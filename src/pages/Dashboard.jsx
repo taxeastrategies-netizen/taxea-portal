@@ -10,6 +10,8 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import PageHeader from '@/components/ui/PageHeader';
 import EstadoFiscal from '@/components/EstadoFiscal';
 import HealthScore from '@/components/HealthScore';
+import SummaryCards from '@/components/dashboard/SummaryCards';
+import CashFlowChart from '@/components/dashboard/CashFlowChart';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -147,7 +149,10 @@ export default function Dashboard() {
         <HealthScore score={healthScore} />
       </div>
 
-      {/* Stats grid */}
+      {/* Tarjetas resumen clave */}
+      <SummaryCards invoices={invoices} expenses={expenses} obligations={obligations} />
+
+      {/* Stats grid anual */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard title="Total Ingresos" value={totalIngresos} icon={TrendingUp} colorClass="text-green-600" bgClass="bg-green-50" />
         <StatCard title="Total Gastos" value={totalGastos} icon={TrendingDown} colorClass="text-red-600" bgClass="bg-red-50" />
@@ -155,11 +160,16 @@ export default function Dashboard() {
         <StatCard title="IVA Estimado" value={ivaRepercutido - ivaSoportado} icon={BarChart3} colorClass="text-primary" bgClass="bg-accent" />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <StatCard title="Facturas Pendientes" value={facturasPendientes} icon={FileText} suffix="" colorClass="text-amber-600" bgClass="bg-amber-50" />
         <StatCard title="Obligaciones" value={obligacionesProximas} icon={Calendar} suffix="" colorClass="text-red-600" bgClass="bg-red-50" />
         <StatCard title="Tareas activas" value={tasks.filter(t => !['completada', 'cancelada'].includes(t.estado)).length} icon={CheckSquare} suffix="" colorClass="text-blue-600" bgClass="bg-blue-50" />
         <StatCard title="Errores activos" value={errors.filter(e => !['resuelto', 'ignorado'].includes(e.estado)).length} icon={AlertTriangle} suffix="" colorClass="text-orange-600" bgClass="bg-orange-50" />
+      </div>
+
+      {/* Gráfico flujo de caja */}
+      <div className="mb-5">
+        <CashFlowChart invoices={invoices} expenses={expenses} />
       </div>
 
       {/* No hay empresa configurada */}
