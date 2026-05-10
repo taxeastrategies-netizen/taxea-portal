@@ -1,0 +1,103 @@
+{
+  "name": "Invoice",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "numero_factura": {
+      "type": "string"
+    },
+    "fecha_emision": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "cliente_nombre": {
+      "type": "string"
+    },
+    "cliente_nif": {
+      "type": "string"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "base_imponible": {
+      "type": "number"
+    },
+    "tipo_iva": {
+      "type": "number",
+      "default": 21
+    },
+    "cuota_iva": {
+      "type": "number"
+    },
+    "retencion_irpf": {
+      "type": "number",
+      "default": 0
+    },
+    "total_factura": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string",
+      "enum": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    "anio": {
+      "type": "number"
+    },
+    "estado_cobro": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "cobrada",
+        "vencida"
+      ],
+      "default": "pendiente"
+    },
+    "estado_contable": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_revision",
+        "revisada",
+        "contabilizada",
+        "presentada",
+        "rechazada"
+      ],
+      "default": "pendiente"
+    },
+    "archivo_url": {
+      "type": "string"
+    },
+    "comentarios": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "emitida",
+        "recibida"
+      ],
+      "default": "emitida"
+    },
+    "subido_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "numero_factura",
+    "fecha_emision",
+    "base_imponible",
+    "total_factura"
+  ]
+}

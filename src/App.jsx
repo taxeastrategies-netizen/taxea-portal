@@ -1,47 +1,99 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-// Add page imports here
+import ProtectedRoute from '@/components/ProtectedRoute';
+import AppLayout from '@/components/layout/AppLayout';
+import { useCompanyContext } from '@/lib/useCompanyContext';
 
-const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+// Pages
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Facturas from './pages/Facturas';
+import IngresosGastos from './pages/IngresosGastos';
+import Presupuestos from './pages/Presupuestos';
+import Proformas from './pages/Proformas';
+import Contactos from './pages/Contactos';
+import Productos from './pages/Productos';
+import NotasPredefinidas from './pages/NotasPredefinidas';
+import LibroRegistros from './pages/LibroRegistros';
+import LectorGastos from './pages/LectorGastos';
+import LectorIngresos from './pages/LectorIngresos';
+import ObligacionesFiscales from './pages/ObligacionesFiscales';
+import Documentos from './pages/Documentos';
+import Ajustes from './pages/Ajustes';
+import AdminPanel from './pages/AdminPanel';
 
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
+function AppWithContext({ user }) {
+  const isAdmin = user?.role === 'admin';
+  const { company, loadingCompany } = useCompanyContext(user);
+
+  if (loadingCompany) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="w-10 h-10 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Cargando tu portal...</p>
+        </div>
       </div>
     );
   }
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
-    }
-  }
-
-  // Render the main app
   return (
     <Routes>
-      {/* Add your page Route elements here */}
+      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/facturas" element={<Facturas />} />
+        <Route path="/ingresos-gastos" element={<IngresosGastos />} />
+        <Route path="/presupuestos" element={<Presupuestos />} />
+        <Route path="/proformas" element={<Proformas />} />
+        <Route path="/contactos" element={<Contactos />} />
+        <Route path="/productos" element={<Productos />} />
+        <Route path="/notas" element={<NotasPredefinidas />} />
+        <Route path="/libro-registros" element={<LibroRegistros />} />
+        <Route path="/lector-gastos" element={<LectorGastos />} />
+        <Route path="/lector-ingresos" element={<LectorIngresos />} />
+        <Route path="/obligaciones" element={<ObligacionesFiscales />} />
+        <Route path="/documentos" element={<Documentos />} />
+        <Route path="/ajustes" element={<Ajustes />} />
+        <Route path="/admin" element={<AdminPanel />} />
+      </Route>
+      <Route path="*" element={<PageNotFound />} />
+    </Routes>
+  );
+}
+
+const AuthenticatedApp = () => {
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
+
+  if (isLoadingPublicSettings || isLoadingAuth) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (authError) {
+    if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
+    if (authError.type === 'auth_required') { navigateToLogin(); return null; }
+  }
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route path="/*" element={<AppWithContext user={user} />} />
+      </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
 };
 
-
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
@@ -51,7 +103,7 @@ function App() {
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
-  )
+  );
 }
 
-export default App
+export default App;

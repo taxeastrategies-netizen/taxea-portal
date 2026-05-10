@@ -1,0 +1,75 @@
+{
+  "name": "Quote",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "numero_presupuesto": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "cliente_nombre": {
+      "type": "string"
+    },
+    "cliente_nif": {
+      "type": "string"
+    },
+    "conceptos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "descripcion": {
+            "type": "string"
+          },
+          "cantidad": {
+            "type": "number"
+          },
+          "precio_unitario": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "base_imponible": {
+      "type": "number"
+    },
+    "tipo_impuesto": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "enviado",
+        "aceptado",
+        "rechazado",
+        "convertido_factura"
+      ],
+      "default": "borrador"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "validez_dias": {
+      "type": "number",
+      "default": 30
+    }
+  },
+  "required": [
+    "company_id",
+    "numero_presupuesto",
+    "fecha",
+    "total"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "PredefinedNote",
+  "type": "object",
+  "properties": {
+    "titulo": {
+      "type": "string"
+    },
+    "texto": {
+      "type": "string"
+    },
+    "categoria": {
+      "type": "string"
+    },
+    "impuesto_relacionado": {
+      "type": "string"
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "titulo",
+    "texto"
+  ]
+}

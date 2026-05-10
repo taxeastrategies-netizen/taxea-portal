@@ -1,0 +1,42 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "destinatario_email": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "mensaje": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "aviso",
+        "tarea",
+        "alerta_fiscal",
+        "documento_revisado",
+        "obligacion_proxima"
+      ],
+      "default": "aviso"
+    },
+    "leida": {
+      "type": "boolean",
+      "default": false
+    },
+    "url_referencia": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "destinatario_email",
+    "titulo",
+    "mensaje"
+  ]
+}

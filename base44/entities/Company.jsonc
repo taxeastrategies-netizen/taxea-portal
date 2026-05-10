@@ -1,0 +1,73 @@
+{
+  "name": "Company",
+  "type": "object",
+  "properties": {
+    "nombre_comercial": {
+      "type": "string"
+    },
+    "razon_social": {
+      "type": "string"
+    },
+    "nif_cif": {
+      "type": "string"
+    },
+    "direccion_fiscal": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "regimen_fiscal": {
+      "type": "string",
+      "enum": [
+        "autonomo",
+        "sociedad_limitada",
+        "sociedad_anonima",
+        "comunidad_bienes",
+        "asociacion",
+        "otro"
+      ]
+    },
+    "tipo_impuesto": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "exento",
+        "mixto"
+      ]
+    },
+    "actividad": {
+      "type": "string"
+    },
+    "epigrafe_iae": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "datos_bancarios": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "usuarios_autorizados": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "razon_social",
+    "nif_cif"
+  ]
+}

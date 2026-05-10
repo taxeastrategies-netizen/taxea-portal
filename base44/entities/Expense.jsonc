@@ -1,0 +1,91 @@
+{
+  "name": "Expense",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "ingreso",
+        "gasto"
+      ],
+      "default": "gasto"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "proveedor_cliente": {
+      "type": "string"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "ventas_servicios",
+        "compras",
+        "suministros",
+        "alquiler",
+        "publicidad_marketing",
+        "servicios_profesionales",
+        "software",
+        "transporte",
+        "dietas",
+        "gastos_financieros",
+        "seguros",
+        "otros"
+      ]
+    },
+    "base_imponible": {
+      "type": "number"
+    },
+    "tipo_impuesto": {
+      "type": "number"
+    },
+    "cuota_impuesto": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string",
+      "enum": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    "anio": {
+      "type": "number"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_revision",
+        "revisado",
+        "contabilizado",
+        "rechazado"
+      ],
+      "default": "pendiente"
+    },
+    "archivo_url": {
+      "type": "string"
+    },
+    "subido_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "fecha",
+    "concepto",
+    "total"
+  ]
+}

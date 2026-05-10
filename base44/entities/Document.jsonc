@@ -1,0 +1,69 @@
+{
+  "name": "Document",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "carpeta": {
+      "type": "string",
+      "enum": [
+        "facturas_emitidas",
+        "facturas_recibidas",
+        "bancos",
+        "contratos",
+        "escrituras",
+        "modelos_fiscales",
+        "certificados",
+        "nominas",
+        "seguros_sociales",
+        "renta",
+        "otros"
+      ],
+      "default": "otros"
+    },
+    "archivo_url": {
+      "type": "string"
+    },
+    "tipo_archivo": {
+      "type": "string"
+    },
+    "anio": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_revision",
+        "revisado",
+        "aprobado",
+        "rechazado"
+      ],
+      "default": "pendiente"
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "comentarios": {
+      "type": "string"
+    },
+    "subido_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre",
+    "archivo_url"
+  ]
+}

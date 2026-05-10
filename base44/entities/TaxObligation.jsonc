@@ -1,0 +1,78 @@
+{
+  "name": "TaxObligation",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "modelo": {
+      "type": "string",
+      "enum": [
+        "modelo_303",
+        "modelo_390",
+        "modelo_130",
+        "modelo_111",
+        "modelo_115",
+        "modelo_202",
+        "modelo_200",
+        "modelo_349",
+        "modelo_420_igic",
+        "modelo_425_igic",
+        "renta",
+        "cuentas_anuales",
+        "libros_contables",
+        "otra"
+      ]
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "fecha_limite": {
+      "type": "string",
+      "format": "date"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente_documentacion",
+        "en_preparacion",
+        "presentado",
+        "domiciliado",
+        "pagado",
+        "finalizado"
+      ],
+      "default": "pendiente_documentacion"
+    },
+    "resultado": {
+      "type": "string",
+      "enum": [
+        "a_pagar",
+        "a_devolver",
+        "cero",
+        "pendiente"
+      ],
+      "default": "pendiente"
+    },
+    "importe": {
+      "type": "number"
+    },
+    "justificante_url": {
+      "type": "string"
+    },
+    "comentarios_asesor": {
+      "type": "string"
+    },
+    "anio": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "modelo",
+    "periodo",
+    "fecha_limite"
+  ]
+}

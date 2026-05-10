@@ -1,0 +1,34 @@
+{
+  "name": "ProductService",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "precio_base": {
+      "type": "number"
+    },
+    "tipo_impuesto": {
+      "type": "number",
+      "default": 21
+    },
+    "categoria": {
+      "type": "string"
+    },
+    "activo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre",
+    "precio_base"
+  ]
+}

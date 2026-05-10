@@ -1,0 +1,56 @@
+{
+  "name": "Contact",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "razon_social": {
+      "type": "string"
+    },
+    "nif_cif": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "cliente",
+        "proveedor",
+        "ambos"
+      ],
+      "default": "cliente"
+    },
+    "direccion_fiscal": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "persona_contacto": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "actividad": {
+      "type": "string"
+    },
+    "regimen_fiscal": {
+      "type": "string"
+    },
+    "activo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre"
+  ]
+}

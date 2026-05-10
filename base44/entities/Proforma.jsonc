@@ -1,0 +1,57 @@
+{
+  "name": "Proforma",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "numero_proforma": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "cliente_nombre": {
+      "type": "string"
+    },
+    "cliente_nif": {
+      "type": "string"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "base_imponible": {
+      "type": "number"
+    },
+    "tipo_impuesto": {
+      "type": "number",
+      "default": 21
+    },
+    "cuota_impuesto": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "enviada",
+        "aceptada",
+        "convertida_factura"
+      ],
+      "default": "borrador"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "numero_proforma",
+    "fecha",
+    "total"
+  ]
+}

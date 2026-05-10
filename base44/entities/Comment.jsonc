@@ -1,0 +1,41 @@
+{
+  "name": "Comment",
+  "type": "object",
+  "properties": {
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "autor_email": {
+      "type": "string"
+    },
+    "autor_nombre": {
+      "type": "string"
+    },
+    "rol_autor": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "user"
+      ]
+    },
+    "texto": {
+      "type": "string"
+    },
+    "interno": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "entidad_tipo",
+    "entidad_id",
+    "company_id",
+    "texto"
+  ]
+}
