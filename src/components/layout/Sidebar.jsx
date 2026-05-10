@@ -45,15 +45,13 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
         "lg:translate-x-0 lg:static lg:z-auto"
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-teal flex items-center justify-center">
-              <Shield className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <p className="text-white font-jakarta font-700 text-sm leading-none">Taxea Portal</p>
-              <p className="text-white/40 text-xs mt-0.5">Strategies</p>
-            </div>
+            <img
+              src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/8e45ad4fc_file_00000000a33871f499fac1209cc581e2.png"
+              alt="Taxea Strategies"
+              className="h-10 w-auto object-contain brightness-0 invert"
+            />
           </div>
           <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white">
             <X className="w-5 h-5" />

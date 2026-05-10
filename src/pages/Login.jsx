@@ -39,7 +39,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Panel izquierdo — branding Taxea */}
-      <div className="hidden lg:flex lg:w-5/12 bg-taxea-dark flex-col justify-between p-12 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden" style={{ backgroundColor: '#1a1a1a' }}>
         {/* Elementos decorativos */}
         <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-taxea-red/5 -translate-y-1/2 translate-x-1/3" />
         <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full bg-taxea-red/3 translate-y-1/3 -translate-x-1/3" />
@@ -47,17 +47,11 @@ export default function Login() {
         <div className="relative">
           {/* Logo */}
           <div className="mb-12">
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-white font-jakarta font-black text-4xl tracking-wider">TAXEA</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-taxea-red font-jakarta font-semibold text-lg tracking-widest">STRATEGIES</span>
-            </div>
-            {/* Swoosh decorativo del logo */}
-            <div className="flex gap-1 mt-2">
-              <div className="h-0.5 w-14 bg-white/30 rounded-full" style={{ transform: 'skewX(-20deg)' }} />
-              <div className="h-0.5 w-10 bg-taxea-red rounded-full" style={{ transform: 'skewX(-20deg)' }} />
-            </div>
+            <img
+              src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/8e45ad4fc_file_00000000a33871f499fac1209cc581e2.png"
+              alt="Taxea Strategies"
+              className="h-20 w-auto object-contain brightness-0 invert"
+            />
           </div>
 
           <h2 className="text-white font-jakarta text-3xl font-bold leading-tight mb-4">
@@ -94,10 +88,11 @@ export default function Login() {
         <div className="w-full max-w-md">
           {/* Logo mobile */}
           <div className="lg:hidden mb-8">
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-jakarta font-black text-2xl text-foreground tracking-wide">TAXEA</span>
-            </div>
-            <span className="text-taxea-red font-jakarta font-semibold text-sm tracking-widest">STRATEGIES</span>
+            <img
+              src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/8e45ad4fc_file_00000000a33871f499fac1209cc581e2.png"
+              alt="Taxea Strategies"
+              className="h-12 w-auto object-contain"
+            />
           </div>
 
           {mode === 'login' ? (

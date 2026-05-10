@@ -48,23 +48,28 @@ module.exports = {
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
   			teal: {
-  				DEFAULT: 'hsl(174 45% 28%)',
-  				light: 'hsl(174 35% 90%)',
-  				dark: 'hsl(174 50% 20%)',
+  				DEFAULT: 'hsl(350 75% 40%)',
+  				light: 'hsl(350 60% 93%)',
+  				dark: 'hsl(350 80% 28%)',
+  			},
+  			'taxea-red': {
+  				DEFAULT: 'hsl(350 75% 40%)',
+  				light: 'hsl(350 60% 93%)',
+  				dark: 'hsl(350 80% 28%)',
   			},
   			gold: {
-  				DEFAULT: 'hsl(43 65% 55%)',
+  				DEFAULT: 'hsl(43 65% 48%)',
   				light: 'hsl(43 80% 92%)',
   			},
   			sidebar: {
-  				DEFAULT: 'hsl(215 30% 12%)',
-  				foreground: 'hsl(210 20% 85%)',
-  				active: 'hsl(174 45% 28%)',
-  				hover: 'hsl(215 25% 18%)',
+  				DEFAULT: 'hsl(0 0% 10%)',
+  				foreground: 'hsl(0 0% 80%)',
+  				active: 'hsl(350 75% 40%)',
+  				hover: 'hsl(0 0% 16%)',
   			},
   			chart: {
-  				'1': 'hsl(174 45% 28%)',
-  				'2': 'hsl(43 65% 55%)',
+  				'1': 'hsl(350 75% 40%)',
+  				'2': 'hsl(43 65% 48%)',
   				'3': 'hsl(215 60% 55%)',
   				'4': 'hsl(0 72% 51%)',
   				'5': 'hsl(270 50% 55%)'
