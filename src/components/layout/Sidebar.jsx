@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
   Users, Package, BookOpen, BookMarked, ScanLine, ScanText,
-  Calendar, FolderOpen, Settings, ChevronLeft, X, Shield
+  Calendar, FolderOpen, Settings, X, Shield, CheckSquare,
+  Clock, AlertTriangle, BarChart2
 } from 'lucide-react';
 
 const menuItems = [
@@ -89,21 +90,56 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
             );
           })}
 
+          {/* Separador admin */}
           {isAdmin && (
-            <Link
-              to="/admin"
-              onClick={onClose}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 mt-2 border border-gold/20",
-                location.pathname.startsWith('/admin')
-                  ? "bg-gold/20 text-gold"
-                  : "text-gold/60 hover:text-gold hover:bg-gold/10"
-              )}
-            >
-              <Shield className="w-4 h-4 flex-shrink-0" />
-              <span>Panel Admin</span>
-            </Link>
+            <div className="pt-3 mt-2 border-t border-white/10 space-y-0.5">
+              <p className="text-white/25 text-xs px-3 pb-1 uppercase tracking-wider">Administración</p>
+              {[
+                { to: '/admin', label: 'Panel Admin', icon: Shield },
+                { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
+                { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
+              ].map(({ to, label, icon: Icon }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 border border-gold/20",
+                    location.pathname.startsWith(to)
+                      ? "bg-gold/20 text-gold"
+                      : "text-gold/60 hover:text-gold hover:bg-gold/10"
+                  )}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </div>
           )}
+
+          {/* Tareas y Timeline (todos los usuarios) */}
+          <div className="pt-3 mt-2 border-t border-white/10 space-y-0.5">
+            {[
+              { to: '/tareas', label: 'Tareas', icon: CheckSquare },
+              { to: '/timeline', label: 'Timeline', icon: Clock },
+            ].map(({ to, label, icon: Icon }) => {
+              const isActive = location.pathname.startsWith(to);
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                    isActive ? "bg-teal text-white shadow-sm" : "text-white/60 hover:text-white hover:bg-white/8"
+                  )}
+                >
+                  <Icon className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-white" : "text-white/50")} />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Footer */}
