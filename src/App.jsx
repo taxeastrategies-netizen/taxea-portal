@@ -31,6 +31,8 @@ import Tareas from './pages/Tareas';
 import DetectorErrores from './pages/DetectorErrores';
 import CRMInterno from './pages/CRMInterno';
 import Notificaciones from './pages/Notificaciones';
+import AsistenteFiscal from './pages/AsistenteFiscal';
+import AdminAsistente from './pages/AdminAsistente';
 
 function AppWithContext({ user }) {
   const isAdmin = user?.role === 'admin';
@@ -70,6 +72,8 @@ function AppWithContext({ user }) {
         <Route path="/errores" element={<DetectorErrores />} />
         <Route path="/crm" element={<CRMInterno />} />
         <Route path="/notificaciones" element={<Notificaciones />} />
+        <Route path="/asistente" element={<AsistenteFiscal />} />
+        <Route path="/admin-asistente" element={<AdminAsistente />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

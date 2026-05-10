@@ -1,0 +1,68 @@
+{
+  "name": "AIRespuestaBase",
+  "type": "object",
+  "properties": {
+    "titulo": {
+      "type": "string"
+    },
+    "pregunta_tipo": {
+      "type": "string"
+    },
+    "palabras_clave": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "respuesta": {
+      "type": "string"
+    },
+    "nivel_riesgo": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "verde"
+    },
+    "impuesto": {
+      "type": "string",
+      "enum": [
+        "irpf",
+        "iva",
+        "igic",
+        "sociedades",
+        "facturacion",
+        "gastos_deducibles",
+        "modelos",
+        "retenciones",
+        "general",
+        "otro"
+      ]
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    },
+    "aprobada": {
+      "type": "boolean",
+      "default": false
+    },
+    "nota_interna": {
+      "type": "string"
+    },
+    "veces_usada": {
+      "type": "number",
+      "default": 0
+    },
+    "creada_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "titulo",
+    "pregunta_tipo",
+    "respuesta"
+  ]
+}

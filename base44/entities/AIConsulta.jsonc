@@ -1,0 +1,91 @@
+{
+  "name": "AIConsulta",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "pregunta": {
+      "type": "string"
+    },
+    "respuesta": {
+      "type": "string"
+    },
+    "nivel_riesgo": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "verde"
+    },
+    "impuesto_detectado": {
+      "type": "string",
+      "enum": [
+        "irpf",
+        "iva",
+        "igic",
+        "sociedades",
+        "facturacion",
+        "gastos_deducibles",
+        "modelos",
+        "retenciones",
+        "general",
+        "otro"
+      ]
+    },
+    "fuente": {
+      "type": "string",
+      "enum": [
+        "preaprobada",
+        "ia_generada",
+        "asesor_manual"
+      ],
+      "default": "ia_generada"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "respondida",
+        "pendiente_revision",
+        "derivada_asesor",
+        "cerrada"
+      ],
+      "default": "respondida"
+    },
+    "valoracion": {
+      "type": "string",
+      "enum": [
+        "util",
+        "no_util",
+        "sin_valorar"
+      ],
+      "default": "sin_valorar"
+    },
+    "tarea_creada": {
+      "type": "boolean",
+      "default": false
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sesion_id": {
+      "type": "string"
+    },
+    "respuesta_asesor": {
+      "type": "string"
+    },
+    "requiere_entrenamiento": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "company_id",
+    "pregunta"
+  ]
+}

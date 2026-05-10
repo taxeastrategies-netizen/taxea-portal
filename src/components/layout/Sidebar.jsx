@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
   Users, Package, BookOpen, BookMarked, ScanLine, ScanText,
   Calendar, FolderOpen, Settings, X, Shield, CheckSquare,
-  Clock, AlertTriangle, BarChart2, Bell
+  Clock, AlertTriangle, BarChart2, Bell, Sparkles, Brain
 } from 'lucide-react';
 
 const menuItems = [
@@ -96,6 +96,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
                 { to: '/admin', label: 'Panel Admin', icon: Shield },
                 { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
                 { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
+                { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },
               ].map(({ to, label, icon: Icon }) => (
                 <Link
                   key={to}
@@ -115,12 +116,13 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
             </div>
           )}
 
-          {/* Tareas, Timeline y Notificaciones (todos los usuarios) */}
+          {/* Tareas, Timeline, Notificaciones y Asistente (todos los usuarios) */}
           <div className="pt-3 mt-2 border-t border-white/10 space-y-0.5">
             {[
               { to: '/tareas', label: 'Tareas', icon: CheckSquare },
               { to: '/timeline', label: 'Timeline', icon: Clock },
               { to: '/notificaciones', label: 'Notificaciones', icon: Bell },
+              { to: '/asistente', label: 'Asistente Fiscal IA', icon: Sparkles },
             ].map(({ to, label, icon: Icon }) => {
               const isActive = location.pathname.startsWith(to);
               return (
