@@ -4,11 +4,11 @@ import { Plus, X, Upload, FileText, FileCheck, MessageSquare, TrendingDown } fro
 import { cn } from '@/lib/utils';
 
 const actions = [
-  { icon: TrendingDown, label: 'Subir gasto', color: 'bg-orange-500', path: '/lector-gastos' },
-  { icon: Upload, label: 'Subir ingreso', color: 'bg-blue-500', path: '/lector-ingresos' },
-  { icon: FileText, label: 'Crear factura', color: 'bg-teal', path: '/facturas?nueva=true' },
-  { icon: FileCheck, label: 'Crear presupuesto', color: 'bg-purple-500', path: '/presupuestos?nuevo=true' },
-  { icon: MessageSquare, label: 'Mensaje al asesor', color: 'bg-slate-600', path: '/documentos' },
+{ icon: TrendingDown, label: 'Subir gasto', color: 'bg-orange-500', path: '/lector-gastos' },
+{ icon: Upload, label: 'Subir ingreso', color: 'bg-blue-500', path: '/lector-ingresos' },
+{ icon: FileText, label: 'Crear factura', color: 'bg-taxea-red', path: '/facturas?nueva=true' },
+{ icon: FileCheck, label: 'Crear presupuesto', color: 'bg-purple-500', path: '/presupuestos?nuevo=true' },
+{ icon: MessageSquare, label: 'Mis tareas', color: 'bg-slate-600', path: '/tareas' },
 ];
 
 export default function FloatingActions() {
@@ -42,10 +42,11 @@ export default function FloatingActions() {
         onClick={() => setOpen(!open)}
         className={cn(
           "w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300",
-          open ? "bg-slate-700 rotate-45" : "bg-teal hover:bg-teal-dark"
+          open ? "bg-slate-700 rotate-45" : "bg-taxea-red hover:bg-taxea-accent"
         )}
       >
         {open ? <X className="w-6 h-6 text-white" /> : <Plus className="w-6 h-6 text-white" />}
+
       </button>
     </div>
   );

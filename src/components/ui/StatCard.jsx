@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
-export default function StatCard({ title, value, icon: Icon, trend, trendLabel, colorClass = 'text-teal', bgClass = 'bg-teal-light', suffix = '€' }) {
+export default function StatCard({ title, value, icon: Icon, trend, trendLabel, colorClass = 'text-taxea-red', bgClass = 'bg-accent', suffix = '€' }) {
   return (
     <div className="bg-card rounded-xl border border-border shadow-card p-5 hover:shadow-card-hover transition-shadow">
       <div className="flex items-start justify-between mb-3">

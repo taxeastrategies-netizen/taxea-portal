@@ -44,7 +44,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-secondary transition-colors">
-              <div className="w-7 h-7 rounded-full bg-teal flex items-center justify-center">
+              <div className="w-7 h-7 rounded-full bg-taxea-red flex items-center justify-center">
                 <span className="text-white text-xs font-semibold">
                   {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
                 </span>

@@ -60,8 +60,14 @@ Datos a extraer:
 - cuota_impuesto: importe del IVA/IGIC (número)
 - total: importe total (número)
 - categoria_sugerida: una de estas categorías: compras, suministros, alquiler, servicios_profesionales, software, transporte, dietas, seguros, otros
+- cuenta_pgc: cuenta del Plan General Contable español sugerida. Usa SOLO una de estas: "600 Compras de mercaderías", "601 Materias primas", "621 Arrendamientos y cánones", "622 Reparaciones y conservación", "623 Servicios de profesionales independientes", "624 Transportes", "625 Primas de seguros", "626 Servicios bancarios", "627 Publicidad y propaganda", "628 Suministros", "629 Otros servicios"
+- confianza_pgc: porcentaje de confianza en la clasificación PGC (número 0-100)
+- motivo_clasificacion: explicación breve de por qué se asigna esa cuenta PGC
 - es_factura_completa: true si tiene todos los datos obligatorios (NIF, número, etc.), false si parece un ticket sin NIF
+- es_proveedor_extranjero: true si el proveedor parece ser extranjero
+- posible_operacion_intracomunitaria: true si podría ser operación intracomunitaria
 - datos_faltantes: lista de campos obligatorios que faltan como array de strings
+- alertas_fiscales: lista de alertas fiscales detectadas como array de strings
 - concepto: descripción breve del gasto`,
       file_urls: [file_url],
       response_json_schema: {
@@ -76,8 +82,14 @@ Datos a extraer:
           cuota_impuesto: { type: 'number' },
           total: { type: 'number' },
           categoria_sugerida: { type: 'string' },
+          cuenta_pgc: { type: 'string' },
+          confianza_pgc: { type: 'number' },
+          motivo_clasificacion: { type: 'string' },
           es_factura_completa: { type: 'boolean' },
+          es_proveedor_extranjero: { type: 'boolean' },
+          posible_operacion_intracomunitaria: { type: 'boolean' },
           datos_faltantes: { type: 'array', items: { type: 'string' } },
+          alertas_fiscales: { type: 'array', items: { type: 'string' } },
           concepto: { type: 'string' },
         }
       }
@@ -92,6 +104,9 @@ Datos a extraer:
       cuota_impuesto: result.cuota_impuesto || '',
       total: result.total || '',
       categoria: result.categoria_sugerida || 'otros',
+      cuenta_pgc: result.cuenta_pgc || '',
+      confianza_pgc: result.confianza_pgc || 0,
+      motivo_clasificacion: result.motivo_clasificacion || '',
     });
     setStage(STAGES.review);
   };
@@ -114,6 +129,17 @@ Datos a extraer:
       anio: year,
       trimestre,
       subido_por: user?.email,
+    });
+    // Crear evento en timeline
+    await base44.entities.TimelineEvent.create({
+      company_id: company.id,
+      tipo: 'documento_subido',
+      titulo: `Gasto subido: ${form.proveedor_cliente || 'sin proveedor'} — ${(parseFloat(form.total) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
+      descripcion: form.cuenta_pgc ? `Cuenta PGC sugerida: ${form.cuenta_pgc} (confianza: ${form.confianza_pgc}%)` : '',
+      color: 'azul',
+      usuario_email: user?.email,
+      automatico: true,
+      visibilidad: 'ambos',
     });
     setSaving(false);
     setStage(STAGES.saved);
@@ -210,6 +236,22 @@ Datos a extraer:
               </div>
             </div>
 
+            {/* Clasificación PGC */}
+            {form.cuenta_pgc && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Clasificación IA — Plan General Contable</p>
+                    <p className="text-sm font-bold text-blue-900">{form.cuenta_pgc}</p>
+                    {form.motivo_clasificacion && <p className="text-xs text-blue-600 mt-0.5">{form.motivo_clasificacion}</p>}
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <p className="text-xs text-blue-600 font-medium">Confianza</p>
+                    <p className="text-xl font-jakarta font-bold text-blue-700">{form.confianza_pgc}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5">
                 <Label>Proveedor</Label>

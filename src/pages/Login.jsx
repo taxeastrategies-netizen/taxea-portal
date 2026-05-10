@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Shield, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,7 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState('login'); // login | forgot
+  const [mode, setMode] = useState('login');
   const [forgotSent, setForgotSent] = useState(false);
 
   const handleLogin = async (e) => {
@@ -31,183 +31,137 @@ export default function Login() {
   const handleForgot = async (e) => {
     e.preventDefault();
     setLoading(true);
-    try {
-      await base44.auth.resetPasswordRequest(email);
-    } catch {}
+    try { await base44.auth.resetPasswordRequest(email); } catch {}
     setForgotSent(true);
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Panel izquierdo - imagen/branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-sidebar flex-col justify-between p-12 relative overflow-hidden">
-        {/* Decoración */}
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-teal/10 -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full bg-teal/5 translate-y-1/2 -translate-x-1/2" />
+    <div className="min-h-screen flex bg-background">
+      {/* Panel izquierdo — branding Taxea */}
+      <div className="hidden lg:flex lg:w-5/12 bg-taxea-dark flex-col justify-between p-12 relative overflow-hidden">
+        {/* Elementos decorativos */}
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-taxea-red/5 -translate-y-1/2 translate-x-1/3" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full bg-taxea-red/3 translate-y-1/3 -translate-x-1/3" />
 
         <div className="relative">
-          <div className="flex items-center gap-3 mb-16">
-            <div className="w-10 h-10 rounded-xl bg-teal flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+          {/* Logo */}
+          <div className="mb-12">
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-white font-jakarta font-black text-4xl tracking-wider">TAXEA</span>
             </div>
-            <div>
-              <p className="text-white font-jakarta font-bold text-lg leading-none">Taxea Portal</p>
-              <p className="text-white/40 text-xs mt-0.5">Strategies</p>
+            <div className="flex items-center gap-2">
+              <span className="text-taxea-red font-jakarta font-semibold text-lg tracking-widest">STRATEGIES</span>
+            </div>
+            {/* Swoosh decorativo del logo */}
+            <div className="flex gap-1 mt-2">
+              <div className="h-0.5 w-14 bg-white/30 rounded-full" style={{ transform: 'skewX(-20deg)' }} />
+              <div className="h-0.5 w-10 bg-taxea-red rounded-full" style={{ transform: 'skewX(-20deg)' }} />
             </div>
           </div>
 
-          <h2 className="text-white font-jakarta text-4xl font-bold leading-tight mb-6">
+          <h2 className="text-white font-jakarta text-3xl font-bold leading-tight mb-4">
             Tu área privada<br />
-            <span className="text-teal">fiscal y contable.</span>
+            <span className="text-taxea-red">fiscal y contable.</span>
           </h2>
-
-          <p className="text-white/50 text-lg leading-relaxed max-w-sm">
-            Gestiona tus facturas, obligaciones fiscales y documentación con la tranquilidad de tener a tu asesor siempre disponible.
+          <p className="text-white/50 text-base leading-relaxed max-w-sm">
+            Portal exclusivo para clientes de Taxea Strategies. Gestiona tu documentación, obligaciones fiscales y comunícate con tu asesor en un entorno seguro.
           </p>
         </div>
 
-        <div className="relative space-y-4">
-          {['Documentación 100% segura y privada', 'Gestión fiscal en tiempo real', 'Comunicación directa con tu asesor'].map((item) => (
+        <div className="relative space-y-3">
+          {[
+            'Documentación 100% segura y privada',
+            'IA que lee y clasifica tus facturas',
+            'Comunicación directa con tu asesor',
+            'Seguimiento de obligaciones fiscales',
+          ].map((item) => (
             <div key={item} className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded-full bg-teal/30 border border-teal flex items-center justify-center flex-shrink-0">
-                <div className="w-2 h-2 rounded-full bg-teal" />
+              <div className="w-5 h-5 rounded-full bg-taxea-red/20 border border-taxea-red flex items-center justify-center flex-shrink-0">
+                <div className="w-2 h-2 rounded-full bg-taxea-red" />
               </div>
               <p className="text-white/60 text-sm">{item}</p>
             </div>
           ))}
-          <p className="text-white/20 text-xs mt-6 pt-6 border-t border-white/10">
-            Portal privado y confidencial. Cumplimiento RGPD.
+          <p className="text-white/20 text-xs mt-6 pt-5 border-t border-white/10">
+            Portal privado y confidencial · Cumplimiento RGPD · © {new Date().getFullYear()} Taxea Strategies
           </p>
         </div>
       </div>
 
-      {/* Panel derecho - formulario */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-background">
+      {/* Panel derecho — formulario */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
         <div className="w-full max-w-md">
           {/* Logo mobile */}
-          <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div className="w-9 h-9 rounded-xl bg-teal flex items-center justify-center">
-              <Shield className="w-4 h-4 text-white" />
+          <div className="lg:hidden mb-8">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-jakarta font-black text-2xl text-foreground tracking-wide">TAXEA</span>
             </div>
-            <div>
-              <p className="font-jakarta font-bold text-lg text-foreground leading-none">Taxea Portal</p>
-              <p className="text-muted-foreground text-xs">Strategies</p>
-            </div>
+            <span className="text-taxea-red font-jakarta font-semibold text-sm tracking-widest">STRATEGIES</span>
           </div>
 
           {mode === 'login' ? (
             <>
-              <div className="mb-8">
+              <div className="mb-7">
                 <h1 className="text-2xl font-jakarta font-bold text-foreground">Iniciar sesión</h1>
-                <p className="text-muted-foreground mt-1.5">Accede a tu área privada de cliente</p>
+                <p className="text-muted-foreground mt-1">Accede a tu área privada de cliente</p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="email">Correo electrónico</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="h-11"
-                  />
+                  <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} required className="h-11" />
                 </div>
-
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="password">Contraseña</Label>
                   <div className="relative">
-                    <Input
-                      id="password"
-                      type={showPass ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="h-11 pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPass(!showPass)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
+                    <Input id="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required className="h-11 pr-10" />
+                    <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                       {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
                 {error && (
-                  <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm px-4 py-3 rounded-lg">
-                    {error}
-                  </div>
+                  <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm px-4 py-3 rounded-lg">{error}</div>
                 )}
 
-                <Button type="submit" className="w-full h-11 bg-teal hover:bg-teal-dark" disabled={loading}>
+                <Button type="submit" className="w-full h-11 bg-taxea-red hover:bg-taxea-accent text-white" disabled={loading}>
                   {loading ? 'Accediendo...' : (
-                    <span className="flex items-center gap-2">
-                      Acceder al portal
-                      <ArrowRight className="w-4 h-4" />
-                    </span>
+                    <span className="flex items-center gap-2">Acceder al portal <ArrowRight className="w-4 h-4" /></span>
                   )}
                 </Button>
 
-                <button
-                  type="button"
-                  onClick={() => setMode('forgot')}
-                  className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors"
-                >
+                <button type="button" onClick={() => setMode('forgot')} className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors">
                   ¿Olvidaste tu contraseña?
                 </button>
               </form>
             </>
           ) : (
             <>
-              <div className="mb-8">
+              <div className="mb-7">
                 <h1 className="text-2xl font-jakarta font-bold text-foreground">Recuperar contraseña</h1>
-                <p className="text-muted-foreground mt-1.5">Te enviaremos un enlace de recuperación</p>
+                <p className="text-muted-foreground mt-1">Te enviaremos un enlace de recuperación</p>
               </div>
-
               {forgotSent ? (
-                <div className="bg-teal/10 border border-teal/20 rounded-xl p-6 text-center">
-                  <div className="w-12 h-12 bg-teal/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Shield className="w-6 h-6 text-teal" />
-                  </div>
-                  <p className="font-medium text-foreground">Correo enviado</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Si el correo está registrado, recibirás las instrucciones en breve.
-                  </p>
-                  <button
-                    onClick={() => { setMode('login'); setForgotSent(false); }}
-                    className="mt-4 text-sm text-teal hover:underline"
-                  >
+                <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                  <Shield className="w-10 h-10 text-green-500 mx-auto mb-3" />
+                  <p className="font-semibold text-foreground">Correo enviado</p>
+                  <p className="text-sm text-muted-foreground mt-1">Revisa tu bandeja de entrada</p>
+                  <button onClick={() => { setMode('login'); setForgotSent(false); }} className="mt-4 text-sm text-taxea-red hover:underline">
                     Volver al login
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleForgot} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email-forgot">Correo electrónico</Label>
-                    <Input
-                      id="email-forgot"
-                      type="email"
-                      placeholder="tu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="h-11"
-                    />
+                  <div className="space-y-1.5">
+                    <Label>Correo electrónico</Label>
+                    <Input type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} required className="h-11" />
                   </div>
-                  <Button type="submit" className="w-full h-11 bg-teal hover:bg-teal-dark" disabled={loading}>
+                  <Button type="submit" className="w-full h-11 bg-taxea-red hover:bg-taxea-accent text-white" disabled={loading}>
                     {loading ? 'Enviando...' : 'Enviar enlace'}
                   </Button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('login')}
-                    className="w-full text-center text-sm text-muted-foreground hover:text-primary"
-                  >
+                  <button type="button" onClick={() => setMode('login')} className="w-full text-center text-sm text-muted-foreground hover:text-primary">
                     ← Volver al login
                   </button>
                 </form>
@@ -216,8 +170,8 @@ export default function Login() {
           )}
 
           <p className="text-xs text-muted-foreground text-center mt-8">
-            Portal privado y confidencial · Protección de datos RGPD<br />
-            © {new Date().getFullYear()} Taxea Strategies. Todos los derechos reservados.
+            Portal privado · Protección de datos RGPD<br />
+            © {new Date().getFullYear()} Taxea Strategies
           </p>
         </div>
       </div>

@@ -26,6 +26,10 @@ import ObligacionesFiscales from './pages/ObligacionesFiscales';
 import Documentos from './pages/Documentos';
 import Ajustes from './pages/Ajustes';
 import AdminPanel from './pages/AdminPanel';
+import Timeline from './pages/Timeline';
+import Tareas from './pages/Tareas';
+import DetectorErrores from './pages/DetectorErrores';
+import CRMInterno from './pages/CRMInterno';
 
 function AppWithContext({ user }) {
   const isAdmin = user?.role === 'admin';
@@ -35,7 +39,7 @@ function AppWithContext({ user }) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="text-center">
-          <div className="w-10 h-10 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-10 h-10 border-2 border-taxea-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">Cargando tu portal...</p>
         </div>
       </div>
@@ -46,6 +50,8 @@ function AppWithContext({ user }) {
     <Routes>
       <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/tareas" element={<Tareas />} />
+        <Route path="/timeline" element={<Timeline />} />
         <Route path="/facturas" element={<Facturas />} />
         <Route path="/ingresos-gastos" element={<IngresosGastos />} />
         <Route path="/presupuestos" element={<Presupuestos />} />
@@ -60,6 +66,8 @@ function AppWithContext({ user }) {
         <Route path="/documentos" element={<Documentos />} />
         <Route path="/ajustes" element={<Ajustes />} />
         <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/errores" element={<DetectorErrores />} />
+        <Route path="/crm" element={<CRMInterno />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
@@ -72,7 +80,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
