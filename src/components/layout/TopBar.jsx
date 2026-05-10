@@ -1,4 +1,5 @@
 import { Menu, Bell, ChevronDown, LogOut, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
@@ -31,14 +32,14 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
 
       <div className="flex items-center gap-2">
         {/* Notificaciones */}
-        <button className="relative p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+        <Link to="/notificaciones" className="relative p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
           <Bell className="w-4 h-4" />
           {notificationsCount > 0 && (
             <span className="absolute top-1 right-1 w-4 h-4 bg-destructive text-white text-xs rounded-full flex items-center justify-center leading-none">
-              {notificationsCount}
+              {notificationsCount > 9 ? '9+' : notificationsCount}
             </span>
           )}
-        </button>
+        </Link>
 
         {/* User menu */}
         <DropdownMenu>

@@ -12,6 +12,8 @@ import EstadoFiscal from '@/components/EstadoFiscal';
 import HealthScore from '@/components/HealthScore';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import CashFlowChart from '@/components/dashboard/CashFlowChart';
+import AdminOverview from '@/components/dashboard/AdminOverview';
+import { calcularHealthScore } from '@/lib/healthScoreCalc';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -72,7 +74,8 @@ export default function Dashboard() {
     return 'gris';
   })();
 
-  const healthScore = crmData?.health_score || (estadoFiscal === 'verde' ? 85 : estadoFiscal === 'amarillo' ? 62 : estadoFiscal === 'rojo' ? 35 : 75);
+  const { score: healthScoreCalc, motivos: healthMotivos } = calcularHealthScore({ errors, tasks, obligations, invoices });
+  const healthScore = crmData?.health_score || healthScoreCalc;
 
   const recentActivity = [...invoices.slice(-3), ...expenses.slice(-3)]
     .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
@@ -145,8 +148,8 @@ export default function Dashboard() {
         <div className="lg:col-span-2">
           <EstadoFiscal estado={estadoFiscal} />
         </div>
-        {/* Health Score */}
-        <HealthScore score={healthScore} />
+        {/* Health Score con desglose automático */}
+        <HealthScore score={healthScore} motivos={healthMotivos} />
       </div>
 
       {/* Tarjetas resumen clave */}
@@ -181,6 +184,13 @@ export default function Dashboard() {
           <Button className="bg-taxea-red hover:bg-taxea-accent text-white" asChild>
             <a href="/ajustes">Configurar empresa</a>
           </Button>
+        </div>
+      )}
+
+      {/* Vista global admin */}
+      {isAdmin && (
+        <div className="mb-5">
+          <AdminOverview />
         </div>
       )}
 

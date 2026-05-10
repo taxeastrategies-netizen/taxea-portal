@@ -65,7 +65,32 @@ export default function DetectorErrores() {
       responsable: 'cliente',
       creada_por: user?.email,
     });
-    alert('Tarea creada correctamente');
+    // Notificar al cliente
+    const comp = await base44.entities.Company.filter({ id: company.id });
+    const ownerEmail = comp?.[0]?.owner_email;
+    if (ownerEmail) {
+      await base44.entities.Notification.create({
+        company_id: company.id,
+        destinatario_email: ownerEmail,
+        titulo: `Error fiscal detectado: ${error.tipo}`,
+        mensaje: error.accion_recomendada || error.descripcion,
+        tipo: 'alerta_fiscal',
+        leida: false,
+        url_referencia: '/errores',
+      });
+    }
+    // Timeline
+    await base44.entities.TimelineEvent.create({
+      company_id: company.id,
+      tipo: 'error_detectado',
+      titulo: `Error detectado: ${error.tipo}`,
+      descripcion: error.descripcion,
+      color: error.severidad === 'critica' ? 'rojo' : 'amarillo',
+      usuario_email: user?.email,
+      automatico: false,
+      visibilidad: 'admin',
+      afecta_riesgo: true,
+    });
   };
 
   const filtered = errors.filter(e => {

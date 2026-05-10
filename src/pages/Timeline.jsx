@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Clock, FileText, CheckCircle, AlertTriangle, Info, MessageSquare } from 'lucide-react';
+import { Clock, FileText, CheckCircle, AlertTriangle, Info, MessageSquare, Plus, Lock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -35,11 +40,14 @@ const COLOR_DOT = {
 };
 
 export default function Timeline() {
-  const { company, isAdmin } = useOutletContext() || {};
+  const { company, user, isAdmin } = useOutletContext() || {};
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterColor, setFilterColor] = useState('all');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ titulo: '', descripcion: '', tipo: 'nota_interna', color: 'gris', visibilidad: 'admin' });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { if (company?.id) load(); }, [company?.id]);
 
@@ -48,6 +56,21 @@ export default function Timeline() {
     const data = await base44.entities.TimelineEvent.filter({ company_id: company.id }, '-created_date', 100);
     setEvents(data || []);
     setLoading(false);
+  };
+
+  const addEvent = async () => {
+    if (!form.titulo) return;
+    setSaving(true);
+    await base44.entities.TimelineEvent.create({
+      ...form,
+      company_id: company.id,
+      usuario_email: user?.email,
+      automatico: false,
+    });
+    setSaving(false);
+    setShowForm(false);
+    setForm({ titulo: '', descripcion: '', tipo: 'nota_interna', color: 'gris', visibilidad: 'admin' });
+    load();
   };
 
   const filtered = events.filter(e => {
@@ -70,7 +93,13 @@ export default function Timeline() {
       <PageHeader
         title="Timeline Fiscal"
         subtitle="Historial completo de actividad y cambios en tu empresa"
-      />
+      >
+        {isAdmin && (
+          <Button onClick={() => setShowForm(true)} size="sm" className="gap-2">
+            <Plus className="w-4 h-4" /> Añadir nota
+          </Button>
+        )}
+      </PageHeader>
 
       <div className="flex flex-wrap gap-3 mb-6">
         <Select value={filterColor} onValueChange={setFilterColor}>
@@ -85,6 +114,58 @@ export default function Timeline() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Modal nueva nota */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Añadir nota al timeline</DialogTitle></DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Título *</Label>
+              <Input value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Resumen del evento..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Descripción</Label>
+              <Textarea value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} rows={3} placeholder="Detalle adicional..." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Color</Label>
+                <Select value={form.color} onValueChange={v => setForm(f => ({ ...f, color: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="verde">Verde</SelectItem>
+                    <SelectItem value="amarillo">Amarillo</SelectItem>
+                    <SelectItem value="rojo">Rojo</SelectItem>
+                    <SelectItem value="azul">Azul</SelectItem>
+                    <SelectItem value="gris">Gris</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Visibilidad</Label>
+                <Select value={form.visibilidad} onValueChange={v => setForm(f => ({ ...f, visibilidad: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Solo admin</SelectItem>
+                    <SelectItem value="ambos">Cliente y admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {form.visibilidad === 'admin' && (
+              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                <Lock className="w-3.5 h-3.5" />
+                Esta nota solo será visible para Taxea, no para el cliente
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button onClick={addEvent} disabled={saving || !form.titulo}>{saving ? 'Guardando...' : 'Añadir nota'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <div className="flex justify-center py-16">

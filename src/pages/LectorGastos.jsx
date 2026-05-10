@@ -184,13 +184,24 @@ Datos a extraer:
               </>
             )}
             <input id="expense-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileSelect} />
+            {/* Botón cámara móvil */}
+            <input id="expense-camera" type="file" className="hidden" accept="image/*" capture="environment" onChange={handleFileSelect} />
           </div>
-          {file && (
-            <Button onClick={handleRead} className="w-full mt-4 bg-teal hover:bg-teal-dark h-11">
-              <ScanLine className="w-4 h-4 mr-2" />
-              Leer con IA
+          <div className="flex gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => document.getElementById('expense-camera').click()}
+              className="flex-1 h-11 gap-2 lg:hidden"
+            >
+              📷 Usar cámara
             </Button>
-          )}
+            {file && (
+              <Button onClick={handleRead} className="flex-1 h-11 bg-teal hover:bg-teal-dark">
+                <ScanLine className="w-4 h-4 mr-2" />
+                Leer con IA
+              </Button>
+            )}
+          </div>
         </div>
       )}
 

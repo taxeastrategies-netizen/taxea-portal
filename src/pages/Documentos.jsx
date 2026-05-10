@@ -201,12 +201,19 @@ export default function Documentos() {
                 )}
                 <input id="file-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png"
                   onChange={e => setFile(e.target.files[0])} />
+                <input id="file-camera" type="file" className="hidden" accept="image/*" capture="environment"
+                  onChange={e => setFile(e.target.files[0])} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Comentarios</Label>
               <Input value={formData.comentarios} onChange={e => setFormData(f => ({ ...f, comentarios: e.target.value }))} placeholder="Notas adicionales..." />
             </div>
+          </div>
+          <div className="flex gap-2 lg:hidden mt-1">
+            <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => document.getElementById('file-camera').click()}>
+              📷 Usar cámara
+            </Button>
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setShowUpload(false)}>Cancelar</Button>

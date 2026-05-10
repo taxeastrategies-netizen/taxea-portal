@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
   Users, Package, BookOpen, BookMarked, ScanLine, ScanText,
   Calendar, FolderOpen, Settings, X, Shield, CheckSquare,
-  Clock, AlertTriangle, BarChart2
+  Clock, AlertTriangle, BarChart2, Bell
 } from 'lucide-react';
 
 const menuItems = [
@@ -115,11 +115,12 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
             </div>
           )}
 
-          {/* Tareas y Timeline (todos los usuarios) */}
+          {/* Tareas, Timeline y Notificaciones (todos los usuarios) */}
           <div className="pt-3 mt-2 border-t border-white/10 space-y-0.5">
             {[
               { to: '/tareas', label: 'Tareas', icon: CheckSquare },
               { to: '/timeline', label: 'Timeline', icon: Clock },
+              { to: '/notificaciones', label: 'Notificaciones', icon: Bell },
             ].map(({ to, label, icon: Icon }) => {
               const isActive = location.pathname.startsWith(to);
               return (

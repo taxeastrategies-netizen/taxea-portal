@@ -30,6 +30,7 @@ import Timeline from './pages/Timeline';
 import Tareas from './pages/Tareas';
 import DetectorErrores from './pages/DetectorErrores';
 import CRMInterno from './pages/CRMInterno';
+import Notificaciones from './pages/Notificaciones';
 
 function AppWithContext({ user }) {
   const isAdmin = user?.role === 'admin';
@@ -68,6 +69,7 @@ function AppWithContext({ user }) {
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/errores" element={<DetectorErrores />} />
         <Route path="/crm" element={<CRMInterno />} />
+        <Route path="/notificaciones" element={<Notificaciones />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

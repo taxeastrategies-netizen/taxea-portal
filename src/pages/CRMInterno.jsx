@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { BarChart2, Plus, MoreVertical, TrendingUp, AlertTriangle, Star, Lock } from 'lucide-react';
+import EtiquetasManager from '@/components/EtiquetasManager';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -258,6 +259,9 @@ export default function CRMInterno() {
             <div className="space-y-1.5"><Label>Horas reales/mes</Label><Input type="number" value={form.horas_reales} onChange={e => setForm(f => ({ ...f, horas_reales: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Origen cliente</Label><Input value={form.origen_cliente || ''} onChange={e => setForm(f => ({ ...f, origen_cliente: e.target.value }))} placeholder="Referido, web, publicidad..." /></div>
             <div className="space-y-1.5"><Label>Próxima acción</Label><Input value={form.proxima_accion || ''} onChange={e => setForm(f => ({ ...f, proxima_accion: e.target.value }))} /></div>
+            <div className="col-span-2 space-y-1.5"><Label>Etiquetas fiscales</Label>
+              <EtiquetasManager etiquetas={form.etiquetas || []} onChange={tags => setForm(f => ({ ...f, etiquetas: tags }))} />
+            </div>
             <div className="col-span-2 space-y-1.5"><Label>Observaciones internas (confidencial)</Label>
               <Textarea value={form.observaciones_internas || ''} onChange={e => setForm(f => ({ ...f, observaciones_internas: e.target.value }))} rows={3} placeholder="Notas internas, incidencias, recomendaciones..." />
             </div>

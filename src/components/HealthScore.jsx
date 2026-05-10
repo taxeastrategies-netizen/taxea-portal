@@ -1,6 +1,9 @@
 import { cn } from '@/lib/utils';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
 
 export default function HealthScore({ score = 75, showDetail = false, motivos = [] }) {
+  const [expanded, setExpanded] = useState(false);
   const getCategory = (s) => {
     if (s >= 80) return { label: 'Excelente', color: 'text-green-600', bg: 'bg-green-500', trackBg: 'bg-green-100' };
     if (s >= 60) return { label: 'Controlado', color: 'text-blue-600', bg: 'bg-blue-500', trackBg: 'bg-blue-100' };
@@ -26,15 +29,25 @@ export default function HealthScore({ score = 75, showDetail = false, motivos = 
           style={{ width: `${Math.max(2, Math.min(100, score))}%` }}
         />
       </div>
-      {showDetail && motivos.length > 0 && (
-        <div className="mt-4 space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Factores detectados:</p>
-          {motivos.map((m, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0" />
-              {m}
+      {motivos.length > 0 && (
+        <div className="mt-3">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {expanded ? 'Ocultar factores' : 'Ver factores'}
+          </button>
+          {expanded && (
+            <div className="mt-2 space-y-1">
+              {motivos.map((m, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground flex-shrink-0 mt-1" />
+                  {m}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

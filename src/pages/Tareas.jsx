@@ -62,16 +62,63 @@ export default function Tareas() {
   const save = async () => {
     const payload = { ...form, company_id: company.id, creada_por: user?.email };
     if (editing) {
+      const prev = editing.estado;
       await base44.entities.Task.update(editing.id, payload);
+      // Si cambia el estado, registrar en timeline
+      if (prev !== form.estado) {
+        await base44.entities.TimelineEvent.create({
+          company_id: company.id,
+          tipo: form.estado === 'completada' ? 'tarea_completada' : 'tarea_creada',
+          titulo: `Tarea ${form.estado === 'completada' ? 'completada' : 'actualizada'}: ${form.titulo}`,
+          color: form.estado === 'completada' ? 'verde' : 'azul',
+          usuario_email: user?.email,
+          automatico: true,
+          visibilidad: form.interna ? 'admin' : 'ambos',
+        });
+      }
     } else {
       await base44.entities.Task.create(payload);
+      // Notificar al responsable y registrar en timeline
+      await base44.entities.TimelineEvent.create({
+        company_id: company.id,
+        tipo: 'tarea_creada',
+        titulo: `Nueva tarea: ${form.titulo}`,
+        descripcion: `Responsable: ${form.responsable} · Prioridad: ${form.prioridad}`,
+        color: form.prioridad === 'urgente' ? 'rojo' : form.prioridad === 'alta' ? 'amarillo' : 'azul',
+        usuario_email: user?.email,
+        automatico: true,
+        visibilidad: form.interna ? 'admin' : 'ambos',
+      });
+      // Crear notificación si hay responsable cliente
+      if (form.responsable === 'cliente' && !form.interna) {
+        await base44.entities.Notification.create({
+          company_id: company.id,
+          destinatario_email: company.owner_email || user?.email,
+          titulo: `Nueva tarea asignada: ${form.titulo}`,
+          mensaje: form.descripcion || `Prioridad: ${form.prioridad}`,
+          tipo: 'tarea',
+          leida: false,
+        });
+      }
     }
     setShowForm(false);
     load();
   };
 
   const updateEstado = async (id, estado) => {
+    const tarea = tareas.find(t => t.id === id);
     await base44.entities.Task.update(id, { estado });
+    if (estado === 'completada' && tarea) {
+      await base44.entities.TimelineEvent.create({
+        company_id: company.id,
+        tipo: 'tarea_completada',
+        titulo: `Tarea completada: ${tarea.titulo}`,
+        color: 'verde',
+        usuario_email: user?.email,
+        automatico: true,
+        visibilidad: tarea.interna ? 'admin' : 'ambos',
+      });
+    }
     load();
   };
 
@@ -255,6 +302,12 @@ export default function Tareas() {
                 <Input type="date" value={form.fecha_limite || ''} onChange={e => setForm({ ...form, fecha_limite: e.target.value })} />
               </div>
             </div>
+            {isAdmin && (
+              <div className="flex items-center gap-3 py-1">
+                <input type="checkbox" id="interna" checked={!!form.interna} onChange={e => setForm({ ...form, interna: e.target.checked })} className="rounded" />
+                <Label htmlFor="interna" className="cursor-pointer text-sm">Tarea interna (solo visible para Taxea)</Label>
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
               <Button onClick={save} disabled={!form.titulo}>Guardar</Button>
