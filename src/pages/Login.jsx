@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+import { TaxeaLogoFull, TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
+
 // ─── Branding panel izquierdo ───────────────────────────────────────────────
 const FEATURES = [
   { icon: FileText, text: 'Documentación 100% privada y segura' },
@@ -18,53 +20,83 @@ function BrandingPanel() {
   return (
     <div
       className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden select-none"
-      style={{ background: 'linear-gradient(160deg, #141414 60%, #1f0a0d 100%)' }}
+      style={{ background: 'linear-gradient(160deg, #0f0f0f 0%, #1a0608 100%)' }}
     >
-      {/* Decoración */}
-      <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-taxea-red/6 -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-taxea-red/4 translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 w-px h-40 bg-gradient-to-b from-transparent via-taxea-red/20 to-transparent pointer-events-none" />
+      {/* Glow decorativo premium */}
+      <div
+        className="absolute top-0 right-0 w-[480px] h-[480px] pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle at 80% 20%, rgba(184,37,53,0.12) 0%, transparent 65%)',
+        }}
+      />
+      <div
+        className="absolute bottom-0 left-0 w-[360px] h-[360px] pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle at 20% 90%, rgba(184,37,53,0.07) 0%, transparent 65%)',
+        }}
+      />
+      {/* Línea sutil lateral */}
+      <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-transparent via-white/5 to-transparent pointer-events-none" />
 
-      {/* Logo + tagline */}
+      {/* ── LOGO PRINCIPAL ── */}
       <div className="relative z-10">
-        <div className="mb-10">
-          <div className="mb-3">
-            <div className="bg-white rounded-2xl px-6 py-4 inline-block">
-              <img
-                src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
-                alt="Taxea Strategies"
-                className="h-24 w-auto object-contain"
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1 bg-taxea-red/30" />
-            <span className="text-taxea-red text-xs font-medium tracking-widest uppercase">Portal Privado</span>
-            <div className="h-px flex-1 bg-taxea-red/30" />
+      <div className="mb-10">
+      {/* Logo sobre tarjeta blanca premium */}
+      <div
+        className="inline-flex items-center justify-center rounded-2xl mb-6"
+        style={{
+          background: 'rgba(255,255,255,0.97)',
+          padding: '20px 36px',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.5), 0 2px 12px rgba(184,37,53,0.25)',
+        }}
+      >
+        <img
+          src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
+          alt="Taxea Strategies"
+          style={{ height: 96, width: 'auto', display: 'block', objectFit: 'contain' }}
+          draggable={false}
+        />
+      </div>
+
+          {/* Divisor con label */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(184,37,53,0.5), transparent)' }} />
+            <span className="text-xs font-medium tracking-[0.2em] uppercase" style={{ color: 'rgba(184,37,53,0.9)' }}>
+              Portal Privado
+            </span>
+            <div className="h-px flex-1" style={{ background: 'linear-gradient(270deg, rgba(184,37,53,0.5), transparent)' }} />
           </div>
         </div>
 
-        <h2 className="text-white font-jakarta text-4xl font-bold leading-tight mb-5">
+        <h2 className="text-white font-jakarta text-4xl font-bold leading-tight mb-5 tracking-tight">
           Tu área privada<br />
-          <span className="text-taxea-red">fiscal y contable.</span>
+          <span style={{ color: '#c9303f' }}>fiscal y contable.</span>
         </h2>
-        <p className="text-white/50 text-sm leading-relaxed max-w-xs">
+        <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Portal exclusivo para clientes de Taxea Strategies. Gestiona tu documentación, obligaciones fiscales y comunicación con tu asesor desde un entorno privado, seguro e inteligente.
         </p>
       </div>
 
-      {/* Features */}
-      <div className="relative z-10 space-y-3">
+      {/* ── FEATURES ── */}
+      <div className="relative z-10 space-y-2.5">
         {FEATURES.map(({ icon: Icon, text }) => (
           <div key={text} className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded-lg bg-taxea-red/10 border border-taxea-red/20 flex items-center justify-center flex-shrink-0 group-hover:bg-taxea-red/20 transition-colors">
-              <Icon className="w-3.5 h-3.5 text-taxea-red" />
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-105"
+              style={{
+                background: 'rgba(184,37,53,0.12)',
+                border: '1px solid rgba(184,37,53,0.25)',
+              }}
+            >
+              <Icon className="w-3.5 h-3.5" style={{ color: '#c9303f' }} />
             </div>
-            <p className="text-white/55 text-sm">{text}</p>
+            <p className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{text}</p>
           </div>
         ))}
-        <div className="pt-5 mt-2 border-t border-white/8">
-          <p className="text-white/20 text-xs">Portal privado · Cifrado SSL · Cumplimiento RGPD · © {new Date().getFullYear()} Taxea Strategies</p>
+        <div className="pt-5 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>
+            Portal privado · Cifrado SSL · Cumplimiento RGPD · © {new Date().getFullYear()} Taxea Strategies
+          </p>
         </div>
       </div>
     </div>
@@ -191,7 +223,7 @@ export default function Login() {
             <img
               src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
               alt="Taxea Strategies"
-              className="h-12 w-auto object-contain"
+              style={{ height: 44, width: 'auto', objectFit: 'contain', display: 'block' }}
             />
           </div>
 

@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
@@ -45,15 +46,19 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
         "lg:translate-x-0 lg:static lg:z-auto"
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <img
-              src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/8e45ad4fc_file_00000000a33871f499fac1209cc581e2.png"
-              alt="Taxea Strategies"
-              className="h-10 w-auto object-contain brightness-0 invert"
-            />
+        <div className="flex items-center justify-between px-4 py-4 border-b border-white/8">
+          <div className="flex items-center gap-2.5">
+            <TaxeaIsotipo size={32} />
+            <div className="flex flex-col leading-none">
+              <span className="text-white font-jakarta font-bold" style={{ fontSize: 13, letterSpacing: '0.07em' }}>
+                TAXEA
+              </span>
+              <span className="font-inter font-normal uppercase" style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.38)', letterSpacing: '0.2em' }}>
+                Strategies
+              </span>
+            </div>
           </div>
-          <button onClick={onClose} className="lg:hidden text-white/50 hover:text-white">
+          <button onClick={onClose} className="lg:hidden text-white/40 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
