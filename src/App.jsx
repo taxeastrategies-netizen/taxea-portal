@@ -36,6 +36,7 @@ import AdminAsistente from './pages/AdminAsistente';
 import BuzonSugerencias from './pages/BuzonSugerencias';
 import AdminSugerencias from './pages/AdminSugerencias';
 import AdminAfiliados from './pages/AdminAfiliados';
+import SubidaMasivaModelos from './pages/SubidaMasivaModelos';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -82,6 +83,7 @@ function AppWithContext({ user }) {
         <Route path="/sugerencias" element={<BuzonSugerencias />} />
         <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
         <Route path="/admin-afiliados" element={<AdminAfiliados />} />
+        <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
