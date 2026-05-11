@@ -59,7 +59,8 @@ export function useCompanyContext(user) {
 
   const refreshCompany = () => {
     if (user?.email) companyCache.delete(user.email);
-    loadCompany();
+    // Small delay to allow the DB write to propagate
+    setTimeout(() => loadCompany(), 300);
   };
 
   return { company, setCompany, loadingCompany: loading, refreshCompany };

@@ -37,7 +37,7 @@ import AdminAsistente from './pages/AdminAsistente';
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
-  const { company, loadingCompany, refreshCompany } = useCompanyContext(user);
+  const { company, loadingCompany, refreshCompany, setCompany } = useCompanyContext(user);
 
   // Admins no esperan a loadingCompany para ver el layout
   if (loadingCompany && !isAdmin) {
@@ -53,7 +53,7 @@ function AppWithContext({ user }) {
 
   return (
     <Routes>
-      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} />}>
+      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} refreshCompany={refreshCompany} />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tareas" element={<Tareas />} />
         <Route path="/timeline" element={<Timeline />} />

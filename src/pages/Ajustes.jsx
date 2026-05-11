@@ -1,33 +1,115 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Settings, Building2, Save, User, Shield } from 'lucide-react';
+import { Building2, Save, User, Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
+
+const EMPTY_FORM = {
+  nombre_comercial: '',
+  razon_social: '',
+  nif_cif: '',
+  telefono: '',
+  email: '',
+  direccion_fiscal: '',
+  regimen_fiscal: '',
+  tipo_impuesto: '',
+  actividad: '',
+  datos_bancarios: '',
+};
+
+function validate(form) {
+  const errors = {};
+  if (!form.razon_social?.trim()) errors.razon_social = 'Campo obligatorio';
+  if (!form.nif_cif?.trim()) errors.nif_cif = 'Campo obligatorio';
+  if (!form.email?.trim()) errors.email = 'Campo obligatorio';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Formato de email no válido';
+  if (!form.direccion_fiscal?.trim()) errors.direccion_fiscal = 'Campo obligatorio';
+  if (!form.regimen_fiscal) errors.regimen_fiscal = 'Selecciona una opción';
+  if (!form.tipo_impuesto) errors.tipo_impuesto = 'Selecciona una opción';
+  if (!form.actividad?.trim()) errors.actividad = 'Campo obligatorio';
+  if (!form.datos_bancarios?.trim()) errors.datos_bancarios = 'Campo obligatorio';
+  return errors;
+}
 
 export default function Ajustes() {
-  const { company, user, isAdmin } = useOutletContext() || {};
-  const [companyForm, setCompanyForm] = useState({});
+  const { company, user, isAdmin, refreshCompany } = useOutletContext() || {};
+  const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error'
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (company) setCompanyForm({ ...company });
-  }, [company]);
+    if (company) {
+      setForm({
+        nombre_comercial: company.nombre_comercial || '',
+        razon_social: company.razon_social || '',
+        nif_cif: company.nif_cif || '',
+        telefono: company.telefono || '',
+        email: company.email || '',
+        direccion_fiscal: company.direccion_fiscal || '',
+        regimen_fiscal: company.regimen_fiscal || '',
+        tipo_impuesto: company.tipo_impuesto || '',
+        actividad: company.actividad || '',
+        datos_bancarios: company.datos_bancarios || '',
+      });
+    }
+  }, [company?.id]);
+
+  const set = (field) => (e) => {
+    const val = e?.target ? e.target.value : e;
+    setForm(f => ({ ...f, [field]: val }));
+    if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+  };
 
   const handleSave = async () => {
-    if (!company?.id) return;
+    const validationErrors = validate(form);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     setSaving(true);
-    await base44.entities.Company.update(company.id, companyForm);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaveStatus(null);
+
+    try {
+      const payload = {
+        ...form,
+        owner_email: user?.email,
+        activa: true,
+      };
+
+      if (company?.id) {
+        await base44.entities.Company.update(company.id, payload);
+      } else {
+        await base44.entities.Company.create(payload);
+      }
+
+      if (refreshCompany) refreshCompany();
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus(null), 4000);
+    } catch (err) {
+      setSaveStatus('error');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const Field = ({ label, name, required, children, colSpan }) => (
+    <div className={`space-y-1.5${colSpan ? ' col-span-2' : ''}`}>
+      <Label>{label}{required ? ' *' : ''}</Label>
+      {children}
+      {errors[name] && (
+        <p className="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" /> {errors[name]}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -35,87 +117,132 @@ export default function Ajustes() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Datos de empresa */}
           <div className="bg-card rounded-xl border border-border shadow-card p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-9 h-9 bg-teal-light rounded-lg flex items-center justify-center">
                 <Building2 className="w-4 h-4 text-teal" />
               </div>
-              <h2 className="font-jakarta font-semibold text-foreground">Datos de la empresa</h2>
+              <div>
+                <h2 className="font-jakarta font-semibold text-foreground">Datos de la empresa</h2>
+                {!company && (
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    Completa los datos de tu empresa para poder crear facturas y utilizar Taxea Portal.
+                  </p>
+                )}
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Nombre comercial</Label>
-                <Input value={companyForm.nombre_comercial || ''} onChange={e => setCompanyForm(f => ({ ...f, nombre_comercial: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Razón social *</Label>
-                <Input value={companyForm.razon_social || ''} onChange={e => setCompanyForm(f => ({ ...f, razon_social: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>NIF / CIF *</Label>
-                <Input value={companyForm.nif_cif || ''} onChange={e => setCompanyForm(f => ({ ...f, nif_cif: e.target.value }))} placeholder="B12345678" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Teléfono</Label>
-                <Input value={companyForm.telefono || ''} onChange={e => setCompanyForm(f => ({ ...f, telefono: e.target.value }))} />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={companyForm.email || ''} onChange={e => setCompanyForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Dirección fiscal</Label>
-                <Input value={companyForm.direccion_fiscal || ''} onChange={e => setCompanyForm(f => ({ ...f, direccion_fiscal: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Régimen fiscal</Label>
-                <Select value={companyForm.regimen_fiscal || ''} onValueChange={v => setCompanyForm(f => ({ ...f, regimen_fiscal: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              <Field label="Nombre comercial" name="nombre_comercial">
+                <Input value={form.nombre_comercial} onChange={set('nombre_comercial')} placeholder="Nombre con el que opera" />
+              </Field>
+
+              <Field label="Razón social" name="razon_social" required>
+                <Input
+                  value={form.razon_social}
+                  onChange={set('razon_social')}
+                  placeholder="Nombre fiscal completo"
+                  className={errors.razon_social ? 'border-destructive' : ''}
+                />
+              </Field>
+
+              <Field label="NIF / CIF" name="nif_cif" required>
+                <Input
+                  value={form.nif_cif}
+                  onChange={set('nif_cif')}
+                  placeholder="B12345678"
+                  className={errors.nif_cif ? 'border-destructive' : ''}
+                />
+              </Field>
+
+              <Field label="Teléfono" name="telefono">
+                <Input value={form.telefono} onChange={set('telefono')} placeholder="+34 600 000 000" />
+              </Field>
+
+              <Field label="Email" name="email" required colSpan>
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder="empresa@ejemplo.com"
+                  className={errors.email ? 'border-destructive' : ''}
+                />
+              </Field>
+
+              <Field label="Dirección fiscal" name="direccion_fiscal" required colSpan>
+                <Input
+                  value={form.direccion_fiscal}
+                  onChange={set('direccion_fiscal')}
+                  placeholder="Calle, número, CP, municipio, provincia"
+                  className={errors.direccion_fiscal ? 'border-destructive' : ''}
+                />
+              </Field>
+
+              <Field label="Régimen fiscal" name="regimen_fiscal" required>
+                <Select value={form.regimen_fiscal} onValueChange={set('regimen_fiscal')}>
+                  <SelectTrigger className={errors.regimen_fiscal ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="autonomo">Autónomo</SelectItem>
                     <SelectItem value="sociedad_limitada">Sociedad Limitada</SelectItem>
-                    <SelectItem value="sociedad_anonima">Sociedad Anónima</SelectItem>
+                    <SelectItem value="profesional">Profesional</SelectItem>
+                    <SelectItem value="empresario_individual">Empresario individual</SelectItem>
                     <SelectItem value="comunidad_bienes">Comunidad de Bienes</SelectItem>
-                    <SelectItem value="asociacion">Asociación</SelectItem>
                     <SelectItem value="otro">Otro</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo de impuesto</Label>
-                <Select value={companyForm.tipo_impuesto || ''} onValueChange={v => setCompanyForm(f => ({ ...f, tipo_impuesto: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+              </Field>
+
+              <Field label="Tipo de impuesto" name="tipo_impuesto" required>
+                <Select value={form.tipo_impuesto} onValueChange={set('tipo_impuesto')}>
+                  <SelectTrigger className={errors.tipo_impuesto ? 'border-destructive' : ''}>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="iva">IVA</SelectItem>
                     <SelectItem value="igic">IGIC (Canarias)</SelectItem>
-                    <SelectItem value="exento">Exento</SelectItem>
-                    <SelectItem value="mixto">Mixto</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Actividad económica</Label>
-                <Input value={companyForm.actividad || ''} onChange={e => setCompanyForm(f => ({ ...f, actividad: e.target.value }))} placeholder="Ej: Consultoría informática" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Epígrafe IAE</Label>
-                <Input value={companyForm.epigrafe_iae || ''} onChange={e => setCompanyForm(f => ({ ...f, epigrafe_iae: e.target.value }))} placeholder="Ej: 773" />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Datos bancarios (opcional)</Label>
-                <Textarea
-                  value={companyForm.datos_bancarios || ''}
-                  onChange={e => setCompanyForm(f => ({ ...f, datos_bancarios: e.target.value }))}
-                  placeholder="IBAN, entidad bancaria..."
-                  rows={2}
+              </Field>
+
+              <Field label="Actividad económica" name="actividad" required colSpan>
+                <Input
+                  value={form.actividad}
+                  onChange={set('actividad')}
+                  placeholder="Ej: Consultoría informática"
+                  className={errors.actividad ? 'border-destructive' : ''}
                 />
-              </div>
+              </Field>
+
+              <Field label="Datos bancarios" name="datos_bancarios" required colSpan>
+                <Textarea
+                  value={form.datos_bancarios}
+                  onChange={set('datos_bancarios')}
+                  placeholder="IBAN y entidad bancaria"
+                  rows={2}
+                  className={errors.datos_bancarios ? 'border-destructive' : ''}
+                />
+              </Field>
             </div>
+
+            {saveStatus === 'success' && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Datos de empresa guardados correctamente.
+              </div>
+            )}
+            {saveStatus === 'error' && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                No se pudieron guardar los cambios. Revisa los campos e inténtalo de nuevo.
+              </div>
+            )}
+
             <div className="flex justify-end mt-5">
               <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
                 <Save className="w-4 h-4 mr-2" />
-                {saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'}
+                {saving ? 'Guardando...' : 'Guardar cambios'}
               </Button>
             </div>
           </div>
@@ -123,7 +250,6 @@ export default function Ajustes() {
 
         {/* Panel derecho */}
         <div className="space-y-4">
-          {/* Info usuario */}
           <div className="bg-card rounded-xl border border-border shadow-card p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-9 h-9 bg-teal-light rounded-lg flex items-center justify-center">
@@ -149,7 +275,6 @@ export default function Ajustes() {
             </div>
           </div>
 
-          {/* Info seguridad */}
           <div className="bg-card rounded-xl border border-border shadow-card p-5">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -165,7 +290,6 @@ export default function Ajustes() {
             </p>
           </div>
 
-          {/* Contacto asesor */}
           <div className="bg-teal/5 border border-teal/20 rounded-xl p-5">
             <p className="text-sm font-medium text-teal mb-1">¿Necesitas ayuda?</p>
             <p className="text-xs text-muted-foreground">
