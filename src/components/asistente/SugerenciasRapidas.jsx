@@ -1,32 +1,31 @@
-import { Zap } from 'lucide-react';
-
-const PREGUNTAS_SUGERIDAS = [
-  { texto: '¿Qué gastos puedo deducirme?', icono: '💡' },
-  { texto: '¿Cuándo tengo que presentar el IVA?', icono: '📅' },
-  { texto: '¿Es deducible el portátil?', icono: '💻' },
-  { texto: '¿Qué es el modelo 130?', icono: '📋' },
-  { texto: '¿Puedo deducirme el home office?', icono: '🏠' },
-  { texto: '¿Cuánto tiempo guardo las facturas?', icono: '🗂️' },
-  { texto: '¿Tengo que retener IRPF?', icono: '📊' },
-  { texto: '¿Qué diferencia hay entre IVA e IGIC?', icono: '🏝️' },
+const SUGERENCIAS = [
+  { emoji: '🏢', texto: '¿Cuándo tengo que darme de alta como autónomo?' },
+  { emoji: '📊', texto: '¿Qué gastos puedo deducir como autónomo?' },
+  { emoji: '📄', texto: '¿Cuándo se presenta el modelo 303 de IVA?' },
+  { emoji: '🏝️', texto: '¿Qué diferencia hay entre IVA e IGIC en Canarias?' },
+  { emoji: '🚗', texto: '¿El vehículo es deducible para un autónomo?' },
+  { emoji: '🏠', texto: '¿Puedo deducir gastos si trabajo desde casa?' },
+  { emoji: '💻', texto: '¿Puedo deducir el software y suscripciones digitales?' },
+  { emoji: '📱', texto: '¿Puedo deducir el teléfono móvil?' },
+  { emoji: '📅', texto: '¿Cuándo presento el modelo 130 de IRPF?' },
+  { emoji: '🧾', texto: '¿Qué debe contener una factura correcta?' },
+  { emoji: '🌍', texto: '¿Cómo facturo a una empresa de la Unión Europea?' },
+  { emoji: '🤝', texto: '¿Qué es el REPEP en Canarias y quién puede acogerse?' },
 ];
 
 export default function SugerenciasRapidas({ onSelect }) {
   return (
-    <div className="p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Zap className="w-3.5 h-3.5 text-primary" />
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Consultas frecuentes</span>
-      </div>
-      <div className="grid grid-cols-1 gap-1.5">
-        {PREGUNTAS_SUGERIDAS.map((p, i) => (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground px-1">Preguntas frecuentes:</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        {SUGERENCIAS.map((s, i) => (
           <button
             key={i}
-            onClick={() => onSelect(p.texto)}
-            className="flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg border border-border/60 hover:border-primary/30 hover:bg-accent/40 transition-all text-sm text-foreground group"
+            onClick={() => onSelect(s.texto)}
+            className="flex items-start gap-2 text-left text-xs px-3 py-2 rounded-lg border border-border/60 bg-card hover:bg-accent hover:border-primary/30 hover:text-primary transition-all group"
           >
-            <span className="text-base leading-none flex-shrink-0">{p.icono}</span>
-            <span className="group-hover:text-primary transition-colors">{p.texto}</span>
+            <span className="text-sm flex-shrink-0 mt-0.5">{s.emoji}</span>
+            <span className="text-muted-foreground group-hover:text-primary leading-snug">{s.texto}</span>
           </button>
         ))}
       </div>

@@ -78,9 +78,11 @@ export default function AsistenteFiscal() {
       contenido: data.respuesta || 'No pude procesar tu consulta. Por favor, inténtalo de nuevo.',
       hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       nivel_riesgo: data.nivel_riesgo,
+      nivel_confianza: data.nivel_confianza,
       impuesto: data.impuesto_detectado,
       sugerencias: data.sugerencias || [],
       fuente: data.fuente,
+      fuentes_usadas: data.fuentes_usadas || [],
       derivar_asesor: data.derivar_asesor,
       consulta_id: data.consulta_id,
     };

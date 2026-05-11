@@ -239,9 +239,14 @@ export default function AdminAsistente() {
                         {c.valoracion === 'util' && <ThumbsUp className="w-3.5 h-3.5 text-emerald-500" />}
                         {c.valoracion === 'no_util' && <ThumbsDown className="w-3.5 h-3.5 text-red-400" />}
                       </div>
-                      <p className="font-medium text-sm text-foreground mb-1 truncate">❓ {c.pregunta}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{c.respuesta}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{new Date(c.created_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="font-medium text-sm text-foreground mb-1">❓ {c.pregunta}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-1">{c.respuesta}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-muted-foreground">{new Date(c.created_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                        {c.fuente === 'ia_generada' && <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">IA + Web</span>}
+                        {c.fuente === 'preaprobada' && <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">Base interna</span>}
+                        {c.requiere_entrenamiento && <span className="text-xs text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-full">⚠ Revisar</span>}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {!c.tarea_creada && (
