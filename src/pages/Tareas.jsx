@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, CheckCircle, Clock, AlertTriangle, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -36,7 +37,7 @@ const EMPTY = {
 };
 
 export default function Tareas() {
-  const { company, user, isAdmin } = useOutletContext() || {};
+  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -45,7 +46,13 @@ export default function Tareas() {
   const [filterEstado, setFilterEstado] = useState('all');
   const [filterResp, setFilterResp] = useState('all');
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) {
+      load();
+    } else if (!loadingCompany) {
+      setLoading(false);
+    }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -136,6 +143,11 @@ export default function Tareas() {
   const pendientes = tareas.filter(t => !['completada', 'cancelada'].includes(t.estado)).length;
   const completadas = tareas.filter(t => t.estado === 'completada').length;
   const urgentes = tareas.filter(t => t.prioridad === 'urgente' && !['completada', 'cancelada'].includes(t.estado)).length;
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Tareas" />;
 
   return (
     <div>

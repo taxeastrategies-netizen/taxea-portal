@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Clock, FileText, CheckCircle, AlertTriangle, Info, MessageSquare, Plus, Lock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -40,7 +41,7 @@ const COLOR_DOT = {
 };
 
 export default function Timeline() {
-  const { company, user, isAdmin } = useOutletContext() || {};
+  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterTipo, setFilterTipo] = useState('all');
@@ -49,7 +50,13 @@ export default function Timeline() {
   const [form, setForm] = useState({ titulo: '', descripcion: '', tipo: 'nota_interna', color: 'gris', visibilidad: 'admin' });
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) {
+      load();
+    } else if (!loadingCompany) {
+      setLoading(false);
+    }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -87,6 +94,11 @@ export default function Timeline() {
     acc[date].push(ev);
     return acc;
   }, {});
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="el Timeline" />;
 
   return (
     <div>

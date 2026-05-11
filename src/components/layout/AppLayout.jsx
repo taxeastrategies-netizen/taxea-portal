@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
 
-export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole }) {
+export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -24,7 +24,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
         />
         <main className="flex-1 overflow-y-auto">
           <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-            <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole }} />
+            <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany }} />
           </div>
         </main>
       </div>

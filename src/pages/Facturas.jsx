@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Search, Download, Upload, Eye, MoreVertical, FileText } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -22,7 +23,7 @@ const EMPTY_INVOICE = {
 };
 
 export default function Facturas() {
-  const { company, user, isAdmin } = useOutletContext() || {};
+  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [invoices, setInvoices] = useState([]);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('all');
@@ -33,10 +34,15 @@ export default function Facturas() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_INVOICE);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    if (company?.id) loadInvoices();
-  }, [company?.id]);
+    if (company?.id) {
+      loadInvoices();
+    } else if (!loadingCompany) {
+      setLoading(false);
+    }
+  }, [company?.id, loadingCompany]);
 
   const loadInvoices = async () => {
     setLoading(true);
@@ -46,6 +52,10 @@ export default function Facturas() {
   };
 
   const handleSave = async () => {
+    setSaveError('');
+    if (!form.numero_factura) { setSaveError('El número de factura es obligatorio.'); return; }
+    if (!form.fecha_emision) { setSaveError('La fecha de emisión es obligatoria.'); return; }
+    if (!form.base_imponible) { setSaveError('La base imponible es obligatoria.'); return; }
     setSaving(true);
     const year = form.fecha_emision ? new Date(form.fecha_emision).getFullYear() : new Date().getFullYear();
     const month = form.fecha_emision ? new Date(form.fecha_emision).getMonth() + 1 : new Date().getMonth() + 1;
@@ -65,16 +75,32 @@ export default function Facturas() {
       trimestre,
       subido_por: user?.email,
     };
-    if (editing) {
-      await base44.entities.Invoice.update(editing.id, payload);
-    } else {
-      await base44.entities.Invoice.create(payload);
+    try {
+      if (editing) {
+        await base44.entities.Invoice.update(editing.id, payload);
+      } else {
+        await base44.entities.Invoice.create(payload);
+        // Registrar en timeline
+        base44.entities.TimelineEvent.create({
+          company_id: company.id,
+          tipo: 'factura_clasificada',
+          titulo: `Nueva factura: ${payload.numero_factura}`,
+          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${payload.cliente_nombre || ''} · ${(payload.total_factura || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
+          color: 'azul',
+          usuario_email: user?.email,
+          automatico: true,
+          visibilidad: 'ambos',
+        }).catch(() => {});
+      }
+      setSaving(false);
+      setShowForm(false);
+      setEditing(null);
+      setForm(EMPTY_INVOICE);
+      loadInvoices();
+    } catch (err) {
+      setSaveError('No se pudo guardar la factura. Inténtalo de nuevo.');
+      setSaving(false);
     }
-    setSaving(false);
-    setShowForm(false);
-    setEditing(null);
-    setForm(EMPTY_INVOICE);
-    loadInvoices();
   };
 
   const openEdit = (inv) => {
@@ -98,6 +124,11 @@ export default function Facturas() {
     const matchTipo = i.tipo === filterTipo;
     return matchSearch && matchEstado && matchTrimestre && matchTipo;
   });
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="la sección de Facturas" />;
 
   return (
     <div>
@@ -307,6 +338,9 @@ export default function Facturas() {
               <Input value={form.comentarios || ''} onChange={e => setForm(f => ({ ...f, comentarios: e.target.value }))} placeholder="Notas adicionales..." />
             </div>
           </div>
+          {saveError && (
+            <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-2">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">

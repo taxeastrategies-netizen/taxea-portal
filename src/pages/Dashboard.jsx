@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import {
   TrendingUp, TrendingDown, FileText, Calendar, AlertTriangle,
   Clock, CheckCircle, Euro, BarChart3, Bell, CheckSquare, Upload
@@ -19,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 
 export default function Dashboard() {
-  const { user, company, isAdmin } = useOutletContext() || {};
+  const { user, company, isAdmin, loadingCompany } = useOutletContext() || {};
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [obligations, setObligations] = useState([]);
@@ -33,7 +34,14 @@ export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
 
-  useEffect(() => { if (company?.id) loadData(); }, [company?.id, selectedYear]);
+  useEffect(() => {
+    if (company?.id) {
+      loadData();
+    } else if (!loadingCompany) {
+      // Company finished loading but is null — stop spinner
+      setLoading(false);
+    }
+  }, [company?.id, selectedYear, loadingCompany]);
 
   const loadData = async () => {
     setLoading(true);
@@ -89,7 +97,37 @@ export default function Dashboard() {
       estadoFiscal, healthScore, healthMotivos, recentActivity };
   }, [invoices, expenses, obligations, tasks, errors, crmData]);
 
-  if (loading) return <DashboardSkeleton />;
+  // Aún cargando empresa
+  if (loading || loadingCompany) return <DashboardSkeleton />;
+
+  // Usuario sin empresa configurada — mostrar onboarding
+  if (!company) return (
+    <div className="animate-fade-in">
+      <div className="mb-6">
+        <h1 className="text-2xl font-jakarta font-bold text-foreground">
+          Bienvenido{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''} 👋
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">Tu portal fiscal de Taxea Strategies</p>
+      </div>
+      <div className="bg-card border border-border rounded-2xl p-10 text-center shadow-card max-w-xl mx-auto">
+        <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Upload className="w-8 h-8 text-primary" />
+        </div>
+        <h2 className="text-xl font-jakarta font-bold text-foreground mb-2">¡Configura tu empresa!</h2>
+        <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
+          Todavía no has configurado los datos de tu empresa. Es el primer paso para activar todas las funcionalidades del portal: facturas, documentos, obligaciones fiscales y más.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button asChild className="bg-primary hover:bg-primary/90 gap-2">
+            <Link to="/ajustes"><CheckCircle className="w-4 h-4" /> Configurar empresa</Link>
+          </Button>
+          <Button asChild variant="outline" className="gap-2">
+            <Link to="/facturas"><FileText className="w-4 h-4" /> Ir a facturas</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="animate-fade-in">

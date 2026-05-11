@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Search, FileCheck, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';

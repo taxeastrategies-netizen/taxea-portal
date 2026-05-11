@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Upload, FolderOpen, Download, MoreVertical, Search, File } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -26,7 +27,7 @@ const CARPETAS = [
 ];
 
 export default function Documentos() {
-  const { company, user, isAdmin } = useOutletContext() || {};
+  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -36,7 +37,13 @@ export default function Documentos() {
   const [formData, setFormData] = useState({ nombre: '', carpeta: 'otros', comentarios: '' });
   const [file, setFile] = useState(null);
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) {
+      load();
+    } else if (!loadingCompany) {
+      setLoading(false);
+    }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -75,6 +82,11 @@ export default function Documentos() {
     const matchCarpeta = filterCarpeta === 'all' || d.carpeta === filterCarpeta;
     return matchSearch && matchCarpeta;
   });
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Documentos" />;
 
   return (
     <div>

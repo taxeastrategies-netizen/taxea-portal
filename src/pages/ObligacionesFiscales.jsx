@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, Link } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Calendar, AlertTriangle, CheckCircle, Clock, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -37,7 +38,7 @@ const EMPTY = {
 };
 
 export default function ObligacionesFiscales() {
-  const { company, isAdmin } = useOutletContext() || {};
+  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
   const [obligations, setObligations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -46,7 +47,13 @@ export default function ObligacionesFiscales() {
   const [saving, setSaving] = useState(false);
   const [filterEstado, setFilterEstado] = useState('all');
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) {
+      load();
+    } else if (!loadingCompany) {
+      setLoading(false);
+    }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -75,6 +82,11 @@ export default function ObligacionesFiscales() {
   };
 
   const filtered = obligations.filter(o => filterEstado === 'all' || o.estado === filterEstado);
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Obligaciones Fiscales" />;
 
   return (
     <div>
