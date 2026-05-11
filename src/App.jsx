@@ -33,6 +33,8 @@ import CRMInterno from './pages/CRMInterno';
 import Notificaciones from './pages/Notificaciones';
 import AsistenteFiscal from './pages/AsistenteFiscal';
 import AdminAsistente from './pages/AdminAsistente';
+import BuzonSugerencias from './pages/BuzonSugerencias';
+import AdminSugerencias from './pages/AdminSugerencias';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -76,6 +78,8 @@ function AppWithContext({ user }) {
         <Route path="/notificaciones" element={<Notificaciones />} />
         <Route path="/asistente" element={<AsistenteFiscal />} />
         <Route path="/admin-asistente" element={<AdminAsistente />} />
+        <Route path="/sugerencias" element={<BuzonSugerencias />} />
+        <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

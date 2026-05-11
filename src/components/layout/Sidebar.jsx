@@ -5,7 +5,7 @@ import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
   Users, Package, BookOpen, BookMarked, ScanLine, ScanText,
   Calendar, FolderOpen, Settings, X, Shield, CheckSquare,
-  Clock, AlertTriangle, BarChart2, Bell, Sparkles, Brain
+  Clock, AlertTriangle, BarChart2, Bell, Sparkles, Brain, Lightbulb
 } from 'lucide-react';
 
 const menuItems = [
@@ -108,6 +108,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                 { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
                 { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
                 { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },
+                { to: '/admin-sugerencias', label: 'Buzón Sugerencias', icon: Lightbulb },
               ].map(({ to, label, icon: Icon }) => (
                 <Link
                   key={to}
@@ -134,6 +135,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
               { to: '/timeline', label: 'Timeline', icon: Clock },
               { to: '/notificaciones', label: 'Notificaciones', icon: Bell },
               { to: '/asistente', label: 'Asistente Fiscal IA', icon: Sparkles },
+              { to: '/sugerencias', label: 'Buzón de Mejoras', icon: Lightbulb },
             ].map(({ to, label, icon: Icon }) => {
               const isActive = location.pathname.startsWith(to);
               return (

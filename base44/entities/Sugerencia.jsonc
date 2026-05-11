@@ -1,0 +1,79 @@
+{
+  "name": "Sugerencia",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "nueva_funcionalidad",
+        "mejora_visual",
+        "error",
+        "ia",
+        "contabilidad",
+        "facturacion",
+        "dashboard",
+        "rendimiento",
+        "movil",
+        "otro"
+      ],
+      "default": "nueva_funcionalidad"
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "nueva",
+        "pendiente_revision",
+        "en_estudio",
+        "aprobada",
+        "en_desarrollo",
+        "implementada",
+        "rechazada"
+      ],
+      "default": "nueva"
+    },
+    "archivo_url": {
+      "type": "string"
+    },
+    "usuario_email": {
+      "type": "string"
+    },
+    "usuario_nombre": {
+      "type": "string"
+    },
+    "nota_admin": {
+      "type": "string"
+    },
+    "publica": {
+      "type": "boolean",
+      "default": false
+    },
+    "votos": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "titulo",
+    "descripcion",
+    "tipo"
+  ]
+}
