@@ -1,297 +1,62 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
-import { Building2, Save, User, Shield, AlertCircle, CheckCircle2, ImagePlus, X } from 'lucide-react';
+import { Building2, Shield, Users, CheckSquare, Bell, User } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+import TabEmpresa from '@/components/ajustes/TabEmpresa';
+import TabSeguridad from '@/components/ajustes/TabSeguridad';
+import TabAfiliados from '@/components/ajustes/TabAfiliados';
+import TabOnboarding from '@/components/ajustes/TabOnboarding';
+import TabNotificaciones from '@/components/ajustes/TabNotificaciones';
 
-// ─── Field helper — defined OUTSIDE the page component so it never gets
-//     re-created on each render (which would destroy/remount the <input>
-//     and cause focus loss on every keystroke).
-function Field({ label, name, required, error, colSpan, children }) {
-  return (
-    <div className={`space-y-1.5${colSpan ? ' col-span-2' : ''}`}>
-      <Label>{label}{required ? ' *' : ''}</Label>
-      {children}
-      {error && (
-        <p className="text-xs text-destructive flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" /> {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-const EMPTY_FORM = {
-  nombre_comercial: '',
-  razon_social: '',
-  nif_cif: '',
-  telefono: '',
-  email: '',
-  direccion_fiscal: '',
-  regimen_fiscal: '',
-  tipo_impuesto: '',
-  actividad: '',
-  datos_bancarios: '',
-  logo_url: '',
-};
-
-function validate(form) {
-  const e = {};
-  if (!form.razon_social?.trim()) e.razon_social = 'Campo obligatorio';
-  if (!form.nif_cif?.trim()) e.nif_cif = 'Campo obligatorio';
-  if (!form.email?.trim()) e.email = 'Campo obligatorio';
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Formato de email no válido';
-  if (!form.direccion_fiscal?.trim()) e.direccion_fiscal = 'Campo obligatorio';
-  if (!form.regimen_fiscal) e.regimen_fiscal = 'Selecciona una opción';
-  if (!form.tipo_impuesto) e.tipo_impuesto = 'Selecciona una opción';
-  if (!form.actividad?.trim()) e.actividad = 'Campo obligatorio';
-  if (!form.datos_bancarios?.trim()) e.datos_bancarios = 'Campo obligatorio';
-  return e;
-}
+const TABS = [
+  { id: 'empresa',        label: 'Empresa',        icon: Building2 },
+  { id: 'onboarding',     label: 'Primeros pasos', icon: CheckSquare },
+  { id: 'seguridad',      label: 'Seguridad',      icon: Shield },
+  { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
+  { id: 'afiliados',      label: 'Referidos',      icon: Users },
+];
 
 export default function Ajustes() {
   const { company, user, isAdmin, refreshCompany } = useOutletContext() || {};
-
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error'
-  const [errors, setErrors] = useState({});
-  const [dirty, setDirty] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const logoInputRef = useRef(null);
-
-  // Load initial data once (when company first becomes available)
-  const loadedRef = useRef(false);
-  useEffect(() => {
-    if (company && !loadedRef.current) {
-      loadedRef.current = true;
-      setForm({
-        nombre_comercial: company.nombre_comercial || '',
-        razon_social: company.razon_social || '',
-        nif_cif: company.nif_cif || '',
-        telefono: company.telefono || '',
-        email: company.email || '',
-        direccion_fiscal: company.direccion_fiscal || '',
-        regimen_fiscal: company.regimen_fiscal || '',
-        tipo_impuesto: company.tipo_impuesto || '',
-        actividad: company.actividad || '',
-        datos_bancarios: company.datos_bancarios || '',
-        logo_url: company.logo_url || '',
-      });
-    }
-  }, [company]);
-
-  // Generic text input handler — stable reference via useCallback
-  const handleChange = useCallback((field) => (e) => {
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
-    setDirty(true);
-    setErrors(prev => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  }, []);
-
-  // Select handler
-  const handleSelect = useCallback((field) => (value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    setDirty(true);
-    setErrors(prev => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  }, []);
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingLogo(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    setForm(prev => ({ ...prev, logo_url: file_url }));
-    setDirty(true);
-    setUploadingLogo(false);
-  };
-
-  const handleSave = async () => {
-    const validationErrors = validate(form);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
-    setSaving(true);
-    setSaveStatus(null);
-
-    try {
-      const payload = { ...form, owner_email: user?.email, activa: true };
-
-      if (company?.id) {
-        await base44.entities.Company.update(company.id, payload);
-      } else {
-        await base44.entities.Company.create(payload);
-      }
-
-      setDirty(false);
-      loadedRef.current = false; // allow re-load on next company refresh
-      if (refreshCompany) refreshCompany();
-      setSaveStatus('success');
-      setTimeout(() => setSaveStatus(null), 4000);
-    } catch {
-      setSaveStatus('error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [activeTab, setActiveTab] = useState('empresa');
 
   return (
     <div>
-      <PageHeader title="Ajustes" subtitle="Configuración de empresa y perfil" />
+      <PageHeader title="Ajustes" subtitle="Configuración de empresa, seguridad y preferencias" />
+
+      {/* Tabs */}
+      <div className="flex gap-1 flex-wrap mb-6 bg-secondary/40 border border-border rounded-xl p-1">
+        {TABS.map(t => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                activeTab === t.id
+                  ? 'bg-card text-foreground shadow-card'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-card rounded-xl border border-border shadow-card p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 bg-teal-light rounded-lg flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-teal" />
-              </div>
-              <div>
-                <h2 className="font-jakarta font-semibold text-foreground">Datos de la empresa</h2>
-                {!company && (
-                  <p className="text-xs text-amber-600 mt-0.5">
-                    Completa los datos de tu empresa para poder crear facturas y utilizar Taxea Portal.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Nombre comercial" name="nombre_comercial" error={errors.nombre_comercial}>
-                <Input value={form.nombre_comercial} onChange={handleChange('nombre_comercial')} placeholder="Nombre con el que opera" />
-              </Field>
-
-              <Field label="Razón social" name="razon_social" required error={errors.razon_social}>
-                <Input value={form.razon_social} onChange={handleChange('razon_social')} placeholder="Nombre fiscal completo" className={errors.razon_social ? 'border-destructive' : ''} />
-              </Field>
-
-              <Field label="NIF / CIF" name="nif_cif" required error={errors.nif_cif}>
-                <Input value={form.nif_cif} onChange={handleChange('nif_cif')} placeholder="B12345678" className={errors.nif_cif ? 'border-destructive' : ''} />
-              </Field>
-
-              <Field label="Teléfono" name="telefono" error={errors.telefono}>
-                <Input value={form.telefono} onChange={handleChange('telefono')} placeholder="+34 600 000 000" />
-              </Field>
-
-              <Field label="Email" name="email" required error={errors.email} colSpan>
-                <Input type="email" value={form.email} onChange={handleChange('email')} placeholder="empresa@ejemplo.com" className={errors.email ? 'border-destructive' : ''} />
-              </Field>
-
-              <Field label="Dirección fiscal" name="direccion_fiscal" required error={errors.direccion_fiscal} colSpan>
-                <Input value={form.direccion_fiscal} onChange={handleChange('direccion_fiscal')} placeholder="Calle, número, CP, municipio, provincia" className={errors.direccion_fiscal ? 'border-destructive' : ''} />
-              </Field>
-
-              <Field label="Régimen fiscal" name="regimen_fiscal" required error={errors.regimen_fiscal}>
-                <Select value={form.regimen_fiscal} onValueChange={handleSelect('regimen_fiscal')}>
-                  <SelectTrigger className={errors.regimen_fiscal ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="autonomo">Autónomo</SelectItem>
-                    <SelectItem value="sociedad_limitada">Sociedad Limitada</SelectItem>
-                    <SelectItem value="profesional">Profesional</SelectItem>
-                    <SelectItem value="empresario_individual">Empresario individual</SelectItem>
-                    <SelectItem value="comunidad_bienes">Comunidad de Bienes</SelectItem>
-                    <SelectItem value="otro">Otro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field label="Tipo de impuesto" name="tipo_impuesto" required error={errors.tipo_impuesto}>
-                <Select value={form.tipo_impuesto} onValueChange={handleSelect('tipo_impuesto')}>
-                  <SelectTrigger className={errors.tipo_impuesto ? 'border-destructive' : ''}>
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="iva">IVA</SelectItem>
-                    <SelectItem value="igic">IGIC (Canarias)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field label="Actividad económica" name="actividad" required error={errors.actividad} colSpan>
-                <Input value={form.actividad} onChange={handleChange('actividad')} placeholder="Ej: Consultoría informática" className={errors.actividad ? 'border-destructive' : ''} />
-              </Field>
-
-              {/* Logo */}
-              <div className="col-span-2 space-y-2">
-                <Label>Logo de empresa</Label>
-                <p className="text-xs text-muted-foreground">Este logo se utilizará automáticamente en las facturas emitidas desde Taxea Portal.</p>
-                <div className="flex items-center gap-4">
-                  {form.logo_url ? (
-                    <div className="relative">
-                      <img src={form.logo_url} alt="Logo empresa" className="h-16 max-w-[160px] object-contain rounded-lg border border-border bg-white p-2" />
-                      <button
-                        onClick={() => { setForm(prev => ({ ...prev, logo_url: '' })); setDirty(true); }}
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive rounded-full flex items-center justify-center text-white hover:bg-destructive/80">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-secondary/30">
-                      <ImagePlus className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div>
-                    <Button type="button" variant="outline" size="sm" disabled={uploadingLogo}
-                      onClick={() => logoInputRef.current?.click()}>
-                      {uploadingLogo ? 'Subiendo...' : form.logo_url ? 'Cambiar logo' : 'Subir logo'}
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP · Máx. 5 MB</p>
-                    <input ref={logoInputRef} type="file" accept="image/png,image/jpg,image/jpeg,image/webp,image/svg+xml"
-                      className="hidden" onChange={handleLogoUpload} />
-                  </div>
-                </div>
-              </div>
-
-              <Field label="Datos bancarios *" name="datos_bancarios" error={errors.datos_bancarios} colSpan>
-                <Textarea value={form.datos_bancarios} onChange={handleChange('datos_bancarios')} placeholder="IBAN y entidad bancaria" rows={2} className={errors.datos_bancarios ? 'border-destructive' : ''} />
-              </Field>
-            </div>
-
-            {/* Status messages */}
-            {dirty && !saveStatus && (
-              <p className="mt-4 text-xs text-amber-600">Cambios sin guardar</p>
-            )}
-            {saveStatus === 'success' && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Datos de empresa guardados correctamente.
-              </div>
-            )}
-            {saveStatus === 'error' && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                No se pudieron guardar los cambios. Revisa los campos e inténtalo de nuevo.
-              </div>
-            )}
-
-            <div className="flex justify-end mt-5">
-              <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? 'Guardando...' : 'Guardar cambios'}
-              </Button>
-            </div>
-          </div>
+        <div className="lg:col-span-2">
+          {activeTab === 'empresa'        && <TabEmpresa company={company} user={user} refreshCompany={refreshCompany} />}
+          {activeTab === 'seguridad'      && <TabSeguridad user={user} />}
+          {activeTab === 'afiliados'      && <TabAfiliados user={user} />}
+          {activeTab === 'onboarding'     && <TabOnboarding company={company} />}
+          {activeTab === 'notificaciones' && <TabNotificaciones user={user} />}
         </div>
 
-        {/* Panel derecho */}
+        {/* Panel derecho — perfil */}
         <div className="space-y-4">
           <div className="bg-card rounded-xl border border-border shadow-card p-5">
             <div className="flex items-center gap-3 mb-4">
@@ -315,28 +80,19 @@ export default function Ajustes() {
                   {isAdmin ? 'Administrador' : 'Cliente'}
                 </span>
               </div>
+              {company && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Empresa</p>
+                  <p className="text-sm text-foreground">{company.razon_social}</p>
+                </div>
+              )}
             </div>
-          </div>
-
-          <div className="bg-card rounded-xl border border-border shadow-card p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
-                <Shield className="w-4 h-4 text-blue-600" />
-              </div>
-              <h3 className="font-jakarta font-semibold text-foreground text-sm">Seguridad y privacidad</h3>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Todos tus datos son privados y confidenciales. Solo tú y tu asesor de Taxea Strategies tienen acceso a tu información fiscal y contable.
-            </p>
-            <p className="text-xs text-muted-foreground leading-relaxed mt-2">
-              Portal en cumplimiento con el RGPD y la LOPDGDD.
-            </p>
           </div>
 
           <div className="bg-teal/5 border border-teal/20 rounded-xl p-5">
             <p className="text-sm font-medium text-teal mb-1">¿Necesitas ayuda?</p>
             <p className="text-xs text-muted-foreground">
-              Tu asesor de Taxea Strategies está disponible para resolver cualquier duda sobre tu gestión fiscal y contable.
+              Tu asesor de Taxea Strategies está disponible para cualquier duda fiscal o contable.
             </p>
           </div>
         </div>
