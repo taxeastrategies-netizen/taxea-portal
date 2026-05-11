@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Building2, Save, User, Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -8,6 +8,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+
+// ─── Field helper — defined OUTSIDE the page component so it never gets
+//     re-created on each render (which would destroy/remount the <input>
+//     and cause focus loss on every keystroke).
+function Field({ label, name, required, error, colSpan, children }) {
+  return (
+    <div className={`space-y-1.5${colSpan ? ' col-span-2' : ''}`}>
+      <Label>{label}{required ? ' *' : ''}</Label>
+      {children}
+      {error && (
+        <p className="text-xs text-destructive flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" /> {error}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const EMPTY_FORM = {
   nombre_comercial: '',
@@ -23,28 +40,33 @@ const EMPTY_FORM = {
 };
 
 function validate(form) {
-  const errors = {};
-  if (!form.razon_social?.trim()) errors.razon_social = 'Campo obligatorio';
-  if (!form.nif_cif?.trim()) errors.nif_cif = 'Campo obligatorio';
-  if (!form.email?.trim()) errors.email = 'Campo obligatorio';
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Formato de email no válido';
-  if (!form.direccion_fiscal?.trim()) errors.direccion_fiscal = 'Campo obligatorio';
-  if (!form.regimen_fiscal) errors.regimen_fiscal = 'Selecciona una opción';
-  if (!form.tipo_impuesto) errors.tipo_impuesto = 'Selecciona una opción';
-  if (!form.actividad?.trim()) errors.actividad = 'Campo obligatorio';
-  if (!form.datos_bancarios?.trim()) errors.datos_bancarios = 'Campo obligatorio';
-  return errors;
+  const e = {};
+  if (!form.razon_social?.trim()) e.razon_social = 'Campo obligatorio';
+  if (!form.nif_cif?.trim()) e.nif_cif = 'Campo obligatorio';
+  if (!form.email?.trim()) e.email = 'Campo obligatorio';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Formato de email no válido';
+  if (!form.direccion_fiscal?.trim()) e.direccion_fiscal = 'Campo obligatorio';
+  if (!form.regimen_fiscal) e.regimen_fiscal = 'Selecciona una opción';
+  if (!form.tipo_impuesto) e.tipo_impuesto = 'Selecciona una opción';
+  if (!form.actividad?.trim()) e.actividad = 'Campo obligatorio';
+  if (!form.datos_bancarios?.trim()) e.datos_bancarios = 'Campo obligatorio';
+  return e;
 }
 
 export default function Ajustes() {
   const { company, user, isAdmin, refreshCompany } = useOutletContext() || {};
+
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error'
   const [errors, setErrors] = useState({});
+  const [dirty, setDirty] = useState(false);
 
+  // Load initial data once (when company first becomes available)
+  const loadedRef = useRef(false);
   useEffect(() => {
-    if (company) {
+    if (company && !loadedRef.current) {
+      loadedRef.current = true;
       setForm({
         nombre_comercial: company.nombre_comercial || '',
         razon_social: company.razon_social || '',
@@ -58,13 +80,31 @@ export default function Ajustes() {
         datos_bancarios: company.datos_bancarios || '',
       });
     }
-  }, [company?.id]);
+  }, [company]);
 
-  const set = (field) => (e) => {
-    const val = e?.target ? e.target.value : e;
-    setForm(f => ({ ...f, [field]: val }));
-    if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
-  };
+  // Generic text input handler — stable reference via useCallback
+  const handleChange = useCallback((field) => (e) => {
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+    setDirty(true);
+    setErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
+
+  // Select handler
+  const handleSelect = useCallback((field) => (value) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+    setDirty(true);
+    setErrors(prev => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
 
   const handleSave = async () => {
     const validationErrors = validate(form);
@@ -77,11 +117,7 @@ export default function Ajustes() {
     setSaveStatus(null);
 
     try {
-      const payload = {
-        ...form,
-        owner_email: user?.email,
-        activa: true,
-      };
+      const payload = { ...form, owner_email: user?.email, activa: true };
 
       if (company?.id) {
         await base44.entities.Company.update(company.id, payload);
@@ -89,27 +125,17 @@ export default function Ajustes() {
         await base44.entities.Company.create(payload);
       }
 
+      setDirty(false);
+      loadedRef.current = false; // allow re-load on next company refresh
       if (refreshCompany) refreshCompany();
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 4000);
-    } catch (err) {
+    } catch {
       setSaveStatus('error');
     } finally {
       setSaving(false);
     }
   };
-
-  const Field = ({ label, name, required, children, colSpan }) => (
-    <div className={`space-y-1.5${colSpan ? ' col-span-2' : ''}`}>
-      <Label>{label}{required ? ' *' : ''}</Label>
-      {children}
-      {errors[name] && (
-        <p className="text-xs text-destructive flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" /> {errors[name]}
-        </p>
-      )}
-    </div>
-  );
 
   return (
     <div>
@@ -133,53 +159,32 @@ export default function Ajustes() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Nombre comercial" name="nombre_comercial">
-                <Input value={form.nombre_comercial} onChange={set('nombre_comercial')} placeholder="Nombre con el que opera" />
+              <Field label="Nombre comercial" name="nombre_comercial" error={errors.nombre_comercial}>
+                <Input value={form.nombre_comercial} onChange={handleChange('nombre_comercial')} placeholder="Nombre con el que opera" />
               </Field>
 
-              <Field label="Razón social" name="razon_social" required>
-                <Input
-                  value={form.razon_social}
-                  onChange={set('razon_social')}
-                  placeholder="Nombre fiscal completo"
-                  className={errors.razon_social ? 'border-destructive' : ''}
-                />
+              <Field label="Razón social" name="razon_social" required error={errors.razon_social}>
+                <Input value={form.razon_social} onChange={handleChange('razon_social')} placeholder="Nombre fiscal completo" className={errors.razon_social ? 'border-destructive' : ''} />
               </Field>
 
-              <Field label="NIF / CIF" name="nif_cif" required>
-                <Input
-                  value={form.nif_cif}
-                  onChange={set('nif_cif')}
-                  placeholder="B12345678"
-                  className={errors.nif_cif ? 'border-destructive' : ''}
-                />
+              <Field label="NIF / CIF" name="nif_cif" required error={errors.nif_cif}>
+                <Input value={form.nif_cif} onChange={handleChange('nif_cif')} placeholder="B12345678" className={errors.nif_cif ? 'border-destructive' : ''} />
               </Field>
 
-              <Field label="Teléfono" name="telefono">
-                <Input value={form.telefono} onChange={set('telefono')} placeholder="+34 600 000 000" />
+              <Field label="Teléfono" name="telefono" error={errors.telefono}>
+                <Input value={form.telefono} onChange={handleChange('telefono')} placeholder="+34 600 000 000" />
               </Field>
 
-              <Field label="Email" name="email" required colSpan>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={set('email')}
-                  placeholder="empresa@ejemplo.com"
-                  className={errors.email ? 'border-destructive' : ''}
-                />
+              <Field label="Email" name="email" required error={errors.email} colSpan>
+                <Input type="email" value={form.email} onChange={handleChange('email')} placeholder="empresa@ejemplo.com" className={errors.email ? 'border-destructive' : ''} />
               </Field>
 
-              <Field label="Dirección fiscal" name="direccion_fiscal" required colSpan>
-                <Input
-                  value={form.direccion_fiscal}
-                  onChange={set('direccion_fiscal')}
-                  placeholder="Calle, número, CP, municipio, provincia"
-                  className={errors.direccion_fiscal ? 'border-destructive' : ''}
-                />
+              <Field label="Dirección fiscal" name="direccion_fiscal" required error={errors.direccion_fiscal} colSpan>
+                <Input value={form.direccion_fiscal} onChange={handleChange('direccion_fiscal')} placeholder="Calle, número, CP, municipio, provincia" className={errors.direccion_fiscal ? 'border-destructive' : ''} />
               </Field>
 
-              <Field label="Régimen fiscal" name="regimen_fiscal" required>
-                <Select value={form.regimen_fiscal} onValueChange={set('regimen_fiscal')}>
+              <Field label="Régimen fiscal" name="regimen_fiscal" required error={errors.regimen_fiscal}>
+                <Select value={form.regimen_fiscal} onValueChange={handleSelect('regimen_fiscal')}>
                   <SelectTrigger className={errors.regimen_fiscal ? 'border-destructive' : ''}>
                     <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
@@ -194,8 +199,8 @@ export default function Ajustes() {
                 </Select>
               </Field>
 
-              <Field label="Tipo de impuesto" name="tipo_impuesto" required>
-                <Select value={form.tipo_impuesto} onValueChange={set('tipo_impuesto')}>
+              <Field label="Tipo de impuesto" name="tipo_impuesto" required error={errors.tipo_impuesto}>
+                <Select value={form.tipo_impuesto} onValueChange={handleSelect('tipo_impuesto')}>
                   <SelectTrigger className={errors.tipo_impuesto ? 'border-destructive' : ''}>
                     <SelectValue placeholder="Seleccionar..." />
                   </SelectTrigger>
@@ -206,26 +211,19 @@ export default function Ajustes() {
                 </Select>
               </Field>
 
-              <Field label="Actividad económica" name="actividad" required colSpan>
-                <Input
-                  value={form.actividad}
-                  onChange={set('actividad')}
-                  placeholder="Ej: Consultoría informática"
-                  className={errors.actividad ? 'border-destructive' : ''}
-                />
+              <Field label="Actividad económica" name="actividad" required error={errors.actividad} colSpan>
+                <Input value={form.actividad} onChange={handleChange('actividad')} placeholder="Ej: Consultoría informática" className={errors.actividad ? 'border-destructive' : ''} />
               </Field>
 
-              <Field label="Datos bancarios" name="datos_bancarios" required colSpan>
-                <Textarea
-                  value={form.datos_bancarios}
-                  onChange={set('datos_bancarios')}
-                  placeholder="IBAN y entidad bancaria"
-                  rows={2}
-                  className={errors.datos_bancarios ? 'border-destructive' : ''}
-                />
+              <Field label="Datos bancarios *" name="datos_bancarios" error={errors.datos_bancarios} colSpan>
+                <Textarea value={form.datos_bancarios} onChange={handleChange('datos_bancarios')} placeholder="IBAN y entidad bancaria" rows={2} className={errors.datos_bancarios ? 'border-destructive' : ''} />
               </Field>
             </div>
 
+            {/* Status messages */}
+            {dirty && !saveStatus && (
+              <p className="mt-4 text-xs text-amber-600">Cambios sin guardar</p>
+            )}
             {saveStatus === 'success' && (
               <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
