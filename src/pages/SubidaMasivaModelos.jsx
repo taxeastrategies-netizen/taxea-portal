@@ -137,72 +137,131 @@ export default function SubidaMasivaModelos() {
   const handleConfirmar = async (item, empresa) => {
     if (!empresa) return;
     const ex = item.extraccion || {};
-    // 1. Subir PDF
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: item.file });
-
-    // 2. Nombre formateado
+    const now = new Date();
     const nombreArchivo = `${empresa.razon_social?.replace(/\s+/g,'_')}_${empresa.nif_cif}_${ex.modelo || 'doc'}_${ex.ejercicio || ''}_${ex.periodo || ''}.pdf`;
-
-    // 3. Archivar en Documentos
     const carpeta = MODELO_A_CARPETA[ex.modelo] || 'fiscal_declaraciones';
-    await base44.entities.Document.create({
+    const modeloLabel = (ex.modelo || 'Modelo fiscal').replace(/_/g, ' ').toUpperCase();
+    const periodo = ex.periodo || ex.trimestre || ex.ejercicio || '';
+    const emailEmpresa = empresa.email || empresa.owner_email;
+
+    // 1. Archivar PDF en Documentos
+    const docData = {
       company_id: empresa.id,
       nombre: nombreArchivo,
       carpeta,
-      archivo_url: file_url,
+      archivo_url: item.previewUrl, // Ya subido durante procesamiento
       tipo_archivo: 'application/pdf',
-      anio: parseInt(ex.ejercicio) || new Date().getFullYear(),
+      anio: parseInt(ex.ejercicio) || now.getFullYear(),
       trimestre: ex.trimestre,
       estado: 'aprobado',
       etiquetas: [ex.modelo, 'presentado', 'taxea'].filter(Boolean),
       subido_por: user?.email,
-    });
+    };
+    const doc = await base44.entities.Document.create(docData);
 
-    // 4. Buscar obligación y actualizar
+    // 2. Buscar/actualizar obligación (NO duplicar)
+    let oblig = null;
     if (ex.modelo && ex.periodo) {
-      const obligaciones = await base44.entities.TaxObligation.filter({ company_id: empresa.id, modelo: ex.modelo });
-      const oblig = obligaciones.find(o => o.periodo === ex.periodo) || obligaciones[0];
+      const obligaciones = await base44.entities.TaxObligation.filter({ 
+        company_id: empresa.id, 
+        modelo: ex.modelo,
+        periodo: ex.periodo
+      });
+      oblig = obligaciones[0];
+      
       if (oblig) {
+        // Actualizar existente
         await base44.entities.TaxObligation.update(oblig.id, {
           estado: 'presentado',
-          justificante_url: file_url,
-          comentarios_asesor: `Presentado por Taxea. ${ex.csv ? `CSV: ${ex.csv}` : ''} ${ex.nrc ? `NRC: ${ex.nrc}` : ''}`.trim(),
+          justificante_url: doc.archivo_url,
+          comentarios_asesor: [
+            oblig.comentarios_asesor || '',
+            `Presentado por Taxea el ${now.toLocaleDateString('es-ES')}`,
+            ex.csv ? `CSV: ${ex.csv}` : '',
+            ex.nrc ? `NRC: ${ex.nrc}` : ''
+          ].filter(Boolean).join(' | '),
+          importe: ex.importe || oblig.importe,
+        });
+      } else {
+        // Crear nueva
+        oblig = await base44.entities.TaxObligation.create({
+          company_id: empresa.id,
+          modelo: ex.modelo,
+          periodo: ex.periodo,
+          anio: parseInt(ex.ejercicio) || now.getFullYear(),
+          trimestre: ex.trimestre,
+          fecha_limite: now.toISOString().split('T')[0],
+          estado: 'presentado',
+          resultado: 'pendiente',
+          justificante_url: doc.archivo_url,
+          comentarios_asesor: `Presentado por Taxea el ${now.toLocaleDateString('es-ES')}${ex.csv ? ` — CSV: ${ex.csv}` : ''}${ex.nrc ? ` — NRC: ${ex.nrc}` : ''}`,
           importe: ex.importe,
         });
       }
     }
 
-    // 5. Notificación interna + email
-    const modeloLabel = (ex.modelo || 'Modelo fiscal').replace(/_/g, ' ').toUpperCase();
-    const periodo = ex.periodo || ex.trimestre || ex.ejercicio || '';
+    // 3. Notificación interna
     await base44.entities.Notification.create({
       company_id: empresa.id,
-      destinatario_email: empresa.email || empresa.owner_email,
+      destinatario_email: emailEmpresa,
       titulo: `✅ ${modeloLabel} presentado`,
-      mensaje: `Tu asesor ha presentado el ${modeloLabel} ${periodo}. Puedes descargarlo desde tu portal.`,
-      tipo: 'obligacion_proxima',
+      mensaje: `Taxea ha presentado recientemente tu ${modeloLabel} ${periodo}. Tu documentación fiscal está al día.`,
+      tipo: 'documento_revisado',
       leida: false,
       url_referencia: '/obligaciones',
     });
-    if (empresa.email) {
+
+    // 4. Email premium (con tema de tranquilidad)
+    if (emailEmpresa) {
       await base44.integrations.Core.SendEmail({
-        to: empresa.email,
-        subject: `${modeloLabel} presentado — ${periodo}`,
-        body: `Hola,\n\nTu asesor Taxea ha presentado el ${modeloLabel} correspondiente al periodo ${periodo}.\n\nPuedes acceder al justificante desde tu portal.\n\nUn saludo,\nEquipo Taxea`
+        to: emailEmpresa,
+        from_name: 'Taxea Strategies',
+        subject: `Tus impuestos ya están presentados — ${modeloLabel}`,
+        body: `Hola,
+
+Tu ${modeloLabel} ha sido presentado correctamente ante la Administración Tributaria.
+
+📋 Detalles:
+• Modelo: ${modeloLabel}
+• Período: ${periodo}
+• Fecha de presentación: ${now.toLocaleDateString('es-ES')}
+${ex.csv ? `• CSV: ${ex.csv}` : ''}
+${ex.nrc ? `• NRC: ${ex.nrc}` : ''}
+
+Puedes descargar el justificante desde tu portal en Obligaciones Fiscales.
+
+Tus impuestos están al día. Taxea Strategies se encarga de que todo funcione correctamente.
+
+Un saludo,
+Equipo Taxea Strategies`
       });
     }
 
-    // 6. Timeline
+    // 5. Timeline
     await base44.entities.TimelineEvent.create({
       company_id: empresa.id,
       tipo: 'modelo_presentado',
       titulo: `${modeloLabel} presentado`,
-      descripcion: `Presentado por Taxea${periodo ? ` — Periodo: ${periodo}` : ''}${ex.csv ? ` — CSV: ${ex.csv}` : ''}`,
+      descripcion: `Presentado por Taxea el ${now.toLocaleDateString('es-ES')}${periodo ? ` — Período: ${periodo}` : ''}${ex.csv ? ` — CSV: ${ex.csv}` : ''}`,
       color: 'verde',
+      entidad_tipo: 'TaxObligation',
+      entidad_id: oblig?.id,
       usuario_email: user?.email,
       automatico: false,
       visibilidad: 'ambos',
+      afecta_health_score: true,
+      estado_nuevo: 'presentado',
     });
+
+    // 6. Actualizar health score del cliente
+    const crm = await base44.entities.ClientCRM.filter({ company_id: empresa.id });
+    if (crm[0]) {
+      const newScore = Math.min(100, (crm[0].health_score || 75) + 5);
+      await base44.entities.ClientCRM.update(crm[0].id, {
+        health_score: newScore,
+        estado_fiscal: 'verde',
+      });
+    }
 
     // 7. Marcar como confirmado
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, estado: 'confirmado' } : i));
