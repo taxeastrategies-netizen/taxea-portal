@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Building2, Save, User, Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Building2, Save, User, Shield, AlertCircle, CheckCircle2, ImagePlus, X } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ const EMPTY_FORM = {
   tipo_impuesto: '',
   actividad: '',
   datos_bancarios: '',
+  logo_url: '',
 };
 
 function validate(form) {
@@ -61,6 +62,8 @@ export default function Ajustes() {
   const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error'
   const [errors, setErrors] = useState({});
   const [dirty, setDirty] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef(null);
 
   // Load initial data once (when company first becomes available)
   const loadedRef = useRef(false);
@@ -78,6 +81,7 @@ export default function Ajustes() {
         tipo_impuesto: company.tipo_impuesto || '',
         actividad: company.actividad || '',
         datos_bancarios: company.datos_bancarios || '',
+        logo_url: company.logo_url || '',
       });
     }
   }, [company]);
@@ -105,6 +109,16 @@ export default function Ajustes() {
       return next;
     });
   }, []);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingLogo(true);
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    setForm(prev => ({ ...prev, logo_url: file_url }));
+    setDirty(true);
+    setUploadingLogo(false);
+  };
 
   const handleSave = async () => {
     const validationErrors = validate(form);
@@ -214,6 +228,37 @@ export default function Ajustes() {
               <Field label="Actividad económica" name="actividad" required error={errors.actividad} colSpan>
                 <Input value={form.actividad} onChange={handleChange('actividad')} placeholder="Ej: Consultoría informática" className={errors.actividad ? 'border-destructive' : ''} />
               </Field>
+
+              {/* Logo */}
+              <div className="col-span-2 space-y-2">
+                <Label>Logo de empresa</Label>
+                <p className="text-xs text-muted-foreground">Este logo se utilizará automáticamente en las facturas emitidas desde Taxea Portal.</p>
+                <div className="flex items-center gap-4">
+                  {form.logo_url ? (
+                    <div className="relative">
+                      <img src={form.logo_url} alt="Logo empresa" className="h-16 max-w-[160px] object-contain rounded-lg border border-border bg-white p-2" />
+                      <button
+                        onClick={() => { setForm(prev => ({ ...prev, logo_url: '' })); setDirty(true); }}
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-destructive rounded-full flex items-center justify-center text-white hover:bg-destructive/80">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-secondary/30">
+                      <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div>
+                    <Button type="button" variant="outline" size="sm" disabled={uploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}>
+                      {uploadingLogo ? 'Subiendo...' : form.logo_url ? 'Cambiar logo' : 'Subir logo'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WebP · Máx. 5 MB</p>
+                    <input ref={logoInputRef} type="file" accept="image/png,image/jpg,image/jpeg,image/webp,image/svg+xml"
+                      className="hidden" onChange={handleLogoUpload} />
+                  </div>
+                </div>
+              </div>
 
               <Field label="Datos bancarios *" name="datos_bancarios" error={errors.datos_bancarios} colSpan>
                 <Textarea value={form.datos_bancarios} onChange={handleChange('datos_bancarios')} placeholder="IBAN y entidad bancaria" rows={2} className={errors.datos_bancarios ? 'border-destructive' : ''} />
