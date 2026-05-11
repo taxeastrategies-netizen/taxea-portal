@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { Upload, FolderOpen } from 'lucide-react';
+import { Upload, FolderOpen, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import MobileScanner from '@/components/lector/MobileScanner';
 
 const MAX_FILES = 200;
 const MAX_FILE_MB = 10;
@@ -11,6 +12,7 @@ const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp';
 export default function BulkDropZone({ onFilesAdded }) {
   const inputRef = useRef();
   const [dragging, setDragging] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const processFiles = (fileList) => {
     const files = Array.from(fileList).filter(f => {
@@ -57,9 +59,19 @@ export default function BulkDropZone({ onFilesAdded }) {
       <p className="text-muted-foreground text-sm mb-4">
         PDF, JPG, JPEG, PNG, WEBP · Hasta 200 archivos · Máx 10 MB por archivo
       </p>
-      <Button variant="outline" size="sm" className="gap-2" onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}>
-        <FolderOpen className="w-4 h-4" /> Seleccionar archivos
-      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+        <Button variant="outline" size="sm" className="gap-2" onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}>
+          <FolderOpen className="w-4 h-4" /> Seleccionar archivos
+        </Button>
+        {/* Botón cámara — visible siempre, prominente en móvil */}
+        <Button
+          size="sm"
+          className="gap-2 bg-teal hover:bg-teal-dark"
+          onClick={e => { e.stopPropagation(); setShowScanner(true); }}
+        >
+          <Camera className="w-4 h-4" /> Sacar foto / Escanear
+        </Button>
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -68,6 +80,12 @@ export default function BulkDropZone({ onFilesAdded }) {
         multiple
         onChange={e => processFiles(e.target.files)}
       />
+      {showScanner && (
+        <MobileScanner
+          onCapture={(files) => { processFiles(files); }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </div>
   );
 }
