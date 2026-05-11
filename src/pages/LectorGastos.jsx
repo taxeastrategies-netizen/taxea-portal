@@ -1,102 +1,69 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Upload, ScanLine, CheckCircle, AlertCircle, Edit3, Save } from 'lucide-react';
+import { ScanLine, Play, CheckCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import BulkDropZone from '@/components/lector/BulkDropZone';
+import DocumentQueue from '@/components/lector/DocumentQueue';
+import ReviewPanel from '@/components/lector/ReviewPanel';
 
-const CATEGORIAS = [
-  { value: 'compras', label: 'Compras' },
-  { value: 'suministros', label: 'Suministros' },
-  { value: 'alquiler', label: 'Alquiler' },
-  { value: 'servicios_profesionales', label: 'Servicios Profesionales' },
-  { value: 'software', label: 'Software' },
-  { value: 'transporte', label: 'Transporte' },
-  { value: 'dietas', label: 'Dietas' },
-  { value: 'seguros', label: 'Seguros' },
-  { value: 'otros', label: 'Otros' },
-];
+let idCounter = 0;
+const mkId = () => `doc-${++idCounter}`;
 
-const STAGES = {
-  idle: 'idle',
-  reading: 'reading',
-  review: 'review',
-  saved: 'saved',
+const trimestre = (fecha) => {
+  const m = new Date(fecha || '').getMonth() + 1;
+  return m <= 3 ? 'T1' : m <= 6 ? 'T2' : m <= 9 ? 'T3' : 'T4';
 };
 
 export default function LectorGastos() {
   const { company, user, loadingCompany } = useOutletContext() || {};
-  const [stage, setStage] = useState(STAGES.idle);
-  const [file, setFile] = useState(null);
-  const [fileUrl, setFileUrl] = useState('');
-  const [extracted, setExtracted] = useState(null);
-  const [form, setForm] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [docs, setDocs] = useState([]);
+  const [reviewing, setReviewing] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
 
-  const handleFileSelect = (e) => {
-    const f = e.target.files[0];
-    if (f) setFile(f);
-  };
+  const setDocState = (id, patch) =>
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, ...patch } : d));
 
-  const handleRead = async () => {
-    if (!file) return;
-    setStage(STAGES.reading);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    setFileUrl(file_url);
+  const handleFilesAdded = useCallback((files) => {
+    const newDocs = files.map(file => ({ id: mkId(), file, status: 'pendiente', fileUrl: null, extracted: null, formData: null }));
+    setDocs(prev => [...prev, ...newDocs]);
+  }, []);
+
+  const processDoc = async (doc) => {
+    setDocState(doc.id, { status: 'subiendo' });
+    const { file_url } = await base44.integrations.Core.UploadFile({ file: doc.file });
+    setDocState(doc.id, { status: 'procesando', fileUrl: file_url });
+
     const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los siguientes datos en formato JSON. Si no encuentras un dato, usa null.
-      
-Datos a extraer:
-- proveedor: nombre del emisor/proveedor
-- nif_proveedor: NIF o CIF del proveedor  
-- fecha: fecha de la factura o ticket (formato YYYY-MM-DD)
-- numero_factura: número de factura (null si es ticket)
-- base_imponible: base imponible sin impuestos (número)
-- tipo_impuesto: tipo de IVA o IGIC en porcentaje (número, ej: 21)
-- cuota_impuesto: importe del IVA/IGIC (número)
-- total: importe total (número)
-- categoria_sugerida: una de estas categorías: compras, suministros, alquiler, servicios_profesionales, software, transporte, dietas, seguros, otros
-- cuenta_pgc: cuenta del Plan General Contable español sugerida. Usa SOLO una de estas: "600 Compras de mercaderías", "601 Materias primas", "621 Arrendamientos y cánones", "622 Reparaciones y conservación", "623 Servicios de profesionales independientes", "624 Transportes", "625 Primas de seguros", "626 Servicios bancarios", "627 Publicidad y propaganda", "628 Suministros", "629 Otros servicios"
-- confianza_pgc: porcentaje de confianza en la clasificación PGC (número 0-100)
-- motivo_clasificacion: explicación breve de por qué se asigna esa cuenta PGC
-- es_factura_completa: true si tiene todos los datos obligatorios (NIF, número, etc.), false si parece un ticket sin NIF
-- es_proveedor_extranjero: true si el proveedor parece ser extranjero
-- posible_operacion_intracomunitaria: true si podría ser operación intracomunitaria
-- datos_faltantes: lista de campos obligatorios que faltan como array de strings
-- alertas_fiscales: lista de alertas fiscales detectadas como array de strings
-- concepto: descripción breve del gasto`,
+      prompt: `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
+Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número),
+tipo_impuesto (número %), cuota_impuesto (número), total (número),
+categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
+cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
+es_factura_completa (boolean), es_proveedor_extranjero (boolean),
+datos_faltantes (array strings), alertas_fiscales (array strings), concepto`,
       file_urls: [file_url],
       response_json_schema: {
         type: 'object',
         properties: {
-          proveedor: { type: 'string' },
-          nif_proveedor: { type: 'string' },
-          fecha: { type: 'string' },
-          numero_factura: { type: 'string' },
-          base_imponible: { type: 'number' },
-          tipo_impuesto: { type: 'number' },
-          cuota_impuesto: { type: 'number' },
-          total: { type: 'number' },
-          categoria_sugerida: { type: 'string' },
-          cuenta_pgc: { type: 'string' },
-          confianza_pgc: { type: 'number' },
-          motivo_clasificacion: { type: 'string' },
-          es_factura_completa: { type: 'boolean' },
-          es_proveedor_extranjero: { type: 'boolean' },
-          posible_operacion_intracomunitaria: { type: 'boolean' },
+          proveedor: { type: 'string' }, nif_proveedor: { type: 'string' },
+          fecha: { type: 'string' }, numero_factura: { type: 'string' },
+          base_imponible: { type: 'number' }, tipo_impuesto: { type: 'number' },
+          cuota_impuesto: { type: 'number' }, total: { type: 'number' },
+          categoria_sugerida: { type: 'string' }, cuenta_pgc: { type: 'string' },
+          confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
+          es_factura_completa: { type: 'boolean' }, es_proveedor_extranjero: { type: 'boolean' },
           datos_faltantes: { type: 'array', items: { type: 'string' } },
           alertas_fiscales: { type: 'array', items: { type: 'string' } },
           concepto: { type: 'string' },
         }
       }
     });
-    setExtracted(result);
-    setForm({
+
+    const formData = {
       proveedor_cliente: result.proveedor || '',
       concepto: result.concepto || '',
       fecha: result.fecha || '',
@@ -108,15 +75,29 @@ Datos a extraer:
       cuenta_pgc: result.cuenta_pgc || '',
       confianza_pgc: result.confianza_pgc || 0,
       motivo_clasificacion: result.motivo_clasificacion || '',
-    });
-    setStage(STAGES.review);
+    };
+
+    setDocState(doc.id, { status: 'pendiente_revision', fileUrl: file_url, extracted: result, formData });
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    const year = form.fecha ? new Date(form.fecha).getFullYear() : new Date().getFullYear();
-    const month = form.fecha ? new Date(form.fecha).getMonth() + 1 : new Date().getMonth() + 1;
-    const trimestre = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
+  const handleProcessAll = async () => {
+    setProcessing(true);
+    const pending = docs.filter(d => d.status === 'pendiente');
+    for (const doc of pending) {
+      await processDoc(doc);
+    }
+    setProcessing(false);
+  };
+
+  const handleProcessOne = async (doc) => {
+    await processDoc(doc);
+  };
+
+  const handleApprove = async (docId, form) => {
+    const doc = docs.find(d => d.id === docId);
+    setDocState(docId, { status: 'subiendo' });
+    const fecha = form.fecha || '';
+    const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
     await base44.entities.Expense.create({
       ...form,
       tipo: 'gasto',
@@ -125,211 +106,121 @@ Datos a extraer:
       cuota_impuesto: parseFloat(form.cuota_impuesto) || 0,
       total: parseFloat(form.total) || 0,
       tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
-      archivo_url: fileUrl,
+      archivo_url: doc?.fileUrl || '',
       estado: 'pendiente',
       anio: year,
-      trimestre,
+      trimestre: trimestre(fecha),
       subido_por: user?.email,
     });
-    // Crear evento en timeline
     await base44.entities.TimelineEvent.create({
       company_id: company.id,
       tipo: 'documento_subido',
       titulo: `Gasto subido: ${form.proveedor_cliente || 'sin proveedor'} — ${(parseFloat(form.total) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`,
-      descripcion: form.cuenta_pgc ? `Cuenta PGC sugerida: ${form.cuenta_pgc} (confianza: ${form.confianza_pgc}%)` : '',
+      descripcion: form.cuenta_pgc ? `Cuenta PGC: ${form.cuenta_pgc} (confianza: ${form.confianza_pgc}%)` : '',
       color: 'azul',
       usuario_email: user?.email,
       automatico: true,
       visibilidad: 'ambos',
     });
-    setSaving(false);
-    setStage(STAGES.saved);
+    setDocState(docId, { status: 'aprobado' });
+    setSavedCount(c => c + 1);
+    setReviewing(null);
   };
 
-  const reset = () => {
-    setStage(STAGES.idle);
-    setFile(null);
-    setFileUrl('');
-    setExtracted(null);
-    setForm({});
+  const handleReject = (docId) => {
+    setDocState(docId, { status: 'rechazado' });
+    setReviewing(null);
   };
 
-  if (loadingCompany) return (
-    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
-  );
+  const handleReview = (doc) => {
+    const latest = docs.find(d => d.id === doc.id);
+    setReviewing(latest || doc);
+  };
+
+  const pendingCount = docs.filter(d => d.status === 'pendiente').length;
+  const reviewCount = docs.filter(d => d.status === 'pendiente_revision').length;
+
+  if (loadingCompany) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
   if (!company) return <NoCompanyState pageName="el Lector de Gastos" />;
 
   return (
     <div>
       <PageHeader
         title="Lector de Gastos"
-        subtitle="Sube una factura recibida o ticket y la IA extrae los datos automáticamente"
+        subtitle="Carga masiva de facturas recibidas y tickets · IA + revisión humana"
+      >
+        {pendingCount > 0 && (
+          <Button onClick={handleProcessAll} disabled={processing} className="bg-teal hover:bg-teal-dark h-9 gap-2">
+            {processing
+              ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Procesando...</>
+              : <><Play className="w-4 h-4" /> Procesar {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}</>
+            }
+          </Button>
+        )}
+      </PageHeader>
+
+      {/* KPIs */}
+      {docs.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          {[
+            { label: 'Total subidos', val: docs.length, color: 'text-foreground' },
+            { label: 'Pendiente IA', val: pendingCount, color: 'text-amber-600' },
+            { label: 'Pendiente revisión', val: reviewCount, color: 'text-orange-600' },
+            { label: 'Aprobados', val: savedCount, color: 'text-green-600' },
+          ].map(k => (
+            <div key={k.label} className="bg-card border border-border rounded-xl p-4 text-center shadow-card">
+              <p className="text-xs text-muted-foreground mb-0.5">{k.label}</p>
+              <p className={`text-2xl font-jakarta font-bold ${k.color}`}>{k.val}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone */}
+      <div className="mb-5">
+        <BulkDropZone onFilesAdded={handleFilesAdded} />
+      </div>
+
+      {/* Revisión activa */}
+      {reviewing && (
+        <div className="mb-5">
+          <ReviewPanel
+            doc={reviewing}
+            tipo="gastos"
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onCancel={() => setReviewing(null)}
+          />
+        </div>
+      )}
+
+      {/* Cola */}
+      <DocumentQueue
+        docs={docs}
+        onRemove={id => setDocs(prev => prev.filter(d => d.id !== id))}
+        onReview={handleReview}
+        onProcessOne={handleProcessOne}
       />
 
-      {stage === STAGES.idle && (
-        <div className="max-w-xl mx-auto">
-          <div
-            className="border-2 border-dashed border-border rounded-2xl p-12 text-center cursor-pointer hover:border-teal/50 hover:bg-teal/3 transition-all"
-            onClick={() => document.getElementById('expense-upload').click()}
-          >
-            <div className="w-16 h-16 bg-teal-light rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ScanLine className="w-8 h-8 text-teal" />
-            </div>
-            {file ? (
-              <div>
-                <p className="font-jakarta font-semibold text-foreground text-lg">{file.name}</p>
-                <p className="text-sm text-muted-foreground mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              </div>
-            ) : (
-              <>
-                <p className="font-jakarta font-semibold text-foreground text-lg mb-2">
-                  Arrastra o selecciona tu factura/ticket
-                </p>
-                <p className="text-muted-foreground text-sm">PDF, JPG, PNG hasta 25MB</p>
-                <p className="text-xs text-muted-foreground mt-2">La IA extraerá automáticamente todos los datos fiscales</p>
-              </>
-            )}
-            <input id="expense-upload" type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileSelect} />
-            {/* Botón cámara móvil */}
-            <input id="expense-camera" type="file" className="hidden" accept="image/*" capture="environment" onChange={handleFileSelect} />
-          </div>
-          <div className="flex gap-3 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => document.getElementById('expense-camera').click()}
-              className="flex-1 h-11 gap-2 lg:hidden"
-            >
-              📷 Usar cámara
-            </Button>
-            {file && (
-              <Button onClick={handleRead} className="flex-1 h-11 bg-teal hover:bg-teal-dark">
-                <ScanLine className="w-4 h-4 mr-2" />
-                Leer con IA
-              </Button>
-            )}
-          </div>
+      {/* Estado vacío */}
+      {!docs.length && (
+        <div className="text-center py-12 text-muted-foreground">
+          <ScanLine className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Arrastra tus facturas o tickets para comenzar</p>
+          <p className="text-sm mt-1">Hasta 200 documentos por lote · PDF, JPG, PNG, WEBP</p>
         </div>
       )}
 
-      {stage === STAGES.reading && (
-        <div className="max-w-xl mx-auto text-center py-16">
-          <div className="w-16 h-16 bg-teal-light rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <ScanLine className="w-8 h-8 text-teal animate-pulse" />
-          </div>
-          <p className="font-jakarta font-semibold text-foreground text-lg">Analizando documento...</p>
-          <p className="text-muted-foreground mt-2 text-sm">La IA está extrayendo los datos fiscales</p>
-          <div className="flex justify-center gap-1 mt-4">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-2 h-2 rounded-full bg-teal animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {stage === STAGES.review && extracted && (
-        <div className="max-w-2xl mx-auto">
-          {/* Alerta si hay datos faltantes */}
-          {extracted.datos_faltantes?.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-amber-700">Datos faltantes detectados</p>
-                <p className="text-xs text-amber-600 mt-0.5">Faltan: {extracted.datos_faltantes.join(', ')}</p>
-                {!extracted.es_factura_completa && (
-                  <p className="text-xs text-amber-600 mt-1">⚠️ Parece un ticket, no una factura completa. Para deducir gastos necesitas factura con NIF.</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-card rounded-xl border border-border shadow-card p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-9 h-9 bg-teal-light rounded-lg flex items-center justify-center">
-                <Edit3 className="w-4 h-4 text-teal" />
-              </div>
-              <div>
-                <p className="font-jakarta font-semibold text-foreground">Revisar datos extraídos</p>
-                <p className="text-xs text-muted-foreground">Confirma o corrige los datos antes de guardar</p>
-              </div>
-            </div>
-
-            {/* Clasificación PGC */}
-            {form.cuenta_pgc && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-blue-700 mb-1">Clasificación IA — Plan General Contable</p>
-                    <p className="text-sm font-bold text-blue-900">{form.cuenta_pgc}</p>
-                    {form.motivo_clasificacion && <p className="text-xs text-blue-600 mt-0.5">{form.motivo_clasificacion}</p>}
-                  </div>
-                  <div className="flex-shrink-0 text-right">
-                    <p className="text-xs text-blue-600 font-medium">Confianza</p>
-                    <p className="text-xl font-jakarta font-bold text-blue-700">{form.confianza_pgc}%</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
-                <Label>Proveedor</Label>
-                <Input value={form.proveedor_cliente} onChange={e => setForm(f => ({ ...f, proveedor_cliente: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha</Label>
-                <Input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Categoría</Label>
-                <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Concepto</Label>
-                <Input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Base imponible (€)</Label>
-                <Input type="number" step="0.01" value={form.base_imponible} onChange={e => setForm(f => ({ ...f, base_imponible: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tipo IVA/IGIC (%)</Label>
-                <Input type="number" value={form.tipo_impuesto} onChange={e => setForm(f => ({ ...f, tipo_impuesto: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Cuota impuesto (€)</Label>
-                <Input type="number" step="0.01" value={form.cuota_impuesto} onChange={e => setForm(f => ({ ...f, cuota_impuesto: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Total (€)</Label>
-                <Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center mt-6">
-              <Button variant="outline" onClick={reset}>← Subir otro</Button>
-              <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? 'Guardando...' : 'Guardar gasto'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {stage === STAGES.saved && (
-        <div className="max-w-xl mx-auto text-center py-16">
-          <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-500" />
-          </div>
-          <p className="font-jakarta font-semibold text-foreground text-xl">¡Gasto registrado!</p>
-          <p className="text-muted-foreground mt-2">Tu asesor revisará el documento en breve</p>
-          <div className="flex justify-center gap-3 mt-6">
-            <Button variant="outline" onClick={reset}>Subir otro gasto</Button>
-            <Button className="bg-teal hover:bg-teal-dark" asChild>
-              <a href="/ingresos-gastos">Ver todos los gastos</a>
-            </Button>
+      {/* Éxito final */}
+      {savedCount > 0 && docs.every(d => ['aprobado','rechazado'].includes(d.status)) && (
+        <div className="mt-6 bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+          <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
+          <p className="font-jakarta font-semibold text-green-800 text-lg">
+            {savedCount} gasto{savedCount > 1 ? 's' : ''} registrado{savedCount > 1 ? 's' : ''}
+          </p>
+          <div className="flex justify-center gap-3 mt-4">
+            <Button variant="outline" onClick={() => { setDocs([]); setSavedCount(0); }}>Nuevo lote</Button>
+            <Button className="bg-teal hover:bg-teal-dark" asChild><a href="/ingresos-gastos">Ver gastos</a></Button>
           </div>
         </div>
       )}
