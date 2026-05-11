@@ -41,21 +41,9 @@ function BrandingPanel() {
       {/* ── LOGO PRINCIPAL ── */}
       <div className="relative z-10">
       <div className="mb-10">
-      {/* Logo sobre tarjeta blanca premium */}
-      <div
-        className="inline-flex items-center justify-center rounded-2xl mb-6"
-        style={{
-          background: 'rgba(255,255,255,0.97)',
-          padding: '20px 36px',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.5), 0 2px 12px rgba(184,37,53,0.25)',
-        }}
-      >
-        <img
-          src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
-          alt="Taxea Strategies"
-          style={{ height: 96, width: 'auto', display: 'block', objectFit: 'contain' }}
-          draggable={false}
-        />
+      {/* Logo en blanco sobre fondo oscuro — SVG tipográfico */}
+      <div className="mb-6">
+        <TaxeaLogoBlancoSVG />
       </div>
 
           {/* Divisor con label */}
@@ -100,6 +88,53 @@ function BrandingPanel() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Logo SVG blanco para fondo oscuro ──────────────────────────────────────
+function TaxeaLogoBlancoSVG() {
+  return (
+    <svg width="260" height="90" viewBox="0 0 260 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Taxea Strategies">
+      {/* TAXEA — serif bold */}
+      <text
+        x="130" y="48"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontWeight="700"
+        fontSize="46"
+        letterSpacing="4"
+        fill="white"
+      >
+        TAXEA
+      </text>
+      {/* STRATEGIES — spaced caps */}
+      <text
+        x="130" y="66"
+        textAnchor="middle"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontWeight="400"
+        fontSize="13"
+        letterSpacing="6"
+        fill="rgba(255,255,255,0.85)"
+      >
+        STRATEGIES
+      </text>
+      {/* Línea decorativa curva — inspirada en el swoosh del logo original */}
+      <path
+        d="M30 79 Q90 70 130 76 Q170 82 230 72"
+        stroke="rgba(255,255,255,0.35)"
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+      />
+      <path
+        d="M40 83 Q95 75 130 80 Q165 85 220 76"
+        stroke="rgba(255,255,255,0.18)"
+        strokeWidth="1"
+        fill="none"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
