@@ -6,6 +6,7 @@ import {
   TrendingUp, TrendingDown, FileText, Calendar, AlertTriangle,
   Clock, CheckCircle, Euro, BarChart3, Bell, CheckSquare, Upload
 } from 'lucide-react';
+import FiscalDashboard from '@/components/dashboard/FiscalDashboard';
 import StatCard from '@/components/ui/StatCard';
 import StatusBadge from '@/components/ui/StatusBadge';
 import PageHeader from '@/components/ui/PageHeader';
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [errors, setErrors] = useState([]);
   const [crmData, setCrmData] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [selectedQuarter, setSelectedQuarter] = useState('anual');
   const [loading, setLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -135,8 +137,18 @@ export default function Dashboard() {
         title={isAdmin ? 'Panel de Control' : `Hola, ${user?.full_name?.split(' ')[0] || 'Cliente'}`}
         subtitle={company?.razon_social || 'Configura tu empresa en Ajustes'}
       >
+        <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+          <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="anual">Año completo</SelectItem>
+            <SelectItem value="T1">T1 · Ene-Mar</SelectItem>
+            <SelectItem value="T2">T2 · Abr-Jun</SelectItem>
+            <SelectItem value="T3">T3 · Jul-Sep</SelectItem>
+            <SelectItem value="T4">T4 · Oct-Dic</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
         </Select>
       </PageHeader>
@@ -216,6 +228,23 @@ export default function Dashboard() {
       <div className="mb-5">
         <CashFlowChart invoices={invoices} expenses={expenses} />
       </div>
+
+      {/* ── BLOQUE FISCAL TRIMESTRAL ── */}
+      {!isAdmin && (
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-jakarta font-semibold text-foreground">
+              Estimación Fiscal · {selectedQuarter === 'anual' ? `Año ${selectedYear}` : `${selectedQuarter} ${selectedYear}`}
+            </h2>
+          </div>
+          <FiscalDashboard
+            invoices={invoices}
+            expenses={expenses}
+            company={company}
+            quarter={selectedQuarter}
+          />
+        </div>
+      )}
 
       {/* No hay empresa configurada */}
       {!company && (
