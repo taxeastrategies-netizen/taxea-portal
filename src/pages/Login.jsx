@@ -28,13 +28,13 @@ function BrandingPanel() {
       {/* Logo + tagline */}
       <div className="relative z-10">
         <div className="mb-10">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(350 75% 40%)' }}>
-              <span className="text-white font-jakarta font-black text-xl leading-none">T</span>
-            </div>
-            <div>
-              <div className="text-white font-jakarta font-bold text-2xl leading-none tracking-tight">TAXEA</div>
-              <div className="text-white/40 text-xs tracking-widest uppercase mt-0.5">Strategies</div>
+          <div className="mb-3">
+            <div className="bg-white rounded-2xl px-6 py-4 inline-block">
+              <img
+                src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
+                alt="Taxea Strategies"
+                className="h-24 w-auto object-contain"
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -187,14 +187,12 @@ export default function Login() {
         <div className="w-full max-w-md">
 
           {/* Logo mobile */}
-          <div className="lg:hidden mb-8 flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'hsl(350 75% 40%)' }}>
-              <span className="text-white font-jakarta font-black text-base leading-none">T</span>
-            </div>
-            <div>
-              <div className="font-jakarta font-bold text-lg leading-none tracking-tight text-foreground">TAXEA</div>
-              <div className="text-muted-foreground text-xs tracking-widest uppercase">Strategies</div>
-            </div>
+          <div className="lg:hidden mb-8">
+            <img
+              src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/35e9bbe29_IMG_20260111_164937_14712.webp"
+              alt="Taxea Strategies"
+              className="h-12 w-auto object-contain"
+            />
           </div>
 
           {/* ── LOGIN ── */}
