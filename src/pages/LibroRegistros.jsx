@@ -71,12 +71,15 @@ export default function LibroRegistros() {
   const totalTotalC = [...recibidas].reduce((s, i) => s + (i.total_factura || 0), 0)
     + gastosF.reduce((s, e) => s + (e.total || 0), 0);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setExporting(true);
-    setTimeout(() => {
-      exportarLibros({ invoices, expenses, year: filterAnio });
-      setExporting(false);
-    }, 100);
+    await exportarLibros({
+      invoices,
+      expenses,
+      year: filterAnio,
+      companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
+    });
+    setExporting(false);
   };
 
   if (loadingCompany && loading) return (
@@ -86,7 +89,7 @@ export default function LibroRegistros() {
 
   return (
     <div>
-      <PageHeader title="Libros de Registro" subtitle="Compatibles AEAT · Exportación CSV/Excel">
+      <PageHeader title="Libros de Registro" subtitle="Compatibles AEAT · Excel multipestaña">
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterAnio} onValueChange={setFilterAnio}>
             <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
@@ -103,8 +106,10 @@ export default function LibroRegistros() {
             </SelectContent>
           </Select>
           <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExport} disabled={exporting}>
-            <Download className="w-4 h-4" />
-            {exporting ? 'Exportando...' : 'Exportar libros'}
+            {exporting
+              ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando Excel…</>
+              : <><Download className="w-4 h-4" /> Exportar libros</>
+            }
           </Button>
         </div>
       </PageHeader>
