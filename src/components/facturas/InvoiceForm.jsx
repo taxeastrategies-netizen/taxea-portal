@@ -5,11 +5,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { AlertCircle, Link } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { AlertCircle } from 'lucide-react';
 
 const IVA_RATES = [0, 4, 10, 21];
 const IGIC_RATES = [0, 3, 7, 9.5, 15];
 const RETENTION_RATES = [7, 15, 19];
+const FORMAS_PAGO = [
+  'Transferencia bancaria', 'Bizum', 'Tarjeta', 'Efectivo',
+  'Domiciliación bancaria', 'PayPal', 'Stripe', 'Otro',
+];
+const COLETILLAS = [
+  'Operación exenta de IGIC por franquicia fiscal (art. 10.Uno.28º Ley 20/1991).',
+  'Operación exenta de IVA.',
+  'Operación no sujeta a IVA por reglas de localización.',
+  'Inversión del sujeto pasivo.',
+  'Factura emitida sin IGIC por aplicación del REPEP.',
+  'Retención profesional aplicada.',
+  'Servicios intracomunitarios exentos de IVA.',
+  'Exportación de servicios.',
+];
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,6 +38,15 @@ function calcTotals(base, taxPct, retentionPct) {
   return { cuota, retencionImporte, total };
 }
 
+function ErrMsg({ msg }) {
+  if (!msg) return null;
+  return (
+    <p className="text-xs text-destructive flex items-center gap-1 mt-0.5">
+      <AlertCircle className="w-3 h-3" />{msg}
+    </p>
+  );
+}
+
 export default function InvoiceForm({ open, onOpenChange, editing, company, user, onSaved }) {
   const taxType = company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const taxRates = taxType === 'IGIC' ? IGIC_RATES : IVA_RATES;
@@ -34,6 +58,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     fecha_vencimiento: '',
     cliente_nombre: '',
     cliente_nif: '',
+    cliente_direccion: '',
+    cliente_email: '',
     concepto: '',
     base_imponible: '',
     tipo_iva: taxType === 'IGIC' ? 7 : 21,
@@ -43,6 +69,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     total_factura: '',
     estado_cobro: 'pendiente',
     estado_contable: 'pendiente',
+    forma_pago: 'Transferencia bancaria',
+    coletilla_fiscal: '',
     comentarios: '',
   });
 
@@ -51,26 +79,22 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [customRetention, setCustomRetention] = useState(false);
+  const [useCustomColetilla, setUseCustomColetilla] = useState(false);
   const loadedRef = useRef(false);
 
-  // Computed
   const { cuota, retencionImporte, total } = calcTotals(
     form.base_imponible,
     form.tipo_iva,
     form.aplica_retencion ? form.retencion_irpf : 0
   );
 
-  // Load editing data once
   useEffect(() => {
     if (!open) { loadedRef.current = false; return; }
     if (editing && !loadedRef.current) {
       loadedRef.current = true;
-      setForm({
-        ...getEmpty(),
-        ...editing,
-        aplica_retencion: (parseFloat(editing.retencion_irpf) || 0) > 0,
-      });
+      setForm({ ...getEmpty(), ...editing, aplica_retencion: (parseFloat(editing.retencion_irpf) || 0) > 0 });
       setCustomRetention(!RETENTION_RATES.includes(parseFloat(editing.retencion_irpf)));
+      setUseCustomColetilla(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal));
     } else if (!editing && !loadedRef.current) {
       loadedRef.current = true;
       setForm(getEmpty());
@@ -80,7 +104,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   }, [open, editing?.id]);
 
   const set = useCallback((field) => (e) => {
-    const val = e?.target ? e.target.value : e;
+    const val = e?.target !== undefined ? e.target.value : e;
     setForm(prev => ({ ...prev, [field]: val }));
     setErrors(prev => { if (!prev[field]) return prev; const n = { ...prev }; delete n[field]; return n; });
   }, []);
@@ -122,7 +146,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       if (editing?.id) {
         await base44.entities.Invoice.update(editing.id, payload);
       } else {
-        const inv = await base44.entities.Invoice.create(payload);
+        await base44.entities.Invoice.create(payload);
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
@@ -139,10 +163,6 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     }
   };
 
-  const ErrMsg = ({ field }) => errors[field]
-    ? <p className="text-xs text-destructive flex items-center gap-1 mt-0.5"><AlertCircle className="w-3 h-3" />{errors[field]}</p>
-    : null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -150,135 +170,133 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           <DialogTitle>{editing ? 'Editar factura' : 'Nueva factura'}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4 mt-2">
-          {/* Tipo */}
-          <div className="space-y-1.5">
-            <Label>Tipo</Label>
-            <Select value={form.tipo} onValueChange={set('tipo')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="emitida">Emitida</SelectItem>
-                <SelectItem value="recibida">Recibida</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Nº factura */}
-          <div className="space-y-1.5">
-            <Label>Nº Factura *</Label>
-            <Input value={form.numero_factura} onChange={set('numero_factura')} placeholder="F-2026-001" className={errors.numero_factura ? 'border-destructive' : ''} />
-            <ErrMsg field="numero_factura" />
-          </div>
-
-          {/* Fechas */}
-          <div className="space-y-1.5">
-            <Label>Fecha emisión *</Label>
-            <Input type="date" value={form.fecha_emision} onChange={set('fecha_emision')} className={errors.fecha_emision ? 'border-destructive' : ''} />
-            <ErrMsg field="fecha_emision" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Fecha vencimiento</Label>
-            <Input type="date" value={form.fecha_vencimiento || ''} onChange={set('fecha_vencimiento')} />
+        <div className="space-y-5 mt-2">
+          {/* Tipo + Nº */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Tipo</Label>
+              <Select value={form.tipo} onValueChange={set('tipo')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="emitida">Emitida</SelectItem>
+                  <SelectItem value="recibida">Recibida</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Nº Factura *</Label>
+              <Input value={form.numero_factura} onChange={set('numero_factura')} placeholder="F-2026-001" className={errors.numero_factura ? 'border-destructive' : ''} />
+              <ErrMsg msg={errors.numero_factura} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Fecha emisión *</Label>
+              <Input type="date" value={form.fecha_emision} onChange={set('fecha_emision')} className={errors.fecha_emision ? 'border-destructive' : ''} />
+              <ErrMsg msg={errors.fecha_emision} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Fecha vencimiento</Label>
+              <Input type="date" value={form.fecha_vencimiento || ''} onChange={set('fecha_vencimiento')} />
+            </div>
           </div>
 
           {/* Cliente */}
-          <div className="space-y-1.5">
-            <Label>Cliente / Proveedor</Label>
-            <Input value={form.cliente_nombre} onChange={set('cliente_nombre')} placeholder="Nombre o razón social" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>NIF / CIF</Label>
-            <Input value={form.cliente_nif} onChange={set('cliente_nif')} placeholder="B12345678" />
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datos del cliente</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Nombre / Razón social</Label>
+                <Input value={form.cliente_nombre} onChange={set('cliente_nombre')} placeholder="Nombre o razón social" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>NIF / CIF</Label>
+                <Input value={form.cliente_nif} onChange={set('cliente_nif')} placeholder="B12345678" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Dirección fiscal</Label>
+                <Input value={form.cliente_direccion || ''} onChange={set('cliente_direccion')} placeholder="Calle, número, CP, municipio" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.cliente_email || ''} onChange={set('cliente_email')} placeholder="cliente@ejemplo.com" />
+              </div>
+            </div>
           </div>
 
           {/* Concepto */}
-          <div className="col-span-2 space-y-1.5">
-            <Label>Concepto</Label>
-            <Input value={form.concepto} onChange={set('concepto')} placeholder="Descripción del servicio o producto" />
-          </div>
-
-          {/* Base imponible */}
           <div className="space-y-1.5">
-            <Label>Base imponible (€) *</Label>
-            <Input type="number" step="0.01" min="0" value={form.base_imponible}
-              onChange={set('base_imponible')} placeholder="0,00"
-              className={errors.base_imponible ? 'border-destructive' : ''} />
-            <ErrMsg field="base_imponible" />
+            <Label>Concepto / Descripción</Label>
+            <Textarea value={form.concepto} onChange={set('concepto')} placeholder="Descripción detallada del servicio..." rows={3} />
           </div>
 
-          {/* Tipo impuesto */}
-          <div className="space-y-1.5">
-            <Label>% {taxType}</Label>
-            <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(parseFloat(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {taxRates.map(r => (
-                  <SelectItem key={r} value={String(r)}>{r} %</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Cuota impuesto (readonly) */}
-          <div className="space-y-1.5">
-            <Label>Cuota {taxType}</Label>
-            <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium text-foreground">
-              {fmt(cuota)} €
-            </div>
-          </div>
-
-          {/* Retención toggle */}
-          <div className="space-y-1.5">
-            <Label>Retención IRPF</Label>
-            <div className="flex items-center gap-3 h-9">
-              <Switch checked={form.aplica_retencion}
-                onCheckedChange={v => setForm(f => ({ ...f, aplica_retencion: v, retencion_irpf: v ? 15 : 0 }))} />
-              <span className="text-sm text-muted-foreground">{form.aplica_retencion ? 'Aplicar retención' : 'Sin retención'}</span>
-            </div>
-          </div>
-
-          {/* Porcentaje retención */}
-          {form.aplica_retencion && (
-            <div className="space-y-1.5">
-              <Label>% Retención *</Label>
-              {!customRetention ? (
-                <div className="flex gap-2">
-                  <Select value={String(form.retencion_irpf)}
-                    onValueChange={v => { if (v === 'otro') { setCustomRetention(true); } else { set('retencion_irpf')(parseFloat(v)); } }}>
-                    <SelectTrigger className={errors.retencion_irpf ? 'border-destructive' : ''}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {RETENTION_RATES.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
-                      <SelectItem value="otro">Otro...</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <Input type="number" step="0.01" min="0" max="100" value={form.retencion_irpf}
-                    onChange={set('retencion_irpf')} placeholder="%" className="flex-1" />
-                  <Button variant="outline" size="sm" onClick={() => setCustomRetention(false)}>←</Button>
-                </div>
-              )}
-              <ErrMsg field="retencion_irpf" />
-            </div>
-          )}
-
-          {/* Importe retención (readonly) */}
-          {form.aplica_retencion && (
-            <div className="space-y-1.5">
-              <Label>Importe retención</Label>
-              <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium text-destructive">
-                -{fmt(retencionImporte)} €
+          {/* Importes */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Importes</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Base imponible (€) *</Label>
+                <Input type="number" step="0.01" min="0" value={form.base_imponible}
+                  onChange={set('base_imponible')} placeholder="0,00"
+                  className={errors.base_imponible ? 'border-destructive' : ''} />
+                <ErrMsg msg={errors.base_imponible} />
               </div>
+              <div className="space-y-1.5">
+                <Label>% {taxType}</Label>
+                <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(parseFloat(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {taxRates.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Cuota {taxType}</Label>
+                <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium">
+                  {fmt(cuota)} €
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Retención IRPF</Label>
+                <div className="flex items-center gap-3 h-9">
+                  <Switch checked={form.aplica_retencion}
+                    onCheckedChange={v => setForm(f => ({ ...f, aplica_retencion: v, retencion_irpf: v ? 15 : 0 }))} />
+                  <span className="text-sm text-muted-foreground">{form.aplica_retencion ? 'Aplicar' : 'Sin retención'}</span>
+                </div>
+              </div>
+              {form.aplica_retencion && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>% Retención *</Label>
+                    {!customRetention ? (
+                      <Select value={String(form.retencion_irpf)}
+                        onValueChange={v => { if (v === 'otro') setCustomRetention(true); else set('retencion_irpf')(parseFloat(v)); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {RETENTION_RATES.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
+                          <SelectItem value="otro">Otro...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input type="number" step="0.01" min="0" max="100" value={form.retencion_irpf}
+                          onChange={set('retencion_irpf')} placeholder="%" className="flex-1" />
+                        <Button variant="outline" size="sm" onClick={() => setCustomRetention(false)}>←</Button>
+                      </div>
+                    )}
+                    <ErrMsg msg={errors.retencion_irpf} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Importe retención</Label>
+                    <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium text-destructive">
+                      -{fmt(retencionImporte)} €
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          )}
 
-          {/* Resumen total */}
-          <div className="col-span-2 mt-2">
+            {/* Resumen */}
             <div className="bg-secondary/40 rounded-xl border border-border p-4">
-              <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Resumen</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Resumen</p>
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Base imponible</span>
@@ -294,7 +312,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                     <span className="font-medium">- {fmt(retencionImporte)} €</span>
                   </div>
                 )}
-                <div className="flex justify-between pt-2 border-t border-border text-base font-bold text-foreground">
+                <div className="flex justify-between pt-2 border-t border-border text-base font-bold">
                   <span>Total factura</span>
                   <span className="text-teal">{fmt(total)} €</span>
                 </div>
@@ -302,33 +320,79 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             </div>
           </div>
 
-          {/* Estados */}
-          <div className="space-y-1.5">
-            <Label>Estado de cobro</Label>
-            <Select value={form.estado_cobro} onValueChange={set('estado_cobro')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-                <SelectItem value="cobrada">Cobrada</SelectItem>
-                <SelectItem value="vencida">Vencida</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Estado contable</Label>
-            <Select value={form.estado_contable} onValueChange={set('estado_contable')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendiente">Pendiente</SelectItem>
-                <SelectItem value="en_revision">En revisión</SelectItem>
-                <SelectItem value="revisada">Revisada</SelectItem>
-                <SelectItem value="contabilizada">Contabilizada</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Forma de pago */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Forma de pago</Label>
+              <Select value={form.forma_pago} onValueChange={set('forma_pago')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FORMAS_PAGO.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Estado de cobro</Label>
+              <Select value={form.estado_cobro} onValueChange={set('estado_cobro')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="cobrada">Cobrada</SelectItem>
+                  <SelectItem value="vencida">Vencida</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Estado contable</Label>
+              <Select value={form.estado_contable} onValueChange={set('estado_contable')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pendiente">Pendiente</SelectItem>
+                  <SelectItem value="en_revision">En revisión</SelectItem>
+                  <SelectItem value="revisada">Revisada</SelectItem>
+                  <SelectItem value="contabilizada">Contabilizada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="col-span-2 space-y-1.5">
-            <Label>Comentarios / Notas</Label>
+          {/* Coletilla fiscal */}
+          <div className="space-y-2">
+            <Label>Coletilla fiscal (opcional)</Label>
+            {!useCustomColetilla ? (
+              <div className="flex gap-2">
+                <Select value={form.coletilla_fiscal}
+                  onValueChange={v => { if (v === '__custom__') { setUseCustomColetilla(true); set('coletilla_fiscal')(''); } else set('coletilla_fiscal')(v); }}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Seleccionar coletilla predefinida..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={null}>Sin coletilla</SelectItem>
+                    {COLETILLAS.map(c => (
+                      <SelectItem key={c} value={c}>{c.slice(0, 60)}…</SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Escribir coletilla personalizada...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.coletilla_fiscal && (
+                  <Button variant="outline" size="sm" onClick={() => set('coletilla_fiscal')('')}>Quitar</Button>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Textarea value={form.coletilla_fiscal} onChange={set('coletilla_fiscal')}
+                  placeholder="Texto de la coletilla fiscal..." rows={2} className="flex-1" />
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setUseCustomColetilla(false)}>←</Button>
+              </div>
+            )}
+            {form.coletilla_fiscal && !useCustomColetilla && (
+              <p className="text-xs text-muted-foreground bg-secondary/60 rounded px-3 py-2 italic">{form.coletilla_fiscal}</p>
+            )}
+          </div>
+
+          {/* Comentarios */}
+          <div className="space-y-1.5">
+            <Label>Observaciones</Label>
             <Input value={form.comentarios || ''} onChange={set('comentarios')} placeholder="Notas adicionales..." />
           </div>
         </div>
@@ -337,7 +401,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-3">{saveError}</p>
         )}
 
-        <div className="flex justify-end gap-3 mt-4">
+        <div className="flex justify-end gap-3 mt-5">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
             {saving ? 'Guardando...' : 'Guardar factura'}
