@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload } from 'lucide-react';
+import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload, BarChart3 } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -33,29 +33,35 @@ const EMPTY = {
   cuota_impuesto: '', total: '', estado: 'pendiente'
 };
 
+function fmt(n) {
+  return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default function IngresosGastos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
+  const [filterCategoria, setFilterCategoria] = useState('all');
+  const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
+  const currentYear = new Date().getFullYear();
+  const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
+
   useEffect(() => {
-    if (company?.id) {
-      load();
-    } else if (!loadingCompany) {
-      setLoading(false);
-    }
-  }, [company?.id, loadingCompany]);
+    if (company?.id) load();
+    else if (!loadingCompany) setLoading(false);
+  }, [company?.id, filterAnio, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.Expense.filter({ company_id: company.id });
+    const data = await base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(filterAnio) });
     setItems(data || []);
     setLoading(false);
   };
@@ -65,12 +71,14 @@ export default function IngresosGastos() {
     const year = form.fecha ? new Date(form.fecha).getFullYear() : new Date().getFullYear();
     const month = form.fecha ? new Date(form.fecha).getMonth() + 1 : new Date().getMonth() + 1;
     const trimestre = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
+    const base = parseFloat(form.base_imponible) || 0;
+    const cuota = base * (parseFloat(form.tipo_impuesto) || 0) / 100;
     const payload = {
       ...form,
       company_id: company.id,
-      base_imponible: parseFloat(form.base_imponible) || 0,
-      cuota_impuesto: parseFloat(form.cuota_impuesto) || 0,
-      total: parseFloat(form.total) || 0,
+      base_imponible: base,
+      cuota_impuesto: cuota,
+      total: parseFloat(form.total) || base + cuota,
       tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
       anio: year, trimestre, subido_por: user?.email,
     };
@@ -79,15 +87,23 @@ export default function IngresosGastos() {
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
   };
 
-  const filtered = items.filter(i => {
+  const filtered = useMemo(() => items.filter(i => {
     const matchSearch = !search || i.concepto?.toLowerCase().includes(search.toLowerCase()) || i.proveedor_cliente?.toLowerCase().includes(search.toLowerCase());
     const matchTipo = filterTipo === 'all' || i.tipo === filterTipo;
     const matchTrimestre = filterTrimestre === 'all' || i.trimestre === filterTrimestre;
-    return matchSearch && matchTipo && matchTrimestre;
-  });
+    const matchCat = filterCategoria === 'all' || i.categoria === filterCategoria;
+    return matchSearch && matchTipo && matchTrimestre && matchCat;
+  }), [items, search, filterTipo, filterTrimestre, filterCategoria]);
 
-  const totalIngresos = filtered.filter(i => i.tipo === 'ingreso').reduce((s, i) => s + (i.total || 0), 0);
-  const totalGastos = filtered.filter(i => i.tipo === 'gasto').reduce((s, i) => s + (i.total || 0), 0);
+  const ingresos = useMemo(() => filtered.filter(i => i.tipo === 'ingreso'), [filtered]);
+  const gastos = useMemo(() => filtered.filter(i => i.tipo === 'gasto'), [filtered]);
+
+  const totalIngresos = ingresos.reduce((s, i) => s + (i.total || 0), 0);
+  const totalGastos = gastos.reduce((s, i) => s + (i.total || 0), 0);
+  const totalBaseIng = ingresos.reduce((s, i) => s + (i.base_imponible || 0), 0);
+  const totalBaseGas = gastos.reduce((s, i) => s + (i.base_imponible || 0), 0);
+  const resultado = totalIngresos - totalGastos;
+  const margen = totalIngresos > 0 ? ((totalIngresos - totalGastos) / totalIngresos * 100).toFixed(1) : '0.0';
 
   if (loadingCompany && loading) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
@@ -96,27 +112,40 @@ export default function IngresosGastos() {
 
   return (
     <div>
-      <PageHeader title="Ingresos y Gastos" subtitle={`${filtered.length} registros`}>
+      <PageHeader title="Ingresos y Gastos" subtitle={`${filtered.length} registros · ${filterAnio}`}>
+        <Select value={filterAnio} onValueChange={setFilterAnio}>
+          <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+        </Select>
         <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
           <Plus className="w-4 h-4 mr-1.5" /> Nuevo registro
         </Button>
       </PageHeader>
 
-      {/* Resumen */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <div className="bg-green-50 border border-green-100 rounded-xl p-4">
-          <p className="text-xs font-medium text-green-700 mb-1">Total Ingresos</p>
-          <p className="text-xl font-jakarta font-bold text-green-800">{totalIngresos.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+          <p className="text-xs font-medium text-green-700 mb-0.5">Total Ingresos</p>
+          <p className="text-lg font-jakarta font-bold text-green-800">{fmt(totalIngresos)} €</p>
+          <p className="text-[10px] text-green-600 mt-0.5">Base: {fmt(totalBaseIng)} €</p>
         </div>
         <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-          <p className="text-xs font-medium text-red-700 mb-1">Total Gastos</p>
-          <p className="text-xl font-jakarta font-bold text-red-800">{totalGastos.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
+          <p className="text-xs font-medium text-red-700 mb-0.5">Total Gastos</p>
+          <p className="text-lg font-jakarta font-bold text-red-800">{fmt(totalGastos)} €</p>
+          <p className="text-[10px] text-red-600 mt-0.5">Base: {fmt(totalBaseGas)} €</p>
         </div>
-        <div className={`border rounded-xl p-4 ${totalIngresos - totalGastos >= 0 ? 'bg-teal-light border-teal/20' : 'bg-red-50 border-red-100'}`}>
-          <p className="text-xs font-medium text-muted-foreground mb-1">Resultado</p>
-          <p className={`text-xl font-jakarta font-bold ${totalIngresos - totalGastos >= 0 ? 'text-teal' : 'text-destructive'}`}>
-            {(totalIngresos - totalGastos).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
-          </p>
+        <div className={`border rounded-xl p-4 ${resultado >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">Resultado</p>
+          <p className={`text-lg font-jakarta font-bold ${resultado >= 0 ? 'text-blue-800' : 'text-destructive'}`}>{fmt(resultado)} €</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-0.5">Margen</p>
+          <p className="text-lg font-jakarta font-bold text-foreground">{margen} %</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-center">
+          <Link to="/libro-registros" className="text-xs text-primary font-medium flex items-center gap-1.5 hover:underline">
+            <BarChart3 className="w-4 h-4" /> Ver P&L completo →
+          </Link>
         </div>
       </div>
 
@@ -124,10 +153,10 @@ export default function IngresosGastos() {
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input placeholder="Buscar por concepto o proveedor/cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
         <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-32 h-9"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="ingreso">Ingresos</SelectItem>
@@ -135,13 +164,20 @@ export default function IngresosGastos() {
           </SelectContent>
         </Select>
         <Select value={filterTrimestre} onValueChange={setFilterTrimestre}>
-          <SelectTrigger className="w-32 h-9"><SelectValue placeholder="Trimestre" /></SelectTrigger>
+          <SelectTrigger className="w-28 h-9"><SelectValue placeholder="Trimestre" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="T1">T1</SelectItem>
             <SelectItem value="T2">T2</SelectItem>
             <SelectItem value="T3">T3</SelectItem>
             <SelectItem value="T4">T4</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+          <SelectTrigger className="w-44 h-9"><SelectValue placeholder="Categoría" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas las categorías</SelectItem>
+            {CATEGORIAS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -159,13 +195,16 @@ export default function IngresosGastos() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-secondary/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tipo</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Proveedor/Cliente</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Categoría</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Base</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Estado</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Tipo</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Fecha</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Proveedor/Cliente</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Concepto</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs hidden lg:table-cell">Categoría</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs">Base</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs hidden lg:table-cell">IVA%</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs">Total</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">T</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Estado</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -178,13 +217,18 @@ export default function IngresosGastos() {
                         {item.tipo === 'ingreso' ? 'Ingreso' : 'Gasto'}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.fecha}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">{item.fecha}</td>
                     <td className="px-4 py-3 font-medium text-foreground">{item.proveedor_cliente || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell capitalize">
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs max-w-[160px] truncate">{item.concepto || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell text-xs capitalize">
                       {CATEGORIAS.find(c => c.value === item.categoria)?.label || item.categoria || '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">{(item.base_imponible || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
-                    <td className="px-4 py-3 text-right font-semibold">{(item.total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                    <td className="px-4 py-3 text-right text-xs">{fmt(item.base_imponible)} €</td>
+                    <td className="px-4 py-3 text-right text-muted-foreground hidden lg:table-cell text-xs">{item.tipo_impuesto ?? 0}%</td>
+                    <td className="px-4 py-3 text-right font-semibold text-xs">{fmt(item.total)} €</td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-medium text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">{item.trimestre}</span>
+                    </td>
                     <td className="px-4 py-3"><StatusBadge status={item.estado} /></td>
                     <td className="px-4 py-3 text-right">
                       <DropdownMenu>
@@ -200,6 +244,15 @@ export default function IngresosGastos() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border bg-secondary/40 font-semibold text-xs">
+                  <td colSpan={5} className="px-4 py-2.5 text-muted-foreground">TOTAL ({filtered.length} registros)</td>
+                  <td className="px-4 py-2.5 text-right">{fmt(filtered.reduce((s, i) => s + (i.base_imponible || 0), 0))} €</td>
+                  <td className="hidden lg:table-cell"></td>
+                  <td className="px-4 py-2.5 text-right font-bold">{fmt(filtered.reduce((s, i) => s + (i.total || 0), 0))} €</td>
+                  <td colSpan={3}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -240,14 +293,32 @@ export default function IngresosGastos() {
             </div>
             <div className="space-y-1.5">
               <Label>Base imponible (€)</Label>
-              <Input type="number" step="0.01" value={form.base_imponible} onChange={e => setForm(f => ({ ...f, base_imponible: e.target.value }))} />
+              <Input type="number" step="0.01" value={form.base_imponible}
+                onChange={e => {
+                  const base = parseFloat(e.target.value) || 0;
+                  const cuota = base * (parseFloat(form.tipo_impuesto) || 0) / 100;
+                  setForm(f => ({ ...f, base_imponible: e.target.value, cuota_impuesto: cuota.toFixed(2), total: (base + cuota).toFixed(2) }));
+                }} />
             </div>
             <div className="space-y-1.5">
               <Label>Tipo impuesto (%)</Label>
-              <Input type="number" value={form.tipo_impuesto} onChange={e => setForm(f => ({ ...f, tipo_impuesto: e.target.value }))} />
+              <Select value={String(form.tipo_impuesto)} onValueChange={v => {
+                const base = parseFloat(form.base_imponible) || 0;
+                const cuota = base * parseFloat(v) / 100;
+                setForm(f => ({ ...f, tipo_impuesto: parseFloat(v), cuota_impuesto: cuota.toFixed(2), total: (base + cuota).toFixed(2) }));
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0, 4, 7, 10, 21].map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Total (€) *</Label>
+              <Label>Cuota impuesto (€)</Label>
+              <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm">{fmt(form.cuota_impuesto)} €</div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Total (€)</Label>
               <Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
