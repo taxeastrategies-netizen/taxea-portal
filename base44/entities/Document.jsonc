@@ -9,21 +9,7 @@
       "type": "string"
     },
     "carpeta": {
-      "type": "string",
-      "enum": [
-        "facturas_emitidas",
-        "facturas_recibidas",
-        "bancos",
-        "contratos",
-        "escrituras",
-        "modelos_fiscales",
-        "certificados",
-        "nominas",
-        "seguros_sociales",
-        "renta",
-        "otros"
-      ],
-      "default": "otros"
+      "type": "string"
     },
     "archivo_url": {
       "type": "string"
