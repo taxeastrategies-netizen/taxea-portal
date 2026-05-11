@@ -1,0 +1,94 @@
+{
+  "name": "Referral",
+  "type": "object",
+  "properties": {
+    "referrer_email": {
+      "type": "string"
+    },
+    "referrer_code": {
+      "type": "string"
+    },
+    "referred_email": {
+      "type": "string"
+    },
+    "referred_nombre": {
+      "type": "string"
+    },
+    "tipo_cliente": {
+      "type": "string",
+      "enum": [
+        "persona_fisica",
+        "sociedad"
+      ],
+      "default": "persona_fisica"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "invitacion_enviada",
+        "registrado",
+        "perfil_completado",
+        "cliente_activo",
+        "primer_pago",
+        "mes_1",
+        "mes_2",
+        "mes_3",
+        "pendiente_validacion",
+        "recompensa_aprobada",
+        "recompensa_pagada",
+        "rechazado",
+        "fraudulento"
+      ],
+      "default": "invitacion_enviada"
+    },
+    "meses_completados": {
+      "type": "number",
+      "default": 0
+    },
+    "recompensa_eur": {
+      "type": "number"
+    },
+    "recompensa_pagada": {
+      "type": "boolean",
+      "default": false
+    },
+    "nota_admin": {
+      "type": "string"
+    },
+    "fraude_flag": {
+      "type": "boolean",
+      "default": false
+    },
+    "fraude_motivo": {
+      "type": "string"
+    },
+    "nivel_afiliado": {
+      "type": "string",
+      "enum": [
+        "bronce",
+        "plata",
+        "oro",
+        "partner"
+      ],
+      "default": "bronce"
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fecha": {
+            "type": "string"
+          },
+          "evento": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "referrer_email",
+    "referrer_code"
+  ]
+}

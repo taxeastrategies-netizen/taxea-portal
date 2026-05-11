@@ -109,6 +109,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                 { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
                 { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },
                 { to: '/admin-sugerencias', label: 'Buzón Sugerencias', icon: Lightbulb },
+                { to: '/admin-afiliados', label: 'Panel Afiliados', icon: Users },
               ].map(({ to, label, icon: Icon }) => (
                 <Link
                   key={to}
