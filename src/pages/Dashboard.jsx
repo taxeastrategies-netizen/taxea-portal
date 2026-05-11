@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
@@ -37,55 +37,59 @@ export default function Dashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    const [inv, exp, obl, notif, tsk, errs, crm] = await Promise.all([
+    // Fase 1: datos críticos en paralelo
+    const [inv, exp, obl, notif] = await Promise.all([
       base44.entities.Invoice.filter({ company_id: company.id, anio: parseInt(selectedYear) }),
       base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(selectedYear) }),
-      base44.entities.TaxObligation.filter({ company_id: company.id }),
-      base44.entities.Notification.filter({ destinatario_email: user?.email, leida: false }),
-      base44.entities.Task.filter({ company_id: company.id }),
-      base44.entities.FiscalError.filter({ company_id: company.id }),
-      base44.entities.ClientCRM.filter({ company_id: company.id }),
+      base44.entities.TaxObligation.filter({ company_id: company.id }, '-fecha_limite', 20),
+      base44.entities.Notification.filter({ destinatario_email: user?.email, leida: false }, '-created_date', 5),
     ]);
     setInvoices(inv || []);
     setExpenses(exp || []);
     setObligations(obl || []);
     setNotifications(notif || []);
+    setLoading(false); // render inmediato con datos críticos
+
+    // Fase 2: datos secundarios sin bloquear UI
+    const [tsk, errs, crm] = await Promise.all([
+      base44.entities.Task.filter({ company_id: company.id }, '-updated_date', 30),
+      base44.entities.FiscalError.filter({ company_id: company.id }, '-created_date', 20),
+      base44.entities.ClientCRM.filter({ company_id: company.id }, '-created_date', 1),
+    ]);
     setTasks(isAdmin ? tsk || [] : (tsk || []).filter(t => !t.interna));
     setErrors(errs || []);
     setCrmData(crm?.[0] || null);
-    setLoading(false);
   };
 
-  const totalIngresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-  const totalGastos = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
-  const resultado = totalIngresos - totalGastos;
-  const ivaRepercutido = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
-  const ivaSoportado = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
-  const facturasPendientes = invoices.filter(i => i.estado_contable === 'pendiente').length;
-  const obligacionesProximas = obligations.filter(o => ['pendiente_documentacion', 'en_preparacion'].includes(o.estado)).length;
-  const tareasVencidas = tasks.filter(t => t.fecha_limite && new Date(t.fecha_limite) < new Date() && !['completada', 'cancelada'].includes(t.estado));
-  const erroresCriticos = errors.filter(e => e.severidad === 'critica' && !['resuelto', 'ignorado'].includes(e.estado));
+  const { totalIngresos, totalGastos, resultado, ivaRepercutido, ivaSoportado,
+    facturasPendientes, obligacionesProximas, tareasVencidas, erroresCriticos,
+    estadoFiscal, healthScore, healthMotivos, recentActivity } = useMemo(() => {
+    const totalIngresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
+    const totalGastos = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
+    const resultado = totalIngresos - totalGastos;
+    const ivaRepercutido = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
+    const ivaSoportado = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
+    const facturasPendientes = invoices.filter(i => i.estado_contable === 'pendiente').length;
+    const obligacionesProximas = obligations.filter(o => ['pendiente_documentacion', 'en_preparacion'].includes(o.estado)).length;
+    const tareasVencidas = tasks.filter(t => t.fecha_limite && new Date(t.fecha_limite) < new Date() && !['completada', 'cancelada'].includes(t.estado));
+    const erroresCriticos = errors.filter(e => e.severidad === 'critica' && !['resuelto', 'ignorado'].includes(e.estado));
+    const estadoFiscal = (() => {
+      if (erroresCriticos.length > 0 || tareasVencidas.length > 0) return 'rojo';
+      if (facturasPendientes > 0 || obligations.some(o => o.estado === 'pendiente_documentacion')) return 'amarillo';
+      if (invoices.length > 0 || expenses.length > 0) return 'verde';
+      return 'gris';
+    })();
+    const { score: healthScoreCalc, motivos: healthMotivos } = calcularHealthScore({ errors, tasks, obligations, invoices });
+    const healthScore = crmData?.health_score || healthScoreCalc;
+    const recentActivity = [...invoices.slice(-3), ...expenses.slice(-3)]
+      .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
+      .slice(0, 5);
+    return { totalIngresos, totalGastos, resultado, ivaRepercutido, ivaSoportado,
+      facturasPendientes, obligacionesProximas, tareasVencidas, erroresCriticos,
+      estadoFiscal, healthScore, healthMotivos, recentActivity };
+  }, [invoices, expenses, obligations, tasks, errors, crmData]);
 
-  // Calcular estado fiscal dinámico
-  const estadoFiscal = (() => {
-    if (erroresCriticos.length > 0 || tareasVencidas.length > 0) return 'rojo';
-    if (facturasPendientes > 0 || obligations.some(o => o.estado === 'pendiente_documentacion')) return 'amarillo';
-    if (invoices.length > 0 || expenses.length > 0) return 'verde';
-    return 'gris';
-  })();
-
-  const { score: healthScoreCalc, motivos: healthMotivos } = calcularHealthScore({ errors, tasks, obligations, invoices });
-  const healthScore = crmData?.health_score || healthScoreCalc;
-
-  const recentActivity = [...invoices.slice(-3), ...expenses.slice(-3)]
-    .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
-    .slice(0, 5);
-
-  if (loading) return (
-    <div className="flex justify-center items-center py-24">
-      <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <div className="animate-fade-in">
@@ -262,6 +266,34 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between mb-6">
+        <div className="space-y-1.5">
+          <div className="h-7 w-48 bg-muted rounded-lg animate-pulse" />
+          <div className="h-4 w-36 bg-muted/60 rounded animate-pulse" />
+        </div>
+        <div className="h-9 w-28 bg-muted rounded-lg animate-pulse" />
+      </div>
+      <div className="grid lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 h-28 bg-muted rounded-xl animate-pulse" />
+        <div className="h-28 bg-muted rounded-xl animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-24 bg-muted rounded-xl animate-pulse" />
+        ))}
+      </div>
+      <div className="h-64 bg-muted rounded-xl animate-pulse" />
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="h-64 bg-muted rounded-xl animate-pulse" />
+        <div className="h-64 bg-muted rounded-xl animate-pulse" />
       </div>
     </div>
   );

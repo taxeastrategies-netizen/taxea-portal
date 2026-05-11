@@ -25,7 +25,13 @@ const menuItems = [
   { icon: Settings, label: 'Ajustes', path: '/ajustes' },
 ];
 
-export default function Sidebar({ isOpen, onClose, isAdmin }) {
+const ROLE_LABELS = {
+  super_admin: { label: 'Super Admin', color: 'bg-red-500/20 border-red-500/30 text-red-300' },
+  admin: { label: 'Administrador', color: 'bg-gold/20 border-gold/30 text-gold' },
+  advisor: { label: 'Asesor', color: 'bg-blue-500/20 border-blue-500/30 text-blue-300' },
+};
+
+export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole }) {
   const location = useLocation();
 
   return (
@@ -63,10 +69,10 @@ export default function Sidebar({ isOpen, onClose, isAdmin }) {
           </button>
         </div>
 
-        {/* Admin badge */}
-        {isAdmin && (
-          <div className="mx-4 mt-3 px-3 py-1.5 rounded-md bg-gold/20 border border-gold/30">
-            <p className="text-gold text-xs font-medium text-center">Panel Administrador</p>
+        {/* Role badge */}
+        {isAdmin && ROLE_LABELS[userRole] && (
+          <div className={`mx-4 mt-3 px-3 py-1.5 rounded-md border ${ROLE_LABELS[userRole].color}`}>
+            <p className="text-xs font-medium text-center">{ROLE_LABELS[userRole].label}</p>
           </div>
         )}
 

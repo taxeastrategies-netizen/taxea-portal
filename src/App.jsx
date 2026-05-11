@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AppLayout from '@/components/layout/AppLayout';
-import { useCompanyContext } from '@/lib/useCompanyContext';
+import { useCompanyContext, isAdminRole } from '@/lib/useCompanyContext';
 
 // Pages
 import Login from './pages/Login';
@@ -35,10 +35,12 @@ import AsistenteFiscal from './pages/AsistenteFiscal';
 import AdminAsistente from './pages/AdminAsistente';
 
 function AppWithContext({ user }) {
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
+  const isSuperAdmin = user?.role === 'super_admin';
   const { company, loadingCompany } = useCompanyContext(user);
 
-  if (loadingCompany) {
+  // Admins no esperan a loadingCompany para ver el layout
+  if (loadingCompany && !isAdmin) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="text-center">
@@ -51,7 +53,7 @@ function AppWithContext({ user }) {
 
   return (
     <Routes>
-      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} />}>
+      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tareas" element={<Tareas />} />
         <Route path="/timeline" element={<Timeline />} />
