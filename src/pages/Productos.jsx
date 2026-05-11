@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Package, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -13,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const EMPTY = { nombre: '', descripcion: '', precio_base: '', tipo_impuesto: 21, categoria: '', activo: true };
 
 export default function Productos() {
-  const { company } = useOutletContext() || {};
+  const { company, loadingCompany } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -21,7 +22,10 @@ export default function Productos() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) { load(); }
+    else if (!loadingCompany) { setLoading(false); }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -37,6 +41,11 @@ export default function Productos() {
     else await base44.entities.ProductService.create(payload);
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
   };
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Productos y Servicios" />;
 
   return (
     <div>

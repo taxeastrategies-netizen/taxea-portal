@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function LibroRegistros() {
-  const { company, isAdmin } = useOutletContext() || {};
+  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +17,10 @@ export default function LibroRegistros() {
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id, filterAnio]);
+  useEffect(() => {
+    if (company?.id) { load(); }
+    else if (!loadingCompany) { setLoading(false); }
+  }, [company?.id, filterAnio, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -52,6 +55,11 @@ export default function LibroRegistros() {
   ];
 
   const activeData = activeTab === 'gastos' ? filteredExpenses : filteredInvoices;
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="el Libro de Registros" />;
 
   return (
     <div>

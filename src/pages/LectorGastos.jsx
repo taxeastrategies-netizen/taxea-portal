@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Upload, ScanLine, CheckCircle, AlertCircle, Edit3, Save } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -29,7 +30,7 @@ const STAGES = {
 };
 
 export default function LectorGastos() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, loadingCompany } = useOutletContext() || {};
   const [stage, setStage] = useState(STAGES.idle);
   const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState('');
@@ -152,6 +153,11 @@ Datos a extraer:
     setExtracted(null);
     setForm({});
   };
+
+  if (loadingCompany) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company) return <NoCompanyState pageName="el Lector de Gastos" />;
 
   return (
     <div>

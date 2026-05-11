@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Receipt, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -15,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const EMPTY = { numero_proforma: '', fecha: '', cliente_nombre: '', cliente_nif: '', concepto: '', base_imponible: '', tipo_impuesto: 21, cuota_impuesto: '', total: '', estado: 'borrador', notas: '' };
 
 export default function Proformas() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, loadingCompany } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -23,7 +24,10 @@ export default function Proformas() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) { load(); }
+    else if (!loadingCompany) { setLoading(false); }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -62,6 +66,11 @@ export default function Proformas() {
     await base44.entities.Proforma.update(p.id, { estado: 'convertida_factura' });
     load();
   };
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Proformas" />;
 
   return (
     <div>

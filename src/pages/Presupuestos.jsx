@@ -16,7 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 const EMPTY = { numero_presupuesto: '', fecha: '', cliente_nombre: '', cliente_nif: '', base_imponible: '', tipo_impuesto: 21, total: '', estado: 'borrador', notas: '', validez_dias: 30 };
 
 export default function Presupuestos() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, loadingCompany } = useOutletContext() || {};
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -25,7 +25,10 @@ export default function Presupuestos() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (company?.id) load(); }, [company?.id]);
+  useEffect(() => {
+    if (company?.id) { load(); }
+    else if (!loadingCompany) { setLoading(false); }
+  }, [company?.id, loadingCompany]);
 
   const load = async () => {
     setLoading(true);
@@ -65,6 +68,11 @@ export default function Presupuestos() {
   };
 
   const filtered = items.filter(i => !search || i.numero_presupuesto?.toLowerCase().includes(search.toLowerCase()) || i.cliente_nombre?.toLowerCase().includes(search.toLowerCase()));
+
+  if (loadingCompany && loading) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Presupuestos" />;
 
   return (
     <div>

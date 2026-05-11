@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { ScanText, CheckCircle, AlertCircle, Save } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const STAGES = { idle: 'idle', reading: 'reading', review: 'review', saved: 'saved' };
 
 export default function LectorIngresos() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, loadingCompany } = useOutletContext() || {};
   const [stage, setStage] = useState(STAGES.idle);
   const [file, setFile] = useState(null);
   const [fileUrl, setFileUrl] = useState('');
@@ -96,6 +97,11 @@ Datos a extraer:
   };
 
   const reset = () => { setStage(STAGES.idle); setFile(null); setFileUrl(''); setExtracted(null); setForm({}); };
+
+  if (loadingCompany) return (
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+  );
+  if (!company) return <NoCompanyState pageName="el Lector de Ingresos" />;
 
   return (
     <div>
