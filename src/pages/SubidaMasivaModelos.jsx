@@ -26,30 +26,38 @@ const MODELO_A_CARPETA = {
   otra: 'fiscal_declaraciones',
 };
 
-async function extraerConIA(file) {
-  // Solo usamos el nombre del archivo (sin subir) para la extracción básica
+async function extraerConIA(fileUrl, fileName) {
+  // Lee el PDF completo y extrae datos del documento real
   const result = await base44.integrations.Core.InvokeLLM({
-    prompt: `Analiza el nombre de este archivo PDF fiscal y extrae todos los datos posibles.
-Archivo: "${file.name}"
+    prompt: `Eres un experto en modelos fiscales españoles. Lee este PDF y extrae TODOS los datos posibles.
 
-Extrae: modelo fiscal, ejercicio, periodo, trimestre, NIF/CIF del cliente, razón social, importe, CSV/NRC si aparece en el nombre.
+Busca especialmente:
+- DNI/CIF/NIF del contribuyente (en mayúsculas, formato español: 12345678A o 12345678-A)
+- Razón social / Nombre completo
+- Modelo fiscal (303, 390, 130, 111, 115, 202, 200, 349, 420, 425, IS, Renta, etc.)
+- Ejercicio / Año (4 dígitos)
+- Período (T1, T2, T3, T4, 1T, 2T, 3T, 4T, o el trimestre que aparezca)
+- CSV (código de autenticación)
+- NRC (número de referencia de control)
+- Importe total a ingresar o devolver
 
-Para el modelo usa uno de: modelo_303, modelo_390, modelo_130, modelo_111, modelo_115, modelo_202, modelo_200, modelo_349, modelo_420_igic, modelo_425_igic, renta, cuentas_anuales, libros_contables, otra.
+Nombre archivo: "${fileName}"
 
-Indica confianza: alta (NIF claro + modelo claro), media (modelo claro pero sin NIF), baja (ambiguo).`,
+Responde SIEMPRE en JSON, incluso si algunos campos están vacíos. Para confianza: usa "alta" si tienes NIF+modelo claros, "media" si modelo es claro pero faltan datos, "baja" si hay dudas o ambigüedad.`,
+    file_urls: fileUrl,
     response_json_schema: {
       type: 'object',
       properties: {
-        modelo: { type: 'string' },
-        ejercicio: { type: 'string' },
-        periodo: { type: 'string' },
+        modelo: { type: 'string', description: 'Ej: modelo_303, modelo_390' },
+        ejercicio: { type: 'string', description: '4 dígitos' },
+        periodo: { type: 'string', description: 'T1, T2, T3, T4 o similar' },
         trimestre: { type: 'string' },
-        nif_cif: { type: 'string' },
+        nif_cif: { type: 'string', description: 'DNI/CIF/NIF en mayúsculas' },
         razon_social: { type: 'string' },
         importe: { type: 'number' },
         csv: { type: 'string' },
         nrc: { type: 'string' },
-        confianza: { type: 'string' }
+        confianza: { type: 'string', description: 'alta, media o baja' }
       }
     }
   });
@@ -88,14 +96,21 @@ export default function SubidaMasivaModelos() {
 
   const procesarItem = useCallback(async (id, file, companiesList) => {
     setItems(prev => prev.map(i => i.id === id ? { ...i, estado: 'procesando' } : i));
-    const extraccion = await extraerConIA(file);
+    
+    // 1. Subir PDF primero
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    
+    // 2. IA lee el PDF completo
+    const extraccion = await extraerConIA(file_url, file.name);
+    
+    // 3. Buscar cliente por NIF (lo más importante ahora)
     const empresa = await buscarEmpresa(companiesList, extraccion?.nif_cif, extraccion?.razon_social);
 
     const estado = empresa
       ? (extraccion?.confianza === 'baja' ? 'revision' : 'identificado')
       : 'no_identificado';
 
-    const previewUrl = file.type === 'application/pdf' ? URL.createObjectURL(file) : null;
+    const previewUrl = file.type === 'application/pdf' ? file_url : null;
 
     setItems(prev => prev.map(i => i.id === id ? {
       ...i, estado,
