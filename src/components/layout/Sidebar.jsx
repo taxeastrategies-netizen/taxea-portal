@@ -56,6 +56,7 @@ const DEPT_GROUPS = [
         basePath: '/finance',
         modules: [
           { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
+          { id: 'cashflow', label: 'Cashflow Center', icon: TrendingUp, path: '/finance/cashflow' },
         ],
       },
     ],
