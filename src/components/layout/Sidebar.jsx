@@ -8,7 +8,7 @@ import {
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Cog
+  Lock, Wallet, Scale, UserCog, Cog, Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -44,6 +44,28 @@ const DEPT_GROUPS = [
         activeBg: 'bg-taxea-red/8',
         basePath: '/tax-accounting',
         modules: TAX_MODULES,
+      },
+      {
+        id: 'people',
+        label: 'People & HR',
+        icon: Heart,
+        activeColor: 'text-rose-600',
+        activeBg: 'bg-rose-50',
+        basePath: '/people',
+        modules: [
+          { id: 'dashboard',   label: 'HR Dashboard',        icon: LayoutDashboard, path: '/people/dashboard' },
+          { id: 'employees',   label: 'Employee Center',      icon: Users,           path: '/people/employees' },
+          { id: 'documents',   label: 'Documents & Signatures', icon: FileText,      path: '/people/documents' },
+          { id: 'time',        label: 'Time & Attendance',    icon: Clock,           path: '/people/time' },
+          { id: 'absences',    label: 'Absences',             icon: Calendar,        path: '/people/absences' },
+          { id: 'hours-bank',  label: 'Hours Bank',           icon: BarChart2,       path: '/people/hours-bank' },
+          { id: 'performance', label: 'Performance & Goals',  icon: TrendingUp,      path: '/people/performance' },
+          { id: 'onboarding',  label: 'Onboarding / Offboarding', icon: UserCog,     path: '/people/onboarding' },
+          { id: 'recruiting',  label: 'Recruiting',           icon: FileCheck,       path: '/people/recruiting' },
+          { id: 'expenses',    label: 'HR Expenses',          icon: Receipt,         path: '/people/expenses' },
+          { id: 'reports',     label: 'People Analytics',     icon: BarChart2,       path: '/people/reports' },
+          { id: 'ai-assistant',label: 'HR AI Assistant',      icon: Brain,           path: '/people/ai-assistant' },
+        ],
       },
       {
         id: 'finance',

@@ -40,6 +40,7 @@ import SubidaMasivaModelos from './pages/SubidaMasivaModelos';
 import AdminWhatsApp from './pages/AdminWhatsApp';
 import TaxAccounting from './pages/TaxAccounting';
 import Finance from './pages/Finance';
+import PeopleHR from './pages/PeopleHR.jsx';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -92,6 +93,8 @@ function AppWithContext({ user }) {
         <Route path="/tax-accounting/:module" element={<TaxAccounting />} />
         <Route path="/finance" element={<Finance />} />
         <Route path="/finance/:module" element={<Finance />} />
+        <Route path="/people" element={<PeopleHR />} />
+        <Route path="/people/:module" element={<PeopleHR />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
