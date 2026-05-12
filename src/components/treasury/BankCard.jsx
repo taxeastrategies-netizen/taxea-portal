@@ -51,11 +51,25 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
   const handleSync = async (e) => {
     e.stopPropagation();
     setSyncing(true);
-    await base44.functions.invoke('bankSync', {
-      action: 'sync_mock',
-      bank_account_id: account.id,
-      company_id: companyId,
-    });
+    // Si tiene proveedor_integracion (GoCardless requisition_id) o API directa, usar api_sync
+    const needsApiSync = ['revolut', 'wise', 'qonto', 'stripe'].includes(account.proveedor) ||
+      (['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'].includes(account.proveedor) && account.proveedor_integracion);
+
+    if (needsApiSync) {
+      await base44.functions.invoke('bankSync', {
+        action: 'api_sync',
+        bank_account_id: account.id,
+        company_id: companyId,
+        proveedor: account.proveedor,
+        requisition_id: account.proveedor_integracion || undefined,
+      });
+    } else {
+      await base44.functions.invoke('bankSync', {
+        action: 'sync_mock',
+        bank_account_id: account.id,
+        company_id: companyId,
+      });
+    }
     setSyncing(false);
     onRefresh?.();
   };
