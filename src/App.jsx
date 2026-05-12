@@ -41,6 +41,7 @@ import AdminWhatsApp from './pages/AdminWhatsApp';
 import TaxAccounting from './pages/TaxAccounting';
 import Finance from './pages/Finance';
 import PeopleHR from './pages/PeopleHR.jsx';
+import Law from './pages/Law';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -95,6 +96,9 @@ function AppWithContext({ user }) {
         <Route path="/finance/:module" element={<Finance />} />
         <Route path="/people" element={<PeopleHR />} />
         <Route path="/people/:module" element={<PeopleHR />} />
+        <Route path="/law" element={<Law />} />
+        <Route path="/law/:subdept" element={<Law />} />
+        <Route path="/law/:subdept/:module" element={<Law />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

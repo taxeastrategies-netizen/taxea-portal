@@ -8,7 +8,7 @@ import {
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Cog, Heart
+  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -68,6 +68,35 @@ const DEPT_GROUPS = [
         ],
       },
       {
+        id: 'law',
+        label: 'LAW',
+        icon: Scale,
+        activeColor: 'text-slate-700',
+        activeBg: 'bg-slate-100',
+        basePath: '/law',
+        modules: [
+          { id: 'home',           label: 'Law Home',            icon: Scale,          path: '/law' },
+          { id: 'tax-dashboard',  label: 'Tax Dashboard',       icon: Calculator,     path: '/law/tax/dashboard' },
+          { id: 'tax-compliance', label: 'Tax Compliance',      icon: Shield,         path: '/law/tax/compliance' },
+          { id: 'tax-litigation', label: 'Tax Litigation',      icon: Gavel,          path: '/law/tax/litigation' },
+          { id: 'tax-inspect',    label: 'Inspecciones AEAT',   icon: FileText,       path: '/law/tax/inspections' },
+          { id: 'tax-knowledge',  label: 'DGT & Base Conocim.', icon: BookOpen,       path: '/law/tax/knowledge' },
+          { id: 'tax-ai',         label: 'Tax AI',              icon: Brain,          path: '/law/tax/ai' },
+          { id: 'legal-dash',     label: 'Legal Dashboard',     icon: LayoutDashboard, path: '/law/business/dashboard' },
+          { id: 'contracts',      label: 'Contracts Center',    icon: FileCheck,      path: '/law/business/contracts' },
+          { id: 'corporate',      label: 'Corporate',           icon: Building2,      path: '/law/business/corporate' },
+          { id: 'compliance',     label: 'Compliance Center',   icon: Shield,         path: '/law/business/compliance' },
+          { id: 'legal-ai',       label: 'Legal AI',            icon: Brain,          path: '/law/business/ai' },
+          { id: 'ma-dash',        label: 'M&A Dashboard',       icon: TrendingUp,     path: '/law/ma/dashboard' },
+          { id: 'deal-pipeline',  label: 'Deal Pipeline',       icon: Target,         path: '/law/ma/pipeline' },
+          { id: 'due-dil',        label: 'Due Diligence',       icon: FileText,       path: '/law/ma/due-diligence' },
+          { id: 'data-rooms',     label: 'Data Rooms',          icon: Lock,           path: '/law/ma/data-rooms' },
+          { id: 'valuation',      label: 'Valuation Center',    icon: BarChart2,      path: '/law/ma/valuation' },
+          { id: 'ma-ai',          label: 'M&A AI',              icon: Brain,          path: '/law/ma/ai' },
+          { id: 'knowledge',      label: 'Knowledge Engine',    icon: BookOpen,       path: '/law/knowledge' },
+        ],
+      },
+      {
         id: 'finance',
         label: 'Finance',
         icon: Wallet,
@@ -113,7 +142,6 @@ const DEPT_GROUPS = [
   {
     groupLabel: 'Próximamente',
     depts: [
-      { id: 'legal', label: 'Legal', icon: Scale, basePath: null, comingSoon: true },
       { id: 'rrhh', label: 'RRHH', icon: UserCog, basePath: null, comingSoon: true },
       { id: 'ops', label: 'Operaciones', icon: Cog, basePath: null, comingSoon: true },
     ],
