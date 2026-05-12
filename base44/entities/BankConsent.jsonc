@@ -1,0 +1,76 @@
+{
+  "name": "BankConsent",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "bank_account_id": {
+      "type": "string"
+    },
+    "proveedor": {
+      "type": "string"
+    },
+    "tipo_conexion": {
+      "type": "string",
+      "enum": [
+        "psd2",
+        "api_directa",
+        "csv",
+        "oauth"
+      ],
+      "default": "psd2"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "revocado",
+        "expirado",
+        "pendiente"
+      ],
+      "default": "activo"
+    },
+    "permisos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fecha_consentimiento": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fecha_expiracion": {
+      "type": "string",
+      "format": "date"
+    },
+    "revocado_por": {
+      "type": "string"
+    },
+    "fecha_revocacion": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "motivo_revocacion": {
+      "type": "string"
+    },
+    "ip_origen": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    },
+    "token_referencia": {
+      "type": "string"
+    },
+    "nota_auditoria": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "bank_account_id",
+    "proveedor"
+  ]
+}

@@ -137,10 +137,10 @@ export default function TreasuryCenter({ company }) {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {accounts.map((acc, i) => (
-                      <BankCard key={acc.id} account={acc} delay={i * 0.06}
+                      <BankCard key={acc.id} account={acc} companyId={companyId} delay={i * 0.06}
                         onViewMovements={() => setTab('movimientos')}
-                        onReconnect={() => {}}
                         onDisconnect={async (a) => { await base44.entities.BankAccount.update(a.id, { estado_conexion: 'desconectado' }); loadData(); }}
+                        onRefresh={loadData}
                       />
                     ))}
                     <button onClick={() => setShowConnect(true)}

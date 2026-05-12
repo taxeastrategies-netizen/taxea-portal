@@ -1,0 +1,76 @@
+{
+  "name": "BankSyncLog",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "bank_account_id": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "manual",
+        "csv_import",
+        "api_direct",
+        "psd2",
+        "webhook"
+      ],
+      "default": "manual"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "iniciado",
+        "en_proceso",
+        "completado",
+        "error",
+        "parcial"
+      ],
+      "default": "iniciado"
+    },
+    "movimientos_nuevos": {
+      "type": "number",
+      "default": 0
+    },
+    "movimientos_duplicados": {
+      "type": "number",
+      "default": 0
+    },
+    "saldo_antes": {
+      "type": "number"
+    },
+    "saldo_despues": {
+      "type": "number"
+    },
+    "fecha_inicio_sync": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_fin_sync": {
+      "type": "string",
+      "format": "date"
+    },
+    "error_detalle": {
+      "type": "string"
+    },
+    "fuente_archivo": {
+      "type": "string"
+    },
+    "proveedor_api": {
+      "type": "string"
+    },
+    "duracion_ms": {
+      "type": "number"
+    },
+    "iniciado_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "bank_account_id"
+  ]
+}
