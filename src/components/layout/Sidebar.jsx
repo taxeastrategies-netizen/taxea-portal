@@ -32,53 +32,70 @@ const TAX_MODULES = [
   { id: 'obligaciones', label: 'Obligaciones Fiscales', icon: Calendar, path: '/tax-accounting/obligaciones' },
 ];
 
-const DEPARTMENTS = [
+const DEPT_GROUPS = [
   {
-    id: 'tax',
-    label: 'Tax & Accounting',
-    icon: Calculator,
-    color: 'text-taxea-red',
-    activeColor: 'text-taxea-red',
-    activeBg: 'bg-taxea-red/10',
-    basePath: '/tax-accounting',
-    modules: TAX_MODULES,
-  },
-  {
-    id: 'contacts',
-    label: 'Contactos',
-    icon: Users,
-    color: 'text-blue-400',
-    activeColor: 'text-blue-400',
-    activeBg: 'bg-blue-500/10',
-    basePath: '/contactos',
-    modules: [],
-  },
-  {
-    id: 'docs',
-    label: 'Documentos',
-    icon: FolderOpen,
-    color: 'text-violet-400',
-    activeColor: 'text-violet-400',
-    activeBg: 'bg-violet-500/10',
-    basePath: '/documentos',
-    modules: [],
-  },
-  {
-    id: 'finance',
-    label: 'Finance',
-    icon: Wallet,
-    color: 'text-emerald-400',
-    activeColor: 'text-emerald-400',
-    activeBg: 'bg-emerald-500/10',
-    basePath: '/finance',
-    modules: [
-      { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
+    groupLabel: 'Core Financiero',
+    depts: [
+      {
+        id: 'tax',
+        label: 'Tax & Accounting',
+        icon: Calculator,
+        color: 'text-taxea-red',
+        activeColor: 'text-taxea-red',
+        activeBg: 'bg-taxea-red/10',
+        basePath: '/tax-accounting',
+        modules: TAX_MODULES,
+      },
+      {
+        id: 'finance',
+        label: 'Finance',
+        icon: Wallet,
+        color: 'text-emerald-400',
+        activeColor: 'text-emerald-400',
+        activeBg: 'bg-emerald-500/10',
+        basePath: '/finance',
+        modules: [
+          { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
+        ],
+      },
     ],
   },
-  { id: 'legal', label: 'Legal', icon: Scale, color: 'text-amber-400', basePath: null, comingSoon: true },
-  { id: 'rrhh', label: 'RRHH', icon: UserCog, color: 'text-pink-400', basePath: null, comingSoon: true },
-  { id: 'ops', label: 'Operaciones', icon: Cog, color: 'text-cyan-400', basePath: null, comingSoon: true },
+  {
+    groupLabel: 'Operativo',
+    depts: [
+      {
+        id: 'contacts',
+        label: 'Contactos',
+        icon: Users,
+        color: 'text-blue-400',
+        activeColor: 'text-blue-400',
+        activeBg: 'bg-blue-500/10',
+        basePath: '/contactos',
+        modules: [],
+      },
+      {
+        id: 'docs',
+        label: 'Documentos',
+        icon: FolderOpen,
+        color: 'text-violet-400',
+        activeColor: 'text-violet-400',
+        activeBg: 'bg-violet-500/10',
+        basePath: '/documentos',
+        modules: [],
+      },
+    ],
+  },
+  {
+    groupLabel: 'Próximamente',
+    depts: [
+      { id: 'legal', label: 'Legal', icon: Scale, color: 'text-amber-400', basePath: null, comingSoon: true },
+      { id: 'rrhh', label: 'RRHH', icon: UserCog, color: 'text-pink-400', basePath: null, comingSoon: true },
+      { id: 'ops', label: 'Operaciones', icon: Cog, color: 'text-cyan-400', basePath: null, comingSoon: true },
+    ],
+  },
 ];
+
+const DEPARTMENTS = DEPT_GROUPS.flatMap(g => g.depts);
 
 const UTILS_ITEMS = [
   { to: '/tareas', label: 'Tareas', icon: CheckSquare },
@@ -185,97 +202,106 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
             <span>Dashboard</span>
           </Link>
 
-          {/* Departments */}
-          <div>
-            <p className="text-white/25 text-xs px-3 pb-2 uppercase tracking-widest font-medium">Departamentos</p>
-            <div className="space-y-0.5">
-              {DEPARTMENTS.map(dept => {
-                const Icon = dept.icon;
-                const isActiveDept = activeDeptId === dept.id;
-                const isExpanded = expanded === dept.id;
-                const hasModules = dept.modules && dept.modules.length > 0;
+          {/* Departments grouped */}
+          <div className="space-y-3">
+            {DEPT_GROUPS.map((group, gi) => (
+              <div key={group.groupLabel}>
+                <p className={cn(
+                  "text-xs px-3 pb-1.5 uppercase tracking-widest font-medium",
+                  gi === 0 ? "text-white/30" : "text-white/18"
+                )}>
+                  {group.groupLabel}
+                </p>
+                <div className="space-y-0.5">
+                  {group.depts.map(dept => {
+                    const DeptIcon = dept.icon;
+                    const isActiveDept = activeDeptId === dept.id;
+                    const isExpanded = expanded === dept.id;
+                    const hasModules = dept.modules && dept.modules.length > 0;
 
-                if (dept.comingSoon) {
-                  return (
-                    <div
-                      key={dept.id}
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg opacity-35 cursor-not-allowed select-none"
-                    >
-                      <Lock className="w-3.5 h-3.5 flex-shrink-0 text-white/30" />
-                      <span className="text-xs text-white/40 font-medium">{dept.label}</span>
-                      <span className="ml-auto text-white/25 text-[10px] leading-none bg-white/8 px-1.5 py-0.5 rounded">Soon</span>
-                    </div>
-                  );
-                }
+                    if (dept.comingSoon) {
+                      return (
+                        <div
+                          key={dept.id}
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg opacity-30 cursor-not-allowed select-none"
+                        >
+                          <Lock className="w-3.5 h-3.5 flex-shrink-0 text-white/30" />
+                          <span className="text-xs text-white/40 font-medium">{dept.label}</span>
+                          <span className="ml-auto text-white/20 text-[10px] leading-none bg-white/6 px-1.5 py-0.5 rounded">Soon</span>
+                        </div>
+                      );
+                    }
 
-                return (
-                  <div key={dept.id}>
-                    {/* Department header */}
-                    <button
-                      onClick={() => handleDeptClick(dept)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group relative overflow-hidden",
-                        isActiveDept
-                          ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-white/8`
-                          : "text-white/55 hover:text-white hover:bg-white/6"
-                      )}
-                    >
-                      {/* Active glow */}
-                      {isActiveDept && (
-                        <div className={cn("absolute inset-0 opacity-30 blur-xl rounded-xl", dept.activeBg)} />
-                      )}
-                      <Icon className={cn("w-4 h-4 flex-shrink-0 relative z-10", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
-                      <span className="flex-1 relative z-10">{dept.label}</span>
-                      {hasModules && (
-                        <ChevronDown className={cn(
-                          "w-3.5 h-3.5 transition-transform duration-200 relative z-10",
-                          isExpanded ? "rotate-0" : "-rotate-90",
-                          isActiveDept ? "opacity-60" : "opacity-30"
-                        )} />
-                      )}
-                    </button>
+                    return (
+                      <div key={dept.id}>
+                        <button
+                          onClick={() => handleDeptClick(dept)}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group relative overflow-hidden",
+                            isActiveDept
+                              ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-white/8`
+                              : "text-white/55 hover:text-white hover:bg-white/6"
+                          )}
+                        >
+                          {isActiveDept && (
+                            <div className={cn("absolute inset-0 opacity-30 blur-xl rounded-xl", dept.activeBg)} />
+                          )}
+                          <DeptIcon className={cn("w-4 h-4 flex-shrink-0 relative z-10", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
+                          <span className="flex-1 relative z-10">{dept.label}</span>
+                          {hasModules && (
+                            <ChevronDown className={cn(
+                              "w-3.5 h-3.5 transition-transform duration-200 relative z-10",
+                              isExpanded ? "rotate-0" : "-rotate-90",
+                              isActiveDept ? "opacity-60" : "opacity-30"
+                            )} />
+                          )}
+                        </button>
 
-                    {/* Modules submenu */}
-                    {hasModules && (
-                      <AnimatePresence initial={false}>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                          >
-                            <div className="mt-0.5 ml-3 pl-3 border-l border-white/8 space-y-0.5 py-1">
-                              {dept.modules.map(mod => {
-                                const ModIcon = mod.icon;
-                                const isActiveModule = location.pathname === mod.path;
-                                return (
-                                  <Link
-                                    key={mod.id}
-                                    to={mod.path}
-                                    onClick={onClose}
-                                    className={cn(
-                                      "flex items-center gap-2 px-2.5 py-1.5 rounded-r-lg text-xs font-medium transition-all duration-200 relative",
-                                      isActiveModule
-                                        ? "sidebar-module-active text-white pl-3"
-                                        : "text-white/40 hover:text-white/75 hover:bg-white/5 rounded-lg"
-                                    )}
-                                  >
-                                    <ModIcon className={cn("w-3 h-3 flex-shrink-0 transition-colors", isActiveModule ? "text-taxea-red" : "text-white/25")} />
-                                    <span className={isActiveModule ? "text-white font-semibold" : ""}>{mod.label}</span>
-                                  </Link>
-                                );
-                              })}
-                            </div>
-                          </motion.div>
+                        {hasModules && (
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-0.5 ml-3 pl-3 border-l border-white/8 space-y-0.5 py-1">
+                                  {dept.modules.map(mod => {
+                                    const ModIcon = mod.icon;
+                                    const isActiveModule = location.pathname === mod.path;
+                                    return (
+                                      <Link
+                                        key={mod.id}
+                                        to={mod.path}
+                                        onClick={onClose}
+                                        className={cn(
+                                          "flex items-center gap-2 px-2.5 py-1.5 rounded-r-lg text-xs font-medium transition-all duration-200 relative",
+                                          isActiveModule
+                                            ? "sidebar-module-active text-white pl-3"
+                                            : "text-white/40 hover:text-white/75 hover:bg-white/5 rounded-lg"
+                                        )}
+                                      >
+                                        <ModIcon className={cn("w-3 h-3 flex-shrink-0 transition-colors", isActiveModule ? "text-taxea-red" : "text-white/25")} />
+                                        <span className={isActiveModule ? "text-white font-semibold" : ""}>{mod.label}</span>
+                                      </Link>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         )}
-                      </AnimatePresence>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {gi < DEPT_GROUPS.length - 1 && (
+                  <div className="mt-3 mx-3 border-t border-white/6" />
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Utils */}
