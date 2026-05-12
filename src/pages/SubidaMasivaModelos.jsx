@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import ColaProcesamiento from '@/components/modelos/ColaProcesamiento';
 import PanelRevision from '@/components/modelos/PanelRevision';
+import { generarEmailPremium } from '@/lib/emailPremium';
 
 let nextId = 1;
 
@@ -211,29 +212,24 @@ export default function SubidaMasivaModelos() {
       url_referencia: '/obligaciones',
     });
 
-    // 4. Email premium (con tema de tranquilidad)
+    // 4. Email premium HTML
     if (emailEmpresa) {
+      const htmlEmail = generarEmailPremium({
+        modeloKey: ex.modelo,
+        ejercicio: ex.ejercicio,
+        periodo,
+        importe: ex.importe,
+        csv: ex.csv,
+        nrc: ex.nrc,
+        fechaPresentacion: now.toISOString(),
+        razonSocial: empresa.razon_social || empresa.nombre_comercial,
+        resultado: ex.resultado,
+      });
       await base44.integrations.Core.SendEmail({
         to: emailEmpresa,
         from_name: 'Taxea Strategies',
-        subject: `Tus impuestos ya están presentados — ${modeloLabel}`,
-        body: `Hola,
-
-Tu ${modeloLabel} ha sido presentado correctamente ante la Administración Tributaria.
-
-📋 Detalles:
-• Modelo: ${modeloLabel}
-• Período: ${periodo}
-• Fecha de presentación: ${now.toLocaleDateString('es-ES')}
-${ex.csv ? `• CSV: ${ex.csv}` : ''}
-${ex.nrc ? `• NRC: ${ex.nrc}` : ''}
-
-Puedes descargar el justificante desde tu portal en Obligaciones Fiscales.
-
-Tus impuestos están al día. Taxea Strategies se encarga de que todo funcione correctamente.
-
-Un saludo,
-Equipo Taxea Strategies`
+        subject: `Tu ${modeloLabel} ha sido presentado correctamente — Taxea Strategies`,
+        body: htmlEmail,
       });
     }
 
