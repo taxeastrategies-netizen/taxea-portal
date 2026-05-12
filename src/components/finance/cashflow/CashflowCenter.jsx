@@ -116,7 +116,7 @@ export default function CashflowCenter() {
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-white/40">Cargando datos de tesorería...</p>
+          <p className="text-sm text-muted-foreground">Cargando datos de tesorería...</p>
         </div>
       </div>
     );

@@ -6,58 +6,58 @@
 
 @layer base {
   :root {
-    --background: 220 14% 96%;
-    --foreground: 0 0% 13%;
+    --background: 220 20% 97%;
+    --foreground: 220 15% 16%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 13%;
+    --card-foreground: 220 15% 16%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 13%;
-    --primary: 350 75% 40%;
+    --popover-foreground: 220 15% 16%;
+    --primary: 350 72% 38%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 94%;
-    --secondary-foreground: 0 0% 20%;
-    --muted: 0 0% 92%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 350 60% 93%;
-    --accent-foreground: 350 75% 30%;
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 220 15% 30%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 48%;
+    --accent: 350 60% 95%;
+    --accent-foreground: 350 72% 32%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 88%;
-    --input: 220 13% 91%;
-    --ring: 350 75% 40%;
+    --border: 220 13% 90%;
+    --input: 220 13% 92%;
+    --ring: 350 72% 38%;
     --radius: 0.75rem;
-    --taxea-red: 350 75% 40%;
-    --taxea-red-light: 350 60% 93%;
+    --taxea-red: 350 72% 38%;
+    --taxea-red-light: 350 60% 95%;
     --taxea-red-dark: 350 80% 28%;
-    --taxea-dark: 0 0% 13%;
-    --gold: 43 65% 48%;
-    --gold-light: 43 80% 92%;
-    --sidebar-bg: 0 0% 10%;
-    --sidebar-fg: 0 0% 80%;
-    --sidebar-active: 350 75% 40%;
-    --sidebar-hover: 0 0% 16%;
+    --taxea-dark: 220 15% 16%;
+    --gold: 43 65% 44%;
+    --gold-light: 43 80% 94%;
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-fg: 220 15% 30%;
+    --sidebar-active: 350 72% 38%;
+    --sidebar-hover: 220 20% 97%;
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 0 0% 92%;
-    --card: 0 0% 11%;
-    --card-foreground: 0 0% 92%;
-    --popover: 0 0% 11%;
-    --popover-foreground: 0 0% 92%;
-    --primary: 350 70% 50%;
+    --background: 220 20% 97%;
+    --foreground: 220 15% 16%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 16%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 16%;
+    --primary: 350 72% 38%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 16%;
-    --secondary-foreground: 0 0% 80%;
-    --muted: 0 0% 16%;
-    --muted-foreground: 0 0% 55%;
-    --accent: 350 50% 20%;
-    --accent-foreground: 350 70% 70%;
-    --destructive: 0 62% 40%;
+    --secondary: 220 15% 95%;
+    --secondary-foreground: 220 15% 30%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 10% 48%;
+    --accent: 350 60% 95%;
+    --accent-foreground: 350 72% 32%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
-    --ring: 350 70% 50%;
+    --border: 220 13% 90%;
+    --input: 220 13% 92%;
+    --ring: 350 72% 38%;
   }
 }
 
@@ -88,6 +88,12 @@
   .sidebar-text {
     color: hsl(var(--sidebar-fg));
   }
+  .shadow-premium {
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.06);
+  }
+  .shadow-premium-hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  }
   .text-teal {
     color: hsl(var(--taxea-red));
   }
@@ -116,8 +122,8 @@
     box-shadow: 0 0 12px rgba(180, 30, 50, 0.12);
   }
   .sidebar-module-active {
-    background: linear-gradient(90deg, hsl(350 75% 40% / 0.18) 0%, transparent 100%);
-    border-left: 2px solid hsl(350 75% 40%);
+    background: hsl(350 72% 38% / 0.08);
+    border-left: 2px solid hsl(350 72% 38%);
   }
   .card-premium {
     background: hsl(var(--card));
@@ -127,7 +133,7 @@
     transition: box-shadow 0.25s ease, transform 0.25s ease;
   }
   .card-premium:hover {
-    box-shadow: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.07), 0 2px 8px rgba(0,0,0,0.04);
     transform: translateY(-1px);
   }
 }

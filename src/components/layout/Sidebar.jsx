@@ -13,9 +13,9 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ROLE_LABELS = {
-  super_admin: { label: 'Super Admin', color: 'bg-red-500/20 border-red-500/30 text-red-300' },
-  admin: { label: 'Administrador', color: 'bg-gold/20 border-gold/30 text-gold' },
-  advisor: { label: 'Asesor', color: 'bg-blue-500/20 border-blue-500/30 text-blue-300' },
+  super_admin: { label: 'Super Admin', color: 'bg-red-50 border-red-200 text-red-600' },
+  admin: { label: 'Administrador', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+  advisor: { label: 'Asesor', color: 'bg-blue-50 border-blue-200 text-blue-600' },
 };
 
 const TAX_MODULES = [
@@ -40,9 +40,8 @@ const DEPT_GROUPS = [
         id: 'tax',
         label: 'Tax & Accounting',
         icon: Calculator,
-        color: 'text-taxea-red',
         activeColor: 'text-taxea-red',
-        activeBg: 'bg-taxea-red/10',
+        activeBg: 'bg-taxea-red/8',
         basePath: '/tax-accounting',
         modules: TAX_MODULES,
       },
@@ -50,9 +49,8 @@ const DEPT_GROUPS = [
         id: 'finance',
         label: 'Finance',
         icon: Wallet,
-        color: 'text-emerald-400',
-        activeColor: 'text-emerald-400',
-        activeBg: 'bg-emerald-500/10',
+        activeColor: 'text-emerald-600',
+        activeBg: 'bg-emerald-50',
         basePath: '/finance',
         modules: [
           { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
@@ -68,9 +66,8 @@ const DEPT_GROUPS = [
         id: 'contacts',
         label: 'Contactos',
         icon: Users,
-        color: 'text-blue-400',
-        activeColor: 'text-blue-400',
-        activeBg: 'bg-blue-500/10',
+        activeColor: 'text-blue-600',
+        activeBg: 'bg-blue-50',
         basePath: '/contactos',
         modules: [],
       },
@@ -78,9 +75,8 @@ const DEPT_GROUPS = [
         id: 'docs',
         label: 'Documentos',
         icon: FolderOpen,
-        color: 'text-violet-400',
-        activeColor: 'text-violet-400',
-        activeBg: 'bg-violet-500/10',
+        activeColor: 'text-violet-600',
+        activeBg: 'bg-violet-50',
         basePath: '/documentos',
         modules: [],
       },
@@ -89,9 +85,9 @@ const DEPT_GROUPS = [
   {
     groupLabel: 'Próximamente',
     depts: [
-      { id: 'legal', label: 'Legal', icon: Scale, color: 'text-amber-400', basePath: null, comingSoon: true },
-      { id: 'rrhh', label: 'RRHH', icon: UserCog, color: 'text-pink-400', basePath: null, comingSoon: true },
-      { id: 'ops', label: 'Operaciones', icon: Cog, color: 'text-cyan-400', basePath: null, comingSoon: true },
+      { id: 'legal', label: 'Legal', icon: Scale, basePath: null, comingSoon: true },
+      { id: 'rrhh', label: 'RRHH', icon: UserCog, basePath: null, comingSoon: true },
+      { id: 'ops', label: 'Operaciones', icon: Cog, basePath: null, comingSoon: true },
     ],
   },
 ];
@@ -122,7 +118,6 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Determine which department is active
   const getActiveDept = () => {
     for (const dept of DEPARTMENTS) {
       if (dept.basePath && location.pathname.startsWith(dept.basePath)) return dept.id;
@@ -140,7 +135,6 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
         setExpanded(null);
       } else {
         setExpanded(dept.id);
-        // Navigate to first module (dashboard) if not already in this dept
         if (!location.pathname.startsWith(dept.basePath)) {
           navigate(dept.modules[0].path);
           onClose();
@@ -155,25 +149,25 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden" onClick={onClose} />
       )}
 
       <aside className={cn(
         "fixed top-0 left-0 h-full w-60 z-50 flex flex-col transition-transform duration-300",
-        "bg-[#0a0a0c] text-white",
+        "bg-white border-r border-slate-100",
         isOpen ? "translate-x-0" : "-translate-x-full",
         "lg:translate-x-0 lg:static lg:z-auto"
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/6">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
           <Link to="/" onClick={onClose} className="flex items-center gap-2.5">
             <TaxeaIsotipo size={30} />
             <div className="flex flex-col leading-none">
-              <span className="text-white font-jakarta font-bold" style={{ fontSize: 13, letterSpacing: '0.07em' }}>TAXEA</span>
-              <span className="font-inter font-normal uppercase" style={{ fontSize: 8, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.22em' }}>Business OS</span>
+              <span className="text-slate-800 font-jakarta font-bold" style={{ fontSize: 13, letterSpacing: '0.07em' }}>TAXEA</span>
+              <span className="font-inter font-normal uppercase" style={{ fontSize: 8, color: 'rgba(0,0,0,0.3)', letterSpacing: '0.22em' }}>Business OS</span>
             </div>
           </Link>
-          <button onClick={onClose} className="lg:hidden text-white/30 hover:text-white transition-colors">
+          <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-700 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -195,11 +189,11 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
             className={cn(
               "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
               location.pathname === '/'
-                ? "bg-white/10 text-white"
-                : "text-white/50 hover:text-white hover:bg-white/6"
+                ? "bg-taxea-red/8 text-taxea-red font-semibold"
+                : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
             )}
           >
-            <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
+            <LayoutDashboard className={cn("w-4 h-4 flex-shrink-0", location.pathname === '/' ? "text-taxea-red" : "text-slate-400")} />
             <span>Dashboard</span>
           </Link>
 
@@ -207,10 +201,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
           <div className="space-y-3">
             {DEPT_GROUPS.map((group, gi) => (
               <div key={group.groupLabel}>
-                <p className={cn(
-                  "text-xs px-3 pb-1.5 uppercase tracking-widest font-medium",
-                  gi === 0 ? "text-white/30" : "text-white/18"
-                )}>
+                <p className="text-[10px] text-slate-400 px-3 pb-1.5 uppercase tracking-widest font-semibold">
                   {group.groupLabel}
                 </p>
                 <div className="space-y-0.5">
@@ -224,11 +215,11 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                       return (
                         <div
                           key={dept.id}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg opacity-30 cursor-not-allowed select-none"
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-lg opacity-40 cursor-not-allowed select-none"
                         >
-                          <Lock className="w-3.5 h-3.5 flex-shrink-0 text-white/30" />
-                          <span className="text-xs text-white/40 font-medium">{dept.label}</span>
-                          <span className="ml-auto text-white/20 text-[10px] leading-none bg-white/6 px-1.5 py-0.5 rounded">Soon</span>
+                          <Lock className="w-3.5 h-3.5 flex-shrink-0 text-slate-300" />
+                          <span className="text-xs text-slate-400 font-medium">{dept.label}</span>
+                          <span className="ml-auto text-slate-300 text-[10px] leading-none bg-slate-100 px-1.5 py-0.5 rounded">Soon</span>
                         </div>
                       );
                     }
@@ -238,22 +229,22 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                         <button
                           onClick={() => handleDeptClick(dept)}
                           className={cn(
-                            "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group relative overflow-hidden",
+                            "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group",
                             isActiveDept
-                              ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-white/8`
-                              : "text-white/55 hover:text-white hover:bg-white/6"
+                              ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-black/5`
+                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                           )}
                         >
-                          {isActiveDept && (
-                            <div className={cn("absolute inset-0 opacity-30 blur-xl rounded-xl", dept.activeBg)} />
-                          )}
-                          <DeptIcon className={cn("w-4 h-4 flex-shrink-0 relative z-10", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
-                          <span className="flex-1 relative z-10">{dept.label}</span>
+                          <DeptIcon className={cn(
+                            "w-4 h-4 flex-shrink-0",
+                            isActiveDept ? dept.activeColor : "text-slate-400 group-hover:text-slate-600"
+                          )} />
+                          <span className="flex-1">{dept.label}</span>
                           {hasModules && (
                             <ChevronDown className={cn(
-                              "w-3.5 h-3.5 transition-transform duration-200 relative z-10",
+                              "w-3.5 h-3.5 transition-transform duration-200",
                               isExpanded ? "rotate-0" : "-rotate-90",
-                              isActiveDept ? "opacity-60" : "opacity-30"
+                              isActiveDept ? "opacity-50" : "opacity-40"
                             )} />
                           )}
                         </button>
@@ -268,7 +259,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                 transition={{ duration: 0.2, ease: 'easeInOut' }}
                                 className="overflow-hidden"
                               >
-                                <div className="mt-0.5 ml-3 pl-3 border-l border-white/8 space-y-0.5 py-1">
+                                <div className="mt-0.5 ml-3 pl-3 border-l border-slate-100 space-y-0.5 py-1">
                                   {dept.modules.map(mod => {
                                     const ModIcon = mod.icon;
                                     const isActiveModule = location.pathname === mod.path;
@@ -278,14 +269,14 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                         to={mod.path}
                                         onClick={onClose}
                                         className={cn(
-                                          "flex items-center gap-2 px-2.5 py-1.5 rounded-r-lg text-xs font-medium transition-all duration-200 relative",
+                                          "flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
                                           isActiveModule
-                                            ? "sidebar-module-active text-white pl-3"
-                                            : "text-white/40 hover:text-white/75 hover:bg-white/5 rounded-lg"
+                                            ? "bg-taxea-red/8 text-taxea-red border-l-2 border-taxea-red pl-2"
+                                            : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                                         )}
                                       >
-                                        <ModIcon className={cn("w-3 h-3 flex-shrink-0 transition-colors", isActiveModule ? "text-taxea-red" : "text-white/25")} />
-                                        <span className={isActiveModule ? "text-white font-semibold" : ""}>{mod.label}</span>
+                                        <ModIcon className={cn("w-3 h-3 flex-shrink-0", isActiveModule ? "text-taxea-red" : "text-slate-350")} />
+                                        <span className={isActiveModule ? "font-semibold" : ""}>{mod.label}</span>
                                       </Link>
                                     );
                                   })}
@@ -299,7 +290,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                   })}
                 </div>
                 {gi < DEPT_GROUPS.length - 1 && (
-                  <div className="mt-3 mx-3 border-t border-white/6" />
+                  <div className="mt-3 mx-2 border-t border-slate-100" />
                 )}
               </div>
             ))}
@@ -307,7 +298,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
 
           {/* Utils */}
           <div>
-            <p className="text-white/25 text-xs px-3 pb-2 uppercase tracking-widest font-medium">Herramientas</p>
+            <p className="text-[10px] text-slate-400 px-3 pb-1.5 uppercase tracking-widest font-semibold">Herramientas</p>
             <div className="space-y-0.5">
               {UTILS_ITEMS.map(({ to, label, icon: Icon }) => {
                 const isActive = location.pathname.startsWith(to);
@@ -319,11 +310,11 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
                       isActive
-                        ? "bg-white/10 text-white"
-                        : "text-white/45 hover:text-white hover:bg-white/6"
+                        ? "bg-taxea-red/8 text-taxea-red"
+                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                     )}
                   >
-                    <Icon className={cn("w-3.5 h-3.5 flex-shrink-0", isActive ? "text-white" : "text-white/35")} />
+                    <Icon className={cn("w-3.5 h-3.5 flex-shrink-0", isActive ? "text-taxea-red" : "text-slate-400")} />
                     <span>{label}</span>
                   </Link>
                 );
@@ -334,7 +325,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
           {/* Admin */}
           {isAdmin && (
             <div>
-              <p className="text-gold/40 text-xs px-3 pb-2 uppercase tracking-widest font-medium">Admin</p>
+              <p className="text-[10px] text-amber-500/80 px-3 pb-1.5 uppercase tracking-widest font-semibold">Admin</p>
               <div className="space-y-0.5">
                 {ADMIN_ITEMS.map(({ to, label, icon: Icon }) => (
                   <Link
@@ -344,8 +335,8 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150",
                       location.pathname.startsWith(to)
-                        ? "bg-gold/15 text-gold"
-                        : "text-gold/40 hover:text-gold/70 hover:bg-gold/8"
+                        ? "bg-amber-50 text-amber-700 border border-amber-100"
+                        : "text-slate-500 hover:text-amber-700 hover:bg-amber-50/60"
                     )}
                   >
                     <Icon className="w-3.5 h-3.5 flex-shrink-0" />
@@ -358,8 +349,8 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
         </nav>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-white/6">
-          <p className="text-white/20 text-xs text-center">© 2025 Taxea Strategies</p>
+        <div className="px-4 py-3 border-t border-slate-100">
+          <p className="text-slate-300 text-xs text-center">© 2025 Taxea Strategies</p>
         </div>
       </aside>
     </>
