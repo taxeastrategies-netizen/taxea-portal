@@ -1,0 +1,116 @@
+{
+  "name": "BankTransaction",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "bank_account_id": {
+      "type": "string"
+    },
+    "fecha_operacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_valor": {
+      "type": "string",
+      "format": "date"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "importe": {
+      "type": "number"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "entrada",
+        "salida"
+      ],
+      "default": "entrada"
+    },
+    "saldo_posterior": {
+      "type": "number"
+    },
+    "moneda": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "referencia": {
+      "type": "string"
+    },
+    "iban_contraparte": {
+      "type": "string"
+    },
+    "nombre_contraparte": {
+      "type": "string"
+    },
+    "categoria_ia": {
+      "type": "string",
+      "enum": [
+        "ingreso",
+        "gasto",
+        "transferencia_interna",
+        "impuesto",
+        "nomina",
+        "comision_bancaria",
+        "devolucion",
+        "prestamo",
+        "inversion",
+        "otro"
+      ]
+    },
+    "estado_conciliacion": {
+      "type": "string",
+      "enum": [
+        "sin_conciliar",
+        "sugerida_ia",
+        "conciliada_auto",
+        "conciliada_manual",
+        "revisar",
+        "descartada",
+        "duplicada",
+        "movimiento_interno"
+      ],
+      "default": "sin_conciliar"
+    },
+    "confianza_conciliacion": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja"
+      ]
+    },
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "contacto_id": {
+      "type": "string"
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notas": {
+      "type": "string"
+    },
+    "es_demo": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "company_id",
+    "bank_account_id",
+    "fecha_operacion",
+    "concepto",
+    "importe"
+  ]
+}

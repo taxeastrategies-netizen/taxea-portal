@@ -55,6 +55,7 @@ const DEPT_GROUPS = [
         modules: [
           { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
           { id: 'cashflow', label: 'Cashflow Center', icon: TrendingUp, path: '/finance/cashflow' },
+          { id: 'treasury', label: 'Treasury / Tesorería', icon: Wallet, path: '/finance/treasury' },
         ],
       },
     ],

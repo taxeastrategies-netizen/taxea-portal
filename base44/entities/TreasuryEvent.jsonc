@@ -1,0 +1,103 @@
+{
+  "name": "TreasuryEvent",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "cobro_previsto",
+        "pago_previsto",
+        "transferencia_interna",
+        "impuesto",
+        "nomina",
+        "cuota_prestamo",
+        "inversion",
+        "retirada_socio",
+        "otro"
+      ],
+      "default": "pago_previsto"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "importe": {
+      "type": "number"
+    },
+    "fecha_prevista": {
+      "type": "string",
+      "format": "date"
+    },
+    "bank_account_id": {
+      "type": "string"
+    },
+    "bank_account_destino_id": {
+      "type": "string"
+    },
+    "moneda": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "confirmado",
+        "ejecutado",
+        "cancelado",
+        "vencido"
+      ],
+      "default": "pendiente"
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": [
+        "urgente",
+        "normal",
+        "diferible",
+        "estrategico"
+      ],
+      "default": "normal"
+    },
+    "recurrente": {
+      "type": "boolean",
+      "default": false
+    },
+    "frecuencia_recurrente": {
+      "type": "string",
+      "enum": [
+        "diaria",
+        "semanal",
+        "mensual",
+        "trimestral",
+        "anual"
+      ]
+    },
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "probabilidad_cobro": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja"
+      ]
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "tipo",
+    "concepto",
+    "importe",
+    "fecha_prevista"
+  ]
+}

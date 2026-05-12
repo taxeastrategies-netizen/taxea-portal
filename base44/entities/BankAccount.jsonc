@@ -1,0 +1,109 @@
+{
+  "name": "BankAccount",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre_banco": {
+      "type": "string"
+    },
+    "tipo_banco": {
+      "type": "string",
+      "enum": [
+        "tradicional",
+        "neobanco",
+        "pasarela_pago",
+        "fintech",
+        "otro"
+      ],
+      "default": "tradicional"
+    },
+    "proveedor": {
+      "type": "string",
+      "enum": [
+        "revolut",
+        "wise",
+        "qonto",
+        "bbva",
+        "santander",
+        "caixabank",
+        "sabadell",
+        "bankinter",
+        "ing",
+        "stripe",
+        "paypal",
+        "otro"
+      ]
+    },
+    "iban": {
+      "type": "string"
+    },
+    "ultimos_4": {
+      "type": "string"
+    },
+    "titular": {
+      "type": "string"
+    },
+    "moneda": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "saldo_disponible": {
+      "type": "number",
+      "default": 0
+    },
+    "saldo_contable": {
+      "type": "number",
+      "default": 0
+    },
+    "saldo_retenido": {
+      "type": "number",
+      "default": 0
+    },
+    "estado_conexion": {
+      "type": "string",
+      "enum": [
+        "conectado",
+        "pendiente",
+        "error",
+        "requiere_renovacion",
+        "sincronizando",
+        "desconectado"
+      ],
+      "default": "pendiente"
+    },
+    "proveedor_integracion": {
+      "type": "string"
+    },
+    "permisos_concedidos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fecha_ultima_sync": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fecha_consentimiento_expira": {
+      "type": "string",
+      "format": "date"
+    },
+    "activa": {
+      "type": "boolean",
+      "default": true
+    },
+    "es_cuenta_principal": {
+      "type": "boolean",
+      "default": false
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre_banco"
+  ]
+}
