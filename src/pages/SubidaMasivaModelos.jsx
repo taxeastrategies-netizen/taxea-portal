@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import ColaProcesamiento from '@/components/modelos/ColaProcesamiento';
 import PanelRevision from '@/components/modelos/PanelRevision';
 import { generarEmailPremium } from '@/lib/emailPremium';
+import { generarMensajeWhatsApp, formatearTelefono } from '@/lib/whatsappMensaje';
 
 let nextId = 1;
 
@@ -233,7 +234,45 @@ export default function SubidaMasivaModelos() {
       });
     }
 
-    // 5. Timeline
+    // 5. WhatsApp premium
+    const telefonoRaw = empresa.telefono;
+    const telefonoFormateado = formatearTelefono(telefonoRaw);
+    
+    if (telefonoFormateado) {
+      const mensajeWA = generarMensajeWhatsApp({
+        nombreCliente: empresa.razon_social || empresa.nombre_comercial,
+        modeloKey: ex.modelo,
+        ejercicio: ex.ejercicio,
+        periodo,
+        importe: ex.importe,
+        csv: ex.csv,
+        nrc: ex.nrc,
+        resultado: ex.resultado,
+      });
+
+      // Crear log primero
+      const waLog = await base44.entities.WhatsAppLog.create({
+        company_id: empresa.id,
+        destinatario_nombre: empresa.razon_social || empresa.nombre_comercial,
+        destinatario_telefono: telefonoFormateado,
+        modelo_label: modeloLabel,
+        periodo,
+        mensaje: mensajeWA,
+        estado: 'pendiente',
+        obligacion_id: oblig?.id,
+      });
+
+      // Enviar via backend
+      base44.functions.invoke('enviarWhatsApp', {
+        to: telefonoFormateado,
+        mensaje: mensajeWA,
+        whatsapp_log_id: waLog.id,
+      }).catch(() => {
+        // Error silencioso — el log ya registra el estado
+      });
+    }
+
+    // 6. Timeline
     await base44.entities.TimelineEvent.create({
       company_id: empresa.id,
       tipo: 'modelo_presentado',

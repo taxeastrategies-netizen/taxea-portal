@@ -1,0 +1,64 @@
+{
+  "name": "WhatsAppLog",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "destinatario_nombre": {
+      "type": "string"
+    },
+    "destinatario_telefono": {
+      "type": "string"
+    },
+    "modelo_label": {
+      "type": "string"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "mensaje": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "enviado",
+        "entregado",
+        "leido",
+        "error",
+        "reintentando"
+      ],
+      "default": "pendiente"
+    },
+    "error_detalle": {
+      "type": "string"
+    },
+    "proveedor": {
+      "type": "string",
+      "default": "twilio"
+    },
+    "message_sid": {
+      "type": "string"
+    },
+    "obligacion_id": {
+      "type": "string"
+    },
+    "agrupado": {
+      "type": "boolean",
+      "default": false
+    },
+    "modelos_agrupados": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "destinatario_telefono",
+    "mensaje"
+  ]
+}

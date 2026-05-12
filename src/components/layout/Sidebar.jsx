@@ -5,7 +5,7 @@ import {
   LayoutDashboard, FileText, TrendingUp, FileCheck, Receipt,
   Users, Package, BookOpen, BookMarked, ScanLine, ScanText,
   Calendar, FolderOpen, Settings, X, Shield, CheckSquare,
-  Clock, AlertTriangle, BarChart2, Bell, Sparkles, Brain, Lightbulb, CloudUpload
+  Clock, AlertTriangle, BarChart2, Bell, Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle
 } from 'lucide-react';
 
 const menuItems = [
@@ -111,6 +111,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                 { to: '/admin-sugerencias', label: 'Buzón Sugerencias', icon: Lightbulb },
                 { to: '/admin-afiliados', label: 'Panel Afiliados', icon: Users },
                 { to: '/subida-modelos', label: 'Subida Masiva Modelos', icon: CloudUpload },
+                { to: '/admin-whatsapp', label: 'WhatsApp Notificaciones', icon: MessageCircle },
               ].map(({ to, label, icon: Icon }) => (
                 <Link
                   key={to}

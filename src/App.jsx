@@ -37,6 +37,7 @@ import BuzonSugerencias from './pages/BuzonSugerencias';
 import AdminSugerencias from './pages/AdminSugerencias';
 import AdminAfiliados from './pages/AdminAfiliados';
 import SubidaMasivaModelos from './pages/SubidaMasivaModelos';
+import AdminWhatsApp from './pages/AdminWhatsApp';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -84,6 +85,7 @@ function AppWithContext({ user }) {
         <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
         <Route path="/admin-afiliados" element={<AdminAfiliados />} />
         <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
+        <Route path="/admin-whatsapp" element={<AdminWhatsApp />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
