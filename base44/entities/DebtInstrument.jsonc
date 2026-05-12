@@ -1,0 +1,143 @@
+{
+  "name": "DebtInstrument",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "prestamo_bancario",
+        "prestamo_socio",
+        "prestamo_participativo",
+        "ico",
+        "leasing",
+        "renting",
+        "linea_credito",
+        "poliza",
+        "deuda_convertible",
+        "financiacion_puente",
+        "otro"
+      ],
+      "default": "prestamo_bancario"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "entidad": {
+      "type": "string"
+    },
+    "numero_contrato": {
+      "type": "string"
+    },
+    "importe_inicial": {
+      "type": "number",
+      "default": 0
+    },
+    "capital_pendiente": {
+      "type": "number",
+      "default": 0
+    },
+    "tin": {
+      "type": "number"
+    },
+    "tae": {
+      "type": "number"
+    },
+    "plazo_meses": {
+      "type": "number"
+    },
+    "fecha_inicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodicidad": {
+      "type": "string",
+      "enum": [
+        "mensual",
+        "trimestral",
+        "semestral",
+        "anual"
+      ],
+      "default": "mensual"
+    },
+    "cuota": {
+      "type": "number",
+      "default": 0
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "cancelado",
+        "vencido",
+        "refinanciado",
+        "carencia"
+      ],
+      "default": "activo"
+    },
+    "en_carencia": {
+      "type": "boolean",
+      "default": false
+    },
+    "fecha_fin_carencia": {
+      "type": "string",
+      "format": "date"
+    },
+    "avales": {
+      "type": "string"
+    },
+    "garantias": {
+      "type": "string"
+    },
+    "moneda": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "limite_credito": {
+      "type": "number"
+    },
+    "dispuesto": {
+      "type": "number",
+      "default": 0
+    },
+    "activo_asociado": {
+      "type": "string"
+    },
+    "opcion_compra": {
+      "type": "number"
+    },
+    "valor_residual": {
+      "type": "number"
+    },
+    "subvencionado": {
+      "type": "boolean",
+      "default": false
+    },
+    "intereses_pagados": {
+      "type": "number",
+      "default": 0
+    },
+    "capital_amortizado": {
+      "type": "number",
+      "default": 0
+    },
+    "documento_url": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "tipo",
+    "nombre",
+    "importe_inicial"
+  ]
+}

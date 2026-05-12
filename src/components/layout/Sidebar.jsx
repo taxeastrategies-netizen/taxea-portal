@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
   Shield, CheckSquare, Clock, AlertTriangle, BarChart2, Bell,
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
-  ChevronDown, FileText, TrendingUp, FileCheck, Receipt,
+  ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Cog
 } from 'lucide-react';
@@ -58,6 +58,7 @@ const DEPT_GROUPS = [
           { id: 'treasury', label: 'Treasury / Tesorería', icon: Wallet, path: '/finance/treasury' },
           { id: 'ar', label: 'Accounts Receivable', icon: FileCheck, path: '/finance/ar' },
           { id: 'ap', label: 'Accounts Payable', icon: Receipt, path: '/finance/ap' },
+          { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
         ],
       },
     ],

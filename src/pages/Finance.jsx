@@ -4,6 +4,7 @@ import CashflowCenter from '@/components/finance/cashflow/CashflowCenter';
 import TreasuryPage from '@/components/treasury/TreasuryPage';
 import AccountsReceivable from '@/components/ar/AccountsReceivable';
 import AccountsPayable from '@/components/ap/AccountsPayable';
+import DebtCenter from '@/components/debt/DebtCenter';
 
 export default function Finance() {
   const { module } = useParams();
@@ -17,6 +18,8 @@ export default function Finance() {
       return <AccountsReceivable />;
     case 'ap':
       return <AccountsPayable />;
+    case 'debt':
+      return <DebtCenter />;
     case 'dashboard':
     default:
       return <FinanceDashboard />;
