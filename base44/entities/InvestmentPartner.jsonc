@@ -1,0 +1,134 @@
+{
+  "name": "InvestmentPartner",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "string"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "neobank",
+        "broker",
+        "crypto",
+        "fondos",
+        "depositos",
+        "treasury",
+        "otro"
+      ],
+      "default": "broker"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "logo_url": {
+      "type": "string"
+    },
+    "referral_link": {
+      "type": "string"
+    },
+    "tipo_comision": {
+      "type": "string",
+      "enum": [
+        "cpa",
+        "revenue_share",
+        "hibrido",
+        "fijo",
+        "pendiente"
+      ],
+      "default": "cpa"
+    },
+    "comision_valor": {
+      "type": "number"
+    },
+    "comision_descripcion": {
+      "type": "string"
+    },
+    "rentabilidad_orientativa": {
+      "type": "string"
+    },
+    "liquidez": {
+      "type": "string",
+      "enum": [
+        "inmediata",
+        "1_7_dias",
+        "1_mes",
+        "3_meses",
+        "limitada"
+      ],
+      "default": "inmediata"
+    },
+    "riesgo": {
+      "type": "string",
+      "enum": [
+        "muy_bajo",
+        "bajo",
+        "moderado",
+        "alto",
+        "muy_alto"
+      ],
+      "default": "bajo"
+    },
+    "tipo_producto": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "pausado",
+        "negociacion",
+        "inactivo"
+      ],
+      "default": "activo"
+    },
+    "total_clicks": {
+      "type": "number",
+      "default": 0
+    },
+    "total_registros": {
+      "type": "number",
+      "default": 0
+    },
+    "total_conversiones": {
+      "type": "number",
+      "default": 0
+    },
+    "ingresos_generados": {
+      "type": "number",
+      "default": 0
+    },
+    "payout_pendiente": {
+      "type": "number",
+      "default": 0
+    },
+    "payout_total": {
+      "type": "number",
+      "default": 0
+    },
+    "condiciones": {
+      "type": "string"
+    },
+    "notas_internas": {
+      "type": "string"
+    },
+    "visible_clientes": {
+      "type": "boolean",
+      "default": false
+    },
+    "destacado": {
+      "type": "boolean",
+      "default": false
+    },
+    "orden": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

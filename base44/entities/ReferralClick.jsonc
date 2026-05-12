@@ -1,0 +1,39 @@
+{
+  "name": "ReferralClick",
+  "type": "object",
+  "properties": {
+    "partner_id": {
+      "type": "string"
+    },
+    "partner_nombre": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "tipo_evento": {
+      "type": "string",
+      "enum": [
+        "click",
+        "registro",
+        "conversion",
+        "payout"
+      ],
+      "default": "click"
+    },
+    "importe": {
+      "type": "number",
+      "default": 0
+    },
+    "origen": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "partner_id",
+    "tipo_evento"
+  ]
+}

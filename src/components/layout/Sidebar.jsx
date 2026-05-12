@@ -59,6 +59,7 @@ const DEPT_GROUPS = [
           { id: 'ar', label: 'Accounts Receivable', icon: FileCheck, path: '/finance/ar' },
           { id: 'ap', label: 'Accounts Payable', icon: Receipt, path: '/finance/ap' },
           { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
+          { id: 'investments', label: 'Investments', icon: BarChart2, path: '/finance/investments', adminOnly: true },
         ],
       },
     ],
@@ -264,10 +265,10 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                 className="overflow-hidden"
                               >
                                 <div className="mt-0.5 ml-3 pl-3 border-l border-slate-100 space-y-0.5 py-1">
-                                  {dept.modules.map(mod => {
-                                    const ModIcon = mod.icon;
-                                    const isActiveModule = location.pathname === mod.path;
-                                    return (
+                                  {dept.modules.filter(mod => !mod.adminOnly || isAdmin).map(mod => {
+                                   const ModIcon = mod.icon;
+                                   const isActiveModule = location.pathname === mod.path;
+                                   return (
                                       <Link
                                         key={mod.id}
                                         to={mod.path}
