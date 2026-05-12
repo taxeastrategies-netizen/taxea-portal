@@ -211,17 +211,17 @@ export default function Dashboard() {
 
       {/* Stats grid anual */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard title="Total Ingresos" value={totalIngresos} icon={TrendingUp} colorClass="text-green-600" bgClass="bg-green-50" />
-        <StatCard title="Total Gastos" value={totalGastos} icon={TrendingDown} colorClass="text-red-600" bgClass="bg-red-50" />
-        <StatCard title="Resultado" value={resultado} icon={Euro} colorClass={resultado >= 0 ? "text-green-600" : "text-destructive"} bgClass={resultado >= 0 ? "bg-green-50" : "bg-red-50"} />
-        <StatCard title="IVA Estimado" value={ivaRepercutido - ivaSoportado} icon={BarChart3} colorClass="text-primary" bgClass="bg-accent" />
+        <StatCard title="Total Ingresos" value={totalIngresos} icon={TrendingUp} colorClass="text-emerald-600" bgClass="bg-emerald-50" accent="bg-emerald-400" />
+        <StatCard title="Total Gastos" value={totalGastos} icon={TrendingDown} colorClass="text-red-500" bgClass="bg-red-50" accent="bg-red-400" />
+        <StatCard title="Resultado Neto" value={resultado} icon={Euro} colorClass={resultado >= 0 ? "text-primary" : "text-destructive"} bgClass={resultado >= 0 ? "bg-accent" : "bg-red-50"} accent={resultado >= 0 ? "bg-taxea-red" : "bg-red-400"} />
+        <StatCard title="IVA Estimado" value={ivaRepercutido - ivaSoportado} icon={BarChart3} colorClass="text-amber-600" bgClass="bg-amber-50" accent="bg-amber-400" />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard title="Facturas Pendientes" value={facturasPendientes} icon={FileText} suffix="" colorClass="text-amber-600" bgClass="bg-amber-50" />
-        <StatCard title="Obligaciones" value={obligacionesProximas} icon={Calendar} suffix="" colorClass="text-red-600" bgClass="bg-red-50" />
-        <StatCard title="Tareas activas" value={tasks.filter(t => !['completada', 'cancelada'].includes(t.estado)).length} icon={CheckSquare} suffix="" colorClass="text-blue-600" bgClass="bg-blue-50" />
-        <StatCard title="Errores activos" value={errors.filter(e => !['resuelto', 'ignorado'].includes(e.estado)).length} icon={AlertTriangle} suffix="" colorClass="text-orange-600" bgClass="bg-orange-50" />
+        <StatCard title="Facturas Pendientes" value={facturasPendientes} icon={FileText} suffix="" colorClass="text-amber-600" bgClass="bg-amber-50" accent="bg-amber-400" />
+        <StatCard title="Obligaciones" value={obligacionesProximas} icon={Calendar} suffix="" colorClass="text-red-500" bgClass="bg-red-50" accent="bg-red-400" />
+        <StatCard title="Tareas activas" value={tasks.filter(t => !['completada', 'cancelada'].includes(t.estado)).length} icon={CheckSquare} suffix="" colorClass="text-blue-600" bgClass="bg-blue-50" accent="bg-blue-400" />
+        <StatCard title="Errores activos" value={errors.filter(e => !['resuelto', 'ignorado'].includes(e.estado)).length} icon={AlertTriangle} suffix="" colorClass="text-orange-500" bgClass="bg-orange-50" accent="bg-orange-400" />
       </div>
 
       {/* Gráfico flujo de caja */}

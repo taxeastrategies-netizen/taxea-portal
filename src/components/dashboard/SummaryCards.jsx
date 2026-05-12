@@ -1,21 +1,39 @@
-import { FileText, TrendingUp, TrendingDown, Calendar, AlertTriangle } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
-function SummaryCard({ icon: Icon, label, value, sub, colorClass, bgClass, href }) {
+function SummaryCard({ icon: Icon, label, value, sub, colorClass, bgClass, href, accentColor, index }) {
   const content = (
-    <div className={cn(
-      "bg-card border border-border rounded-xl p-5 shadow-card hover:shadow-card-hover transition-all duration-200",
-      href && "cursor-pointer hover:border-primary/30"
-    )}>
-      <div className="flex items-start justify-between mb-3">
-        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", bgClass)}>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.06 }}
+      className={cn(
+        "group relative bg-card border border-border rounded-2xl p-5 overflow-hidden",
+        "hover:shadow-[0_8px_30px_rgba(0,0,0,0.09)] hover:-translate-y-0.5 transition-all duration-300",
+        href && "cursor-pointer"
+      )}
+    >
+      {/* Top accent */}
+      <div className={cn("absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl opacity-60", accentColor)} />
+
+      {/* Glow behind icon */}
+      <div className={cn("absolute -top-8 -right-8 w-24 h-24 rounded-full blur-3xl opacity-0 group-hover:opacity-20 transition-opacity duration-500", bgClass)} />
+
+      <div className="flex items-start justify-between mb-4">
+        <div className={cn(
+          "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm",
+          "border border-white/20 backdrop-blur-sm",
+          bgClass
+        )}>
           <Icon className={cn("w-5 h-5", colorClass)} />
         </div>
       </div>
-      <p className="text-xs text-muted-foreground font-medium mb-1">{label}</p>
+
+      <p className="text-[11px] text-muted-foreground font-semibold uppercase tracking-widest mb-1.5">{label}</p>
       <p className={cn("text-2xl font-jakarta font-bold", colorClass)}>{value}</p>
-      {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-    </div>
+      {sub && <p className="text-xs text-muted-foreground mt-1.5 font-medium">{sub}</p>}
+    </motion.div>
   );
 
   if (href) return <a href={href}>{content}</a>;
@@ -51,39 +69,47 @@ export default function SummaryCards({ invoices, expenses, obligations, currentM
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
       <SummaryCard
+        index={0}
         icon={FileText}
         label="Facturas pendientes"
         value={pendientes.length}
         sub={vencidas.length > 0 ? `${vencidas.length} vencida${vencidas.length > 1 ? 's' : ''}` : 'Al día'}
-        colorClass={pendientes.length > 0 ? "text-amber-600" : "text-green-600"}
-        bgClass={pendientes.length > 0 ? "bg-amber-50" : "bg-green-50"}
-        href="/facturas"
+        colorClass={pendientes.length > 0 ? "text-amber-600" : "text-emerald-600"}
+        bgClass={pendientes.length > 0 ? "bg-amber-50" : "bg-emerald-50"}
+        accentColor={pendientes.length > 0 ? "bg-amber-400" : "bg-emerald-400"}
+        href="/tax-accounting/facturas"
       />
       <SummaryCard
+        index={1}
         icon={TrendingUp}
         label="Ingresos este mes"
         value={fmt(ingresosEsteMes)}
         sub={`Gastos: ${fmt(gastosEsteMes)}`}
-        colorClass="text-green-600"
-        bgClass="bg-green-50"
-        href="/ingresos-gastos"
+        colorClass="text-emerald-600"
+        bgClass="bg-emerald-50"
+        accentColor="bg-emerald-400"
+        href="/tax-accounting/ingresos-gastos"
       />
       <SummaryCard
+        index={2}
         icon={saldoMes >= 0 ? TrendingUp : TrendingDown}
         label="Resultado del mes"
         value={fmt(saldoMes)}
         sub={saldoMes >= 0 ? 'Saldo positivo' : 'Saldo negativo'}
         colorClass={saldoMes >= 0 ? "text-primary" : "text-destructive"}
         bgClass={saldoMes >= 0 ? "bg-accent" : "bg-red-50"}
+        accentColor={saldoMes >= 0 ? "bg-taxea-red" : "bg-red-400"}
       />
       <SummaryCard
+        index={3}
         icon={Calendar}
         label="Vencimientos próximos"
         value={vencimientosProximos.length}
         sub={vencimientosProximos.length > 0 ? 'En los próximos 30 días' : 'Sin vencimientos urgentes'}
-        colorClass={vencimientosProximos.length > 0 ? "text-red-600" : "text-green-600"}
-        bgClass={vencimientosProximos.length > 0 ? "bg-red-50" : "bg-green-50"}
-        href="/obligaciones"
+        colorClass={vencimientosProximos.length > 0 ? "text-red-600" : "text-emerald-600"}
+        bgClass={vencimientosProximos.length > 0 ? "bg-red-50" : "bg-emerald-50"}
+        accentColor={vencimientosProximos.length > 0 ? "bg-red-400" : "bg-emerald-400"}
+        href="/tax-accounting/obligaciones"
       />
     </div>
   );

@@ -203,17 +203,21 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                     <button
                       onClick={() => handleDeptClick(dept)}
                       className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group",
+                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group relative overflow-hidden",
                         isActiveDept
-                          ? `${dept.activeBg} ${dept.activeColor}`
+                          ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-white/8`
                           : "text-white/55 hover:text-white hover:bg-white/6"
                       )}
                     >
-                      <Icon className={cn("w-4 h-4 flex-shrink-0", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
-                      <span className="flex-1">{dept.label}</span>
+                      {/* Active glow */}
+                      {isActiveDept && (
+                        <div className={cn("absolute inset-0 opacity-30 blur-xl rounded-xl", dept.activeBg)} />
+                      )}
+                      <Icon className={cn("w-4 h-4 flex-shrink-0 relative z-10", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
+                      <span className="flex-1 relative z-10">{dept.label}</span>
                       {hasModules && (
                         <ChevronDown className={cn(
-                          "w-3.5 h-3.5 transition-transform duration-200",
+                          "w-3.5 h-3.5 transition-transform duration-200 relative z-10",
                           isExpanded ? "rotate-0" : "-rotate-90",
                           isActiveDept ? "opacity-60" : "opacity-30"
                         )} />
@@ -241,14 +245,14 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                     to={mod.path}
                                     onClick={onClose}
                                     className={cn(
-                                      "flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
+                                      "flex items-center gap-2 px-2.5 py-1.5 rounded-r-lg text-xs font-medium transition-all duration-200 relative",
                                       isActiveModule
-                                        ? `bg-taxea-red text-white shadow-sm`
-                                        : "text-white/40 hover:text-white/80 hover:bg-white/6"
+                                        ? "sidebar-module-active text-white pl-3"
+                                        : "text-white/40 hover:text-white/75 hover:bg-white/5 rounded-lg"
                                     )}
                                   >
-                                    <ModIcon className={cn("w-3 h-3 flex-shrink-0", isActiveModule ? "text-white" : "text-white/30")} />
-                                    <span>{mod.label}</span>
+                                    <ModIcon className={cn("w-3 h-3 flex-shrink-0 transition-colors", isActiveModule ? "text-taxea-red" : "text-white/25")} />
+                                    <span className={isActiveModule ? "text-white font-semibold" : ""}>{mod.label}</span>
                                   </Link>
                                 );
                               })}
