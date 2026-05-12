@@ -60,6 +60,7 @@ const DEPT_GROUPS = [
           { id: 'ap', label: 'Accounts Payable', icon: Receipt, path: '/finance/ap' },
           { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
           { id: 'investments', label: 'Investments', icon: BarChart2, path: '/finance/investments', adminOnly: true },
+          { id: 'reporting', label: 'Reporting Center', icon: FileText, path: '/finance/reporting' },
         ],
       },
     ],
