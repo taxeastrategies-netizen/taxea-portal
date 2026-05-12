@@ -88,6 +88,7 @@ function AppWithContext({ user }) {
         <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
         <Route path="/admin-whatsapp" element={<AdminWhatsApp />} />
         <Route path="/tax-accounting" element={<TaxAccounting />} />
+        <Route path="/tax-accounting/:module" element={<TaxAccounting />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

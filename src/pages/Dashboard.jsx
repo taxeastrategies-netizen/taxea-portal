@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import {
   TrendingUp, TrendingDown, FileText, Calendar, AlertTriangle,
-  Clock, CheckCircle, Euro, BarChart3, Bell, CheckSquare, Upload, Calculator, ChevronRight, ScanLine
+  Clock, CheckCircle, Euro, BarChart3, Bell, CheckSquare, Upload
 } from 'lucide-react';
 import FiscalDashboard from '@/components/dashboard/FiscalDashboard';
 import StatCard from '@/components/ui/StatCard';
@@ -133,23 +133,6 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-in">
-      {/* Tax & Accounting Department Banner */}
-      <Link to="/tax-accounting" className="flex items-center justify-between bg-gradient-to-r from-taxea-red/90 to-taxea-red-dark text-white rounded-2xl px-5 py-4 mb-5 hover:from-taxea-red hover:to-taxea-red-dark transition-all shadow-md group">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center">
-            <Calculator className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <p className="font-jakarta font-bold text-sm tracking-wide">Tax & Accounting</p>
-            <p className="text-white/70 text-xs mt-0.5">Facturas · Obligaciones · OCR · Libros · P&L</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-white/60 hidden sm:block">Abrir departamento</span>
-          <ChevronRight className="w-5 h-5 text-white/60 group-hover:translate-x-1 transition-transform" />
-        </div>
-      </Link>
-
       <PageHeader
         title={isAdmin ? 'Panel de Control' : `Hola, ${user?.full_name?.split(' ')[0] || 'Cliente'}`}
         subtitle={company?.razon_social || 'Configura tu empresa en Ajustes'}

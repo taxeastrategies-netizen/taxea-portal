@@ -1,12 +1,16 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
   Shield, CheckSquare, Clock, AlertTriangle, BarChart2, Bell,
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
-  ChevronRight
+  ChevronDown, FileText, TrendingUp, FileCheck, Receipt,
+  Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
+  Lock, Wallet, Scale, UserCog, Cog
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ROLE_LABELS = {
   super_admin: { label: 'Super Admin', color: 'bg-red-500/20 border-red-500/30 text-red-300' },
@@ -14,42 +18,55 @@ const ROLE_LABELS = {
   advisor: { label: 'Asesor', color: 'bg-blue-500/20 border-blue-500/30 text-blue-300' },
 };
 
-// Main departments
+const TAX_MODULES = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/tax-accounting/dashboard' },
+  { id: 'facturas', label: 'Facturas', icon: FileText, path: '/tax-accounting/facturas' },
+  { id: 'ingresos-gastos', label: 'Ingresos y Gastos', icon: TrendingUp, path: '/tax-accounting/ingresos-gastos' },
+  { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
+  { id: 'proformas', label: 'Proformas', icon: Receipt, path: '/tax-accounting/proformas' },
+  { id: 'productos', label: 'Productos / Servicios', icon: Package, path: '/tax-accounting/productos' },
+  { id: 'notas', label: 'Notas Predefinidas', icon: BookMarked, path: '/tax-accounting/notas' },
+  { id: 'libros', label: 'Libros Registro', icon: BookOpen, path: '/tax-accounting/libros' },
+  { id: 'lector-gastos', label: 'Lector de Gastos', icon: ScanLine, path: '/tax-accounting/lector-gastos' },
+  { id: 'lector-ingresos', label: 'Lector de Ingresos', icon: ScanText, path: '/tax-accounting/lector-ingresos' },
+  { id: 'obligaciones', label: 'Obligaciones Fiscales', icon: Calendar, path: '/tax-accounting/obligaciones' },
+];
+
 const DEPARTMENTS = [
   {
     id: 'tax',
     label: 'Tax & Accounting',
-    sublabel: 'Fiscal y Contabilidad',
     icon: Calculator,
-    path: '/tax-accounting',
     color: 'text-taxea-red',
-    activeBg: 'bg-taxea-red',
-    hoverBg: 'hover:bg-taxea-red/10',
-    badgeColor: 'bg-taxea-red/20 text-taxea-red border-taxea-red/30',
+    activeColor: 'text-taxea-red',
+    activeBg: 'bg-taxea-red/10',
+    basePath: '/tax-accounting',
+    modules: TAX_MODULES,
   },
   {
     id: 'contacts',
     label: 'Contactos',
-    sublabel: 'Clientes y proveedores',
     icon: Users,
-    path: '/contactos',
     color: 'text-blue-400',
-    activeBg: 'bg-blue-500',
-    hoverBg: 'hover:bg-blue-500/10',
-    badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-400/30',
-    comingSoon: false,
+    activeColor: 'text-blue-400',
+    activeBg: 'bg-blue-500/10',
+    basePath: '/contactos',
+    modules: [],
   },
   {
     id: 'docs',
     label: 'Documentos',
-    sublabel: 'Archivos y gestión',
     icon: FolderOpen,
-    path: '/documentos',
     color: 'text-violet-400',
-    activeBg: 'bg-violet-500',
-    hoverBg: 'hover:bg-violet-500/10',
-    badgeColor: 'bg-violet-500/20 text-violet-400 border-violet-400/30',
+    activeColor: 'text-violet-400',
+    activeBg: 'bg-violet-500/10',
+    basePath: '/documentos',
+    modules: [],
   },
+  { id: 'finance', label: 'Finance', icon: Wallet, color: 'text-emerald-400', basePath: null, comingSoon: true },
+  { id: 'legal', label: 'Legal', icon: Scale, color: 'text-amber-400', basePath: null, comingSoon: true },
+  { id: 'rrhh', label: 'RRHH', icon: UserCog, color: 'text-pink-400', basePath: null, comingSoon: true },
+  { id: 'ops', label: 'Operaciones', icon: Cog, color: 'text-cyan-400', basePath: null, comingSoon: true },
 ];
 
 const UTILS_ITEMS = [
@@ -74,12 +91,36 @@ const ADMIN_ITEMS = [
 
 export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole }) {
   const location = useLocation();
+  const navigate = useNavigate();
 
-  const isDeptActive = (dept) => {
-    if (dept.path === '/tax-accounting') {
-      return location.pathname === '/tax-accounting' || location.hash.includes('#');
+  // Determine which department is active
+  const getActiveDept = () => {
+    for (const dept of DEPARTMENTS) {
+      if (dept.basePath && location.pathname.startsWith(dept.basePath)) return dept.id;
     }
-    return location.pathname.startsWith(dept.path);
+    return null;
+  };
+
+  const activeDeptId = getActiveDept();
+  const [expanded, setExpanded] = useState(activeDeptId || 'tax');
+
+  const handleDeptClick = (dept) => {
+    if (dept.comingSoon) return;
+    if (dept.modules && dept.modules.length > 0) {
+      if (expanded === dept.id) {
+        setExpanded(null);
+      } else {
+        setExpanded(dept.id);
+        // Navigate to first module (dashboard) if not already in this dept
+        if (!location.pathname.startsWith(dept.basePath)) {
+          navigate(dept.modules[0].path);
+          onClose();
+        }
+      }
+    } else {
+      navigate(dept.basePath);
+      onClose();
+    }
   };
 
   return (
@@ -116,51 +157,107 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
         )}
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2.5 space-y-6">
+        <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-4">
 
           {/* Dashboard principal */}
-          <div>
-            <Link
-              to="/"
-              onClick={onClose}
-              className={cn(
-                "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-                location.pathname === '/'
-                  ? "bg-white/10 text-white"
-                  : "text-white/50 hover:text-white hover:bg-white/6"
-              )}
-            >
-              <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-              <span>Dashboard</span>
-            </Link>
-          </div>
+          <Link
+            to="/"
+            onClick={onClose}
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+              location.pathname === '/'
+                ? "bg-white/10 text-white"
+                : "text-white/50 hover:text-white hover:bg-white/6"
+            )}
+          >
+            <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
+            <span>Dashboard</span>
+          </Link>
 
           {/* Departments */}
           <div>
             <p className="text-white/25 text-xs px-3 pb-2 uppercase tracking-widest font-medium">Departamentos</p>
-            <div className="space-y-1.5">
+            <div className="space-y-0.5">
               {DEPARTMENTS.map(dept => {
                 const Icon = dept.icon;
-                const isActive = isDeptActive(dept);
-                return (
-                  <Link
-                    key={dept.id}
-                    to={dept.path}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 group border",
-                      isActive
-                        ? `${dept.activeBg} text-white border-transparent shadow-sm`
-                        : `text-white/50 hover:text-white border-white/5 hover:border-white/10 ${dept.hoverBg}`
-                    )}
-                  >
-                    <Icon className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-white" : dept.color)} />
-                    <div className="flex-1 min-w-0">
-                      <p className={cn("text-sm font-semibold leading-none", isActive ? "text-white" : "text-white/70")}>{dept.label}</p>
-                      <p className={cn("text-xs mt-0.5 truncate", isActive ? "text-white/70" : "text-white/30")}>{dept.sublabel}</p>
+                const isActiveDept = activeDeptId === dept.id;
+                const isExpanded = expanded === dept.id;
+                const hasModules = dept.modules && dept.modules.length > 0;
+
+                if (dept.comingSoon) {
+                  return (
+                    <div
+                      key={dept.id}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-lg opacity-35 cursor-not-allowed select-none"
+                    >
+                      <Lock className="w-3.5 h-3.5 flex-shrink-0 text-white/30" />
+                      <span className="text-xs text-white/40 font-medium">{dept.label}</span>
+                      <span className="ml-auto text-white/25 text-[10px] leading-none bg-white/8 px-1.5 py-0.5 rounded">Soon</span>
                     </div>
-                    <ChevronRight className={cn("w-3.5 h-3.5 flex-shrink-0 transition-transform", isActive ? "text-white/60 translate-x-0" : "text-white/20 group-hover:translate-x-0.5")} />
-                  </Link>
+                  );
+                }
+
+                return (
+                  <div key={dept.id}>
+                    {/* Department header */}
+                    <button
+                      onClick={() => handleDeptClick(dept)}
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group",
+                        isActiveDept
+                          ? `${dept.activeBg} ${dept.activeColor}`
+                          : "text-white/55 hover:text-white hover:bg-white/6"
+                      )}
+                    >
+                      <Icon className={cn("w-4 h-4 flex-shrink-0", isActiveDept ? dept.activeColor : "text-white/35 group-hover:text-white/60")} />
+                      <span className="flex-1">{dept.label}</span>
+                      {hasModules && (
+                        <ChevronDown className={cn(
+                          "w-3.5 h-3.5 transition-transform duration-200",
+                          isExpanded ? "rotate-0" : "-rotate-90",
+                          isActiveDept ? "opacity-60" : "opacity-30"
+                        )} />
+                      )}
+                    </button>
+
+                    {/* Modules submenu */}
+                    {hasModules && (
+                      <AnimatePresence initial={false}>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-0.5 ml-3 pl-3 border-l border-white/8 space-y-0.5 py-1">
+                              {dept.modules.map(mod => {
+                                const ModIcon = mod.icon;
+                                const isActiveModule = location.pathname === mod.path;
+                                return (
+                                  <Link
+                                    key={mod.id}
+                                    to={mod.path}
+                                    onClick={onClose}
+                                    className={cn(
+                                      "flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
+                                      isActiveModule
+                                        ? `bg-taxea-red text-white shadow-sm`
+                                        : "text-white/40 hover:text-white/80 hover:bg-white/6"
+                                    )}
+                                  >
+                                    <ModIcon className={cn("w-3 h-3 flex-shrink-0", isActiveModule ? "text-white" : "text-white/30")} />
+                                    <span>{mod.label}</span>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    )}
+                  </div>
                 );
               })}
             </div>
