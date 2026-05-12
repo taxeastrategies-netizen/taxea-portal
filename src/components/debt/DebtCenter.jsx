@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { differenceInDays, parseISO } from 'date-fns';
-import { Layers, Plus, RefreshCw, TrendingDown, AlertTriangle, BarChart2, Calendar, DollarSign, Sliders, Activity, Bell } from 'lucide-react';
+import { Layers, Plus, RefreshCw, TrendingDown, AlertTriangle, BarChart2, Calendar, DollarSign, Sliders, Activity, Bell, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DebtKpiBar from './DebtKpiBar';
 import DebtList from './DebtList';
@@ -13,6 +13,7 @@ import DebtRatios from './DebtRatios';
 import DebtSimulator from './DebtSimulator';
 import DebtAlerts from './DebtAlerts';
 import DebtFormModal from './DebtFormModal';
+import DebtOCR from './DebtOCR';
 
 const TABS = [
   { id: 'overview',    label: 'Resumen',          icon: Layers },
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'ratios',      label: 'Ratios',           icon: Activity },
   { id: 'simulator',  label: 'Simulador',         icon: Sliders },
   { id: 'alerts',     label: 'Alertas IA',        icon: Bell },
+  { id: 'ocr',        label: 'OCR Financiero',    icon: Zap },
 ];
 
 export default function DebtCenter() {
@@ -152,6 +154,7 @@ export default function DebtCenter() {
           {tab === 'ratios' && <DebtRatios debts={debts} kpis={kpis} invoices={invoices} expenses={expenses} />}
           {tab === 'simulator' && <DebtSimulator debts={debts} kpis={kpis} />}
           {tab === 'alerts' && <DebtAlerts debts={debts} kpis={kpis} />}
+          {tab === 'ocr' && <DebtOCR companyId={companyId} onImported={loadData} />}
         </>
       )}
 
