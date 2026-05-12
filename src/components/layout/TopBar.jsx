@@ -19,6 +19,8 @@ const BREADCRUMBS = {
   '/tax-accounting/lector-ingresos': ['Tax & Accounting', 'Lector de Ingresos'],
   '/tax-accounting/obligaciones': ['Tax & Accounting', 'Obligaciones Fiscales'],
   '/tax-accounting': ['Tax & Accounting', 'Dashboard'],
+  '/finance/dashboard': ['Finance', 'Dashboard'],
+  '/finance': ['Finance', 'Dashboard'],
   '/contactos': ['Contactos'],
   '/documentos': ['Documentos'],
   '/tareas': ['Herramientas', 'Tareas'],

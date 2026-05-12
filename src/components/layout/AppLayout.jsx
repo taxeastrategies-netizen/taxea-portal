@@ -9,7 +9,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
   const location = useLocation();
 
   // Department pages get full-width, no max-width container
-  const isDeptPage = location.pathname.startsWith('/tax-accounting');
+  const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
