@@ -7,7 +7,7 @@ import {
   BarChart2, Upload, FileText, AlertTriangle, CheckCircle2,
   Clock, Plus, ChevronRight, Sparkles, Info, TrendingUp
 } from 'lucide-react';
-import ImportWizard from './ImportWizard';
+import A3ImportWizard from './A3ImportWizard';
 import AnalysisDashboard from './AnalysisDashboard';
 import ReportViewer from './ReportViewer';
 
@@ -57,7 +57,7 @@ export default function AnalysisHome() {
   };
 
   if (view === 'import') {
-    return <ImportWizard companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('home')} />;
+    return <A3ImportWizard companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('home')} />;
   }
 
   if (view === 'dashboard' && selectedImport) {
@@ -83,7 +83,7 @@ export default function AnalysisHome() {
         </div>
         <button onClick={() => setView('import')}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all shadow-sm flex-shrink-0">
-          <Upload className="w-4 h-4" /> Importar contabilidad
+          <Upload className="w-4 h-4" /> Importar A3 .dat
         </button>
       </div>
 
@@ -162,7 +162,7 @@ export default function AnalysisHome() {
       {/* Features preview */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { icon: Upload, title: 'Importa A3 / Holded', desc: 'Sube CSV o Excel de cualquier software contable. Mapeamos las columnas automáticamente.', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { icon: Upload, title: 'Importa A3 .dat', desc: 'Sube archivos .dat exportados desde A3 Asesor, A3 ERP o A3CON. Detectamos la estructura automáticamente.', color: 'text-emerald-600', bg: 'bg-emerald-50' },
           { icon: BarChart2, title: 'Dashboard financiero', desc: 'PyG, balance, caja, ratios e indicadores. Visual, claro y con alertas sobre los datos.', color: 'text-blue-600', bg: 'bg-blue-50' },
           { icon: FileText, title: 'Informe detallado', desc: 'Genera un informe completo con resumen ejecutivo, alertas, ratios y recomendaciones.', color: 'text-violet-600', bg: 'bg-violet-50' },
         ].map((f, i) => {
@@ -194,7 +194,7 @@ function EmptyState({ onImport }) {
       </p>
       <button onClick={onImport}
         className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all shadow-sm">
-        <Upload className="w-4 h-4" /> Importar contabilidad
+        <Upload className="w-4 h-4" /> Importar A3 .dat
       </button>
     </div>
   );

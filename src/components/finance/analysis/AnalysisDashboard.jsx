@@ -11,55 +11,80 @@ import {
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
 } from 'recharts';
 
-// Demo financial data derived from import
+const COLORS_DIST = ['#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0', '#f1f5f9'];
+
 function buildFinancials(imp) {
   const m = imp.metricas_calculadas || {};
+  const bal = m.balance || {};
+
+  // Build mensual data
+  const mensualRaw = m.mensual || [];
+  const mensual = mensualRaw.length > 0 ? mensualRaw.map(r => ({
+    mes: r.mes?.substring(5) || r.mes,
+    ingresos: r.ingresos || 0,
+    gastos: r.gastos || 0,
+    resultado: (r.ingresos || 0) - (r.gastos || 0),
+  })) : [
+    { mes: 'Ene', ingresos: 12100, gastos: 8445, resultado: 3655 },
+    { mes: 'Feb', ingresos: 26600, gastos: 8450, resultado: 18150 },
+    { mes: 'Mar', ingresos: 14520, gastos: 450, resultado: 14070 },
+  ];
+
+  // Build gastos dist
+  const gastosDistRaw = m.gastos_dist || [];
+  const gastos_dist = gastosDistRaw.length > 0
+    ? gastosDistRaw.map((g, i) => ({ ...g, color: COLORS_DIST[i] || '#94a3b8' }))
+    : [
+        { name: 'Compras', value: 8000, color: '#64748b' },
+        { name: 'Sueldos', value: 8450, color: '#94a3b8' },
+        { name: 'Suministros', value: 450, color: '#cbd5e1' },
+      ];
+
+  // Build clientes/proveedores
+  const clientesRaw = m.clientes || [];
+  const totalClientes = clientesRaw.reduce((s, c) => s + Math.abs((c.haber || 0) - (c.debe || 0)), 0);
+  const clientes = clientesRaw.length > 0 ? clientesRaw.map(c => ({
+    nombre: c.nombre || c.cuenta,
+    importe: Math.abs((c.haber || 0) - (c.debe || 0)),
+    pct: totalClientes > 0 ? Math.round(Math.abs((c.haber || 0) - (c.debe || 0)) / totalClientes * 100) : 0,
+  })) : [{ nombre: 'Sin datos de clientes detectados', importe: 0, pct: 0 }];
+
+  const proveedoresRaw = m.proveedores || [];
+  const totalProv = proveedoresRaw.reduce((s, c) => s + Math.abs((c.debe || 0) - (c.haber || 0)), 0);
+  const proveedores = proveedoresRaw.length > 0 ? proveedoresRaw.map(c => ({
+    nombre: c.nombre || c.cuenta,
+    importe: Math.abs((c.debe || 0) - (c.haber || 0)),
+    pct: totalProv > 0 ? Math.round(Math.abs((c.debe || 0) - (c.haber || 0)) / totalProv * 100) : 0,
+  })) : [{ nombre: 'Sin datos de proveedores detectados', importe: 0, pct: 0 }];
+
+  const ratios = m.ratios || [
+    { nombre: 'Margen neto', valor: `${(m.margen_neto || 0).toFixed(1)}%`, interpretacion: 'Resultado sobre ingresos. Dato preliminar basado en movimientos importados.', color: (m.margen_neto || 0) > 0 ? 'text-emerald-600' : 'text-red-600' },
+    { nombre: 'Peso gastos / ingresos', valor: (m.ingresos || 0) > 0 ? `${((m.gastos || 0) / (m.ingresos || 1) * 100).toFixed(1)}%` : '—', interpretacion: 'Gastos del grupo 6 sobre ingresos del grupo 7.', color: 'text-blue-600' },
+    { nombre: 'Fondo de maniobra (est.)', valor: fmt((bal.activoCorriente || 0) - (bal.pasivoCorriente || 0)), interpretacion: 'Activo corriente estimado − pasivo corriente estimado.', color: ((bal.activoCorriente || 0) - (bal.pasivoCorriente || 0)) >= 0 ? 'text-emerald-600' : 'text-red-600' },
+  ];
+
   return {
-    ingresos: m.ingresos || 47200,
-    gastos: m.gastos || 18000,
-    resultado: m.resultado_neto || 29200,
-    margen: m.margen_neto || 61.9,
-    caja: m.caja_estimada || 22000,
-    movimientos: m.movimientos || 8,
-    mensual: [
-      { mes: 'Ene', ingresos: 12100, gastos: 8445, resultado: 3655 },
-      { mes: 'Feb', ingresos: 18000, gastos: 6500, resultado: 11500 },
-      { mes: 'Mar', ingresos: 17100, gastos: 3055, resultado: 14045 },
-    ],
-    gastos_dist: [
-      { name: 'Compras', value: 12500, color: '#64748b' },
-      { name: 'Sueldos', value: 6500, color: '#94a3b8' },
-      { name: 'Gastos generales', value: 1450, color: '#cbd5e1' },
-      { name: 'Financieros', value: 320, color: '#e2e8f0' },
-    ],
+    ingresos: m.ingresos || 0,
+    gastos: m.gastos || 0,
+    resultado: m.resultado_neto || 0,
+    margen: m.margen_neto || 0,
+    caja: m.caja_estimada || 0,
+    totalDebe: m.total_debe || 0,
+    totalHaber: m.total_haber || 0,
+    movimientos: m.movimientos || 0,
+    mensual,
+    gastos_dist,
     balance: {
-      activo_corriente: 34200,
-      activo_no_corriente: 8000,
-      pasivo_corriente: 5445,
+      activo_corriente: bal.activoCorriente || 0,
+      activo_no_corriente: bal.activoNoCorriente || 0,
+      pasivo_corriente: bal.pasivoCorriente || 0,
       pasivo_no_corriente: 0,
-      patrimonio: 36755,
+      patrimonio: bal.patrimonio || 0,
     },
-    clientes: [
-      { nombre: 'Cliente Omega SL', importe: 21780, pct: 46 },
-      { nombre: 'Cliente Beta SL', importe: 14520, pct: 31 },
-      { nombre: 'Cliente Delta SA', importe: 9680, pct: 21 },
-    ],
-    proveedores: [
-      { nombre: 'Proveedor Tech SA', importe: 2420, pct: 13 },
-      { nombre: 'Proveedor Office', importe: 544.5, pct: 3 },
-      { nombre: 'Proveedor B', importe: 5445, pct: 30 },
-    ],
-    alertas: [
-      { nivel: 'revisar', titulo: 'Alta concentración de ingresos', desc: 'El 46% de los ingresos proviene de un único cliente (Cliente Omega SL). Riesgo de dependencia.', area: 'Clientes' },
-      { nivel: 'informativo', titulo: 'Análisis preliminar sin saldos bancarios explícitos', desc: 'La tesorería se estima por movimientos de cuentas 57x. Puede requerir validación profesional.', area: 'Tesorería' },
-      { nivel: 'informativo', titulo: 'Clasificación estimada de cuentas de gasto', desc: 'Algunas cuentas de gasto se han clasificado por rango de cuenta PGC. Pendiente de revisión contable.', area: 'Gastos' },
-    ],
-    ratios: [
-      { nombre: 'Margen neto', valor: '61.9%', interpretacion: 'Resultado positivo. Dato preliminar basado en movimientos importados.', color: 'text-emerald-600' },
-      { nombre: 'Liquidez corriente', valor: (34200 / 5445).toFixed(1) + 'x', interpretacion: 'Activo corriente superior al pasivo corriente. Posición de liquidez aparentemente sana.', color: 'text-emerald-600' },
-      { nombre: 'Concentración clientes', valor: '46%', interpretacion: 'Dependencia alta de un cliente. Revisar estrategia comercial.', color: 'text-amber-600' },
-      { nombre: 'Peso gastos / ingresos', valor: '38%', interpretacion: 'Gastos representan el 38% de los ingresos del período.', color: 'text-blue-600' },
-    ],
+    clientes,
+    proveedores,
+    alertas: m.alertas || imp.advertencias || [],
+    ratios,
   };
 }
 
