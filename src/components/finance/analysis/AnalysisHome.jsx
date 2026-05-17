@@ -5,11 +5,11 @@ import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import { BarChart2, Upload, FileText, AlertTriangle, CheckCircle2, Clock, ChevronRight, Info, Plus } from 'lucide-react';
 import SourceSelector from './SourceSelector';
-import PDFImportWizard from './PDFImportWizard';
+import PDFAnalysisEngine from './PDFAnalysisEngine';
 import A3ImportWizard from './A3ImportWizard';
 import ExcelImportWizard from './ExcelImportWizard';
 import AnalysisDashboard from './AnalysisDashboard';
-import ReportViewer from './ReportViewer';
+import PremiumReportViewer from './PremiumReportViewer';
 
 const ESTADO_CONFIG = {
   importado:          { label: 'Importado',            color: 'bg-slate-100 text-slate-600',    icon: Clock },
@@ -76,7 +76,7 @@ export default function AnalysisHome() {
   };
 
   if (view === 'selector')     return <SourceSelector onSelect={handleSelectType} onCancel={() => setView('home')} />;
-  if (view === 'import_pdf')   return <PDFImportWizard importType={importType} companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('selector')} />;
+  if (view === 'import_pdf')   return <PDFAnalysisEngine importType={importType} companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('selector')} />;
   if (view === 'import_dat')   return <A3ImportWizard companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('selector')} />;
   if (view === 'import_excel') return <ExcelImportWizard importType={importType} companyId={companyId} company={company} onComplete={handleImportComplete} onCancel={() => setView('selector')} />;
   if (view === 'dashboard' && selectedImport) return (
@@ -84,7 +84,7 @@ export default function AnalysisHome() {
       onGenerateReport={() => setView('report')} onBack={() => setView('home')} />
   );
   if (view === 'report' && selectedImport) return (
-    <ReportViewer imp={selectedImport} onBack={() => setView('dashboard')} />
+    <PremiumReportViewer imp={selectedImport} onBack={() => setView('dashboard')} />
   );
 
   return (
