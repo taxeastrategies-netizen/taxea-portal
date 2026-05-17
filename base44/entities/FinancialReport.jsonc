@@ -1,0 +1,85 @@
+{
+  "name": "FinancialReport",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "import_id": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "empresa_nombre": {
+      "type": "string"
+    },
+    "periodo_inicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodo_fin": {
+      "type": "string",
+      "format": "date"
+    },
+    "origen_datos": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "generado",
+        "obsoleto"
+      ],
+      "default": "borrador"
+    },
+    "nivel_detalle": {
+      "type": "string",
+      "enum": [
+        "basico",
+        "completo",
+        "ejecutivo"
+      ],
+      "default": "completo"
+    },
+    "contenido": {
+      "type": "object"
+    },
+    "resumen_ejecutivo": {
+      "type": "string"
+    },
+    "conclusiones": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "alertas": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "nivel_confianza": {
+      "type": "string",
+      "enum": [
+        "alto",
+        "medio",
+        "bajo"
+      ],
+      "default": "medio"
+    },
+    "aviso_alcance": {
+      "type": "string"
+    },
+    "generado_por": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "import_id",
+    "titulo"
+  ]
+}

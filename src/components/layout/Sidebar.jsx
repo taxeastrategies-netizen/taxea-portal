@@ -112,6 +112,7 @@ const DEPT_GROUPS = [
           { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
           { id: 'investments', label: 'Investments', icon: BarChart2, path: '/finance/investments', adminOnly: true },
           { id: 'reporting', label: 'Reporting Center', icon: FileText, path: '/finance/reporting' },
+          { id: 'analysis', label: 'Análisis Financiero', icon: BarChart2, path: '/finance/analysis' },
         ],
       },
     ],

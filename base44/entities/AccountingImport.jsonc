@@ -1,0 +1,108 @@
+{
+  "name": "AccountingImport",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre_archivo": {
+      "type": "string"
+    },
+    "origen": {
+      "type": "string",
+      "enum": [
+        "a3",
+        "holded",
+        "excel_generico",
+        "csv_generico",
+        "pegado_manual"
+      ],
+      "default": "csv_generico"
+    },
+    "periodo_inicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodo_fin": {
+      "type": "string",
+      "format": "date"
+    },
+    "empresa_nombre": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "importado",
+        "pendiente_mapeo",
+        "pendiente_revision",
+        "analizado",
+        "informe_generado",
+        "error"
+      ],
+      "default": "importado"
+    },
+    "total_lineas": {
+      "type": "number",
+      "default": 0
+    },
+    "lineas_error": {
+      "type": "number",
+      "default": 0
+    },
+    "lineas_advertencia": {
+      "type": "number",
+      "default": 0
+    },
+    "alertas_criticas": {
+      "type": "number",
+      "default": 0
+    },
+    "calidad_dato": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja",
+        "sin_evaluar"
+      ],
+      "default": "sin_evaluar"
+    },
+    "mapeo_columnas": {
+      "type": "object"
+    },
+    "supuestos_aplicados": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "advertencias": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "resumen_ia": {
+      "type": "string"
+    },
+    "metricas_calculadas": {
+      "type": "object"
+    },
+    "usuario_importa": {
+      "type": "string"
+    },
+    "version_mapeo": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre_archivo",
+    "origen"
+  ]
+}
