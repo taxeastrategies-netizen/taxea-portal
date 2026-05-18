@@ -9,7 +9,7 @@ import PDFAnalysisEngine from './PDFAnalysisEngine';
 import A3ImportWizard from './A3ImportWizard';
 import ExcelImportWizard from './ExcelImportWizard';
 import AnalysisDashboard from './AnalysisDashboard';
-import PremiumReportViewer from './PremiumReportViewer';
+import PremiumReportViewerV5 from './v5/PremiumReportViewerV5';
 
 const ESTADO_CONFIG = {
   importado:          { label: 'Importado',            color: 'bg-slate-100 text-slate-600',    icon: Clock },
@@ -84,7 +84,9 @@ export default function AnalysisHome() {
       onGenerateReport={() => setView('report')} onBack={() => setView('home')} />
   );
   if (view === 'report' && selectedImport) return (
-    <PremiumReportViewer imp={selectedImport} onBack={() => setView('dashboard')} />
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+      <PremiumReportViewerV5 imp={selectedImport} onBack={() => setView('dashboard')} />
+    </div>
   );
 
   return (

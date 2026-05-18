@@ -145,7 +145,7 @@ export default function AnalysisDashboard({ imp, companyId, company, onGenerateR
         <button onClick={handleGenerateReport} disabled={generating}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-sm font-semibold shadow-sm flex-shrink-0">
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-          Generar Informe Premium Taxea
+          Generar Informe Financiero Premium
         </button>
       </div>
 
