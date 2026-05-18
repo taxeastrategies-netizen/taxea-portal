@@ -160,12 +160,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         uploadedUrls.push({ url: file_url, type: pdfFiles[i].type, nombre: pdfFiles[i].file.name });
       }
 
-      await setMsg('Analizando todos los documentos con IA (puede tardar 30-60s)…', 35, 500);
-
-      const tiposDoc = uploadedUrls.map(u => {
-        const tipo = PDF_TYPES.find(t => t.value === u.type);
-        return `${u.nombre} → tipo: ${tipo?.label || u.type}`;
-      }).join('\n');
+      await setMsg(`Analizando ${uploadedUrls.length} documento(s) uno a uno…`, 35, 300);
 
       const schema = {
         type: 'object',
@@ -204,52 +199,56 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         },
       };
 
-      await setMsg('Extrayendo cuentas, subcuentas e importes…', 50, 300);
+      // Analizar cada PDF individualmente para evitar límite de contexto
+      const allPages = [];
+      const allRawAccounts = [];
 
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Eres un experto contable español (PGC 2007). Se te proporcionan ${uploadedUrls.length} documento(s) financiero(s) de la empresa "${empresa}" para el ejercicio ${ejercicio}.
+      for (let i = 0; i < uploadedUrls.length; i++) {
+        const u = uploadedUrls[i];
+        const tipoInfo = PDF_TYPES.find(t => t.value === u.type);
+        await setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(35 + (i / uploadedUrls.length) * 45), 200);
 
-DOCUMENTOS APORTADOS:
-${tiposDoc}
+        const result = await base44.integrations.Core.InvokeLLM({
+          prompt: `Eres un experto contable español (PGC 2007). Analiza este documento financiero de la empresa "${empresa}" (ejercicio ${ejercicio}).
 
-Analiza TODOS los documentos y extrae de forma exhaustiva:
+TIPO DE DOCUMENTO: ${tipoInfo?.label || u.type}
+ARCHIVO: ${u.nombre}
 
-1. Para cada PÁGINA de cada documento:
-- documento: nombre del archivo o tipo de documento
+Extrae de forma exhaustiva:
+
+1. Para cada PÁGINA:
+- documento: "${u.nombre}"
 - pagina: número de página
 - tipo: (balance/pyg/diario/extracto_bancario/portada/no_reconocida)
 - confianza: 0-100
 - razon: breve explicación
 - cuentas_detectadas: número estimado
 
-2. Para cada CUENTA/SUBCUENTA/PARTIDA encontrada en TODOS los documentos:
-- documento: nombre del archivo o tipo de documento origen
-- pagina: número de página
-- bloque: sección (ej: "Activo No Corriente", "Gastos de personal", "Ingresos de explotación", etc.)
-- cuenta: código contable PGC (ej: "211000", "640000"). Si no hay código, dejar vacío.
-- descripcion: nombre/descripción de la partida tal como aparece en el documento
-- importe_actual: importe del ejercicio actual como número. FORMATO ESPAÑOL: punto=miles, coma=decimal. "1.234,56" → 1234.56. "(1.234,56)" → -1234.56.
-- importe_anterior: importe ejercicio anterior si existe, mismo formato
-- signo: "+" o "-" según naturaleza contable
-- confianza: fiabilidad de lectura 0-100
+2. Para cada CUENTA/SUBCUENTA/PARTIDA:
+- documento: "${u.nombre}"
+- pagina: número
+- bloque: sección contable (ej: "Activo No Corriente", "Gastos de personal", etc.)
+- cuenta: código PGC (ej: "211000"). Vacío si no aparece.
+- descripcion: nombre de la partida
+- importe_actual: número. FORMATO ESPAÑOL: punto=miles, coma=decimal. "1.234,56" → 1234.56
+- importe_anterior: si existe año anterior
+- signo: "+" o "-"
+- confianza: 0-100
 
-REGLAS CRÍTICAS:
-- Extrae ABSOLUTAMENTE TODAS las subcuentas y partidas de TODOS los documentos, no solo epígrafes o totales.
-- NO inventes importes. Si no puedes leer un número con seguridad, pon null.
-- El formato numérico es ESPAÑOL: PUNTO separa miles, COMA separa decimales.
-- Si hay datos comparativos (ejercicio anterior), extráelos en importe_anterior.
-- Si un documento es extracto bancario, extrae cada movimiento como una fila con la fecha y concepto.
-- Si hay balance de dos ejercicios, extrae ambos años correctamente.
-- Integra información de todos los documentos de forma coherente.`,
-        file_urls: uploadedUrls.map(u => u.url),
-        response_json_schema: schema,
-        model: 'claude_sonnet_4_6',
-      });
+REGLAS: Extrae TODAS las subcuentas, no solo totales. NO inventes importes. Formato numérico español.`,
+          file_urls: [u.url],
+          response_json_schema: schema,
+          model: 'claude_sonnet_4_6',
+        });
 
-      await setMsg('Clasificando por grupo contable PGC…', 80, 300);
+        if (result?.paginas) allPages.push(...result.paginas);
+        if (result?.cuentas) allRawAccounts.push(...result.cuentas);
+      }
 
-      const rawPages = result?.paginas || [];
-      const rawAccounts = result?.cuentas || [];
+      await setMsg('Fusionando y clasificando cuentas…', 82, 300);
+
+      const rawPages = allPages;
+      const rawAccounts = allRawAccounts;
 
       if (rawAccounts.length === 0) {
         setError('No se han podido extraer cuentas de los PDFs. Comprueba que los archivos son documentos contables legibles.');
