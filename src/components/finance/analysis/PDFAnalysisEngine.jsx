@@ -115,7 +115,7 @@ function EditableCell({ value, onSave, type = 'text' }) {
 
 export default function PDFAnalysisEngine({ importType, companyId, company, onComplete, onCancel }) {
   const [step, setStep] = useState(0);
-  const [pdfFiles, setPdfFiles] = useState([]); // [{file, type, label}]
+  const [pdfFiles, setPdfFiles] = useState([]);
   const [empresa, setEmpresa] = useState(company?.nombre_comercial || '');
   const [ejercicio, setEjercicio] = useState('2024');
   const [nota, setNota] = useState('');
@@ -130,11 +130,19 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
   const [error, setError] = useState('');
   const fileRef = useRef();
   const [pendingFileType, setPendingFileType] = useState('balance_situacion');
+  const cancelledRef = useRef(false);
 
-  const setMsg = async (msg, progress, ms = 400) => {
+  const setMsg = (msg, progress) => {
     setLoadingMsg(msg);
     setLoadingProgress(progress);
-    await new Promise(r => setTimeout(r, ms));
+  };
+
+  const handleCancel = () => {
+    cancelledRef.current = true;
+    setLoading(false);
+    setLoadingProgress(0);
+    setLoadingMsg('');
+    setError('Análisis cancelado por el usuario.');
   };
 
   const addFile = (file) => {
@@ -147,20 +155,20 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
 
   const runExtraction = async () => {
     if (pdfFiles.length === 0) { setError('Añade al menos un PDF para analizar.'); return; }
+    cancelledRef.current = false;
     setLoading(true);
     setError('');
 
     try {
       // Upload all PDFs
-      await setMsg(`Subiendo ${pdfFiles.length} PDF(s)…`, 5, 300);
+      setMsg(`Subiendo ${pdfFiles.length} PDF(s)…`, 5);
       const uploadedUrls = [];
       for (let i = 0; i < pdfFiles.length; i++) {
-        await setMsg(`Subiendo PDF ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].file.name}…`, Math.round(5 + (i / pdfFiles.length) * 25), 200);
+        if (cancelledRef.current) return;
+        setMsg(`Subiendo ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].file.name}…`, Math.round(5 + (i / pdfFiles.length) * 20));
         const { file_url } = await base44.integrations.Core.UploadFile({ file: pdfFiles[i].file });
         uploadedUrls.push({ url: file_url, type: pdfFiles[i].type, nombre: pdfFiles[i].file.name });
       }
-
-      await setMsg(`Analizando ${uploadedUrls.length} documento(s) uno a uno…`, 35, 300);
 
       const schema = {
         type: 'object',
@@ -199,14 +207,15 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         },
       };
 
-      // Analizar cada PDF individualmente para evitar límite de contexto
+      // Analizar cada PDF individualmente (evita límite de tokens)
       const allPages = [];
       const allRawAccounts = [];
 
       for (let i = 0; i < uploadedUrls.length; i++) {
+        if (cancelledRef.current) return;
         const u = uploadedUrls[i];
         const tipoInfo = PDF_TYPES.find(t => t.value === u.type);
-        await setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(35 + (i / uploadedUrls.length) * 45), 200);
+        setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(28 + (i / uploadedUrls.length) * 60));
 
         const result = await base44.integrations.Core.InvokeLLM({
           prompt: `Eres un experto contable español (PGC 2007). Analiza este documento financiero de la empresa "${empresa}" (ejercicio ${ejercicio}).
@@ -214,49 +223,30 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
 TIPO DE DOCUMENTO: ${tipoInfo?.label || u.type}
 ARCHIVO: ${u.nombre}
 
-Extrae de forma exhaustiva:
+Extrae:
+1. PÁGINAS: documento, pagina, tipo (balance/pyg/diario/extracto_bancario/no_reconocida), confianza, razon, cuentas_detectadas.
+2. CUENTAS: documento, pagina, bloque, cuenta (código PGC), descripcion, importe_actual (número, formato español: punto=miles coma=decimal), importe_anterior, signo, confianza.
 
-1. Para cada PÁGINA:
-- documento: "${u.nombre}"
-- pagina: número de página
-- tipo: (balance/pyg/diario/extracto_bancario/portada/no_reconocida)
-- confianza: 0-100
-- razon: breve explicación
-- cuentas_detectadas: número estimado
-
-2. Para cada CUENTA/SUBCUENTA/PARTIDA:
-- documento: "${u.nombre}"
-- pagina: número
-- bloque: sección contable (ej: "Activo No Corriente", "Gastos de personal", etc.)
-- cuenta: código PGC (ej: "211000"). Vacío si no aparece.
-- descripcion: nombre de la partida
-- importe_actual: número. FORMATO ESPAÑOL: punto=miles, coma=decimal. "1.234,56" → 1234.56
-- importe_anterior: si existe año anterior
-- signo: "+" o "-"
-- confianza: 0-100
-
-REGLAS: Extrae TODAS las subcuentas, no solo totales. NO inventes importes. Formato numérico español.`,
+REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234,56" → 1234.56`,
           file_urls: [u.url],
           response_json_schema: schema,
-          model: 'claude_sonnet_4_6',
+          model: 'gemini_3_flash',
         });
 
         if (result?.paginas) allPages.push(...result.paginas);
         if (result?.cuentas) allRawAccounts.push(...result.cuentas);
       }
 
-      await setMsg('Fusionando y clasificando cuentas…', 82, 300);
+      if (cancelledRef.current) return;
+      setMsg('Clasificando cuentas PGC…', 92);
 
-      const rawPages = allPages;
-      const rawAccounts = allRawAccounts;
-
-      if (rawAccounts.length === 0) {
+      if (allRawAccounts.length === 0) {
         setError('No se han podido extraer cuentas de los PDFs. Comprueba que los archivos son documentos contables legibles.');
         setLoading(false);
         return;
       }
 
-      const processedPages = rawPages.map((p, i) => ({
+      const processedPages = allPages.map((p, i) => ({
         pagina: p.pagina || i + 1,
         documento: p.documento || '',
         tipo: p.tipo || 'no_reconocida',
@@ -265,7 +255,7 @@ REGLAS: Extrae TODAS las subcuentas, no solo totales. NO inventes importes. Form
         cuentas: p.cuentas_detectadas || 0,
       }));
 
-      const processedAccounts = rawAccounts.map((a, i) => {
+      const processedAccounts = allRawAccounts.map((a, i) => {
         const cuentaStr = String(a.cuenta || '').trim();
         const cls = classifyAccount(cuentaStr);
         const importeActual = parseSpanishAmount(a.importe_actual);
@@ -290,13 +280,12 @@ REGLAS: Extrae TODAS las subcuentas, no solo totales. NO inventes importes. Form
         };
       });
 
-      await setMsg('Procesando y construyendo tabla de cuentas…', 95, 300);
-
+      setMsg('Listo. Construyendo tabla de cuentas…', 98);
       setPages(processedPages);
       setAccounts(processedAccounts);
       setStep(1);
     } catch (e) {
-      setError(`Error al procesar los PDFs: ${e.message}`);
+      if (!cancelledRef.current) setError(`Error al procesar los PDFs: ${e.message}`);
     }
     setLoading(false);
     setLoadingProgress(0);
@@ -707,15 +696,17 @@ REGLAS: Extrae TODAS las subcuentas, no solo totales. NO inventes importes. Form
 
       {/* Loading overlay */}
       {loading && (
-        <div className="fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4">
+        <div className="fixed inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-          <p className="text-sm font-semibold text-slate-700 text-center max-w-xs">{loadingMsg}</p>
-          {loadingProgress > 0 && (
-            <div className="w-48 bg-slate-200 rounded-full h-1.5">
-              <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${loadingProgress}%` }} />
-            </div>
-          )}
-          <p className="text-xs text-slate-400">Motor IA en curso — no cierres esta ventana</p>
+          <p className="text-sm font-semibold text-slate-700 text-center max-w-sm px-4">{loadingMsg}</p>
+          <div className="w-56 bg-slate-200 rounded-full h-2">
+            <div className="bg-blue-600 h-2 rounded-full transition-all duration-700" style={{ width: `${loadingProgress}%` }} />
+          </div>
+          <p className="text-xs text-slate-400">{loadingProgress}% completado · ~15-30s por documento</p>
+          <button onClick={handleCancel}
+            className="mt-2 px-4 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-all">
+            Cancelar análisis
+          </button>
         </div>
       )}
 
