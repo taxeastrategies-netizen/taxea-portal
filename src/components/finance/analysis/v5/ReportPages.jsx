@@ -337,8 +337,28 @@ export function PageBalance({ calc, aiContent }) {
         </div>
       </div>
 
+      {/* Narrativa automática del balance */}
+      {(() => {
+        const { totalActivo, patrimonioNeto, activoCorriente, activoNoCorriente, pasivoCorriente, pasivoNoCorriente, fondoManiobra, autonomia } = calc;
+        const partes = [];
+        if (totalActivo > 0) {
+          const pctNC = totalActivo > 0 ? activoNoCorriente / totalActivo * 100 : 0;
+          partes.push(`La estructura del activo muestra un ${fmtPct(pctNC)} de activos no corrientes y un ${fmtPct(100 - pctNC)} de activos corrientes sobre el total de ${fmtEUR(totalActivo)}.`);
+        }
+        if (patrimonioNeto > 0 && autonomia !== null) partes.push(`El patrimonio neto (${fmtEUR(patrimonioNeto)}) financia el ${fmtPct(autonomia * 100)} del activo, indicando ${autonomia >= 0.4 ? 'una estructura patrimonial sólida' : autonomia >= 0.25 ? 'una dependencia moderada de recursos ajenos' : 'una alta dependencia de recursos ajenos'}.`);
+        if (patrimonioNeto < 0) partes.push(`El patrimonio neto es negativo (${fmtEUR(patrimonioNeto)}): situación que podría constituir causa de disolución legal según el artículo 363 LSC.`);
+        if (fondoManiobra !== 0) partes.push(`El fondo de maniobra es ${fondoManiobra >= 0 ? 'positivo' : 'negativo'} (${fmtEUR(fondoManiobra)}), ${fondoManiobra >= 0 ? 'lo que indica equilibrio financiero en el corto plazo' : 'lo que puede generar tensiones de liquidez a corto plazo'}.`);
+        return partes.length > 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mt-3">
+            <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Interpretación del balance</p>
+            <p className="text-xs text-slate-700 leading-relaxed">{partes.join(' ')}</p>
+          </div>
+        ) : null;
+      })()}
+
       {aiContent?.analisis_balance && (
-        <div className="space-y-2 mt-4">
+        <div className="space-y-2 mt-3">
+          <p className="text-[10px] font-bold text-violet-500 uppercase">Análisis IA</p>
           {Object.entries({
             'Activo no corriente': aiContent.analisis_balance.activo_no_corriente,
             'Activo corriente': aiContent.analisis_balance.activo_corriente,
@@ -403,8 +423,26 @@ export function PagePyG({ calc, aiContent }) {
           </ResponsiveContainer>
         </div>
       </div>
+      {/* Narrativa automática PyG */}
+      {(() => {
+        const { ingresos, gastos, resultado, ebitda, amortizacion, personalGasto, serviciosGasto, margenNeto } = calc;
+        const partes = [];
+        if (ingresos > 0) partes.push(`Los ingresos del ejercicio ascienden a ${fmtEUR(ingresos)}.`);
+        if (gastos > 0 && ingresos > 0) partes.push(`La carga de gastos totales es de ${fmtEUR(gastos)}, representando el ${fmtPct(gastos / ingresos * 100)} de los ingresos.`);
+        if (personalGasto > 0 && ingresos > 0) partes.push(`Los gastos de personal (${fmtEUR(personalGasto)}) suponen el ${fmtPct(personalGasto / ingresos * 100)} de la cifra de negocio.`);
+        if (resultado !== 0) partes.push(`El resultado del ejercicio es ${resultado > 0 ? 'positivo' : 'negativo'} por ${fmtEUR(Math.abs(resultado))} (margen neto: ${fmtPct((margenNeto || 0) * 100)}).`);
+        if (ebitda !== 0) partes.push(`El EBITDA (resultado + amortizaciones de ${fmtEUR(amortizacion)}) se sitúa en ${fmtEUR(ebitda)}, que es la medida de generación de caja operativa más utilizada en valoración y análisis de deuda.`);
+        return partes.length > 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mt-3">
+            <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Interpretación de la PyG</p>
+            <p className="text-xs text-slate-700 leading-relaxed">{partes.join(' ')}</p>
+          </div>
+        ) : null;
+      })()}
+
       {aiContent?.analisis_pyg && (
         <div className="space-y-1.5 mt-3">
+          <p className="text-[10px] font-bold text-violet-500 uppercase">Análisis IA</p>
           {Object.entries({ Ingresos: aiContent.analisis_pyg.ingresos, Gastos: aiContent.analisis_pyg.gastos, Resultado: aiContent.analisis_pyg.resultado }).map(([k, v]) => v && (
             <div key={k}><p className="text-[10px] font-bold text-slate-600">{k}</p><p className="text-xs text-slate-600 leading-relaxed">{v}</p></div>
           ))}
@@ -417,6 +455,24 @@ export function PagePyG({ calc, aiContent }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // PÁGINA 6 — LIQUIDEZ & TESORERÍA
 // ══════════════════════════════════════════════════════════════════════════════
+function narrativaLiquidez(calc) {
+  const { ratioLiquidez, fondoManiobra, tesoreria, pruebaAcida, clientes, proveedores } = calc;
+  const partes = [];
+  if (ratioLiquidez !== null) {
+    if (ratioLiquidez >= 1.5) partes.push(`La empresa presenta una posición de liquidez corriente sólida (${fmtX(ratioLiquidez)}), con activos corrientes que cubren holgadamente las obligaciones a corto plazo. Este nivel es considerado óptimo y refleja una gestión saludable del circulante.`);
+    else if (ratioLiquidez >= 1) partes.push(`El ratio de liquidez corriente (${fmtX(ratioLiquidez)}) es positivo pero ajustado: los activos corrientes cubren el pasivo corriente con escaso margen. Cualquier deterioro en el cobro de clientes o aceleración de pagos podría generar tensiones de tesorería.`);
+    else partes.push(`El ratio de liquidez corriente (${fmtX(ratioLiquidez)}) es inferior a 1, lo que indica que el pasivo corriente supera al activo corriente. Esta situación requiere atención prioritaria: la empresa no dispone de activos líquidos suficientes para cubrir sus compromisos inmediatos con garantía.`);
+  }
+  if (fondoManiobra !== 0) {
+    if (fondoManiobra >= 0) partes.push(`El fondo de maniobra es positivo (${fmtEUR(fondoManiobra)}), lo que indica que los activos corrientes financian en parte el capital de trabajo de forma estructural.`);
+    else partes.push(`El fondo de maniobra negativo (${fmtEUR(fondoManiobra)}) señala una financiación del activo fijo con recursos a corto plazo, lo que aumenta el riesgo financiero y limita la flexibilidad operativa.`);
+  }
+  if (tesoreria > 0) partes.push(`La posición de tesorería disponible asciende a ${fmtEUR(tesoreria)} (cuentas 57x).`);
+  if (clientes > 0 && proveedores > 0) partes.push(`Los saldos de clientes (${fmtEUR(clientes)}) frente a proveedores (${fmtEUR(proveedores)}) determinan la posición neta del circulante comercial.`);
+  if (pruebaAcida !== null && pruebaAcida < ratioLiquidez * 0.7) partes.push(`La prueba ácida (${fmtX(pruebaAcida)}) muestra una diferencia significativa respecto al ratio corriente, indicando un peso relevante de existencias en el activo corriente.`);
+  return partes.join(' ');
+}
+
 export function PageLiquidez({ calc }) {
   const { ratioLiquidez, pruebaAcida, liquidezInmediata, fondoManiobra, tesoreria, hasBalance } = calc;
   if (!hasBalance) return (
@@ -429,15 +485,23 @@ export function PageLiquidez({ calc }) {
   const s1 = ratioLiquidez === null ? 'gris' : ratioLiquidez >= 1.5 ? 'verde' : ratioLiquidez >= 1 ? 'ambar' : 'rojo';
   const s2 = pruebaAcida === null ? 'gris' : pruebaAcida >= 1 ? 'verde' : pruebaAcida >= 0.7 ? 'ambar' : 'rojo';
   const s3 = liquidezInmediata === null ? 'gris' : liquidezInmediata >= 0.3 ? 'verde' : liquidezInmediata >= 0.15 ? 'ambar' : 'rojo';
+  const narrativa = narrativaLiquidez(calc);
 
   return (
     <A4Page id="page-liquidez">
       <PageHeader n="06" title="Liquidez, tesorería y runway" empresa={calc.empresa} ejercicio={calc.ejercicio} />
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Liquidez corriente" formula="Activo C / Pasivo C" valor={fmtX(ratioLiquidez)} semColor={s1} refValue="≥ 1,5" interpretacion={`Mide la capacidad de cubrir obligaciones CP con activos corrientes. Valor de ${fmtX(ratioLiquidez)}: ${s1 === 'verde' ? 'favorable' : s1 === 'ambar' ? 'ajustado' : 'bajo, revisar'}.`} />
-        <RatioCard nombre="Prueba ácida" formula="(Activo C − Exist.) / Pasivo C" valor={fmtX(pruebaAcida)} semColor={s2} refValue="≥ 1,0" interpretacion="Excluye existencias. Mayor exigencia que la liquidez corriente." />
-        <RatioCard nombre="Liquidez inmediata" formula="Tesorería / Pasivo C" valor={fmtX(liquidezInmediata)} semColor={s3} refValue="≥ 0,2" interpretacion="Cobertura con caja disponible sobre deudas a corto." />
+        <RatioCard nombre="Liquidez corriente" formula="Activo C / Pasivo C" valor={fmtX(ratioLiquidez)} semColor={s1} refValue="≥ 1,5" interpretacion={ratioLiquidez >= 1.5 ? 'Nivel óptimo. Activo corriente cubre ampliamente el pasivo corriente.' : ratioLiquidez >= 1 ? 'Nivel ajustado. Cubre el pasivo corriente pero con margen reducido.' : 'Nivel crítico. El pasivo corriente supera el activo corriente.'} />
+        <RatioCard nombre="Prueba ácida" formula="(Activo C − Exist.) / Pasivo C" valor={fmtX(pruebaAcida)} semColor={s2} refValue="≥ 1,0" interpretacion={pruebaAcida >= 1 ? 'Posición solvente excluyendo existencias.' : pruebaAcida >= 0.7 ? 'Cobertura ajustada sin existencias. Monitorizar.' : 'Insuficiente sin existencias. Riesgo de liquidez.'} />
+        <RatioCard nombre="Liquidez inmediata" formula="Tesorería / Pasivo C" valor={fmtX(liquidezInmediata)} semColor={s3} refValue="≥ 0,2" interpretacion={liquidezInmediata >= 0.3 ? 'Caja suficiente para cobertura inmediata de obligaciones.' : liquidezInmediata >= 0.15 ? 'Cobertura de caja ajustada. Vigilar vencimientos.' : 'Caja insuficiente para cobertura inmediata del pasivo corriente.'} />
       </div>
+
+      {narrativa && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-4">
+          <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Diagnóstico de liquidez</p>
+          <p className="text-xs text-slate-700 leading-relaxed">{narrativa}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
@@ -472,6 +536,28 @@ export function PageLiquidez({ calc }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // PÁGINA 7 — ENDEUDAMIENTO & SOLVENCIA
 // ══════════════════════════════════════════════════════════════════════════════
+function narrativaEndeudamiento(calc) {
+  const { autonomia, endeudamiento, solvencia, deudaFinancieraTotal, deudaFinancieraNeta, deudaNetaEbitda, coberturaIntereses, patrimonioNeto, totalActivo } = calc;
+  const partes = [];
+  if (autonomia !== null) {
+    if (autonomia >= 0.5) partes.push(`La empresa presenta una sólida autonomía financiera del ${fmtPct(autonomia * 100)}: más de la mitad del activo está financiado con recursos propios, lo que otorga estabilidad y capacidad de maniobra ante dificultades.`);
+    else if (autonomia >= 0.35) partes.push(`La autonomía financiera (${fmtPct(autonomia * 100)}) se sitúa en niveles razonables. Los recursos propios financian una parte significativa del activo, aunque la dependencia de financiación ajena es considerable.`);
+    else if (autonomia >= 0.2) partes.push(`La autonomía financiera es baja (${fmtPct(autonomia * 100)}): la empresa depende mayoritariamente de financiación ajena para sostener su estructura de activos. Esto eleva el riesgo financiero y limita la capacidad de endeudamiento adicional.`);
+    else partes.push(`La autonomía financiera es muy reducida (${fmtPct(autonomia * 100)}). La casi totalidad del activo está financiada con recursos ajenos, lo que implica una alta dependencia de acreedores y una vulnerabilidad estructural significativa.`);
+  }
+  if (endeudamiento !== null) {
+    partes.push(`El ratio de endeudamiento (Pasivo/PN) es de ${fmtX(endeudamiento)}, ${endeudamiento < 1.5 ? 'dentro de parámetros conservadores' : endeudamiento < 2.5 ? 'en niveles moderados' : 'en niveles elevados que deben monitorizarse'}.`);
+  }
+  if (deudaFinancieraTotal > 0 && deudaNetaEbitda !== null) {
+    partes.push(`La deuda financiera neta (DFN) equivale a ${fmtX(deudaNetaEbitda)} el EBITDA. ${deudaNetaEbitda < 2 ? 'Este nivel es conservador y proporciona flexibilidad para nueva financiación.' : deudaNetaEbitda < 3.5 ? 'Nivel estándar en operaciones de deuda bancaria.' : deudaNetaEbitda < 5 ? 'Nivel que puede limitar el acceso a nueva financiación.' : 'Nivel elevado que requiere un plan activo de desapalancamiento.'}`);
+  }
+  if (coberturaIntereses !== null) {
+    partes.push(`La cobertura de intereses (EBITDA/Gasto financiero) es de ${fmtX(coberturaIntereses)}, ${coberturaIntereses > 5 ? 'muy holgada' : coberturaIntereses > 3 ? 'razonable' : 'ajustada, lo que puede limitar la generación de caja libre'}.`);
+  }
+  if (deudaFinancieraTotal === 0) partes.push('No se identifican cuentas de deuda financiera bancaria (17x/52x) en la documentación aportada.');
+  return partes.join(' ');
+}
+
 export function PageEndeudamiento({ calc }) {
   if (!calc.hasBalance) return (
     <A4Page id="page-deuda">
@@ -479,14 +565,22 @@ export function PageEndeudamiento({ calc }) {
       <LimitNote>No calculable sin balance de situación.</LimitNote>
     </A4Page>
   );
+  const narrativa = narrativaEndeudamiento(calc);
   return (
     <A4Page id="page-deuda">
       <PageHeader n="07" title="Endeudamiento y solvencia" empresa={calc.empresa} ejercicio={calc.ejercicio} />
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Autonomía financiera" formula="PN / Total Activo" valor={fmtPct((calc.autonomia || 0) * 100)} semColor={calc.autonomia >= 0.35 ? 'verde' : calc.autonomia >= 0.2 ? 'ambar' : 'rojo'} refValue="≥ 35%" interpretacion={`Peso de recursos propios sobre activo total. ${calc.autonomia >= 0.35 ? 'Estructura patrimonial sólida.' : 'Dependencia financiera elevada.'}`} />
-        <RatioCard nombre="Endeudamiento total" formula="Pasivo / PN" valor={fmtX(calc.endeudamiento)} semColor={calc.endeudamiento === null ? 'gris' : calc.endeudamiento < 1.5 ? 'verde' : calc.endeudamiento < 2.5 ? 'ambar' : 'rojo'} refValue="< 2,0" interpretacion="Relación entre recursos ajenos y propios. Por encima de 2-3x se considera elevado." />
-        <RatioCard nombre="Solvencia patrimonial" formula="Total Activo / Pasivo" valor={fmtX(calc.solvencia)} semColor={calc.solvencia === null ? 'gris' : calc.solvencia >= 1.5 ? 'verde' : calc.solvencia >= 1.2 ? 'ambar' : 'rojo'} refValue="≥ 1,5" interpretacion="Capacidad de activo para cubrir todas las deudas. Por debajo de 1 existe insolvencia técnica." />
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <RatioCard nombre="Autonomía financiera" formula="PN / Total Activo" valor={fmtPct((calc.autonomia || 0) * 100)} semColor={calc.autonomia >= 0.35 ? 'verde' : calc.autonomia >= 0.2 ? 'ambar' : 'rojo'} refValue="≥ 35%" interpretacion={calc.autonomia >= 0.5 ? 'Estructura sólida. Mayoría de activos financiados con recursos propios.' : calc.autonomia >= 0.35 ? 'Estructura razonable. Dependencia moderada de financiación ajena.' : 'Alta dependencia de recursos ajenos. Riesgo estructural elevado.'} />
+        <RatioCard nombre="Endeudamiento total" formula="Pasivo / PN" valor={fmtX(calc.endeudamiento)} semColor={calc.endeudamiento === null ? 'gris' : calc.endeudamiento < 1.5 ? 'verde' : calc.endeudamiento < 2.5 ? 'ambar' : 'rojo'} refValue="< 2,0" interpretacion={calc.endeudamiento < 1.5 ? 'Endeudamiento conservador. Buena capacidad de financiación adicional.' : calc.endeudamiento < 2.5 ? 'Endeudamiento moderado. Dentro de rangos habituales del mercado.' : 'Endeudamiento elevado. Puede dificultar nueva financiación bancaria.'} />
+        <RatioCard nombre="Solvencia patrimonial" formula="Total Activo / Pasivo" valor={fmtX(calc.solvencia)} semColor={calc.solvencia === null ? 'gris' : calc.solvencia >= 1.5 ? 'verde' : calc.solvencia >= 1.2 ? 'ambar' : 'rojo'} refValue="≥ 1,5" interpretacion={calc.solvencia >= 1.5 ? 'El activo cubre con holgura todas las deudas de la empresa.' : calc.solvencia >= 1 ? 'Solvencia ajustada. Activo cubre deudas pero sin margen amplio.' : 'Insolvencia técnica: el pasivo supera el activo total.'} />
       </div>
+
+      {narrativa && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-4">
+          <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Diagnóstico de endeudamiento y solvencia</p>
+          <p className="text-xs text-slate-700 leading-relaxed">{narrativa}</p>
+        </div>
+      )}
 
       <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-4">
         <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Deuda financiera identificada (cuentas 17x / 52x)</p>
@@ -506,6 +600,26 @@ export function PageEndeudamiento({ calc }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // PÁGINA 8 — RENTABILIDAD
 // ══════════════════════════════════════════════════════════════════════════════
+function narrativaRentabilidad(calc) {
+  const { margenNeto, margenEBITDA, roa, roe, pesPersonal, pesServicios, resultado, ebitda, ingresos } = calc;
+  const partes = [];
+  if (margenNeto !== null) {
+    if (margenNeto > 0.15) partes.push(`La empresa presenta un margen neto excelente del ${fmtPct(margenNeto * 100)}: por cada euro de ingresos retiene más de ${fmtPct(margenNeto * 100)} de beneficio neto, lo que refleja una estructura de costes eficiente y una propuesta de valor con capacidad de pricing.`);
+    else if (margenNeto > 0.05) partes.push(`El margen neto (${fmtPct(margenNeto * 100)}) es positivo y razonable. La empresa genera beneficio, aunque existe margen de mejora en la optimización de la estructura de costes.`);
+    else if (margenNeto > 0) partes.push(`El margen neto es positivo pero muy ajustado (${fmtPct(margenNeto * 100)}). Pequeñas variaciones en ingresos o costes pueden llevar el resultado a territorio negativo.`);
+    else partes.push(`El margen neto es negativo (${fmtPct(margenNeto * 100)}), lo que indica que los gastos totales superan los ingresos generados en el ejercicio analizado. Es prioritario identificar las partidas de coste con mayor impacto y revisar el modelo de negocio.`);
+  }
+  if (margenEBITDA !== null) {
+    partes.push(`El margen EBITDA es del ${fmtPct(margenEBITDA * 100)} (EBITDA: ${fmtEUR(ebitda)}), que representa la generación de caja operativa antes de amortizaciones, intereses e impuestos.`);
+  }
+  if (roa !== null) partes.push(`El ROA (${fmtPct(roa * 100)}) indica la rentabilidad que la empresa obtiene sobre sus activos totales.`);
+  if (roe !== null) partes.push(`El ROE (${fmtPct(roe * 100)}) refleja el retorno generado sobre los fondos propios invertidos por los accionistas.`);
+  if (pesPersonal !== null) {
+    partes.push(`El gasto de personal representa el ${fmtPct(pesPersonal * 100)} de los ingresos, ${pesPersonal < 0.35 ? 'dentro de parámetros eficientes' : pesPersonal < 0.5 ? 'en niveles que merecen seguimiento' : 'un nivel elevado que presiona significativamente la rentabilidad'}.`);
+  }
+  return partes.join(' ');
+}
+
 export function PageRentabilidad({ calc }) {
   if (!calc.hasPyG) return (
     <A4Page id="page-rentabilidad">
@@ -513,17 +627,24 @@ export function PageRentabilidad({ calc }) {
       <LimitNote>Ratios de rentabilidad no calculables: falta cuenta de PyG.</LimitNote>
     </A4Page>
   );
+  const narrativa = narrativaRentabilidad(calc);
   return (
     <A4Page id="page-rentabilidad">
       <PageHeader n="08" title="Rentabilidad y eficiencia" empresa={calc.empresa} ejercicio={calc.ejercicio} />
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Margen neto" formula="Resultado / Ingresos" valor={fmtPct((calc.margenNeto || 0) * 100)} semColor={calc.resultado > 0 ? 'verde' : 'rojo'} refValue="> 0%" interpretacion={`Porcentaje de beneficio sobre ingresos. ${calc.resultado > 0 ? 'Resultado positivo.' : 'Resultado negativo: revisar costes.'}`} />
-        <RatioCard nombre="Margen EBITDA" formula="EBITDA / Ingresos" valor={fmtPct((calc.margenEBITDA || 0) * 100)} semColor={calc.ebitda > 0 ? 'verde' : 'rojo'} refValue="> 10%" interpretacion="Generación de caja operativa sobre ingresos. Referencia sectorial variable." />
-        <RatioCard nombre="ROA" formula="Resultado / Total Activo" valor={fmtPct((calc.roa || 0) * 100)} semColor={calc.roa === null ? 'gris' : calc.roa > 0.05 ? 'verde' : calc.roa > 0 ? 'ambar' : 'rojo'} refValue="> 5%" interpretacion="Rentabilidad sobre activos totales. Mide eficiencia en el uso de los activos." />
-        <RatioCard nombre="ROE" formula="Resultado / PN" valor={fmtPct((calc.roe || 0) * 100)} semColor={calc.roe === null ? 'gris' : calc.roe > 0.1 ? 'verde' : calc.roe > 0 ? 'ambar' : 'rojo'} refValue="> 10%" interpretacion="Rentabilidad sobre recursos propios. Retorno que obtienen los socios." />
-        <RatioCard nombre="Peso personal / ingresos" formula="Gasto personal / Ingresos" valor={fmtPct((calc.pesPersonal || 0) * 100)} semColor={calc.pesPersonal === null ? 'gris' : calc.pesPersonal < 0.35 ? 'verde' : calc.pesPersonal < 0.5 ? 'ambar' : 'rojo'} refValue="< 35-40%" interpretacion="Proporción del coste de personal sobre ingresos. Por encima del 50% puede comprometer la rentabilidad." />
-        <RatioCard nombre="Peso servicios / ingresos" formula="Serv. exteriores / Ingresos" valor={fmtPct((calc.pesServicios || 0) * 100)} semColor={calc.pesServicios === null ? 'gris' : calc.pesServicios < 0.3 ? 'verde' : calc.pesServicios < 0.45 ? 'ambar' : 'rojo'} refValue="< 30%" interpretacion="Peso de servicios exteriores (62x) sobre ingresos." />
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <RatioCard nombre="Margen neto" formula="Resultado / Ingresos" valor={fmtPct((calc.margenNeto || 0) * 100)} semColor={calc.resultado > 0 ? 'verde' : 'rojo'} refValue="> 0%" interpretacion={calc.resultado > 0 ? `Resultado positivo: ${fmtEUR(calc.resultado)} de beneficio neto en el ejercicio.` : `Resultado negativo: ${fmtEUR(calc.resultado)}. La empresa consume más recursos de los que genera.`} />
+        <RatioCard nombre="Margen EBITDA" formula="EBITDA / Ingresos" valor={fmtPct((calc.margenEBITDA || 0) * 100)} semColor={calc.ebitda > 0 ? 'verde' : 'rojo'} refValue="> 10%" interpretacion={calc.ebitda > 0 ? `EBITDA positivo (${fmtEUR(calc.ebitda)}): la operación genera caja antes de amortizaciones e intereses.` : `EBITDA negativo: la operación no genera caja suficiente. Revisión urgente.`} />
+        <RatioCard nombre="ROA" formula="Resultado / Total Activo" valor={fmtPct((calc.roa || 0) * 100)} semColor={calc.roa === null ? 'gris' : calc.roa > 0.05 ? 'verde' : calc.roa > 0 ? 'ambar' : 'rojo'} refValue="> 5%" interpretacion={calc.roa > 0.08 ? 'Buena eficiencia en el uso de activos.' : calc.roa > 0 ? 'Rentabilidad sobre activos positiva pero mejorable.' : 'Activos no generan retorno positivo en el ejercicio.'} />
+        <RatioCard nombre="ROE" formula="Resultado / PN" valor={fmtPct((calc.roe || 0) * 100)} semColor={calc.roe === null ? 'gris' : calc.roe > 0.1 ? 'verde' : calc.roe > 0 ? 'ambar' : 'rojo'} refValue="> 10%" interpretacion={calc.roe > 0.15 ? 'Retorno sobre equity atractivo para accionistas.' : calc.roe > 0 ? 'Rentabilidad sobre fondos propios positiva pero por debajo del 10% de referencia.' : 'Fondos propios generan pérdidas en el ejercicio.'} />
+        <RatioCard nombre="Peso personal / ingresos" formula="Gasto personal / Ingresos" valor={fmtPct((calc.pesPersonal || 0) * 100)} semColor={calc.pesPersonal === null ? 'gris' : calc.pesPersonal < 0.35 ? 'verde' : calc.pesPersonal < 0.5 ? 'ambar' : 'rojo'} refValue="< 35-40%" interpretacion={calc.pesPersonal < 0.35 ? 'Estructura salarial eficiente respecto a ingresos.' : calc.pesPersonal < 0.5 ? 'Coste de personal significativo. Monitorizar productividad.' : 'Coste de personal muy elevado. Impacto directo en rentabilidad.'} />
+        <RatioCard nombre="Peso servicios / ingresos" formula="Serv. exteriores / Ingresos" valor={fmtPct((calc.pesServicios || 0) * 100)} semColor={calc.pesServicios === null ? 'gris' : calc.pesServicios < 0.3 ? 'verde' : calc.pesServicios < 0.45 ? 'ambar' : 'rojo'} refValue="< 30%" interpretacion={calc.pesServicios < 0.3 ? 'Gasto en servicios exteriores bajo control.' : 'Servicios exteriores representan una parte relevante del coste. Revisar externalización.'} />
       </div>
+      {narrativa && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Diagnóstico de rentabilidad</p>
+          <p className="text-xs text-slate-700 leading-relaxed">{narrativa}</p>
+        </div>
+      )}
     </A4Page>
   );
 }

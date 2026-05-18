@@ -1,6 +1,6 @@
 /**
- * PDFAnalysisEngine — Motor de análisis PDF cuenta a cuenta V4
- * Pipeline: Subida → Análisis páginas → Tabla cuentas → Revisión → Confirmar
+ * PDFAnalysisEngine — Motor de análisis PDF cuenta a cuenta V5
+ * Soporta múltiples PDFs de distintos tipos en el mismo análisis
  */
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import {
   ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle,
-  FileText, X, Info, Loader2, Eye, Pencil, Save, Filter, Shield
+  FileText, X, Info, Loader2, Eye, Pencil, Save, Filter, Shield, Plus, Trash2
 } from 'lucide-react';
 
 // ─── PGC classifier ───────────────────────────────────────────────────────────
@@ -51,7 +51,6 @@ function classifyAccount(cuenta) {
   return { masa: 'sin_clasificar', tipo: 'otro' };
 }
 
-// Formato español: punto=miles, coma=decimal
 function parseSpanishAmount(raw) {
   if (raw === null || raw === undefined || raw === '') return null;
   if (typeof raw === 'number') return raw;
@@ -72,14 +71,23 @@ const fmt = n => typeof n === 'number'
   ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
   : '—';
 
-const STEPS = ['Subir PDF', 'Análisis páginas', 'Tabla de cuentas', 'Revisión', 'Confirmar'];
+const PDF_TYPES = [
+  { value: 'balance_situacion', label: 'Balance de situación', emoji: '📊', desc: 'Activo, Pasivo y Patrimonio Neto' },
+  { value: 'pyg', label: 'Cuenta de Pérdidas y Ganancias', emoji: '📈', desc: 'Ingresos y gastos del ejercicio' },
+  { value: 'balance_comparativo', label: 'Balance comparativo (2 ejercicios)', emoji: '📋', desc: 'Balance con año anterior' },
+  { value: 'libro_diario', label: 'Libro diario / Mayor', emoji: '📒', desc: 'Asientos contables detallados' },
+  { value: 'extracto_bancario', label: 'Extracto bancario', emoji: '🏦', desc: 'Movimientos de cuenta bancaria' },
+  { value: 'cuentas_anuales', label: 'Cuentas anuales completas', emoji: '📑', desc: 'Memoria, balance y PyG' },
+  { value: 'otro', label: 'Otro documento', emoji: '📄', desc: 'Cualquier documento financiero' },
+];
+
+const STEPS = ['Subir PDFs', 'Análisis IA', 'Tabla de cuentas', 'Revisión', 'Confirmar'];
 const MASA_LABEL = {
   activo_no_corriente: 'Activo NC', activo_corriente: 'Activo C',
   patrimonio_neto: 'Patrimonio',   pasivo_no_corriente: 'Pasivo NC',
   pasivo_corriente: 'Pasivo C',    pyg_ingreso: 'Ingreso',
   pyg_gasto: 'Gasto',             sin_clasificar: '—', varios: 'Varios',
 };
-const METODO_LABEL = { texto_digital: 'Texto digital', ocr_alta: 'OCR alta', ocr_media: 'OCR media', ocr_baja: 'OCR baja', pdf_ia: 'PDF IA', correccion_manual: 'Corregida' };
 
 function ConfBadge({ v }) {
   const color = v >= 85 ? 'bg-emerald-50 text-emerald-700' : v >= 70 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600';
@@ -107,12 +115,13 @@ function EditableCell({ value, onSave, type = 'text' }) {
 
 export default function PDFAnalysisEngine({ importType, companyId, company, onComplete, onCancel }) {
   const [step, setStep] = useState(0);
-  const [file, setFile] = useState(null);
+  const [pdfFiles, setPdfFiles] = useState([]); // [{file, type, label}]
   const [empresa, setEmpresa] = useState(company?.nombre_comercial || '');
   const [ejercicio, setEjercicio] = useState('2024');
   const [nota, setNota] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [pages, setPages] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [filterMasa, setFilterMasa] = useState('all');
@@ -120,17 +129,43 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
   const [approvalMode, setApprovalMode] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef();
+  const [pendingFileType, setPendingFileType] = useState('balance_situacion');
 
-  const setMsg = async (msg, ms = 600) => { setLoadingMsg(msg); await new Promise(r => setTimeout(r, ms)); };
+  const setMsg = async (msg, progress, ms = 400) => {
+    setLoadingMsg(msg);
+    setLoadingProgress(progress);
+    await new Promise(r => setTimeout(r, ms));
+  };
+
+  const addFile = (file) => {
+    setPdfFiles(prev => [...prev, { file, type: pendingFileType, id: Date.now() }]);
+    setError('');
+  };
+
+  const removeFile = (id) => setPdfFiles(prev => prev.filter(f => f.id !== id));
+  const updateFileType = (id, type) => setPdfFiles(prev => prev.map(f => f.id === id ? { ...f, type } : f));
 
   const runExtraction = async () => {
+    if (pdfFiles.length === 0) { setError('Añade al menos un PDF para analizar.'); return; }
     setLoading(true);
     setError('');
-    try {
-      await setMsg('Subiendo PDF…', 400);
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-      await setMsg('Analizando estructura del PDF con IA…', 600);
+    try {
+      // Upload all PDFs
+      await setMsg(`Subiendo ${pdfFiles.length} PDF(s)…`, 5, 300);
+      const uploadedUrls = [];
+      for (let i = 0; i < pdfFiles.length; i++) {
+        await setMsg(`Subiendo PDF ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].file.name}…`, Math.round(5 + (i / pdfFiles.length) * 25), 200);
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: pdfFiles[i].file });
+        uploadedUrls.push({ url: file_url, type: pdfFiles[i].type, nombre: pdfFiles[i].file.name });
+      }
+
+      await setMsg('Analizando todos los documentos con IA (puede tardar 30-60s)…', 35, 500);
+
+      const tiposDoc = uploadedUrls.map(u => {
+        const tipo = PDF_TYPES.find(t => t.value === u.type);
+        return `${u.nombre} → tipo: ${tipo?.label || u.type}`;
+      }).join('\n');
 
       const schema = {
         type: 'object',
@@ -140,11 +175,11 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
             items: {
               type: 'object',
               properties: {
+                documento: { type: 'string' },
                 pagina: { type: 'number' },
                 tipo: { type: 'string' },
                 confianza: { type: 'number' },
                 razon: { type: 'string' },
-                tablas: { type: 'number' },
                 cuentas_detectadas: { type: 'number' },
               },
             },
@@ -154,6 +189,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
             items: {
               type: 'object',
               properties: {
+                documento: { type: 'string' },
                 pagina: { type: 'number' },
                 bloque: { type: 'string' },
                 cuenta: { type: 'string' },
@@ -168,56 +204,68 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         },
       };
 
-      await setMsg('Extrayendo cuentas y subcuentas página a página…', 800);
+      await setMsg('Extrayendo cuentas, subcuentas e importes…', 50, 300);
 
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Eres un experto contable español (PGC). Analiza este PDF contable COMPLETO y extrae:
+        prompt: `Eres un experto contable español (PGC 2007). Se te proporcionan ${uploadedUrls.length} documento(s) financiero(s) de la empresa "${empresa}" para el ejercicio ${ejercicio}.
 
-1. Para cada PÁGINA: tipo (balance/pyg/diario/portada/no_reconocida), confianza (0-100), razón, número de tablas, cuentas detectadas.
+DOCUMENTOS APORTADOS:
+${tiposDoc}
 
-2. Para cada CUENTA/SUBCUENTA encontrada en el documento:
-- pagina: número de página donde aparece
-- bloque: sección (ej: "Activo No Corriente", "Gastos de personal", etc.)
-- cuenta: código contable (ej: "211000", "640000"). Si no hay código visible, dejar vacío.
-- descripcion: nombre/descripción de la partida
+Analiza TODOS los documentos y extrae de forma exhaustiva:
+
+1. Para cada PÁGINA de cada documento:
+- documento: nombre del archivo o tipo de documento
+- pagina: número de página
+- tipo: (balance/pyg/diario/extracto_bancario/portada/no_reconocida)
+- confianza: 0-100
+- razon: breve explicación
+- cuentas_detectadas: número estimado
+
+2. Para cada CUENTA/SUBCUENTA/PARTIDA encontrada en TODOS los documentos:
+- documento: nombre del archivo o tipo de documento origen
+- pagina: número de página
+- bloque: sección (ej: "Activo No Corriente", "Gastos de personal", "Ingresos de explotación", etc.)
+- cuenta: código contable PGC (ej: "211000", "640000"). Si no hay código, dejar vacío.
+- descripcion: nombre/descripción de la partida tal como aparece en el documento
 - importe_actual: importe del ejercicio actual como número. FORMATO ESPAÑOL: punto=miles, coma=decimal. "1.234,56" → 1234.56. "(1.234,56)" → -1234.56.
 - importe_anterior: importe ejercicio anterior si existe, mismo formato
 - signo: "+" o "-" según naturaleza contable
-- confianza: fiabilidad de lectura (0-100)
+- confianza: fiabilidad de lectura 0-100
 
 REGLAS CRÍTICAS:
-- Extrae TODAS las subcuentas, no solo los totales o epígrafes.
+- Extrae ABSOLUTAMENTE TODAS las subcuentas y partidas de TODOS los documentos, no solo epígrafes o totales.
 - NO inventes importes. Si no puedes leer un número con seguridad, pon null.
 - El formato numérico es ESPAÑOL: PUNTO separa miles, COMA separa decimales.
-- Incluye TODAS las páginas del documento.
-- Si una partida tiene descripción pero no código de cuenta, incluirla igualmente con cuenta vacía.`,
-        file_urls: [file_url],
+- Si hay datos comparativos (ejercicio anterior), extráelos en importe_anterior.
+- Si un documento es extracto bancario, extrae cada movimiento como una fila con la fecha y concepto.
+- Si hay balance de dos ejercicios, extrae ambos años correctamente.
+- Integra información de todos los documentos de forma coherente.`,
+        file_urls: uploadedUrls.map(u => u.url),
         response_json_schema: schema,
+        model: 'claude_sonnet_4_6',
       });
 
-      await setMsg('Clasificando por grupo contable PGC…', 400);
+      await setMsg('Clasificando por grupo contable PGC…', 80, 300);
 
       const rawPages = result?.paginas || [];
       const rawAccounts = result?.cuentas || [];
 
       if (rawAccounts.length === 0) {
-        setError('No se han podido extraer cuentas del PDF. Comprueba que el archivo es un documento contable legible.');
+        setError('No se han podido extraer cuentas de los PDFs. Comprueba que los archivos son documentos contables legibles.');
         setLoading(false);
         return;
       }
 
-      // Process pages
       const processedPages = rawPages.map((p, i) => ({
         pagina: p.pagina || i + 1,
+        documento: p.documento || '',
         tipo: p.tipo || 'no_reconocida',
         confianza: p.confianza || 80,
         razon: p.razon || 'Detectada por IA',
-        tablas: p.tablas || 1,
         cuentas: p.cuentas_detectadas || 0,
-        importes: p.cuentas_detectadas || 0,
       }));
 
-      // Process accounts
       const processedAccounts = rawAccounts.map((a, i) => {
         const cuentaStr = String(a.cuenta || '').trim();
         const cls = classifyAccount(cuentaStr);
@@ -227,6 +275,7 @@ REGLAS CRÍTICAS:
         return {
           id: `pdf_${i}`,
           pagina: a.pagina || 1,
+          documento: a.documento || '',
           bloque: a.bloque || 'Sin clasificar',
           cuenta: cuentaStr,
           descripcion: String(a.descripcion || '').trim(),
@@ -242,13 +291,16 @@ REGLAS CRÍTICAS:
         };
       });
 
+      await setMsg('Procesando y construyendo tabla de cuentas…', 95, 300);
+
       setPages(processedPages);
       setAccounts(processedAccounts);
       setStep(1);
     } catch (e) {
-      setError(`Error al procesar el PDF: ${e.message}`);
+      setError(`Error al procesar los PDFs: ${e.message}`);
     }
     setLoading(false);
+    setLoadingProgress(0);
   };
 
   const updateAccount = (id, field, value) => {
@@ -256,7 +308,7 @@ REGLAS CRÍTICAS:
   };
 
   const toggleExclude = (id) => {
-    setAccounts(prev => prev.map(a => a.id === id ? { ...a, excluida: !a.excluida, estado: a.excluida ? 'extraida' : 'excluida' } : a));
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, excluida: !a.excluida } : a));
   };
 
   const validateAccount = (id) => {
@@ -278,7 +330,6 @@ REGLAS CRÍTICAS:
     ? Math.round(validAccounts.reduce((s, a) => s + a.confianza, 0) / validAccounts.length)
     : 0;
 
-  // Build balance & PyG from accounts
   const buildMetrics = () => {
     const sum = (masa) => validAccounts.filter(a => a.masa === masa).reduce((s, a) => s + (a.importe_actual || 0), 0);
     const ingresos = validAccounts.filter(a => a.masa === 'pyg_ingreso').reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
@@ -310,12 +361,12 @@ REGLAS CRÍTICAS:
     if (!m.balance.cuadra && m.totalActivo > 0) alerts.push({ nivel: 'critico', titulo: 'Balance descuadrado', desc: `Diferencia: ${fmt(m.balance.diferencia)}`, area: 'Balance' });
     if (lowConf > 0) alerts.push({ nivel: 'revisar', titulo: `${lowConf} cifra(s) con confianza baja`, desc: 'Revisar antes de usar el informe.', area: 'OCR' });
     if (pendingRevision > 0) alerts.push({ nivel: 'revisar', titulo: `${pendingRevision} cuenta(s) pendientes`, desc: 'No validadas por el usuario.', area: 'Revisión' });
-    alerts.push({ nivel: 'informativo', titulo: 'Cifras extraídas del PDF', desc: 'Todos los importes proceden del documento. Pendiente validación contable profesional.', area: 'General' });
+    alerts.push({ nivel: 'informativo', titulo: `${pdfFiles.length} PDF(s) analizados`, desc: pdfFiles.map(f => f.file.name).join(', '), area: 'General' });
 
     const data = {
       company_id: companyId,
-      nombre_archivo: file?.name || 'documento.pdf',
-      origen: importType || 'pdf_auto',
+      nombre_archivo: pdfFiles.map(f => f.file.name).join(' + '),
+      origen: 'pdf_auto',
       periodo_inicio: `${ejercicio}-01-01`,
       periodo_fin: `${ejercicio}-12-31`,
       empresa_nombre: empresa,
@@ -325,10 +376,11 @@ REGLAS CRÍTICAS:
       lineas_advertencia: pendingRevision,
       alertas_criticas: alerts.filter(a => a.nivel === 'critico').length,
       calidad_dato: avgConf >= 85 ? 'alta' : avgConf >= 70 ? 'media' : 'baja',
-      mapeo_columnas: { metodo: 'pdf_ia_v4', paginas: pages.length, cuentas: accounts.length },
+      mapeo_columnas: { metodo: 'pdf_ia_v5', paginas: pages.length, cuentas: accounts.length, documentos: pdfFiles.length },
       supuestos_aplicados: [
-        `PDF analizado página a página (${pages.length} páginas)`,
-        `${accounts.length} cuentas/subcuentas extraídas por IA`,
+        `${pdfFiles.length} PDF(s) analizados: ${pdfFiles.map(f => f.file.name).join(', ')}`,
+        `Tipos de documento: ${pdfFiles.map(f => PDF_TYPES.find(t => t.value === f.type)?.label || f.type).join(', ')}`,
+        `${pages.length} páginas procesadas · ${accounts.length} cuentas extraídas`,
         `Confianza media: ${avgConf}%`,
         `${accounts.filter(a => a.estado === 'corregida').length} correcciones manuales`,
         approvalMode === 'con_advertencias' ? 'Aprobado con advertencias' : 'Datos validados por el usuario',
@@ -353,7 +405,7 @@ REGLAS CRÍTICAS:
         amortizacion: m.amortizacion,
         fondo_maniobra: m.fondo_maniobra,
         confianza_media: avgConf,
-        fuente: 'pdf_cuenta_a_cuenta',
+        fuente: 'pdf_multi_ia_v5',
         correcciones: accounts.filter(a => a.estado === 'corregida').length,
         pendientes: pendingRevision,
         alertas: alerts,
@@ -362,7 +414,7 @@ REGLAS CRÍTICAS:
         gastos_dist: [],
       },
       usuario_importa: 'usuario_actual',
-      version_mapeo: '4.0',
+      version_mapeo: '5.0',
       notas: nota,
     };
     const saved = await base44.entities.AccountingImport.create(data);
@@ -378,8 +430,8 @@ REGLAS CRÍTICAS:
         </button>
         <div className="h-4 w-px bg-slate-200" />
         <div>
-          <h2 className="text-lg font-jakarta font-bold">Motor IA — Análisis PDF cuenta a cuenta</h2>
-          <p className="text-xs text-slate-400">Extracción trazable · Revisión humana · Cero cifras inventadas</p>
+          <h2 className="text-lg font-jakarta font-bold">Motor IA — Análisis multi-PDF</h2>
+          <p className="text-xs text-slate-400">Sube todos los documentos necesarios · Extracción trazable · Cero cifras inventadas</p>
         </div>
       </div>
 
@@ -401,28 +453,58 @@ REGLAS CRÍTICAS:
         <motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }}
           className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 space-y-5">
 
-          {/* STEP 0 */}
+          {/* STEP 0 — Multi PDF upload */}
           {step === 0 && (
             <>
-              <h3 className="text-base font-bold">Sube el PDF contable</h3>
+              <h3 className="text-base font-bold">Sube todos los documentos del análisis</h3>
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                 <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700"><strong>La IA leerá tu PDF real, página a página.</strong> Extrae cada cuenta y subcuenta con importe, página origen y confianza. Formato español: punto=miles, coma=decimal.</p>
+                <p className="text-xs text-blue-700"><strong>Puedes subir tantos PDFs como necesites:</strong> Balance de situación, PyG, balance comparativo, libro diario, extractos bancarios, cuentas anuales… La IA los analiza todos de forma integrada.</p>
               </div>
-              <div onClick={() => fileRef.current?.click()} className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-all">
-                <div className="text-4xl mb-3">📄</div>
-                <p className="text-sm font-semibold text-slate-600">Arrastra o haz clic — PDF Balance / PyG / Cuentas anuales</p>
-                <p className="text-xs text-slate-400 mt-1">PDF digital o escaneado · Multipágina · Cuentas anuales</p>
-                <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { setFile(e.target.files[0]); setError(''); }} />
-              </div>
-              {file && (
-                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-                  <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0"><p className="text-sm font-semibold text-blue-800 truncate">{file.name}</p><p className="text-xs text-blue-500">{(file.size / 1024).toFixed(0)} KB</p></div>
-                  <button onClick={() => setFile(null)}><X className="w-4 h-4 text-blue-400" /></button>
+
+              {/* PDF list */}
+              {pdfFiles.length > 0 && (
+                <div className="space-y-2">
+                  {pdfFiles.map(pf => {
+                    const tipoInfo = PDF_TYPES.find(t => t.value === pf.type);
+                    return (
+                      <div key={pf.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                        <span className="text-lg flex-shrink-0">{tipoInfo?.emoji || '📄'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 truncate">{pf.file.name}</p>
+                          <select value={pf.type} onChange={e => updateFileType(pf.id, e.target.value)}
+                            className="text-[10px] text-slate-500 bg-transparent border-none focus:outline-none cursor-pointer mt-0.5">
+                            {PDF_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </div>
+                        <p className="text-[10px] text-slate-400 flex-shrink-0">{(pf.file.size / 1024).toFixed(0)} KB</p>
+                        <button onClick={() => removeFile(pf.id)}><Trash2 className="w-3.5 h-3.5 text-red-400 hover:text-red-600" /></button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
+              {/* Add PDF area */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select value={pendingFileType} onChange={e => setPendingFileType(e.target.value)}
+                    className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 flex-1 min-w-0">
+                    {PDF_TYPES.map(t => <option key={t.value} value={t.value}>{t.emoji} {t.label}</option>)}
+                  </select>
+                </div>
+                <div onClick={() => fileRef.current?.click()}
+                  className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-all">
+                  <Plus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-500">Añadir PDF</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Haz clic para seleccionar · Repite para añadir más</p>
+                  <input ref={fileRef} type="file" accept=".pdf" className="hidden"
+                    onChange={e => { if (e.target.files[0]) addFile(e.target.files[0]); e.target.value = ''; }} />
+                </div>
+              </div>
+
               {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3"><p className="text-xs font-semibold text-red-700">{error}</p></div>}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">Empresa / Cliente</label>
@@ -440,21 +522,34 @@ REGLAS CRÍTICAS:
                 <textarea value={nota} onChange={e => setNota(e.target.value)} rows={2} placeholder="Contexto, cliente, observaciones…"
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none resize-none" />
               </div>
+
+              {/* Type grid reference */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {PDF_TYPES.map(t => (
+                  <div key={t.value} className="flex items-start gap-2 bg-slate-50 rounded-xl p-2.5">
+                    <span className="text-base flex-shrink-0">{t.emoji}</span>
+                    <div>
+                      <p className="text-[10px] font-semibold text-slate-700">{t.label}</p>
+                      <p className="text-[9px] text-slate-400">{t.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
-          {/* STEP 1: Pages */}
+          {/* STEP 1: Pages summary */}
           {step === 1 && (
             <>
-              <h3 className="text-base font-bold">Análisis página por página</h3>
+              <h3 className="text-base font-bold">Resultado del análisis IA</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Páginas analizadas', value: pages.length },
+                  { label: 'Documentos analizados', value: pdfFiles.length },
+                  { label: 'Páginas procesadas', value: pages.length },
                   { label: 'Cuentas detectadas', value: accounts.length },
                   { label: 'Confianza media', value: `${avgConf}%`, warn: avgConf < 70 },
                   { label: 'Baja confianza', value: lowConf, warn: lowConf > 0 },
                   { label: 'Pendientes revisión', value: pendingRevision, warn: pendingRevision > 0 },
-                  { label: 'Correcciones', value: accounts.filter(a => a.estado === 'corregida').length },
                 ].map((k, i) => (
                   <div key={i} className={cn("border rounded-xl p-3", k.warn ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100')}>
                     <p className={cn("text-lg font-bold font-jakarta", k.warn ? 'text-amber-700' : 'text-foreground')}>{k.value}</p>
@@ -473,6 +568,7 @@ REGLAS CRÍTICAS:
                         <div className="flex items-center gap-2">
                           <span className={cn("text-xs font-bold capitalize", p.tipo === 'balance' ? 'text-blue-700' : p.tipo === 'pyg' ? 'text-emerald-700' : 'text-slate-500')}>{p.tipo}</span>
                           <ConfBadge v={p.confianza} />
+                          {p.documento && <span className="text-[9px] text-slate-400 truncate max-w-[100px]">{p.documento}</span>}
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">{p.razon}</p>
                       </div>
@@ -508,7 +604,7 @@ REGLAS CRÍTICAS:
                 <table className="text-xs w-full min-w-[700px]">
                   <thead className="bg-slate-50 sticky top-0">
                     <tr>
-                      {['Pág.','Cuenta','Descripción','Masa','Importe actual','Importe ant.','Conf.','Acc.'].map(h => (
+                      {['Doc.','Pág.','Cuenta','Descripción','Masa','Importe actual','Importe ant.','Conf.','Acc.'].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left font-semibold text-slate-600 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -519,6 +615,7 @@ REGLAS CRÍTICAS:
                         a.excluida && 'opacity-40 line-through',
                         a.confianza < 70 && 'bg-red-50/20',
                         a.estado === 'pendiente_revision' && 'bg-amber-50/20')}>
+                        <td className="px-3 py-2 text-slate-400 text-[10px] truncate max-w-[60px]">{a.documento || '—'}</td>
                         <td className="px-3 py-2 text-slate-400 font-mono">{a.pagina}</td>
                         <td className="px-3 py-2 font-mono font-semibold text-slate-800">{a.cuenta || '—'}</td>
                         <td className="px-3 py-2 max-w-36">
@@ -603,7 +700,7 @@ REGLAS CRÍTICAS:
             <div className="flex flex-col items-center py-6 text-center">
               <CheckCircle2 className="w-14 h-14 text-emerald-500 mb-3" />
               <h3 className="text-lg font-jakarta font-bold mb-2">Cuentas confirmadas</h3>
-              <p className="text-sm text-slate-500">{validAccounts.length} cuentas · confianza media {avgConf}% · {accounts.filter(a => a.estado === 'corregida').length} correcciones</p>
+              <p className="text-sm text-slate-500">{validAccounts.length} cuentas · confianza media {avgConf}% · {pdfFiles.length} PDF(s) analizados</p>
             </div>
           )}
         </motion.div>
@@ -614,6 +711,11 @@ REGLAS CRÍTICAS:
         <div className="fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
           <p className="text-sm font-semibold text-slate-700 text-center max-w-xs">{loadingMsg}</p>
+          {loadingProgress > 0 && (
+            <div className="w-48 bg-slate-200 rounded-full h-1.5">
+              <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${loadingProgress}%` }} />
+            </div>
+          )}
           <p className="text-xs text-slate-400">Motor IA en curso — no cierres esta ventana</p>
         </div>
       )}
@@ -625,9 +727,9 @@ REGLAS CRÍTICAS:
           <ChevronLeft className="w-4 h-4" /> {step === 0 ? 'Cancelar' : 'Atrás'}
         </button>
         {step === 0 && (
-          <button onClick={runExtraction} disabled={!file || loading}
+          <button onClick={runExtraction} disabled={pdfFiles.length === 0 || loading}
             className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold shadow-sm">
-            <Eye className="w-4 h-4" /> Analizar PDF <ChevronRight className="w-4 h-4" />
+            <Eye className="w-4 h-4" /> Analizar {pdfFiles.length > 0 ? `${pdfFiles.length} PDF${pdfFiles.length > 1 ? 's' : ''}` : 'PDFs'} <ChevronRight className="w-4 h-4" />
           </button>
         )}
         {step === 1 && <button onClick={() => setStep(2)} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold shadow-sm">Ver cuentas <ChevronRight className="w-4 h-4" /></button>}
