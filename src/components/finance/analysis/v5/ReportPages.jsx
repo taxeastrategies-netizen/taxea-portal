@@ -93,7 +93,7 @@ export function LimitNote({ children }) {
   );
 }
 
-export function RatioCard({ nombre, formula, valor, semColor, ref, interpretacion, limitacion }) {
+export function RatioCard({ nombre, formula, valor, semColor, refValue, interpretacion, limitacion }) {
   const bg = { verde: 'border-emerald-200 bg-emerald-50', ambar: 'border-amber-200 bg-amber-50', rojo: 'border-red-200 bg-red-50', gris: 'border-slate-200 bg-slate-50' };
   const vc = { verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700', gris: 'text-slate-500' };
   return (
@@ -104,7 +104,7 @@ export function RatioCard({ nombre, formula, valor, semColor, ref, interpretacio
       </div>
       <p className={cn('text-xl font-jakarta font-bold', vc[semColor] || vc.gris)}>{valor || '—'}</p>
       <p className="text-[10px] text-slate-400 mt-0.5">{formula}</p>
-      {ref && <p className="text-[9px] text-slate-400">Ref: {ref}</p>}
+      {refValue && <p className="text-[9px] text-slate-400">Ref: {refValue}</p>}
       {interpretacion && <p className="text-[10px] text-slate-600 mt-1.5 leading-relaxed">{interpretacion}</p>}
       {limitacion && <p className="text-[9px] text-amber-600 mt-1 italic">{limitacion}</p>}
     </div>
@@ -434,9 +434,9 @@ export function PageLiquidez({ calc }) {
     <A4Page id="page-liquidez">
       <PageHeader n="06" title="Liquidez, tesorería y runway" empresa={calc.empresa} ejercicio={calc.ejercicio} />
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Liquidez corriente" formula="Activo C / Pasivo C" valor={fmtX(ratioLiquidez)} semColor={s1} ref="≥ 1,5" interpretacion={`Mide la capacidad de cubrir obligaciones CP con activos corrientes. Valor de ${fmtX(ratioLiquidez)}: ${s1 === 'verde' ? 'favorable' : s1 === 'ambar' ? 'ajustado' : 'bajo, revisar'}.`} />
-        <RatioCard nombre="Prueba ácida" formula="(Activo C − Exist.) / Pasivo C" valor={fmtX(pruebaAcida)} semColor={s2} ref="≥ 1,0" interpretacion="Excluye existencias. Mayor exigencia que la liquidez corriente." />
-        <RatioCard nombre="Liquidez inmediata" formula="Tesorería / Pasivo C" valor={fmtX(liquidezInmediata)} semColor={s3} ref="≥ 0,2" interpretacion="Cobertura con caja disponible sobre deudas a corto." />
+        <RatioCard nombre="Liquidez corriente" formula="Activo C / Pasivo C" valor={fmtX(ratioLiquidez)} semColor={s1} refValue="≥ 1,5" interpretacion={`Mide la capacidad de cubrir obligaciones CP con activos corrientes. Valor de ${fmtX(ratioLiquidez)}: ${s1 === 'verde' ? 'favorable' : s1 === 'ambar' ? 'ajustado' : 'bajo, revisar'}.`} />
+        <RatioCard nombre="Prueba ácida" formula="(Activo C − Exist.) / Pasivo C" valor={fmtX(pruebaAcida)} semColor={s2} refValue="≥ 1,0" interpretacion="Excluye existencias. Mayor exigencia que la liquidez corriente." />
+        <RatioCard nombre="Liquidez inmediata" formula="Tesorería / Pasivo C" valor={fmtX(liquidezInmediata)} semColor={s3} refValue="≥ 0,2" interpretacion="Cobertura con caja disponible sobre deudas a corto." />
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -483,9 +483,9 @@ export function PageEndeudamiento({ calc }) {
     <A4Page id="page-deuda">
       <PageHeader n="07" title="Endeudamiento y solvencia" empresa={calc.empresa} ejercicio={calc.ejercicio} />
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Autonomía financiera" formula="PN / Total Activo" valor={fmtPct((calc.autonomia || 0) * 100)} semColor={calc.autonomia >= 0.35 ? 'verde' : calc.autonomia >= 0.2 ? 'ambar' : 'rojo'} ref="≥ 35%" interpretacion={`Peso de recursos propios sobre activo total. ${calc.autonomia >= 0.35 ? 'Estructura patrimonial sólida.' : 'Dependencia financiera elevada.'}`} />
-        <RatioCard nombre="Endeudamiento total" formula="Pasivo / PN" valor={fmtX(calc.endeudamiento)} semColor={calc.endeudamiento === null ? 'gris' : calc.endeudamiento < 1.5 ? 'verde' : calc.endeudamiento < 2.5 ? 'ambar' : 'rojo'} ref="< 2,0" interpretacion="Relación entre recursos ajenos y propios. Por encima de 2-3x se considera elevado." />
-        <RatioCard nombre="Solvencia patrimonial" formula="Total Activo / Pasivo" valor={fmtX(calc.solvencia)} semColor={calc.solvencia === null ? 'gris' : calc.solvencia >= 1.5 ? 'verde' : calc.solvencia >= 1.2 ? 'ambar' : 'rojo'} ref="≥ 1,5" interpretacion="Capacidad de activo para cubrir todas las deudas. Por debajo de 1 existe insolvencia técnica." />
+        <RatioCard nombre="Autonomía financiera" formula="PN / Total Activo" valor={fmtPct((calc.autonomia || 0) * 100)} semColor={calc.autonomia >= 0.35 ? 'verde' : calc.autonomia >= 0.2 ? 'ambar' : 'rojo'} refValue="≥ 35%" interpretacion={`Peso de recursos propios sobre activo total. ${calc.autonomia >= 0.35 ? 'Estructura patrimonial sólida.' : 'Dependencia financiera elevada.'}`} />
+        <RatioCard nombre="Endeudamiento total" formula="Pasivo / PN" valor={fmtX(calc.endeudamiento)} semColor={calc.endeudamiento === null ? 'gris' : calc.endeudamiento < 1.5 ? 'verde' : calc.endeudamiento < 2.5 ? 'ambar' : 'rojo'} refValue="< 2,0" interpretacion="Relación entre recursos ajenos y propios. Por encima de 2-3x se considera elevado." />
+        <RatioCard nombre="Solvencia patrimonial" formula="Total Activo / Pasivo" valor={fmtX(calc.solvencia)} semColor={calc.solvencia === null ? 'gris' : calc.solvencia >= 1.5 ? 'verde' : calc.solvencia >= 1.2 ? 'ambar' : 'rojo'} refValue="≥ 1,5" interpretacion="Capacidad de activo para cubrir todas las deudas. Por debajo de 1 existe insolvencia técnica." />
       </div>
 
       <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-4">
@@ -517,12 +517,12 @@ export function PageRentabilidad({ calc }) {
     <A4Page id="page-rentabilidad">
       <PageHeader n="08" title="Rentabilidad y eficiencia" empresa={calc.empresa} ejercicio={calc.ejercicio} />
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <RatioCard nombre="Margen neto" formula="Resultado / Ingresos" valor={fmtPct((calc.margenNeto || 0) * 100)} semColor={calc.resultado > 0 ? 'verde' : 'rojo'} ref="> 0%" interpretacion={`Porcentaje de beneficio sobre ingresos. ${calc.resultado > 0 ? 'Resultado positivo.' : 'Resultado negativo: revisar costes.'}`} />
-        <RatioCard nombre="Margen EBITDA" formula="EBITDA / Ingresos" valor={fmtPct((calc.margenEBITDA || 0) * 100)} semColor={calc.ebitda > 0 ? 'verde' : 'rojo'} ref="> 10%" interpretacion="Generación de caja operativa sobre ingresos. Referencia sectorial variable." />
-        <RatioCard nombre="ROA" formula="Resultado / Total Activo" valor={fmtPct((calc.roa || 0) * 100)} semColor={calc.roa === null ? 'gris' : calc.roa > 0.05 ? 'verde' : calc.roa > 0 ? 'ambar' : 'rojo'} ref="> 5%" interpretacion="Rentabilidad sobre activos totales. Mide eficiencia en el uso de los activos." />
-        <RatioCard nombre="ROE" formula="Resultado / PN" valor={fmtPct((calc.roe || 0) * 100)} semColor={calc.roe === null ? 'gris' : calc.roe > 0.1 ? 'verde' : calc.roe > 0 ? 'ambar' : 'rojo'} ref="> 10%" interpretacion="Rentabilidad sobre recursos propios. Retorno que obtienen los socios." />
-        <RatioCard nombre="Peso personal / ingresos" formula="Gasto personal / Ingresos" valor={fmtPct((calc.pesPersonal || 0) * 100)} semColor={calc.pesPersonal === null ? 'gris' : calc.pesPersonal < 0.35 ? 'verde' : calc.pesPersonal < 0.5 ? 'ambar' : 'rojo'} ref="< 35-40%" interpretacion="Proporción del coste de personal sobre ingresos. Por encima del 50% puede comprometer la rentabilidad." />
-        <RatioCard nombre="Peso servicios / ingresos" formula="Serv. exteriores / Ingresos" valor={fmtPct((calc.pesServicios || 0) * 100)} semColor={calc.pesServicios === null ? 'gris' : calc.pesServicios < 0.3 ? 'verde' : calc.pesServicios < 0.45 ? 'ambar' : 'rojo'} ref="< 30%" interpretacion="Peso de servicios exteriores (62x) sobre ingresos." />
+        <RatioCard nombre="Margen neto" formula="Resultado / Ingresos" valor={fmtPct((calc.margenNeto || 0) * 100)} semColor={calc.resultado > 0 ? 'verde' : 'rojo'} refValue="> 0%" interpretacion={`Porcentaje de beneficio sobre ingresos. ${calc.resultado > 0 ? 'Resultado positivo.' : 'Resultado negativo: revisar costes.'}`} />
+        <RatioCard nombre="Margen EBITDA" formula="EBITDA / Ingresos" valor={fmtPct((calc.margenEBITDA || 0) * 100)} semColor={calc.ebitda > 0 ? 'verde' : 'rojo'} refValue="> 10%" interpretacion="Generación de caja operativa sobre ingresos. Referencia sectorial variable." />
+        <RatioCard nombre="ROA" formula="Resultado / Total Activo" valor={fmtPct((calc.roa || 0) * 100)} semColor={calc.roa === null ? 'gris' : calc.roa > 0.05 ? 'verde' : calc.roa > 0 ? 'ambar' : 'rojo'} refValue="> 5%" interpretacion="Rentabilidad sobre activos totales. Mide eficiencia en el uso de los activos." />
+        <RatioCard nombre="ROE" formula="Resultado / PN" valor={fmtPct((calc.roe || 0) * 100)} semColor={calc.roe === null ? 'gris' : calc.roe > 0.1 ? 'verde' : calc.roe > 0 ? 'ambar' : 'rojo'} refValue="> 10%" interpretacion="Rentabilidad sobre recursos propios. Retorno que obtienen los socios." />
+        <RatioCard nombre="Peso personal / ingresos" formula="Gasto personal / Ingresos" valor={fmtPct((calc.pesPersonal || 0) * 100)} semColor={calc.pesPersonal === null ? 'gris' : calc.pesPersonal < 0.35 ? 'verde' : calc.pesPersonal < 0.5 ? 'ambar' : 'rojo'} refValue="< 35-40%" interpretacion="Proporción del coste de personal sobre ingresos. Por encima del 50% puede comprometer la rentabilidad." />
+        <RatioCard nombre="Peso servicios / ingresos" formula="Serv. exteriores / Ingresos" valor={fmtPct((calc.pesServicios || 0) * 100)} semColor={calc.pesServicios === null ? 'gris' : calc.pesServicios < 0.3 ? 'verde' : calc.pesServicios < 0.45 ? 'ambar' : 'rojo'} refValue="< 30%" interpretacion="Peso de servicios exteriores (62x) sobre ingresos." />
       </div>
     </A4Page>
   );
