@@ -133,7 +133,7 @@ Genera JSON con: diagnostico_ejecutivo (4-6 frases, diagnóstico general prudent
     // Save
     const contenido = { ...imp?.metricas_calculadas, narrativa: result, supuestos };
     if (report?.id) {
-      await base44.entities.FinancialReport.update(report.id, { contenido, resumen_ejecutivo: result.diagnostico_ejecutivo, conclusiones: [result.conclusion_final], estado });
+      await base44.entities.FinancialReport.update(report.id, { contenido, resumen_ejecutivo: result.diagnostico_ejecutivo || '', conclusiones: result.conclusion_final ? [result.conclusion_final] : [], estado });
     } else {
       const newReport = await base44.entities.FinancialReport.create({
         company_id: imp?.company_id,
@@ -147,7 +147,7 @@ Genera JSON con: diagnostico_ejecutivo (4-6 frases, diagnóstico general prudent
         nivel_detalle: 'completo',
         contenido,
         resumen_ejecutivo: result.diagnostico_ejecutivo,
-        conclusiones: [result.conclusion_final],
+        conclusiones: [result.conclusion_final].filter(Boolean),
         generado_por: 'taxea_ia_v5',
       });
       setReport(newReport);
