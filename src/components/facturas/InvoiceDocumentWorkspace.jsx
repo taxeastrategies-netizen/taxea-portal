@@ -55,18 +55,19 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
-      {/* Toolbar del visor */}
+      {/* Toolbar del visor — propia de Taxea, sin toolbar nativa PDF */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground font-medium">
-            {hasPdf ? `Factura_${invoice.numero_factura}.pdf` : 'Vista previa del documento'}
+            Vista previa del documento
           </span>
-          {!hasPdf && (
-            <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
-              PDF no generado
-            </span>
-          )}
+          <span className={cn(
+            "text-[10px] px-2 py-0.5 rounded-full border font-medium",
+            hasPdf ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+          )}>
+            {hasPdf ? 'PDF generado' : 'Render de datos'}
+          </span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -82,50 +83,33 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             title="Ampliar zoom">
             <ZoomIn className="w-3.5 h-3.5" />
           </button>
+          <div className="w-px h-4 bg-border mx-1" />
+          <button
+            onClick={() => window.print()}
+            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            title="Imprimir">
+            <Printer className="w-3.5 h-3.5" />
+          </button>
           {hasPdf && (
-            <>
-              <div className="w-px h-4 bg-border mx-1" />
-              <button
-                onClick={() => window.print()}
-                className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                title="Imprimir">
-                <Printer className="w-3.5 h-3.5" />
-              </button>
-              <a
-                href={invoice.archivo_url}
-                target="_blank"
-                rel="noreferrer"
-                className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-                title="Descargar PDF">
-                <Download className="w-3.5 h-3.5" />
-              </a>
-            </>
+            <a
+              href={invoice.archivo_url}
+              download={`Factura_${invoice.numero_factura}.pdf`}
+              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="Descargar PDF">
+              <Download className="w-3.5 h-3.5" />
+            </a>
           )}
         </div>
       </div>
 
-      {/* Área de visualización */}
+      {/* Área de visualización — siempre render HTML propio, nunca iframe PDF nativo */}
       <div className="flex-1 overflow-auto flex items-start justify-center py-6 px-4">
         <div
           style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', width: '100%', maxWidth: '680px' }}
           className="transition-transform duration-150">
-
-          {hasPdf ? (
-            /* Visor PDF inline */
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden" style={{ minHeight: '880px' }}>
-              <iframe
-                src={invoice.archivo_url}
-                className="w-full"
-                style={{ height: '880px', border: 'none' }}
-                title={`Factura ${invoice.numero_factura}`}
-              />
-            </div>
-          ) : (
-            /* Render visual de la factura sin PDF */
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-              <InvoiceVisualRender invoice={invoice} company={company} fmt={fmt} fmtDate={fmtDate} />
-            </div>
-          )}
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <InvoiceVisualRender invoice={invoice} company={company} fmt={fmt} fmtDate={fmtDate} />
+          </div>
         </div>
       </div>
     </div>
