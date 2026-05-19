@@ -169,16 +169,10 @@ export default function PublicInvoiceViewer() {
 
   const loadInvoice = async (t) => {
     try {
-      // Buscar factura por public_token
-      const invoices = await base44.entities.Invoice.filter({ public_token: t });
-      if (!invoices || invoices.length === 0) {
+      // El token ES el ID de la factura
+      const inv = await base44.entities.Invoice.get(t);
+      if (!inv) {
         setError('La factura no existe, ha sido desactivada o el enlace ha caducado.');
-        setLoading(false);
-        return;
-      }
-      const inv = invoices[0];
-      if (inv.public_link_status === 'desactivado') {
-        setError('Este enlace ha sido desactivado por el emisor.');
         setLoading(false);
         return;
       }
@@ -195,10 +189,7 @@ export default function PublicInvoiceViewer() {
         origin: 'cliente',
       }).catch(() => {});
 
-      // Actualizar public_opened_at si no estaba registrado
-      if (!inv.public_opened_at) {
-        base44.entities.Invoice.update(inv.id, { public_opened_at: new Date().toISOString() }).catch(() => {});
-      }
+
 
       // Cargar datos del emisor (company) — solo lo necesario, sin datos internos
       if (inv.company_id) {
@@ -228,9 +219,7 @@ export default function PublicInvoiceViewer() {
       created_at: new Date().toISOString(),
       origin: 'cliente',
     }).catch(() => {});
-    if (!invoice.public_downloaded_at) {
-      base44.entities.Invoice.update(invoice.id, { public_downloaded_at: new Date().toISOString() }).catch(() => {});
-    }
+
   };
 
   const isOverdue = invoice?.fecha_vencimiento && new Date(invoice.fecha_vencimiento) < new Date()

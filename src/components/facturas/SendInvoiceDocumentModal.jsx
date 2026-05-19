@@ -134,19 +134,9 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     if (invoice) setSubject(buildEmailSubject(invoice, company, templateId));
   }, [templateId]);
 
-  const initPublicLink = async () => {
-    // Usar token existente o generar uno nuevo
-    let token = invoice?.public_token;
-    if (!token) {
-      token = generatePublicToken();
-      const link = `${window.location.origin}/public/invoice/${token}`;
-      await base44.entities.Invoice.update(invoice.id, {
-        public_token: token,
-        public_link_status: 'activo',
-        public_invoice_url: link,
-      });
-    }
-    setPublicLink(`${window.location.origin}/public/invoice/${token}`);
+  const initPublicLink = () => {
+    // El enlace público usa el ID de la factura directamente (no necesita campo extra)
+    setPublicLink(`${window.location.origin}/public/invoice/${invoice.id}`);
   };
 
   const loadClientEmail = async () => {
