@@ -1,0 +1,42 @@
+{
+  "name": "InvoiceTimelineEvent",
+  "type": "object",
+  "properties": {
+    "invoice_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "event_label": {
+      "type": "string"
+    },
+    "event_detail": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "automatizacion",
+        "sistema",
+        "cliente"
+      ],
+      "default": "manual"
+    }
+  },
+  "required": [
+    "invoice_id",
+    "event_type"
+  ]
+}

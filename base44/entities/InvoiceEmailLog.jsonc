@@ -1,0 +1,68 @@
+{
+  "name": "InvoiceEmailLog",
+  "type": "object",
+  "properties": {
+    "invoice_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "to": {
+      "type": "string"
+    },
+    "cc": {
+      "type": "string"
+    },
+    "bcc": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "template_id": {
+      "type": "string"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sent_by": {
+      "type": "string"
+    },
+    "delivery_status": {
+      "type": "string",
+      "enum": [
+        "enviada",
+        "abierta",
+        "error_envio",
+        "pendiente"
+      ],
+      "default": "pendiente"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "to_was_manual": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "invoice_id",
+    "to"
+  ]
+}
