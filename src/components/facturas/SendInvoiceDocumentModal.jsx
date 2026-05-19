@@ -178,6 +178,8 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setShowPreview(true);
   };
 
+  const [sendingStep, setSendingStep] = useState(''); // 'pdf' | 'link' | 'sending' | ''
+
   const handleSend = async () => {
     setError('');
     if (to.length === 0) { setError('Añade al menos un destinatario.'); return; }
@@ -187,15 +189,16 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
 
     setSending(true);
 
-    // Garantizar PDF antes de enviar
+    // 1. Garantizar PDF
     let finalPdfUrl = resolvedPdfUrl;
     if (!finalPdfUrl) {
+      setSendingStep('pdf');
       setPreparingPdf(true);
       const pdfResult = await ensureInvoicePdf(invoice, company, base44);
       setPreparingPdf(false);
       if (!pdfResult.ok) {
         setError('No se puede enviar la factura porque no ha sido posible generar el PDF adjunto automáticamente. Revisa la factura y vuelve a intentarlo.');
-        setSending(false);
+        setSending(false); setSendingStep('');
         return;
       }
       finalPdfUrl = pdfResult.pdfUrl;
@@ -203,12 +206,43 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       setPdfReady(true);
     }
 
+    // 2. Validar enlace público: verificar que el token resuelve la factura correcta
+    setSendingStep('link');
+    let validatedLink = publicLink;
+    if (!validatedLink) {
+      setError('No se ha podido generar el enlace público de la factura. Vuelve a intentarlo.');
+      setSending(false); setSendingStep('');
+      return;
+    }
+    // Validar en cliente: buscar factura por token y comprobar que coincide
+    try {
+      const tokenParts = validatedLink.split('/');
+      const t = tokenParts[tokenParts.length - 1];
+      if (!t || t.length < 10) throw new Error('Token inválido');
+      const invCheck = await base44.entities.Invoice.filter({ public_token: t });
+      if (!invCheck || invCheck.length === 0 || invCheck[0].id !== invoice.id) {
+        throw new Error('El enlace público no resuelve esta factura correctamente.');
+      }
+      if (invCheck[0].public_link_status === 'desactivado') {
+        throw new Error('El enlace público está desactivado. Actívalo desde el panel antes de enviar.');
+      }
+    } catch (linkErr) {
+      setError(`No se ha enviado el correo porque el enlace público de la factura no está disponible: ${linkErr.message}`);
+      await base44.entities.InvoiceEmailLog.create({
+        invoice_id: invoice.id, company_id: company?.id, to: to.join(', '), subject,
+        sent_at: new Date().toISOString(), sent_by: user?.full_name || user?.email,
+        delivery_status: 'error_envio', error_message: `Enlace público inválido: ${linkErr.message}`,
+      }).catch(() => {});
+      setSending(false); setSendingStep('');
+      return;
+    }
+
+    // 3. Construir y enviar email
+    setSendingStep('sending');
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
-      const link = publicLink || `${window.location.origin}/public/invoice/${invoice?.id}`;
-      const htmlBody = buildPremiumInvoiceEmail(invoice, company, link, templateId);
+      const htmlBody = buildPremiumInvoiceEmail(invoice, company, validatedLink, templateId);
 
-      // Enviar email con HTML premium
       await base44.integrations.Core.SendEmail({
         to: to[0],
         from_name: senderName,
@@ -216,7 +250,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         body: htmlBody,
       });
 
-      // Log de envío
+      // Log de envío con trazabilidad completa
       await base44.entities.InvoiceEmailLog.create({
         invoice_id: invoice.id,
         company_id: company?.id,
@@ -227,15 +261,16 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         body: htmlBody,
         template_id: templateId,
         attachments: [finalPdfUrl].filter(Boolean),
-        public_invoice_url: link,
+        public_invoice_url: validatedLink,
         pdf_attachment_name: `Factura_${invoice.numero_factura}.pdf`,
         sent_at: new Date().toISOString(),
         sent_by: user?.full_name || user?.email || 'Usuario',
         delivery_status: 'enviada',
         to_was_manual: noEmailWarning,
+        error_message: null,
       });
 
-      // Actualizar estado factura
+      // Actualizar estado factura solo tras éxito
       await base44.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
 
       // Timeline
@@ -244,13 +279,12 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         company_id: company?.id,
         event_type: 'email_enviado',
         event_label: 'Email enviado',
-        event_detail: `Enviado a ${to.join(', ')} · Plantilla: ${TEMPLATES.find(t => t.id === templateId)?.label}`,
+        event_detail: `Enviado a ${to.join(', ')} · PDF adjunto: Factura_${invoice.numero_factura}.pdf · Enlace público validado · Plantilla: ${TEMPLATES.find(t => t.id === templateId)?.label}`,
         created_at: new Date().toISOString(),
         created_by: user?.full_name || user?.email || 'Usuario',
         origin: 'manual',
       });
 
-      // Guardar email si es nuevo
       if (saveEmail && noEmailWarning && to.length > 0) {
         try {
           const contacts = await base44.entities.Contact.filter({ company_id: company?.id }, '-created_date', 100);
@@ -262,21 +296,14 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       setSent(true);
       onSent?.();
     } catch (e) {
-      try {
-        await base44.entities.InvoiceEmailLog.create({
-          invoice_id: invoice.id,
-          company_id: company?.id,
-          to: to.join(', '),
-          subject,
-          sent_at: new Date().toISOString(),
-          sent_by: user?.full_name || user?.email,
-          delivery_status: 'error_envio',
-          error_message: e.message || 'Error desconocido al enviar.',
-        });
-      } catch {}
-      setError('Error al enviar el email: ' + (e.message || 'inténtalo de nuevo.'));
+      await base44.entities.InvoiceEmailLog.create({
+        invoice_id: invoice.id, company_id: company?.id, to: to.join(', '), subject,
+        sent_at: new Date().toISOString(), sent_by: user?.full_name || user?.email,
+        delivery_status: 'error_envio', error_message: e.message || 'Error desconocido al enviar.',
+      }).catch(() => {});
+      setError('No se ha podido enviar el correo. La factura no se ha marcado como enviada. Revisa la configuración de email o vuelve a intentarlo.');
     }
-    setSending(false);
+    setSending(false); setSendingStep('');
   };
 
   return (
@@ -467,7 +494,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               <Button onClick={handleSend} disabled={sending || preparingPdf || to.length === 0}
                 className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                {sending ? (preparingPdf ? 'Preparando PDF…' : 'Enviando…') : 'Enviar'}
+                {sending
+                  ? sendingStep === 'pdf' ? 'Preparando PDF…'
+                  : sendingStep === 'link' ? 'Validando enlace…'
+                  : 'Enviando…'
+                  : 'Enviar'}
               </Button>
             </div>
           )}

@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Download, Printer, FileText, AlertTriangle, ExternalLink, Building2 } from 'lucide-react';
+import { Download, Printer, AlertTriangle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
@@ -17,6 +17,135 @@ const fmtDate = (d) => {
   try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }); }
   catch { return d; }
 };
+
+// ── Render visual de la factura (sin iframe) ──────────────────────────────────
+function InvoicePublicRender({ invoice, company }) {
+  const brandColor = '#b91c1c';
+  const LOGO_URL = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
+  const lineas = invoice?.lineas || [];
+
+  return (
+    <div className="p-8 font-sans text-sm text-slate-800" style={{ minHeight: '900px' }}>
+      {/* Cabecera */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          {company?.logo_url
+            ? <img src={company.logo_url} alt={company.nombre} className="h-10 object-contain mb-2" />
+            : <img src={LOGO_URL} alt="Taxea Strategies" className="h-8 object-contain mb-2" />
+          }
+          <div className="text-xs text-slate-500 leading-relaxed mt-1 space-y-0.5">
+            <p className="font-semibold text-slate-800">{company?.nombre || company?.razon_social || 'Emisor'}</p>
+            {company?.nif && <p>NIF: {company.nif}</p>}
+            {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-bold mb-1" style={{ color: brandColor }}>FACTURA</div>
+          <div className="text-lg font-semibold text-slate-700">{invoice.numero_factura}</div>
+          <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
+            <p>Fecha: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_emision)}</span></p>
+            {invoice.fecha_vencimiento && <p>Vencimiento: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_vencimiento)}</span></p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Emisor / Receptor */}
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Emisor</div>
+          <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
+            <p className="font-semibold">{company?.nombre || '—'}</p>
+            {company?.nif && <p>NIF: {company.nif}</p>}
+            {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Destinatario</div>
+          <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
+            <p className="font-semibold">{invoice.cliente_nombre || '—'}</p>
+            {invoice.cliente_nif && <p>NIF/CIF: {invoice.cliente_nif}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Concepto */}
+      {invoice.concepto && (
+        <div className="mb-5">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Concepto</div>
+          <p className="text-sm text-slate-700">{invoice.concepto}</p>
+        </div>
+      )}
+
+      {/* Líneas */}
+      <table className="w-full text-xs mb-5 border-collapse">
+        <thead>
+          <tr style={{ backgroundColor: brandColor }} className="text-white">
+            <th className="text-left px-3 py-2 font-semibold">Descripción</th>
+            <th className="text-center px-3 py-2 font-semibold w-14">Cant.</th>
+            <th className="text-right px-3 py-2 font-semibold w-20">Precio u.</th>
+            <th className="text-right px-3 py-2 font-semibold w-18">Importe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lineas.length > 0 ? lineas.map((l, i) => (
+            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+              <td className="px-3 py-2 border-b border-slate-100">{l.descripcion || l.concepto || '—'}</td>
+              <td className="px-3 py-2 text-center border-b border-slate-100">{l.cantidad || 1}</td>
+              <td className="px-3 py-2 text-right border-b border-slate-100">{fmt(l.precio_unitario || l.precio)}</td>
+              <td className="px-3 py-2 text-right font-medium border-b border-slate-100">{fmt(l.importe || (l.cantidad * l.precio_unitario))}</td>
+            </tr>
+          )) : (
+            <tr className="bg-white">
+              <td className="px-3 py-2 border-b border-slate-100">{invoice.concepto || 'Servicio profesional'}</td>
+              <td className="px-3 py-2 text-center border-b border-slate-100">1</td>
+              <td className="px-3 py-2 text-right border-b border-slate-100">{fmt(invoice.base_imponible)}</td>
+              <td className="px-3 py-2 text-right font-medium border-b border-slate-100">{fmt(invoice.base_imponible)}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Totales */}
+      <div className="flex justify-end mb-6">
+        <div className="w-56">
+          <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
+            <span className="text-slate-500">Base imponible</span>
+            <span className="font-medium">{fmt(invoice.base_imponible)}</span>
+          </div>
+          <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
+            <span className="text-slate-500">IVA ({invoice.tipo_iva || 21}%)</span>
+            <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
+          </div>
+          {invoice.retencion_irpf > 0 && (
+            <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
+              <span className="text-slate-500">Retención IRPF</span>
+              <span className="font-medium text-red-600">−{fmt(invoice.retencion_irpf)}</span>
+            </div>
+          )}
+          <div className="flex justify-between py-2 mt-1 rounded-lg px-2" style={{ backgroundColor: `${brandColor}10` }}>
+            <span className="font-bold text-slate-800 text-sm">Total</span>
+            <span className="font-bold text-sm" style={{ color: brandColor }}>{fmt(invoice.total_factura)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Método de pago */}
+      {invoice.metodo_pago && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-xs text-slate-700 mb-4">
+          <p className="font-semibold text-emerald-800 mb-1.5">Instrucciones de pago</p>
+          <p><span className="text-slate-500">Método: </span>{invoice.metodo_pago}</p>
+          {invoice.iban_cobro && <p><span className="text-slate-500">IBAN: </span>{invoice.iban_cobro}</p>}
+          <p className="text-slate-500 mt-1">Indica el número <strong>{invoice.numero_factura}</strong> como referencia del pago.</p>
+        </div>
+      )}
+
+      {/* Pie */}
+      <div className="border-t border-slate-100 mt-6 pt-4 text-[10px] text-slate-400 text-center">
+        Documento gestionado con Taxea Strategies · Portal de gestión financiera y fiscal
+      </div>
+    </div>
+  );
+}
 
 export default function PublicInvoiceViewer() {
   const [invoice, setInvoice] = useState(null);
@@ -180,28 +309,14 @@ export default function PublicInvoiceViewer() {
         <div className="max-w-5xl mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-            {/* ── Visor PDF / placeholder ────────────────────────── */}
+            {/* ── Visor de factura — render HTML propio, sin iframe oscuro ── */}
             <div className="lg:col-span-2">
-              {invoice.archivo_url ? (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" style={{ minHeight: '700px' }}>
-                  <iframe
-                    src={`${invoice.archivo_url}#toolbar=1&view=FitH`}
-                    className="w-full"
-                    style={{ height: '700px' }}
-                    title={`Factura ${invoice.numero_factura}`}
-                  />
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center" style={{ minHeight: '400px' }}>
-                  <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                  <p className="text-slate-500 font-medium">PDF no disponible</p>
-                  <p className="text-sm text-slate-400 mt-1">El emisor no ha adjuntado el PDF a este enlace.</p>
-                </div>
-              )}
-              {/* Descarga bajo el visor en móvil */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <InvoicePublicRender invoice={invoice} company={company} />
+              </div>
               {invoice.archivo_url && (
                 <button onClick={handleDownload}
-                  className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors lg:hidden">
+                  className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                   <Download className="w-4 h-4" /> Descargar PDF
                 </button>
               )}
