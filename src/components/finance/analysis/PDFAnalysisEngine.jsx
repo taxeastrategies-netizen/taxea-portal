@@ -12,40 +12,70 @@ import {
 } from 'lucide-react';
 
 // ─── PGC classifier ───────────────────────────────────────────────────────────
-const PGC_MAP = [
-  [['100','101','102','110','112','113','114','118','119','120','121','129'], 'patrimonio_neto', 'patrimonio'],
-  [['170','171','172','173','174','175','176','177','179','180','181','182'], 'pasivo_no_corriente', 'pasivo'],
-  [['200','201','202','203','204','205','206','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','228','229','240','241','242','243','244','245','246','248','249','250','251','252','253','254','255','256','257','258','259','260','261','262','265','266','267','268','269','280','281','282','290','291','292','293','294','295','296','297','298','299'], 'activo_no_corriente', 'activo'],
-  [['300','301','302','303','304','305','306','307','308','309','310','311','312','313','314','315','320','321','322','325','326','327','328','330','331','332','333','334','335','340','341','342','343','344','345','346','347','348','349','350','351','352','353','354','355','356','357','358','360','365','390','391','392','393','394','395','396','397','398','399'], 'activo_corriente', 'activo'],
-  [['430','431','432','433','434','435','436','437','438','439'], 'activo_corriente', 'activo'],
-  [['440','441','442','443','444','445','446','447','448','449','460','461','470','471','472','473','474'], 'activo_corriente', 'activo'],
-  [['400','401','402','403','404','405','406','407','408','409'], 'pasivo_corriente', 'pasivo'],
-  [['410','411','412','413','419'], 'pasivo_corriente', 'pasivo'],
-  [['465','466','475','476','477','478','479','480','481','485','490','491','493','494','495','496','497','498','499'], 'pasivo_corriente', 'pasivo'],
-  [['520','521','522','523','524','525','526','527','528','529','530','531','532','533','534','540','541','542','543','544','545','546','547','548','549','550','551','552','553','554','555','556','557','558','559','560','561','562','563','564','565','566','567','568','569'], 'pasivo_corriente', 'pasivo'],
-  [['570','571','572','573','574','575','576','577','578','579'], 'activo_corriente', 'activo'],
-  [['600','601','602','606','607','608','609','610','611','612','620','621','622','623','624','625','626','627','628','629'], 'pyg_gasto', 'gasto'],
-  [['630','631','632','633','634','635','636','637','638','639','640','641','642','643','644','649','650','651','659'], 'pyg_gasto', 'gasto'],
-  [['660','661','662','663','664','665','666','667','668','669','670','671','672','678','679','680','681','682','690','691','692'], 'pyg_gasto', 'gasto'],
-  [['700','701','702','703','704','705','706','708','709','710','711','712','713'], 'pyg_ingreso', 'ingreso'],
-  [['720','721','722','723','724','725','726','727','728','729','730','731','732','733','740','741','746','747','748','749'], 'pyg_ingreso', 'ingreso'],
-  [['750','751','752','753','754','755','759','760','761','762','763','764','765','766','768','769','770','771','772','773','774','775','778','779'], 'pyg_ingreso', 'ingreso'],
-];
+// Grupo 1: Financiación básica
+const PATRIMONIO_PREFIXES = ['100','101','102','103','104','108','109','110','111','112','113','114','115','116','117','118','119','120','121','129','130','131','132','133','134','135','136','137','138','139','140','141','142','143','145','146','147','148','149'];
+const PASIVO_NC_PREFIXES  = ['150','153','155','156','157','158','159','160','161','162','163','164','165','166','167','168','169','170','171','172','173','174','175','176','177','178','179','180','181','182','183','184','185','189','190','191','192','193','194','195','196','197','199'];
+// Grupo 2: Activo no corriente
+const ACTIVO_NC_PREFIXES  = ['200','201','202','203','204','205','206','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','228','229','230','231','232','233','234','235','239','240','241','242','243','244','245','246','247','248','249','250','251','252','253','254','255','256','257','258','259','260','261','262','263','264','265','266','267','268','269','270','271','272','273','274','275','276','277','278','279','280','281','282','290','291','292','293','294','295','296','297','298','299'];
+// Grupo 3: Existencias (activo corriente)
+const EXISTENCIAS_PREFIXES= ['300','301','302','303','304','305','306','307','308','309','310','311','312','313','314','315','320','321','322','325','326','327','328','330','331','332','333','334','335','340','341','342','343','344','345','346','347','348','349','350','351','352','353','354','355','356','357','358','360','361','365','390','391','392','393','394','395','396','397','398','399'];
+// Grupo 4: Acreedores/deudores — clasificar por descripción/contexto o saldo
+// Activo: clientes, deudores, HP deudora, IVA soportado pendiente
+const ACTIVO_C_G4 = ['430','431','432','433','434','435','436','437','438','439','440','441','442','443','444','446','447','448','449','460','461','470','471','472','473','474','480','481','482','484','485'];
+// Pasivo: proveedores, acreedores, HP acreedora, IVA repercutido pendiente
+const PASIVO_C_G4 = ['400','401','402','403','404','405','406','407','408','409','410','411','412','413','414','415','416','417','418','419','450','453','455','456','457','458','459','465','466','475','476','477','478','479','483','490','491','493','494','495','496','497','498','499'];
+// Grupo 5: cuentas financieras
+const PASIVO_C_G5 = ['500','501','502','503','504','505','506','507','508','509','510','511','512','513','514','515','516','517','518','519','520','521','522','523','524','525','526','527','528','529','550','551','552','553','554','555','556','557','558','559','560','561','562','563','564','565','566','567','568','569'];
+const ACTIVO_C_G5 = ['530','531','532','533','534','535','536','537','538','539','540','541','542','543','544','545','546','547','548','549','570','571','572','573','574','575','576','577','578','579'];
+// Grupo 6: gastos, Grupo 7: ingresos
+const PYG_GASTO_PREFIXES  = ['600','601','602','603','604','605','606','607','608','609','610','611','612','613','614','615','616','617','618','619','620','621','622','623','624','625','626','627','628','629','630','631','632','633','634','635','636','637','638','639','640','641','642','643','644','645','646','647','648','649','650','651','652','653','654','655','656','657','658','659','660','661','662','663','664','665','666','667','668','669','670','671','672','673','674','675','676','677','678','679','680','681','682','683','684','685','686','687','688','689','690','691','692','693','694','695','696','697','698','699'];
+const PYG_INGRESO_PREFIXES= ['700','701','702','703','704','705','706','707','708','709','710','711','712','713','714','715','720','721','722','723','724','725','726','727','728','729','730','731','732','733','740','741','742','743','744','745','746','747','748','749','750','751','752','753','754','755','756','757','758','759','760','761','762','763','764','765','766','767','768','769','770','771','772','773','774','775','776','777','778','779'];
 
-function classifyAccount(cuenta) {
+function classifyAccount(cuenta, descripcion, bloque) {
   const c = String(cuenta || '').trim().replace(/[^0-9].*/, '');
-  if (!c) return { masa: 'sin_clasificar', tipo: 'otro' };
-  for (const [prefixes, masa, tipo] of PGC_MAP) {
-    for (const p of prefixes) {
-      if (c.startsWith(p)) return { masa, tipo };
-    }
+  const desc = String(descripcion || '').toLowerCase();
+  const blq = String(bloque || '').toLowerCase();
+
+  if (!c) {
+    // Sin código: clasificar por descripción/bloque
+    if (/activo no corriente|inmovilizado|intangible|material|financiero lp/.test(blq + desc)) return { masa: 'activo_no_corriente', tipo: 'activo' };
+    if (/activo corriente|existencias|clientes|deudores|tesorería|efectivo/.test(blq + desc)) return { masa: 'activo_corriente', tipo: 'activo' };
+    if (/patrimonio|fondos propios|capital|reservas|resultado/.test(blq + desc)) return { masa: 'patrimonio_neto', tipo: 'patrimonio' };
+    if (/pasivo no corriente|deuda lp|largo plazo/.test(blq + desc)) return { masa: 'pasivo_no_corriente', tipo: 'pasivo' };
+    if (/pasivo corriente|proveedores|acreedores|deuda cp|corto plazo/.test(blq + desc)) return { masa: 'pasivo_corriente', tipo: 'pasivo' };
+    if (/ingreso|ventas|cifra de negocio|prestación/.test(blq + desc)) return { masa: 'pyg_ingreso', tipo: 'ingreso' };
+    if (/gasto|consumo|personal|sueldos|arrendamiento|suministro|amortización/.test(blq + desc)) return { masa: 'pyg_gasto', tipo: 'gasto' };
+    return { masa: 'sin_clasificar', tipo: 'otro' };
   }
+
+  const check = (arr) => arr.some(p => c.startsWith(p));
+
+  if (check(PATRIMONIO_PREFIXES))  return { masa: 'patrimonio_neto', tipo: 'patrimonio' };
+  if (check(PASIVO_NC_PREFIXES))   return { masa: 'pasivo_no_corriente', tipo: 'pasivo' };
+  if (check(ACTIVO_NC_PREFIXES))   return { masa: 'activo_no_corriente', tipo: 'activo' };
+  if (check(EXISTENCIAS_PREFIXES)) return { masa: 'activo_corriente', tipo: 'activo' };
+  if (check(ACTIVO_C_G4))          return { masa: 'activo_corriente', tipo: 'activo' };
+  if (check(PASIVO_C_G4))          return { masa: 'pasivo_corriente', tipo: 'pasivo' };
+  if (check(ACTIVO_C_G5))          return { masa: 'activo_corriente', tipo: 'activo' };
+  if (check(PASIVO_C_G5))          return { masa: 'pasivo_corriente', tipo: 'pasivo' };
+  if (check(PYG_GASTO_PREFIXES))   return { masa: 'pyg_gasto', tipo: 'gasto' };
+  if (check(PYG_INGRESO_PREFIXES)) return { masa: 'pyg_ingreso', tipo: 'ingreso' };
+
+  // Fallback por primer dígito
   const g = c[0];
   if (g === '1') return { masa: 'patrimonio_neto', tipo: 'patrimonio' };
   if (g === '2') return { masa: 'activo_no_corriente', tipo: 'activo' };
   if (g === '3') return { masa: 'activo_corriente', tipo: 'activo' };
-  if (g === '4') return { masa: 'varios', tipo: 'varios' };
-  if (g === '5') return { masa: 'activo_corriente', tipo: 'activo' };
+  if (g === '4') {
+    // Heurística: si la descripción suena a deudor/cliente → activo; si suena a acreedor/proveedor → pasivo
+    if (/cliente|deudor|anticipo a|cobrar/.test(desc)) return { masa: 'activo_corriente', tipo: 'activo' };
+    if (/proveedor|acreedor|pagar|hp acreedora|iva repercutido/.test(desc)) return { masa: 'pasivo_corriente', tipo: 'pasivo' };
+    return { masa: 'activo_corriente', tipo: 'activo' }; // default grupo 4
+  }
+  if (g === '5') {
+    if (/caja|banco|efectivo|tesorería/.test(desc)) return { masa: 'activo_corriente', tipo: 'activo' };
+    return { masa: 'pasivo_corriente', tipo: 'pasivo' };
+  }
   if (g === '6') return { masa: 'pyg_gasto', tipo: 'gasto' };
   if (g === '7') return { masa: 'pyg_ingreso', tipo: 'ingreso' };
   return { masa: 'sin_clasificar', tipo: 'otro' };
@@ -218,16 +248,68 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(28 + (i / uploadedUrls.length) * 60));
 
         const result = await base44.integrations.Core.InvokeLLM({
-          prompt: `Eres un experto contable español (PGC 2007). Analiza este documento financiero de la empresa "${empresa}" (ejercicio ${ejercicio}).
+          prompt: `Eres un experto contable español certificado especialista en PGC 2007. Analiza METICULOSAMENTE este documento financiero.
 
-TIPO DE DOCUMENTO: ${tipoInfo?.label || u.type}
+EMPRESA: "${empresa}" | EJERCICIO: ${ejercicio}
+TIPO DE DOCUMENTO DECLARADO: ${tipoInfo?.label || u.type}
 ARCHIVO: ${u.nombre}
 
-Extrae:
-1. PÁGINAS: documento, pagina, tipo (balance/pyg/diario/extracto_bancario/no_reconocida), confianza, razon, cuentas_detectadas.
-2. CUENTAS: documento, pagina, bloque, cuenta (código PGC), descripcion, importe_actual (número, formato español: punto=miles coma=decimal), importe_anterior, signo, confianza.
+═══════════════════════════════════════════════════════
+INSTRUCCIONES DE EXTRACCIÓN CRÍTICAS — LEE TODO ANTES DE EMPEZAR
+═══════════════════════════════════════════════════════
 
-REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234,56" → 1234.56`,
+## BALANCE DE SITUACIÓN — REGLAS ABSOLUTAS:
+La ecuación fundamental DEBE cumplirse: TOTAL ACTIVO = PATRIMONIO NETO + TOTAL PASIVO
+Si tus cifras no cuadran, ESTÁS COMETIENDO UN ERROR. Relee el documento hasta que cuadre.
+
+ACTIVO:
+- Activo No Corriente: inmovilizado intangible (20x), material (21x-22x), financiero LP (24x-25x), otros activos fijos
+- Activo Corriente: existencias (30x-39x), deudores/clientes (43x, 44x), deudas HP deudora (470,471,472,473,474), IVA soportado, otros deudores (46x), tesorería (57x), inversiones CP (53x-54x), periodificaciones activo (480,481)
+
+PATRIMONIO NETO (siempre positivo en el balance normalizado):
+- Capital (100,101,102), prima de emisión (110), reservas (11x), resultado del ejercicio (129), subvenciones (13x), ajustes por cambio de valor (133,134)
+- IMPORTANTE: el resultado del ejercicio puede ser negativo. Captura el signo correcto.
+
+PASIVO NO CORRIENTE:
+- Deudas LP (17x): préstamos bancarios LP, obligaciones, deudas con entidades de crédito LP
+- Pasivos por impuesto diferido (479), provisiones LP (14x)
+
+PASIVO CORRIENTE:
+- Proveedores (40x), acreedores comerciales (41x), deudas CP (52x), deudas con entidades de crédito CP (520,521), HP acreedora (475,476,477), IVA repercutido (477), SS acreedora (476), periodificaciones pasivo (485)
+
+## CUENTA DE PÉRDIDAS Y GANANCIAS — REGLAS ABSOLUTAS:
+Resultado = Ingresos totales - Gastos totales
+
+INGRESOS (grupo 7 — importes positivos):
+- Ventas y prestaciones de servicios (700-709)
+- Variación de existencias de productos terminados (710,711,712) — OJO: puede ser negativa
+- Trabajos realizados para el activo (73x)
+- Otros ingresos de explotación (74x, 75x)
+- Ingresos financieros (76x)
+- Beneficios y otros ingresos excepcionales (77x)
+- Subvenciones imputadas (74x)
+
+GASTOS (grupo 6 — importes positivos, se restan):
+- Consumos y variación de existencias (60x, 61x)
+- Gastos de personal: sueldos (640,641), SS empresa (642), otros gastos personal (64x)
+- Otros gastos de explotación: arrendamientos (621), reparaciones (622), servicios profesionales (623), publicidad (627), suministros (628), otros servicios exteriores (629)
+- Amortización del inmovilizado (680,681,682) — línea crítica para EBITDA
+- Deterioros y provisiones (690-699, 650-659)
+- Gastos financieros (66x): intereses deudas (663,665)
+- Impuesto sobre beneficios (630)
+
+## REGLAS GENERALES:
+1. EXTRAE TODAS LAS LÍNEAS del documento, incluyendo subtotales intermedios Y totales. Marca los totales con confianza más alta.
+2. Los importes SIEMPRE como número decimal. Convierte formato español: "1.234,56" → 1234.56 | "(1.234,56)" → -1234.56 | "1.234" → 1234
+3. Si una partida aparece entre paréntesis → es negativa
+4. Para el campo "bloque": indica la sección exacta del documento (ej: "ACTIVO NO CORRIENTE", "GASTOS DE PERSONAL", "INGRESOS DE EXPLOTACIÓN")
+5. Para el campo "cuenta": pon el código PGC si aparece. Si no aparece, déjalo vacío "".
+6. Para el campo "signo": "+" si suma al bloque, "-" si resta (ej: amortizaciones acumuladas en activo son "-")
+7. confianza: 95-100 si lees perfectamente el número, 80-94 si hay dudas menores, <80 si hay ambigüedad real
+
+COMPROBACIÓN FINAL OBLIGATORIA:
+- Si es balance: suma tu Total Activo y compara con tu PN+Pasivo. Deben coincidir. Si no, revisa qué falta.
+- Si es PyG: comprueba que Resultado = Ingresos - Gastos coincide con la línea de "Resultado del ejercicio" del documento.`,
           file_urls: [u.url],
           response_json_schema: schema,
           model: 'gemini_3_flash',
@@ -255,9 +337,9 @@ REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234
         cuentas: p.cuentas_detectadas || 0,
       }));
 
-      const processedAccounts = allRawAccounts.map((a, i) => {
+      const buildProcessed = (rawList) => rawList.map((a, i) => {
         const cuentaStr = String(a.cuenta || '').trim();
-        const cls = classifyAccount(cuentaStr);
+        const cls = classifyAccount(cuentaStr, a.descripcion, a.bloque);
         const importeActual = parseSpanishAmount(a.importe_actual);
         const importeAnterior = parseSpanishAmount(a.importe_anterior);
         const conf = a.confianza ?? 85;
@@ -279,6 +361,128 @@ REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234
           excluida: false,
         };
       });
+
+      let processedAccounts = buildProcessed(allRawAccounts);
+
+      // ─── VALIDACIÓN DE CUADRE DEL BALANCE ─────────────────────────────────
+      const sumMasa = (lista, masa) =>
+        lista.filter(a => a.masa === masa).reduce((s, a) => s + (a.importe_actual || 0), 0);
+
+      const checkBalance = (lista) => {
+        const totalActivo = sumMasa(lista, 'activo_no_corriente') + sumMasa(lista, 'activo_corriente');
+        const totalPN = sumMasa(lista, 'patrimonio_neto');
+        const totalPasivo = sumMasa(lista, 'pasivo_corriente') + sumMasa(lista, 'pasivo_no_corriente');
+        const totalPNPasivo = totalPN + totalPasivo;
+        const diferencia = Math.abs(totalActivo - totalPNPasivo);
+        return { totalActivo, totalPNPasivo, totalPN, totalPasivo, diferencia, cuadra: diferencia < 10 };
+      };
+
+      const hasBalance = processedAccounts.some(a => ['activo_no_corriente','activo_corriente','patrimonio_neto','pasivo_corriente','pasivo_no_corriente'].includes(a.masa));
+      const hasPyG = processedAccounts.some(a => ['pyg_ingreso','pyg_gasto'].includes(a.masa));
+
+      if (hasBalance) {
+        const chk = checkBalance(processedAccounts);
+        // Si no cuadra y la diferencia es significativa (>100€), hacer segunda pasada
+        if (!chk.cuadra && chk.diferencia > 100 && chk.totalActivo > 0) {
+          if (!cancelledRef.current) {
+            setMsg(`Balance descuadrado (diferencia ${fmt(chk.diferencia)}). Repasando cifras…`, 94);
+
+            // Buscar el PDF de balance para re-analizarlo con enfoque en cuadre
+            const balanceFiles = uploadedUrls.filter(u =>
+              ['balance_situacion','balance_comparativo','cuentas_anuales'].includes(u.type)
+            );
+            const targetFiles = balanceFiles.length > 0 ? balanceFiles : uploadedUrls;
+
+            try {
+              const correctionSchema = {
+                type: 'object',
+                properties: {
+                  cuentas_corregidas: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        descripcion: { type: 'string' },
+                        bloque: { type: 'string' },
+                        cuenta: { type: 'string' },
+                        importe_actual: { type: 'number' },
+                        masa: { type: 'string' },
+                        confianza: { type: 'number' },
+                      },
+                    },
+                  },
+                  diagnostico: { type: 'string' },
+                },
+              };
+
+              const corrResult = await base44.integrations.Core.InvokeLLM({
+                prompt: `Eres un auditor contable español. He extraído el balance de situación pero NO CUADRA.
+
+Datos actuales calculados:
+- Total Activo extraído: ${fmt(chk.totalActivo)}
+- Total PN + Pasivo extraído: ${fmt(chk.totalPNPasivo)} (PN: ${fmt(chk.totalPN)}, Pasivo: ${fmt(chk.totalPasivo)})
+- DIFERENCIA: ${fmt(chk.diferencia)}
+
+MISIÓN: Releer el documento completo e identificar TODAS las partidas del balance con sus importes exactos.
+La ecuación ACTIVO = PATRIMONIO NETO + PASIVO debe cumplirse.
+
+Para cada partida del balance extrae:
+- descripcion: nombre exacto de la partida
+- bloque: "ACTIVO NO CORRIENTE" | "ACTIVO CORRIENTE" | "PATRIMONIO NETO" | "PASIVO NO CORRIENTE" | "PASIVO CORRIENTE"
+- cuenta: código PGC si aparece, o ""
+- importe_actual: número positivo (excepto resultado ejercicio si es pérdida, que va negativo)
+- masa: "activo_no_corriente" | "activo_corriente" | "patrimonio_neto" | "pasivo_no_corriente" | "pasivo_corriente"
+- confianza: 0-100
+
+IMPORTANTE:
+- No omitas NINGUNA línea, incluyendo partidas con importe 0
+- Los totales intermedios (ej: "Total activo corriente") inclúyelos también
+- Verifica al final que la suma de tus activos = suma de tu PN + Pasivo
+- diagnostico: explica brevemente dónde estaba el error de cuadre
+
+Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
+                file_urls: targetFiles.map(f => f.url),
+                response_json_schema: correctionSchema,
+                model: 'gemini_3_flash',
+              });
+
+              if (corrResult?.cuentas_corregidas?.length > 0) {
+                // Reemplazar las cuentas de balance con la versión corregida
+                const correctedBalance = corrResult.cuentas_corregidas.map((a, i) => {
+                  const cuentaStr = String(a.cuenta || '').trim();
+                  const cls = a.masa
+                    ? { masa: a.masa, tipo: a.masa.includes('activo') ? 'activo' : a.masa.includes('pasivo') ? 'pasivo' : a.masa === 'patrimonio_neto' ? 'patrimonio' : 'otro' }
+                    : classifyAccount(cuentaStr, a.descripcion, a.bloque);
+                  return {
+                    id: `corr_${i}`,
+                    pagina: 1,
+                    documento: targetFiles[0]?.nombre || '',
+                    bloque: a.bloque || '',
+                    cuenta: cuentaStr,
+                    descripcion: String(a.descripcion || '').trim(),
+                    importe_actual: typeof a.importe_actual === 'number' ? a.importe_actual : parseSpanishAmount(a.importe_actual),
+                    importe_anterior: null,
+                    signo_detectado: '+',
+                    masa: cls.masa,
+                    tipo_cuenta: cls.tipo,
+                    metodo: 'pdf_ia_correccion',
+                    confianza: a.confianza ?? 88,
+                    estado: 'extraida',
+                    excluida: false,
+                  };
+                });
+
+                // Mantener PyG del análisis original, reemplazar solo balance
+                const pygAccounts = processedAccounts.filter(a => ['pyg_ingreso','pyg_gasto'].includes(a.masa));
+                processedAccounts = [...correctedBalance, ...pygAccounts];
+              }
+            } catch (_e) {
+              // Si falla la corrección, continuar con los datos originales
+            }
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       setMsg('Listo. Construyendo tabla de cuentas…', 98);
       setPages(processedPages);
@@ -323,21 +527,29 @@ REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234
     const ingresos = validAccounts.filter(a => a.masa === 'pyg_ingreso').reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
     const gastos   = validAccounts.filter(a => a.masa === 'pyg_gasto').reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
     const resultado = ingresos - gastos;
-    const totalActivo = sum('activo_no_corriente') + sum('activo_corriente');
+    const activoNoCorriente = sum('activo_no_corriente');
+    const activoCorriente = sum('activo_corriente');
+    const totalActivo = activoNoCorriente + activoCorriente;
     const patrimonioNeto = sum('patrimonio_neto');
     const pasivoCorriente = sum('pasivo_corriente');
     const pasivoNoCorriente = sum('pasivo_no_corriente');
-    const activoCorriente = sum('activo_corriente');
-    const totalPNPasivo = patrimonioNeto + pasivoCorriente + pasivoNoCorriente;
-    const amortizacion = validAccounts.filter(a => String(a.cuenta).startsWith('68')).reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
+    const totalPasivo = pasivoCorriente + pasivoNoCorriente;
+    const totalPNPasivo = patrimonioNeto + totalPasivo;
+    const diferencia = Math.abs(totalActivo - totalPNPasivo);
+    const amortizacion = validAccounts.filter(a => /^68/.test(String(a.cuenta))).reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
+    const personalGasto = validAccounts.filter(a => /^64/.test(String(a.cuenta))).reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
+    const serviciosGasto = validAccounts.filter(a => /^62/.test(String(a.cuenta))).reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
+    const gastoFinanciero = validAccounts.filter(a => /^66/.test(String(a.cuenta))).reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
     return {
       ingresos, gastos, resultado,
       margen: ingresos > 0 ? resultado / ingresos * 100 : null,
-      totalActivo, patrimonioNeto, pasivoCorriente, pasivoNoCorriente, activoCorriente,
-      totalPNPasivo, amortizacion, ebitda: resultado + amortizacion,
+      totalActivo, activoNoCorriente, activoCorriente,
+      patrimonioNeto, pasivoCorriente, pasivoNoCorriente, totalPasivo, totalPNPasivo,
+      amortizacion, personalGasto, serviciosGasto, gastoFinanciero,
+      ebitda: resultado + amortizacion,
       fondo_maniobra: activoCorriente - pasivoCorriente,
-      balance: { totalActivo, patrimonioNeto, activoCorriente, pasivoCorriente, pasivoNoCorriente, totalPNPasivo, cuadra: Math.abs(totalActivo - totalPNPasivo) < 1, diferencia: Math.abs(totalActivo - totalPNPasivo) },
-      pyg: { ingresos, gastos, resultado, margen: ingresos > 0 ? resultado / ingresos * 100 : null, amortizacion, ebitda: resultado + amortizacion },
+      balance: { totalActivo, patrimonioNeto, activoCorriente, activoNoCorriente, pasivoCorriente, pasivoNoCorriente, totalPNPasivo, cuadra: diferencia < 10, diferencia },
+      pyg: { ingresos, gastos, resultado, margen: ingresos > 0 ? resultado / ingresos * 100 : null, amortizacion, ebitda: resultado + amortizacion, personalGasto, serviciosGasto, gastoFinanciero },
     };
   };
 
@@ -639,24 +851,70 @@ REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234
           {/* STEP 3: Review */}
           {step === 3 && (() => {
             const m = buildMetrics();
+            const balanceTienesDatos = m.totalActivo > 0;
+            const pygTienesDatos = m.ingresos > 0 || m.gastos > 0;
             return (
               <>
                 <h3 className="text-base font-bold">Validación previa al análisis</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total activo', value: fmt(m.totalActivo), ok: m.totalActivo > 0 },
-                    { label: 'PN + Pasivo', value: fmt(m.totalPNPasivo), ok: m.balance.cuadra },
-                    { label: m.balance.cuadra ? '✓ Balance cuadra' : '⚠ Diferencia', value: m.balance.cuadra ? '—' : fmt(m.balance.diferencia), ok: m.balance.cuadra, warn: !m.balance.cuadra },
-                    { label: 'Ingresos', value: fmt(m.ingresos), ok: m.ingresos > 0 },
-                    { label: 'Gastos', value: fmt(m.gastos), ok: true },
-                    { label: 'Resultado', value: fmt(m.resultado), ok: m.resultado >= 0, warn: m.resultado < 0 },
-                  ].map((k, i) => (
-                    <div key={i} className={cn("border rounded-xl p-3", k.warn ? 'bg-amber-50 border-amber-200' : k.ok ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100')}>
-                      <p className={cn("text-sm font-bold", k.warn ? 'text-amber-700' : k.ok ? 'text-emerald-700' : 'text-slate-600')}>{k.value}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{k.label}</p>
+
+                {/* Balance check */}
+                {balanceTienesDatos && (
+                  <div className={cn("border rounded-xl p-4", m.balance.cuadra ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-300')}>
+                    <div className="flex items-center gap-2 mb-3">
+                      {m.balance.cuadra
+                        ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                        : <AlertTriangle className="w-5 h-5 text-red-600" />}
+                      <p className={cn("text-sm font-bold", m.balance.cuadra ? 'text-emerald-800' : 'text-red-800')}>
+                        {m.balance.cuadra ? '✓ Balance cuadra — Activo = PN + Pasivo' : `⚠ Balance NO cuadra — Diferencia: ${fmt(m.balance.diferencia)}`}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Total Activo', value: fmt(m.totalActivo), sub: `NC: ${fmt(m.totalActivo - m.activoCorriente)} | C: ${fmt(m.activoCorriente)}` },
+                        { label: 'Patrimonio Neto', value: fmt(m.patrimonioNeto), sub: '' },
+                        { label: 'Total Pasivo', value: fmt(m.pasivoCorriente + m.pasivoNoCorriente), sub: `NC: ${fmt(m.pasivoNoCorriente)} | C: ${fmt(m.pasivoCorriente)}` },
+                      ].map((k, i) => (
+                        <div key={i} className="bg-white/70 rounded-lg p-2.5">
+                          <p className="text-sm font-bold text-slate-800">{k.value}</p>
+                          <p className="text-[10px] text-slate-600 font-medium">{k.label}</p>
+                          {k.sub && <p className="text-[9px] text-slate-400 mt-0.5">{k.sub}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    {!m.balance.cuadra && (
+                      <p className="text-xs text-red-700 mt-2">
+                        Revisa las cuentas en el paso anterior. Asegúrate de que todas las partidas del balance estén correctamente clasificadas. La diferencia de {fmt(m.balance.diferencia)} puede estar en una partida mal clasificada o con importe incorrecto.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* PyG check */}
+                {pygTienesDatos && (
+                  <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <p className="text-xs font-bold text-slate-600 mb-2">Cuenta de PyG</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Ingresos totales', value: fmt(m.ingresos), color: 'text-emerald-700' },
+                        { label: 'Gastos totales', value: fmt(m.gastos), color: 'text-slate-700' },
+                        { label: 'Resultado del ejercicio', value: fmt(m.resultado), color: m.resultado >= 0 ? 'text-emerald-700' : 'text-red-600' },
+                      ].map((k, i) => (
+                        <div key={i} className="bg-white rounded-lg p-2.5 border border-slate-100">
+                          <p className={cn("text-sm font-bold", k.color)}>{k.value}</p>
+                          <p className="text-[10px] text-slate-500">{k.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!balanceTienesDatos && !pygTienesDatos && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <p className="text-xs font-bold text-amber-800">⚠ No se han detectado datos financieros suficientes</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Vuelve al paso anterior y revisa las clasificaciones de cuentas.</p>
+                  </div>
+                )}
+
                 {(pendingRevision > 0 || lowConf > 0) && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                     <p className="text-xs font-bold text-amber-800 mb-1">⚠ Hay cifras pendientes de revisión</p>
@@ -667,12 +925,14 @@ REGLAS: Extrae TODAS las partidas, no solo totales. NO inventes importes. "1.234
                 <div className="space-y-2">
                   <p className="text-xs font-bold text-slate-700">Modo de aprobación:</p>
                   {[
-                    { id: 'validado', icon: Shield, label: 'Datos validados', desc: 'He revisado y confirmado todas las cuentas.' },
-                    { id: 'con_advertencias', icon: AlertTriangle, label: 'Analizar con advertencias', desc: 'Continuar aunque hay cuentas pendientes.' },
-                    { id: 'sin_informe', icon: Eye, label: 'Guardar sin informe', desc: 'Guardar para revisión posterior.' },
+                    { id: 'validado', icon: Shield, label: 'Datos validados y balance cuadra', desc: 'He revisado y confirmado todas las cuentas.', disabled: !m.balance.cuadra && balanceTienesDatos },
+                    { id: 'con_advertencias', icon: AlertTriangle, label: 'Continuar con advertencias', desc: 'Continuar aunque el balance no cuadra exactamente.', disabled: false },
+                    { id: 'sin_informe', icon: Eye, label: 'Guardar sin informe', desc: 'Guardar para revisión posterior.', disabled: false },
                   ].map(opt => { const Icon = opt.icon; return (
-                    <button key={opt.id} onClick={() => setApprovalMode(opt.id)}
+                    <button key={opt.id} onClick={() => !opt.disabled && setApprovalMode(opt.id)}
+                      disabled={opt.disabled}
                       className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all",
+                        opt.disabled ? 'opacity-40 cursor-not-allowed border-slate-100 bg-slate-50' :
                         approvalMode === opt.id ? 'border-slate-400 bg-slate-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
                       <Icon className="w-4 h-4 text-slate-600 flex-shrink-0" />
                       <div><p className="text-xs font-bold text-foreground">{opt.label}</p><p className="text-[10px] text-slate-500">{opt.desc}</p></div>
