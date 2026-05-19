@@ -206,33 +206,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       setPdfReady(true);
     }
 
-    // 2. Validar enlace público: verificar que el token resuelve la factura correcta
+    // 2. Verificar que el enlace público existe (token ya guardado en initPublicLink)
     setSendingStep('link');
     let validatedLink = publicLink;
-    if (!validatedLink) {
-      setError('No se ha podido generar el enlace público de la factura. Vuelve a intentarlo.');
-      setSending(false); setSendingStep('');
-      return;
-    }
-    // Validar en cliente: buscar factura por token y comprobar que coincide
-    try {
-      const tokenParts = validatedLink.split('/');
-      const t = tokenParts[tokenParts.length - 1];
-      if (!t || t.length < 10) throw new Error('Token inválido');
-      const invCheck = await base44.entities.Invoice.filter({ public_token: t });
-      if (!invCheck || invCheck.length === 0 || invCheck[0].id !== invoice.id) {
-        throw new Error('El enlace público no resuelve esta factura correctamente.');
-      }
-      if (invCheck[0].public_link_status === 'desactivado') {
-        throw new Error('El enlace público está desactivado. Actívalo desde el panel antes de enviar.');
-      }
-    } catch (linkErr) {
-      setError(`No se ha enviado el correo porque el enlace público de la factura no está disponible: ${linkErr.message}`);
-      await base44.entities.InvoiceEmailLog.create({
-        invoice_id: invoice.id, company_id: company?.id, to: to.join(', '), subject,
-        sent_at: new Date().toISOString(), sent_by: user?.full_name || user?.email,
-        delivery_status: 'error_envio', error_message: `Enlace público inválido: ${linkErr.message}`,
-      }).catch(() => {});
+    if (!validatedLink || !validatedLink.includes('/public/invoice/')) {
+      setError('No se ha podido generar el enlace público de la factura. Cierra y vuelve a abrir el modal.');
       setSending(false); setSendingStep('');
       return;
     }
