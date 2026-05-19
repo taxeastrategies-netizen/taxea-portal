@@ -87,7 +87,7 @@ function InfoRow({ label, value, valueClass = '' }) {
 }
 
 // ── Panel principal ────────────────────────────────────────────────────────────
-export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onEdit, onRefresh, company }) {
+export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onEdit, onRefresh, company, user, isAdmin }) {
   const [tab, setTab] = useState('general');
   const [emailLogs, setEmailLogs] = useState([]);
   const [timeline, setTimeline] = useState([]);

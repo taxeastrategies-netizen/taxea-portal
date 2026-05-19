@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import InvoiceForm from '@/components/facturas/InvoiceForm';
 import InvoiceViewer from '@/components/facturas/InvoiceViewer';
-import InvoiceOperationalSidePanel from '@/components/facturas/InvoiceOperationalSidePanel';
+import InvoiceDocumentWorkspace from '@/components/facturas/InvoiceDocumentWorkspace';
 import SendInvoiceDocumentModal from '@/components/facturas/SendInvoiceDocumentModal';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +26,8 @@ export default function Facturas() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  // workspaceInvoice: factura abierta en la vista completa de documento
+  const [workspaceInvoice, setWorkspaceInvoice] = useState(null);
   const [sendingInvoice, setSendingInvoice] = useState(null);
 
   useEffect(() => {
@@ -47,24 +48,41 @@ export default function Facturas() {
   const updateEstado = async (id, field, value) => {
     await base44.entities.Invoice.update(id, { [field]: value });
     loadInvoices();
-    if (selectedInvoice?.id === id) {
-      setSelectedInvoice(prev => ({ ...prev, [field]: value }));
+    // Actualizar factura en workspace si está abierta
+    if (workspaceInvoice?.id === id) {
+      setWorkspaceInvoice(prev => ({ ...prev, [field]: value }));
     }
   };
 
-  const handleSelectInvoice = (inv) => {
-    setSelectedInvoice(prev => prev?.id === inv.id ? null : inv);
+  const handleOpenWorkspace = (inv) => {
+    setWorkspaceInvoice(inv);
   };
 
-  const handleSend = (inv, mode, logData) => {
-    setSendingInvoice(inv || selectedInvoice);
+  const handleCloseWorkspace = () => {
+    setWorkspaceInvoice(null);
+    loadInvoices(); // Refrescar listado al volver
   };
 
-  const handleSent = () => {
+  const handleSend = (inv) => {
+    setSendingInvoice(inv || workspaceInvoice);
+  };
+
+  const handleSent = async () => {
     loadInvoices();
-    if (selectedInvoice) {
-      // Actualizar el selectedInvoice con estado_envio actualizado
-      setSelectedInvoice(prev => ({ ...prev, estado_envio: 'enviada' }));
+    if (workspaceInvoice) {
+      // Refrescar la factura en el workspace
+      const data = await base44.entities.Invoice.filter({ company_id: company.id });
+      const fresh = data?.find(i => i.id === workspaceInvoice.id);
+      if (fresh) setWorkspaceInvoice(fresh);
+    }
+  };
+
+  const handleWorkspaceRefresh = async () => {
+    loadInvoices();
+    if (workspaceInvoice) {
+      const data = await base44.entities.Invoice.filter({ company_id: company.id });
+      const fresh = data?.find(i => i.id === workspaceInvoice.id);
+      if (fresh) setWorkspaceInvoice(fresh);
     }
   };
 
@@ -86,10 +104,9 @@ export default function Facturas() {
   if (!company && !loadingCompany) return <NoCompanyState pageName="la sección de Facturas" />;
 
   return (
-    <div className={cn("flex gap-0 min-h-0", selectedInvoice ? 'h-[calc(100vh-120px)]' : '')}>
-
-      {/* ── Zona principal ─────────────────────────────────────────── */}
-      <div className={cn("flex-1 min-w-0 overflow-y-auto", selectedInvoice ? 'pr-0' : '')}>
+    <>
+      {/* ── Listado de facturas ──────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 overflow-y-auto">
         <PageHeader title="Facturas" subtitle={`${filtered.length} facturas · ${filterTipo === 'emitida' ? 'Emitidas' : 'Recibidas'}`}>
           <Button onClick={openNew} className="bg-teal hover:bg-teal-dark h-9">
             <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
@@ -166,9 +183,8 @@ export default function Facturas() {
                 <tbody className="divide-y divide-border">
                   {filtered.map(inv => (
                     <tr key={inv.id}
-                      onClick={() => handleSelectInvoice(inv)}
-                      className={cn("hover:bg-secondary/30 transition-colors cursor-pointer",
-                        selectedInvoice?.id === inv.id && "bg-primary/5 border-l-2 border-l-primary")}>
+                      onClick={() => handleOpenWorkspace(inv)}
+                      className="hover:bg-secondary/30 transition-colors cursor-pointer">
                       <td className="px-4 py-3 font-medium text-foreground">{inv.numero_factura}</td>
                       <td className="px-4 py-3 text-muted-foreground">{inv.fecha_emision}</td>
                       <td className="px-4 py-3 text-foreground">{inv.cliente_nombre || '—'}</td>
@@ -186,7 +202,7 @@ export default function Facturas() {
                             <Send className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => setViewing(inv)}
+                            onClick={() => handleOpenWorkspace(inv)}
                             className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-teal transition-colors"
                             title="Ver factura">
                             <Eye className="w-4 h-4" />
@@ -199,8 +215,7 @@ export default function Facturas() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => openEdit(inv)}>Editar</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setViewing(inv)}>Ver factura</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleSelectInvoice(inv)}>Panel operativo</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_cobro', 'cobrada')}>Marcar cobrada</DropdownMenuItem>
                               {isAdmin && <>
@@ -227,30 +242,21 @@ export default function Facturas() {
         </div>
       </div>
 
-      {/* ── Panel lateral operativo ────────────────────────────────── */}
-      {selectedInvoice && (
-        <div className="w-[440px] flex-shrink-0 border-l border-border overflow-hidden flex flex-col"
-          style={{ height: 'calc(100vh - 120px)', position: 'sticky', top: 0 }}>
-          <InvoiceOperationalSidePanel
-            invoice={selectedInvoice}
-            company={company}
-            onClose={() => setSelectedInvoice(null)}
-            onSend={handleSend}
-            onEdit={openEdit}
-            onRefresh={() => {
-              loadInvoices();
-              // Recargar la factura seleccionada con datos frescos
-              base44.entities.Invoice.filter({ company_id: company.id })
-                .then(data => {
-                  const fresh = data?.find(i => i.id === selectedInvoice.id);
-                  if (fresh) setSelectedInvoice(fresh);
-                });
-            }}
-          />
-        </div>
+      {/* ── Vista completa de documento (workspace) ─────────────────────── */}
+      {workspaceInvoice && (
+        <InvoiceDocumentWorkspace
+          invoice={workspaceInvoice}
+          company={company}
+          user={user}
+          isAdmin={isAdmin}
+          onClose={handleCloseWorkspace}
+          onSend={handleSend}
+          onEdit={(inv) => { openEdit(inv); }}
+          onRefresh={handleWorkspaceRefresh}
+        />
       )}
 
-      {/* ── Modales ───────────────────────────────────────────────── */}
+      {/* ── Modales ───────────────────────────────────────────────────────── */}
       <InvoiceForm
         open={showForm}
         onOpenChange={v => { setShowForm(v); if (!v) setEditing(null); }}
@@ -275,6 +281,6 @@ export default function Facturas() {
         user={user}
         onSent={handleSent}
       />
-    </div>
+    </>
   );
 }
