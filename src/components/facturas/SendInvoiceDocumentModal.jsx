@@ -8,7 +8,7 @@ import { X, Send, Paperclip, ChevronDown, Loader2, CheckCircle2, AlertTriangle, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { buildPremiumInvoiceEmail, buildEmailSubject } from './invoicePremiumEmail';
+import { buildPremiumInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
 
 const TEMPLATES = [
   { id: 'envio_factura',  label: 'Envío de factura' },
@@ -97,6 +97,9 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [preparingPdf, setPreparingPdf] = useState(false);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [resolvedPdfUrl, setResolvedPdfUrl] = useState(null);
   const [saveEmail, setSaveEmail] = useState(false);
   const [clientEmails, setClientEmails] = useState([]);
   const [noEmailWarning, setNoEmailWarning] = useState(false);
@@ -110,10 +113,20 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setSent(false);
     setError('');
     setShowPreview(false);
+    setPdfReady(!!invoice?.archivo_url);
+    setResolvedPdfUrl(invoice?.archivo_url || null);
     loadClientEmail();
     initPublicLink();
     setTemplateId('envio_factura');
     setSubject(buildEmailSubject(invoice, company, 'envio_factura'));
+    // Pre-generar PDF en segundo plano al abrir el modal
+    if (!invoice?.archivo_url) {
+      setPreparingPdf(true);
+      ensureInvoicePdf(invoice, company, base44).then(result => {
+        if (result.ok) { setPdfReady(true); setResolvedPdfUrl(result.pdfUrl); }
+        setPreparingPdf(false);
+      }).catch(() => setPreparingPdf(false));
+    }
   }, [open, invoice?.id]);
 
   // Re-generar asunto al cambiar plantilla
@@ -173,6 +186,23 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     if (!subject.trim()) { setError('El asunto no puede estar vacío.'); return; }
 
     setSending(true);
+
+    // Garantizar PDF antes de enviar
+    let finalPdfUrl = resolvedPdfUrl;
+    if (!finalPdfUrl) {
+      setPreparingPdf(true);
+      const pdfResult = await ensureInvoicePdf(invoice, company, base44);
+      setPreparingPdf(false);
+      if (!pdfResult.ok) {
+        setError('No se puede enviar la factura porque no ha sido posible generar el PDF adjunto automáticamente. Revisa la factura y vuelve a intentarlo.');
+        setSending(false);
+        return;
+      }
+      finalPdfUrl = pdfResult.pdfUrl;
+      setResolvedPdfUrl(finalPdfUrl);
+      setPdfReady(true);
+    }
+
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
       const link = publicLink || `${window.location.origin}/public/invoice/${invoice?.id}`;
@@ -277,14 +307,17 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
           ) : (
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-              {/* Aviso PDF no adjunto (no bloquea) */}
-              {!invoice?.archivo_url && (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-amber-800">Sin PDF adjunto</p>
-                    <p className="text-xs text-amber-700">El email se enviará sin PDF adjunto. Puedes generar el PDF desde la factura si lo necesitas.</p>
-                  </div>
+              {/* Estado del PDF */}
+              {preparingPdf && (
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
+                  <Loader2 className="w-4 h-4 text-blue-600 flex-shrink-0 animate-spin" />
+                  <p className="text-xs font-semibold text-blue-800">Preparando PDF adjunto…</p>
+                </div>
+              )}
+              {!preparingPdf && pdfReady && !invoice?.archivo_url && (
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-emerald-800">PDF generado automáticamente y listo para adjuntar.</p>
                 </div>
               )}
 
@@ -367,15 +400,17 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-2">Adjuntos</label>
                 <div className={cn("flex items-center gap-2 p-2.5 border rounded-lg",
-                  invoice?.archivo_url ? 'border-primary/30 bg-primary/5' : 'border-border bg-secondary/30')}>
-                  <Paperclip className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  pdfReady ? 'border-primary/30 bg-primary/5' : preparingPdf ? 'border-blue-200 bg-blue-50' : 'border-border bg-secondary/30')}>
+                  <Paperclip className={cn("w-3.5 h-3.5 flex-shrink-0", preparingPdf ? 'text-blue-500' : pdfReady ? 'text-primary' : 'text-muted-foreground')} />
                   <div className="flex-1 min-w-0">
                     <span className="text-xs font-medium text-foreground">
                       Factura_{invoice?.numero_factura}.pdf
                     </span>
-                    {!invoice?.archivo_url
-                      ? <span className="text-[10px] text-amber-600 ml-2">Sin PDF — se enviará sin adjunto</span>
-                      : <span className="text-[10px] text-emerald-600 ml-2">✓ Adjunto confirmado</span>
+                    {preparingPdf
+                      ? <span className="text-[10px] text-blue-600 ml-2">Generando…</span>
+                      : pdfReady
+                        ? <span className="text-[10px] text-emerald-600 ml-2">✓ Adjunto listo</span>
+                        : <span className="text-[10px] text-muted-foreground ml-2">Se generará al enviar</span>
                     }
                   </div>
                 </div>
@@ -429,10 +464,10 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending} className="h-8 text-sm">
                 Cancelar
               </Button>
-              <Button onClick={handleSend} disabled={sending || to.length === 0}
+              <Button onClick={handleSend} disabled={sending || preparingPdf || to.length === 0}
                 className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                {sending ? 'Enviando…' : 'Enviar'}
+                {sending ? (preparingPdf ? 'Preparando PDF…' : 'Enviando…') : 'Enviar'}
               </Button>
             </div>
           )}
