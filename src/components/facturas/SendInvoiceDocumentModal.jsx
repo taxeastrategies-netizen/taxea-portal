@@ -1,45 +1,20 @@
 /**
- * SendInvoiceDocumentModal — Modal de envío de factura por email
- * Precarga email del cliente, permite CC/BCC, plantillas y adjuntos
+ * SendInvoiceDocumentModal V2 — Email premium HTML, adjunto PDF obligatorio, enlace público
  */
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
-import { X, Send, Paperclip, ChevronDown, Loader2, CheckCircle2, AlertTriangle, Mail } from 'lucide-react';
+import { X, Send, Paperclip, ChevronDown, Loader2, CheckCircle2, AlertTriangle, Mail, ExternalLink, Copy, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { buildPremiumInvoiceEmail, buildEmailSubject } from './invoicePremiumEmail';
 
-// ── Plantillas predefinidas ────────────────────────────────────────────────────
 const TEMPLATES = [
-  {
-    id: 'envio_factura',
-    label: 'Envío de factura',
-    subject: (inv) => `Factura ${inv?.numero_factura || ''} — ${inv?.empresa_nombre || ''}`,
-    body: (inv) =>
-      `Hola,\n\nTe enviamos la factura ${inv?.numero_factura || ''} por importe de ${formatAmount(inv?.total_factura)}.\n\nEl documento vence el ${formatDate(inv?.fecha_vencimiento)}.\n\nPuedes consultar el documento desde el portal en el siguiente enlace:\n${window.location.origin}/portal/invoice/${inv?.id}\n\nSi tienes cualquier duda, puedes responder a este correo.\n\nGracias,\n`,
-  },
-  {
-    id: 'recordatorio',
-    label: 'Recordatorio de vencimiento',
-    subject: (inv) => `Recordatorio de pago — Factura ${inv?.numero_factura || ''}`,
-    body: (inv) =>
-      `Hola,\n\nTe recordamos que la factura ${inv?.numero_factura || ''} por importe de ${formatAmount(inv?.total_factura)} venció el ${formatDate(inv?.fecha_vencimiento)} y se encuentra pendiente de pago.\n\nPuedes consultar el documento en:\n${window.location.origin}/portal/invoice/${inv?.id}\n\nSi ya has realizado el pago, por favor ignora este mensaje.\n\nGracias,\n`,
-  },
-  {
-    id: 'vencida',
-    label: 'Factura vencida',
-    subject: (inv) => `Factura ${inv?.numero_factura || ''} — Pendiente de pago`,
-    body: (inv) =>
-      `Hola,\n\nNos ponemos en contacto porque la factura ${inv?.numero_factura || ''} por importe de ${formatAmount(inv?.total_factura)} está pendiente de pago desde el ${formatDate(inv?.fecha_vencimiento)}.\n\nTe agradeceríamos que regularizaras el pago en la mayor brevedad posible.\n\nGracias,\n`,
-  },
-  {
-    id: 'pagada',
-    label: 'Confirmación de pago',
-    subject: (inv) => `Confirmación de pago — Factura ${inv?.numero_factura || ''}`,
-    body: (inv) =>
-      `Hola,\n\nConfirmamos la recepción del pago de la factura ${inv?.numero_factura || ''} por importe de ${formatAmount(inv?.total_factura)}.\n\nQuedamos a tu disposición para cualquier consulta.\n\nGracias,\n`,
-  },
+  { id: 'envio_factura',  label: 'Envío de factura' },
+  { id: 'recordatorio',   label: 'Recordatorio de vencimiento' },
+  { id: 'vencida',        label: 'Factura vencida' },
+  { id: 'pagada',         label: 'Confirmación de pago' },
 ];
 
 const formatAmount = (n) =>
@@ -49,6 +24,13 @@ const formatDate = (d) => {
   if (!d) return '—';
   try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }); }
   catch { return d; }
+};
+
+// Generar token público seguro
+const generatePublicToken = () => {
+  const arr = new Uint8Array(32);
+  window.crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -104,35 +86,58 @@ function EmailInput({ label, chips, onAddChip, onRemoveChip, placeholder }) {
   );
 }
 
-// ── Modal principal ────────────────────────────────────────────────────────────
+// ── Modal principal V2 ─────────────────────────────────────────────────────────
 export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, company, user, onSent }) {
   const [to, setTo] = useState([]);
   const [cc, setCc] = useState([]);
   const [bcc, setBcc] = useState([]);
   const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
   const [templateId, setTemplateId] = useState('envio_factura');
   const [showCcBcc, setShowCcBcc] = useState(false);
-  const [attachPdf, setAttachPdf] = useState(true);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [saveEmail, setSaveEmail] = useState(false);
   const [clientEmails, setClientEmails] = useState([]);
   const [noEmailWarning, setNoEmailWarning] = useState(false);
+  const [publicLink, setPublicLink] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState('');
 
-  // Cargar email del cliente al abrir
   useEffect(() => {
     if (!open || !invoice) return;
     setSent(false);
     setError('');
+    setShowPreview(false);
     loadClientEmail();
-    applyTemplate('envio_factura');
+    initPublicLink();
+    setTemplateId('envio_factura');
+    setSubject(buildEmailSubject(invoice, company, 'envio_factura'));
   }, [open, invoice?.id]);
+
+  // Re-generar asunto al cambiar plantilla
+  useEffect(() => {
+    if (invoice) setSubject(buildEmailSubject(invoice, company, templateId));
+  }, [templateId]);
+
+  const initPublicLink = async () => {
+    // Usar token existente o generar uno nuevo
+    let token = invoice?.public_token;
+    if (!token) {
+      token = generatePublicToken();
+      const link = `${window.location.origin}/public/invoice/${token}`;
+      await base44.entities.Invoice.update(invoice.id, {
+        public_token: token,
+        public_link_status: 'activo',
+        public_invoice_url: link,
+      });
+    }
+    setPublicLink(`${window.location.origin}/public/invoice/${token}`);
+  };
 
   const loadClientEmail = async () => {
     const emails = [];
-    // Buscar en contactos por nombre del cliente
     if (invoice?.cliente_nombre && company?.id) {
       try {
         const contacts = await base44.entities.Contact.filter({ company_id: company.id }, '-created_date', 100);
@@ -141,109 +146,98 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
           invoice.cliente_nombre.toLowerCase().includes(c.nombre?.toLowerCase() || '')
         );
         matches.forEach(c => {
-          if (c.email && !emails.find(e => e.email === c.email)) {
+          if (c.email && !emails.find(e => e.email === c.email))
             emails.push({ email: c.email, label: 'Principal', nombre: c.nombre });
-          }
-          if (c.email_facturacion && !emails.find(e => e.email === c.email_facturacion)) {
+          if (c.email_facturacion && !emails.find(e => e.email === c.email_facturacion))
             emails.push({ email: c.email_facturacion, label: 'Facturación', nombre: c.nombre });
-          }
         });
       } catch {}
     }
     setClientEmails(emails);
-
-    if (emails.length > 0) {
-      setTo([emails[0].email]);
-      setNoEmailWarning(false);
-    } else {
-      setTo([]);
-      setNoEmailWarning(true);
-    }
+    if (emails.length > 0) { setTo([emails[0].email]); setNoEmailWarning(false); }
+    else { setTo([]); setNoEmailWarning(true); }
   };
 
-  const applyTemplate = (tid) => {
-    const tpl = TEMPLATES.find(t => t.id === tid);
-    if (!tpl) return;
-    setTemplateId(tid);
-    setSubject(tpl.subject(invoice));
-    setBody(tpl.body(invoice));
+  const handlePreview = () => {
+    const link = publicLink || `${window.location.origin}/public/invoice/${invoice?.id}`;
+    const html = buildPremiumInvoiceEmail(invoice, company, link, templateId);
+    setPreviewHtml(html);
+    setShowPreview(true);
   };
 
   const handleSend = async () => {
     setError('');
-    // Validaciones
     if (to.length === 0) { setError('Añade al menos un destinatario.'); return; }
     const invalidEmails = to.filter(e => !isValidEmail(e));
     if (invalidEmails.length > 0) { setError(`Email inválido: ${invalidEmails.join(', ')}`); return; }
     if (!subject.trim()) { setError('El asunto no puede estar vacío.'); return; }
-    if (!body.trim()) { setError('El cuerpo del mensaje no puede estar vacío.'); return; }
-    if (attachPdf && !invoice?.archivo_url) {
-      const confirm = window.confirm('No hay PDF generado para esta factura. ¿Enviar sin PDF?');
-      if (!confirm) return;
+
+    // Bloquear si no hay PDF
+    if (!invoice?.archivo_url) {
+      setError('No se puede enviar la factura porque no se ha generado el PDF adjunto. Genera el PDF y vuelve a intentarlo.');
+      return;
     }
 
     setSending(true);
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
-      const finalBody = body.endsWith('\n') ? body + senderName : body + '\n' + senderName;
+      const link = publicLink || `${window.location.origin}/public/invoice/${invoice?.id}`;
+      const htmlBody = buildPremiumInvoiceEmail(invoice, company, link, templateId);
 
-      // Enviar email usando integración Core
+      // Enviar email con HTML premium
       await base44.integrations.Core.SendEmail({
         to: to[0],
         from_name: senderName,
         subject,
-        body: finalBody,
+        body: htmlBody,
       });
 
-      // Registrar log de envío
-      const logData = {
+      // Log de envío
+      await base44.entities.InvoiceEmailLog.create({
         invoice_id: invoice.id,
         company_id: company?.id,
         to: to.join(', '),
         cc: cc.join(', '),
         bcc: bcc.join(', '),
         subject,
-        body: finalBody,
+        body: htmlBody,
         template_id: templateId,
-        attachments: attachPdf && invoice?.archivo_url ? [invoice.archivo_url] : [],
+        attachments: [invoice.archivo_url],
+        public_invoice_url: link,
+        pdf_attachment_name: `Factura_${invoice.numero_factura}.pdf`,
         sent_at: new Date().toISOString(),
         sent_by: user?.full_name || user?.email || 'Usuario',
         delivery_status: 'enviada',
         to_was_manual: noEmailWarning,
-      };
-      await base44.entities.InvoiceEmailLog.create(logData);
+      });
 
-      // Actualizar estado de factura a "enviada"
+      // Actualizar estado factura
       await base44.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
 
-      // Registrar evento en historial
+      // Timeline
       await base44.entities.InvoiceTimelineEvent.create({
         invoice_id: invoice.id,
         company_id: company?.id,
         event_type: 'email_enviado',
         event_label: 'Email enviado',
-        event_detail: `Enviado a ${to.join(', ')} · Asunto: ${subject}`,
+        event_detail: `Enviado a ${to.join(', ')} · Plantilla: ${TEMPLATES.find(t => t.id === templateId)?.label}`,
         created_at: new Date().toISOString(),
         created_by: user?.full_name || user?.email || 'Usuario',
         origin: 'manual',
       });
 
-      // Guardar email en contacto si se solicitó
+      // Guardar email si es nuevo
       if (saveEmail && noEmailWarning && to.length > 0) {
-        // Intento silencioso de guardar email
         try {
           const contacts = await base44.entities.Contact.filter({ company_id: company?.id }, '-created_date', 100);
           const match = contacts.find(c => c.nombre?.toLowerCase().includes(invoice.cliente_nombre?.toLowerCase() || ''));
-          if (match) {
-            await base44.entities.Contact.update(match.id, { email: to[0] });
-          }
+          if (match) await base44.entities.Contact.update(match.id, { email: to[0] });
         } catch {}
       }
 
       setSent(true);
       onSent?.();
     } catch (e) {
-      // Registrar error en log
       try {
         await base44.entities.InvoiceEmailLog.create({
           invoice_id: invoice.id,
@@ -262,153 +256,211 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
 
-        {/* Cabecera */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-border flex-shrink-0">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Enviar documento</h2>
-            {invoice && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {invoice.cliente_nombre || '—'} · {invoice.numero_factura} · {formatDate(invoice.fecha_emision)}
-              </p>
-            )}
+          {/* Cabecera */}
+          <div className="flex items-start justify-between px-5 py-4 border-b border-border flex-shrink-0">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Enviar documento</h2>
+              {invoice && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {invoice.cliente_nombre || '—'} · {invoice.numero_factura} · {formatDate(invoice.fecha_emision)}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {sent ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center flex-1">
+              <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" />
+              <h3 className="text-base font-semibold text-foreground mb-1">Factura enviada</h3>
+              <p className="text-sm text-muted-foreground mb-1">Email premium enviado a {to.join(', ')}</p>
+              <p className="text-xs text-muted-foreground mb-4">El cliente puede consultar la factura sin cuenta en el enlace público.</p>
+              <Button onClick={() => onOpenChange(false)} className="bg-primary hover:bg-primary/90">Cerrar</Button>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+              {/* PDF bloqueante */}
+              {!invoice?.archivo_url && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-800">PDF no generado</p>
+                    <p className="text-xs text-red-700">No se puede enviar la factura sin PDF adjunto. Genera el PDF primero.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sin email */}
+              {noEmailWarning && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Sin email de facturación guardado.</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Escribe un email manualmente en el campo "Para".</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Sugerencias emails */}
+              {clientEmails.length > 1 && (
+                <div className="bg-secondary/50 border border-border rounded-lg p-3">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Emails del cliente:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {clientEmails.map(e => (
+                      <button key={e.email} onClick={() => !to.includes(e.email) && setTo(prev => [...prev, e.email])}
+                        className={cn("text-xs px-2.5 py-1 rounded-full border font-medium transition-colors",
+                          to.includes(e.email) ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:bg-secondary')}>
+                        {e.label}: {e.email}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Para */}
+              <EmailInput label="Para *" chips={to}
+                onAddChip={e => setTo(prev => [...prev, e])}
+                onRemoveChip={e => setTo(prev => prev.filter(x => x !== e))}
+                placeholder="email@empresa.com" />
+
+              {/* CC / BCC */}
+              <button onClick={() => setShowCcBcc(!showCcBcc)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 -mt-2">
+                <ChevronDown className={cn("w-3 h-3 transition-transform", showCcBcc && "rotate-180")} />
+                {showCcBcc ? 'Ocultar CC / CCO' : 'Mostrar CC / CCO'}
+              </button>
+              {showCcBcc && (
+                <div className="space-y-3">
+                  <EmailInput label="CC" chips={cc} onAddChip={e => setCc(prev => [...prev, e])} onRemoveChip={e => setCc(prev => prev.filter(x => x !== e))} placeholder="copia@empresa.com" />
+                  <EmailInput label="CCO" chips={bcc} onAddChip={e => setBcc(prev => [...prev, e])} onRemoveChip={e => setBcc(prev => prev.filter(x => x !== e))} placeholder="cco@empresa.com" />
+                </div>
+              )}
+
+              {/* Plantilla */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Plantilla</label>
+                <select value={templateId} onChange={e => setTemplateId(e.target.value)}
+                  className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring/30">
+                  {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+              </div>
+
+              {/* Asunto */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Asunto *</label>
+                <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Asunto del email" className="h-9" />
+              </div>
+
+              {/* Email premium badge */}
+              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-3.5 h-3.5 text-primary" />
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">Email premium con diseño HTML</p>
+                    <p className="text-[10px] text-muted-foreground">Logo Taxea · Datos completos · Resumen de factura · Instrucciones de pago</p>
+                  </div>
+                </div>
+                <button onClick={handlePreview} className="text-xs text-primary hover:underline flex items-center gap-1 flex-shrink-0">
+                  <Eye className="w-3 h-3" /> Previsualizar
+                </button>
+              </div>
+
+              {/* Adjuntos */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-2">Adjuntos</label>
+                <div className={cn("flex items-center gap-2 p-2.5 border rounded-lg",
+                  invoice?.archivo_url ? 'border-primary/30 bg-primary/5' : 'border-red-200 bg-red-50')}>
+                  <Paperclip className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-foreground">
+                      Factura_{invoice?.numero_factura}.pdf
+                    </span>
+                    {!invoice?.archivo_url
+                      ? <span className="text-[10px] text-red-600 ml-2 font-semibold">⚠ No generado — bloquea el envío</span>
+                      : <span className="text-[10px] text-emerald-600 ml-2">✓ Adjunto confirmado</span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              {/* Enlace público */}
+              {publicLink && (
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Enlace público de la factura</label>
+                  <div className="bg-secondary/50 border border-border rounded-lg p-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-[10px] font-mono text-muted-foreground truncate flex-1">{publicLink}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => { navigator.clipboard.writeText(publicLink); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); }}
+                        className={cn("flex-1 text-xs py-1 rounded border font-medium transition-colors flex items-center justify-center gap-1",
+                          copiedLink ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-border hover:bg-secondary text-foreground')}>
+                        <Copy className="w-3 h-3" /> {copiedLink ? 'Copiado' : 'Copiar enlace'}
+                      </button>
+                      <a href={publicLink} target="_blank" rel="noreferrer"
+                        className="flex-1 text-xs py-1 rounded border border-border hover:bg-secondary text-foreground font-medium flex items-center justify-center gap-1">
+                        <Eye className="w-3 h-3" /> Ver sin login
+                      </a>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">El destinatario puede ver y descargar la factura sin necesidad de cuenta Taxea.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Guardar email */}
+              {noEmailWarning && to.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={saveEmail} onChange={e => setSaveEmail(e.target.checked)} className="rounded" />
+                  <span className="text-xs text-muted-foreground">Guardar este email como contacto de facturación</span>
+                </label>
+              )}
+
+              {/* Error */}
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!sent && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-border flex-shrink-0 bg-secondary/30">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending} className="h-8 text-sm">
+                Cancelar
+              </Button>
+              <Button onClick={handleSend} disabled={sending || to.length === 0 || !invoice?.archivo_url}
+                className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
+                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                {sending ? 'Enviando…' : 'Enviar'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de previsualización del email premium */}
+      {showPreview && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowPreview(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <p className="text-sm font-semibold text-slate-800">Previsualización del email</p>
+              <button onClick={() => setShowPreview(false)} className="p-1 rounded hover:bg-slate-100">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <iframe srcDoc={previewHtml} className="w-full" style={{ height: '600px', border: 'none' }} title="Preview email" />
+            </div>
           </div>
         </div>
-
-        {sent ? (
-          /* ── Estado enviado ── */
-          <div className="flex flex-col items-center justify-center p-8 text-center flex-1">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" />
-            <h3 className="text-base font-semibold text-foreground mb-1">Factura enviada</h3>
-            <p className="text-sm text-muted-foreground mb-4">Email enviado a {to.join(', ')}</p>
-            <Button onClick={() => onOpenChange(false)} className="bg-primary hover:bg-primary/90">Cerrar</Button>
-          </div>
-        ) : (
-          /* ── Formulario ── */
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-
-            {/* Aviso sin email */}
-            {noEmailWarning && (
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-semibold text-amber-800">Este cliente no tiene email de facturación guardado.</p>
-                  <p className="text-xs text-amber-700 mt-0.5">Introduce un email manualmente en el campo "Para".</p>
-                </div>
-              </div>
-            )}
-
-            {/* Sugerencias de emails del cliente */}
-            {clientEmails.length > 1 && (
-              <div className="bg-secondary/50 border border-border rounded-lg p-3">
-                <p className="text-xs font-semibold text-muted-foreground mb-2">Emails del cliente:</p>
-                <div className="flex flex-wrap gap-2">
-                  {clientEmails.map(e => (
-                    <button key={e.email} onClick={() => !to.includes(e.email) && setTo(prev => [...prev, e.email])}
-                      className={cn("text-xs px-2.5 py-1 rounded-full border font-medium transition-colors",
-                        to.includes(e.email) ? 'bg-primary text-primary-foreground border-transparent' : 'bg-card border-border text-foreground hover:bg-secondary')}>
-                      {e.label}: {e.email}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Para */}
-            <EmailInput
-              label="Para *"
-              chips={to}
-              onAddChip={e => setTo(prev => [...prev, e])}
-              onRemoveChip={e => setTo(prev => prev.filter(x => x !== e))}
-              placeholder="email@empresa.com"
-            />
-
-            {/* CC / BCC toggle */}
-            <button onClick={() => setShowCcBcc(!showCcBcc)}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 -mt-2">
-              <ChevronDown className={cn("w-3 h-3 transition-transform", showCcBcc && "rotate-180")} />
-              {showCcBcc ? 'Ocultar CC / CCO' : 'Mostrar CC / CCO'}
-            </button>
-
-            {showCcBcc && (
-              <div className="space-y-3">
-                <EmailInput label="CC" chips={cc} onAddChip={e => setCc(prev => [...prev, e])} onRemoveChip={e => setCc(prev => prev.filter(x => x !== e))} placeholder="copia@empresa.com" />
-                <EmailInput label="CCO (Copia oculta)" chips={bcc} onAddChip={e => setBcc(prev => [...prev, e])} onRemoveChip={e => setBcc(prev => prev.filter(x => x !== e))} placeholder="cco@empresa.com" />
-              </div>
-            )}
-
-            {/* Plantilla */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Plantilla</label>
-              <select value={templateId} onChange={e => applyTemplate(e.target.value)}
-                className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring/30">
-                {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </div>
-
-            {/* Asunto */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Asunto *</label>
-              <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Asunto del email" className="h-9" />
-            </div>
-
-            {/* Mensaje */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Mensaje *</label>
-              <textarea value={body} onChange={e => setBody(e.target.value)} rows={7}
-                className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring/30"
-                placeholder="Cuerpo del mensaje..." />
-            </div>
-
-            {/* Adjuntos */}
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-2">Adjuntos</label>
-              <div className="space-y-1.5">
-                <label className={cn("flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer transition-colors",
-                  attachPdf ? 'border-primary/30 bg-primary/5' : 'border-border hover:bg-secondary/50')}>
-                  <input type="checkbox" checked={attachPdf} onChange={e => setAttachPdf(e.target.checked)} className="rounded" />
-                  <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium text-foreground">PDF Factura {invoice?.numero_factura}</span>
-                    {!invoice?.archivo_url && <span className="text-[10px] text-amber-600 ml-2">(no generado)</span>}
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Guardar email si es nuevo */}
-            {noEmailWarning && to.length > 0 && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={saveEmail} onChange={e => setSaveEmail(e.target.checked)} className="rounded" />
-                <span className="text-xs text-muted-foreground">Guardar este email como contacto de facturación del cliente</span>
-              </label>
-            )}
-
-            {/* Error */}
-            {error && (
-              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-                <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-red-700">{error}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer */}
-        {!sent && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border flex-shrink-0 bg-secondary/30">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending} className="h-8 text-sm">
-              Cancelar
-            </Button>
-            <Button onClick={handleSend} disabled={sending || to.length === 0} className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
-              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              {sending ? 'Enviando…' : 'Enviar'}
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+      )}
+    </>
   );
 }

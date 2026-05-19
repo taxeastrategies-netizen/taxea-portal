@@ -18,6 +18,7 @@ import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { generateInvoiceAccountingEntry } from './invoicePremiumEmail';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fmt = (n) => typeof n === 'number'
@@ -116,7 +117,9 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
   };
 
   const copyPortalLink = () => {
-    const link = invoice.portal_link || `${window.location.origin}/portal/invoice/${invoice.id}`;
+    const link = invoice.public_token
+      ? `${window.location.origin}/public/invoice/${invoice.public_token}`
+      : `${window.location.origin}/public/invoice/${invoice.id}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -360,66 +363,100 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
               </div>
             </Section>
 
-            {/* Asiento contable */}
+            {/* Asiento contable — generado automáticamente */}
             <Section title="Asiento contable" icon={BookOpen} defaultOpen={false}>
-              {invoice.estado_contable === 'contabilizada' ? (
-                <div>
-                  <table className="w-full text-xs mb-2">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-1 text-muted-foreground font-medium">Cuenta</th>
-                        <th className="text-right py-1 text-muted-foreground font-medium">Debe</th>
-                        <th className="text-right py-1 text-muted-foreground font-medium">Haber</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-border/50">
-                        <td className="py-1 font-mono">430 · Clientes</td>
-                        <td className="py-1 text-right">{fmt(invoice.total_factura)}</td>
-                        <td className="py-1 text-right">—</td>
-                      </tr>
-                      <tr className="border-b border-border/50">
-                        <td className="py-1 font-mono">700 · Ventas</td>
-                        <td className="py-1 text-right">—</td>
-                        <td className="py-1 text-right">{fmt(invoice.base_imponible)}</td>
-                      </tr>
-                      {invoice.cuota_iva > 0 && (
-                        <tr className="border-b border-border/50">
-                          <td className="py-1 font-mono">477 · IVA Repercutido</td>
-                          <td className="py-1 text-right">—</td>
-                          <td className="py-1 text-right">{fmt(invoice.cuota_iva)}</td>
+              {(() => {
+                const entry = generateInvoiceAccountingEntry(invoice);
+                if (!entry) return (
+                  <div className="flex items-start gap-2 bg-slate-50 border border-border rounded-lg p-2.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-muted-foreground">Sin datos suficientes para generar el asiento.</p>
+                  </div>
+                );
+                const statusCfg = {
+                  generado:          { color: 'text-emerald-600', icon: CheckCircle2, label: 'Asiento cuadrado' },
+                  pendiente_validar:  { color: 'text-amber-600', icon: AlertTriangle, label: 'Pendiente de validar' },
+                  descuadrado:        { color: 'text-red-600', icon: AlertTriangle, label: 'Descuadrado' },
+                };
+                const sc = statusCfg[entry.status] || statusCfg.pendiente_validar;
+                const StatusIcon = sc.icon;
+                return (
+                  <div>
+                    <table className="w-full text-xs mb-2">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-1 text-muted-foreground font-medium w-24">Cuenta</th>
+                          <th className="text-left py-1 text-muted-foreground font-medium">Descripción</th>
+                          <th className="text-right py-1 text-muted-foreground font-medium">Debe</th>
+                          <th className="text-right py-1 text-muted-foreground font-medium">Haber</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                  <p className="text-[10px] text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Asiento cuadrado
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700">Asiento pendiente de validar. Marca la factura como contabilizada para generar el asiento.</p>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {entry.lines.map((line, i) => (
+                          <tr key={i} className="border-b border-border/40">
+                            <td className="py-1 font-mono text-[10px] text-muted-foreground">{line.cuenta}</td>
+                            <td className="py-1 text-[10px] text-foreground truncate max-w-[80px]">{line.descripcion}</td>
+                            <td className="py-1 text-right font-medium">{line.debe > 0 ? fmt(line.debe) : '—'}</td>
+                            <td className="py-1 text-right font-medium">{line.haber > 0 ? fmt(line.haber) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className={`flex items-center gap-1 text-[10px] font-semibold ${sc.color} mb-1.5`}>
+                      <StatusIcon className="w-3 h-3" /> {sc.label}
+                    </div>
+                    {entry.warnings.length > 0 && (
+                      <div className="space-y-1">
+                        {entry.warnings.map((w, i) => (
+                          <p key={i} className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1">{w}</p>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">Asiento sugerido basado en PGC. Valida con tu plan contable.</p>
+                  </div>
+                );
+              })()}
             </Section>
 
-            {/* Enlace portal cliente */}
-            <Section title="Portal cliente" icon={Link} defaultOpen={false}>
+            {/* Enlace público sin login */}
+            <Section title="Enlace público de factura" icon={Link} defaultOpen={false}>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 p-2.5 bg-secondary/50 rounded-lg">
-                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="text-xs text-muted-foreground flex-1 truncate font-mono">
-                    {`/portal/invoice/${invoice.id}`}
-                  </span>
-                </div>
-                <button onClick={copyPortalLink}
-                  className={cn("w-full text-xs font-medium rounded-lg py-1.5 border transition-colors",
-                    copied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-border hover:bg-secondary text-foreground')}>
-                  {copied ? '✓ Enlace copiado' : (
-                    <span className="flex items-center justify-center gap-1.5"><Copy className="w-3.5 h-3.5" /> Copiar enlace del documento</span>
-                  )}
-                </button>
+                {invoice.public_token ? (
+                  <>
+                    <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                      <span className="text-[10px] text-emerald-700 font-medium">Enlace activo · Sin login</span>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-lg">
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <span className="text-[10px] text-muted-foreground font-mono flex-1 truncate">
+                        {`${window.location.origin}/public/invoice/${invoice.public_token}`}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={copyPortalLink}
+                        className={cn("flex-1 text-xs font-medium rounded-lg py-1.5 border transition-colors flex items-center justify-center gap-1",
+                          copied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-border hover:bg-secondary text-foreground')}>
+                        <Copy className="w-3 h-3" /> {copied ? 'Copiado' : 'Copiar enlace'}
+                      </button>
+                      <a href={`${window.location.origin}/public/invoice/${invoice.public_token}`} target="_blank" rel="noreferrer"
+                        className="flex-1 text-xs font-medium rounded-lg py-1.5 border border-border hover:bg-secondary text-foreground flex items-center justify-center gap-1">
+                        <ExternalLink className="w-3 h-3" /> Ver
+                      </a>
+                    </div>
+                    {invoice.public_opened_at && (
+                      <p className="text-[10px] text-emerald-600 flex items-center gap-1">
+                        <Eye className="w-3 h-3" /> Abierto el {fmtDateTime(invoice.public_opened_at)}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">El destinatario puede ver y descargar la factura sin cuenta Taxea.</p>
+                  </>
+                ) : (
+                  <div className="text-center py-3">
+                    <p className="text-xs text-muted-foreground mb-2">Aún no se ha generado un enlace público para esta factura.</p>
+                    <p className="text-[10px] text-muted-foreground">Se generará automáticamente al enviar la factura por email.</p>
+                  </div>
+                )}
               </div>
             </Section>
           </div>

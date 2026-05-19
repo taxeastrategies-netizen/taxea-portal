@@ -42,6 +42,7 @@ import TaxAccounting from './pages/TaxAccounting';
 import Finance from './pages/Finance';
 import PeopleHR from './pages/PeopleHR.jsx';
 import Law from './pages/Law';
+import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -124,6 +125,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/*" element={<AppWithContext user={user} />} />
       </Route>
