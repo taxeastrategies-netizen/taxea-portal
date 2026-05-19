@@ -231,6 +231,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
                 importe_anterior: { type: 'number' },
                 signo: { type: 'string' },
                 confianza: { type: 'number' },
+                es_total: { type: 'boolean' },
               },
             },
           },
@@ -248,68 +249,88 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(28 + (i / uploadedUrls.length) * 60));
 
         const result = await base44.integrations.Core.InvokeLLM({
-          prompt: `Eres un experto contable español certificado especialista en PGC 2007. Analiza METICULOSAMENTE este documento financiero.
+          prompt: `Eres un experto contable español certificado (PGC 2007). Extrae los datos contables de este documento.
 
 EMPRESA: "${empresa}" | EJERCICIO: ${ejercicio}
-TIPO DE DOCUMENTO DECLARADO: ${tipoInfo?.label || u.type}
-ARCHIVO: ${u.nombre}
+TIPO: ${tipoInfo?.label || u.type} | ARCHIVO: ${u.nombre}
 
-═══════════════════════════════════════════════════════
-INSTRUCCIONES DE EXTRACCIÓN CRÍTICAS — LEE TODO ANTES DE EMPEZAR
-═══════════════════════════════════════════════════════
+═══════════════════════════════════════════
+⚠️ REGLA CRÍTICA — SIN DUPLICADOS ⚠️
+═══════════════════════════════════════════
+Los balances y PyG tienen JERARQUÍA: grupos → subgrupos → cuentas → subcuentas.
+DEBES extraer SOLO el nivel más detallado disponible (las "hojas" del árbol).
+NUNCA extraigas un total si ya has extraído sus componentes.
 
-## BALANCE DE SITUACIÓN — REGLAS ABSOLUTAS:
-La ecuación fundamental DEBE cumplirse: TOTAL ACTIVO = PATRIMONIO NETO + TOTAL PASIVO
-Si tus cifras no cuadran, ESTÁS COMETIENDO UN ERROR. Relee el documento hasta que cuadre.
+EJEMPLOS DE LO QUE NO DEBES HACER:
+❌ MAL: extraer "Inmovilizado material: 50.000" Y también "Terrenos: 20.000" + "Construcciones: 30.000"
+✅ BIEN: extraer solo "Terrenos: 20.000" y "Construcciones: 30.000" (los componentes suman el total)
 
-ACTIVO:
-- Activo No Corriente: inmovilizado intangible (20x), material (21x-22x), financiero LP (24x-25x), otros activos fijos
-- Activo Corriente: existencias (30x-39x), deudores/clientes (43x, 44x), deudas HP deudora (470,471,472,473,474), IVA soportado, otros deudores (46x), tesorería (57x), inversiones CP (53x-54x), periodificaciones activo (480,481)
+❌ MAL: extraer "Ventas: 100.000" Y también "Ventas mercaderías: 60.000" + "Ventas productos: 40.000"
+✅ BIEN: extraer solo las subcuentas que suman 100.000
 
-PATRIMONIO NETO (siempre positivo en el balance normalizado):
-- Capital (100,101,102), prima de emisión (110), reservas (11x), resultado del ejercicio (129), subvenciones (13x), ajustes por cambio de valor (133,134)
-- IMPORTANTE: el resultado del ejercicio puede ser negativo. Captura el signo correcto.
+REGLA PRÁCTICA: Si una línea del documento es SUMA de otras líneas que también aparecen → NO la extraigas.
+Si una línea NO tiene desglose visible → SÍ la extraigas (es la hoja del árbol).
 
-PASIVO NO CORRIENTE:
-- Deudas LP (17x): préstamos bancarios LP, obligaciones, deudas con entidades de crédito LP
-- Pasivos por impuesto diferido (479), provisiones LP (14x)
+═══════════════════════════════════════════
+BALANCE DE SITUACIÓN
+═══════════════════════════════════════════
+Extrae las partidas INDIVIDUALES (no sus totales de grupo) de:
 
-PASIVO CORRIENTE:
-- Proveedores (40x), acreedores comerciales (41x), deudas CP (52x), deudas con entidades de crédito CP (520,521), HP acreedora (475,476,477), IVA repercutido (477), SS acreedora (476), periodificaciones pasivo (485)
+ACTIVO NO CORRIENTE (masa: "activo_no_corriente"):
+Inmovilizado intangible (200-209 y amortiz. 280), Inmovilizado material neto (210-219 menos 281-282),
+Inversiones inmobiliarias, Inversiones financieras LP (240-259), Activos por impuesto diferido (474), Fondo de comercio (204)
 
-## CUENTA DE PÉRDIDAS Y GANANCIAS — REGLAS ABSOLUTAS:
-Resultado = Ingresos totales - Gastos totales
+ACTIVO CORRIENTE (masa: "activo_corriente"):
+Existencias (300-399), Clientes/deudores (430-449), Deudores varios (460-469),
+HP deudora/Hacienda (470,471,472,473,474), Inversiones financieras CP (530-549),
+Tesorería/caja/bancos (570-579), Periodificaciones activo (480,481)
 
-INGRESOS (grupo 7 — importes positivos):
-- Ventas y prestaciones de servicios (700-709)
-- Variación de existencias de productos terminados (710,711,712) — OJO: puede ser negativa
-- Trabajos realizados para el activo (73x)
-- Otros ingresos de explotación (74x, 75x)
-- Ingresos financieros (76x)
-- Beneficios y otros ingresos excepcionales (77x)
-- Subvenciones imputadas (74x)
+PATRIMONIO NETO (masa: "patrimonio_neto"):
+Capital escriturado (100), Prima emisión (110), Reservas (111-119), Resultado ejercicio (129) — puede ser NEGATIVO,
+Subvenciones (130-132), Ajustes valor (133-134)
 
-GASTOS (grupo 6 — importes positivos, se restan):
-- Consumos y variación de existencias (60x, 61x)
-- Gastos de personal: sueldos (640,641), SS empresa (642), otros gastos personal (64x)
-- Otros gastos de explotación: arrendamientos (621), reparaciones (622), servicios profesionales (623), publicidad (627), suministros (628), otros servicios exteriores (629)
-- Amortización del inmovilizado (680,681,682) — línea crítica para EBITDA
-- Deterioros y provisiones (690-699, 650-659)
-- Gastos financieros (66x): intereses deudas (663,665)
-- Impuesto sobre beneficios (630)
+PASIVO NO CORRIENTE (masa: "pasivo_no_corriente"):
+Deudas LP entidades crédito (170,171), Otras deudas LP (172-179), Pasivos impuesto diferido (479),
+Provisiones LP (140-149), Deudas empresas grupo LP (162-163)
 
-## REGLAS GENERALES:
-1. EXTRAE TODAS LAS LÍNEAS del documento, incluyendo subtotales intermedios Y totales. Marca los totales con confianza más alta.
-2. Los importes SIEMPRE como número decimal. Convierte formato español: "1.234,56" → 1234.56 | "(1.234,56)" → -1234.56 | "1.234" → 1234
-3. Si una partida aparece entre paréntesis → es negativa
-4. Para el campo "bloque": indica la sección exacta del documento (ej: "ACTIVO NO CORRIENTE", "GASTOS DE PERSONAL", "INGRESOS DE EXPLOTACIÓN")
-5. Para el campo "cuenta": pon el código PGC si aparece. Si no aparece, déjalo vacío "".
-6. Para el campo "signo": "+" si suma al bloque, "-" si resta (ej: amortizaciones acumuladas en activo son "-")
-7. confianza: 95-100 si lees perfectamente el número, 80-94 si hay dudas menores, <80 si hay ambigüedad real
+PASIVO CORRIENTE (masa: "pasivo_corriente"):
+Proveedores (400-409), Acreedores (410-419), Deudas CP entidades crédito (520,521),
+HP acreedora/IVA repercutido (475,476,477), SS acreedora (476), Otras deudas CP (522-529),
+Anticipos clientes (438), Periodificaciones pasivo (485)
 
-COMPROBACIÓN FINAL OBLIGATORIA:
-- Si es balance: suma tu Total Activo y compara con tu PN+Pasivo. Deben coincidir. Si no, revisa qué falta.
-- Si es PyG: comprueba que Resultado = Ingresos - Gastos coincide con la línea de "Resultado del ejercicio" del documento.`,
+═══════════════════════════════════════════
+CUENTA DE PÉRDIDAS Y GANANCIAS
+═══════════════════════════════════════════
+Misma regla: extrae el nivel más detallado.
+
+INGRESOS (masa: "pyg_ingreso") — importes positivos:
+Ventas mercaderías (700), Ventas productos (701-703), Prestaciones servicios (705),
+Variación existencias PT/semiterminados (710,711) — puede ser negativa,
+Trabajos para activo propio (730-733), Subvenciones explotación (740,747),
+Otros ingresos explotación (751-755,759), Ingresos financieros (760-769), Otros ingresos (770-779)
+
+GASTOS (masa: "pyg_gasto") — importes positivos (representan una resta):
+Consumos mercaderías (600,601), Consumos MP/otros aprovisionamientos (602-609),
+Variación existencias comerciales (610,611) — puede ser negativa,
+Sueldos y salarios (640,641), SS a cargo empresa (642), Otros gastos personal (643-649),
+Arrendamientos (621), Reparaciones (622), Servicios profesionales independientes (623),
+Transportes (624), Primas seguros (625), Publicidad (627), Suministros (628), Otros servicios (629),
+Tributos (631,634), Amortización inmovilizado (680,681,682) — IMPORTANTE para EBITDA,
+Deterioros y pérdidas (690-699,650-659), Gastos financieros/intereses (663,665,668),
+Impuesto sobre beneficios (630)
+
+═══════════════════════════════════════════
+FORMATO DE EXTRACCIÓN
+═══════════════════════════════════════════
+- importe_actual: número decimal. Español → "1.234,56"=1234.56 | "(500)"=-500 | negativo con signo "-"
+- cuenta: código PGC si aparece en el documento, "" si no
+- bloque: nombre exacto de la sección (ej: "ACTIVO NO CORRIENTE", "GASTOS DE PERSONAL")
+- es_total: true si esta línea es un subtotal/total (aunque no la incluyas en el cálculo, márcala)
+- confianza: 95-100 perfecta lectura, 80-94 dudas menores, <80 ambigüedad
+
+VERIFICACIÓN FINAL:
+- Balance: confirma que Σ(activo_no_corriente) + Σ(activo_corriente) ≈ Σ(patrimonio_neto) + Σ(pasivo_no_corriente) + Σ(pasivo_corriente)
+- PyG: confirma que Σ(ingresos) - Σ(gastos) ≈ resultado del ejercicio del documento`,
           file_urls: [u.url],
           response_json_schema: schema,
           model: 'gemini_3_flash',
@@ -337,6 +358,7 @@ COMPROBACIÓN FINAL OBLIGATORIA:
         cuentas: p.cuentas_detectadas || 0,
       }));
 
+      // ─── Construye lista procesada ────────────────────────────────────────
       const buildProcessed = (rawList) => rawList.map((a, i) => {
         const cuentaStr = String(a.cuenta || '').trim();
         const cls = classifyAccount(cuentaStr, a.descripcion, a.bloque);
@@ -359,10 +381,78 @@ COMPROBACIÓN FINAL OBLIGATORIA:
           confianza: conf,
           estado: conf < 70 ? 'pendiente_revision' : 'extraida',
           excluida: false,
+          es_total: a.es_total === true,
         };
       });
 
-      let processedAccounts = buildProcessed(allRawAccounts);
+      // ─── Deduplicación inteligente ────────────────────────────────────────
+      // Elimina totales/subtotales cuyo importe coincide con la suma de sus componentes
+      // y también elimina duplicados exactos (misma descripción + mismo importe + misma masa)
+      const deduplicarCuentas = (lista) => {
+        // Paso 1: Eliminar duplicados exactos (mismo bloque+descripcion+importe+masa)
+        const seen = new Map();
+        const sinDuplicados = lista.filter(a => {
+          const key = `${a.masa}|${a.descripcion.toLowerCase().trim()}|${a.importe_actual}`;
+          if (seen.has(key)) return false;
+          seen.set(key, true);
+          return true;
+        });
+
+        // Paso 2: Agrupar por masa y detectar totales redundantes
+        // Un registro es "total redundante" si:
+        // a) está marcado como es_total=true, O
+        // b) su importe coincide (±1%) con la suma de otros registros de la misma masa
+        const masas = ['activo_no_corriente','activo_corriente','patrimonio_neto','pasivo_no_corriente','pasivo_corriente','pyg_ingreso','pyg_gasto'];
+        const resultado = [];
+
+        for (const masa of masas) {
+          const grupo = sinDuplicados.filter(a => a.masa === masa);
+          if (grupo.length <= 1) { resultado.push(...grupo); continue; }
+
+          // Separar los marcados como totales de los que no
+          const totalesMarcados = grupo.filter(a => a.es_total);
+          const hojas = grupo.filter(a => !a.es_total);
+
+          if (hojas.length === 0) {
+            // Solo hay totales: usar todos
+            resultado.push(...grupo);
+            continue;
+          }
+
+          const sumaHojas = hojas.reduce((s, a) => s + Math.abs(a.importe_actual || 0), 0);
+
+          // Para cada total marcado: verificar si su valor coincide con suma de hojas (±2%)
+          const totalesRedundantes = new Set();
+          for (const t of totalesMarcados) {
+            const vt = Math.abs(t.importe_actual || 0);
+            if (sumaHojas > 0 && Math.abs(vt - sumaHojas) / sumaHojas < 0.02) {
+              totalesRedundantes.add(t.id);
+            }
+          }
+
+          // También detectar por jerarquía de código PGC: si hay código de 5+ dígitos
+          // y también el prefijo de 3 dígitos, el de 3 es el total
+          for (const t of grupo) {
+            const cT = String(t.cuenta || '').replace(/[^0-9]/g,'');
+            if (cT.length <= 3) {
+              // Buscar si hay subcuentas con mismo prefijo
+              const subcuentas = grupo.filter(s => {
+                const cS = String(s.cuenta || '').replace(/[^0-9]/g,'');
+                return cS.length > 3 && cS.startsWith(cT) && s.id !== t.id;
+              });
+              if (subcuentas.length > 0) totalesRedundantes.add(t.id);
+            }
+          }
+
+          resultado.push(...grupo.filter(a => !totalesRedundantes.has(a.id)));
+        }
+
+        // Añadir los sin_clasificar y varios sin filtrar
+        resultado.push(...sinDuplicados.filter(a => !masas.includes(a.masa)));
+        return resultado;
+      };
+
+      let processedAccounts = deduplicarCuentas(buildProcessed(allRawAccounts));
 
       // ─── VALIDACIÓN DE CUADRE DEL BALANCE ─────────────────────────────────
       const sumMasa = (lista, masa) =>
@@ -515,7 +605,7 @@ Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
     return true;
   });
 
-  const validAccounts = accounts.filter(a => !a.excluida);
+  const validAccounts = accounts.filter(a => !a.excluida && !a.es_total);
   const pendingRevision = validAccounts.filter(a => a.estado === 'pendiente_revision').length;
   const lowConf = validAccounts.filter(a => a.confianza < 70).length;
   const avgConf = validAccounts.length > 0
@@ -746,9 +836,9 @@ Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
                 {[
                   { label: 'Documentos analizados', value: pdfFiles.length },
                   { label: 'Páginas procesadas', value: pages.length },
-                  { label: 'Cuentas detectadas', value: accounts.length },
+                  { label: 'Cuentas (subcuentas)', value: accounts.filter(a => !a.es_total).length },
+                  { label: 'Totales eliminados', value: accounts.filter(a => a.es_total).length, ok: true },
                   { label: 'Confianza media', value: `${avgConf}%`, warn: avgConf < 70 },
-                  { label: 'Baja confianza', value: lowConf, warn: lowConf > 0 },
                   { label: 'Pendientes revisión', value: pendingRevision, warn: pendingRevision > 0 },
                 ].map((k, i) => (
                   <div key={i} className={cn("border rounded-xl p-3", k.warn ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100')}>
