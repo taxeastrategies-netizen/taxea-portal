@@ -1,0 +1,50 @@
+{
+  "name": "LaborAccountingRules",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "rule_name": {
+      "type": "string"
+    },
+    "concept_type": {
+      "type": "string",
+      "enum": [
+        "sueldos_salarios",
+        "ss_empresa",
+        "irpf",
+        "ss_acreedora",
+        "remuneraciones_pendientes",
+        "banco",
+        "anticipos",
+        "embargos",
+        "indemnizaciones",
+        "dietas",
+        "retribucion_especie",
+        "bonificaciones",
+        "otro"
+      ]
+    },
+    "account_code": {
+      "type": "string"
+    },
+    "account_name": {
+      "type": "string"
+    },
+    "priority": {
+      "type": "number",
+      "default": 0
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "company_id",
+    "rule_name",
+    "concept_type",
+    "account_code"
+  ]
+}

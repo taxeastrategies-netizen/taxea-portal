@@ -1,0 +1,111 @@
+{
+  "name": "LaborAccountingEntryProposal",
+  "type": "object",
+  "properties": {
+    "labor_ocr_document_id": {
+      "type": "string"
+    },
+    "batch_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "document_type": {
+      "type": "string",
+      "enum": [
+        "nomina",
+        "seguro_social"
+      ]
+    },
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "propuesto",
+        "validado",
+        "rechazado",
+        "contabilizado"
+      ],
+      "default": "propuesto"
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "cuenta": {
+            "type": "string"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "debe": {
+            "type": "number"
+          },
+          "haber": {
+            "type": "number"
+          },
+          "origen": {
+            "type": "string"
+          },
+          "confianza": {
+            "type": "string"
+          },
+          "regla_aplicada": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "debit_total": {
+      "type": "number",
+      "default": 0
+    },
+    "credit_total": {
+      "type": "number",
+      "default": 0
+    },
+    "balanced": {
+      "type": "boolean",
+      "default": false
+    },
+    "rules_applied": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validated_by": {
+      "type": "string"
+    },
+    "validated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "labor_ocr_document_id",
+    "company_id",
+    "document_type",
+    "period"
+  ]
+}

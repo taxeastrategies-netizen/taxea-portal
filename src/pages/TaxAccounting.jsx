@@ -13,6 +13,7 @@ import ObligacionesFiscales from './ObligacionesFiscales';
 import AsistenteFiscal from './AsistenteFiscal';
 import Notificaciones from './Notificaciones';
 import Timeline from './Timeline';
+import LaborOcr from './LaborOcr';
 
 export default function TaxAccounting() {
   const { module } = useParams();
@@ -36,6 +37,7 @@ export default function TaxAccounting() {
     case 'asistente': return <AsistenteFiscal />;
     case 'notificaciones': return <Notificaciones />;
     case 'timeline': return <Timeline />;
+    case 'labor-ocr': return <LaborOcr />;
     case 'dashboard':
     default:
       return <TaxDashboard onNavigate={handleNavigate} />;

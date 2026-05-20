@@ -1,0 +1,92 @@
+{
+  "name": "LaborOcrBatch",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "nominas",
+        "seguros_sociales",
+        "mixta"
+      ],
+      "default": "nominas"
+    },
+    "period": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "creado",
+        "procesando",
+        "completado",
+        "con_incidencias",
+        "error"
+      ],
+      "default": "creado"
+    },
+    "total_documents": {
+      "type": "number",
+      "default": 0
+    },
+    "payroll_count": {
+      "type": "number",
+      "default": 0
+    },
+    "ss_count": {
+      "type": "number",
+      "default": 0
+    },
+    "unknown_count": {
+      "type": "number",
+      "default": 0
+    },
+    "validated_count": {
+      "type": "number",
+      "default": 0
+    },
+    "archived_count": {
+      "type": "number",
+      "default": 0
+    },
+    "high_confidence_count": {
+      "type": "number",
+      "default": 0
+    },
+    "needs_review_count": {
+      "type": "number",
+      "default": 0
+    },
+    "duplicate_count": {
+      "type": "number",
+      "default": 0
+    },
+    "accounting_proposed_count": {
+      "type": "number",
+      "default": 0
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "mode"
+  ]
+}

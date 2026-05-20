@@ -1,0 +1,77 @@
+{
+  "name": "SocialSecurityExtraction",
+  "type": "object",
+  "properties": {
+    "labor_ocr_document_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "company_name": {
+      "type": "string"
+    },
+    "company_tax_id": {
+      "type": "string"
+    },
+    "contribution_account_code": {
+      "type": "string"
+    },
+    "settlement_period": {
+      "type": "string"
+    },
+    "settlement_number": {
+      "type": "string"
+    },
+    "settlement_type": {
+      "type": "string"
+    },
+    "total_to_pay": {
+      "type": "number"
+    },
+    "total_to_compensate": {
+      "type": "number"
+    },
+    "common_contingencies": {
+      "type": "number"
+    },
+    "professional_contingencies": {
+      "type": "number"
+    },
+    "unemployment": {
+      "type": "number"
+    },
+    "training": {
+      "type": "number"
+    },
+    "fogasa": {
+      "type": "number"
+    },
+    "mei": {
+      "type": "number"
+    },
+    "bonuses": {
+      "type": "number"
+    },
+    "surcharges": {
+      "type": "number"
+    },
+    "workers_count": {
+      "type": "number"
+    },
+    "validation_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence_global": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "labor_ocr_document_id",
+    "company_id"
+  ]
+}

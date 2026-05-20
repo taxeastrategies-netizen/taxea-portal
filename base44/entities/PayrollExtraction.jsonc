@@ -1,0 +1,99 @@
+{
+  "name": "PayrollExtraction",
+  "type": "object",
+  "properties": {
+    "labor_ocr_document_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "employee_tax_id": {
+      "type": "string"
+    },
+    "social_security_number": {
+      "type": "string"
+    },
+    "company_name": {
+      "type": "string"
+    },
+    "company_tax_id": {
+      "type": "string"
+    },
+    "contribution_account_code": {
+      "type": "string"
+    },
+    "professional_group": {
+      "type": "string"
+    },
+    "period_label": {
+      "type": "string"
+    },
+    "worked_days": {
+      "type": "number"
+    },
+    "gross_salary": {
+      "type": "number"
+    },
+    "total_accruals": {
+      "type": "number"
+    },
+    "total_deductions": {
+      "type": "number"
+    },
+    "net_pay": {
+      "type": "number"
+    },
+    "irpf_rate": {
+      "type": "number"
+    },
+    "irpf_amount": {
+      "type": "number"
+    },
+    "employee_ss_amount": {
+      "type": "number"
+    },
+    "employer_ss_amount": {
+      "type": "number"
+    },
+    "contribution_base_common": {
+      "type": "number"
+    },
+    "contribution_base_professional": {
+      "type": "number"
+    },
+    "devengos": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "deducciones": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "validation_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence_global": {
+      "type": "number",
+      "default": 0
+    },
+    "corrected_by_user": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "labor_ocr_document_id",
+    "company_id"
+  ]
+}

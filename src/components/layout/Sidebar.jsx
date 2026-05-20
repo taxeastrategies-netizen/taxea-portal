@@ -33,6 +33,7 @@ const TAX_MODULES = [
   { id: 'asistente', label: 'Asistente IA', icon: Sparkles, path: '/tax-accounting/asistente' },
   { id: 'notificaciones', label: 'Notificaciones', icon: Bell, path: '/tax-accounting/notificaciones' },
   { id: 'timeline', label: 'Timeline', icon: Clock, path: '/tax-accounting/timeline' },
+  { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },
 ];
 
 const DEPT_GROUPS = [
