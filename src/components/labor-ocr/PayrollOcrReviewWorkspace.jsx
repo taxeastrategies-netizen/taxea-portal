@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import {
   ArrowLeft, CheckCircle2, AlertTriangle, XCircle, FileText,
@@ -96,30 +97,57 @@ export default function PayrollOcrReviewWorkspace({ document: doc, company, user
 
   const handleValidate = async () => {
     setSaving(true);
+    const f = doc?.extracted_fields?.response || doc?.extracted_fields || {};
+    const empName = f.employee?.full_name || doc.original_file_name;
+    const periodLabel = f.period?.label || '';
+    const docName = `Nómina ${periodLabel} - ${empName}`.trim();
+    const now = new Date().toISOString();
+
     await base44.entities.LaborOcrDocument.update(doc.id, {
       ocr_status: 'validado',
       validation_status: 'validado',
       reviewed_by: user?.email,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: now,
     });
+
     if (accountingEntry?.id) {
       await base44.entities.LaborAccountingEntryProposal.update(accountingEntry.id, {
         status: 'validado',
         validated_by: user?.email,
-        validated_at: new Date().toISOString(),
+        validated_at: now,
       });
     }
+
     if (doc.file_url && company?.id) {
+      // 1. People HR > Docs y firmas
       await base44.entities.HRDocument.create({
         company_id: company.id,
         employee_id: doc.employee_id || null,
-        nombre: `Nómina ${fields.period?.label || ''} - ${fields.employee?.full_name || doc.original_file_name}`,
+        nombre: docName,
         tipo: 'nomina',
         archivo_url: doc.file_url,
         estado_firma: 'sin_firma',
         notas: `Validada desde OCR Laboral. Confianza: ${doc.confidence_global}%`,
       });
+
+      // 2. Documentos > Laboral > Nóminas
+      await base44.entities.Document.create({
+        company_id: company.id,
+        nombre: docName,
+        carpeta: 'lab_nominas',
+        archivo_url: doc.file_url,
+        tipo_archivo: 'pdf',
+        anio: f.period?.year || new Date().getFullYear(),
+        estado: 'aprobado',
+        etiquetas: ['nómina', 'ocr-laboral', empName].filter(Boolean),
+        subido_por: user?.email || '',
+        comentarios: `Validada desde OCR Laboral. Confianza: ${doc.confidence_global}%. Empleado: ${empName}. Periodo: ${periodLabel}.`,
+      });
     }
+
+    toast.success('Nómina validada y archivada', {
+      description: 'Guardada en Documentos › Laboral › Nóminas y en People HR › Docs y firmas',
+    });
     setSaving(false);
     onBack?.();
   };
@@ -131,11 +159,9 @@ export default function PayrollOcrReviewWorkspace({ document: doc, company, user
   const per = fields.period || {};
   const totals = fields.totals || {};
   const mathVal = fields.math_validation || {};
-  const ae = fields.accounting_entry || {};
   const conf = doc?.confidence_global || 0;
 
   const hasConflicts = (fields.identity_conflicts || []).length > 0;
-  const allMathOk = mathVal.all_ok !== false && (fields.devengos || []).length > 0;
   const canValidate = doc?.ocr_status !== 'validado' && !hasConflicts;
 
   const TABS = [
