@@ -41,6 +41,7 @@ function resolveStatus(invoice) {
 // ── Visor de factura ───────────────────────────────────────────────────────────
 function InvoiceDocumentPreviewPane({ invoice, company }) {
   const [zoom, setZoom] = useState(100);
+  const isRecibida = invoice?.tipo === 'recibida';
   const hasPdf = !!invoice?.archivo_url;
 
   const fmt = (n) => typeof n === 'number'
@@ -55,7 +56,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
-      {/* Toolbar del visor — propia de Taxea, sin toolbar nativa PDF */}
+      {/* Toolbar del visor */}
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
@@ -64,26 +65,35 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
           </span>
           <span className={cn(
             "text-[10px] px-2 py-0.5 rounded-full border font-medium",
-            hasPdf ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+            isRecibida
+              ? 'bg-blue-50 text-blue-700 border-blue-200'
+              : hasPdf
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
           )}>
-            {hasPdf ? 'PDF generado' : 'Render de datos'}
+            {isRecibida ? 'Factura recibida' : hasPdf ? 'PDF generado' : 'Render de datos'}
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => setZoom(z => Math.max(50, z - 10))}
-            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-            title="Reducir zoom">
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <span className="text-xs text-muted-foreground w-10 text-center">{zoom}%</span>
-          <button
-            onClick={() => setZoom(z => Math.min(150, z + 10))}
-            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-            title="Ampliar zoom">
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <div className="w-px h-4 bg-border mx-1" />
+          {/* Zoom solo para facturas emitidas */}
+          {!isRecibida && (
+            <>
+              <button
+                onClick={() => setZoom(z => Math.max(50, z - 10))}
+                className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                title="Reducir zoom">
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-xs text-muted-foreground w-10 text-center">{zoom}%</span>
+              <button
+                onClick={() => setZoom(z => Math.min(150, z + 10))}
+                className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                title="Ampliar zoom">
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-4 bg-border mx-1" />
+            </>
+          )}
           <button
             onClick={() => window.print()}
             className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -102,21 +112,65 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
         </div>
       </div>
 
-      {/* Área de visualización — siempre render HTML propio, nunca iframe PDF nativo */}
+      {/* Área de visualización */}
       <div className="flex-1 overflow-auto flex items-start justify-center py-6 px-4">
-        <div
-          style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', width: '100%', maxWidth: '680px' }}
-          className="transition-transform duration-150">
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <InvoiceVisualRender invoice={invoice} company={company} fmt={fmt} fmtDate={fmtDate} />
+        {isRecibida ? (
+          // ── Factura recibida: mostrar el PDF escaneado original ──
+          hasPdf ? (
+            <div className="w-full" style={{ height: '100%', minHeight: '800px' }}>
+              <iframe
+                src={invoice.archivo_url}
+                className="w-full rounded-lg shadow-lg border border-border"
+                style={{ height: '800px', minHeight: '800px' }}
+                title={`Factura recibida ${invoice.numero_factura}`}
+              />
+            </div>
+          ) : (
+            // Sin PDF: mostrar resumen de datos extraídos por OCR
+            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg">
+              <div className="flex items-center gap-2 mb-6">
+                <FileText className="w-5 h-5 text-muted-foreground" />
+                <h3 className="text-base font-semibold text-foreground">Datos extraídos de la factura</h3>
+              </div>
+              <div className="space-y-0">
+                {[
+                  ['Proveedor', invoice.cliente_nombre],
+                  ['NIF proveedor', invoice.cliente_nif],
+                  ['Nº Factura', invoice.numero_factura],
+                  ['Fecha emisión', invoice.fecha_emision ? new Date(invoice.fecha_emision).toLocaleDateString('es-ES') : null],
+                  ['Fecha vencimiento', invoice.fecha_vencimiento ? new Date(invoice.fecha_vencimiento).toLocaleDateString('es-ES') : null],
+                  ['Concepto', invoice.concepto],
+                  ['Base imponible', invoice.base_imponible != null ? invoice.base_imponible.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
+                  ['IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
+                  ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
+                ].filter(([, v]) => v).map(([label, value]) => (
+                  <div key={label} className="flex justify-between py-2.5 border-b border-slate-100 last:border-0 text-sm">
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-medium text-foreground">{value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                <p className="text-xs text-amber-700">No hay PDF original adjunto. Los datos fueron extraídos por OCR.</p>
+              </div>
+            </div>
+          )
+        ) : (
+          // ── Factura emitida: plantilla Taxea ──
+          <div
+            style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', width: '100%', maxWidth: '680px' }}
+            className="transition-transform duration-150">
+            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+              <InvoiceVisualRender invoice={invoice} company={company} fmt={fmt} fmtDate={fmtDate} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Render visual de la factura (cuando no hay PDF) ───────────────────────────
+// ── Render visual de la factura emitida (plantilla Taxea) ─────────────────────
 function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
   const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
   const brandColor = '#b91c1c';
@@ -276,6 +330,7 @@ export default function InvoiceDocumentWorkspace({
 
   if (!invoice) return null;
 
+  const isRecibida = invoice?.tipo === 'recibida';
   const status = resolveStatus(invoice);
   const publicUrl = invoice.public_token
     ? `${window.location.origin}/public/invoice/${invoice.public_token}`
@@ -308,10 +363,12 @@ export default function InvoiceDocumentWorkspace({
             <FileText className="w-4 h-4 text-primary flex-shrink-0" />
             <div className="min-w-0">
               <span className="text-sm font-semibold text-foreground truncate block">
-                Factura — {invoice.numero_factura}
+                {isRecibida ? 'Factura recibida' : 'Factura'} — {invoice.numero_factura}
               </span>
               {invoice.cliente_nombre && (
-                <span className="text-xs text-muted-foreground truncate block">{invoice.cliente_nombre}</span>
+                <span className="text-xs text-muted-foreground truncate block">
+                  {isRecibida ? 'Proveedor: ' : ''}{invoice.cliente_nombre}
+                </span>
               )}
             </div>
           </div>
@@ -322,8 +379,8 @@ export default function InvoiceDocumentWorkspace({
 
         {/* Derecha: acciones */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Compartir enlace */}
-          {publicUrl && (
+          {/* Compartir enlace — solo para facturas emitidas */}
+          {publicUrl && !isRecibida && (
             <button
               onClick={handleCopyLink}
               className={cn(
@@ -356,26 +413,30 @@ export default function InvoiceDocumentWorkspace({
                   </a>
                 </DropdownMenuItem>
               )}
-              {publicUrl && (
+              {publicUrl && !isRecibida && (
                 <DropdownMenuItem asChild>
                   <a href={publicUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2">
                     <ExternalLink className="w-3.5 h-3.5" /> Ver enlace público
                   </a>
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={handleCopyLink}>
-                <Copy className="w-3.5 h-3.5 mr-2" /> Copiar enlace
-              </DropdownMenuItem>
+              {publicUrl && !isRecibida && (
+                <DropdownMenuItem onClick={handleCopyLink}>
+                  <Copy className="w-3.5 h-3.5 mr-2" /> Copiar enlace
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Botón principal Enviar */}
-          <Button
-            onClick={() => onSend?.(invoice)}
-            className="bg-primary hover:bg-primary/90 h-9 text-sm gap-2">
-            <Send className="w-3.5 h-3.5" />
-            <span>Enviar</span>
-          </Button>
+          {/* Botón principal Enviar — solo para facturas emitidas */}
+          {!isRecibida && (
+            <Button
+              onClick={() => onSend?.(invoice)}
+              className="bg-primary hover:bg-primary/90 h-9 text-sm gap-2">
+              <Send className="w-3.5 h-3.5" />
+              <span>Enviar</span>
+            </Button>
+          )}
         </div>
       </div>
 
