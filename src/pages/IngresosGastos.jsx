@@ -61,8 +61,27 @@ export default function IngresosGastos() {
 
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(filterAnio) });
-    setItems(data || []);
+    const [expenses, invoices] = await Promise.all([
+      base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(filterAnio) }),
+      base44.entities.Invoice.filter({ company_id: company.id, anio: parseInt(filterAnio) }),
+    ]);
+    const invoiceItems = (invoices || []).map(inv => ({
+      _source: 'invoice',
+      id: inv.id,
+      tipo: inv.tipo === 'emitida' ? 'ingreso' : 'gasto',
+      fecha: inv.fecha_emision,
+      proveedor_cliente: inv.cliente_nombre,
+      concepto: inv.concepto,
+      base_imponible: inv.base_imponible,
+      tipo_impuesto: inv.tipo_iva,
+      cuota_impuesto: inv.cuota_iva,
+      total: inv.total_factura,
+      trimestre: inv.trimestre,
+      estado: inv.estado_contable,
+      categoria: inv.categoria || (inv.tipo === 'emitida' ? 'ventas_servicios' : 'otros'),
+      numero_factura: inv.numero_factura,
+    }));
+    setItems([...(expenses || []).map(e => ({ ...e, _source: 'expense' })), ...invoiceItems]);
     setLoading(false);
   };
 
@@ -82,8 +101,12 @@ export default function IngresosGastos() {
       tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
       anio: year, trimestre, subido_por: user?.email,
     };
-    if (editing) await base44.entities.Expense.update(editing.id, payload);
-    else await base44.entities.Expense.create(payload);
+    if (editing) {
+      if (editing._source === 'invoice') await base44.entities.Invoice.update(editing.id, { estado_contable: payload.estado });
+      else await base44.entities.Expense.update(editing.id, payload);
+    } else {
+      await base44.entities.Expense.create(payload);
+    }
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
   };
 
@@ -143,8 +166,8 @@ export default function IngresosGastos() {
           <p className="text-lg font-jakarta font-bold text-foreground">{margen} %</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-center">
-          <Link to="/libro-registros" className="text-xs text-primary font-medium flex items-center gap-1.5 hover:underline">
-            <BarChart3 className="w-4 h-4" /> Ver P&L completo →
+          <Link to="/tax-accounting/libros" className="text-xs text-primary font-medium flex items-center gap-1.5 hover:underline">
+            <BarChart3 className="w-4 h-4" /> Ver P&amp;L completo
           </Link>
         </div>
       </div>
@@ -236,8 +259,16 @@ export default function IngresosGastos() {
                           <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setShowForm(true); }}>Editar</DropdownMenuItem>
-                          {isAdmin && <DropdownMenuItem onClick={() => base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(load)}>Contabilizar</DropdownMenuItem>}
+                          {item._source !== 'invoice'
+                            ? <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                            : <DropdownMenuItem asChild><a href="/tax-accounting/facturas">Ver en Facturas</a></DropdownMenuItem>
+                          }
+                          {isAdmin && (
+                            <DropdownMenuItem onClick={() => {
+                              if (item._source === 'invoice') base44.entities.Invoice.update(item.id, { estado_contable: 'contabilizada' }).then(load);
+                              else base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(load);
+                            }}>Contabilizar</DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>

@@ -98,16 +98,21 @@ datos_faltantes (array strings), alertas_fiscales (array strings), concepto`,
     setDocState(docId, { status: 'subiendo' });
     const fecha = form.fecha || '';
     const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
-    await base44.entities.Expense.create({
-      ...form,
-      tipo: 'gasto',
+    await base44.entities.Invoice.create({
+      tipo: 'recibida',
       company_id: company.id,
+      numero_factura: doc?.extracted?.numero_factura || '',
+      cliente_nombre: form.proveedor_cliente,
+      cliente_nif: doc?.extracted?.nif_proveedor || '',
+      concepto: form.concepto,
+      fecha_emision: form.fecha,
       base_imponible: parseFloat(form.base_imponible) || 0,
-      cuota_impuesto: parseFloat(form.cuota_impuesto) || 0,
-      total: parseFloat(form.total) || 0,
-      tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
+      tipo_iva: parseFloat(form.tipo_impuesto) || 21,
+      cuota_iva: parseFloat(form.cuota_impuesto) || 0,
+      total_factura: parseFloat(form.total) || 0,
       archivo_url: doc?.fileUrl || '',
-      estado: 'pendiente',
+      estado_contable: 'pendiente',
+      estado_cobro: 'pendiente',
       anio: year,
       trimestre: trimestre(fecha),
       subido_por: user?.email,
@@ -220,7 +225,7 @@ datos_faltantes (array strings), alertas_fiscales (array strings), concepto`,
           </p>
           <div className="flex justify-center gap-3 mt-4">
             <Button variant="outline" onClick={() => { setDocs([]); setSavedCount(0); }}>Nuevo lote</Button>
-            <Button className="bg-teal hover:bg-teal-dark" asChild><a href="/ingresos-gastos">Ver gastos</a></Button>
+            <Button className="bg-teal hover:bg-teal-dark" asChild><a href="/tax-accounting/facturas">Ver facturas recibidas</a></Button>
           </div>
         </div>
       )}

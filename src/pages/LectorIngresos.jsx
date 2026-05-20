@@ -209,7 +209,7 @@ alertas_fiscales (array strings), datos_faltantes (array strings)`,
           </p>
           <div className="flex justify-center gap-3 mt-4">
             <Button variant="outline" onClick={() => { setDocs([]); setSavedCount(0); }}>Nuevo lote</Button>
-            <Button className="bg-teal hover:bg-teal-dark" asChild><a href="/facturas">Ver facturas</a></Button>
+            <Button className="bg-teal hover:bg-teal-dark" asChild><a href="/tax-accounting/facturas">Ver facturas emitidas</a></Button>
           </div>
         </div>
       )}
