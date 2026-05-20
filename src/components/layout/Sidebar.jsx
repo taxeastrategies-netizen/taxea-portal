@@ -101,7 +101,7 @@ const DEPT_GROUPS = [
     depts: [
       {
         id: 'law',
-        label: 'law',
+        label: 'Law',
         icon: Scale,
         activeColor: 'text-slate-700',
         activeBg: 'bg-slate-100',
