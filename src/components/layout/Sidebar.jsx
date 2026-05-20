@@ -49,6 +49,30 @@ const DEPT_GROUPS = [
         modules: TAX_MODULES,
       },
       {
+        id: 'finance',
+        label: 'Finance',
+        icon: Wallet,
+        activeColor: 'text-emerald-600',
+        activeBg: 'bg-emerald-50',
+        basePath: '/finance',
+        modules: [
+          { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
+          { id: 'cashflow', label: 'Cashflow Center', icon: TrendingUp, path: '/finance/cashflow' },
+          { id: 'treasury', label: 'Treasury / Tesorería', icon: Wallet, path: '/finance/treasury' },
+          { id: 'ar', label: 'Accounts Receivable', icon: FileCheck, path: '/finance/ar' },
+          { id: 'ap', label: 'Accounts Payable', icon: Receipt, path: '/finance/ap' },
+          { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
+          { id: 'investments', label: 'Investments', icon: BarChart2, path: '/finance/investments', adminOnly: true },
+          { id: 'reporting', label: 'Reporting Center', icon: FileText, path: '/finance/reporting' },
+          { id: 'analysis', label: 'Análisis Financiero', icon: BarChart2, path: '/finance/analysis' },
+        ],
+      },
+    ],
+  },
+  {
+    groupLabel: 'Core People',
+    depts: [
+      {
         id: 'people',
         label: 'People & HR',
         icon: Heart,
@@ -70,6 +94,11 @@ const DEPT_GROUPS = [
           { id: 'ai-assistant',label: 'HR AI Assistant',      icon: Brain,           path: '/people/ai-assistant' },
         ],
       },
+    ],
+  },
+  {
+    groupLabel: 'Core Legal',
+    depts: [
       {
         id: 'law',
         label: 'LAW',
@@ -97,25 +126,6 @@ const DEPT_GROUPS = [
           { id: 'valuation',      label: 'Valuation Center',    icon: BarChart2,      path: '/law/ma/valuation' },
           { id: 'ma-ai',          label: 'M&A AI',              icon: Brain,          path: '/law/ma/ai' },
           { id: 'knowledge',      label: 'Knowledge Engine',    icon: BookOpen,       path: '/law/knowledge' },
-        ],
-      },
-      {
-        id: 'finance',
-        label: 'Finance',
-        icon: Wallet,
-        activeColor: 'text-emerald-600',
-        activeBg: 'bg-emerald-50',
-        basePath: '/finance',
-        modules: [
-          { id: 'dashboard', label: 'Finance Dashboard', icon: LayoutDashboard, path: '/finance/dashboard' },
-          { id: 'cashflow', label: 'Cashflow Center', icon: TrendingUp, path: '/finance/cashflow' },
-          { id: 'treasury', label: 'Treasury / Tesorería', icon: Wallet, path: '/finance/treasury' },
-          { id: 'ar', label: 'Accounts Receivable', icon: FileCheck, path: '/finance/ar' },
-          { id: 'ap', label: 'Accounts Payable', icon: Receipt, path: '/finance/ap' },
-          { id: 'debt', label: 'Debt & Financing', icon: TrendingDown, path: '/finance/debt' },
-          { id: 'investments', label: 'Investments', icon: BarChart2, path: '/finance/investments', adminOnly: true },
-          { id: 'reporting', label: 'Reporting Center', icon: FileText, path: '/finance/reporting' },
-          { id: 'analysis', label: 'Análisis Financiero', icon: BarChart2, path: '/finance/analysis' },
         ],
       },
     ],
@@ -146,8 +156,8 @@ const DEPT_GROUPS = [
   {
     groupLabel: 'Próximamente',
     depts: [
-      { id: 'rrhh', label: 'RRHH', icon: UserCog, basePath: null, comingSoon: true },
       { id: 'ops', label: 'Operaciones', icon: Cog, basePath: null, comingSoon: true },
+      { id: 'marketing', label: 'Marketing - Growth', icon: Target, basePath: null, comingSoon: true },
     ],
   },
 ];
