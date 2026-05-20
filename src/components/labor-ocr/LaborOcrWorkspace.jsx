@@ -58,6 +58,7 @@ export default function LaborOcrWorkspace({ company, user }) {
   const handleStartBatch = async () => {
     if (!files.length || !company?.id) return;
     setProcessing(true);
+
     const batch = await base44.entities.LaborOcrBatch.create({
       company_id: company.id,
       mode,
@@ -67,6 +68,8 @@ export default function LaborOcrWorkspace({ company, user }) {
       created_by: user?.email,
     });
 
+    // Upload all files and create doc records first
+    const docIds = [];
     for (const file of files) {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       const doc = await base44.entities.LaborOcrDocument.create({
@@ -75,9 +78,9 @@ export default function LaborOcrWorkspace({ company, user }) {
         original_file_name: file.name,
         file_url,
         document_type: mode === 'nominas' ? 'nomina' : mode === 'seguros_sociales' ? 'seguro_social' : 'desconocido',
-        ocr_status: 'procesando',
+        ocr_status: 'pendiente',
       });
-      processDocumentOcr(doc, file_url, mode, batch.id, company);
+      docIds.push(doc.id);
     }
 
     setFiles([]);
@@ -85,6 +88,11 @@ export default function LaborOcrWorkspace({ company, user }) {
     setView('batch');
     setProcessing(false);
     loadBatches();
+
+    // Fire OCR calls to backend (non-blocking)
+    for (const docId of docIds) {
+      base44.functions.invoke('processLaborOcr', { document_id: docId }).catch(e => console.error('OCR invoke error', e));
+    }
   };
 
   const processDocumentOcr = async (doc, fileUrl, batchMode, batchId, company) => {

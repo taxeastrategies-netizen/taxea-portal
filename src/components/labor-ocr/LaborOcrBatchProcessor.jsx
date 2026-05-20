@@ -36,9 +36,9 @@ export default function LaborOcrBatchProcessor({ batch, company, onBack, onRevie
   useEffect(() => {
     const hasProcessing = documents.some(d => d.ocr_status === 'procesando' || d.ocr_status === 'pendiente');
     if (!hasProcessing) return;
-    const iv = setInterval(loadDocuments, 4000);
+    const iv = setInterval(loadDocuments, 5000);
     return () => clearInterval(iv);
-  }, [documents]);
+  }, [documents.map(d => d.ocr_status).join(',')]);
 
   const loadDocuments = async () => {
     const docs = await base44.entities.LaborOcrDocument.filter({ batch_id: batch.id }, 'created_date', 200);
