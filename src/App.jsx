@@ -42,6 +42,7 @@ import TaxAccounting from './pages/TaxAccounting';
 import Finance from './pages/Finance';
 import PeopleHR from './pages/PeopleHR.jsx';
 import Logistics from './pages/Logistics';
+import Operations from './pages/Operations';
 import Law from './pages/Law';
 import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 
@@ -100,6 +101,8 @@ function AppWithContext({ user }) {
         <Route path="/people/:module" element={<PeopleHR />} />
         <Route path="/logistics" element={<Logistics />} />
         <Route path="/logistics/:module" element={<Logistics />} />
+        <Route path="/operations" element={<Operations />} />
+        <Route path="/operations/:module" element={<Operations />} />
         <Route path="/law" element={<Law />} />
         <Route path="/law/:subdept" element={<Law />} />
         <Route path="/law/:subdept/:module" element={<Law />} />

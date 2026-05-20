@@ -1,0 +1,155 @@
+{
+  "name": "OpsTask",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "project_name": {
+      "type": "string"
+    },
+    "process_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "backlog",
+        "pendiente_revisar",
+        "en_curso",
+        "bloqueado",
+        "pendiente_cliente",
+        "pendiente_tercero",
+        "en_revision",
+        "finalizado",
+        "archivado"
+      ],
+      "default": "backlog"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critica",
+        "alta",
+        "media",
+        "baja"
+      ],
+      "default": "media"
+    },
+    "assignee_email": {
+      "type": "string"
+    },
+    "assignee_name": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "estimated_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "actual_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "estimated_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "actual_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checklist": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "comments_count": {
+      "type": "number",
+      "default": 0
+    },
+    "blocked_reason": {
+      "type": "string"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "impact_fiscal": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_accounting": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_financial": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_legal": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_notes": {
+      "type": "string"
+    },
+    "recurrent": {
+      "type": "boolean",
+      "default": false
+    },
+    "recurrent_frequency": {
+      "type": "string",
+      "enum": [
+        "diaria",
+        "semanal",
+        "quincenal",
+        "mensual",
+        "trimestral",
+        "anual"
+      ]
+    },
+    "is_recurring_instance": {
+      "type": "boolean",
+      "default": false
+    },
+    "parent_task_id": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}

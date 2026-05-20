@@ -1,0 +1,104 @@
+{
+  "name": "OpsProject",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "planificacion",
+        "activo",
+        "en_pausa",
+        "finalizado",
+        "cancelado"
+      ],
+      "default": "planificacion"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critica",
+        "alta",
+        "media",
+        "baja"
+      ],
+      "default": "media"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "owner_name": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "client_name": {
+      "type": "string"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "estimated_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "actual_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "estimated_budget": {
+      "type": "number",
+      "default": 0
+    },
+    "actual_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "revenue": {
+      "type": "number",
+      "default": 0
+    },
+    "progress": {
+      "type": "number",
+      "default": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "bajo",
+        "medio",
+        "alto",
+        "critico"
+      ],
+      "default": "bajo"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

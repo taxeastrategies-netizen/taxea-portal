@@ -1,0 +1,94 @@
+{
+  "name": "OpsRoadmapItem",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "validacion",
+        "aprobado",
+        "en_desarrollo",
+        "en_pruebas",
+        "implementado",
+        "medicion",
+        "descartado"
+      ],
+      "default": "idea"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critica",
+        "alta",
+        "media",
+        "baja"
+      ],
+      "default": "media"
+    },
+    "department": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "target_quarter": {
+      "type": "string"
+    },
+    "target_year": {
+      "type": "number"
+    },
+    "estimated_impact": {
+      "type": "string",
+      "enum": [
+        "alto",
+        "medio",
+        "bajo"
+      ],
+      "default": "medio"
+    },
+    "estimated_effort": {
+      "type": "string",
+      "enum": [
+        "alto",
+        "medio",
+        "bajo"
+      ],
+      "default": "medio"
+    },
+    "economic_impact": {
+      "type": "number",
+      "default": 0
+    },
+    "affected_clients": {
+      "type": "number",
+      "default": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ai_priority_score": {
+      "type": "number",
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}

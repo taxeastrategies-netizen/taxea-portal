@@ -9,7 +9,8 @@ import {
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine,
-  Warehouse, ArrowDownUp, Layers, Truck
+  Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
+  Folder, Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -135,6 +136,22 @@ const DEPT_GROUPS = [
   {
     groupLabel: 'Operativo',
     depts: [
+      {
+        id: 'operations',
+        label: 'Operaciones',
+        icon: Cpu,
+        activeColor: 'text-violet-600',
+        activeBg: 'bg-violet-50',
+        basePath: '/operations',
+        modules: [
+          { id: 'dashboard',  label: 'Dashboard',        icon: LayoutDashboard, path: '/operations/dashboard' },
+          { id: 'tasks',      label: 'Tareas / Kanban',  icon: Kanban,          path: '/operations/tasks' },
+          { id: 'projects',   label: 'Proyectos',        icon: Folder,          path: '/operations/projects' },
+          { id: 'roadmap',    label: 'Roadmap',          icon: Map,             path: '/operations/roadmap' },
+          { id: 'processes',  label: 'Procesos / SOPs',  icon: Zap,             path: '/operations/processes' },
+          { id: 'reports',    label: 'Informes',         icon: BarChart2,       path: '/operations/reports' },
+        ],
+      },
       {
         id: 'logistics',
         label: 'Logística',

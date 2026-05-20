@@ -1,0 +1,88 @@
+{
+  "name": "OpsProcess",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "cliente",
+        "fiscal",
+        "contable",
+        "rrhh",
+        "comercial",
+        "legal",
+        "financiero",
+        "operativo",
+        "otro"
+      ],
+      "default": "operativo"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "en_revision",
+        "archivado"
+      ],
+      "default": "activo"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "checklist_template": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "estimated_duration_days": {
+      "type": "number",
+      "default": 1
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": [
+        "bajo",
+        "medio",
+        "alto"
+      ],
+      "default": "bajo"
+    },
+    "execution_count": {
+      "type": "number",
+      "default": 0
+    },
+    "last_executed": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}
