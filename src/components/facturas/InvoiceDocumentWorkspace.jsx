@@ -190,8 +190,8 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             </div>
           )}
           <div className="text-xs text-slate-500 leading-relaxed mt-1">
-            <p className="font-semibold text-slate-800">{company?.nombre || company?.razon_social || 'Emisor'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold text-slate-800">{company?.razon_social || company?.nombre_comercial || 'Emisor'}</p>
+            {company?.nif_cif && <p>NIF/CIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
             {company?.email && <p>{company.email}</p>}
             {company?.telefono && <p>{company.telefono}</p>}
@@ -214,8 +214,8 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Emisor</div>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
-            <p className="font-semibold">{company?.nombre || '—'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold">{company?.razon_social || company?.nombre_comercial || '—'}</p>
+            {company?.nif_cif && <p>NIF/CIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
           </div>
         </div>
@@ -291,11 +291,11 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
       </div>
 
       {/* Método de pago */}
-      {(invoice.metodo_pago || invoice.iban) && (
+      {(invoice.forma_pago || company?.datos_bancarios) && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-xs text-slate-700 mb-6">
           <p className="font-semibold text-emerald-800 mb-2">Instrucciones de pago</p>
-          {invoice.metodo_pago && <p><span className="text-slate-500">Método: </span>{invoice.metodo_pago}</p>}
-          {invoice.iban && <p><span className="text-slate-500">IBAN: </span>{invoice.iban}</p>}
+          {invoice.forma_pago && <p><span className="text-slate-500">Método: </span>{invoice.forma_pago}</p>}
+          {company?.datos_bancarios && <p><span className="text-slate-500">Datos bancarios: </span>{company.datos_bancarios}</p>}
           <p className="text-slate-500 mt-1">Indica el número <strong>{invoice.numero_factura}</strong> como referencia del pago.</p>
         </div>
       )}

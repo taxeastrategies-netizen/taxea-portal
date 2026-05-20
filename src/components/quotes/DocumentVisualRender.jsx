@@ -32,8 +32,8 @@ export default function DocumentVisualRender({ doc, company, docType }) {
             <img src={LOGO} alt="Taxea" className="h-8 object-contain mb-2" />
           )}
           <div className="text-xs text-slate-500 leading-relaxed mt-1">
-            <p className="font-semibold text-slate-800">{company?.nombre || company?.razon_social || 'Empresa'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold text-slate-800">{company?.razon_social || company?.nombre_comercial || 'Empresa'}</p>
+            {company?.nif_cif && <p>NIF/CIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
             {company?.email && <p>{company.email}</p>}
             {company?.telefono && <p>{company.telefono}</p>}
@@ -56,8 +56,8 @@ export default function DocumentVisualRender({ doc, company, docType }) {
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">De</div>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
-            <p className="font-semibold">{company?.nombre || '—'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold">{company?.razon_social || company?.nombre_comercial || '—'}</p>
+            {company?.nif_cif && <p>NIF/CIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
           </div>
         </div>
