@@ -171,7 +171,7 @@ export default function LaborOcrBatchProcessor({ batch, company, onBack, onRevie
                 {filtered.map(doc => {
                   const s = STATUS_CONFIG[doc.ocr_status] || STATUS_CONFIG.pendiente;
                   const SIcon = s.icon;
-                  const fields = doc.extracted_fields || {};
+                  const fields = doc.extracted_fields?.response || doc.extracted_fields || {};
                   return (
                     <tr key={doc.id} className="hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3">

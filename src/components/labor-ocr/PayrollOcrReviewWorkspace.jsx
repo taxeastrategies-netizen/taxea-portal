@@ -124,7 +124,8 @@ export default function PayrollOcrReviewWorkspace({ document: doc, company, user
     onBack?.();
   };
 
-  const fields = doc?.extracted_fields || {};
+  // Handle both wrapped (result.response) and unwrapped formats
+  const fields = doc?.extracted_fields?.response || doc?.extracted_fields || {};
   const emp = fields.employee || {};
   const comp = fields.company || {};
   const per = fields.period || {};

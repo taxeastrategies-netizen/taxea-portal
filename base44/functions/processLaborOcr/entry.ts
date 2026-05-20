@@ -266,11 +266,13 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
     });
 
     if (!result) throw new Error('El LLM no devolvió resultado');
+    // InvokeLLM wraps the response in a 'response' key when using response_json_schema
+    const data = result.response || result;
 
-    const conf = result.confidence || 0;
-    const hasConflicts = (result.identity_conflicts || []).length > 0;
-    const mathOk = result.math_validation?.all_ok !== false;
-    const hasWarnings = (result.warnings || []).length > 0 || (result.fields_needing_review || []).length > 0;
+    const conf = data.confidence || 0;
+    const hasConflicts = (data.identity_conflicts || []).length > 0;
+    const mathOk = data.math_validation?.all_ok !== false;
+    const hasWarnings = (data.warnings || []).length > 0 || (data.fields_needing_review || []).length > 0;
 
     let ocr_status;
     if (hasConflicts) ocr_status = 'requiere_revision';
@@ -279,24 +281,24 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
     else if (conf >= 50) ocr_status = 'procesado_con_advertencias';
     else ocr_status = 'requiere_revision';
 
-    const totals = result.totals || {};
-    const emp = result.employee || {};
-    const comp = result.company || {};
-    const per = result.period || {};
+    const totals = data.totals || {};
+    const emp = data.employee || {};
+    const comp = data.company || {};
+    const per = data.period || {};
 
-    // Update document
+    // Update document — store unwrapped data so frontend can access fields directly
     await base44.asServiceRole.entities.LaborOcrDocument.update(doc.id, {
-      document_type: result.document_type || doc.document_type,
+      document_type: data.document_type || doc.document_type,
       employee_name: emp.full_name || null,
       period_label: per.label || null,
       ocr_status,
       confidence_global: conf,
-      extracted_fields: result,
+      extracted_fields: data,
       validation_status: 'pendiente',
     });
 
     // Payroll extraction
-    if ((result.document_type || doc.document_type) === 'nomina') {
+    if ((data.document_type || doc.document_type) === 'nomina') {
       const existing = await base44.asServiceRole.entities.PayrollExtraction.filter({ labor_ocr_document_id: doc.id });
 
       const extractionData = {
@@ -333,7 +335,7 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
       }
 
       // Accounting entry - only if LLM says it can generate
-      const ae = result.accounting_entry;
+      const ae = data.accounting_entry;
       if (ae && ae.can_generate) {
         const existingEntry = await base44.asServiceRole.entities.LaborAccountingEntryProposal.filter({ labor_ocr_document_id: doc.id });
         const entryData = {
@@ -370,7 +372,7 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
           await base44.asServiceRole.entities.LaborAccountingEntryProposal.create(entryData);
         }
       }
-    } else if ((result.document_type || doc.document_type) === 'seguro_social') {
+    } else if ((data.document_type || doc.document_type) === 'seguro_social') {
       const existing = await base44.asServiceRole.entities.SocialSecurityExtraction.filter({ labor_ocr_document_id: doc.id });
       const ssData = {
         labor_ocr_document_id: doc.id,
@@ -390,7 +392,7 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
       }
     }
 
-    return Response.json({ success: true, ocr_status, confidence: conf, document_type: result.document_type });
+    return Response.json({ success: true, ocr_status, confidence: conf, document_type: data.document_type });
 
   } catch (err) {
     console.error('OCR error for doc', doc.id, ':', err.message);
