@@ -1,0 +1,55 @@
+{
+  "name": "FifoLayer",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "source_movement_id": {
+      "type": "string"
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "original_quantity": {
+      "type": "number"
+    },
+    "remaining_quantity": {
+      "type": "number"
+    },
+    "unit_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "supplier_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "expiration_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activa",
+        "consumida",
+        "parcial"
+      ],
+      "default": "activa"
+    }
+  },
+  "required": [
+    "company_id",
+    "product_id",
+    "purchase_date",
+    "original_quantity",
+    "unit_cost"
+  ]
+}

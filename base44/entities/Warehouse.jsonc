@@ -1,0 +1,41 @@
+{
+  "name": "Warehouse",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "almacen",
+        "tienda",
+        "vehiculo",
+        "camara",
+        "otro"
+      ],
+      "default": "almacen"
+    },
+    "address": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "inactivo"
+      ],
+      "default": "activo"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

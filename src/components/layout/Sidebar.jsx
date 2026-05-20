@@ -8,7 +8,8 @@ import {
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine
+  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine,
+  Warehouse, ArrowDownUp, Layers, Truck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -134,6 +135,24 @@ const DEPT_GROUPS = [
   {
     groupLabel: 'Operativo',
     depts: [
+      {
+        id: 'logistics',
+        label: 'Logística',
+        icon: Warehouse,
+        activeColor: 'text-orange-600',
+        activeBg: 'bg-orange-50',
+        basePath: '/logistics',
+        modules: [
+          { id: 'dashboard',     label: 'Dashboard Logístico',  icon: LayoutDashboard, path: '/logistics/dashboard' },
+          { id: 'inventory',     label: 'Inventario',           icon: Package,         path: '/logistics/inventory' },
+          { id: 'movements',     label: 'Entradas y Salidas',   icon: ArrowDownUp,     path: '/logistics/movements' },
+          { id: 'valuation',     label: 'Valoración PMP/FIFO',  icon: Layers,          path: '/logistics/valuation' },
+          { id: 'replenishment', label: 'Stock Crítico',        icon: AlertTriangle,   path: '/logistics/replenishment' },
+          { id: 'import',        label: 'Importación IA',       icon: ScanLine,        path: '/logistics/import' },
+          { id: 'suppliers',     label: 'Proveedores',          icon: Truck,           path: '/logistics/suppliers' },
+          { id: 'reports',       label: 'Informes',             icon: FileText,        path: '/logistics/reports' },
+        ],
+      },
       {
         id: 'contacts',
         label: 'Contactos',

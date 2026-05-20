@@ -1,0 +1,78 @@
+{
+  "name": "InventoryValuationSnapshot",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "pmp",
+        "fifo",
+        "coste_real"
+      ],
+      "default": "pmp"
+    },
+    "total_inventory_value": {
+      "type": "number",
+      "default": 0
+    },
+    "cost_of_sales": {
+      "type": "number",
+      "default": 0
+    },
+    "gross_margin": {
+      "type": "number",
+      "default": 0
+    },
+    "initial_inventory_value": {
+      "type": "number",
+      "default": 0
+    },
+    "purchases_value": {
+      "type": "number",
+      "default": 0
+    },
+    "final_inventory_value": {
+      "type": "number",
+      "default": 0
+    },
+    "adjustments_value": {
+      "type": "number",
+      "default": 0
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "revisado",
+        "validado"
+      ],
+      "default": "borrador"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "period_start",
+    "period_end",
+    "method"
+  ]
+}

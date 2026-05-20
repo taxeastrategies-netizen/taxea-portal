@@ -41,6 +41,7 @@ import AdminWhatsApp from './pages/AdminWhatsApp';
 import TaxAccounting from './pages/TaxAccounting';
 import Finance from './pages/Finance';
 import PeopleHR from './pages/PeopleHR.jsx';
+import Logistics from './pages/Logistics';
 import Law from './pages/Law';
 import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 
@@ -97,6 +98,8 @@ function AppWithContext({ user }) {
         <Route path="/finance/:module" element={<Finance />} />
         <Route path="/people" element={<PeopleHR />} />
         <Route path="/people/:module" element={<PeopleHR />} />
+        <Route path="/logistics" element={<Logistics />} />
+        <Route path="/logistics/:module" element={<Logistics />} />
         <Route path="/law" element={<Law />} />
         <Route path="/law/:subdept" element={<Law />} />
         <Route path="/law/:subdept/:module" element={<Law />} />

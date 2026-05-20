@@ -1,0 +1,103 @@
+{
+  "name": "StockMovement",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "product_name": {
+      "type": "string"
+    },
+    "product_sku": {
+      "type": "string"
+    },
+    "movement_type": {
+      "type": "string",
+      "enum": [
+        "entrada_compra",
+        "entrada_devolucion",
+        "entrada_ajuste",
+        "salida_venta",
+        "salida_merma",
+        "salida_rotura",
+        "salida_perdida",
+        "salida_robo",
+        "salida_autoconsumo",
+        "salida_ajuste",
+        "traspaso",
+        "regularizacion"
+      ],
+      "default": "entrada_compra"
+    },
+    "quantity": {
+      "type": "number"
+    },
+    "unit_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "total_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "sale_price": {
+      "type": "number",
+      "default": 0
+    },
+    "source_warehouse_id": {
+      "type": "string"
+    },
+    "target_warehouse_id": {
+      "type": "string"
+    },
+    "supplier_id": {
+      "type": "string"
+    },
+    "document_id": {
+      "type": "string"
+    },
+    "document_ref": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "confirmado",
+        "anulado"
+      ],
+      "default": "confirmado"
+    },
+    "movement_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "pmp_before": {
+      "type": "number",
+      "default": 0
+    },
+    "pmp_after": {
+      "type": "number",
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "product_id",
+    "movement_type",
+    "quantity",
+    "movement_date"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "name": "InventoryAlert",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "product_id": {
+      "type": "string"
+    },
+    "product_name": {
+      "type": "string"
+    },
+    "alert_type": {
+      "type": "string",
+      "enum": [
+        "stock_minimo",
+        "ruptura",
+        "sobrestock",
+        "margen_negativo",
+        "sin_movimiento",
+        "stock_parado",
+        "precio_venta_inferior_coste",
+        "merma_excesiva"
+      ],
+      "default": "stock_minimo"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ],
+      "default": "warning"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "recommended_action": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activa",
+        "resuelta",
+        "ignorada"
+      ],
+      "default": "activa"
+    },
+    "detected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "company_id",
+    "alert_type",
+    "title"
+  ]
+}

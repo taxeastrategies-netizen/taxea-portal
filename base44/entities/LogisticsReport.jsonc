@@ -1,0 +1,60 @@
+{
+  "name": "LogisticsReport",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "inventario_mensual",
+        "existencias_trimestral",
+        "fiscal_contable",
+        "margen",
+        "mermas",
+        "stock_critico",
+        "rotacion",
+        "sin_movimiento",
+        "asesor",
+        "premium"
+      ],
+      "default": "inventario_mensual"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "file_url": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "content": {
+      "type": "object"
+    },
+    "generated_by": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "generado",
+        "obsoleto"
+      ],
+      "default": "borrador"
+    }
+  },
+  "required": [
+    "company_id",
+    "report_type",
+    "period_start",
+    "period_end"
+  ]
+}

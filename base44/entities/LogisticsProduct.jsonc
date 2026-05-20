@@ -1,0 +1,101 @@
+{
+  "name": "LogisticsProduct",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "barcode": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "family_id": {
+      "type": "string"
+    },
+    "category_id": {
+      "type": "string"
+    },
+    "unit_of_measure": {
+      "type": "string",
+      "default": "ud"
+    },
+    "image_url": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "descatalogado",
+        "pendiente_reposicion"
+      ],
+      "default": "activo"
+    },
+    "default_supplier_id": {
+      "type": "string"
+    },
+    "purchase_price": {
+      "type": "number",
+      "default": 0
+    },
+    "sale_price": {
+      "type": "number",
+      "default": 0
+    },
+    "estimated_gross_margin": {
+      "type": "number",
+      "default": 0
+    },
+    "current_stock": {
+      "type": "number",
+      "default": 0
+    },
+    "min_stock": {
+      "type": "number",
+      "default": 0
+    },
+    "max_stock": {
+      "type": "number",
+      "default": 0
+    },
+    "default_warehouse_id": {
+      "type": "string"
+    },
+    "default_location_id": {
+      "type": "string"
+    },
+    "last_purchase_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "last_sale_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "pmp_cost": {
+      "type": "number",
+      "default": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

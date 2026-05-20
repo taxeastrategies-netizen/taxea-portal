@@ -1,0 +1,55 @@
+{
+  "name": "LogisticsSupplier",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tax_id": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "address": {
+      "type": "string"
+    },
+    "average_delivery_days": {
+      "type": "number",
+      "default": 0
+    },
+    "reliability_score": {
+      "type": "number",
+      "default": 100
+    },
+    "incident_count": {
+      "type": "number",
+      "default": 0
+    },
+    "payment_terms": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "inactivo",
+        "preferente"
+      ],
+      "default": "activo"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

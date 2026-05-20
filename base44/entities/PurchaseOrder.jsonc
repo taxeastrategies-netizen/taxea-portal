@@ -1,0 +1,60 @@
+{
+  "name": "PurchaseOrder",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "supplier_id": {
+      "type": "string"
+    },
+    "supplier_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "enviado",
+        "recibido_parcial",
+        "recibido_completo",
+        "cancelado",
+        "con_incidencia"
+      ],
+      "default": "borrador"
+    },
+    "order_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "expected_delivery_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "received_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "total_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "supplier_id",
+    "order_date"
+  ]
+}

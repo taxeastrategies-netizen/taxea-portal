@@ -1,0 +1,26 @@
+{
+  "name": "ProductFamily",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "code_prefix": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

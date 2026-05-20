@@ -1,0 +1,55 @@
+{
+  "name": "WarehouseLocation",
+  "type": "object",
+  "properties": {
+    "warehouse_id": {
+      "type": "string"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "zona",
+        "estanteria",
+        "camara",
+        "congelador",
+        "expositor",
+        "otro"
+      ],
+      "default": "zona"
+    },
+    "zone": {
+      "type": "string"
+    },
+    "aisle": {
+      "type": "string"
+    },
+    "shelf": {
+      "type": "string"
+    },
+    "bin": {
+      "type": "string"
+    },
+    "parent_location_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "inactivo"
+      ],
+      "default": "activo"
+    }
+  },
+  "required": [
+    "warehouse_id",
+    "company_id",
+    "name"
+  ]
+}
