@@ -30,6 +30,9 @@ const TAX_MODULES = [
   { id: 'lector-gastos', label: 'Lector de Gastos', icon: ScanLine, path: '/tax-accounting/lector-gastos' },
   { id: 'lector-ingresos', label: 'Lector de Ingresos', icon: ScanText, path: '/tax-accounting/lector-ingresos' },
   { id: 'obligaciones', label: 'Obligaciones Fiscales', icon: Calendar, path: '/tax-accounting/obligaciones' },
+  { id: 'asistente', label: 'Asistente IA', icon: Sparkles, path: '/tax-accounting/asistente' },
+  { id: 'notificaciones', label: 'Notificaciones', icon: Bell, path: '/tax-accounting/notificaciones' },
+  { id: 'timeline', label: 'Timeline', icon: Clock, path: '/tax-accounting/timeline' },
 ];
 
 const DEPT_GROUPS = [
@@ -153,9 +156,6 @@ const DEPARTMENTS = DEPT_GROUPS.flatMap(g => g.depts);
 
 const UTILS_ITEMS = [
   { to: '/tareas', label: 'Tareas', icon: CheckSquare },
-  { to: '/timeline', label: 'Timeline', icon: Clock },
-  { to: '/notificaciones', label: 'Notificaciones', icon: Bell },
-  { to: '/asistente', label: 'Asistente IA', icon: Sparkles },
   { to: '/sugerencias', label: 'Mejoras', icon: Lightbulb },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ];

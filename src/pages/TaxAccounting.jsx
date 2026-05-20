@@ -10,6 +10,9 @@ import LibroRegistros from './LibroRegistros';
 import LectorGastos from './LectorGastos';
 import LectorIngresos from './LectorIngresos';
 import ObligacionesFiscales from './ObligacionesFiscales';
+import AsistenteFiscal from './AsistenteFiscal';
+import Notificaciones from './Notificaciones';
+import Timeline from './Timeline';
 
 export default function TaxAccounting() {
   const { module } = useParams();
@@ -30,6 +33,9 @@ export default function TaxAccounting() {
     case 'lector-gastos': return <LectorGastos />;
     case 'lector-ingresos': return <LectorIngresos />;
     case 'obligaciones': return <ObligacionesFiscales />;
+    case 'asistente': return <AsistenteFiscal />;
+    case 'notificaciones': return <Notificaciones />;
+    case 'timeline': return <Timeline />;
     case 'dashboard':
     default:
       return <TaxDashboard onNavigate={handleNavigate} />;
