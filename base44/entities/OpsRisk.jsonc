@@ -1,0 +1,109 @@
+{
+  "name": "OpsRisk",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "operativo",
+        "fiscal",
+        "legal",
+        "financiero",
+        "rrhh",
+        "tecnologico",
+        "reputacional",
+        "cumplimiento",
+        "otro"
+      ],
+      "default": "operativo"
+    },
+    "probability": {
+      "type": "string",
+      "enum": [
+        "muy_baja",
+        "baja",
+        "media",
+        "alta",
+        "muy_alta"
+      ],
+      "default": "media"
+    },
+    "impact": {
+      "type": "string",
+      "enum": [
+        "muy_bajo",
+        "bajo",
+        "medio",
+        "alto",
+        "muy_alto"
+      ],
+      "default": "medio"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "bajo",
+        "medio",
+        "alto",
+        "critico"
+      ],
+      "default": "medio"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "identificado",
+        "en_seguimiento",
+        "mitigado",
+        "aceptado",
+        "cerrado"
+      ],
+      "default": "identificado"
+    },
+    "owner_name": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string"
+    },
+    "mitigation_plan": {
+      "type": "string"
+    },
+    "contingency_plan": {
+      "type": "string"
+    },
+    "review_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "economic_impact": {
+      "type": "number",
+      "default": 0
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}

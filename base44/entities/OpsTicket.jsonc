@@ -1,0 +1,100 @@
+{
+  "name": "OpsTicket",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "incidencia",
+        "solicitud",
+        "mejora",
+        "bloqueo",
+        "duda",
+        "otro"
+      ],
+      "default": "incidencia"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "abierto",
+        "en_curso",
+        "pendiente_respuesta",
+        "resuelto",
+        "cerrado",
+        "archivado"
+      ],
+      "default": "abierto"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "critica",
+        "alta",
+        "media",
+        "baja"
+      ],
+      "default": "media"
+    },
+    "assignee_name": {
+      "type": "string"
+    },
+    "assignee_email": {
+      "type": "string"
+    },
+    "reporter_name": {
+      "type": "string"
+    },
+    "reporter_email": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "impact_fiscal": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_accounting": {
+      "type": "boolean",
+      "default": false
+    },
+    "impact_financial": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}
