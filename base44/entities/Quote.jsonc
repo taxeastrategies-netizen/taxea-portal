@@ -12,10 +12,20 @@
       "type": "string",
       "format": "date"
     },
+    "validez_dias": {
+      "type": "number",
+      "default": 30
+    },
     "cliente_nombre": {
       "type": "string"
     },
     "cliente_nif": {
+      "type": "string"
+    },
+    "cliente_direccion": {
+      "type": "string"
+    },
+    "cliente_email": {
       "type": "string"
     },
     "conceptos": {
@@ -38,14 +48,36 @@
         }
       }
     },
+    "concepto": {
+      "type": "string"
+    },
     "base_imponible": {
       "type": "number"
     },
     "tipo_impuesto": {
+      "type": "number",
+      "default": 21
+    },
+    "cuota_impuesto": {
       "type": "number"
+    },
+    "aplica_retencion": {
+      "type": "boolean",
+      "default": false
+    },
+    "retencion_irpf": {
+      "type": "number",
+      "default": 0
     },
     "total": {
       "type": "number"
+    },
+    "forma_pago": {
+      "type": "string",
+      "default": "Transferencia bancaria"
+    },
+    "coletilla_fiscal": {
+      "type": "string"
     },
     "estado": {
       "type": "string",
@@ -60,10 +92,6 @@
     },
     "notas": {
       "type": "string"
-    },
-    "validez_dias": {
-      "type": "number",
-      "default": 30
     }
   },
   "required": [

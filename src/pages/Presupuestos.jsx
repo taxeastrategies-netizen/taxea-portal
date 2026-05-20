@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DocumentWorkspace from '@/components/quotes/DocumentWorkspace';
+import DocumentForm from '@/components/quotes/DocumentForm';
 
-const EMPTY = { numero_presupuesto: '', fecha: '', cliente_nombre: '', cliente_nif: '', base_imponible: '', tipo_impuesto: 21, total: '', estado: 'borrador', notas: '', validez_dias: 30 };
+
 
 export default function Presupuestos() {
   const { company, user, loadingCompany } = useOutletContext() || {};
@@ -23,8 +24,6 @@ export default function Presupuestos() {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
 
   useEffect(() => {
@@ -44,13 +43,7 @@ export default function Presupuestos() {
     setLoading(false);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    const payload = { ...form, company_id: company.id, base_imponible: parseFloat(form.base_imponible) || 0, total: parseFloat(form.total) || 0, tipo_impuesto: parseFloat(form.tipo_impuesto) || 21 };
-    if (editing) await base44.entities.Quote.update(editing.id, payload);
-    else await base44.entities.Quote.create(payload);
-    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
-  };
+
 
   const filtered = items.filter(i => !search || i.numero_presupuesto?.toLowerCase().includes(search.toLowerCase()) || i.cliente_nombre?.toLowerCase().includes(search.toLowerCase()));
 
@@ -68,7 +61,7 @@ export default function Presupuestos() {
         company={company}
         user={user}
         onClose={() => setSelectedDoc(null)}
-        onEdit={(q) => { setEditing(q); setForm({ ...q }); setSelectedDoc(null); setShowForm(true); }}
+        onEdit={(q) => { setEditing(q); setSelectedDoc(null); setShowForm(true); }}
         onRefresh={load}
       />
     );
@@ -77,7 +70,7 @@ export default function Presupuestos() {
   return (
     <div>
       <PageHeader title="Presupuestos" subtitle={`${items.length} presupuestos`}>
-        <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
+        <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
           <Plus className="w-4 h-4 mr-1.5" /> Nuevo presupuesto
         </Button>
       </PageHeader>
@@ -122,7 +115,7 @@ export default function Presupuestos() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => setSelectedDoc(q)}>Ver documento</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setEditing(q); setForm({ ...q }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setEditing(q); setShowForm(true); }}>Editar</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => base44.entities.Quote.update(q.id, { estado: 'aceptado' }).then(load)}>Marcar aceptado</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -135,38 +128,15 @@ export default function Presupuestos() {
         )}
       </div>
 
-      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); } }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar presupuesto' : 'Nuevo presupuesto'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            <div className="space-y-1.5"><Label>Nº Presupuesto *</Label><Input value={form.numero_presupuesto} onChange={e => setForm(f => ({ ...f, numero_presupuesto: e.target.value }))} placeholder="P-2024-001" /></div>
-            <div className="space-y-1.5"><Label>Fecha *</Label><Input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Cliente</Label><Input value={form.cliente_nombre} onChange={e => setForm(f => ({ ...f, cliente_nombre: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>NIF/CIF</Label><Input value={form.cliente_nif} onChange={e => setForm(f => ({ ...f, cliente_nif: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_imponible} onChange={e => setForm(f => ({ ...f, base_imponible: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Tipo impuesto (%)</Label><Input type="number" value={form.tipo_impuesto} onChange={e => setForm(f => ({ ...f, tipo_impuesto: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Total (€) *</Label><Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Validez (días)</Label><Input type="number" value={form.validez_dias} onChange={e => setForm(f => ({ ...f, validez_dias: e.target.value }))} /></div>
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="borrador">Borrador</SelectItem>
-                  <SelectItem value="enviado">Enviado</SelectItem>
-                  <SelectItem value="aceptado">Aceptado</SelectItem>
-                  <SelectItem value="rechazado">Rechazado</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2 space-y-1.5"><Label>Notas</Label><Textarea value={form.notas || ''} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={2} /></div>
-          </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">{saving ? 'Guardando...' : 'Guardar'}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DocumentForm
+        open={showForm}
+        onOpenChange={v => { setShowForm(v); if (!v) setEditing(null); }}
+        editing={editing}
+        docType="quote"
+        company={company}
+        user={user}
+        onSaved={() => { setEditing(null); load(); }}
+      />
     </div>
   );
 }

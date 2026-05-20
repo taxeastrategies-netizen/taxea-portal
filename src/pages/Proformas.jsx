@@ -13,8 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DocumentWorkspace from '@/components/quotes/DocumentWorkspace';
+import DocumentForm from '@/components/quotes/DocumentForm';
 
-const EMPTY = { numero_proforma: '', fecha: '', cliente_nombre: '', cliente_nif: '', concepto: '', base_imponible: '', tipo_impuesto: 21, cuota_impuesto: '', total: '', estado: 'borrador', notas: '' };
+
 
 export default function Proformas() {
   const { company, user, loadingCompany } = useOutletContext() || {};
@@ -22,8 +23,6 @@ export default function Proformas() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
 
   useEffect(() => {
@@ -42,13 +41,7 @@ export default function Proformas() {
     setLoading(false);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    const payload = { ...form, company_id: company.id, base_imponible: parseFloat(form.base_imponible) || 0, total: parseFloat(form.total) || 0 };
-    if (editing) await base44.entities.Proforma.update(editing.id, payload);
-    else await base44.entities.Proforma.create(payload);
-    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
-  };
+
 
   if (loadingCompany && loading) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
@@ -64,7 +57,7 @@ export default function Proformas() {
         company={company}
         user={user}
         onClose={() => setSelectedDoc(null)}
-        onEdit={(p) => { setEditing(p); setForm({ ...p }); setSelectedDoc(null); setShowForm(true); }}
+        onEdit={(p) => { setEditing(p); setSelectedDoc(null); setShowForm(true); }}
         onRefresh={load}
       />
     );
@@ -73,7 +66,7 @@ export default function Proformas() {
   return (
     <div>
       <PageHeader title="Facturas Proforma" subtitle={`${items.length} proformas`}>
-        <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
+        <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
           <Plus className="w-4 h-4 mr-1.5" /> Nueva proforma
         </Button>
       </PageHeader>
@@ -115,7 +108,7 @@ export default function Proformas() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => setSelectedDoc(p)}>Ver documento</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setEditing(p); setForm({ ...p }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setEditing(p); setShowForm(true); }}>Editar</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -127,37 +120,15 @@ export default function Proformas() {
         )}
       </div>
 
-      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); } }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar proforma' : 'Nueva proforma'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            <div className="space-y-1.5"><Label>Nº Proforma *</Label><Input value={form.numero_proforma} onChange={e => setForm(f => ({ ...f, numero_proforma: e.target.value }))} placeholder="PRO-2024-001" /></div>
-            <div className="space-y-1.5"><Label>Fecha *</Label><Input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Cliente</Label><Input value={form.cliente_nombre} onChange={e => setForm(f => ({ ...f, cliente_nombre: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>NIF/CIF</Label><Input value={form.cliente_nif} onChange={e => setForm(f => ({ ...f, cliente_nif: e.target.value }))} /></div>
-            <div className="col-span-2 space-y-1.5"><Label>Concepto</Label><Input value={form.concepto} onChange={e => setForm(f => ({ ...f, concepto: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_imponible} onChange={e => setForm(f => ({ ...f, base_imponible: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Tipo impuesto (%)</Label><Input type="number" value={form.tipo_impuesto} onChange={e => setForm(f => ({ ...f, tipo_impuesto: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Total (€)</Label><Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} /></div>
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="borrador">Borrador</SelectItem>
-                  <SelectItem value="enviada">Enviada</SelectItem>
-                  <SelectItem value="aceptada">Aceptada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="col-span-2 space-y-1.5"><Label>Notas</Label><Textarea value={form.notas || ''} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={2} /></div>
-          </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">{saving ? 'Guardando...' : 'Guardar'}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DocumentForm
+        open={showForm}
+        onOpenChange={v => { setShowForm(v); if (!v) setEditing(null); }}
+        editing={editing}
+        docType="proforma"
+        company={company}
+        user={user}
+        onSaved={() => { setEditing(null); load(); }}
+      />
     </div>
   );
 }

@@ -18,6 +18,12 @@
     "cliente_nif": {
       "type": "string"
     },
+    "cliente_direccion": {
+      "type": "string"
+    },
+    "cliente_email": {
+      "type": "string"
+    },
     "concepto": {
       "type": "string"
     },
@@ -31,8 +37,23 @@
     "cuota_impuesto": {
       "type": "number"
     },
+    "aplica_retencion": {
+      "type": "boolean",
+      "default": false
+    },
+    "retencion_irpf": {
+      "type": "number",
+      "default": 0
+    },
     "total": {
       "type": "number"
+    },
+    "forma_pago": {
+      "type": "string",
+      "default": "Transferencia bancaria"
+    },
+    "coletilla_fiscal": {
+      "type": "string"
     },
     "estado": {
       "type": "string",
