@@ -88,6 +88,7 @@ export default function LaborOcrWorkspace({ company, user }) {
   };
 
   const processDocumentOcr = async (doc, fileUrl, batchMode, batchId, company) => {
+    try {
     const docType = batchMode === 'nominas' ? 'nómina' : batchMode === 'seguros_sociales' ? 'documento de seguros sociales (RLC/RNT/TC)' : 'documento laboral (nómina o seguros sociales)';
     const prompt = `Eres un sistema OCR especializado en documentos laborales españoles. Analiza este ${docType} y extrae TODOS los datos disponibles.
 
@@ -233,8 +234,15 @@ Sé preciso. Si un campo no aparece, devuelve null. No inventes datos.`;
         balanced,
         warnings: !balanced ? ['El asiento no cuadra. Revisa los importes.'] : [],
       });
-    }
-  };
+      }
+      } catch (err) {
+      console.error('OCR error for doc', doc.id, err);
+      await base44.entities.LaborOcrDocument.update(doc.id, {
+        ocr_status: 'error',
+        notes: err?.message || 'Error desconocido durante el análisis OCR',
+      });
+      }
+      };
 
   if (view === 'batch' && selectedBatch) {
     return (

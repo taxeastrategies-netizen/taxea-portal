@@ -31,12 +31,14 @@ export default function LaborOcrBatchProcessor({ batch, company, onBack, onRevie
 
   useEffect(() => {
     if (batch?.id) loadDocuments();
-    const iv = setInterval(() => {
-      const hasProcessing = documents.some(d => d.ocr_status === 'procesando' || d.ocr_status === 'pendiente');
-      if (hasProcessing) loadDocuments();
-    }, 4000);
-    return () => clearInterval(iv);
   }, [batch?.id]);
+
+  useEffect(() => {
+    const hasProcessing = documents.some(d => d.ocr_status === 'procesando' || d.ocr_status === 'pendiente');
+    if (!hasProcessing) return;
+    const iv = setInterval(loadDocuments, 4000);
+    return () => clearInterval(iv);
+  }, [documents]);
 
   const loadDocuments = async () => {
     const docs = await base44.entities.LaborOcrDocument.filter({ batch_id: batch.id }, 'created_date', 200);
