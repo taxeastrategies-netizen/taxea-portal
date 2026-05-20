@@ -9,6 +9,7 @@ import OperationsReports from '@/components/operations/OperationsReports';
 import OperationsTickets from '@/components/operations/OperationsTickets';
 import OperationsRisks from '@/components/operations/OperationsRisks';
 import OperationsCalendar from '@/components/operations/OperationsCalendar';
+import OperationsAICenter from '@/components/operations/OperationsAICenter';
 
 const MODULE_MAP = {
   dashboard: OperationsDashboard,
@@ -22,6 +23,7 @@ const MODULE_MAP = {
   tickets: OperationsTickets,
   risks: OperationsRisks,
   calendar: OperationsCalendar,
+  ai: OperationsAICenter,
   reports: OperationsReports,
 };
 

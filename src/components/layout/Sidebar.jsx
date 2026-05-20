@@ -153,6 +153,7 @@ const DEPT_GROUPS = [
           { id: 'tickets',    label: 'Tickets internos',  icon: AlertTriangle,   path: '/operations/tickets' },
           { id: 'risks',      label: 'Riesgos',           icon: Shield,          path: '/operations/risks' },
           { id: 'calendar',   label: 'Calendario',        icon: Calendar,        path: '/operations/calendar' },
+          { id: 'ai',         label: 'IA Director',       icon: Brain,           path: '/operations/ai' },
           { id: 'reports',    label: 'Informes',          icon: BarChart2,       path: '/operations/reports' },
         ],
       },
