@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import DocumentWorkspace from '@/components/quotes/DocumentWorkspace';
 
 const EMPTY = { numero_proforma: '', fecha: '', cliente_nombre: '', cliente_nif: '', concepto: '', base_imponible: '', tipo_impuesto: 21, cuota_impuesto: '', total: '', estado: 'borrador', notas: '' };
 
@@ -23,6 +24,7 @@ export default function Proformas() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
 
   useEffect(() => {
     if (company?.id) { load(); }
@@ -33,6 +35,10 @@ export default function Proformas() {
     setLoading(true);
     const data = await base44.entities.Proforma.filter({ company_id: company.id });
     setItems(data || []);
+    if (selectedDoc) {
+      const updated = (data || []).find(d => d.id === selectedDoc.id);
+      if (updated) setSelectedDoc(updated);
+    }
     setLoading(false);
   };
 
@@ -44,33 +50,25 @@ export default function Proformas() {
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
   };
 
-  const convertToInvoice = async (p) => {
-    await base44.entities.Invoice.create({
-      company_id: company.id,
-      numero_factura: `F-${p.numero_proforma}`,
-      fecha_emision: new Date().toISOString().split('T')[0],
-      cliente_nombre: p.cliente_nombre,
-      cliente_nif: p.cliente_nif,
-      concepto: p.concepto,
-      base_imponible: p.base_imponible,
-      tipo_iva: p.tipo_impuesto,
-      cuota_iva: (p.base_imponible || 0) * (p.tipo_impuesto || 21) / 100,
-      total_factura: p.total,
-      tipo: 'emitida',
-      estado_cobro: 'pendiente',
-      estado_contable: 'pendiente',
-      anio: new Date().getFullYear(),
-      trimestre: ['T1','T2','T3','T4'][Math.floor(new Date().getMonth() / 3)],
-      subido_por: user?.email,
-    });
-    await base44.entities.Proforma.update(p.id, { estado: 'convertida_factura' });
-    load();
-  };
-
   if (loadingCompany && loading) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="Proformas" />;
+
+  // Vista del workspace al seleccionar una proforma
+  if (selectedDoc) {
+    return (
+      <DocumentWorkspace
+        doc={selectedDoc}
+        docType="proforma"
+        company={company}
+        user={user}
+        onClose={() => setSelectedDoc(null)}
+        onEdit={(p) => { setEditing(p); setForm({ ...p }); setSelectedDoc(null); setShowForm(true); }}
+        onRefresh={load}
+      />
+    );
+  }
 
   return (
     <div>
@@ -103,23 +101,21 @@ export default function Proformas() {
               </thead>
               <tbody className="divide-y divide-border">
                 {items.map(p => (
-                  <tr key={p.id} className="hover:bg-secondary/30">
+                  <tr key={p.id} className="hover:bg-secondary/30 cursor-pointer" onClick={() => setSelectedDoc(p)}>
                     <td className="px-4 py-3 font-medium text-foreground">{p.numero_proforma}</td>
                     <td className="px-4 py-3 text-muted-foreground">{p.fecha}</td>
                     <td className="px-4 py-3">{p.cliente_nombre || '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell truncate max-w-xs">{p.concepto || '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold">{(p.total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
                     <td className="px-4 py-3"><StatusBadge status={p.estado} /></td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setSelectedDoc(p)}>Ver documento</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setEditing(p); setForm({ ...p }); setShowForm(true); }}>Editar</DropdownMenuItem>
-                          {p.estado !== 'convertida_factura' && (
-                            <DropdownMenuItem onClick={() => convertToInvoice(p)}>Convertir en factura</DropdownMenuItem>
-                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>

@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import DocumentWorkspace from '@/components/quotes/DocumentWorkspace';
 
 const EMPTY = { numero_presupuesto: '', fecha: '', cliente_nombre: '', cliente_nif: '', base_imponible: '', tipo_impuesto: 21, total: '', estado: 'borrador', notas: '', validez_dias: 30 };
 
@@ -24,6 +25,7 @@ export default function Presupuestos() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
 
   useEffect(() => {
     if (company?.id) { load(); }
@@ -34,6 +36,11 @@ export default function Presupuestos() {
     setLoading(true);
     const data = await base44.entities.Quote.filter({ company_id: company.id });
     setItems(data || []);
+    // Refresh selectedDoc if open
+    if (selectedDoc) {
+      const updated = (data || []).find(d => d.id === selectedDoc.id);
+      if (updated) setSelectedDoc(updated);
+    }
     setLoading(false);
   };
 
@@ -45,34 +52,27 @@ export default function Presupuestos() {
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
   };
 
-  const convertToInvoice = async (q) => {
-    await base44.entities.Invoice.create({
-      company_id: company.id,
-      numero_factura: `F-${q.numero_presupuesto}`,
-      fecha_emision: new Date().toISOString().split('T')[0],
-      cliente_nombre: q.cliente_nombre,
-      cliente_nif: q.cliente_nif,
-      base_imponible: q.base_imponible,
-      tipo_iva: q.tipo_impuesto,
-      cuota_iva: q.base_imponible * (q.tipo_impuesto || 21) / 100,
-      total_factura: q.total,
-      tipo: 'emitida',
-      estado_cobro: 'pendiente',
-      estado_contable: 'pendiente',
-      anio: new Date().getFullYear(),
-      trimestre: ['T1','T2','T3','T4'][Math.floor(new Date().getMonth() / 3)],
-      subido_por: user?.email,
-    });
-    await base44.entities.Quote.update(q.id, { estado: 'convertido_factura' });
-    load();
-  };
-
   const filtered = items.filter(i => !search || i.numero_presupuesto?.toLowerCase().includes(search.toLowerCase()) || i.cliente_nombre?.toLowerCase().includes(search.toLowerCase()));
 
   if (loadingCompany && loading) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="Presupuestos" />;
+
+  // Vista del workspace al seleccionar un presupuesto
+  if (selectedDoc) {
+    return (
+      <DocumentWorkspace
+        doc={selectedDoc}
+        docType="quote"
+        company={company}
+        user={user}
+        onClose={() => setSelectedDoc(null)}
+        onEdit={(q) => { setEditing(q); setForm({ ...q }); setSelectedDoc(null); setShowForm(true); }}
+        onRefresh={load}
+      />
+    );
+  }
 
   return (
     <div>
@@ -109,23 +109,21 @@ export default function Presupuestos() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map(q => (
-                  <tr key={q.id} className="hover:bg-secondary/30">
+                  <tr key={q.id} className="hover:bg-secondary/30 cursor-pointer" onClick={() => setSelectedDoc(q)}>
                     <td className="px-4 py-3 font-medium text-foreground">{q.numero_presupuesto}</td>
                     <td className="px-4 py-3 text-muted-foreground">{q.fecha}</td>
                     <td className="px-4 py-3">{q.cliente_nombre || '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold">{(q.total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
                     <td className="px-4 py-3"><StatusBadge status={q.estado} /></td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setSelectedDoc(q)}>Ver documento</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => { setEditing(q); setForm({ ...q }); setShowForm(true); }}>Editar</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => base44.entities.Quote.update(q.id, { estado: 'aceptado' }).then(load)}>Marcar aceptado</DropdownMenuItem>
-                          {q.estado === 'aceptado' && (
-                            <DropdownMenuItem onClick={() => convertToInvoice(q)}>Convertir en factura</DropdownMenuItem>
-                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -148,6 +146,7 @@ export default function Presupuestos() {
             <div className="space-y-1.5"><Label>Base imponible (€)</Label><Input type="number" step="0.01" value={form.base_imponible} onChange={e => setForm(f => ({ ...f, base_imponible: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Tipo impuesto (%)</Label><Input type="number" value={form.tipo_impuesto} onChange={e => setForm(f => ({ ...f, tipo_impuesto: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Total (€) *</Label><Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Validez (días)</Label><Input type="number" value={form.validez_dias} onChange={e => setForm(f => ({ ...f, validez_dias: e.target.value }))} /></div>
             <div className="space-y-1.5">
               <Label>Estado</Label>
               <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v }))}>
