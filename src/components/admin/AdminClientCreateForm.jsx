@@ -53,10 +53,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
       setError('Razón social, NIF/CIF y email son obligatorios.');
       return;
     }
-    if (form.tempPassword.length < 10) {
-      setError('La contraseña temporal debe tener al menos 10 caracteres.');
-      return;
-    }
+
     setSaving(true);
     try {
       // 1. Crear ClientAccount
