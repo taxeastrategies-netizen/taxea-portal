@@ -84,10 +84,41 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         tempPasswordShared: false,
       });
 
-      // 2. Invitar usuario — envía email de invitación para que el cliente establezca su contraseña
-      await base44.users.inviteUser(form.email, 'user');
+      // 2. Invitar usuario (crea la cuenta en el sistema)
+      try { await base44.users.inviteUser(form.email, 'user'); } catch {}
 
-      // 3. Audit log
+      // 3. Enviar email personalizado en español con enlace a /setup-password
+      const appUrl = window.location.origin;
+      const setupUrl = `${appUrl}/setup-password`;
+      const emailHtml = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+          <div style="background:#fff;padding:32px 40px 16px;text-align:center;border-bottom:1px solid #f3f4f6;">
+            <img src="https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/b059a58db_ChatGPTImage7may202610_56_53pm.png" alt="Taxea Strategies" style="height:60px;object-fit:contain;" />
+          </div>
+          <div style="padding:32px 40px;">
+            <h2 style="font-size:22px;font-weight:700;color:#1e293b;margin:0 0 12px;">Bienvenido/a a tu portal privado</h2>
+            <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 8px;">Hola <strong>${form.legalName}</strong>,</p>
+            <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 24px;">Tu cuenta en el <strong>Portal de Clientes de Taxea Strategies</strong> ha sido activada. Para acceder por primera vez, necesitas establecer tu contraseña personal.</p>
+            <div style="text-align:center;margin:28px 0;">
+              <a href="${setupUrl}" style="display:inline-block;background:#b91c2c;color:#fff;font-weight:600;font-size:15px;padding:14px 32px;border-radius:8px;text-decoration:none;">Establecer mi contraseña →</a>
+            </div>
+            <p style="color:#64748b;font-size:13px;line-height:1.5;">Si el botón no funciona, copia y pega este enlace en tu navegador:<br/><a href="${setupUrl}" style="color:#b91c2c;">${setupUrl}</a></p>
+            <hr style="border:none;border-top:1px solid #f1f5f9;margin:28px 0;" />
+            <p style="color:#94a3b8;font-size:12px;">¿Necesitas ayuda? Escríbenos a <a href="mailto:info@taxeastrategies.com" style="color:#b91c2c;">info@taxeastrategies.com</a></p>
+          </div>
+          <div style="background:#f8fafc;padding:16px 40px;text-align:center;">
+            <p style="color:#94a3b8;font-size:11px;margin:0;">© 2025 Taxea Strategies · Asesoría fiscal y empresarial</p>
+          </div>
+        </div>
+      `;
+      await base44.integrations.Core.SendEmail({
+        to: form.email,
+        subject: 'Bienvenido/a a tu Portal Taxea Strategies — Establece tu contraseña',
+        body: emailHtml,
+        from_name: 'Taxea Strategies',
+      });
+
+      // 4. Audit log
       await base44.entities.ClientAccessAuditLog.create({
         clientAccountId: client.id,
         clientName: form.legalName,
