@@ -7,14 +7,9 @@ import {
   Calculator, Wallet, Heart, Users, ChevronRight, ArrowRight,
   ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
-import FiscalDashboard from '@/components/dashboard/FiscalDashboard';
-import StatCard from '@/components/ui/StatCard';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import StatusBadge from '@/components/ui/StatusBadge';
 import EstadoFiscal from '@/components/EstadoFiscal';
-import HealthScore from '@/components/HealthScore';
-import SummaryCards from '@/components/dashboard/SummaryCards';
-import CashFlowChart from '@/components/dashboard/CashFlowChart';
 import { calcularHealthScore } from '@/lib/healthScoreCalc';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,14 +37,13 @@ const HR_TOOLS = [
 ];
 
 function KpiBlock({ label, value, sub, alert, warn, trend }) {
+  const color = alert ? 'text-red-600' : warn ? 'text-amber-600' : 'text-foreground';
   const TrendIcon = trend === 'up' ? ArrowUpRight : trend === 'down' ? ArrowDownRight : Minus;
   const trendColor = trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-red-500' : 'text-muted-foreground';
   return (
     <div className="bg-card px-5 py-4">
       <div className="flex items-start justify-between gap-1">
-        <p className={cn('text-2xl font-bold leading-none', alert ? 'text-red-600' : warn ? 'text-amber-600' : 'text-foreground')}>
-          {value}
-        </p>
+        <p className={cn('text-2xl font-bold leading-none', color)}>{value}</p>
         {trend && <TrendIcon className={cn('w-4 h-4 mt-0.5 flex-shrink-0', trendColor)} />}
       </div>
       <p className="text-xs text-muted-foreground mt-1.5 leading-snug">{label}</p>
@@ -58,12 +52,12 @@ function KpiBlock({ label, value, sub, alert, warn, trend }) {
   );
 }
 
-function DeptCard({ color, bgLight, border, icon: Icon, title, to, kpis, tools }) {
+function DeptCard({ color, bgLight, border, icon: DeptIcon, title, to, kpis, tools }) {
   return (
     <div className={cn('bg-card rounded-xl border overflow-hidden flex flex-col', border)}>
       <div className={cn('flex items-center justify-between px-5 py-3.5 border-b', bgLight, border)}>
         <div className="flex items-center gap-2.5">
-          <Icon className={cn('w-4 h-4', color)} />
+          <DeptIcon className={cn('w-4 h-4', color)} />
           <span className={cn('font-jakarta font-bold text-sm', color)}>{title}</span>
         </div>
         <Link to={to} className={cn('flex items-center gap-0.5 text-xs font-medium hover:underline', color)}>
@@ -74,11 +68,14 @@ function DeptCard({ color, bgLight, border, icon: Icon, title, to, kpis, tools }
         {kpis.map((kpi, i) => <KpiBlock key={i} {...kpi} />)}
       </div>
       <div className="px-5 py-3 border-t border-border bg-secondary/30 flex flex-wrap gap-x-4 gap-y-1.5">
-        {tools.map((t, i) => (
-          <Link key={i} to={t.to} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
-            <t.icon className="w-3 h-3" />{t.label}
-          </Link>
-        ))}
+        {tools.map((t, i) => {
+          const ToolIcon = t.icon;
+          return (
+            <Link key={i} to={t.to} className="text-xs text-primary hover:underline font-medium flex items-center gap-1">
+              <ToolIcon className="w-3 h-3" />{t.label}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
@@ -113,7 +110,6 @@ export default function Dashboard() {
   const [absences, setAbsences] = useState([]);
   const [hrDocuments, setHrDocuments] = useState([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [selectedQuarter, setSelectedQuarter] = useState('anual');
   const [loading, setLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
@@ -154,54 +150,55 @@ export default function Dashboard() {
     setHrDocuments(hrdocs || []);
   };
 
-  const {
-    totalIngresos, totalGastos, resultado, ivaRepercutido, ivaSoportado,
-    facturasPendientes, obligacionesProximas, tareasVencidas, erroresCriticos,
-    estadoFiscal, healthScore, healthMotivos, recentActivity, monthlyChart
-  } = useMemo(() => {
+  const derived = useMemo(() => {
     const totalIngresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
     const totalGastos = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
     const resultado = totalIngresos - totalGastos;
     const ivaRepercutido = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
     const ivaSoportado = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
     const facturasPendientes = invoices.filter(i => i.estado_contable === 'pendiente').length;
-    const obligacionesProximas = obligations.filter(o => ['pendiente_documentacion', 'en_preparacion'].includes(o.estado)).length;
     const tareasVencidas = tasks.filter(t => t.fecha_limite && new Date(t.fecha_limite) < new Date() && !['completada', 'cancelada'].includes(t.estado));
     const erroresCriticos = errors.filter(e => e.severidad === 'critica' && !['resuelto', 'ignorado'].includes(e.estado));
+    const now = new Date();
+    const oblUrgentes = obligations.filter(o => {
+      if (!o.fecha_limite) return false;
+      const diff = (new Date(o.fecha_limite) - now) / 86400000;
+      return diff >= 0 && diff <= 15;
+    });
+    const facturasCobrar = invoices.filter(i => i.tipo === 'emitida' && ['pendiente', 'enviada'].includes(i.estado_contable));
+    const facturasVencidas = invoices.filter(i => i.tipo === 'emitida' && i.fecha_vencimiento && new Date(i.fecha_vencimiento) < now && !['cobrada', 'anulada'].includes(i.estado_contable));
     const estadoFiscal = (() => {
       if (erroresCriticos.length > 0 || tareasVencidas.length > 0) return 'rojo';
       if (facturasPendientes > 0 || obligations.some(o => o.estado === 'pendiente_documentacion')) return 'amarillo';
       if (invoices.length > 0 || expenses.length > 0) return 'verde';
       return 'gris';
     })();
-    const { score: healthScoreCalc, motivos: healthMotivos } = calcularHealthScore({ errors, tasks, obligations, invoices });
-    const healthScore = crmData?.health_score || healthScoreCalc;
+    const { score: healthScore, motivos: healthMotivos } = calcularHealthScore({ errors, tasks, obligations, invoices });
+    const margen = totalIngresos > 0 ? Math.round((resultado / totalIngresos) * 100) : 0;
     const recentActivity = [...invoices.slice(-3), ...expenses.slice(-3)]
       .sort((a, b) => new Date(b.created_date) - new Date(a.created_date)).slice(0, 5);
-
-    // Monthly chart data
-    const monthlyData = {};
-    MONTHS.forEach((m, idx) => { monthlyData[idx] = { month: m, ingresos: 0, gastos: 0 }; });
-    invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-      const d = new Date(i.fecha_emision || i.created_date);
-      if (!isNaN(d)) monthlyData[d.getMonth()].ingresos += i.total_factura || 0;
-    });
-    expenses.filter(e => e.tipo === 'gasto').forEach(e => {
-      const d = new Date(e.fecha || e.created_date);
-      if (!isNaN(d)) monthlyData[d.getMonth()].gastos += e.total || 0;
-    });
-    const monthlyChart = Object.values(monthlyData).map(m => ({
-      ...m,
-      ingresos: Math.round(m.ingresos),
-      gastos: Math.round(m.gastos),
-    }));
-
+    const monthlyChart = (() => {
+      const data = MONTHS.map((m, idx) => ({ month: m, ingresos: 0, gastos: 0 }));
+      invoices.filter(i => i.tipo === 'emitida').forEach(i => {
+        const d = new Date(i.fecha_emision || i.created_date);
+        if (!isNaN(d)) data[d.getMonth()].ingresos += Math.round(i.total_factura || 0);
+      });
+      expenses.filter(e => e.tipo === 'gasto').forEach(e => {
+        const d = new Date(e.fecha || e.created_date);
+        if (!isNaN(d)) data[d.getMonth()].gastos += Math.round(e.total || 0);
+      });
+      return data;
+    })();
+    const empleadosActivos = employees.filter(e => !e.estado || e.estado === 'activo');
+    const ausenciasPendientes = absences.filter(a => ['pendiente', 'solicitada'].includes(a.estado));
+    const hrDocsPendientes = hrDocuments.filter(d => ['pendiente', 'revision'].includes(d.estado));
     return {
       totalIngresos, totalGastos, resultado, ivaRepercutido, ivaSoportado,
-      facturasPendientes, obligacionesProximas, tareasVencidas, erroresCriticos,
-      estadoFiscal, healthScore, healthMotivos, recentActivity, monthlyChart
+      facturasPendientes, tareasVencidas, erroresCriticos, oblUrgentes,
+      facturasCobrar, facturasVencidas, estadoFiscal, healthScore, healthMotivos,
+      margen, recentActivity, monthlyChart, empleadosActivos, ausenciasPendientes, hrDocsPendientes
     };
-  }, [invoices, expenses, obligations, tasks, errors, crmData]);
+  }, [invoices, expenses, obligations, tasks, errors, employees, absences, hrDocuments]);
 
   if (loading || loadingCompany) return <DashboardSkeleton />;
 
@@ -216,20 +213,15 @@ export default function Dashboard() {
     </div>
   );
 
-  const now = new Date();
-  const empleadosActivos = employees.filter(e => !e.estado || e.estado === 'activo');
-  const ausenciasPendientes = absences.filter(a => ['pendiente', 'solicitada'].includes(a.estado));
-  const hrDocsPendientes = hrDocuments.filter(d => ['pendiente', 'revision'].includes(d.estado));
-  const oblUrgentes = obligations.filter(o => {
-    if (!o.fecha_limite) return false;
-    const diff = (new Date(o.fecha_limite) - now) / 86400000;
-    return diff >= 0 && diff <= 15;
-  });
-  const facturasCobrar = invoices.filter(i => i.tipo === 'emitida' && ['pendiente', 'enviada'].includes(i.estado_contable));
-  const facturasVencidas = invoices.filter(i => i.tipo === 'emitida' && i.fecha_vencimiento && new Date(i.fecha_vencimiento) < now && !['cobrada', 'anulada'].includes(i.estado_contable));
-  const margen = totalIngresos > 0 ? Math.round((resultado / totalIngresos) * 100) : 0;
+  const {
+    totalIngresos, totalGastos, resultado, ivaRepercutido, ivaSoportado,
+    facturasPendientes, tareasVencidas, erroresCriticos, oblUrgentes,
+    facturasCobrar, facturasVencidas, estadoFiscal, healthScore, healthMotivos,
+    margen, recentActivity, monthlyChart, empleadosActivos, ausenciasPendientes, hrDocsPendientes
+  } = derived;
 
-  // ── UNIFIED VIEW ──
+  const now = new Date();
+
   return (
     <div className="animate-fade-in space-y-5">
 
@@ -240,30 +232,18 @@ export default function Dashboard() {
             {isAdmin ? (company?.razon_social || 'Dashboard') : `Hola, ${user?.full_name?.split(' ')[0] || 'Cliente'}`}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isAdmin ? now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : company?.razon_social}
+            {isAdmin
+              ? now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
+              : company?.razon_social}
           </p>
         </div>
-        <div className="flex gap-2">
-          {!isAdmin && (
-            <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
-              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="anual">Ano completo</SelectItem>
-                <SelectItem value="T1">T1 Ene-Mar</SelectItem>
-                <SelectItem value="T2">T2 Abr-Jun</SelectItem>
-                <SelectItem value="T3">T3 Jul-Sep</SelectItem>
-                <SelectItem value="T4">T4 Oct-Dic</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+        </Select>
       </div>
 
-      {/* Alertas */}
+      {/* Alertas urgentes */}
       {(erroresCriticos.length > 0 || tareasVencidas.length > 0 || oblUrgentes.length > 0) && (
         <div className="flex flex-wrap gap-2">
           {erroresCriticos.length > 0 && (
@@ -284,6 +264,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Notificaciones */}
       {notifications.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {notifications.slice(0, 2).map(n => (
@@ -298,17 +279,17 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Fila 1: Health Score + KPIs financieros */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl px-5 py-4 flex items-center gap-4">
+      {/* Fila 1: Health Score + 3 KPIs financieros */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card border border-border rounded-xl px-5 py-4 flex items-center gap-4 col-span-2 lg:col-span-1">
           <ScoreRing score={healthScore} />
           <div>
             <p className="text-sm font-jakarta font-bold text-foreground">Health Score</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {healthScore >= 80 ? 'Estado optimo' : healthScore >= 50 ? 'Requiere atencion' : 'Estado critico'}
             </p>
-            {healthMotivos && healthMotivos.length > 0 && (
-              <p className="text-[11px] text-amber-600 mt-1 font-medium">{healthMotivos[0]}</p>
+            {healthMotivos?.[0] && (
+              <p className="text-[11px] text-amber-600 mt-1 font-medium leading-snug">{healthMotivos[0]}</p>
             )}
           </div>
         </div>
@@ -324,15 +305,21 @@ export default function Dashboard() {
           <p className={cn('text-[10px] font-medium mt-0.5', margen >= 0 ? 'text-emerald-600' : 'text-red-500')}>Margen {margen}%</p>
         </div>
         <div className="bg-card border border-border rounded-xl px-5 py-4">
-          <p className="text-2xl font-bold text-foreground">{empleadosActivos.length > 0 ? empleadosActivos.length : obligations.length}</p>
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-            {empleadosActivos.length > 0 ? <><Users className="w-3 h-3" />Empleados activos</> : <><Calendar className="w-3 h-3" />Obligaciones</>}
+          <p className="text-2xl font-bold text-foreground">
+            {empleadosActivos.length > 0 ? empleadosActivos.length : obligations.length}
           </p>
-          {empleadosActivos.length > 0 && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{employees.length} total plantilla</p>}
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            {empleadosActivos.length > 0
+              ? <><Users className="w-3 h-3" />Empleados activos</>
+              : <><Calendar className="w-3 h-3" />Obligaciones</>}
+          </p>
+          {empleadosActivos.length > 0 && (
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{employees.length} total plantilla</p>
+          )}
         </div>
       </div>
 
-      {/* Fila 2: Grafica + Semaforo + Indicadores */}
+      {/* Fila 2: Grafica mensual + Semaforo + Indicadores */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
@@ -355,7 +342,7 @@ export default function Dashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="h-44 flex items-center justify-center">
-                <p className="text-xs text-muted-foreground">Sin datos para mostrar en {selectedYear}</p>
+                <p className="text-xs text-muted-foreground">Sin datos para {selectedYear}</p>
               </div>
             )}
             <div className="flex items-center gap-4 mt-1 justify-center">
@@ -364,10 +351,11 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
         <div className="flex flex-col gap-4">
           <EstadoFiscal estado={estadoFiscal} />
           <div className="bg-card border border-border rounded-xl px-5 py-4 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Indicadores</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Indicadores clave</p>
             {[
               { label: 'Facturas por cobrar', val: facturasCobrar.length, barColor: 'bg-amber-400' },
               { label: 'Cobros vencidos', val: facturasVencidas.length, barColor: 'bg-red-500' },
@@ -380,7 +368,10 @@ export default function Dashboard() {
                   <span className={cn('text-xs font-bold', ind.val > 0 ? 'text-amber-600' : 'text-emerald-600')}>{ind.val}</span>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-1.5">
-                  <div className={cn('h-1.5 rounded-full transition-all', ind.val > 0 ? ind.barColor : 'bg-emerald-500')} style={{ width: ind.val === 0 ? '4px' : `${Math.min(ind.val * 20, 100)}%` }} />
+                  <div
+                    className={cn('h-1.5 rounded-full transition-all', ind.val > 0 ? ind.barColor : 'bg-emerald-500')}
+                    style={{ width: ind.val === 0 ? '4px' : `${Math.min(ind.val * 20, 100)}%` }}
+                  />
                 </div>
               </div>
             ))}
@@ -388,7 +379,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Fila 3: Tres cards departamento */}
+      {/* Fila 3: Cards de departamento */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <DeptCard
           icon={Calculator} color="text-taxea-red" bgLight="bg-red-50/60" border="border-red-100"
@@ -397,7 +388,7 @@ export default function Dashboard() {
             { label: 'Obligaciones urgentes', value: oblUrgentes.length, alert: oblUrgentes.length > 0, trend: oblUrgentes.length > 0 ? 'up' : 'down' },
             { label: 'Docs sin validar', value: facturasPendientes, warn: facturasPendientes > 0 },
             { label: 'Obligaciones totales', value: obligations.length },
-            { label: 'Errores criticos', value: erroresCriticos.length, alert: erroresCriticos.length > 0, trend: erroresCriticos.length > 0 ? 'up' : null },
+            { label: 'Errores criticos', value: erroresCriticos.length, alert: erroresCriticos.length > 0 },
           ]}
           tools={TAX_TOOLS}
         />
@@ -407,7 +398,7 @@ export default function Dashboard() {
           kpis={[
             { label: 'Cobros vencidos', value: facturasVencidas.length, alert: facturasVencidas.length > 0, trend: facturasVencidas.length > 0 ? 'up' : null },
             { label: 'Cobros pendientes', value: facturasCobrar.length, warn: facturasCobrar.length > 0 },
-            { label: 'Total gastos', value: totalGastos.toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €', sub: selectedYear },
+            { label: 'Total gastos ' + selectedYear, value: totalGastos.toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €' },
             { label: 'IVA estimado', value: (ivaRepercutido - ivaSoportado).toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €' },
           ]}
           tools={FIN_TOOLS}
@@ -416,7 +407,7 @@ export default function Dashboard() {
           icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100"
           title="People &amp; HR" to="/people/dashboard"
           kpis={[
-            { label: 'Empleados activos', value: empleadosActivos.length, trend: 'up' },
+            { label: 'Empleados activos', value: empleadosActivos.length },
             { label: 'Total plantilla', value: employees.length },
             { label: 'Ausencias pendientes', value: ausenciasPendientes.length, warn: ausenciasPendientes.length > 0 },
             { label: 'Docs laborales pend.', value: hrDocsPendientes.length, warn: hrDocsPendientes.length > 0 },
@@ -425,20 +416,28 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Fila 4: Obligaciones + Empleados + Actividad */}
+      {/* Fila 4: Obligaciones + Equipo + Actividad */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Obligaciones */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" />Obligaciones</h3>
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />Obligaciones
+            </h3>
             <Link to="/tax-accounting/obligaciones" className="text-xs text-primary hover:underline">Ver todas</Link>
           </div>
           <div className="divide-y divide-border/60">
             {obligations.length === 0 ? (
-              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin obligaciones registradas</p></div>
+              <div className="px-5 py-8 text-center">
+                <CheckCircle className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground">Sin obligaciones registradas</p>
+              </div>
             ) : obligations.slice(0, 5).map((obl) => (
               <div key={obl.id} className="px-5 py-2.5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-foreground capitalize">{obl.modelo?.replace(/_/g, ' ').replace('modelo ', 'Mod. ') || 'Obligacion'}</p>
+                  <p className="text-xs font-medium text-foreground capitalize">
+                    {obl.modelo?.replace(/_/g, ' ').replace('modelo ', 'Mod. ') || 'Obligacion'}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">{obl.periodo} · {obl.fecha_limite}</p>
                 </div>
                 <StatusBadge status={obl.estado} />
@@ -448,24 +447,34 @@ export default function Dashboard() {
           {tasks.filter(t => t.estado === 'pendiente_cliente').length > 0 && (
             <div className="px-5 py-2.5 border-t border-border bg-amber-50/50 flex items-center gap-2">
               <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
-              <p className="text-xs font-medium text-amber-700 flex-1">{tasks.filter(t => t.estado === 'pendiente_cliente').length} tarea(s) pendiente(s)</p>
+              <p className="text-xs font-medium text-amber-700 flex-1">
+                {tasks.filter(t => t.estado === 'pendiente_cliente').length} tarea(s) pendiente(s)
+              </p>
               <Link to="/tareas" className="text-xs text-amber-700 hover:underline font-medium">Ver</Link>
             </div>
           )}
         </div>
 
+        {/* Equipo */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Users className="w-3.5 h-3.5 text-muted-foreground" />Equipo</h3>
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-muted-foreground" />Equipo
+            </h3>
             <Link to="/people/employees" className="text-xs text-primary hover:underline">Ver todos</Link>
           </div>
           <div className="divide-y divide-border/60">
             {empleadosActivos.length === 0 ? (
-              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin empleados registrados</p></div>
+              <div className="px-5 py-8 text-center">
+                <Users className="w-6 h-6 text-muted-foreground mx-auto mb-2 opacity-40" />
+                <p className="text-xs text-muted-foreground">Sin empleados registrados</p>
+              </div>
             ) : empleadosActivos.slice(0, 5).map((e, i) => (
               <div key={i} className="px-5 py-2.5 flex items-center gap-3">
                 <div className="w-7 h-7 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[11px] font-bold text-rose-700">{(e.full_name || e.nombre || '?').charAt(0).toUpperCase()}</span>
+                  <span className="text-[11px] font-bold text-rose-700">
+                    {(e.full_name || e.nombre || '?').charAt(0).toUpperCase()}
+                  </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-foreground truncate">{e.full_name || e.nombre || 'Empleado'}</p>
@@ -476,30 +485,44 @@ export default function Dashboard() {
             ))}
             {empleadosActivos.length > 5 && (
               <div className="px-5 py-2 text-center">
-                <Link to="/people/employees" className="text-xs text-muted-foreground hover:text-primary">+{empleadosActivos.length - 5} mas</Link>
+                <Link to="/people/employees" className="text-xs text-muted-foreground hover:text-primary">
+                  +{empleadosActivos.length - 5} mas
+                </Link>
               </div>
             )}
           </div>
         </div>
 
+        {/* Actividad reciente */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />Actividad reciente</h3>
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2">
+              <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />Actividad reciente
+            </h3>
             <Link to="/tax-accounting/libros" className="text-xs text-primary hover:underline">Ver todo</Link>
           </div>
           <div className="divide-y divide-border/60">
             {recentActivity.length === 0 ? (
-              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin movimientos recientes</p></div>
+              <div className="px-5 py-8 text-center">
+                <BarChart3 className="w-6 h-6 text-muted-foreground mx-auto mb-2 opacity-40" />
+                <p className="text-xs text-muted-foreground">Sin movimientos recientes</p>
+              </div>
             ) : recentActivity.map((item, i) => (
               <div key={i} className="px-5 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', item.tipo === 'emitida' ? 'bg-emerald-500' : 'bg-red-400')} />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{item.numero_factura || item.concepto || 'Movimiento'}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{item.cliente_nombre || item.proveedor_cliente || '—'}</p>
+                    <p className="text-xs font-medium text-foreground truncate">
+                      {item.numero_factura || item.concepto || 'Movimiento'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {item.cliente_nombre || item.proveedor_cliente || '—'}
+                    </p>
                   </div>
                 </div>
-                <p className="text-xs font-semibold text-foreground flex-shrink-0 ml-2">{((item.total_factura || item.total) || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €</p>
+                <p className="text-xs font-semibold text-foreground flex-shrink-0 ml-2">
+                  {((item.total_factura || item.total) || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+                </p>
               </div>
             ))}
           </div>
@@ -528,7 +551,10 @@ function DashboardSkeleton() {
         <div className="h-64 bg-muted rounded-xl" />
       </div>
       <div className="grid grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => <div key={i} className="h-64 bg-muted rounded-xl" />)}
+        {[...Array(3)].map((_, i) => <div key={i} className="h-52 bg-muted rounded-xl" />)}
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => <div key={i} className="h-40 bg-muted rounded-xl" />)}
       </div>
     </div>
   );
