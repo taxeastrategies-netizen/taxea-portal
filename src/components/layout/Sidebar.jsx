@@ -246,7 +246,6 @@ const UTILS_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
-  { to: '/admin', label: 'Panel Admin', icon: Shield },
   { to: '/admin/clients', label: 'Clientes y accesos', icon: Users },
   { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
