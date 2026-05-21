@@ -1,0 +1,45 @@
+{
+  "name": "ClientAccessAuditLog",
+  "type": "object",
+  "properties": {
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "actionType": {
+      "type": "string",
+      "enum": [
+        "cuenta_creada",
+        "credenciales_generadas",
+        "primer_acceso",
+        "contrasena_cambiada_cliente",
+        "contrasena_reseteada_admin",
+        "cuenta_suspendida",
+        "cuenta_reactivada",
+        "cuenta_bloqueada",
+        "cuenta_desbloqueada",
+        "cuenta_archivada",
+        "intento_fallido",
+        "login_correcto",
+        "nota_interna",
+        "datos_editados"
+      ]
+    },
+    "actionBy": {
+      "type": "string"
+    },
+    "actionAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "details": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "clientAccountId",
+    "actionType"
+  ]
+}

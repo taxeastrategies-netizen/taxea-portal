@@ -135,29 +135,6 @@ export default function AdminPanel() {
         )}
       </div>
 
-      {/* Facturas pendientes */}
-      {allInvoices.length > 0 && (
-        <div className="mt-6 bg-card rounded-xl border border-border shadow-card">
-          <div className="px-5 py-4 border-b border-border">
-            <h3 className="font-jakarta font-semibold text-foreground">Facturas pendientes de revisión</h3>
-          </div>
-          <div className="divide-y divide-border">
-            {allInvoices.slice(0, 8).map(inv => (
-              <div key={inv.id} className="px-5 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{inv.numero_factura}</p>
-                  <p className="text-xs text-muted-foreground">{inv.cliente_nombre} · {inv.fecha_emision}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold">{(inv.total_factura || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
-                  <StatusBadge status={inv.estado_contable} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <Dialog open={showNewCompany} onOpenChange={setShowNewCompany}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Nueva empresa / cliente</DialogTitle></DialogHeader>

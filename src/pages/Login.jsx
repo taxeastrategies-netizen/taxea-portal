@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Phone, Mail, Lock, User, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 
-import { TaxeaLogoFull, TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
-
-// ─── Branding panel izquierdo ───────────────────────────────────────────────
 const FEATURES = [
   { icon: FileText, text: 'Documentación 100% privada y segura' },
   { icon: Brain,    text: 'IA que lee y clasifica tus facturas' },
@@ -22,60 +20,36 @@ function BrandingPanel() {
       className="hidden lg:flex lg:w-5/12 flex-col justify-between p-12 relative overflow-hidden select-none"
       style={{ background: 'linear-gradient(160deg, #0f0f0f 0%, #1a0608 100%)' }}
     >
-      {/* Glow decorativo premium */}
-      <div
-        className="absolute top-0 right-0 w-[480px] h-[480px] pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle at 80% 20%, rgba(184,37,53,0.12) 0%, transparent 65%)',
-        }}
-      />
-      <div
-        className="absolute bottom-0 left-0 w-[360px] h-[360px] pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle at 20% 90%, rgba(184,37,53,0.07) 0%, transparent 65%)',
-        }}
-      />
-      {/* Línea sutil lateral */}
+      <div className="absolute top-0 right-0 w-[480px] h-[480px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle at 80% 20%, rgba(184,37,53,0.12) 0%, transparent 65%)' }} />
+      <div className="absolute bottom-0 left-0 w-[360px] h-[360px] pointer-events-none"
+        style={{ background: 'radial-gradient(circle at 20% 90%, rgba(184,37,53,0.07) 0%, transparent 65%)' }} />
       <div className="absolute top-0 right-0 w-px h-full bg-gradient-to-b from-transparent via-white/5 to-transparent pointer-events-none" />
 
-      {/* ── LOGO PRINCIPAL ── */}
       <div className="relative z-10">
-      <div className="mb-10">
-      {/* Logo en blanco sobre fondo oscuro — SVG tipográfico */}
-      <div className="mb-6">
-        <TaxeaLogoBlancoSVG />
-      </div>
-
-          {/* Divisor con label */}
+        <div className="mb-10">
+          <div className="mb-6">
+            <TaxeaLogoBlancoSVG />
+          </div>
           <div className="flex items-center gap-3">
             <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(184,37,53,0.5), transparent)' }} />
-            <span className="text-xs font-medium tracking-[0.2em] uppercase" style={{ color: 'rgba(184,37,53,0.9)' }}>
-              Portal Privado
-            </span>
+            <span className="text-xs font-medium tracking-[0.2em] uppercase" style={{ color: 'rgba(184,37,53,0.9)' }}>Portal Privado</span>
             <div className="h-px flex-1" style={{ background: 'linear-gradient(270deg, rgba(184,37,53,0.5), transparent)' }} />
           </div>
         </div>
-
         <h2 className="text-white font-jakarta text-4xl font-bold leading-tight mb-5 tracking-tight">
-          Tu área privada<br />
-          <span style={{ color: '#c9303f' }}>fiscal y contable.</span>
+          Tu área privada<br /><span style={{ color: '#c9303f' }}>fiscal y contable.</span>
         </h2>
         <p className="text-sm leading-relaxed max-w-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Portal exclusivo para clientes de Taxea Strategies. Gestiona tu documentación, obligaciones fiscales y comunicación con tu asesor desde un entorno privado, seguro e inteligente.
         </p>
       </div>
 
-      {/* ── FEATURES ── */}
       <div className="relative z-10 space-y-2.5">
         {FEATURES.map(({ icon: Icon, text }) => (
           <div key={text} className="flex items-center gap-3 group">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-105"
-              style={{
-                background: 'rgba(184,37,53,0.12)',
-                border: '1px solid rgba(184,37,53,0.25)',
-              }}
-            >
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200 group-hover:scale-105"
+              style={{ background: 'rgba(184,37,53,0.12)', border: '1px solid rgba(184,37,53,0.25)' }}>
               <Icon className="w-3.5 h-3.5" style={{ color: '#c9303f' }} />
             </div>
             <p className="text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{text}</p>
@@ -91,84 +65,30 @@ function BrandingPanel() {
   );
 }
 
-// ─── Logo SVG blanco para fondo oscuro ──────────────────────────────────────
 function TaxeaLogoBlancoSVG() {
   return (
-    <svg width="260" height="90" viewBox="0 0 260 90" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Taxea Strategies">
-      {/* TAXEA — serif bold */}
-      <text
-        x="130" y="48"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontWeight="700"
-        fontSize="46"
-        letterSpacing="4"
-        fill="white"
-      >
-        TAXEA
-      </text>
-      {/* STRATEGIES — spaced caps */}
-      <text
-        x="130" y="66"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontWeight="400"
-        fontSize="13"
-        letterSpacing="6"
-        fill="rgba(255,255,255,0.85)"
-      >
-        STRATEGIES
-      </text>
-      {/* Línea decorativa curva — inspirada en el swoosh del logo original */}
-      <path
-        d="M30 79 Q90 70 130 76 Q170 82 230 72"
-        stroke="rgba(255,255,255,0.35)"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <path
-        d="M40 83 Q95 75 130 80 Q165 85 220 76"
-        stroke="rgba(255,255,255,0.18)"
-        strokeWidth="1"
-        fill="none"
-        strokeLinecap="round"
-      />
+    <svg width="260" height="90" viewBox="0 0 260 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <text x="130" y="48" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="700" fontSize="46" letterSpacing="4" fill="white">TAXEA</text>
+      <text x="130" y="66" textAnchor="middle" fontFamily="Georgia, 'Times New Roman', serif" fontWeight="400" fontSize="13" letterSpacing="6" fill="rgba(255,255,255,0.85)">STRATEGIES</text>
+      <path d="M30 79 Q90 70 130 76 Q170 82 230 72" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
     </svg>
   );
 }
 
-// ─── Panel formulario ────────────────────────────────────────────────────────
 export default function Login() {
-  const [mode, setMode] = useState('login'); // login | register | forgot | otp | success
+  const [mode, setMode] = useState('login'); // login | forgot
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
 
-  // Registro
-  const [regNombre, setRegNombre] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regTel, setRegTel] = useState('');
-  const [regPass, setRegPass] = useState('');
-  const [regPassConf, setRegPassConf] = useState('');
-  const [showRegPass, setShowRegPass] = useState(false);
-  const [rgpdMain, setRgpdMain] = useState(false);
-  const [rgpdComms, setRgpdComms] = useState(false);
-
-  // OTP
-  const [otpCode, setOtpCode] = useState('');
-
-  // Forgot
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
   const resetErrors = () => setError('');
 
-  // ── LOGIN ──
   const handleLogin = async (e) => {
     e.preventDefault();
     resetErrors();
@@ -183,60 +103,6 @@ export default function Login() {
     }
   };
 
-  // ── REGISTRO ──
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    resetErrors();
-    if (!rgpdMain) { setError('Debes aceptar la política de privacidad para continuar.'); return; }
-    if (regPass.length < 8) { setError('La contraseña debe tener al menos 8 caracteres.'); return; }
-    if (regPass !== regPassConf) { setError('Las contraseñas no coinciden.'); return; }
-    setLoading(true);
-    try {
-      await base44.auth.register({ email: regEmail, password: regPass, full_name: regNombre });
-      setMode('otp');
-    } catch (err) {
-      const msg = err.message || '';
-      if (msg.toLowerCase().includes('exist') || msg.toLowerCase().includes('already')) {
-        setError('Este correo ya está registrado. ¿Quieres iniciar sesión?');
-      } else {
-        setError(msg || 'Error al crear la cuenta. Inténtalo de nuevo.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── OTP ──
-  const handleOtp = async (e) => {
-    e.preventDefault();
-    resetErrors();
-    setLoading(true);
-    try {
-      const res = await base44.auth.verifyOtp({ email: regEmail, otpCode });
-      if (res?.access_token) base44.auth.setToken(res.access_token);
-      // Crear lead CRM
-      try {
-        await base44.entities.ClientCRM.create({
-          company_id: 'pendiente',
-          estado_comercial: 'lead',
-          rentabilidad: 'media',
-          observaciones_internas: `Registro portal: ${new Date().toLocaleDateString('es-ES')} | Tel: ${regTel || 'no proporcionado'} | Comms: ${rgpdComms}`,
-          etiquetas: ['portal_registro', rgpdComms ? 'acepta_comms' : 'sin_comms'],
-        });
-      } catch {}
-      setMode('success');
-    } catch (err) {
-      setError(err.message || 'Código incorrecto. Revisa tu correo.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    try { await base44.auth.resendOtp(regEmail); } catch {}
-  };
-
-  // ── FORGOT ──
   const handleForgot = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -249,7 +115,6 @@ export default function Login() {
     <div className="min-h-screen flex bg-background">
       <BrandingPanel />
 
-      {/* Panel derecho */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-background">
         <div className="w-full max-w-md">
 
@@ -262,12 +127,12 @@ export default function Login() {
             />
           </div>
 
-          {/* ── LOGIN ── */}
+          {/* LOGIN */}
           {mode === 'login' && (
             <div className="animate-fade-in">
               <div className="mb-8">
                 <div className="inline-flex items-center gap-2 bg-taxea-red/8 border border-taxea-red/15 rounded-full px-3 py-1 mb-4">
-                  <Sparkles className="w-3 h-3 text-taxea-red" />
+                  <Shield className="w-3 h-3 text-taxea-red" />
                   <span className="text-xs text-taxea-red font-medium">Área privada de cliente</span>
                 </div>
                 <h1 className="text-3xl font-jakarta font-bold text-foreground">Iniciar sesión</h1>
@@ -296,200 +161,32 @@ export default function Login() {
                 {error && <ErrorBox message={error} />}
 
                 <Button type="submit" className="w-full h-12 text-sm font-semibold" disabled={loading} style={{ background: 'hsl(350 75% 40%)', color: 'white' }}>
-                  {loading ? <span className="flex items-center gap-2"><Spinner />Accediendo...</span> : <span className="flex items-center gap-2">Acceder al portal <ArrowRight className="w-4 h-4" /></span>}
+                  {loading
+                    ? <span className="flex items-center gap-2"><Spinner />Accediendo...</span>
+                    : <span className="flex items-center gap-2">Acceder al portal <ArrowRight className="w-4 h-4" /></span>}
                 </Button>
 
-                <button type="button" onClick={() => { setMode('forgot'); resetErrors(); }} className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors py-1">
+                <button type="button" onClick={() => { setMode('forgot'); resetErrors(); }}
+                  className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors py-1">
                   ¿Olvidaste tu contraseña?
                 </button>
               </form>
 
-              {/* Separador */}
-              <div className="my-6 flex items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">¿Aún no tienes cuenta?</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => { setMode('register'); resetErrors(); }}
-                className="w-full h-12 rounded-lg border-2 border-taxea-red/30 hover:border-taxea-red/60 text-taxea-red hover:bg-taxea-red/5 font-semibold text-sm transition-all flex items-center justify-center gap-2"
-              >
-                <Users className="w-4 h-4" />
-                Crear acceso al portal
-              </button>
-              <p className="text-center text-xs text-muted-foreground mt-2">Solicita tu acceso a Taxea Portal</p>
-            </div>
-          )}
-
-          {/* ── REGISTRO ── */}
-          {mode === 'register' && (
-            <div className="animate-fade-in">
-              <button onClick={() => { setMode('login'); resetErrors(); }} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
-                <ChevronLeft className="w-4 h-4" /> Volver al acceso
-              </button>
-              <div className="mb-7">
-                <div className="inline-flex items-center gap-2 bg-taxea-red/8 border border-taxea-red/15 rounded-full px-3 py-1 mb-4">
-                  <Sparkles className="w-3 h-3 text-taxea-red" />
-                  <span className="text-xs text-taxea-red font-medium">Nuevo acceso</span>
-                </div>
-                <h1 className="text-2xl font-jakarta font-bold text-foreground">Crear cuenta</h1>
-                <p className="text-muted-foreground mt-1 text-sm">Accede al portal fiscal de Taxea Strategies</p>
-              </div>
-
-              <form onSubmit={handleRegister} className="space-y-3.5">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Nombre y apellidos *</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input type="text" placeholder="Ana García Martínez" value={regNombre} onChange={e => setRegNombre(e.target.value)} required className="h-11 pl-10 text-sm" />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Correo electrónico *</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input type="email" placeholder="tu@email.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} required className="h-11 pl-10 text-sm" />
-                  </div>
-                </div>
-
-                {/* Teléfono opcional con incentivo */}
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    Teléfono <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
-                  </Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input type="tel" placeholder="+34 600 000 000" value={regTel} onChange={e => setRegTel(e.target.value)} className="h-11 pl-10 text-sm" />
-                  </div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Bell className="w-3 h-3 text-taxea-red flex-shrink-0" />
-                    Añádelo para recibir avisos fiscales importantes y soporte más rápido
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Contraseña *</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input type={showRegPass ? 'text' : 'password'} placeholder="Mínimo 8 caracteres" value={regPass} onChange={e => setRegPass(e.target.value)} required className="h-11 pl-10 pr-11 text-sm" />
-                    <button type="button" onClick={() => setShowRegPass(!showRegPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1">
-                      {showRegPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {regPass.length > 0 && regPass.length < 8 && (
-                    <p className="text-xs text-destructive">Mínimo 8 caracteres</p>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Confirmar contraseña *</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <Input type="password" placeholder="Repite la contraseña" value={regPassConf} onChange={e => setRegPassConf(e.target.value)} required className="h-11 pl-10 text-sm" />
-                  </div>
-                  {regPassConf.length > 0 && regPass !== regPassConf && (
-                    <p className="text-xs text-destructive">Las contraseñas no coinciden</p>
-                  )}
-                </div>
-
-                {/* RGPD */}
-                <div className="bg-secondary/50 rounded-xl p-4 space-y-3 mt-2">
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" checked={rgpdMain} onChange={e => setRgpdMain(e.target.checked)} className="mt-0.5 w-4 h-4 rounded accent-taxea-red flex-shrink-0" />
-                    <span className="text-xs text-muted-foreground leading-snug">
-                      He leído y acepto la <span className="text-primary underline cursor-pointer">política de privacidad</span> y el tratamiento de mis datos por Taxea Strategies. <span className="text-destructive font-medium">*</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" checked={rgpdComms} onChange={e => setRgpdComms(e.target.checked)} className="mt-0.5 w-4 h-4 rounded accent-taxea-red flex-shrink-0" />
-                    <span className="text-xs text-muted-foreground leading-snug">
-                      Deseo recibir avisos fiscales, novedades y comunicaciones de Taxea Strategies
-                    </span>
-                  </label>
-                </div>
-
-                {error && <ErrorBox message={error} />}
-
-                <Button type="submit" className="w-full h-12 text-sm font-semibold mt-1" disabled={loading || !rgpdMain} style={{ background: !rgpdMain ? undefined : 'hsl(350 75% 40%)', color: 'white' }}>
-                  {loading ? <span className="flex items-center gap-2"><Spinner />Creando cuenta...</span> : <span className="flex items-center gap-2">Crear mi acceso <ArrowRight className="w-4 h-4" /></span>}
-                </Button>
-              </form>
-            </div>
-          )}
-
-          {/* ── OTP ── */}
-          {mode === 'otp' && (
-            <div className="animate-fade-in">
-              <div className="mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-taxea-red/10 border border-taxea-red/20 flex items-center justify-center mb-5">
-                  <Mail className="w-8 h-8 text-taxea-red" />
-                </div>
-                <h1 className="text-2xl font-jakarta font-bold text-foreground">Verifica tu correo</h1>
-                <p className="text-muted-foreground mt-1.5 text-sm">
-                  Hemos enviado un código de verificación a <strong>{regEmail}</strong>
+              {/* Aviso acceso exclusivo — NO hay registro público */}
+              <div className="mt-6 bg-secondary/60 border border-border rounded-xl p-4">
+                <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                  Acceso exclusivo para clientes de Taxea con cuenta activa.<br />
+                  <span className="text-foreground/60">Si eres cliente y no tienes acceso, contacta con tu asesor.</span>
                 </p>
               </div>
-              <form onSubmit={handleOtp} className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Código de verificación</Label>
-                  <Input
-                    type="text"
-                    placeholder="Introduce el código de 6 dígitos"
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value)}
-                    required
-                    className="h-12 text-center text-lg tracking-widest font-mono"
-                    maxLength={6}
-                  />
-                </div>
-                {error && <ErrorBox message={error} />}
-                <Button type="submit" className="w-full h-12 text-sm font-semibold" disabled={loading} style={{ background: 'hsl(350 75% 40%)', color: 'white' }}>
-                  {loading ? <span className="flex items-center gap-2"><Spinner />Verificando...</span> : 'Verificar y acceder'}
-                </Button>
-                <button type="button" onClick={handleResendOtp} className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors">
-                  ¿No recibiste el código? Reenviar
-                </button>
-              </form>
             </div>
           )}
 
-          {/* ── SUCCESS ── */}
-          {mode === 'success' && (
-            <div className="animate-fade-in text-center">
-              <div className="w-20 h-20 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-10 h-10 text-green-500" />
-              </div>
-              <div className="mb-2 inline-flex items-center gap-2 bg-taxea-red/8 border border-taxea-red/15 rounded-full px-3 py-1">
-                <Sparkles className="w-3 h-3 text-taxea-red" />
-                <span className="text-xs text-taxea-red font-medium">¡Bienvenido a Taxea!</span>
-              </div>
-              <h1 className="text-2xl font-jakarta font-bold text-foreground mt-3 mb-2">Acceso creado correctamente</h1>
-              <p className="text-muted-foreground text-sm mb-8 leading-relaxed">
-                Tu cuenta en Taxea Portal ha sido activada. Un asesor revisará tu acceso y se pondrá en contacto contigo en breve.
-              </p>
-              <div className="space-y-3">
-                <Button
-                  onClick={() => { window.location.href = '/'; }}
-                  className="w-full h-12 text-sm font-semibold"
-                  style={{ background: 'hsl(350 75% 40%)', color: 'white' }}
-                >
-                  Acceder al portal <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-                <a
-                  href="mailto:info@taxea.es"
-                  className="w-full h-12 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all flex items-center justify-center gap-2"
-                >
-                  <Mail className="w-4 h-4" /> Contactar con Taxea
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* ── FORGOT ── */}
+          {/* FORGOT */}
           {mode === 'forgot' && (
             <div className="animate-fade-in">
-              <button onClick={() => { setMode('login'); resetErrors(); setForgotSent(false); }} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+              <button onClick={() => { setMode('login'); resetErrors(); setForgotSent(false); }}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
                 <ChevronLeft className="w-4 h-4" /> Volver al acceso
               </button>
               <div className="mb-7">
@@ -500,11 +197,14 @@ export default function Login() {
                 <p className="text-muted-foreground mt-1.5 text-sm">Introduce tu correo y te enviaremos un enlace seguro</p>
               </div>
               {forgotSent ? (
-                <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30 rounded-xl p-6 text-center">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
                   <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-3" />
-                  <p className="font-semibold text-foreground text-sm">Correo enviado</p>
-                  <p className="text-sm text-muted-foreground mt-1">Si el correo existe en nuestro sistema, recibirás instrucciones en tu bandeja de entrada</p>
-                  <button onClick={() => { setMode('login'); setForgotSent(false); resetErrors(); }} className="mt-5 text-sm text-taxea-red hover:underline font-medium">
+                  <p className="font-semibold text-foreground text-sm">Solicitud enviada</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Si el correo corresponde a una cuenta activa, recibirás instrucciones para recuperar el acceso.
+                  </p>
+                  <button onClick={() => { setMode('login'); setForgotSent(false); resetErrors(); }}
+                    className="mt-5 text-sm text-taxea-red hover:underline font-medium">
                     Volver al acceso
                   </button>
                 </div>
@@ -525,7 +225,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Footer */}
           <p className="text-xs text-muted-foreground text-center mt-10">
             Portal privado · Cifrado SSL · Cumplimiento RGPD<br />© {new Date().getFullYear()} Taxea Strategies
           </p>
@@ -535,7 +234,6 @@ export default function Login() {
   );
 }
 
-// Micro-componentes
 function ErrorBox({ message }) {
   return (
     <div className="bg-destructive/8 border border-destructive/20 text-destructive text-sm px-4 py-3 rounded-lg flex items-start gap-2">

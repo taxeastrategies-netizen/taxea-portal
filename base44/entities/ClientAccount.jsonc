@@ -1,0 +1,167 @@
+{
+  "name": "ClientAccount",
+  "type": "object",
+  "properties": {
+    "clientType": {
+      "type": "string",
+      "enum": [
+        "autonomo",
+        "empresa"
+      ],
+      "default": "autonomo"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "legalName": {
+      "type": "string"
+    },
+    "taxId": {
+      "type": "string"
+    },
+    "representativeName": {
+      "type": "string"
+    },
+    "representativeTaxId": {
+      "type": "string"
+    },
+    "representativeRole": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "activity": {
+      "type": "string"
+    },
+    "cnae": {
+      "type": "string"
+    },
+    "fiscalAddress": {
+      "type": "string"
+    },
+    "postalCode": {
+      "type": "string"
+    },
+    "province": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string",
+      "default": "Espa\u00f1a"
+    },
+    "taxRegime": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "exento",
+        "mixto",
+        "pendiente"
+      ],
+      "default": "pendiente"
+    },
+    "numEmployees": {
+      "type": "number",
+      "default": 0
+    },
+    "estimatedInvoiceVolume": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "string"
+    },
+    "monthlyFee": {
+      "type": "number",
+      "default": 0
+    },
+    "contractedService": {
+      "type": "string"
+    },
+    "serviceStartDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "nextRenewalDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "paymentStatus": {
+      "type": "string",
+      "enum": [
+        "al_dia",
+        "pendiente",
+        "no_aplica",
+        "revision"
+      ],
+      "default": "al_dia"
+    },
+    "accessStatus": {
+      "type": "string",
+      "enum": [
+        "activa",
+        "pendiente_primer_acceso",
+        "pendiente_pago",
+        "suspendida",
+        "baja",
+        "bloqueada",
+        "archivada"
+      ],
+      "default": "pendiente_primer_acceso"
+    },
+    "firstAccessCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "passwordChangedByClient": {
+      "type": "boolean",
+      "default": false
+    },
+    "lastPasswordChangeAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastLoginAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failedLoginAttempts": {
+      "type": "number",
+      "default": 0
+    },
+    "forcePasswordChange": {
+      "type": "boolean",
+      "default": true
+    },
+    "tempPasswordShared": {
+      "type": "boolean",
+      "default": false
+    },
+    "tempPasswordSharedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "internalOwner": {
+      "type": "string"
+    },
+    "registrationDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "archivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "legalName",
+    "taxId",
+    "email"
+  ]
+}

@@ -47,6 +47,7 @@ import Growth from './pages/Growth';
 import Law from './pages/Law';
 import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 import ComingSoon from './pages/ComingSoon';
+import AdminClients from './pages/AdminClients';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -111,6 +112,9 @@ function AppWithContext({ user }) {
         <Route path="/law/:subdept" element={<Law />} />
         <Route path="/law/:subdept/:module" element={<Law />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
+        <Route path="/admin/clients" element={<AdminClients />} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
+        <Route path="/signup" element={<Navigate to="/login" replace />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
