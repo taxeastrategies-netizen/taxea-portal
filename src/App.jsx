@@ -49,6 +49,7 @@ import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 import ComingSoon from './pages/ComingSoon';
 import AdminClients from './pages/AdminClients';
 import SetupPassword from './pages/SetupPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -143,6 +144,7 @@ const AuthenticatedApp = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
       <Route path="/setup-password" element={<SetupPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/*" element={<AppWithContext user={user} />} />
       </Route>
