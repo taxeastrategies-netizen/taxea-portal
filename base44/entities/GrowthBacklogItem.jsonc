@@ -1,0 +1,94 @@
+{
+  "name": "GrowthBacklogItem",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "en_analisis",
+        "priorizada",
+        "en_ejecucion",
+        "test_activo",
+        "ganadora",
+        "perdedora",
+        "escalada",
+        "archivada"
+      ],
+      "default": "idea"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "seo",
+        "ads",
+        "email",
+        "whatsapp",
+        "landing",
+        "oferta",
+        "pricing",
+        "referidos",
+        "retencion",
+        "upsell",
+        "producto",
+        "onboarding",
+        "contenido",
+        "conversion",
+        "activacion",
+        "otro"
+      ],
+      "default": "landing"
+    },
+    "impact": {
+      "type": "string",
+      "enum": [
+        "alto",
+        "medio",
+        "bajo"
+      ],
+      "default": "medio"
+    },
+    "effort": {
+      "type": "string",
+      "enum": [
+        "alto",
+        "medio",
+        "bajo"
+      ],
+      "default": "medio"
+    },
+    "revenue_impact_eur": {
+      "type": "number",
+      "default": 0
+    },
+    "owner": {
+      "type": "string"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}

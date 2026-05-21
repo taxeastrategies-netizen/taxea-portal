@@ -10,7 +10,7 @@ import {
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
-  Folder, Zap
+  Folder, Zap, Megaphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -196,10 +196,33 @@ const DEPT_GROUPS = [
     ],
   },
   {
-    groupLabel: 'Próximamente',
+    groupLabel: 'Crecimiento',
     depts: [
-      { id: 'ops', label: 'Operaciones', icon: Cog, basePath: null, comingSoon: true },
-      { id: 'marketing', label: 'Marketing - Growth', icon: Target, basePath: null, comingSoon: true },
+      {
+        id: 'growth',
+        label: 'Marketing & Growth',
+        icon: TrendingUp,
+        activeColor: 'text-pink-600',
+        activeBg: 'bg-pink-50',
+        basePath: '/growth',
+        modules: [
+          { id: 'dashboard',   label: 'Growth Command Center', icon: LayoutDashboard, path: '/growth/dashboard' },
+          { id: 'campaigns',   label: 'Campanas',              icon: Megaphone,       path: '/growth/campaigns' },
+          { id: 'content',     label: 'Contenido',             icon: FileText,        path: '/growth/content' },
+          { id: 'seo',         label: 'SEO Center',            icon: Target,          path: '/growth/seo' },
+          { id: 'ai-visibility',label: 'AI Visibility / GEO', icon: Brain,           path: '/growth/ai-visibility' },
+          { id: 'funnels',     label: 'Embudos',               icon: BarChart2,       path: '/growth/funnels' },
+          { id: 'sales',       label: 'Sales Enablement',      icon: CheckSquare,     path: '/growth/sales' },
+          { id: 'leads',       label: 'Calidad de Leads',      icon: Users,           path: '/growth/leads' },
+          { id: 'growth-lab',  label: 'Growth Lab',            icon: Zap,             path: '/growth/growth-lab' },
+          { id: 'analytics',   label: 'Analitica',             icon: BarChart2,       path: '/growth/analytics' },
+          { id: 'retention',   label: 'Retencion',             icon: Heart,           path: '/growth/retention' },
+          { id: 'compliance',  label: 'Compliance',            icon: Shield,          path: '/growth/compliance' },
+          { id: 'reports',     label: 'Informes',              icon: FileText,        path: '/growth/reports' },
+          { id: 'ai',          label: 'IA Director Growth',    icon: Brain,           path: '/growth/ai' },
+          { id: 'settings',    label: 'Integraciones',         icon: Settings,        path: '/growth/settings' },
+        ],
+      },
     ],
   },
 ];

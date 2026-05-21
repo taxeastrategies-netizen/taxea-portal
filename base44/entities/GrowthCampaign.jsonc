@@ -1,0 +1,157 @@
+{
+  "name": "GrowthCampaign",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "meta_ads",
+        "google_ads",
+        "tiktok_ads",
+        "linkedin_ads",
+        "email",
+        "whatsapp",
+        "seo",
+        "blog",
+        "newsletter",
+        "referidos",
+        "webinar",
+        "evento",
+        "lead_magnet",
+        "retargeting",
+        "local",
+        "sectorial",
+        "organico",
+        "otro"
+      ],
+      "default": "meta_ads"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "planificada",
+        "en_revision",
+        "activa",
+        "pausada",
+        "finalizada",
+        "analizada",
+        "escalada",
+        "descartada"
+      ],
+      "default": "idea"
+    },
+    "budget": {
+      "type": "number",
+      "default": 0
+    },
+    "spent": {
+      "type": "number",
+      "default": 0
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "target_audience": {
+      "type": "string"
+    },
+    "buyer_persona": {
+      "type": "string"
+    },
+    "cta": {
+      "type": "string"
+    },
+    "landing_url": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "leads_generated": {
+      "type": "number",
+      "default": 0
+    },
+    "leads_qualified": {
+      "type": "number",
+      "default": 0
+    },
+    "cpl": {
+      "type": "number",
+      "default": 0
+    },
+    "appointments": {
+      "type": "number",
+      "default": 0
+    },
+    "proposals_sent": {
+      "type": "number",
+      "default": 0
+    },
+    "sales_closed": {
+      "type": "number",
+      "default": 0
+    },
+    "revenue_generated": {
+      "type": "number",
+      "default": 0
+    },
+    "mrr_generated": {
+      "type": "number",
+      "default": 0
+    },
+    "cac": {
+      "type": "number",
+      "default": 0
+    },
+    "roas": {
+      "type": "number",
+      "default": 0
+    },
+    "roi": {
+      "type": "number",
+      "default": 0
+    },
+    "impressions": {
+      "type": "number",
+      "default": 0
+    },
+    "clicks": {
+      "type": "number",
+      "default": 0
+    },
+    "ctr": {
+      "type": "number",
+      "default": 0
+    },
+    "ai_recommendation": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ]
+}

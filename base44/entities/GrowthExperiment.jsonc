@@ -1,0 +1,132 @@
+{
+  "name": "GrowthExperiment",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "hypothesis": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "landing_ab",
+        "hook_ab",
+        "cta_ab",
+        "precio_ab",
+        "oferta_ab",
+        "lead_magnet_ab",
+        "email_subject_ab",
+        "whatsapp_ab",
+        "creatividad_ab",
+        "segmentacion_ab",
+        "canal_ab",
+        "secuencia_ab",
+        "otro"
+      ],
+      "default": "landing_ab"
+    },
+    "channel": {
+      "type": "string"
+    },
+    "metric": {
+      "type": "string"
+    },
+    "variant_a": {
+      "type": "string"
+    },
+    "variant_b": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "en_analisis",
+        "priorizada",
+        "en_ejecucion",
+        "test_activo",
+        "ganadora",
+        "perdedora",
+        "escalada",
+        "archivada"
+      ],
+      "default": "idea"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "seo",
+        "ads",
+        "email",
+        "whatsapp",
+        "landing",
+        "oferta",
+        "pricing",
+        "referidos",
+        "retencion",
+        "upsell",
+        "contenido",
+        "conversion",
+        "activacion",
+        "otro"
+      ],
+      "default": "landing"
+    },
+    "impact_score": {
+      "type": "number",
+      "default": 5
+    },
+    "confidence_score": {
+      "type": "number",
+      "default": 5
+    },
+    "effort_score": {
+      "type": "number",
+      "default": 5
+    },
+    "reach_score": {
+      "type": "number",
+      "default": 5
+    },
+    "ice_score": {
+      "type": "number",
+      "default": 0
+    },
+    "budget": {
+      "type": "number",
+      "default": 0
+    },
+    "duration_days": {
+      "type": "number",
+      "default": 14
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "result": {
+      "type": "string"
+    },
+    "learning": {
+      "type": "string"
+    },
+    "next_step": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "hypothesis"
+  ]
+}

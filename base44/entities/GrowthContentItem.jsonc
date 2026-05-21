@@ -1,0 +1,139 @@
+{
+  "name": "GrowthContentItem",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "post",
+        "reel",
+        "story",
+        "carrusel",
+        "articulo",
+        "newsletter",
+        "email",
+        "whatsapp",
+        "youtube",
+        "shorts",
+        "podcast",
+        "guia",
+        "infografia",
+        "video",
+        "otro"
+      ],
+      "default": "post"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "instagram",
+        "tiktok",
+        "linkedin",
+        "facebook",
+        "youtube",
+        "blog",
+        "newsletter",
+        "email",
+        "whatsapp",
+        "google_business",
+        "twitter",
+        "threads",
+        "otro"
+      ],
+      "default": "instagram"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "guion",
+        "diseno",
+        "grabado",
+        "editado",
+        "revisado",
+        "programado",
+        "publicado",
+        "analizado",
+        "reutilizado"
+      ],
+      "default": "idea"
+    },
+    "funnel_stage": {
+      "type": "string",
+      "enum": [
+        "tofu",
+        "mofu",
+        "bofu"
+      ],
+      "default": "tofu"
+    },
+    "objective": {
+      "type": "string"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "published_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "copy": {
+      "type": "string"
+    },
+    "script": {
+      "type": "string"
+    },
+    "cta": {
+      "type": "string"
+    },
+    "keyword": {
+      "type": "string"
+    },
+    "campaign_id": {
+      "type": "string"
+    },
+    "impressions": {
+      "type": "number",
+      "default": 0
+    },
+    "reach": {
+      "type": "number",
+      "default": 0
+    },
+    "engagement": {
+      "type": "number",
+      "default": 0
+    },
+    "clicks": {
+      "type": "number",
+      "default": 0
+    },
+    "leads": {
+      "type": "number",
+      "default": 0
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "title"
+  ]
+}
