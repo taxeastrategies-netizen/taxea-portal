@@ -1,33 +1,18 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Eye, EyeOff, RefreshCw, Copy, Check } from 'lucide-react';
+import { Mail, Copy, Check, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-function generatePassword() {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*';
-  let pass = '';
-  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lower = 'abcdefghijklmnopqrstuvwxyz';
-  const nums = '0123456789';
-  const syms = '!@#$%&*';
-  pass += upper[Math.floor(Math.random() * upper.length)];
-  pass += lower[Math.floor(Math.random() * lower.length)];
-  pass += nums[Math.floor(Math.random() * nums.length)];
-  pass += syms[Math.floor(Math.random() * syms.length)];
-  for (let i = 4; i < 12; i++) pass += chars[Math.floor(Math.random() * chars.length)];
-  return pass.split('').sort(() => Math.random() - 0.5).join('');
-}
 
 export default function AdminClientCreateForm({ open, onOpenChange, onCreated }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [copiedMsg, setCopiedMsg] = useState(false);
-  const [showPass, setShowPass] = useState(false);
   const [createdClient, setCreatedClient] = useState(null);
 
   const [form, setForm] = useState({
@@ -51,16 +36,12 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
     internalOwner: '',
     registrationDate: new Date().toISOString().split('T')[0],
     notes: '',
-    tempPassword: generatePassword(),
-    forcePasswordChange: true,
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleGenPass = () => set('tempPassword', generatePassword());
-
   const copyWelcomeMessage = () => {
-    const msg = `Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nPuedes acceder desde: https://taxea-flow-portal.base44.app/login\n\nUsuario: ${form.email}\nContraseña temporal: ${form.tempPassword}\n\nPor seguridad, te recomendamos cambiarla tras el primer acceso.`;
+    const msg = `Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nPuedes acceder desde: https://taxea-flow-portal.base44.app/login\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nSi tienes dudas, contacta con tu asesor.`;
     navigator.clipboard.writeText(msg);
     setCopiedMsg(true);
     setTimeout(() => setCopiedMsg(false), 2000);
@@ -106,10 +87,8 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         tempPasswordShared: false,
       });
 
-      // 2. Invitar usuario en la plataforma
-      try {
-        await base44.users.inviteUser(form.email, 'user');
-      } catch {}
+      // 2. Invitar usuario — envía email de invitación para que el cliente establezca su contraseña
+      await base44.users.inviteUser(form.email, 'user');
 
       // 3. Audit log
       await base44.entities.ClientAccessAuditLog.create({
@@ -121,7 +100,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         details: `Cuenta creada. Email: ${form.email}. Régimen: ${form.taxRegime}. Plan: ${form.plan || '—'}`,
       });
 
-      setCreatedClient({ ...client, tempPassword: form.tempPassword });
+      setCreatedClient(client);
       setStep(3);
       onCreated?.();
     } catch (e) {
@@ -142,7 +121,6 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
       taxRegime: 'iva', plan: '', monthlyFee: '', paymentStatus: 'al_dia',
       accessStatus: 'pendiente_primer_acceso', internalOwner: '', notes: '',
       registrationDate: new Date().toISOString().split('T')[0],
-      tempPassword: generatePassword(), forcePasswordChange: true,
     });
     onOpenChange(false);
   };
@@ -277,52 +255,29 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
           </div>
         )}
 
-        {/* STEP 2: Credenciales */}
+        {/* STEP 2: Email y acceso */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-              <strong>Seguridad:</strong> La contraseña temporal solo se mostrará en este momento. Cópiala antes de continuar.
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+              <div className="flex items-start gap-2">
+                <Mail className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong>Acceso por invitación por email</strong>
+                  <p className="mt-1 text-blue-700">Al crear la cuenta, el sistema enviará automáticamente un email de invitación al cliente. El cliente hace clic en el enlace del email para establecer su contraseña y acceder al portal.</p>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1.5">
               <Label>Email de acceso *</Label>
-              <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="cliente@email.com" />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Contraseña temporal *</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    type={showPass ? 'text' : 'password'}
-                    value={form.tempPassword}
-                    onChange={e => set('tempPassword', e.target.value)}
-                    className="pr-10 font-mono"
-                  />
-                  <button type="button" onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <Button type="button" variant="outline" onClick={handleGenPass} title="Generar nueva">
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">Mín. 10 caracteres, mayúscula, minúscula, número y símbolo.</p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.forcePasswordChange} onChange={e => set('forcePasswordChange', e.target.checked)}
-                  className="w-4 h-4 accent-taxea-red rounded" />
-                <span className="text-sm font-medium">Forzar cambio en primer acceso <span className="text-xs text-muted-foreground">(recomendado)</span></span>
-              </label>
+              <Input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="cliente@gmail.com" />
+              <p className="text-xs text-muted-foreground">El cliente recibirá aquí el enlace de activación.</p>
             </div>
 
             <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mensaje de bienvenida</p>
-              <p className="text-xs text-foreground font-mono bg-card border border-border rounded-lg p-3 whitespace-pre-line leading-relaxed">
-                {`Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nAcceso: https://taxea-flow-portal.base44.app/login\nUsuario: ${form.email || '[email]'}\nContraseña temporal: ${showPass ? form.tempPassword : '••••••••••'}\n\nTe recomendamos cambiarla tras el primer acceso.`}
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mensaje de bienvenida (opcional)</p>
+              <p className="text-xs text-foreground bg-card border border-border rounded-lg p-3 whitespace-pre-line leading-relaxed">
+                {`Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nPortal: https://taxea-flow-portal.base44.app/login`}
               </p>
               <Button type="button" variant="outline" size="sm" onClick={copyWelcomeMessage} className="gap-2">
                 {copiedMsg ? <><Check className="w-3.5 h-3.5 text-emerald-600" />Copiado</> : <><Copy className="w-3.5 h-3.5" />Copiar mensaje</>}
@@ -348,15 +303,15 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         {step === 3 && createdClient && (
           <div className="space-y-4 text-center py-2">
             <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto">
-              <Check className="w-8 h-8 text-emerald-600" />
+              <Send className="w-8 h-8 text-emerald-600" />
             </div>
             <div>
               <h3 className="font-jakarta font-bold text-lg text-foreground">{createdClient.legalName}</h3>
               <p className="text-sm text-muted-foreground">{createdClient.email}</p>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left text-sm text-amber-800">
-              <p className="font-semibold mb-1">Cuenta creada correctamente.</p>
-              <p>Entrega las credenciales temporales al cliente por un canal seguro. La contraseña no podrá consultarse después.</p>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-left text-sm text-blue-800">
+              <p className="font-semibold mb-1">✓ Cuenta creada e invitación enviada.</p>
+              <p>El cliente recibirá un email en <strong>{createdClient.email}</strong> con un enlace para activar su acceso y establecer su contraseña. Pídele que revise su bandeja de entrada (y la carpeta de spam).</p>
             </div>
             <Button onClick={handleClose} className="w-full">Cerrar</Button>
           </div>
