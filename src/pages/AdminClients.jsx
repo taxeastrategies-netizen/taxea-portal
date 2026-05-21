@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { startImpersonation } from '@/lib/impersonation';
 import {
   Users, Plus, Search, AlertTriangle, Shield, Clock, CheckCircle,
   XCircle, RotateCcw, Archive, Eye, ChevronRight, Building2, User,
   Lock, Unlock, RefreshCw, Copy, Check, ArrowLeft, Calendar, Euro,
-  FileText, Activity
+  FileText, Activity, LogIn
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,7 @@ function KpiCard({ title, value, color, sub }) {
 
 export default function AdminClients() {
   const { isAdmin, user } = useOutletContext() || {};
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +65,8 @@ export default function AdminClients() {
   const [activeTab, setActiveTab] = useState('resumen');
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [impersonateModal, setImpersonateModal] = useState(null);
+  const [impersonateReason, setImpersonateReason] = useState('');
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin]);
 
@@ -102,6 +106,20 @@ export default function AdminClients() {
     if (selectedClient?.id === client.id) setSelectedClient(prev => ({ ...prev, accessStatus: newStatus }));
     setActionLoading(false);
     setConfirmAction(null);
+  };
+
+  const handleStartImpersonation = async () => {
+    const client = impersonateModal;
+    if (!client) return;
+    setActionLoading(true);
+    await logAction(client.id, client.legalName, 'nota_interna',
+      `Admin ${user?.email || 'admin'} inició sesión directa como cliente. Motivo: ${impersonateReason || 'Sin especificar'}`);
+    startImpersonation({ clientAccountId: client.id, clientName: client.legalName, clientEmail: client.email });
+    setImpersonateModal(null);
+    setImpersonateReason('');
+    setActionLoading(false);
+    navigate('/');
+    window.location.reload();
   };
 
   const handleResetPassword = async (client) => {
@@ -291,6 +309,15 @@ export default function AdminClients() {
                 <div className="border-t border-border pt-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acciones de acceso</p>
                   <div className="flex flex-wrap gap-2">
+                    {selectedClient.accessStatus === 'activa' ? (
+                      <Button size="sm" onClick={() => { setImpersonateModal(selectedClient); setImpersonateReason(''); }} className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
+                        <LogIn className="w-3.5 h-3.5" />Entrar como cliente
+                      </Button>
+                    ) : (
+                      <Button size="sm" disabled title="Solo puedes iniciar sesión directa en cuentas activas." className="gap-1.5 opacity-40">
+                        <LogIn className="w-3.5 h-3.5" />Entrar como cliente
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => handleResendInvite(selectedClient)} disabled={actionLoading} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
                       <RefreshCw className="w-3.5 h-3.5" />Reenviar enlace de acceso
                     </Button>
@@ -380,6 +407,53 @@ export default function AdminClients() {
                   onClick={() => handleStatusChange(confirmAction.client, confirmAction.type === 'suspend' ? 'suspendida' : 'bloqueada')}
                   disabled={actionLoading}>
                   {actionLoading ? 'Procesando...' : 'Confirmar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {impersonateModal && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-card rounded-xl border border-border p-6 max-w-md w-full shadow-xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <LogIn className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-jakarta font-bold text-foreground">Iniciar sesión como cliente</h3>
+                  <p className="text-xs text-muted-foreground">Esta acción quedará registrada en el historial</p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Vas a entrar al portal como <strong className="text-foreground">{impersonateModal.legalName}</strong>.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1 text-xs text-amber-800">
+                <p>· Verás el portal desde la perspectiva del cliente.</p>
+                <p>· No se mostrarán datos de otros clientes.</p>
+                <p>· Las acciones realizadas quedarán asociadas a tu usuario admin.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">Motivo del acceso (opcional)</Label>
+                <select
+                  value={impersonateReason}
+                  onChange={e => setImpersonateReason(e.target.value)}
+                  className="w-full h-9 px-3 text-sm border border-input rounded-md bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <option value="">Selecciona un motivo...</option>
+                  <option>Revisión de facturas</option>
+                  <option>Soporte al cliente</option>
+                  <option>Validación de datos</option>
+                  <option>Revisión fiscal/contable</option>
+                  <option>Prueba de acceso</option>
+                  <option>Incidencia técnica</option>
+                  <option>Otro</option>
+                </select>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setImpersonateModal(null)}>Cancelar</Button>
+                <Button size="sm" onClick={handleStartImpersonation} disabled={actionLoading} className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5">
+                  <LogIn className="w-3.5 h-3.5" />
+                  {actionLoading ? 'Entrando...' : 'Entrar como cliente'}
                 </Button>
               </div>
             </div>
@@ -492,6 +566,12 @@ export default function AdminClients() {
                   <span className="text-[11px] text-muted-foreground hidden lg:block">
                     {client.firstAccessCompleted ? '✓ Acceso' : '○ Sin acceso'}
                   </span>
+                  {client.accessStatus === 'activa' && (
+                    <Button size="sm" variant="ghost" onClick={() => { setImpersonateModal(client); setImpersonateReason(''); }}
+                      className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600 hover:bg-amber-50" title="Entrar como cliente">
+                      <LogIn className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => { setSelectedClient(client); setActiveTab('resumen'); }}
                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Eye className="w-3.5 h-3.5 mr-1" />Ver

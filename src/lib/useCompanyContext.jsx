@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
+import { getImpersonation } from '@/lib/impersonation';
 
 // Roles con acceso administrativo completo
 export const ADMIN_ROLES = ['admin', 'super_admin', 'advisor'];
@@ -26,12 +27,19 @@ export function useCompanyContext(user) {
 
     try {
       if (isAdminRole(user.role)) {
-        // Admin: carga diferida — no bloquear el layout inicial
+        // Admin: check if impersonating a client
+        const imp = getImpersonation();
         setLoading(false); // render inmediato
-        const all = await base44.entities.Company.list('-created_date', 1);
-        const c = all?.[0] || null;
-        companyCache.set(cacheKey, c);
-        setCompany(c);
+        if (imp?.clientEmail) {
+          const own = await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1);
+          const c = own?.[0] || null;
+          setCompany(c);
+        } else {
+          const all = await base44.entities.Company.list('-created_date', 1);
+          const c = all?.[0] || null;
+          companyCache.set(cacheKey, c);
+          setCompany(c);
+        }
       } else {
         // Cliente: buscar empresa propia
         const own = await base44.entities.Company.filter({ owner_email: user.email }, '-created_date', 1);

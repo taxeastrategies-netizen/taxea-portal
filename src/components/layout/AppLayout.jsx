@@ -4,11 +4,14 @@ import { base44 } from '@/api/base44Client';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
+import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
+import { getImpersonation } from '@/lib/impersonation';
 
 export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const trackedRef = useRef(false);
+  const impersonation = getImpersonation();
 
   // Tracking automático de primer acceso para clientes
   useEffect(() => {
@@ -61,33 +64,36 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        isAdmin={isAdmin}
-        isSuperAdmin={isSuperAdmin}
-        userRole={userRole}
-      />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopBar
-          onMenuToggle={() => setSidebarOpen(true)}
-          user={user}
-          companyName={company?.nombre_comercial || company?.razon_social}
+    <div className="flex h-screen overflow-hidden bg-background flex-col">
+      {impersonation && <ImpersonationBanner impersonation={impersonation} />}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          isAdmin={isAdmin}
+          isSuperAdmin={isSuperAdmin}
+          userRole={userRole}
         />
-        <main className="flex-1 overflow-y-auto">
-          {isDeptPage ? (
-            <div className="p-4 lg:p-6">
-              <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
-            </div>
-          ) : (
-            <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-              <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
-            </div>
-          )}
-        </main>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <TopBar
+            onMenuToggle={() => setSidebarOpen(true)}
+            user={user}
+            companyName={company?.nombre_comercial || company?.razon_social}
+          />
+          <main className="flex-1 overflow-y-auto">
+            {isDeptPage ? (
+              <div className="p-4 lg:p-6">
+                <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
+              </div>
+            ) : (
+              <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
+                <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
+              </div>
+            )}
+          </main>
+        </div>
+        <FloatingActions />
       </div>
-      <FloatingActions />
     </div>
   );
 }
