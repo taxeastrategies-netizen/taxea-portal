@@ -138,7 +138,7 @@ const DEPT_GROUPS = [
     depts: [
       {
         id: 'operations',
-        label: 'Operaciones',
+        label: 'Operations',
         icon: Cpu,
         activeColor: 'text-violet-600',
         activeBg: 'bg-violet-50',
@@ -159,7 +159,7 @@ const DEPT_GROUPS = [
       },
       {
         id: 'logistics',
-        label: 'Logística',
+        label: 'Logistics',
         icon: Warehouse,
         activeColor: 'text-orange-600',
         activeBg: 'bg-orange-50',
