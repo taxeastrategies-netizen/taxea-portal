@@ -347,7 +347,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                   {group.groupLabel}
                 </p>
                 <div className="space-y-0.5">
-                  {group.depts.filter(dept => !dept.adminOnly || isAdmin).map(dept => {
+                  {group.depts.map(dept => {
                     const DeptIcon = dept.icon;
                     const isActiveDept = activeDeptId === dept.id;
                     const isExpanded = expanded === dept.id;
@@ -369,7 +369,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                     return (
                       <div key={dept.id}>
                         <button
-                          onClick={() => handleDeptClick(dept)}
+                          onClick={() => dept.adminOnly && !isAdmin ? (navigate('/coming-soon'), onClose()) : handleDeptClick(dept)}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group",
                             isActiveDept
@@ -382,7 +382,10 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                             isActiveDept ? dept.activeColor : "text-slate-400 group-hover:text-slate-600"
                           )} />
                           <span className="flex-1">{dept.label}</span>
-                          {hasModules && (
+                          {dept.adminOnly && !isAdmin && (
+                            <Lock className="w-3 h-3 text-slate-300" />
+                          )}
+                          {hasModules && (!dept.adminOnly || isAdmin) && (
                             <ChevronDown className={cn(
                               "w-3.5 h-3.5 transition-transform duration-200",
                               isExpanded ? "rotate-0" : "-rotate-90",

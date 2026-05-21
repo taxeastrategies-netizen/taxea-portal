@@ -46,6 +46,7 @@ import Operations from './pages/Operations';
 import Growth from './pages/Growth';
 import Law from './pages/Law';
 import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
+import ComingSoon from './pages/ComingSoon';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -109,6 +110,7 @@ function AppWithContext({ user }) {
         <Route path="/law" element={<Law />} />
         <Route path="/law/:subdept" element={<Law />} />
         <Route path="/law/:subdept/:module" element={<Law />} />
+        <Route path="/coming-soon" element={<ComingSoon />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
