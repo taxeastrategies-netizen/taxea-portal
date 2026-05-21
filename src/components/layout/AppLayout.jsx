@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { base44 } from '@/api/base44Client';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
@@ -7,6 +8,54 @@ import FloatingActions from '../FloatingActions';
 export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const trackedRef = useRef(false);
+
+  // Tracking automático de primer acceso para clientes
+  useEffect(() => {
+    if (!user?.email || isAdmin || trackedRef.current) return;
+    trackedRef.current = true;
+
+    const trackAccess = async () => {
+      try {
+        const accounts = await base44.entities.ClientAccount.filter({ email: user.email });
+        const account = accounts?.[0];
+        if (!account) return;
+
+        const now = new Date().toISOString();
+        const updates = { lastLoginAt: now };
+
+        if (!account.firstAccessCompleted) {
+          updates.firstAccessCompleted = true;
+          updates.passwordChangedByClient = true;
+          updates.lastPasswordChangeAt = now;
+          if (account.accessStatus === 'pendiente_primer_acceso') {
+            updates.accessStatus = 'activa';
+          }
+          await base44.entities.ClientAccessAuditLog.create({
+            clientAccountId: account.id,
+            clientName: account.legalName,
+            actionType: 'primer_acceso',
+            actionBy: user.email,
+            actionAt: now,
+            details: 'Primer acceso completado. Contraseña establecida por el cliente.',
+          });
+        } else {
+          await base44.entities.ClientAccessAuditLog.create({
+            clientAccountId: account.id,
+            clientName: account.legalName,
+            actionType: 'login_correcto',
+            actionBy: user.email,
+            actionAt: now,
+            details: 'Acceso al portal.',
+          });
+        }
+
+        await base44.entities.ClientAccount.update(account.id, updates);
+      } catch {}
+    };
+
+    trackAccess();
+  }, [user?.email, isAdmin]);
 
   // Department pages get full-width, no max-width container
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
