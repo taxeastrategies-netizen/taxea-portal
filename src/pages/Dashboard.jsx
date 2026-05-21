@@ -229,400 +229,283 @@ export default function Dashboard() {
   const facturasVencidas = invoices.filter(i => i.tipo === 'emitida' && i.fecha_vencimiento && new Date(i.fecha_vencimiento) < now && !['cobrada', 'anulada'].includes(i.estado_contable));
   const margen = totalIngresos > 0 ? Math.round((resultado / totalIngresos) * 100) : 0;
 
-  // ── ADMIN VIEW ──
-  if (isAdmin) {
-    return (
-      <div className="animate-fade-in space-y-5">
+  // ── UNIFIED VIEW ──
+  return (
+    <div className="animate-fade-in space-y-5">
 
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-jakarta font-bold text-foreground">{company?.razon_social || 'Dashboard'}</h1>
-            <p className="text-sm text-muted-foreground">{now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          </div>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-jakarta font-bold text-foreground">
+            {isAdmin ? (company?.razon_social || 'Dashboard') : `Hola, ${user?.full_name?.split(' ')[0] || 'Cliente'}`}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin ? now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : company?.razon_social}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {!isAdmin && (
+            <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="anual">Ano completo</SelectItem>
+                <SelectItem value="T1">T1 Ene-Mar</SelectItem>
+                <SelectItem value="T2">T2 Abr-Jun</SelectItem>
+                <SelectItem value="T3">T3 Jul-Sep</SelectItem>
+                <SelectItem value="T4">T4 Oct-Dic</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Select value={selectedYear} onValueChange={setSelectedYear}>
             <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-
-        {/* Alertas */}
-        {(erroresCriticos.length > 0 || tareasVencidas.length > 0 || oblUrgentes.length > 0) && (
-          <div className="flex flex-wrap gap-2">
-            {erroresCriticos.length > 0 && (
-              <Link to="/errores" className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
-                <AlertTriangle className="w-3.5 h-3.5" />{erroresCriticos.length} error{erroresCriticos.length > 1 ? 'es' : ''} critico{erroresCriticos.length > 1 ? 's' : ''}
-              </Link>
-            )}
-            {tareasVencidas.length > 0 && (
-              <Link to="/tareas" className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors">
-                <Clock className="w-3.5 h-3.5" />{tareasVencidas.length} tarea{tareasVencidas.length > 1 ? 's' : ''} vencida{tareasVencidas.length > 1 ? 's' : ''}
-              </Link>
-            )}
-            {oblUrgentes.length > 0 && (
-              <Link to="/tax-accounting/obligaciones" className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
-                <Calendar className="w-3.5 h-3.5" />{oblUrgentes.length} vencimiento{oblUrgentes.length > 1 ? 's' : ''} proximo{oblUrgentes.length > 1 ? 's' : ''}
-              </Link>
-            )}
-          </div>
-        )}
-
-        {/* Fila superior: Health Score + KPIs financieros clave */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* Health Score */}
-          <div className="bg-card border border-border rounded-xl px-5 py-4 flex items-center gap-4">
-            <ScoreRing score={healthScore} />
-            <div>
-              <p className="text-sm font-jakarta font-bold text-foreground">Health Score</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {healthScore >= 80 ? 'Estado optimo' : healthScore >= 50 ? 'Requiere atencion' : 'Estado critico'}
-              </p>
-              {healthMotivos && healthMotivos.length > 0 && (
-                <p className="text-[11px] text-amber-600 mt-1 font-medium">{healthMotivos[0]}</p>
-              )}
-            </div>
-          </div>
-          {/* KPIs financieros */}
-          <div className="bg-card border border-border rounded-xl px-5 py-4">
-            <p className="text-2xl font-bold text-emerald-600">{totalIngresos.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €</p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Ingresos {selectedYear}</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl px-5 py-4">
-            <p className={cn('text-2xl font-bold', resultado >= 0 ? 'text-primary' : 'text-destructive')}>
-              {resultado >= 0 ? '+' : ''}{resultado.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
-            </p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Euro className="w-3 h-3" />Resultado neto</p>
-            <p className={cn('text-[10px] font-medium mt-0.5', margen >= 0 ? 'text-emerald-600' : 'text-red-500')}>Margen {margen}%</p>
-          </div>
-          <div className="bg-card border border-border rounded-xl px-5 py-4">
-            <p className="text-2xl font-bold text-foreground">{empleadosActivos.length}</p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Users className="w-3 h-3" />Empleados activos</p>
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{employees.length} total plantilla</p>
-          </div>
-        </div>
-
-        {/* Grafica mensual + Semaforo fiscal */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h3 className="text-sm font-jakarta font-semibold">Ingresos vs Gastos — {selectedYear}</h3>
-              <Link to="/tax-accounting/ingresos-gastos" className="text-xs text-primary hover:underline flex items-center gap-1">
-                Ver detalle <ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-            <div className="px-4 py-4">
-              {monthlyChart.some(m => m.ingresos > 0 || m.gastos > 0) ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={monthlyChart} barSize={10} barGap={2}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                    <Tooltip formatter={(val) => `${val.toLocaleString('es-ES')} €`} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                    <Bar dataKey="ingresos" fill="#16a34a" radius={[3,3,0,0]} name="Ingresos" />
-                    <Bar dataKey="gastos" fill="#dc2626" radius={[3,3,0,0]} name="Gastos" opacity={0.7} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-44 flex items-center justify-center">
-                  <p className="text-xs text-muted-foreground">Sin datos para mostrar en {selectedYear}</p>
-                </div>
-              )}
-              <div className="flex items-center gap-4 mt-1 justify-center">
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Ingresos</span>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block opacity-70" />Gastos</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Estado fiscal semaforo */}
-          <div className="flex flex-col gap-4">
-            <EstadoFiscal estado={estadoFiscal} />
-            {/* Indicadores rapidos */}
-            <div className="bg-card border border-border rounded-xl px-5 py-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Indicadores</p>
-              {[
-                { label: 'Facturas por cobrar', val: facturasCobrar.length, color: facturasCobrar.length > 0 ? 'text-amber-600' : 'text-emerald-600', bar: Math.min(facturasCobrar.length * 10, 100), barColor: 'bg-amber-400' },
-                { label: 'Cobros vencidos', val: facturasVencidas.length, color: facturasVencidas.length > 0 ? 'text-red-600' : 'text-emerald-600', bar: Math.min(facturasVencidas.length * 20, 100), barColor: 'bg-red-500' },
-                { label: 'Obligaciones urgentes', val: oblUrgentes.length, color: oblUrgentes.length > 0 ? 'text-orange-600' : 'text-emerald-600', bar: Math.min(oblUrgentes.length * 20, 100), barColor: 'bg-orange-400' },
-                { label: 'Errores criticos', val: erroresCriticos.length, color: erroresCriticos.length > 0 ? 'text-red-600' : 'text-emerald-600', bar: Math.min(erroresCriticos.length * 20, 100), barColor: 'bg-red-600' },
-              ].map((ind, i) => (
-                <div key={i}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-foreground">{ind.label}</span>
-                    <span className={cn('text-xs font-bold', ind.color)}>{ind.val}</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-1.5">
-                    <div className={cn('h-1.5 rounded-full transition-all', ind.barColor)} style={{ width: ind.bar === 0 ? '4px' : `${ind.bar}%`, backgroundColor: ind.val === 0 ? '#16a34a' : undefined }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Tres cards departamento */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <DeptCard
-            icon={Calculator} color="text-taxea-red" bgLight="bg-red-50/60" border="border-red-100"
-            title="Tax &amp; Accounting" to="/tax-accounting/dashboard"
-            kpis={[
-              { label: 'Obligaciones urgentes', value: oblUrgentes.length, alert: oblUrgentes.length > 0, trend: oblUrgentes.length > 0 ? 'up' : 'down' },
-              { label: 'Docs sin validar', value: facturasPendientes, warn: facturasPendientes > 0 },
-              { label: 'Obligaciones totales', value: obligations.length },
-              { label: 'Errores criticos', value: erroresCriticos.length, alert: erroresCriticos.length > 0, trend: erroresCriticos.length > 0 ? 'up' : null },
-            ]}
-            tools={TAX_TOOLS}
-          />
-          <DeptCard
-            icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100"
-            title="Finance" to="/finance/dashboard"
-            kpis={[
-              { label: 'Cobros vencidos', value: facturasVencidas.length, alert: facturasVencidas.length > 0, trend: facturasVencidas.length > 0 ? 'up' : null },
-              { label: 'Cobros pendientes', value: facturasCobrar.length, warn: facturasCobrar.length > 0 },
-              { label: 'Total gastos', value: totalGastos.toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €', sub: selectedYear },
-              { label: 'IVA estimado', value: (ivaRepercutido - ivaSoportado).toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €' },
-            ]}
-            tools={FIN_TOOLS}
-          />
-          <DeptCard
-            icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100"
-            title="People &amp; HR" to="/people/dashboard"
-            kpis={[
-              { label: 'Empleados activos', value: empleadosActivos.length, trend: 'up' },
-              { label: 'Total plantilla', value: employees.length },
-              { label: 'Ausencias pendientes', value: ausenciasPendientes.length, warn: ausenciasPendientes.length > 0 },
-              { label: 'Docs laborales pend.', value: hrDocsPendientes.length, warn: hrDocsPendientes.length > 0 },
-            ]}
-            tools={HR_TOOLS}
-          />
-        </div>
-
-        {/* Fila inferior: Obligaciones + Empleados + Actividad */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Obligaciones */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-              <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" />Obligaciones</h3>
-              <Link to="/tax-accounting/obligaciones" className="text-xs text-primary hover:underline">Ver todas</Link>
-            </div>
-            <div className="divide-y divide-border/60">
-              {obligations.length === 0 ? (
-                <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin obligaciones registradas</p></div>
-              ) : obligations.slice(0, 5).map((obl) => (
-                <div key={obl.id} className="px-5 py-2.5 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-foreground capitalize">{obl.modelo?.replace(/_/g, ' ').replace('modelo ', 'Mod. ') || 'Obligacion'}</p>
-                    <p className="text-[11px] text-muted-foreground">{obl.periodo} · {obl.fecha_limite}</p>
-                  </div>
-                  <StatusBadge status={obl.estado} />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Empleados */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-              <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Users className="w-3.5 h-3.5 text-muted-foreground" />Equipo</h3>
-              <Link to="/people/employees" className="text-xs text-primary hover:underline">Ver todos</Link>
-            </div>
-            <div className="divide-y divide-border/60">
-              {empleadosActivos.length === 0 ? (
-                <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin empleados registrados</p></div>
-              ) : empleadosActivos.slice(0, 5).map((e, i) => (
-                <div key={i} className="px-5 py-2.5 flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[11px] font-bold text-rose-700">{(e.full_name || e.nombre || '?').charAt(0).toUpperCase()}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{e.full_name || e.nombre || 'Empleado'}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">{e.departamento || e.puesto || '—'}</p>
-                  </div>
-                  <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">Activo</span>
-                </div>
-              ))}
-              {empleadosActivos.length > 5 && (
-                <div className="px-5 py-2 text-center">
-                  <Link to="/people/employees" className="text-xs text-muted-foreground hover:text-primary">+{empleadosActivos.length - 5} mas</Link>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actividad reciente */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-              <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />Actividad reciente</h3>
-              <Link to="/tax-accounting/libros" className="text-xs text-primary hover:underline">Ver todo</Link>
-            </div>
-            <div className="divide-y divide-border/60">
-              {recentActivity.length === 0 ? (
-                <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin movimientos recientes</p></div>
-              ) : recentActivity.map((item, i) => (
-                <div key={i} className="px-5 py-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', item.tipo === 'emitida' ? 'bg-emerald-500' : 'bg-red-400')} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-foreground truncate">{item.numero_factura || item.concepto || 'Movimiento'}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{item.cliente_nombre || item.proveedor_cliente || '—'}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs font-semibold text-foreground flex-shrink-0 ml-2">{((item.total_factura || item.total) || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-      </div>
-    );
-  }
-
-  // ── USER VIEW ──
-  return (
-    <div className="animate-fade-in">
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl font-jakarta font-bold text-foreground">Hola, {user?.full_name?.split(' ')[0] || 'Cliente'}</h1>
-          <p className="text-sm text-muted-foreground">{company?.razon_social}</p>
-        </div>
-        <div className="flex gap-2">
-          <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
-            <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="anual">Ano completo</SelectItem>
-              <SelectItem value="T1">T1 Ene-Mar</SelectItem>
-              <SelectItem value="T2">T2 Abr-Jun</SelectItem>
-              <SelectItem value="T3">T3 Jul-Sep</SelectItem>
-              <SelectItem value="T4">T4 Oct-Dic</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
-            <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
       </div>
 
-      {(erroresCriticos.length > 0 || tareasVencidas.length > 0) && (
-        <div className="mb-5 space-y-2">
+      {/* Alertas */}
+      {(erroresCriticos.length > 0 || tareasVencidas.length > 0 || oblUrgentes.length > 0) && (
+        <div className="flex flex-wrap gap-2">
           {erroresCriticos.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
-              <p className="text-sm font-semibold text-red-700 flex-1">{erroresCriticos.length} error{erroresCriticos.length > 1 ? 'es' : ''} critico{erroresCriticos.length > 1 ? 's' : ''}</p>
-              <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-100" asChild>
-                <Link to="/errores">Ver</Link>
-              </Button>
-            </div>
+            <Link to="/errores" className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
+              <AlertTriangle className="w-3.5 h-3.5" />{erroresCriticos.length} error{erroresCriticos.length > 1 ? 'es' : ''} critico{erroresCriticos.length > 1 ? 's' : ''}
+            </Link>
           )}
           {tareasVencidas.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-              <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
-              <p className="text-sm font-semibold text-amber-700 flex-1">{tareasVencidas.length} tarea{tareasVencidas.length > 1 ? 's' : ''} vencida{tareasVencidas.length > 1 ? 's' : ''}</p>
-              <Button size="sm" variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-100" asChild>
-                <Link to="/tareas">Ver</Link>
-              </Button>
-            </div>
+            <Link to="/tareas" className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-amber-100 transition-colors">
+              <Clock className="w-3.5 h-3.5" />{tareasVencidas.length} tarea{tareasVencidas.length > 1 ? 's' : ''} vencida{tareasVencidas.length > 1 ? 's' : ''}
+            </Link>
+          )}
+          {oblUrgentes.length > 0 && (
+            <Link to="/tax-accounting/obligaciones" className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
+              <Calendar className="w-3.5 h-3.5" />{oblUrgentes.length} vencimiento{oblUrgentes.length > 1 ? 's' : ''} proximo{oblUrgentes.length > 1 ? 's' : ''}
+            </Link>
           )}
         </div>
       )}
 
       {notifications.length > 0 && (
-        <div className="mb-5 space-y-2">
+        <div className="flex flex-wrap gap-2">
           {notifications.slice(0, 2).map(n => (
-            <div key={n.id} className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl p-4">
+            <div key={n.id} className="flex items-start gap-3 bg-primary/5 border border-primary/20 rounded-xl p-3 flex-1 min-w-[260px]">
               <Bell className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-foreground">{n.titulo}</p>
-                <p className="text-sm text-muted-foreground">{n.mensaje}</p>
+                <p className="text-xs text-muted-foreground">{n.mensaje}</p>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-5 mb-5">
-        <div className="lg:col-span-2"><EstadoFiscal estado={estadoFiscal} /></div>
-        <HealthScore score={healthScore} motivos={healthMotivos} />
-      </div>
-      <SummaryCards invoices={invoices} expenses={expenses} obligations={obligations} />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard title="Total Ingresos" value={totalIngresos} icon={TrendingUp} colorClass="text-emerald-600" bgClass="bg-emerald-50" accent="bg-emerald-400" />
-        <StatCard title="Total Gastos" value={totalGastos} icon={TrendingDown} colorClass="text-red-500" bgClass="bg-red-50" accent="bg-red-400" />
-        <StatCard title="Resultado Neto" value={resultado} icon={Euro} colorClass={resultado >= 0 ? "text-primary" : "text-destructive"} bgClass={resultado >= 0 ? "bg-accent" : "bg-red-50"} accent={resultado >= 0 ? "bg-taxea-red" : "bg-red-400"} />
-        <StatCard title="IVA Estimado" value={ivaRepercutido - ivaSoportado} icon={BarChart3} colorClass="text-amber-600" bgClass="bg-amber-50" accent="bg-amber-400" />
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-        <StatCard title="Facturas Pendientes" value={facturasPendientes} icon={FileText} suffix="" colorClass="text-amber-600" bgClass="bg-amber-50" accent="bg-amber-400" />
-        <StatCard title="Obligaciones" value={obligacionesProximas} icon={Calendar} suffix="" colorClass="text-red-500" bgClass="bg-red-50" accent="bg-red-400" />
-        <StatCard title="Tareas activas" value={tasks.filter(t => !['completada', 'cancelada'].includes(t.estado)).length} icon={CheckSquare} suffix="" colorClass="text-blue-600" bgClass="bg-blue-50" accent="bg-blue-400" />
-        <StatCard title="Errores activos" value={errors.filter(e => !['resuelto', 'ignorado'].includes(e.estado)).length} icon={AlertTriangle} suffix="" colorClass="text-orange-500" bgClass="bg-orange-50" accent="bg-orange-400" />
-      </div>
-      <div className="mb-5"><CashFlowChart invoices={invoices} expenses={expenses} /></div>
-      <div className="mb-5">
-        <h2 className="text-sm font-jakarta font-semibold text-foreground mb-3">
-          Estimacion Fiscal · {selectedQuarter === 'anual' ? `Ano ${selectedYear}` : `${selectedQuarter} ${selectedYear}`}
-        </h2>
-        <FiscalDashboard invoices={invoices} expenses={expenses} company={company} quarter={selectedQuarter} />
-      </div>
-      <div className="grid lg:grid-cols-2 gap-5">
-        <div className="bg-card rounded-xl border border-border shadow-card">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="font-jakarta font-semibold text-foreground text-sm">Ultimos movimientos</h3>
-            <Link to="/tax-accounting/libros" className="text-xs text-primary hover:underline">Ver todo</Link>
+      {/* Fila 1: Health Score + KPIs financieros */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="bg-card border border-border rounded-xl px-5 py-4 flex items-center gap-4">
+          <ScoreRing score={healthScore} />
+          <div>
+            <p className="text-sm font-jakarta font-bold text-foreground">Health Score</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {healthScore >= 80 ? 'Estado optimo' : healthScore >= 50 ? 'Requiere atencion' : 'Estado critico'}
+            </p>
+            {healthMotivos && healthMotivos.length > 0 && (
+              <p className="text-[11px] text-amber-600 mt-1 font-medium">{healthMotivos[0]}</p>
+            )}
           </div>
-          <div className="divide-y divide-border">
-            {recentActivity.length === 0 ? (
-              <div className="px-5 py-8 text-center">
-                <Upload className="w-7 h-7 text-muted-foreground mx-auto mb-2 opacity-40" />
-                <p className="text-sm text-muted-foreground">Sin movimientos registrados</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl px-5 py-4">
+          <p className="text-2xl font-bold text-emerald-600">{totalIngresos.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €</p>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Ingresos {selectedYear}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl px-5 py-4">
+          <p className={cn('text-2xl font-bold', resultado >= 0 ? 'text-primary' : 'text-destructive')}>
+            {resultado >= 0 ? '+' : ''}{resultado.toLocaleString('es-ES', { maximumFractionDigits: 0 })} €
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><Euro className="w-3 h-3" />Resultado neto</p>
+          <p className={cn('text-[10px] font-medium mt-0.5', margen >= 0 ? 'text-emerald-600' : 'text-red-500')}>Margen {margen}%</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl px-5 py-4">
+          <p className="text-2xl font-bold text-foreground">{empleadosActivos.length > 0 ? empleadosActivos.length : obligations.length}</p>
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            {empleadosActivos.length > 0 ? <><Users className="w-3 h-3" />Empleados activos</> : <><Calendar className="w-3 h-3" />Obligaciones</>}
+          </p>
+          {empleadosActivos.length > 0 && <p className="text-[10px] text-muted-foreground/60 mt-0.5">{employees.length} total plantilla</p>}
+        </div>
+      </div>
+
+      {/* Fila 2: Grafica + Semaforo + Indicadores */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+            <h3 className="text-sm font-jakarta font-semibold">Ingresos vs Gastos — {selectedYear}</h3>
+            <Link to="/tax-accounting/ingresos-gastos" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Ver detalle <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="px-4 py-4">
+            {monthlyChart.some(m => m.ingresos > 0 || m.gastos > 0) ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={monthlyChart} barSize={10} barGap={2}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                  <Tooltip formatter={(val) => `${val.toLocaleString('es-ES')} €`} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="ingresos" fill="#16a34a" radius={[3,3,0,0]} name="Ingresos" />
+                  <Bar dataKey="gastos" fill="#dc2626" radius={[3,3,0,0]} name="Gastos" opacity={0.7} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-44 flex items-center justify-center">
+                <p className="text-xs text-muted-foreground">Sin datos para mostrar en {selectedYear}</p>
               </div>
-            ) : recentActivity.map((item, i) => (
-              <div key={i} className="px-5 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{item.numero_factura || item.concepto || 'Movimiento'}</p>
-                  <p className="text-xs text-muted-foreground">{item.cliente_nombre || item.proveedor_cliente || '—'}</p>
+            )}
+            <div className="flex items-center gap-4 mt-1 justify-center">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Ingresos</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block opacity-70" />Gastos</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          <EstadoFiscal estado={estadoFiscal} />
+          <div className="bg-card border border-border rounded-xl px-5 py-4 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Indicadores</p>
+            {[
+              { label: 'Facturas por cobrar', val: facturasCobrar.length, barColor: 'bg-amber-400' },
+              { label: 'Cobros vencidos', val: facturasVencidas.length, barColor: 'bg-red-500' },
+              { label: 'Obligaciones urgentes', val: oblUrgentes.length, barColor: 'bg-orange-400' },
+              { label: 'Errores criticos', val: erroresCriticos.length, barColor: 'bg-red-600' },
+            ].map((ind, i) => (
+              <div key={i}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs text-foreground">{ind.label}</span>
+                  <span className={cn('text-xs font-bold', ind.val > 0 ? 'text-amber-600' : 'text-emerald-600')}>{ind.val}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold">{((item.total_factura || item.total) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
-                  <StatusBadge status={item.estado_contable || item.estado} />
+                <div className="w-full bg-secondary rounded-full h-1.5">
+                  <div className={cn('h-1.5 rounded-full transition-all', ind.val > 0 ? ind.barColor : 'bg-emerald-500')} style={{ width: ind.val === 0 ? '4px' : `${Math.min(ind.val * 20, 100)}%` }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
-        <div className="bg-card rounded-xl border border-border shadow-card">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="font-jakarta font-semibold text-foreground text-sm">Obligaciones Fiscales</h3>
-            <Link to="/tax-accounting/obligaciones" className="text-xs text-primary hover:underline">Ver todo</Link>
+      </div>
+
+      {/* Fila 3: Tres cards departamento */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <DeptCard
+          icon={Calculator} color="text-taxea-red" bgLight="bg-red-50/60" border="border-red-100"
+          title="Tax &amp; Accounting" to="/tax-accounting/dashboard"
+          kpis={[
+            { label: 'Obligaciones urgentes', value: oblUrgentes.length, alert: oblUrgentes.length > 0, trend: oblUrgentes.length > 0 ? 'up' : 'down' },
+            { label: 'Docs sin validar', value: facturasPendientes, warn: facturasPendientes > 0 },
+            { label: 'Obligaciones totales', value: obligations.length },
+            { label: 'Errores criticos', value: erroresCriticos.length, alert: erroresCriticos.length > 0, trend: erroresCriticos.length > 0 ? 'up' : null },
+          ]}
+          tools={TAX_TOOLS}
+        />
+        <DeptCard
+          icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100"
+          title="Finance" to="/finance/dashboard"
+          kpis={[
+            { label: 'Cobros vencidos', value: facturasVencidas.length, alert: facturasVencidas.length > 0, trend: facturasVencidas.length > 0 ? 'up' : null },
+            { label: 'Cobros pendientes', value: facturasCobrar.length, warn: facturasCobrar.length > 0 },
+            { label: 'Total gastos', value: totalGastos.toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €', sub: selectedYear },
+            { label: 'IVA estimado', value: (ivaRepercutido - ivaSoportado).toLocaleString('es-ES', { maximumFractionDigits: 0 }) + ' €' },
+          ]}
+          tools={FIN_TOOLS}
+        />
+        <DeptCard
+          icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100"
+          title="People &amp; HR" to="/people/dashboard"
+          kpis={[
+            { label: 'Empleados activos', value: empleadosActivos.length, trend: 'up' },
+            { label: 'Total plantilla', value: employees.length },
+            { label: 'Ausencias pendientes', value: ausenciasPendientes.length, warn: ausenciasPendientes.length > 0 },
+            { label: 'Docs laborales pend.', value: hrDocsPendientes.length, warn: hrDocsPendientes.length > 0 },
+          ]}
+          tools={HR_TOOLS}
+        />
+      </div>
+
+      {/* Fila 4: Obligaciones + Empleados + Actividad */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" />Obligaciones</h3>
+            <Link to="/tax-accounting/obligaciones" className="text-xs text-primary hover:underline">Ver todas</Link>
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border/60">
             {obligations.length === 0 ? (
-              <div className="px-5 py-8 text-center">
-                <CheckCircle className="w-7 h-7 text-green-400 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Sin obligaciones registradas</p>
-              </div>
-            ) : obligations.slice(0, 4).map((obl) => (
-              <div key={obl.id} className="px-5 py-3 flex items-center justify-between">
+              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin obligaciones registradas</p></div>
+            ) : obligations.slice(0, 5).map((obl) => (
+              <div key={obl.id} className="px-5 py-2.5 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground capitalize">{obl.modelo?.replace(/_/g, ' ').replace('modelo ', 'Mod. ') || 'Obligacion'}</p>
-                  <p className="text-xs text-muted-foreground">{obl.periodo} · Limite: {obl.fecha_limite}</p>
+                  <p className="text-xs font-medium text-foreground capitalize">{obl.modelo?.replace(/_/g, ' ').replace('modelo ', 'Mod. ') || 'Obligacion'}</p>
+                  <p className="text-[11px] text-muted-foreground">{obl.periodo} · {obl.fecha_limite}</p>
                 </div>
                 <StatusBadge status={obl.estado} />
               </div>
             ))}
           </div>
           {tasks.filter(t => t.estado === 'pendiente_cliente').length > 0 && (
-            <div className="px-5 py-3 border-t border-border bg-amber-50/50 flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-medium text-amber-700 flex-1">
-                {tasks.filter(t => t.estado === 'pendiente_cliente').length} tarea{tasks.filter(t => t.estado === 'pendiente_cliente').length > 1 ? 's' : ''} pendiente{tasks.filter(t => t.estado === 'pendiente_cliente').length > 1 ? 's' : ''}
-              </p>
+            <div className="px-5 py-2.5 border-t border-border bg-amber-50/50 flex items-center gap-2">
+              <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
+              <p className="text-xs font-medium text-amber-700 flex-1">{tasks.filter(t => t.estado === 'pendiente_cliente').length} tarea(s) pendiente(s)</p>
               <Link to="/tareas" className="text-xs text-amber-700 hover:underline font-medium">Ver</Link>
             </div>
           )}
         </div>
+
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Users className="w-3.5 h-3.5 text-muted-foreground" />Equipo</h3>
+            <Link to="/people/employees" className="text-xs text-primary hover:underline">Ver todos</Link>
+          </div>
+          <div className="divide-y divide-border/60">
+            {empleadosActivos.length === 0 ? (
+              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin empleados registrados</p></div>
+            ) : empleadosActivos.slice(0, 5).map((e, i) => (
+              <div key={i} className="px-5 py-2.5 flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[11px] font-bold text-rose-700">{(e.full_name || e.nombre || '?').charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">{e.full_name || e.nombre || 'Empleado'}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{e.departamento || e.puesto || '—'}</p>
+                </div>
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">Activo</span>
+              </div>
+            ))}
+            {empleadosActivos.length > 5 && (
+              <div className="px-5 py-2 text-center">
+                <Link to="/people/employees" className="text-xs text-muted-foreground hover:text-primary">+{empleadosActivos.length - 5} mas</Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+            <h3 className="text-sm font-jakarta font-semibold flex items-center gap-2"><BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />Actividad reciente</h3>
+            <Link to="/tax-accounting/libros" className="text-xs text-primary hover:underline">Ver todo</Link>
+          </div>
+          <div className="divide-y divide-border/60">
+            {recentActivity.length === 0 ? (
+              <div className="px-5 py-6 text-center"><p className="text-xs text-muted-foreground">Sin movimientos recientes</p></div>
+            ) : recentActivity.map((item, i) => (
+              <div key={i} className="px-5 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', item.tipo === 'emitida' ? 'bg-emerald-500' : 'bg-red-400')} />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{item.numero_factura || item.concepto || 'Movimiento'}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{item.cliente_nombre || item.proveedor_cliente || '—'}</p>
+                  </div>
+                </div>
+                <p className="text-xs font-semibold text-foreground flex-shrink-0 ml-2">{((item.total_factura || item.total) || 0).toLocaleString('es-ES', { maximumFractionDigits: 0 })} €</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
     </div>
   );
 }
