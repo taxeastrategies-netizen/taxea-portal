@@ -15,6 +15,7 @@ import HealthScore from '@/components/HealthScore';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import CashFlowChart from '@/components/dashboard/CashFlowChart';
 import AdminOverview from '@/components/dashboard/AdminOverview';
+import DeptsDashboard from '@/components/dashboard/DeptsDashboard';
 import { calcularHealthScore } from '@/lib/healthScoreCalc';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -261,7 +262,15 @@ export default function Dashboard() {
       {/* Vista global admin */}
       {isAdmin && (
         <div className="mb-5">
-          <AdminOverview />
+          <DeptsDashboard
+            invoices={invoices}
+            expenses={expenses}
+            obligations={obligations}
+            tasks={tasks}
+            errors={errors}
+            company={company}
+          />
+          <div className="mt-5"><AdminOverview /></div>
         </div>
       )}
 
