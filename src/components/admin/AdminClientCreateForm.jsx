@@ -91,12 +91,9 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         inviteEmailSentAt: new Date().toISOString(),
       });
 
-      // 2. Invitar usuario (crea la cuenta en el sistema auth)
-      try { await base44.users.inviteUser(form.email, 'user'); } catch (_e) { /* expected */ }
-
-      // 3. Enviar email personalizado en español vía backend function
+      // 2. Enviar email personalizado en español vía backend function
       const appUrl = window.location.origin;
-      const setupUrl = `${appUrl}/setup-password?token=${setupToken}&email=${encodeURIComponent(form.email)}`;
+      const setupUrl = `${appUrl}/setup-password`;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
           email: form.email,
