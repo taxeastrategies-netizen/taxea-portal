@@ -106,15 +106,30 @@ export default function AdminClients() {
 
   const handleResetPassword = async (client) => {
     setActionLoading(true);
-    await base44.entities.ClientAccount.update(client.id, {
-      forcePasswordChange: true,
-      passwordChangedByClient: false,
-      tempPasswordShared: false,
-    });
-    await logAction(client.id, client.legalName, 'contrasena_reseteada_admin', 'Admin solicitó reset de contraseña. Cliente deberá cambiarla en próximo acceso.');
-    await load();
+    try {
+      await base44.auth.resetPasswordRequest(client.email);
+      await base44.entities.ClientAccount.update(client.id, { forcePasswordChange: true, passwordChangedByClient: false });
+      await logAction(client.id, client.legalName, 'contrasena_reseteada_admin', 'Admin envió enlace de reset de contraseña al cliente.');
+      await load();
+    } catch {}
     setActionLoading(false);
-    alert('Reset registrado. El cliente deberá restablecer su contraseña. Usa la plataforma base44 para enviar email de recuperación.');
+  };
+
+  const handleResendInvite = async (client) => {
+    setActionLoading(true);
+    try {
+      const newToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+      const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+      const setupUrl = `${window.location.origin}/setup-password?token=${newToken}&email=${encodeURIComponent(client.email)}`;
+      await base44.entities.ClientAccount.update(client.id, { setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() });
+      await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl, isResend: true });
+      await logAction(client.id, client.legalName, 'credenciales_generadas', 'Admin reenvió enlace de acceso al cliente.');
+      await load();
+      if (selectedClient?.id === client.id) setSelectedClient(prev => ({ ...prev, setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() }));
+    } catch (e) { alert('Error al reenviar: ' + e.message); }
+    setActionLoading(false);
   };
 
   if (!isAdmin) return (
@@ -243,16 +258,16 @@ export default function AdminClients() {
 
             {activeTab === 'acceso' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {[
                     { label: 'Email de acceso', value: selectedClient.email },
                     { label: 'Estado cuenta', value: <AccessBadge status={selectedClient.accessStatus} /> },
+                    { label: 'Invitación enviada', value: selectedClient.inviteEmailSentAt ? `Sí — ${new Date(selectedClient.inviteEmailSentAt).toLocaleDateString('es-ES')}` : 'No' },
+                    { label: 'Contraseña establecida', value: selectedClient.passwordChangedByClient ? `Sí — ${selectedClient.lastPasswordChangeAt ? new Date(selectedClient.lastPasswordChangeAt).toLocaleDateString('es-ES') : ''}` : 'No' },
                     { label: 'Primer acceso realizado', value: selectedClient.firstAccessCompleted ? 'Sí' : 'No' },
-                    { label: 'Contraseña cambiada por cliente', value: selectedClient.passwordChangedByClient ? 'Sí' : 'No' },
-                    { label: 'Último cambio contraseña', value: selectedClient.lastPasswordChangeAt ? new Date(selectedClient.lastPasswordChangeAt).toLocaleDateString('es-ES') : '—' },
-                    { label: 'Último acceso', value: selectedClient.lastLoginAt ? new Date(selectedClient.lastLoginAt).toLocaleDateString('es-ES') : 'Nunca' },
+                    { label: 'Último acceso', value: selectedClient.lastLoginAt ? new Date(selectedClient.lastLoginAt).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Nunca' },
+                    { label: 'Enlace válido hasta', value: selectedClient.setupTokenExpiresAt ? (new Date(selectedClient.setupTokenExpiresAt) > new Date() ? `Activo — ${new Date(selectedClient.setupTokenExpiresAt).toLocaleDateString('es-ES')}` : 'Caducado') : '—' },
                     { label: 'Intentos fallidos', value: selectedClient.failedLoginAttempts || 0 },
-                    { label: 'Cuenta bloqueada', value: selectedClient.accessStatus === 'bloqueada' ? 'Sí' : 'No' },
                   ].map((item, i) => (
                     <div key={i} className="bg-secondary/30 rounded-lg p-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{item.label}</p>
@@ -260,11 +275,27 @@ export default function AdminClients() {
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-border pt-4 space-y-2">
+
+                {selectedClient.setupToken && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">Enlace de acceso activo:</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500 flex-1 break-all">{`${window.location.origin}/setup-password?token=${selectedClient.setupToken}&email=${encodeURIComponent(selectedClient.email)}`}</span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 flex-shrink-0" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/setup-password?token=${selectedClient.setupToken}&email=${encodeURIComponent(selectedClient.email)}`)}>
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="border-t border-border pt-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Acciones de acceso</p>
                   <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleResendInvite(selectedClient)} disabled={actionLoading} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
+                      <RefreshCw className="w-3.5 h-3.5" />Reenviar enlace de acceso
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => handleResetPassword(selectedClient)} disabled={actionLoading} className="gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5" />Resetear contraseña
+                      <Lock className="w-3.5 h-3.5" />Enviar reset de contraseña
                     </Button>
                     {selectedClient.accessStatus !== 'suspendida' && selectedClient.accessStatus !== 'bloqueada' ? (
                       <Button variant="outline" size="sm" onClick={() => setConfirmAction({ type: 'suspend', client: selectedClient })} className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50">

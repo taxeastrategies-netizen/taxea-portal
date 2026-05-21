@@ -144,6 +144,17 @@
       "type": "string",
       "format": "date-time"
     },
+    "setupToken": {
+      "type": "string"
+    },
+    "setupTokenExpiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inviteEmailSentAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "internalOwner": {
       "type": "string"
     },

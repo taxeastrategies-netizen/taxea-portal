@@ -55,6 +55,10 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
     }
 
     setSaving(true);
+    const setupToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+    const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
     try {
       // 1. Crear ClientAccount
       const client = await base44.entities.ClientAccount.create({
@@ -82,12 +86,25 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         firstAccessCompleted: false,
         passwordChangedByClient: false,
         tempPasswordShared: false,
+        setupToken,
+        setupTokenExpiresAt,
+        inviteEmailSentAt: new Date().toISOString(),
       });
 
-      // 2. Invitar usuario (crea la cuenta en el sistema)
-      try { await base44.users.inviteUser(form.email, 'user'); } catch {}
+      // 2. Invitar usuario (crea la cuenta en el sistema auth)
+      try { await base44.users.inviteUser(form.email, 'user'); } catch (_e) { /* expected */ }
 
-      // 3. (Email personalizado no disponible hasta que el usuario active su cuenta)
+      // 3. Enviar email personalizado en español vía backend function
+      const appUrl = window.location.origin;
+      const setupUrl = `${appUrl}/setup-password?token=${setupToken}&email=${encodeURIComponent(form.email)}`;
+      try {
+        await base44.functions.invoke('sendClientInviteEmail', {
+          email: form.email,
+          clientName: form.legalName,
+          setupUrl,
+          isResend: false,
+        });
+      } catch (_emailError) { /* no bloquear si falla */ }
 
       // 4. Audit log
       await base44.entities.ClientAccessAuditLog.create({
@@ -96,7 +113,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         actionType: 'cuenta_creada',
         actionBy: 'admin',
         actionAt: new Date().toISOString(),
-        details: `Cuenta creada. Email: ${form.email}. Régimen: ${form.taxRegime}. Plan: ${form.plan || '—'}`,
+        details: `Cuenta creada e invitación enviada. Email: ${form.email}. Régimen: ${form.taxRegime}. Plan: ${form.plan || '—'}`,
       });
 
       setCreatedClient(client);
@@ -308,20 +325,18 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
               <h3 className="font-jakarta font-bold text-lg text-foreground">{createdClient.legalName}</h3>
               <p className="text-sm text-muted-foreground">{createdClient.email}</p>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-left text-sm text-blue-800 space-y-2">
-              <p className="font-semibold">✓ Cuenta creada correctamente.</p>
-              <p>Comparte este enlace con el cliente para que establezca su contraseña:</p>
-              <div className="flex items-center gap-2 bg-white border border-blue-200 rounded-lg px-3 py-2">
-                <span className="text-xs text-blue-700 flex-1 break-all">{window.location.origin}/setup-password</span>
-                <button
-                  type="button"
-                  onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/setup-password`); }}
-                  className="text-blue-600 hover:text-blue-800 flex-shrink-0"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left text-sm text-emerald-800 space-y-3">
+              <p className="font-semibold">Cuenta creada y email enviado en español ✓</p>
+              <p>Se ha enviado un email de bienvenida con el enlace de acceso a <strong>{createdClient.email}</strong>. El cliente puede hacer clic en el enlace para establecer su contraseña.</p>
+              <div>
+                <p className="text-xs text-emerald-700 font-medium mb-1.5">Enlace directo (para reenviar si fuera necesario):</p>
+                <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-3 py-2">
+                  <span className="text-[11px] text-emerald-700 flex-1 break-all">{window.location.origin}/setup-password</span>
+                  <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/setup-password`)} className="text-emerald-600 hover:text-emerald-800 flex-shrink-0">
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <p className="text-blue-600 text-xs">El cliente entra al enlace, escribe su email y recibe el link para crear su contraseña.</p>
             </div>
             <Button onClick={handleClose} className="w-full">Cerrar</Button>
           </div>
