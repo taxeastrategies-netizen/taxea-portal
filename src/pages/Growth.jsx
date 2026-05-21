@@ -21,6 +21,7 @@ import SeoCenter from '@/components/growth/SeoCenter';
 import AiVisibilityCenter from '@/components/growth/AiVisibilityCenter';
 import RevenueTaskPrioritizer from '@/components/growth/RevenueTaskPrioritizer';
 import PricingGuardrailV2 from '@/components/growth/PricingGuardrailV2';
+import GrowthPremiumHub from '@/components/growth/GrowthPremiumHub';
 
 const MODULE_MAP = {
   // Fase 1
@@ -65,6 +66,18 @@ const MODULE_MAP = {
   // Fase 2 — Priorities
   priorities: RevenueTaskPrioritizer,
   'revenue-tasks': RevenueTaskPrioritizer,
+
+  // Fase 3 — Premium Hub (single entry point)
+  premium: GrowthPremiumHub,
+  'war-room': GrowthPremiumHub,
+  'autopilot': GrowthPremiumHub,
+  'playbooks': GrowthPremiumHub,
+  'intelligence': GrowthPremiumHub,
+  forecast: GrowthPremiumHub,
+  'pain-mining': GrowthPremiumHub,
+  local: GrowthPremiumHub,
+  library: GrowthPremiumHub,
+  'action-plan': GrowthPremiumHub,
 
   // Coming soon stubs
   landings: GrowthComingSoon,

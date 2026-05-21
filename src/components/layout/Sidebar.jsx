@@ -227,6 +227,7 @@ const DEPT_GROUPS = [
           { id: 'reports',       label: 'Informes',              icon: FileText,        path: '/growth/reports' },
           { id: 'ai',            label: 'IA Director Growth',    icon: Sparkles,        path: '/growth/ai' },
           { id: 'settings',      label: 'Integraciones',         icon: Settings,        path: '/growth/settings' },
+          { id: 'premium',       label: 'Growth Premium ⚡',     icon: Sparkles,        path: '/growth/premium' },
         ],
       },
     ],
