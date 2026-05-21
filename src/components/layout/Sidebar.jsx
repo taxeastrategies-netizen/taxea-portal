@@ -139,6 +139,7 @@ const DEPT_GROUPS = [
       {
         id: 'operations',
         label: 'Operations',
+        adminOnly: true,
         icon: Cpu,
         activeColor: 'text-violet-600',
         activeBg: 'bg-violet-50',
@@ -160,6 +161,7 @@ const DEPT_GROUPS = [
       {
         id: 'logistics',
         label: 'Logistics',
+        adminOnly: true,
         icon: Warehouse,
         activeColor: 'text-orange-600',
         activeBg: 'bg-orange-50',
@@ -201,6 +203,7 @@ const DEPT_GROUPS = [
       {
         id: 'growth',
         label: 'Marketing & Growth',
+        adminOnly: true,
         icon: TrendingUp,
         activeColor: 'text-pink-600',
         activeBg: 'bg-pink-50',
@@ -344,7 +347,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                   {group.groupLabel}
                 </p>
                 <div className="space-y-0.5">
-                  {group.depts.map(dept => {
+                  {group.depts.filter(dept => !dept.adminOnly || isAdmin).map(dept => {
                     const DeptIcon = dept.icon;
                     const isActiveDept = activeDeptId === dept.id;
                     const isExpanded = expanded === dept.id;
