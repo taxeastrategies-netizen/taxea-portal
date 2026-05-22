@@ -19,31 +19,55 @@ Deno.serve(async (req) => {
       ? `Acceso a tu portal Taxea Strategies — Nuevo enlace`
       : `Bienvenido/a a Taxea Strategies — Configura tu acceso`;
 
-    const body = `
-Hola ${clientName},
+    const html = `
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #b91c3c; font-size: 24px; margin: 0;">Taxea Strategies</h1>
+  </div>
+  <h2 style="font-size: 20px;">${isResend ? 'Nuevo enlace de acceso' : 'Bienvenido/a al portal'}</h2>
+  <p>Hola <strong>${clientName}</strong>,</p>
+  <p>${isResend
+    ? 'Te enviamos un nuevo enlace para acceder a tu portal privado.'
+    : 'Tu cuenta en el portal privado de Taxea Strategies ha sido creada correctamente.'
+  }</p>
+  <p>Haz clic en el botón para configurar tu contraseña y acceder:</p>
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="${setupUrl}" style="background-color: #b91c3c; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+      Acceder al portal
+    </a>
+  </div>
+  <p style="color: #666; font-size: 13px;">Este enlace es válido durante 72 horas. Si tienes dudas, contacta con nosotros.</p>
+  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+  <p style="color: #999; font-size: 12px; text-align: center;">Taxea Strategies · Asesoría fiscal y contable</p>
+</body>
+</html>`;
 
-${isResend ? 'Te enviamos un nuevo enlace de acceso a tu portal.' : 'Tu cuenta en el portal privado de Taxea Strategies ha sido creada.'}
-
-Para configurar tu contraseña y acceder, haz clic en el siguiente enlace:
-
-${setupUrl}
-
-Este enlace es válido durante 72 horas. Si tienes alguna duda, contacta con nosotros.
-
-Un saludo,
-El equipo de Taxea Strategies
-    `.trim();
-
-    await base44.asServiceRole.integrations.Core.SendEmail({
-      to: email,
-      subject,
-      body,
-      from_name: 'Taxea Strategies',
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Taxea Strategies <onboarding@resend.dev>',
+        to: [email],
+        subject,
+        html,
+      }),
     });
 
-    return Response.json({ success: true });
+    const resendData = await resendRes.json();
+
+    if (!resendRes.ok) {
+      console.error('Resend error:', resendData);
+      return Response.json({ error: resendData.message || 'Error enviando email' }, { status: 500 });
+    }
+
+    return Response.json({ success: true, id: resendData.id });
   } catch (error) {
-    console.error('Error enviando email:', error);
+    console.error('Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
