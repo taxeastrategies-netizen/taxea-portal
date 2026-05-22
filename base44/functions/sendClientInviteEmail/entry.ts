@@ -74,12 +74,24 @@ Deno.serve(async (req) => {
       </div>
     `;
 
-    await base44.asServiceRole.integrations.Core.SendEmail({
-      to: email,
-      subject,
-      body,
-      from_name: 'Taxea Strategies',
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Taxea Strategies <onboarding@resend.dev>',
+        to: [email],
+        subject,
+        html: body,
+      }),
     });
+
+    if (!resendRes.ok) {
+      const errText = await resendRes.text();
+      throw new Error(`Resend error ${resendRes.status}: ${errText}`);
+    }
 
     return Response.json({ ok: true });
   } catch (error) {
