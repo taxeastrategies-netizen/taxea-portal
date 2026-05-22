@@ -1,0 +1,64 @@
+{
+  "name": "AccountingExportHistory",
+  "type": "object",
+  "properties": {
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "exportYear": {
+      "type": "number"
+    },
+    "exportPeriod": {
+      "type": "string"
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exportedBy": {
+      "type": "string"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "totalEmitted": {
+      "type": "number",
+      "default": 0
+    },
+    "totalReceived": {
+      "type": "number",
+      "default": 0
+    },
+    "newEmittedCount": {
+      "type": "number",
+      "default": 0
+    },
+    "newReceivedCount": {
+      "type": "number",
+      "default": 0
+    },
+    "onlyNew": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error"
+      ],
+      "default": "ok"
+    },
+    "errorMessage": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "clientAccountId",
+    "exportYear",
+    "exportPeriod"
+  ]
+}

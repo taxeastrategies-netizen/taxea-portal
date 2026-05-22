@@ -247,6 +247,7 @@ const UTILS_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: '/admin/clients', label: 'Clientes y accesos', icon: Users },
+  { to: '/admin/estado-contable', label: 'Estado contable', icon: BookOpen },
   { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
   { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },

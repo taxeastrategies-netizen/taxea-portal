@@ -1,0 +1,81 @@
+{
+  "name": "AccountingExportSnapshot",
+  "type": "object",
+  "properties": {
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "exportYear": {
+      "type": "number"
+    },
+    "exportPeriod": {
+      "type": "string"
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exportedBy": {
+      "type": "string"
+    },
+    "emittedInvoiceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "receivedInvoiceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "emittedInvoiceFingerprints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "receivedInvoiceFingerprints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "totalEmitted": {
+      "type": "number",
+      "default": 0
+    },
+    "totalReceived": {
+      "type": "number",
+      "default": 0
+    },
+    "newEmittedCount": {
+      "type": "number",
+      "default": 0
+    },
+    "newReceivedCount": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error"
+      ],
+      "default": "ok"
+    }
+  },
+  "required": [
+    "clientAccountId",
+    "exportYear",
+    "exportPeriod"
+  ]
+}
