@@ -1,0 +1,74 @@
+{
+  "name": "AccountingAccount",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "code": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "subgroup1": {
+      "type": "string"
+    },
+    "subgroup2": {
+      "type": "string"
+    },
+    "subgroup3": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "pasivo",
+        "patrimonio",
+        "ingreso",
+        "gasto",
+        "banco",
+        "cliente",
+        "proveedor",
+        "impuesto",
+        "amortizacion",
+        "otro"
+      ],
+      "default": "otro"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activa",
+        "inactiva"
+      ],
+      "default": "activa"
+    },
+    "isSystemAccount": {
+      "type": "boolean",
+      "default": false
+    },
+    "openingDebit": {
+      "type": "number",
+      "default": 0
+    },
+    "openingCredit": {
+      "type": "number",
+      "default": 0
+    },
+    "description": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "name"
+  ]
+}

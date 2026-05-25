@@ -1,0 +1,97 @@
+{
+  "name": "JournalEntry",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "entryNumber": {
+      "type": "string"
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "gasto",
+        "ingreso",
+        "pago",
+        "cobro",
+        "banco",
+        "nomina",
+        "amortizacion",
+        "apertura",
+        "cierre",
+        "regularizacion",
+        "impuesto",
+        "ajuste"
+      ],
+      "default": "manual"
+    },
+    "description": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "OCR",
+        "factura_emitida",
+        "factura_recibida",
+        "banco",
+        "conciliacion",
+        "importacion",
+        "sistema"
+      ],
+      "default": "manual"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "pendiente_revision",
+        "confirmado",
+        "anulado"
+      ],
+      "default": "borrador"
+    },
+    "totalDebit": {
+      "type": "number",
+      "default": 0
+    },
+    "totalCredit": {
+      "type": "number",
+      "default": 0
+    },
+    "isBalanced": {
+      "type": "boolean",
+      "default": false
+    },
+    "confirmedBy": {
+      "type": "string"
+    },
+    "confirmedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "description"
+  ]
+}

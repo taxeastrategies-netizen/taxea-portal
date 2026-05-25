@@ -36,6 +36,7 @@ const TAX_MODULES = [
   { id: 'notificaciones', label: 'Notificaciones', icon: Bell, path: '/tax-accounting/notificaciones' },
   { id: 'timeline', label: 'Timeline', icon: Clock, path: '/tax-accounting/timeline' },
   { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },
+  { id: 'contabilidad', label: 'Contabilidad', icon: BookOpen, path: '/tax-accounting/contabilidad' },
 ];
 
 const DEPT_GROUPS = [

@@ -1,0 +1,81 @@
+{
+  "name": "DocumentAccountingSource",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "factura_emitida",
+        "factura_recibida",
+        "ticket",
+        "nomina",
+        "banco",
+        "otro"
+      ],
+      "default": "otro"
+    },
+    "documentNumber": {
+      "type": "string"
+    },
+    "issueDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "accountingDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "supplierOrCustomerName": {
+      "type": "string"
+    },
+    "supplierOrCustomerTaxId": {
+      "type": "string"
+    },
+    "baseAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "taxAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "withholdingAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "totalAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "ocrConfidence": {
+      "type": "number",
+      "default": 0
+    },
+    "reviewStatus": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "revisado",
+        "confirmado",
+        "rechazado"
+      ],
+      "default": "pendiente"
+    },
+    "linkedJournalEntryId": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "documentType"
+  ]
+}

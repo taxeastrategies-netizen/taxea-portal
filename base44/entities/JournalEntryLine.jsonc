@@ -1,0 +1,66 @@
+{
+  "name": "JournalEntryLine",
+  "type": "object",
+  "properties": {
+    "journalEntryId": {
+      "type": "string"
+    },
+    "companyId": {
+      "type": "string"
+    },
+    "lineNumber": {
+      "type": "number",
+      "default": 1
+    },
+    "accountId": {
+      "type": "string"
+    },
+    "accountCode": {
+      "type": "string"
+    },
+    "accountName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "debit": {
+      "type": "number",
+      "default": 0
+    },
+    "credit": {
+      "type": "number",
+      "default": 0
+    },
+    "taxCode": {
+      "type": "string"
+    },
+    "counterpartyAccountId": {
+      "type": "string"
+    },
+    "counterpartyAccountCode": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "bankTransactionId": {
+      "type": "string"
+    },
+    "isReconciled": {
+      "type": "boolean",
+      "default": false
+    },
+    "reconciledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "entryStatus": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "journalEntryId",
+    "accountCode"
+  ]
+}

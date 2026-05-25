@@ -14,6 +14,7 @@ import AsistenteFiscal from './AsistenteFiscal';
 import Notificaciones from './Notificaciones';
 import Timeline from './Timeline';
 import LaborOcr from './LaborOcr';
+import ContabilidadModule from '@/components/tax/contabilidad/ContabilidadModule';
 
 export default function TaxAccounting() {
   const { module } = useParams();
@@ -38,6 +39,7 @@ export default function TaxAccounting() {
     case 'notificaciones': return <Notificaciones />;
     case 'timeline': return <Timeline />;
     case 'labor-ocr': return <LaborOcr />;
+    case 'contabilidad': return <ContabilidadModule />;
     case 'dashboard':
     default:
       return <TaxDashboard onNavigate={handleNavigate} />;
