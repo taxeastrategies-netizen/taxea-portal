@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle, BookOpen } from 'lucide-react';
+import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle, BookOpen, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import JournalEntryForm from './JournalEntryForm';
 
@@ -64,8 +64,20 @@ export default function LibroDiario() {
   };
 
   const handleAnular = async (entry) => {
-    if (!confirm('¿Anular este asiento? No podrá deshacerse.')) return;
+    if (!confirm('¿Anular este asiento? Quedará marcado como anulado.')) return;
     await base44.entities.JournalEntry.update(entry.id, { status: 'anulado' });
+    load();
+  };
+
+  const handleEliminar = async (entry) => {
+    const msg = entry.status === 'confirmado'
+      ? `¿Eliminar el asiento confirmado "${entry.description}"? Esta acción es irreversible y elimina su trazabilidad contable.`
+      : `¿Eliminar el asiento "${entry.description}"?`;
+    if (!confirm(msg)) return;
+    await base44.entities.JournalEntry.delete(entry.id);
+    // Delete lines too
+    const entryLines = lines.filter(l => l.journalEntryId === entry.id);
+    await Promise.all(entryLines.map(l => base44.entities.JournalEntryLine.delete(l.id)));
     load();
   };
 
@@ -164,6 +176,9 @@ export default function LibroDiario() {
                       {entry.status !== 'anulado' && entry.status !== 'confirmado' && (
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleAnular(entry)}>Anular</Button>
                       )}
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600" onClick={() => handleEliminar(entry)} title="Eliminar asiento">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
 

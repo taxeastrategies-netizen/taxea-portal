@@ -4,7 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AsientoProposalModal from './AsientoProposalModal';
 
@@ -25,6 +26,9 @@ export default function FacturasPendientes() {
   const [filterEstado, setFilterEstado] = useState('todas');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showAnuladas, setShowAnuladas] = useState(false);
+  const [anularTarget, setAnularTarget] = useState(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices-contabilidad'],
@@ -36,7 +40,35 @@ export default function FacturasPendientes() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] }),
   });
 
-  const filtered = invoices.filter(inv => {
+  const anularFactura = useMutation({
+    mutationFn: async ({ id, motivo, journalEntryId }) => {
+      await base44.entities.Invoice.update(id, {
+        anulada: true,
+        fecha_anulacion: new Date().toISOString(),
+        motivo_anulacion: motivo,
+      });
+      if (journalEntryId) {
+        await base44.entities.JournalEntry.update(journalEntryId, { status: 'anulado' });
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
+      qc.invalidateQueries({ queryKey: ['journal-entries'] });
+      setAnularTarget(null);
+      setMotivoAnulacion('');
+    },
+  });
+
+  const eliminarFactura = useMutation({
+    mutationFn: (id) => base44.entities.Invoice.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] }),
+  });
+
+  const activas = invoices.filter(i => !i.anulada);
+  const anuladas = invoices.filter(i => i.anulada);
+  const lista = showAnuladas ? anuladas : activas;
+
+  const filtered = lista.filter(inv => {
     const matchTipo = filterTipo === 'todas' || inv.tipo === filterTipo;
     const matchEstado = filterEstado === 'todas' || inv.estado_contable === filterEstado;
     const matchSearch = !search ||
@@ -47,9 +79,9 @@ export default function FacturasPendientes() {
     return matchTipo && matchEstado && matchSearch;
   });
 
-  const pendientes = invoices.filter(i => i.estado_contable === 'pendiente' || i.estado_contable === 'asiento_propuesto').length;
-  const contabilizadas = invoices.filter(i => i.estado_contable === 'contabilizada').length;
-  const errores = invoices.filter(i => i.estado_contable === 'requiere_correccion' || i.estado_contable === 'rechazada').length;
+  const pendientes = activas.filter(i => i.estado_contable === 'pendiente' || i.estado_contable === 'asiento_propuesto').length;
+  const contabilizadas = activas.filter(i => i.estado_contable === 'contabilizada').length;
+  const errores = activas.filter(i => i.estado_contable === 'requiere_correccion' || i.estado_contable === 'rechazada').length;
 
   const openModal = (inv) => { setSelectedInvoice(inv); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setSelectedInvoice(null); };
@@ -63,13 +95,25 @@ export default function FacturasPendientes() {
         {[
           { label: 'Pendientes de contabilizar', value: pendientes, color: 'text-amber-600 bg-amber-50 border-amber-200' },
           { label: 'Contabilizadas', value: contabilizadas, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-          { label: 'Con errores', value: errores, color: 'text-red-600 bg-red-50 border-red-200' },
+          { label: 'Con errores / rechazadas', value: errores, color: 'text-red-600 bg-red-50 border-red-200' },
         ].map(k => (
           <div key={k.label} className={cn('rounded-xl p-4 border', k.color)}>
             <p className="text-2xl font-bold font-jakarta">{k.value}</p>
             <p className="text-xs mt-0.5">{k.label}</p>
           </div>
         ))}
+      </div>
+
+      {/* Toggle activas / anuladas */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowAnuladas(false)}
+          className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${!showAnuladas ? 'bg-foreground text-background border-foreground' : 'bg-card text-muted-foreground border-border hover:border-foreground'}`}
+        >Activas ({activas.length})</button>
+        <button
+          onClick={() => setShowAnuladas(true)}
+          className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${showAnuladas ? 'bg-red-600 text-white border-red-600' : 'bg-card text-muted-foreground border-border hover:border-red-400'}`}
+        >Anuladas ({anuladas.length})</button>
       </div>
 
       {/* Filters */}
@@ -130,40 +174,64 @@ export default function FacturasPendientes() {
                 const Icon = cfg.icon;
                 const esEmitida = inv.tipo === 'emitida';
                 return (
-                  <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={inv.id} className={cn('hover:bg-muted/20 transition-colors', inv.anulada && 'opacity-60 line-through-none')}>
                     <td className="px-4 py-2.5">
                       <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full', esEmitida ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
                         {esEmitida ? <ArrowUpCircle className="w-2.5 h-2.5" /> : <ArrowDownCircle className="w-2.5 h-2.5" />}
                         {esEmitida ? 'Emitida' : 'Recibida'}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 font-mono font-medium">{inv.numero_factura}</td>
+                    <td className="px-4 py-2.5 font-mono font-medium">
+                      {inv.numero_factura}
+                      {inv.anulada && <span className="ml-1.5 text-[9px] font-semibold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full not-italic">ANULADA</span>}
+                    </td>
                     <td className="px-4 py-2.5 text-muted-foreground">{inv.fecha_emision}</td>
                     <td className="px-4 py-2.5">{inv.cliente_nombre || inv.proveedor_nombre || '—'}</td>
                     <td className="px-4 py-2.5 text-muted-foreground max-w-40 truncate">{inv.concepto || '—'}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{fmt(inv.base_imponible)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
                     <td className="px-4 py-2.5">
-                      <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full', cfg.color)}>
-                        <Icon className="w-2.5 h-2.5" /> {cfg.label}
-                      </span>
+                      {inv.anulada ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          <Ban className="w-2.5 h-2.5" /> Anulada
+                        </span>
+                      ) : (
+                        <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full', cfg.color)}>
+                          <Icon className="w-2.5 h-2.5" /> {cfg.label}
+                        </span>
+                      )}
+                      {inv.anulada && inv.motivo_anulacion && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5 max-w-32 truncate" title={inv.motivo_anulacion}>{inv.motivo_anulacion}</p>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
                         {inv.archivo_url && (
                           <a href={inv.archivo_url} target="_blank" rel="noreferrer">
                             <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Eye className="w-3 h-3" /></Button>
                           </a>
                         )}
-                        {(inv.estado_contable === 'pendiente' || inv.estado_contable === 'asiento_propuesto' || inv.estado_contable === 'requiere_correccion') && (
+                        {!inv.anulada && (inv.estado_contable === 'pendiente' || inv.estado_contable === 'asiento_propuesto' || inv.estado_contable === 'requiere_correccion') && (
                           <Button size="sm" className="h-6 px-2 text-[10px]" onClick={() => openModal(inv)}>
                             {inv.estado_contable === 'asiento_propuesto' ? 'Ver asiento' : 'Proponer asiento'}
                           </Button>
                         )}
-                        {inv.estado_contable === 'pendiente' && (
-                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-600 hover:bg-red-50"
+                        {!inv.anulada && inv.estado_contable === 'pendiente' && (
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground hover:bg-muted"
                             onClick={() => markRechazada.mutate(inv.id)}>
                             Rechazar
+                          </Button>
+                        )}
+                        {!inv.anulada && (
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-600 hover:bg-red-50 gap-1"
+                            onClick={() => { setAnularTarget(inv); setMotivoAnulacion(''); }}>
+                            <Ban className="w-2.5 h-2.5" /> Anular
+                          </Button>
+                        )}
+                        {inv.anulada && (
+                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-700 hover:bg-red-50 gap-1"
+                            onClick={() => { if (confirm(`¿Eliminar definitivamente la factura ${inv.numero_factura}? Esta acción no se puede deshacer.`)) eliminarFactura.mutate(inv.id); }}>
+                            <Trash2 className="w-2.5 h-2.5" /> Eliminar
                           </Button>
                         )}
                       </div>
@@ -176,12 +244,50 @@ export default function FacturasPendientes() {
         </div>
       )}
 
+      {/* Asiento proposal modal */}
       {showModal && selectedInvoice && (
         <AsientoProposalModal
           invoice={selectedInvoice}
           onClose={closeModal}
           onConfirmed={() => { qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] }); qc.invalidateQueries({ queryKey: ['journal-entries'] }); closeModal(); }}
         />
+      )}
+
+      {/* Modal anular factura */}
+      {anularTarget && (
+        <Dialog open onOpenChange={() => setAnularTarget(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-jakarta flex items-center gap-2">
+                <Ban className="w-5 h-5 text-red-600" /> Anular factura {anularTarget.numero_factura}
+              </DialogTitle>
+            </DialogHeader>
+            {anularTarget.linked_journal_entry_id && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-800">
+                ⚠️ Esta factura tiene un asiento contable vinculado. Al anularla, el asiento también quedará marcado como <strong>anulado</strong>.
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Motivo de anulación <span className="text-red-500">*</span></label>
+              <input
+                className="w-full border border-input rounded-md px-3 py-2 text-sm"
+                placeholder="Ej: Error en importe, factura duplicada, acuerdo con cliente..."
+                value={motivoAnulacion}
+                onChange={e => setMotivoAnulacion(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAnularTarget(null)}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                disabled={!motivoAnulacion.trim() || anularFactura.isPending}
+                onClick={() => anularFactura.mutate({ id: anularTarget.id, motivo: motivoAnulacion, journalEntryId: anularTarget.linked_journal_entry_id })}
+              >
+                {anularFactura.isPending ? 'Anulando...' : 'Confirmar anulación'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

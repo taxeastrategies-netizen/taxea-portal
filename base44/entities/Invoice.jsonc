@@ -113,6 +113,17 @@
       ],
       "default": "pendiente"
     },
+    "anulada": {
+      "type": "boolean",
+      "default": false
+    },
+    "fecha_anulacion": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "motivo_anulacion": {
+      "type": "string"
+    },
     "linked_journal_entry_id": {
       "type": "string"
     },
