@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle } from 'lucide-react';
+import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import JournalEntryForm from './JournalEntryForm';
 
@@ -81,7 +81,7 @@ export default function LibroDiario() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-jakarta font-bold text-foreground">Libro diario</h2>
-          <p className="text-xs text-muted-foreground">Gestiona asientos manuales, movimientos generados por OCR, facturas y bancos.</p>
+          <p className="text-xs text-muted-foreground">Solo asientos generados desde facturas contabilizadas y asientos manuales confirmados.</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={load} className="h-8"><RefreshCw className="w-3.5 h-3.5" /></Button>
@@ -118,9 +118,16 @@ export default function LibroDiario() {
         {loading ? (
           <div className="p-8 text-center"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-sm text-muted-foreground">Sin asientos registrados.</p>
-            <Button size="sm" onClick={() => setShowNewEntry(true)} className="mt-3 gap-1.5"><Plus className="w-3.5 h-3.5" />Crear primer asiento</Button>
+          <div className="p-12 text-center space-y-3">
+            <BookOpen className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+            {entries.length === 0 ? (
+              <>
+                <p className="font-semibold text-foreground">Todavía no hay asientos en el libro diario</p>
+                <p className="text-sm text-muted-foreground">El diario se alimenta de facturas contabilizadas y asientos manuales confirmados.</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No hay asientos con los filtros aplicados.</p>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-border">

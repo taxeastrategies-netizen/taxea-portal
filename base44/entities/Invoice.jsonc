@@ -16,14 +16,41 @@
       "type": "string",
       "format": "date"
     },
+    "fecha_operacion": {
+      "type": "string",
+      "format": "date"
+    },
     "cliente_nombre": {
       "type": "string"
     },
     "cliente_nif": {
       "type": "string"
     },
+    "proveedor_nombre": {
+      "type": "string"
+    },
+    "proveedor_nif": {
+      "type": "string"
+    },
     "concepto": {
       "type": "string"
+    },
+    "categoria_gasto": {
+      "type": "string",
+      "enum": [
+        "ventas_servicios",
+        "compras",
+        "suministros",
+        "alquiler",
+        "publicidad_marketing",
+        "servicios_profesionales",
+        "software",
+        "transporte",
+        "dietas",
+        "gastos_financieros",
+        "seguros",
+        "otros"
+      ]
     },
     "base_imponible": {
       "type": "number"
@@ -42,6 +69,10 @@
     "total_factura": {
       "type": "number"
     },
+    "moneda": {
+      "type": "string",
+      "default": "EUR"
+    },
     "trimestre": {
       "type": "string",
       "enum": [
@@ -53,6 +84,14 @@
     },
     "anio": {
       "type": "number"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "emitida",
+        "recibida"
+      ],
+      "default": "emitida"
     },
     "estado_cobro": {
       "type": "string",
@@ -67,13 +106,15 @@
       "type": "string",
       "enum": [
         "pendiente",
-        "en_revision",
-        "revisada",
+        "asiento_propuesto",
         "contabilizada",
-        "presentada",
-        "rechazada"
+        "rechazada",
+        "requiere_correccion"
       ],
       "default": "pendiente"
+    },
+    "linked_journal_entry_id": {
+      "type": "string"
     },
     "archivo_url": {
       "type": "string"
@@ -81,16 +122,15 @@
     "comentarios": {
       "type": "string"
     },
-    "tipo": {
-      "type": "string",
-      "enum": [
-        "emitida",
-        "recibida"
-      ],
-      "default": "emitida"
-    },
     "subido_por": {
       "type": "string"
+    },
+    "confirmado_por": {
+      "type": "string"
+    },
+    "fecha_contabilizacion": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [

@@ -62,7 +62,7 @@ export default function CuadrosCuentas() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-jakarta font-bold text-foreground">Cuadro de cuentas</h2>
-          <p className="text-xs text-muted-foreground">Mantén las cuentas contables en orden y revisa saldos, movimientos y detalle por cuenta.</p>
+          <p className="text-xs text-muted-foreground">El cuadro se construye desde las cuentas usadas en facturas contabilizadas y asientos confirmados. No se crean cuentas artificiales.</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={load} className="h-8 gap-1.5"><RefreshCw className="w-3.5 h-3.5" /></Button>
@@ -110,7 +110,16 @@ export default function CuadrosCuentas() {
               {loading ? (
                 <tr><td colSpan={9} className="px-4 py-8 text-center"><div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">Sin cuentas. Crea cuentas contables para empezar.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center">
+                  {accounts.length === 0 ? (
+                    <div className="space-y-2">
+                      <p className="font-semibold text-foreground">El cuadro de cuentas se alimentará de las cuentas usadas en facturas y asientos</p>
+                      <p className="text-muted-foreground text-sm">Contabiliza facturas desde la pestaña "Facturas pendientes" para ver cuentas aquí.</p>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No hay cuentas que coincidan con los filtros.</p>
+                  )}
+                </td></tr>
               ) : filtered.map(acc => (
                 <tr key={acc.id} className="hover:bg-secondary/20 cursor-pointer group" onClick={() => setSelectedAccount(acc)}>
                   <td className="px-3 py-2.5 font-mono font-semibold text-primary">{acc.code}</td>
