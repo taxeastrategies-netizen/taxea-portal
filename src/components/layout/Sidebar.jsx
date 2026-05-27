@@ -26,7 +26,7 @@ const TAX_MODULES = [
   { id: 'ingresos-gastos', label: 'Ingresos y Gastos', icon: TrendingUp, path: '/tax-accounting/ingresos-gastos' },
   { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
   { id: 'proformas', label: 'Proformas', icon: Receipt, path: '/tax-accounting/proformas' },
-  { id: 'productos', label: 'Productos / Servicios', icon: Package, path: '/tax-accounting/productos' },
+
   { id: 'notas', label: 'Notas Predefinidas', icon: BookMarked, path: '/tax-accounting/notas' },
   { id: 'libros', label: 'Libros Registro', icon: BookOpen, path: '/tax-accounting/libros' },
   { id: 'lector-gastos', label: 'Lector de Gastos', icon: ScanLine, path: '/tax-accounting/lector-gastos' },

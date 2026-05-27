@@ -30,7 +30,7 @@ export default function TaxAccounting() {
     case 'ingresos-gastos': return <IngresosGastos />;
     case 'presupuestos': return <Presupuestos />;
     case 'proformas': return <Proformas />;
-    case 'productos': return <Productos />;
+
     case 'notas': return <NotasPredefinidas />;
     case 'libros': return <LibroRegistros />;
     case 'lector-gastos': return <LectorGastos />;
