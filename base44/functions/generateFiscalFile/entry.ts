@@ -262,8 +262,7 @@ Deno.serve(async (req) => {
     }
 
     // 1. Cargar datos del cliente
-    const companies = await base44.entities.ClientAccount.filter({ id: companyId });
-    const company = companies[0];
+    const company = await base44.entities.ClientAccount.get(companyId);
     if (!company) return Response.json({ error: 'Cliente no encontrado.' }, { status: 404 });
 
     // 2. Cargar facturas del período
