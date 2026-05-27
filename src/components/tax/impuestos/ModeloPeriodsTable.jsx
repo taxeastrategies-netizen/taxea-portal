@@ -1,35 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getDeadlines } from './aeatDeadlines';
+import { getDeadlines, getPeriodosDelModelo } from './aeatDeadlines';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Plus, Eye } from 'lucide-react';
 
-const PERIODOS_TRIMESTRAL = ['T1', 'T2', 'T3', 'T4'];
-const PERIODOS_ANUAL = ['Anual'];
-const PERIODOS_MENSUAL = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-
-// Plazos reales: ver aeatDeadlines.js
-
-function getPeriodos(modelo) {
-  const m = modelos_per.find(x => x.codigo === modelo);
-  if (!m) return PERIODOS_TRIMESTRAL;
-  if (m.periodicidad === 'anual') return PERIODOS_ANUAL;
-  if (m.periodicidad === 'mensual') return PERIODOS_MENSUAL;
-  return PERIODOS_TRIMESTRAL;
-}
-const modelos_per = [
-  { codigo: '303', periodicidad: 'trimestral' }, { codigo: '390', periodicidad: 'anual' },
-  { codigo: '349', periodicidad: 'trimestral' }, { codigo: '347', periodicidad: 'anual' },
-  { codigo: '130', periodicidad: 'trimestral' }, { codigo: '111', periodicidad: 'trimestral' },
-  { codigo: '190', periodicidad: 'anual' }, { codigo: '115', periodicidad: 'trimestral' },
-  { codigo: '180', periodicidad: 'anual' }, { codigo: '123', periodicidad: 'trimestral' },
-  { codigo: '193', periodicidad: 'anual' }, { codigo: '420', periodicidad: 'trimestral' },
-  { codigo: '425', periodicidad: 'anual' }, { codigo: '415', periodicidad: 'anual' },
-];
-
 export default function ModeloPeriodsTable({ modeloCodigo, companyId, year, estadoConfig }) {
   const qc = useQueryClient();
-  const periodos = getPeriodos(modeloCodigo);
+  // Usa getPeriodosDelModelo para respetar anuales vs trimestrales vs mensuales
+  const periodosList = getPeriodosDelModelo(modeloCodigo, year);
+  const periodos = periodosList.map(p => p.periodo);
 
   const { data: taxPeriods = [] } = useQuery({
     queryKey: ['taxPeriods', companyId, year, modeloCodigo],

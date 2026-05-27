@@ -3,31 +3,166 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertCircle, ChevronRight, RefreshCw, Settings, Calendar } from 'lucide-react';
-import { getPeriodosDelModelo } from './aeatDeadlines';
+import { Settings, ChevronRight, Eye } from 'lucide-react';
+import { getPeriodosDelModelo, getDeadlines } from './aeatDeadlines';
 import { Button } from '@/components/ui/button';
-import ModeloPeriodsTable from './ModeloPeriodsTable';
 
 const ESTADO_CONFIG = {
-  sin_datos: { label: 'Sin datos', color: 'bg-gray-100 text-gray-600' },
-  pendiente_configurar: { label: 'Pendiente configurar', color: 'bg-amber-100 text-amber-700' },
-  calculado: { label: 'Calculado', color: 'bg-blue-100 text-blue-700' },
-  borrador: { label: 'Borrador', color: 'bg-indigo-100 text-indigo-700' },
-  pendiente_revision: { label: 'Pendiente revisión', color: 'bg-yellow-100 text-yellow-700' },
-  revisado: { label: 'Revisado', color: 'bg-teal-100 text-teal-700' },
-  listo_presentar: { label: 'Listo para presentar', color: 'bg-green-100 text-green-700' },
-  presentado: { label: 'Presentado', color: 'bg-green-200 text-green-800' },
-  rechazado: { label: 'Rechazado', color: 'bg-red-100 text-red-700' },
-  con_requerimiento: { label: 'Con requerimiento', color: 'bg-red-200 text-red-800' },
-  sustitutiva: { label: 'Sustitutiva', color: 'bg-purple-100 text-purple-700' },
-  no_aplica: { label: 'No aplica', color: 'bg-gray-100 text-gray-400' },
+  sin_datos:            { label: 'Pendiente',   color: 'text-gray-500',  dot: 'bg-gray-400' },
+  pendiente_configurar: { label: 'Pendiente',   color: 'text-gray-500',  dot: 'bg-gray-400' },
+  calculado:            { label: 'Borrador',    color: 'text-blue-600',  dot: 'bg-blue-500' },
+  borrador:             { label: 'Borrador',    color: 'text-blue-600',  dot: 'bg-blue-500' },
+  pendiente_revision:   { label: 'En revisión', color: 'text-yellow-600',dot: 'bg-yellow-500' },
+  revisado:             { label: 'Revisado',    color: 'text-teal-600',  dot: 'bg-teal-500' },
+  listo_presentar:      { label: 'Listo',       color: 'text-green-600', dot: 'bg-green-500' },
+  presentado:           { label: 'Presentado',  color: 'text-green-700', dot: 'bg-green-600' },
+  rechazado:            { label: 'Rechazado',   color: 'text-red-600',   dot: 'bg-red-500' },
+  con_requerimiento:    { label: 'Req.',         color: 'text-red-700',   dot: 'bg-red-600' },
+  no_aplica:            { label: 'No aplica',   color: 'text-gray-400',  dot: 'bg-gray-300' },
 };
 
-export default function ImpuestosPanel() {
+function fmt(n) { return n != null ? `${Number(n).toFixed(2)} €` : '0,00 €'; }
+
+function facturaEnPeriodo(f, periodo, ejercicio) {
+  const anio = f.anio || (f.fecha_emision && new Date(f.fecha_emision).getFullYear());
+  if (anio !== ejercicio) return false;
+  if (periodo === 'Anual') return true;
+  const mes = f.fecha_emision ? new Date(f.fecha_emision).getMonth() + 1 : null;
+  if (!mes) return false;
+  const t = mes <= 3 ? 'T1' : mes <= 6 ? 'T2' : mes <= 9 ? 'T3' : 'T4';
+  return t === periodo;
+}
+
+function PeriodRow({ periodo, ejercicio, modeloCodigo, savedPeriod, invoices, onView }) {
+  const cfg = ESTADO_CONFIG[savedPeriod?.estado || 'sin_datos'];
+  const emitidas = invoices.filter(f => f.tipo === 'emitida' && !f.anulada && facturaEnPeriodo(f, periodo, ejercicio));
+  const recibidas = invoices.filter(f => f.tipo === 'recibida' && !f.anulada && facturaEnPeriodo(f, periodo, ejercicio));
+  const baseEmitida = emitidas.reduce((s, f) => s + (f.base_imponible || 0), 0);
+  const baseRecibida = recibidas.reduce((s, f) => s + (f.base_imponible || 0), 0);
+  const cuotaEmitida = emitidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
+  const cuotaRecibida = recibidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
+  const total = cuotaEmitida - cuotaRecibida;
+
+  return (
+    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+      <td className="py-3 px-4 text-sm text-gray-700 font-medium">{periodo === 'Anual' ? `Anual ${ejercicio}` : `${periodo === 'T1' ? '1' : periodo === 'T2' ? '2' : periodo === 'T3' ? '3' : '4'} Trimestre`}</td>
+      <td className="py-3 px-4 text-sm text-gray-600 text-right">{emitidas.length > 0 ? fmt(baseEmitida) : <span className="text-gray-300">—</span>}</td>
+      <td className="py-3 px-4 text-sm text-gray-600 text-right">{recibidas.length > 0 ? fmt(baseRecibida) : <span className="text-gray-300">—</span>}</td>
+      <td className="py-3 px-4 text-sm font-semibold text-right">
+        {emitidas.length + recibidas.length > 0 ? (
+          <span className={total > 0 ? 'text-red-600' : total < 0 ? 'text-green-600' : 'text-gray-500'}>
+            {fmt(Math.abs(total))}
+          </span>
+        ) : <span className="text-gray-300">0</span>}
+      </td>
+      <td className="py-3 px-4 text-center">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${cfg.color}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+          {cfg.label}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <button onClick={() => onView({ periodo, ejercicio, baseEmitida, baseRecibida, cuotaEmitida, cuotaRecibida, total, emitidas, recibidas })}
+          className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 ml-auto">
+          Ver <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function ResumenImpuestos({ invoices, ejercicio }) {
+  const currentYear = ejercicio;
+  const facturas = invoices.filter(f => {
+    const anio = f.anio || (f.fecha_emision && new Date(f.fecha_emision).getFullYear());
+    return anio === currentYear && !f.anulada;
+  });
+
+  // Group by IVA type
+  const emitidas = facturas.filter(f => f.tipo === 'emitida');
+  const recibidas = facturas.filter(f => f.tipo === 'recibida');
+
+  const groupByIva = (list) => {
+    const map = {};
+    list.forEach(f => {
+      const tipo = f.tipo_iva != null ? `IVA ${f.tipo_iva}%` : 'IVA 21%';
+      if (!map[tipo]) map[tipo] = { base: 0, cuota: 0 };
+      map[tipo].base += f.base_imponible || 0;
+      map[tipo].cuota += f.cuota_iva || 0;
+    });
+    return Object.entries(map).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]));
+  };
+
+  const ivaEmitidas = groupByIva(emitidas);
+  const ivaRecibidas = groupByIva(recibidas);
+  const totalRepercutido = emitidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
+  const totalSoportado = recibidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
+  const resultado = totalRepercutido - totalSoportado;
+
+  return (
+    <div className="mt-6">
+      <h3 className="text-sm font-semibold text-gray-800 mb-3">Resumen de impuestos</h3>
+      <div className="border border-gray-200 rounded-xl overflow-hidden">
+        {/* Ventas */}
+        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+          <div className="flex justify-between text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <span>Ventas</span>
+            <div className="flex gap-12">
+              <span>Subtotal</span>
+              <span>Importe</span>
+            </div>
+          </div>
+        </div>
+        {ivaEmitidas.length === 0 ? (
+          <div className="px-4 py-3 text-xs text-gray-400">Sin ventas este año</div>
+        ) : ivaEmitidas.map(([tipo, v]) => (
+          <div key={tipo} className="flex justify-between items-center px-4 py-2.5 border-b border-gray-100 hover:bg-gray-50">
+            <span className="text-sm text-blue-600 hover:underline cursor-pointer">{tipo}</span>
+            <div className="flex gap-8 text-sm">
+              <span className="text-gray-600 w-24 text-right">{fmt(v.base)}</span>
+              <span className="text-gray-800 font-medium w-20 text-right">{fmt(v.cuota)}</span>
+            </div>
+          </div>
+        ))}
+        {/* Compras */}
+        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 border-t border-gray-200 mt-1">
+          <div className="flex justify-between text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <span>Compras</span>
+            <div className="flex gap-12">
+              <span>Subtotal</span>
+              <span>Importe</span>
+            </div>
+          </div>
+        </div>
+        {ivaRecibidas.length === 0 ? (
+          <div className="px-4 py-3 text-xs text-gray-400">Sin compras este año</div>
+        ) : ivaRecibidas.map(([tipo, v]) => (
+          <div key={tipo} className="flex justify-between items-center px-4 py-2.5 border-b border-gray-100 hover:bg-gray-50">
+            <span className="text-sm text-blue-600 hover:underline cursor-pointer">{tipo}</span>
+            <div className="flex gap-8 text-sm">
+              <span className="text-gray-600 w-24 text-right">{fmt(v.base)}</span>
+              <span className="text-gray-800 font-medium w-20 text-right">{fmt(v.cuota)}</span>
+            </div>
+          </div>
+        ))}
+        {/* Resultado */}
+        <div className={`flex justify-between items-center px-4 py-3 ${resultado > 0 ? 'bg-red-50' : resultado < 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
+          <span className="text-sm font-semibold text-gray-800">Resultado neto</span>
+          <span className={`text-base font-bold ${resultado > 0 ? 'text-red-600' : resultado < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+            {fmt(Math.abs(resultado))} {resultado > 0 ? '(a ingresar)' : resultado < 0 ? '(a devolver)' : ''}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ImpuestosPanel({ onGoToConfig }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
   const companyId = company?.id;
   const [selectedModelo, setSelectedModelo] = useState(null);
+  const [detailData, setDetailData] = useState(null);
   const currentYear = new Date().getFullYear();
 
   const { data: modelos = [] } = useQuery({
@@ -42,139 +177,151 @@ export default function ImpuestosPanel() {
     enabled: !!companyId,
   });
 
-  const { data: filings = [] } = useQuery({
-    queryKey: ['taxFilings', companyId],
-    queryFn: () => base44.entities.TaxFiling.filter({ companyId }),
+  const { data: invoices = [] } = useQuery({
+    queryKey: ['invoices', companyId],
+    queryFn: () => base44.entities.Invoice.filter({ company_id: companyId }),
     enabled: !!companyId,
   });
 
   const activeModelos = modelos.filter(m => m.activo);
+  const currentModelo = selectedModelo
+    ? activeModelos.find(m => m.codigo === selectedModelo)
+    : activeModelos[0];
 
-  // Próximos: usando plazos reales AEAT aunque no exista TaxPeriod guardado
-  const today = new Date();
-  const proximos = activeModelos.flatMap(m => {
-    const periodos = getPeriodosDelModelo(m.codigo, currentYear);
-    return periodos
-      .map(p => {
-        const savedPeriod = periods.find(sp => sp.modeloCodigo === m.codigo && sp.periodo === p.periodo);
-        const diff = (new Date(p.presentacion) - today) / (1000 * 60 * 60 * 24);
-        if (diff < 0 || diff > 45) return null;
-        const estado = savedPeriod?.estado || 'sin_datos';
-        if (estado === 'presentado' || estado === 'no_aplica') return null;
-        return { ...p, modeloCodigo: m.codigo, fechaLimiteInterna: p.limiteInterno, estado };
-      })
-      .filter(Boolean);
-  }).sort((a, b) => new Date(a.presentacion) - new Date(b.presentacion));
+  // Auto-select first model
+  const displayModelo = currentModelo || (activeModelos.length > 0 ? activeModelos[0] : null);
 
-  if (!companyId) {
-    return (
-      <div className="text-center py-16 text-muted-foreground text-sm">
-        Selecciona un cliente para ver el panel de impuestos.
-      </div>
-    );
-  }
+  if (!companyId) return <div className="text-center py-16 text-sm text-gray-400">Selecciona un cliente para ver el panel de impuestos.</div>;
 
   if (activeModelos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
-          <Settings className="w-6 h-6 text-amber-600" />
+        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <Settings className="w-7 h-7 text-gray-400" />
         </div>
-        <h3 className="text-base font-semibold text-foreground mb-2">Configuración fiscal pendiente</h3>
-        <p className="text-sm text-muted-foreground max-w-sm mb-4">
-          Antes de calcular modelos, configura las obligaciones fiscales del cliente en la pestaña <strong>Configuración fiscal</strong>.
-        </p>
+        <h3 className="text-base font-semibold text-gray-700 mb-2">No hay modelos a presentar</h3>
+        <p className="text-sm text-gray-500 max-w-xs mb-5">Accede a todos tus modelos haciendo clic en mostrar todos.</p>
+        <Button size="sm" onClick={onGoToConfig}>Configurar modelos</Button>
       </div>
     );
   }
 
+  const periodosList = displayModelo ? getPeriodosDelModelo(displayModelo.codigo, currentYear) : [];
+
   return (
-    <div className="space-y-6">
-      {/* Top actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <RefreshCw className="w-3.5 h-3.5" /> Actualizar desde contabilidad
-        </Button>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <Calendar className="w-3.5 h-3.5" /> Calendario fiscal
-        </Button>
+    <div className="flex gap-0 min-h-[600px] bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Left sidebar: model list */}
+      <div className="w-56 border-r border-gray-200 flex-shrink-0">
+        <div className="p-3 border-b border-gray-100">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Modelos</p>
+        </div>
+        <div className="py-1">
+          {activeModelos.map(m => {
+            const isActive = (displayModelo?.codigo === m.codigo);
+            const modelPeriods = getPeriodosDelModelo(m.codigo, currentYear);
+            const pendientes = modelPeriods.filter(p => {
+              const sp = periods.find(sp => sp.modeloCodigo === m.codigo && sp.periodo === p.periodo);
+              return !sp || (sp.estado !== 'presentado' && sp.estado !== 'no_aplica');
+            }).length;
+            return (
+              <button key={m.codigo}
+                onClick={() => { setSelectedModelo(m.codigo); setDetailData(null); }}
+                className={`w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors ${isActive ? 'bg-blue-50 border-l-2 border-blue-500' : 'hover:bg-gray-50 border-l-2 border-transparent'}`}>
+                <div>
+                  <p className={`text-sm font-semibold ${isActive ? 'text-blue-700' : 'text-gray-700'}`}>{m.codigo}</p>
+                  <p className="text-xs text-gray-400 truncate max-w-[130px]">{m.nombre || (m.periodicidad === 'anual' ? 'Anual' : 'Trimestral')}</p>
+                </div>
+                {pendientes > 0 && (
+                  <span className="text-xs bg-amber-100 text-amber-700 rounded-full w-5 h-5 flex items-center justify-center font-medium flex-shrink-0">{pendientes}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* KPI resumen */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Modelos activos" value={activeModelos.length} />
-        <KpiCard label="Períodos sin datos" value={periods.filter(p => p.estado === 'sin_datos' || !p.estado).length} warn />
-        <KpiCard label="Listos para presentar" value={periods.filter(p => p.estado === 'listo_presentar').length} ok />
-        <KpiCard label="Presentados este año" value={filings.filter(f => f.ejercicio === currentYear).length} />
-      </div>
+      {/* Right content */}
+      <div className="flex-1 overflow-auto">
+        {displayModelo ? (
+          <div className="p-5">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-bold text-gray-800">{displayModelo.codigo}</span>
+                <span className="text-base text-gray-500 font-medium">{displayModelo.nombre || `Modelo ${displayModelo.codigo}`}</span>
+                <span className="text-sm text-gray-400 ml-1">
+                  {displayModelo.periodicidad === 'anual' ? '· Anual' : displayModelo.periodicidad === 'mensual' ? '· Mensual' : '· Trimestral'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">{currentYear}</span>
+              </div>
+            </div>
 
-      {/* Próximos impuestos */}
-      <div className="bg-white border border-border rounded-xl p-5">
-        <h2 className="text-sm font-semibold text-foreground mb-3">Próximos impuestos</h2>
-        {proximos.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-sm">
-            No hay modelos a presentar en los próximos 45 días.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {proximos.map(p => {
-              const cfg = ESTADO_CONFIG[p.estado] || ESTADO_CONFIG.sin_datos;
-              const diasRestantes = Math.ceil((new Date(p.presentacion) - today) / (1000 * 60 * 60 * 24));
-              return (
-                <div key={p.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedModelo(p.modeloCodigo)}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{p.modeloCodigo}</div>
-                    <div>
-                      <p className="text-sm font-medium">{p.modeloCodigo} — {p.periodo} {p.ejercicio}</p>
-                      <p className="text-xs text-muted-foreground">Dom: {p.domiciliacion} · Pres: {p.presentacion} · {diasRestantes}d</p>
-                    </div>
+            {/* Period table */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500">Período</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-gray-500">Facturas de venta</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-gray-500">Facturas de compra</th>
+                    <th className="text-right py-2.5 px-4 text-xs font-semibold text-gray-500">Total a pagar</th>
+                    <th className="text-center py-2.5 px-4 text-xs font-semibold text-gray-500">Estado</th>
+                    <th className="py-2.5 px-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodosList.map(p => {
+                    const savedPeriod = periods.find(sp => sp.modeloCodigo === displayModelo.codigo && sp.periodo === p.periodo);
+                    return (
+                      <PeriodRow
+                        key={p.periodo}
+                        periodo={p.periodo}
+                        ejercicio={currentYear}
+                        modeloCodigo={displayModelo.codigo}
+                        savedPeriod={savedPeriod}
+                        invoices={invoices}
+                        onView={setDetailData}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Detail drawer */}
+            {detailData && (
+              <div className="mt-4 border border-blue-200 bg-blue-50 rounded-xl p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <h4 className="text-sm font-semibold text-gray-800">Detalle — {detailData.periodo} {detailData.ejercicio}</h4>
+                  <button onClick={() => setDetailData(null)} className="text-xs text-gray-400 hover:text-gray-600">Cerrar</button>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500 mb-1">IVA repercutido</p>
+                    <p className="font-bold text-blue-700">{fmt(detailData.cuotaEmitida)}</p>
+                    <p className="text-xs text-gray-400">{detailData.emitidas.length} facturas · base {fmt(detailData.baseEmitida)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>{cfg.label}</span>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                  <div className="bg-white rounded-lg p-3 border border-blue-100">
+                    <p className="text-xs text-gray-500 mb-1">IVA soportado</p>
+                    <p className="font-bold text-orange-600">{fmt(detailData.cuotaRecibida)}</p>
+                    <p className="text-xs text-gray-400">{detailData.recibidas.length} facturas · base {fmt(detailData.baseRecibida)}</p>
+                  </div>
+                  <div className={`bg-white rounded-lg p-3 border ${detailData.total > 0 ? 'border-red-200' : 'border-green-200'}`}>
+                    <p className="text-xs text-gray-500 mb-1">Resultado</p>
+                    <p className={`font-bold text-lg ${detailData.total > 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(Math.abs(detailData.total))}</p>
+                    <p className="text-xs text-gray-400">{detailData.total > 0 ? 'A ingresar' : detailData.total < 0 ? 'A devolver' : 'Cero'}</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+              </div>
+            )}
 
-      {/* Tabla por modelo */}
-      <div className="bg-white border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Períodos por modelo — {currentYear}</h2>
-          <div className="flex gap-1">
-            {activeModelos.slice(0, 8).map(m => (
-              <button key={m.codigo} onClick={() => setSelectedModelo(selectedModelo === m.codigo ? null : m.codigo)}
-                className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${selectedModelo === m.codigo ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
-                {m.codigo}
-              </button>
-            ))}
+            {/* Resumen de impuestos */}
+            <ResumenImpuestos invoices={invoices} ejercicio={currentYear} />
           </div>
-        </div>
-        {selectedModelo ? (
-          <ModeloPeriodsTable modeloCodigo={selectedModelo} companyId={companyId} year={currentYear} estadoConfig={ESTADO_CONFIG} />
-        ) : (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            Selecciona un modelo arriba para ver sus períodos
-          </div>
-        )}
+        ) : null}
       </div>
-
-      {/* Aviso */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-        Presentación directa AEAT/ATC no disponible todavía. Puedes generar borrador o fichero para presentación externa.
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({ label, value, warn, ok }) {
-  return (
-    <div className={`rounded-xl border p-4 ${warn && value > 0 ? 'border-amber-200 bg-amber-50' : ok && value > 0 ? 'border-green-200 bg-green-50' : 'border-border bg-white'}`}>
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <p className={`text-2xl font-bold font-jakarta ${warn && value > 0 ? 'text-amber-700' : ok && value > 0 ? 'text-green-700' : 'text-foreground'}`}>{value}</p>
     </div>
   );
 }

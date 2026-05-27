@@ -7,6 +7,9 @@ import BorradoresTab from './BorradoresTab';
 import PresentacionesTab from './PresentacionesTab';
 import ImpuestosComingSoon from './ImpuestosComingSoon';
 import CalendarioFiscalTab from './CalendarioFiscalTab';
+import ReglasFiscalesTab from './ReglasFiscalesTab';
+import ErroresValidacionesTab from './ErroresValidacionesTab';
+import HistorialFiscalTab from './HistorialFiscalTab';
 
 const TABS = [
   { id: 'panel', label: 'Panel', icon: LayoutDashboard },
@@ -26,12 +29,15 @@ export default function ImpuestosModule() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'panel': return <ImpuestosPanel />;
+      case 'panel': return <ImpuestosPanel onGoToConfig={() => setActiveTab('configuracion')} />;
       case 'configuracion': return <ConfiguracionFiscal />;
       case 'modelos': return <ModelosConfig />;
       case 'borradores': return <BorradoresTab />;
       case 'presentaciones': return <PresentacionesTab />;
       case 'calendario': return <CalendarioFiscalTab />;
+      case 'reglas': return <ReglasFiscalesTab />;
+      case 'errores': return <ErroresValidacionesTab />;
+      case 'historial': return <HistorialFiscalTab />;
       default: return <ImpuestosComingSoon tab={TABS.find(t => t.id === activeTab)?.label} />;
     }
   };
