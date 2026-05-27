@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getDeadlines } from './aeatDeadlines';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Plus, Eye } from 'lucide-react';
@@ -7,10 +8,7 @@ const PERIODOS_TRIMESTRAL = ['T1', 'T2', 'T3', 'T4'];
 const PERIODOS_ANUAL = ['Anual'];
 const PERIODOS_MENSUAL = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 
-const FECHA_LIMITES = {
-  T1: '-04-20', T2: '-07-20', T3: '-10-20', T4: '-01-31',
-  Anual: '-01-31',
-};
+// Plazos reales: ver aeatDeadlines.js
 
 function getPeriodos(modelo) {
   const m = modelos_per.find(x => x.codigo === modelo);
@@ -40,11 +38,16 @@ export default function ModeloPeriodsTable({ modeloCodigo, companyId, year, esta
   });
 
   const createPeriod = useMutation({
-    mutationFn: (periodo) => base44.entities.TaxPeriod.create({
-      companyId, modeloCodigo, ejercicio: year, periodo,
-      estado: 'sin_datos',
-      fechaLimiteInterna: periodo === 'T4' ? `${year + 1}${FECHA_LIMITES[periodo]}` : `${year}${FECHA_LIMITES[periodo] || '-12-31'}`,
-    }),
+    mutationFn: (periodo) => {
+      const dl = getDeadlines(modeloCodigo, periodo, year);
+      return base44.entities.TaxPeriod.create({
+        companyId, modeloCodigo, ejercicio: year, periodo,
+        estado: 'sin_datos',
+        fechaInicio: null,
+        fechaFin: null,
+        fechaLimiteInterna: dl?.limiteInterno || dl?.presentacion || null,
+      });
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['taxPeriods'] }),
   });
 
@@ -54,6 +57,8 @@ export default function ModeloPeriodsTable({ modeloCodigo, companyId, year, esta
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-2 px-3 text-xs text-muted-foreground font-medium">Periodo</th>
+            <th className="text-center py-2 px-3 text-xs text-muted-foreground font-medium">Dom.</th>
+            <th className="text-center py-2 px-3 text-xs text-muted-foreground font-medium">Presentación</th>
             <th className="text-right py-2 px-3 text-xs text-muted-foreground font-medium">Base imponible</th>
             <th className="text-right py-2 px-3 text-xs text-muted-foreground font-medium">Cuota rep.</th>
             <th className="text-right py-2 px-3 text-xs text-muted-foreground font-medium">Cuota sop.</th>
@@ -69,6 +74,8 @@ export default function ModeloPeriodsTable({ modeloCodigo, companyId, year, esta
             return (
               <tr key={p} className="border-b border-border/50 hover:bg-muted/20">
                 <td className="py-2.5 px-3 font-medium">{p} {year}</td>
+                <td className="py-2.5 px-3 text-center text-xs text-muted-foreground">{getDeadlines(modeloCodigo, p, year)?.domiciliacion || '—'}</td>
+                <td className="py-2.5 px-3 text-center text-xs font-medium">{getDeadlines(modeloCodigo, p, year)?.presentacion || '—'}</td>
                 <td className="py-2.5 px-3 text-right text-muted-foreground">
                   {tp ? '—' : <span className="text-xs text-muted-foreground/60">Sin datos</span>}
                 </td>

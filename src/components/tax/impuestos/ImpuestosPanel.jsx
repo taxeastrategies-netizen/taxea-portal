@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertCircle, TrendingUp, TrendingDown, Minus, ChevronRight, RefreshCw, Settings, Calendar } from 'lucide-react';
+import { AlertCircle, ChevronRight, RefreshCw, Settings, Calendar } from 'lucide-react';
+import { getPeriodosDelModelo } from './aeatDeadlines';
 import { Button } from '@/components/ui/button';
 import ModeloPeriodsTable from './ModeloPeriodsTable';
 
@@ -49,15 +50,21 @@ export default function ImpuestosPanel() {
 
   const activeModelos = modelos.filter(m => m.activo);
 
-  // Próximos: períodos con fecha límite próxima y no presentados
+  // Próximos: usando plazos reales AEAT aunque no exista TaxPeriod guardado
   const today = new Date();
-  const proximos = periods
-    .filter(p => {
-      if (!p.fechaLimiteInterna) return false;
-      const diff = (new Date(p.fechaLimiteInterna) - today) / (1000 * 60 * 60 * 24);
-      return diff >= 0 && diff <= 45 && p.estado !== 'presentado' && p.estado !== 'no_aplica';
-    })
-    .sort((a, b) => new Date(a.fechaLimiteInterna) - new Date(b.fechaLimiteInterna));
+  const proximos = activeModelos.flatMap(m => {
+    const periodos = getPeriodosDelModelo(m.codigo, currentYear);
+    return periodos
+      .map(p => {
+        const savedPeriod = periods.find(sp => sp.modeloCodigo === m.codigo && sp.periodo === p.periodo);
+        const diff = (new Date(p.presentacion) - today) / (1000 * 60 * 60 * 24);
+        if (diff < 0 || diff > 45) return null;
+        const estado = savedPeriod?.estado || 'sin_datos';
+        if (estado === 'presentado' || estado === 'no_aplica') return null;
+        return { ...p, modeloCodigo: m.codigo, fechaLimiteInterna: p.limiteInterno, estado };
+      })
+      .filter(Boolean);
+  }).sort((a, b) => new Date(a.presentacion) - new Date(b.presentacion));
 
   if (!companyId) {
     return (
@@ -112,14 +119,14 @@ export default function ImpuestosPanel() {
           <div className="space-y-2">
             {proximos.map(p => {
               const cfg = ESTADO_CONFIG[p.estado] || ESTADO_CONFIG.sin_datos;
-              const diasRestantes = Math.ceil((new Date(p.fechaLimiteInterna) - today) / (1000 * 60 * 60 * 24));
+              const diasRestantes = Math.ceil((new Date(p.presentacion) - today) / (1000 * 60 * 60 * 24));
               return (
                 <div key={p.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedModelo(p.modeloCodigo)}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{p.modeloCodigo}</div>
                     <div>
                       <p className="text-sm font-medium">{p.modeloCodigo} — {p.periodo} {p.ejercicio}</p>
-                      <p className="text-xs text-muted-foreground">Límite: {p.fechaLimiteInterna} · {diasRestantes} días</p>
+                      <p className="text-xs text-muted-foreground">Dom: {p.domiciliacion} · Pres: {p.presentacion} · {diasRestantes}d</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

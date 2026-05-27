@@ -6,6 +6,7 @@ import ModelosConfig from './ModelosConfig';
 import BorradoresTab from './BorradoresTab';
 import PresentacionesTab from './PresentacionesTab';
 import ImpuestosComingSoon from './ImpuestosComingSoon';
+import CalendarioFiscalTab from './CalendarioFiscalTab';
 
 const TABS = [
   { id: 'panel', label: 'Panel', icon: LayoutDashboard },
@@ -30,6 +31,7 @@ export default function ImpuestosModule() {
       case 'modelos': return <ModelosConfig />;
       case 'borradores': return <BorradoresTab />;
       case 'presentaciones': return <PresentacionesTab />;
+      case 'calendario': return <CalendarioFiscalTab />;
       default: return <ImpuestosComingSoon tab={TABS.find(t => t.id === activeTab)?.label} />;
     }
   };
