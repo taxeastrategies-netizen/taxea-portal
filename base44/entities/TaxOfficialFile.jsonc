@@ -1,0 +1,88 @@
+{
+  "name": "TaxOfficialFile",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "administracion": {
+      "type": "string",
+      "enum": [
+        "AEAT",
+        "ATC",
+        "Otro"
+      ],
+      "default": "AEAT"
+    },
+    "nombreFichero": {
+      "type": "string"
+    },
+    "extension": {
+      "type": "string"
+    },
+    "formato": {
+      "type": "string"
+    },
+    "versionDiseno": {
+      "type": "string"
+    },
+    "fileUrl": {
+      "type": "string"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "generadoPor": {
+      "type": "string"
+    },
+    "fechaGeneracion": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "generado",
+        "descargado",
+        "validado_internamente",
+        "rechazado_validacion",
+        "subido_sede",
+        "presentado"
+      ],
+      "default": "generado"
+    },
+    "errores": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "avisos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "taxDraftId": {
+      "type": "string"
+    },
+    "resumenLegible": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo"
+  ]
+}

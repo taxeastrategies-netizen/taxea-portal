@@ -1,0 +1,118 @@
+{
+  "name": "TaxSubmission",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "clienteNif": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "administracion": {
+      "type": "string",
+      "enum": [
+        "AEAT",
+        "ATC",
+        "Otro"
+      ],
+      "default": "AEAT"
+    },
+    "viaPresentacion": {
+      "type": "string",
+      "enum": [
+        "conector_directo",
+        "fichero_oficial_sede",
+        "flujo_asistido",
+        "exportacion_a3",
+        "presentacion_manual_externa"
+      ],
+      "default": "fichero_oficial_sede"
+    },
+    "taxOfficialFileId": {
+      "type": "string"
+    },
+    "taxDraftId": {
+      "type": "string"
+    },
+    "usuarioPresentador": {
+      "type": "string"
+    },
+    "fechaEnvio": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fechaRespuesta": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "enviado",
+        "validado",
+        "presentado",
+        "rechazado",
+        "presentado_parcialmente",
+        "requiere_subsanacion"
+      ],
+      "default": "pendiente"
+    },
+    "numeroJustificante": {
+      "type": "string"
+    },
+    "csv": {
+      "type": "string"
+    },
+    "numeroEntradaRegistro": {
+      "type": "string"
+    },
+    "importeFinal": {
+      "type": "number",
+      "default": 0
+    },
+    "justificantePdfUrl": {
+      "type": "string"
+    },
+    "ficheroPresentadoUrl": {
+      "type": "string"
+    },
+    "errores": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "avisos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "respuestaTecnicaRaw": {
+      "type": "string"
+    },
+    "confirmacionExplicitaUsuario": {
+      "type": "boolean",
+      "default": false
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo"
+  ]
+}
