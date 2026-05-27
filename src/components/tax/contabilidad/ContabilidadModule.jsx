@@ -11,7 +11,7 @@ import CuadrosCuentas from './CuadrosCuentas';
 import LibroRegistroEmitidas from './LibroRegistroEmitidas';
 import LibroRegistroRecibidas from './LibroRegistroRecibidas';
 import IVAResumen from './IVAResumen';
-import MayorCuenta from './MayorCuenta';
+import MayoresTab from './MayoresTab';
 import BalancePyG from './BalancePyG';
 import ConfigContable from './ConfigContable';
 
@@ -66,7 +66,7 @@ export default function ContabilidadModule() {
         {activeTab === 'emitidas' && <LibroRegistroEmitidas />}
         {activeTab === 'recibidas' && <LibroRegistroRecibidas />}
         {activeTab === 'iva' && <IVAResumen />}
-        {activeTab === 'mayores' && <MayorCuenta />}
+        {activeTab === 'mayores' && <MayoresTab />}
         {activeTab === 'balance' && <BalancePyG />}
         {activeTab === 'config' && <ConfigContable />}
       </div>

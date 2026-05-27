@@ -15,19 +15,29 @@ function buildProposal(invoice) {
   const total = invoice.total_factura || (base + iva - retencion);
 
   if (invoice.tipo === 'emitida') {
+    // total_factura ya es neto (base + iva - retención)
+    // Debe: 430 por el importe neto que paga el cliente (total_factura)
+    // Debe: 473 por la retención que retiene Hacienda
+    // Haber: 705 base imponible
+    // Haber: 477 IVA repercutido
     const lines = [
-      { cuenta: '430', nombre: 'Clientes', debe: total - retencion, haber: 0 },
+      { cuenta: '430', nombre: 'Clientes', debe: total, haber: 0 },
     ];
-    if (retencion > 0) lines.push({ cuenta: '473', nombre: 'Retenciones y pagos a cuenta', debe: retencion, haber: 0 });
+    if (retencion > 0) lines.push({ cuenta: '473', nombre: 'H.P. retenciones e ingresos a cuenta', debe: retencion, haber: 0 });
     lines.push({ cuenta: '705', nombre: 'Prestaciones de servicios', debe: 0, haber: base });
     if (iva > 0) lines.push({ cuenta: '477', nombre: 'IVA repercutido', debe: 0, haber: iva });
     return lines;
   } else {
+    // total_factura ya es neto (base + iva - retención)
+    // Debe: 6XX gasto
+    // Debe: 472 IVA soportado
+    // Haber: 410 por el importe neto que pagamos (total_factura)
+    // Haber: 4751 retención que practicamos al proveedor
     const lines = [
       { cuenta: '629', nombre: 'Gasto (pendiente de clasificar)', debe: base, haber: 0 },
     ];
     if (iva > 0) lines.push({ cuenta: '472', nombre: 'IVA soportado', debe: iva, haber: 0 });
-    lines.push({ cuenta: '410', nombre: 'Proveedores', debe: 0, haber: total - retencion });
+    lines.push({ cuenta: '410', nombre: 'Proveedores', debe: 0, haber: total });
     if (retencion > 0) lines.push({ cuenta: '4751', nombre: 'Retenciones practicadas', debe: 0, haber: retencion });
     return lines;
   }
