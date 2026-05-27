@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,10 @@ export default function Facturas() {
   // workspaceInvoice: factura abierta en la vista completa de documento
   const [workspaceInvoice, setWorkspaceInvoice] = useState(null);
   const [sendingInvoice, setSendingInvoice] = useState(null);
+  const [showAnuladas, setShowAnuladas] = useState(false);
+  const [anularTarget, setAnularTarget] = useState(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [anulando, setAnulando] = useState(false);
 
   useEffect(() => {
     if (company?.id) loadInvoices();
@@ -40,6 +45,29 @@ export default function Facturas() {
     const data = await base44.entities.Invoice.filter({ company_id: company.id });
     setInvoices(data || []);
     setLoading(false);
+  };
+
+  const handleAnular = async () => {
+    if (!anularTarget || !motivoAnulacion.trim()) return;
+    setAnulando(true);
+    await base44.entities.Invoice.update(anularTarget.id, {
+      anulada: true,
+      fecha_anulacion: new Date().toISOString(),
+      motivo_anulacion: motivoAnulacion,
+    });
+    if (anularTarget.linked_journal_entry_id) {
+      await base44.entities.JournalEntry.update(anularTarget.linked_journal_entry_id, { status: 'anulado' });
+    }
+    setAnulando(false);
+    setAnularTarget(null);
+    setMotivoAnulacion('');
+    loadInvoices();
+  };
+
+  const handleEliminar = async (inv) => {
+    if (!confirm(`¿Eliminar definitivamente la factura ${inv.numero_factura}? Esta acción no se puede deshacer.`)) return;
+    await base44.entities.Invoice.delete(inv.id);
+    loadInvoices();
   };
 
   const openEdit = (inv) => { setEditing(inv); setShowForm(true); };
@@ -86,7 +114,11 @@ export default function Facturas() {
     }
   };
 
-  const filtered = invoices.filter(i => {
+  const activas = invoices.filter(i => !i.anulada);
+  const anuladas = invoices.filter(i => i.anulada);
+  const lista = showAnuladas ? anuladas : activas;
+
+  const filtered = lista.filter(i => {
     const matchSearch = !search ||
       i.numero_factura?.toLowerCase().includes(search.toLowerCase()) ||
       i.cliente_nombre?.toLowerCase().includes(search.toLowerCase()) ||
@@ -113,14 +145,26 @@ export default function Facturas() {
           </Button>
         </PageHeader>
 
-        {/* Tipo toggle */}
-        <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5">
+        {/* Tipo toggle + estado anuladas */}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit">
           {['emitida', 'recibida'].map(t => (
             <button key={t} onClick={() => setFilterTipo(t)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterTipo === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               {t === 'emitida' ? 'Emitidas' : 'Recibidas'}
             </button>
           ))}
+        </div>
+        <div className="flex gap-1.5">
+          <button onClick={() => setShowAnuladas(false)}
+            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${!showAnuladas ? 'bg-foreground text-background border-foreground' : 'bg-card text-muted-foreground border-border hover:border-foreground'}`}>
+            Activas ({activas.filter(i => i.tipo === filterTipo).length})
+          </button>
+          <button onClick={() => setShowAnuladas(true)}
+            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${showAnuladas ? 'bg-red-600 text-white border-red-600' : 'bg-card text-muted-foreground border-border hover:border-red-400'}`}>
+            Anuladas ({anuladas.filter(i => i.tipo === filterTipo).length})
+          </button>
+        </div>
         </div>
 
         {/* Filtros */}
@@ -185,7 +229,10 @@ export default function Facturas() {
                     <tr key={inv.id}
                       onClick={() => handleOpenWorkspace(inv)}
                       className="hover:bg-secondary/30 transition-colors cursor-pointer">
-                      <td className="px-4 py-3 font-medium text-foreground">{inv.numero_factura}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                         {inv.numero_factura}
+                         {inv.anulada && <span className="ml-1.5 text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">ANULADA</span>}
+                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{inv.fecha_emision}</td>
                       <td className="px-4 py-3 text-foreground">{inv.cliente_nombre || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.concepto || '—'}</td>
@@ -214,23 +261,35 @@ export default function Facturas() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(inv)}>Editar</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_cobro', 'cobrada')}>Marcar cobrada</DropdownMenuItem>
-                              {isAdmin && <>
-                                <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>En revisión</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'contabilizada')}>Contabilizar</DropdownMenuItem>
-                              </>}
-                              {inv.archivo_url && (
-                                <DropdownMenuItem asChild>
-                                  <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
-                                    <Download className="w-3.5 h-3.5" /> Descargar archivo
-                                  </a>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                               <DropdownMenuItem onClick={() => openEdit(inv)}>Editar</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_cobro', 'cobrada')}>Marcar cobrada</DropdownMenuItem>
+                               {isAdmin && (
+                                 <>
+                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>En revisión</DropdownMenuItem>
+                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'contabilizada')}>Contabilizar</DropdownMenuItem>
+                                 </>
+                               )}
+                               {inv.archivo_url && (
+                                 <DropdownMenuItem asChild>
+                                   <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                                     <Download className="w-3.5 h-3.5" /> Descargar archivo
+                                   </a>
+                                 </DropdownMenuItem>
+                               )}
+                               {!inv.anulada && (
+                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => { setAnularTarget(inv); setMotivoAnulacion(''); }}>
+                                   <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
+                                 </DropdownMenuItem>
+                               )}
+                               {inv.anulada && (
+                                 <DropdownMenuItem className="text-red-700 focus:text-red-700" onClick={() => handleEliminar(inv)}>
+                                   <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar definitivamente
+                                 </DropdownMenuItem>
+                               )}
+                             </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                       </td>
                     </tr>
@@ -281,6 +340,43 @@ export default function Facturas() {
         user={user}
         onSent={handleSent}
       />
+
+      {/* Modal anular factura */}
+      {anularTarget && (
+        <Dialog open onOpenChange={() => setAnularTarget(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-jakarta flex items-center gap-2">
+                <Ban className="w-5 h-5 text-red-600" /> Anular factura {anularTarget.numero_factura}
+              </DialogTitle>
+            </DialogHeader>
+            {anularTarget.linked_journal_entry_id && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-800">
+                ⚠️ Esta factura tiene un asiento contable vinculado que también quedará anulado.
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-xs font-medium">Motivo de anulación <span className="text-red-500">*</span></label>
+              <input
+                className="w-full border border-input rounded-md px-3 py-2 text-sm"
+                placeholder="Ej: Error en importe, factura duplicada..."
+                value={motivoAnulacion}
+                onChange={e => setMotivoAnulacion(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setAnularTarget(null)}>Cancelar</Button>
+              <Button
+                variant="destructive"
+                disabled={!motivoAnulacion.trim() || anulando}
+                onClick={handleAnular}
+              >
+                {anulando ? 'Anulando...' : 'Confirmar anulación'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
