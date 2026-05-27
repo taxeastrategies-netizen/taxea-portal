@@ -32,6 +32,7 @@ const TAX_MODULES = [
   { id: 'lector-gastos', label: 'Lector de Gastos', icon: ScanLine, path: '/tax-accounting/lector-gastos' },
   { id: 'lector-ingresos', label: 'Lector de Ingresos', icon: ScanText, path: '/tax-accounting/lector-ingresos' },
   { id: 'obligaciones', label: 'Obligaciones Fiscales', icon: Calendar, path: '/tax-accounting/obligaciones' },
+  { id: 'impuestos', label: 'Impuestos', icon: FileCheck, path: '/tax-accounting/impuestos' },
   { id: 'contabilidad', label: 'Contabilidad', icon: BookOpen, path: '/tax-accounting/contabilidad' },
   { id: 'registro-mercantil', label: 'Registro Mercantil', icon: Building2, path: '/tax-accounting/registro-mercantil' },
   { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },

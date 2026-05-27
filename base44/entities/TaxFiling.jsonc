@@ -1,0 +1,79 @@
+{
+  "name": "TaxFiling",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "taxPeriodId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "estadoPresentacion": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_proceso",
+        "presentado",
+        "rechazado",
+        "con_requerimiento",
+        "subsanado"
+      ],
+      "default": "pendiente"
+    },
+    "via": {
+      "type": "string",
+      "enum": [
+        "conector_aeat",
+        "conector_atc",
+        "fichero_exportado",
+        "importacion_a3",
+        "presentacion_manual"
+      ],
+      "default": "presentacion_manual"
+    },
+    "fechaPresentacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "numeroJustificante": {
+      "type": "string"
+    },
+    "csv": {
+      "type": "string"
+    },
+    "respuestaAdministracion": {
+      "type": "string"
+    },
+    "justificantePdfUrl": {
+      "type": "string"
+    },
+    "ficheroPresentadoUrl": {
+      "type": "string"
+    },
+    "usuarioPresentador": {
+      "type": "string"
+    },
+    "importeFinal": {
+      "type": "number",
+      "default": 0
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo"
+  ]
+}

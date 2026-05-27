@@ -1,0 +1,75 @@
+{
+  "name": "TaxPeriod",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "fechaInicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaFin": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaLimiteInterna": {
+      "type": "string",
+      "format": "date"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "sin_datos",
+        "pendiente_configurar",
+        "calculado",
+        "borrador",
+        "pendiente_revision",
+        "revisado",
+        "listo_presentar",
+        "presentado",
+        "rechazado",
+        "con_requerimiento",
+        "sustitutiva",
+        "no_aplica"
+      ],
+      "default": "sin_datos"
+    },
+    "importeCalculado": {
+      "type": "number",
+      "default": 0
+    },
+    "importeConfirmado": {
+      "type": "number",
+      "default": 0
+    },
+    "resultado": {
+      "type": "string",
+      "enum": [
+        "a_ingresar",
+        "a_devolver",
+        "a_compensar",
+        "cero",
+        "informativo"
+      ]
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo"
+  ]
+}

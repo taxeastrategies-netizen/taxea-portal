@@ -1,0 +1,75 @@
+{
+  "name": "TaxDraft",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "taxPeriodId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "origenDatos": {
+      "type": "string"
+    },
+    "resumen": {
+      "type": "object"
+    },
+    "validaciones": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "errores": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "ajustesManuales": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "usuarioCreador": {
+      "type": "string"
+    },
+    "usuarioRevisor": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "en_revision",
+        "revisado",
+        "aprobado",
+        "rechazado"
+      ],
+      "default": "borrador"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo"
+  ]
+}

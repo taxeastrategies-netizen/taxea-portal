@@ -15,6 +15,7 @@ import Notificaciones from './Notificaciones';
 import Timeline from './Timeline';
 import LaborOcr from './LaborOcr';
 import ContabilidadModule from '@/components/tax/contabilidad/ContabilidadModule';
+import ImpuestosModule from '@/components/tax/impuestos/ImpuestosModule';
 import RegistroMercantilModule from '@/components/mercantil/RegistroMercantilModule';
 
 export default function TaxAccounting() {
@@ -40,6 +41,7 @@ export default function TaxAccounting() {
     case 'notificaciones': return <Notificaciones />;
     case 'timeline': return <Timeline />;
     case 'labor-ocr': return <LaborOcr />;
+    case 'impuestos': return <ImpuestosModule />;
     case 'contabilidad': return <ContabilidadModule />;
     case 'registro-mercantil': return <RegistroMercantilModule />;
     case 'dashboard':

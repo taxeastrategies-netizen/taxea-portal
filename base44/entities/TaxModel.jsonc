@@ -1,0 +1,104 @@
+{
+  "name": "TaxModel",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "codigo": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "impuesto": {
+      "type": "string",
+      "enum": [
+        "IVA",
+        "IGIC",
+        "IRPF",
+        "Retenciones",
+        "Otro"
+      ]
+    },
+    "administracion": {
+      "type": "string",
+      "enum": [
+        "AEAT",
+        "ATC",
+        "Otro"
+      ],
+      "default": "AEAT"
+    },
+    "periodicidad": {
+      "type": "string",
+      "enum": [
+        "trimestral",
+        "mensual",
+        "anual",
+        "segun_modelo"
+      ],
+      "default": "trimestral"
+    },
+    "activo": {
+      "type": "boolean",
+      "default": true
+    },
+    "primerPeriodo": {
+      "type": "string"
+    },
+    "fechaAlta": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaBaja": {
+      "type": "string",
+      "format": "date"
+    },
+    "motivoBaja": {
+      "type": "string"
+    },
+    "fuenteValidacion": {
+      "type": "string",
+      "enum": [
+        "certificado_censal",
+        "criterio_asesor",
+        "alta_manual",
+        "pendiente_confirmar"
+      ],
+      "default": "pendiente_confirmar"
+    },
+    "requiereCertificado": {
+      "type": "boolean",
+      "default": false
+    },
+    "permiteExportacionFichero": {
+      "type": "boolean",
+      "default": false
+    },
+    "permitePresenta": {
+      "type": "boolean",
+      "default": false
+    },
+    "estadoImplementacion": {
+      "type": "string",
+      "enum": [
+        "configuracion",
+        "borrador_interno",
+        "exportacion",
+        "presentacion_directa"
+      ],
+      "default": "configuracion"
+    },
+    "responsable": {
+      "type": "string"
+    },
+    "observaciones": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "codigo"
+  ]
+}
