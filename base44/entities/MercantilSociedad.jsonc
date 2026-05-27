@@ -1,0 +1,67 @@
+{
+  "name": "MercantilSociedad",
+  "type": "object",
+  "properties": {
+    "nombreFiscal": {
+      "type": "string"
+    },
+    "nif": {
+      "type": "string"
+    },
+    "tipoEntidad": {
+      "type": "string",
+      "enum": [
+        "sl",
+        "sa",
+        "otra_mercantil",
+        "persona_fisica",
+        "comunidad_bienes",
+        "asociacion",
+        "otra"
+      ],
+      "default": "sl"
+    },
+    "provincia": {
+      "type": "string"
+    },
+    "registroMercantil": {
+      "type": "string"
+    },
+    "fechaConstitucion": {
+      "type": "string",
+      "format": "date"
+    },
+    "ejercicioFiscal": {
+      "type": "string",
+      "default": "enero-diciembre"
+    },
+    "responsableInterno": {
+      "type": "string"
+    },
+    "estadoDocumental": {
+      "type": "string",
+      "enum": [
+        "activa",
+        "pendiente",
+        "incidencia",
+        "cerrada",
+        "archivada"
+      ],
+      "default": "activa"
+    },
+    "clienteAccountId": {
+      "type": "string"
+    },
+    "observaciones": {
+      "type": "string"
+    },
+    "visibilidadCliente": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "nombreFiscal",
+    "nif"
+  ]
+}

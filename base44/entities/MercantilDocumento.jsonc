@@ -1,0 +1,98 @@
+{
+  "name": "MercantilDocumento",
+  "type": "object",
+  "properties": {
+    "expedienteId": {
+      "type": "string"
+    },
+    "sociedadId": {
+      "type": "string"
+    },
+    "carpeta": {
+      "type": "string",
+      "enum": [
+        "01_libros",
+        "02_cuentas_anuales",
+        "03_justificantes_rm",
+        "04_subsanaciones",
+        "05_documentacion_final"
+      ],
+      "default": "02_cuentas_anuales"
+    },
+    "tipoDocumento": {
+      "type": "string",
+      "enum": [
+        "archivo_d2",
+        "justificante_presentacion",
+        "justificante_inscripcion",
+        "balance",
+        "pyg",
+        "memoria",
+        "certificacion_acta",
+        "acta_aprobacion",
+        "informe_auditoria",
+        "informe_gestion",
+        "subsanacion",
+        "otro"
+      ],
+      "default": "otro"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "subido",
+        "revisado",
+        "presentado",
+        "aceptado",
+        "sustituido"
+      ],
+      "default": "pendiente"
+    },
+    "fechaDocumento": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaSubida": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "subidoPor": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "documentoAnteriorId": {
+      "type": "string"
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fileUrl": {
+      "type": "string"
+    },
+    "comentarios": {
+      "type": "string"
+    },
+    "esBorrador": {
+      "type": "boolean",
+      "default": false
+    },
+    "visibleCliente": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "expedienteId",
+    "nombre"
+  ]
+}

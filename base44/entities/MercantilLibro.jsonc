@@ -1,0 +1,76 @@
+{
+  "name": "MercantilLibro",
+  "type": "object",
+  "properties": {
+    "expedienteId": {
+      "type": "string"
+    },
+    "sociedadId": {
+      "type": "string"
+    },
+    "tipoLibro": {
+      "type": "string",
+      "enum": [
+        "diario",
+        "inventarios_cuentas",
+        "balance_situacion",
+        "pyg",
+        "balance_sumas_saldos",
+        "socios",
+        "actas",
+        "otros"
+      ],
+      "default": "diario"
+    },
+    "aplica": {
+      "type": "boolean",
+      "default": true
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "preparado",
+        "revisado",
+        "presentado",
+        "legalizado",
+        "con_incidencia"
+      ],
+      "default": "pendiente"
+    },
+    "archivoFuenteUrl": {
+      "type": "string"
+    },
+    "justificantePresentacionUrl": {
+      "type": "string"
+    },
+    "confirmacionRegistroUrl": {
+      "type": "string"
+    },
+    "fechaPreparacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaPresentacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaLegalizacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "responsable": {
+      "type": "string"
+    },
+    "incidencias": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expedienteId",
+    "tipoLibro"
+  ]
+}

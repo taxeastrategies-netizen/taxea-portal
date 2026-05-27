@@ -1,0 +1,54 @@
+{
+  "name": "MercantilHistorial",
+  "type": "object",
+  "properties": {
+    "expedienteId": {
+      "type": "string"
+    },
+    "sociedadId": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usuario": {
+      "type": "string"
+    },
+    "accion": {
+      "type": "string"
+    },
+    "tipoAccion": {
+      "type": "string",
+      "enum": [
+        "cambio_estado",
+        "documento_subido",
+        "documento_sustituido",
+        "incidencia_creada",
+        "incidencia_cerrada",
+        "expediente_creado",
+        "expediente_cerrado",
+        "nota_interna",
+        "presentacion_registrada",
+        "legalizado"
+      ],
+      "default": "nota_interna"
+    },
+    "estadoAnterior": {
+      "type": "string"
+    },
+    "estadoNuevo": {
+      "type": "string"
+    },
+    "documentoId": {
+      "type": "string"
+    },
+    "comentario": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expedienteId",
+    "accion"
+  ]
+}

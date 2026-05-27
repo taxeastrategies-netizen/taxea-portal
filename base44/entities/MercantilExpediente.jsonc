@@ -1,0 +1,137 @@
+{
+  "name": "MercantilExpediente",
+  "type": "object",
+  "properties": {
+    "sociedadId": {
+      "type": "string"
+    },
+    "sociedadNombre": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "string"
+    },
+    "fechaCierreContable": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaLimiteLibros": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaLimiteCuentas": {
+      "type": "string",
+      "format": "date"
+    },
+    "estadoGlobal": {
+      "type": "string",
+      "enum": [
+        "no_iniciado",
+        "en_preparacion",
+        "pendiente_revision",
+        "presentado",
+        "legalizado",
+        "con_incidencias",
+        "cerrado"
+      ],
+      "default": "no_iniciado"
+    },
+    "estadoLibros": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_preparacion",
+        "presentado",
+        "legalizado",
+        "con_incidencia"
+      ],
+      "default": "pendiente"
+    },
+    "estadoCuentas": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_preparacion",
+        "presentado",
+        "inscrito",
+        "con_defectos",
+        "cerrado"
+      ],
+      "default": "pendiente"
+    },
+    "responsable": {
+      "type": "string"
+    },
+    "registroMercantilRef": {
+      "type": "string"
+    },
+    "numPresentacionLibros": {
+      "type": "string"
+    },
+    "fechaPresentacionLibros": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaLegalizacionLibros": {
+      "type": "string",
+      "format": "date"
+    },
+    "resultadoLibros": {
+      "type": "string",
+      "enum": [
+        "correcto",
+        "pendiente_respuesta",
+        "subsanacion",
+        "rechazado"
+      ]
+    },
+    "numPresentacionCuentas": {
+      "type": "string"
+    },
+    "fechaPresentacionCuentas": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaInscripcionCuentas": {
+      "type": "string",
+      "format": "date"
+    },
+    "resultadoCuentas": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "inscrito",
+        "con_defectos",
+        "subsanado",
+        "rechazado"
+      ]
+    },
+    "justificanteLibrosUrl": {
+      "type": "string"
+    },
+    "justificanteCuentasUrl": {
+      "type": "string"
+    },
+    "resumenExpediente": {
+      "type": "string"
+    },
+    "incidenciaAbierta": {
+      "type": "boolean",
+      "default": false
+    },
+    "motivoCierreManual": {
+      "type": "string"
+    },
+    "observaciones": {
+      "type": "string"
+    },
+    "ultimaActualizacion": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "sociedadId",
+    "ejercicio"
+  ]
+}

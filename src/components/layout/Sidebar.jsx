@@ -37,6 +37,7 @@ const TAX_MODULES = [
   { id: 'timeline', label: 'Timeline', icon: Clock, path: '/tax-accounting/timeline' },
   { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },
   { id: 'contabilidad', label: 'Contabilidad', icon: BookOpen, path: '/tax-accounting/contabilidad' },
+  { id: 'registro-mercantil', label: 'Registro Mercantil', icon: Building2, path: '/tax-accounting/registro-mercantil' },
 ];
 
 const DEPT_GROUPS = [
