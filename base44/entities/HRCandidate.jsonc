@@ -1,0 +1,95 @@
+{
+  "name": "HRCandidate",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "apellidos": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "cargo_aplicado": {
+      "type": "string"
+    },
+    "departamento": {
+      "type": "string"
+    },
+    "cv_url": {
+      "type": "string"
+    },
+    "linkedin_url": {
+      "type": "string"
+    },
+    "etapa": {
+      "type": "string",
+      "enum": [
+        "aplicado",
+        "screening",
+        "entrevista_rrhh",
+        "entrevista_tecnica",
+        "oferta",
+        "contratado",
+        "descartado"
+      ],
+      "default": "aplicado"
+    },
+    "score_ia": {
+      "type": "number"
+    },
+    "nota_rrhh": {
+      "type": "string"
+    },
+    "salario_esperado": {
+      "type": "number"
+    },
+    "disponibilidad": {
+      "type": "string"
+    },
+    "fuente": {
+      "type": "string",
+      "enum": [
+        "linkedin",
+        "infojobs",
+        "referido",
+        "web_propia",
+        "otro"
+      ],
+      "default": "otro"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre",
+    "apellidos",
+    "email"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "name": "TimelineEvent",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "documento_subido",
+        "factura_leida_ia",
+        "factura_clasificada",
+        "documento_revisado",
+        "documento_rechazado",
+        "tarea_creada",
+        "tarea_completada",
+        "error_detectado",
+        "error_resuelto",
+        "estado_fiscal_cambiado",
+        "modelo_presentado",
+        "notificacion_enviada",
+        "comentario_anadido",
+        "health_score_actualizado",
+        "nota_interna"
+      ]
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo",
+        "azul",
+        "gris"
+      ],
+      "default": "azul"
+    },
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "usuario_email": {
+      "type": "string"
+    },
+    "automatico": {
+      "type": "boolean",
+      "default": true
+    },
+    "visibilidad": {
+      "type": "string",
+      "enum": [
+        "cliente",
+        "admin",
+        "ambos"
+      ],
+      "default": "ambos"
+    },
+    "afecta_health_score": {
+      "type": "boolean",
+      "default": false
+    },
+    "afecta_riesgo": {
+      "type": "boolean",
+      "default": false
+    },
+    "estado_anterior": {
+      "type": "string"
+    },
+    "estado_nuevo": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "tipo",
+    "titulo"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "company_id": "{{user.data.company_id}}"
+        },
+        {
+          "visibilidad": "ambos"
+        }
+      ]
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

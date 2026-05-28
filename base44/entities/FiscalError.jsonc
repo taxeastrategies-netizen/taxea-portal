@@ -1,38 +1,45 @@
 {
-  "name": "Document",
+  "name": "FiscalError",
   "type": "object",
   "properties": {
     "company_id": {
       "type": "string"
     },
-    "nombre": {
+    "tipo": {
       "type": "string"
     },
-    "carpeta": {
+    "descripcion": {
       "type": "string"
     },
-    "archivo_url": {
-      "type": "string"
-    },
-    "tipo_archivo": {
-      "type": "string"
-    },
-    "anio": {
-      "type": "number"
-    },
-    "trimestre": {
-      "type": "string"
+    "severidad": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
     },
     "estado": {
       "type": "string",
       "enum": [
-        "pendiente",
+        "detectado",
         "en_revision",
-        "revisado",
-        "aprobado",
-        "rechazado"
+        "pendiente_cliente",
+        "resuelto",
+        "ignorado"
       ],
-      "default": "pendiente"
+      "default": "detectado"
+    },
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "accion_recomendada": {
+      "type": "string"
     },
     "etiquetas": {
       "type": "array",
@@ -40,17 +47,15 @@
         "type": "string"
       }
     },
-    "comentarios": {
-      "type": "string"
-    },
-    "subido_por": {
+    "nota_interna": {
       "type": "string"
     }
   },
   "required": [
     "company_id",
-    "nombre",
-    "archivo_url"
+    "tipo",
+    "descripcion",
+    "severidad"
   ],
   "rls": {
     "create": {

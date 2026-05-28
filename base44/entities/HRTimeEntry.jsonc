@@ -1,0 +1,80 @@
+{
+  "name": "HRTimeEntry",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_nombre": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "hora_entrada": {
+      "type": "string"
+    },
+    "hora_salida": {
+      "type": "string"
+    },
+    "horas_totales": {
+      "type": "number"
+    },
+    "horas_extra": {
+      "type": "number",
+      "default": 0
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "presencial",
+        "remoto",
+        "viaje",
+        "cliente"
+      ],
+      "default": "presencial"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "aprobado",
+        "rechazado"
+      ],
+      "default": "pendiente"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "proyecto": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "employee_id",
+    "fecha"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    }
+  }
+}

@@ -75,5 +75,11 @@
     "titulo",
     "descripcion",
     "tipo"
-  ]
+  ],
+  "rls": {
+    "create": {},
+    "read": {},
+    "update": {},
+    "delete": {}
+  }
 }

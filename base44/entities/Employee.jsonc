@@ -1,0 +1,189 @@
+{
+  "name": "Employee",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "numero_empleado": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "apellidos": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "email_personal": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "foto_url": {
+      "type": "string"
+    },
+    "cargo": {
+      "type": "string"
+    },
+    "departamento": {
+      "type": "string"
+    },
+    "sede": {
+      "type": "string"
+    },
+    "manager_id": {
+      "type": "string"
+    },
+    "tipo_contrato": {
+      "type": "string",
+      "enum": [
+        "indefinido",
+        "temporal",
+        "practicas",
+        "freelance",
+        "obra_servicio",
+        "otro"
+      ],
+      "default": "indefinido"
+    },
+    "jornada": {
+      "type": "string",
+      "enum": [
+        "completa",
+        "parcial",
+        "reducida"
+      ],
+      "default": "completa"
+    },
+    "modalidad": {
+      "type": "string",
+      "enum": [
+        "presencial",
+        "remoto",
+        "hibrido"
+      ],
+      "default": "presencial"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "baja",
+        "vacaciones",
+        "remoto",
+        "ausente",
+        "baja_medica",
+        "offboarding"
+      ],
+      "default": "activo"
+    },
+    "fecha_inicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_fin": {
+      "type": "string",
+      "format": "date"
+    },
+    "salario_bruto": {
+      "type": "number"
+    },
+    "seniority": {
+      "type": "string",
+      "enum": [
+        "junior",
+        "mid",
+        "senior",
+        "lead",
+        "manager",
+        "director",
+        "c_level"
+      ],
+      "default": "mid"
+    },
+    "convenio": {
+      "type": "string"
+    },
+    "nif": {
+      "type": "string"
+    },
+    "numero_ss": {
+      "type": "string"
+    },
+    "iban": {
+      "type": "string"
+    },
+    "direccion": {
+      "type": "string"
+    },
+    "ciudad": {
+      "type": "string"
+    },
+    "pais": {
+      "type": "string",
+      "default": "Espa\u00f1a"
+    },
+    "contacto_emergencia_nombre": {
+      "type": "string"
+    },
+    "contacto_emergencia_telefono": {
+      "type": "string"
+    },
+    "dias_vacaciones_a\u00f1o": {
+      "type": "number",
+      "default": 22
+    },
+    "dias_vacaciones_usados": {
+      "type": "number",
+      "default": 0
+    },
+    "horas_semanales": {
+      "type": "number",
+      "default": 40
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notas_internas": {
+      "type": "string"
+    },
+    "onboarding_completado": {
+      "type": "boolean",
+      "default": false
+    },
+    "es_manager": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre",
+    "apellidos",
+    "email"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

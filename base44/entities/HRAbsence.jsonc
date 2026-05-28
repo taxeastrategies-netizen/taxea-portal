@@ -1,0 +1,85 @@
+{
+  "name": "HRAbsence",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_nombre": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "vacaciones",
+        "baja_medica",
+        "permiso",
+        "cita_medica",
+        "asunto_propio",
+        "maternidad",
+        "paternidad",
+        "otro"
+      ],
+      "default": "vacaciones"
+    },
+    "fecha_inicio": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_fin": {
+      "type": "string",
+      "format": "date"
+    },
+    "dias": {
+      "type": "number",
+      "default": 1
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "aprobada",
+        "rechazada",
+        "cancelada"
+      ],
+      "default": "pendiente"
+    },
+    "motivo": {
+      "type": "string"
+    },
+    "aprobado_por": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "employee_id",
+    "tipo",
+    "fecha_inicio",
+    "fecha_fin"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}",
+      "employee_id": "{{user.id}}"
+    }
+  }
+}

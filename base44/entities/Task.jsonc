@@ -1,0 +1,98 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "fecha_limite": {
+      "type": "string",
+      "format": "date"
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta",
+        "urgente"
+      ],
+      "default": "media"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente_cliente",
+        "pendiente_taxea",
+        "en_revision",
+        "bloqueada",
+        "completada",
+        "vencida",
+        "cancelada"
+      ],
+      "default": "pendiente_cliente"
+    },
+    "responsable": {
+      "type": "string",
+      "enum": [
+        "cliente",
+        "taxea"
+      ],
+      "default": "cliente"
+    },
+    "interna": {
+      "type": "boolean",
+      "default": false
+    },
+    "entidad_tipo": {
+      "type": "string"
+    },
+    "entidad_id": {
+      "type": "string"
+    },
+    "archivos_requeridos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "creada_por": {
+      "type": "string"
+    },
+    "recurrente": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "company_id",
+    "titulo"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "company_id": "{{user.data.company_id}}"
+        },
+        {
+          "interna": false
+        }
+      ]
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

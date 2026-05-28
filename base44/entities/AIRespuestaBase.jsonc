@@ -64,5 +64,17 @@
     "titulo",
     "pregunta_tipo",
     "respuesta"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "creada_por": "{{user.email}}"
+    },
+    "read": {},
+    "update": {
+      "creada_por": "{{user.email}}"
+    },
+    "delete": {
+      "creada_por": "{{user.email}}"
+    }
+  }
 }

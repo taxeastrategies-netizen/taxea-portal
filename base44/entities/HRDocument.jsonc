@@ -1,0 +1,84 @@
+{
+  "name": "HRDocument",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "employee_id": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "contrato",
+        "nomina",
+        "dni",
+        "certificado",
+        "convenio",
+        "anexo",
+        "prl",
+        "formacion",
+        "otro"
+      ],
+      "default": "contrato"
+    },
+    "archivo_url": {
+      "type": "string"
+    },
+    "estado_firma": {
+      "type": "string",
+      "enum": [
+        "sin_firma",
+        "pendiente_firma",
+        "firmado",
+        "rechazado",
+        "expirado"
+      ],
+      "default": "sin_firma"
+    },
+    "fecha_envio": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_firma": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_expiracion": {
+      "type": "string",
+      "format": "date"
+    },
+    "firmado_por": {
+      "type": "string"
+    },
+    "datos_ocr": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "nombre",
+    "tipo"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

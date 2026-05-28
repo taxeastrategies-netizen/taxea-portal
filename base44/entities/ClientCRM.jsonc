@@ -1,0 +1,135 @@
+{
+  "name": "ClientCRM",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "honorarios_mensuales": {
+      "type": "number"
+    },
+    "honorarios_anuales": {
+      "type": "number"
+    },
+    "fecha_alta": {
+      "type": "string",
+      "format": "date"
+    },
+    "origen_cliente": {
+      "type": "string"
+    },
+    "estado_comercial": {
+      "type": "string",
+      "enum": [
+        "lead",
+        "contactado",
+        "reunion_agendada",
+        "propuesta_enviada",
+        "cliente_activo",
+        "cliente_pausado",
+        "cliente_baja",
+        "no_recomendable"
+      ],
+      "default": "cliente_activo"
+    },
+    "rentabilidad": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja",
+        "negativa"
+      ],
+      "default": "media"
+    },
+    "horas_estimadas": {
+      "type": "number"
+    },
+    "horas_reales": {
+      "type": "number"
+    },
+    "complejidad": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta",
+        "muy_alta"
+      ],
+      "default": "media"
+    },
+    "calidad_cliente": {
+      "type": "string",
+      "enum": [
+        "excelente",
+        "bueno",
+        "normal",
+        "problematico",
+        "no_recomendable"
+      ],
+      "default": "bueno"
+    },
+    "servicios": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "health_score": {
+      "type": "number",
+      "default": 75
+    },
+    "observaciones_internas": {
+      "type": "string"
+    },
+    "proxima_accion": {
+      "type": "string"
+    },
+    "ultimo_contacto": {
+      "type": "string",
+      "format": "date"
+    },
+    "potencial_crecimiento": {
+      "type": "string",
+      "enum": [
+        "bajo",
+        "medio",
+        "alto"
+      ],
+      "default": "medio"
+    },
+    "estado_fiscal": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo",
+        "gris"
+      ],
+      "default": "gris"
+    }
+  },
+  "required": [
+    "company_id"
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
+}

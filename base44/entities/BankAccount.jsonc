@@ -105,5 +105,19 @@
   "required": [
     "company_id",
     "nombre_banco"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "company_id": "{{user.data.company_id}}"
+    }
+  }
 }
