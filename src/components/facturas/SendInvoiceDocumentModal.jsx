@@ -11,7 +11,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { buildPremiumInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
 import { base44 as b44Client } from '@/api/base44Client';
 
-const GMAIL_CONNECTOR_ID = '6a10346bedd89bd7e97c35ed';
+const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 
 const TEMPLATES = [
   { id: 'envio_factura',  label: 'Envío de factura' },

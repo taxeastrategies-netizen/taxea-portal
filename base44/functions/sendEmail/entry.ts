@@ -4,7 +4,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const GMAIL_CONNECTOR_ID = '6a10346bedd89bd7e97c35ed';
+const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 
 function encodeSubject(subject) {
   const bytes = new TextEncoder().encode(subject);
