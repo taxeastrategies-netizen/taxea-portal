@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Receipt, MoreVertical, Search, Filter, ArrowRight, FileCheck } from 'lucide-react';
+import { Plus, Receipt, MoreVertical, Search, Filter, ArrowRight, FileCheck, Download } from 'lucide-react';
+import { downloadProformasPDF } from '@/lib/generateSummaryPDF';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,9 +93,14 @@ export default function Proformas() {
           <h1 className="text-xl font-jakarta font-bold text-foreground">Facturas Proforma</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Documentos previos sin valor fiscal</p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-taxea-red hover:bg-taxea-red-dark h-9 gap-1.5">
-          <Plus className="w-4 h-4" /> Nueva proforma
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => downloadProformasPDF(items, company)} className="gap-1.5 h-9">
+            <Download className="w-4 h-4" /> Descargar resumen
+          </Button>
+          <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-taxea-red hover:bg-taxea-red-dark h-9 gap-1.5">
+            <Plus className="w-4 h-4" /> Nueva proforma
+          </Button>
+        </div>
       </div>
 
       {/* KPI Strip — horizontal 4 cards */}

@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, FileCheck, MoreVertical, TrendingUp, Clock, BarChart3, FileText, Filter } from 'lucide-react';
+import { Plus, Search, FileCheck, MoreVertical, TrendingUp, Clock, BarChart3, FileText, Filter, Download } from 'lucide-react';
+import { downloadPresupuestosPDF } from '@/lib/generateSummaryPDF';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,9 +93,14 @@ export default function Presupuestos() {
           <h1 className="text-xl font-jakarta font-bold text-foreground">Presupuestos</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Gestiona tus presupuestos comerciales</p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-taxea-red hover:bg-taxea-red-dark h-9 gap-1.5">
-          <Plus className="w-4 h-4" /> Nuevo presupuesto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => downloadPresupuestosPDF(items, company)} className="gap-1.5 h-9">
+            <Download className="w-4 h-4" /> Descargar resumen
+          </Button>
+          <Button onClick={() => { setEditing(null); setShowForm(true); }} className="bg-taxea-red hover:bg-taxea-red-dark h-9 gap-1.5">
+            <Plus className="w-4 h-4" /> Nuevo presupuesto
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
