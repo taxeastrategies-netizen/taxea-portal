@@ -2,13 +2,14 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { BookOpen, Download } from 'lucide-react';
+import { BookOpen, Download, FileText } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PnLPanel from '@/components/libros/PnLPanel.jsx';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';
+import { exportarLibrosPDF } from '@/components/libros/ExportPDF.jsx';
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -30,6 +31,7 @@ export default function LibroRegistros() {
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
   const [exporting, setExporting] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   useEffect(() => {
     if (company?.id) load();
@@ -74,12 +76,19 @@ export default function LibroRegistros() {
   const handleExport = async () => {
     setExporting(true);
     await exportarLibros({
-      invoices,
-      expenses,
-      year: filterAnio,
+      invoices, expenses, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
     });
     setExporting(false);
+  };
+
+  const handleExportPDF = async () => {
+    setExportingPDF(true);
+    await exportarLibrosPDF({
+      invoices, expenses, year: filterAnio,
+      companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
+    });
+    setExportingPDF(false);
   };
 
   if (loadingCompany && loading) return (
@@ -105,10 +114,16 @@ export default function LibroRegistros() {
               <SelectItem value="T4">T4 · Oct-Dic</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportPDF} disabled={exportingPDF}>
+            {exportingPDF
+              ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando PDF…</>
+              : <><FileText className="w-4 h-4" /> Exportar PDF</>
+            }
+          </Button>
           <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExport} disabled={exporting}>
             {exporting
               ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando Excel…</>
-              : <><Download className="w-4 h-4" /> Exportar libros</>
+              : <><Download className="w-4 h-4" /> Exportar Excel</>
             }
           </Button>
         </div>

@@ -97,20 +97,49 @@ function buildPnL(invoices, expenses, year) {
   return rows;
 }
 
+// ─── Account mapping helpers ─────────────────────────────────────────────────
+const GASTO_CUENTAS_8 = {
+  ventas_servicios: '70000000', compras: '60000000', suministros: '62800000',
+  alquiler: '62100000', publicidad_marketing: '62700000',
+  servicios_profesionales: '62300000', software: '62800000',
+  transporte: '62400000', dietas: '62500000', gastos_financieros: '66900000',
+  seguros: '62500000', otros: '62900000',
+};
+function ctaIngreso8(inv) { return n(inv.tipo_iva) === 0 ? '70500000' : '70000000'; }
+function ctaGasto8(inv) { return GASTO_CUENTAS_8[inv.categoria_gasto] || '60000000'; }
+function buildClienteMap(invoices) {
+  const map = {}; let c = 1;
+  invoices.filter(i => i.tipo === 'emitida').forEach(i => {
+    const k = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
+    if (k && !map[k]) map[k] = `4300${String(c++).padStart(4, '0')}`;
+  });
+  return map;
+}
+function buildProveedorMap(invoices) {
+  const map = {}; let c = 1;
+  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
+    const k = i.proveedor_nif ? i.proveedor_nif.toUpperCase() : (i.proveedor_nombre || i.cliente_nombre || '').toLowerCase();
+    if (k && !map[k]) map[k] = `4100${String(c++).padStart(4, '0')}`;
+  });
+  return map;
+}
+
 // ─── Hoja 3: Facturas Emitidas ───────────────────────────────────────────────
 function buildFacturasEmitidas(invoices) {
-  const header = ['Nº Factura','Fecha Emisión','Fecha Vencimiento','Cliente','NIF/CIF Cliente','Concepto','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Retención IRPF %','Importe Retención (€)','Total Factura (€)','Estado Cobro','Estado Contable','Trimestre','Año','Cuenta Contable'];
+  const clienteMap = buildClienteMap(invoices);
+  const header = ['Nº Factura','Fecha Emisión','Fecha Operación','Fecha Vencimiento','Cliente','NIF/CIF Cliente','Concepto','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Retención IRPF %','Importe Retención (€)','Total Factura (€)','Estado Cobro','Estado Contable','Trimestre','Año','Cta. Ingreso','Cta. Cliente (430)'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'emitida').forEach(i => {
+    const key = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
     rows.push([
-      i.numero_factura || '', i.fecha_emision || '', i.fecha_vencimiento || '',
+      i.numero_factura || '', i.fecha_emision || '', i.fecha_operacion || i.fecha_emision || '', i.fecha_vencimiento || '',
       i.cliente_nombre || '', i.cliente_nif || '', i.concepto || '',
       n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva),
       n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf),
       n(i.total_factura),
       i.estado_cobro || '', i.estado_contable || '',
-      i.trimestre || quarter(i.fecha_emision), i.anio || new Date(i.fecha_emision).getFullYear() || '',
-      '700000',
+      i.trimestre || quarter(i.fecha_emision), i.anio || new Date(i.fecha_emision || '').getFullYear() || '',
+      ctaIngreso8(i), clienteMap[key] || '43000000',
     ]);
   });
   return rows;
@@ -118,17 +147,22 @@ function buildFacturasEmitidas(invoices) {
 
 // ─── Hoja 4: Facturas Recibidas ──────────────────────────────────────────────
 function buildFacturasRecibidas(invoices) {
-  const header = ['Nº Factura','Fecha Emisión','Proveedor','NIF/CIF Proveedor','Concepto','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Total Factura (€)','Estado Contable','Trimestre','Año','Cuenta Contable'];
+  const proveedorMap = buildProveedorMap(invoices);
+  const header = ['Nº Factura','Fecha Emisión','Fecha Operación','Proveedor','NIF/CIF Proveedor','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Retenciones (€)','Total Factura (€)','Estado Contable','Trimestre','Año','Cta. Gasto (6xx)','Cta. Proveedor (40x/41x)'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
+    const provNombre = i.proveedor_nombre || i.cliente_nombre || '';
+    const provNif = i.proveedor_nif || i.cliente_nif || '';
+    const key = provNif ? provNif.toUpperCase() : provNombre.toLowerCase();
     rows.push([
-      i.numero_factura || '', i.fecha_emision || '',
-      i.cliente_nombre || '', i.cliente_nif || '', i.concepto || '',
+      i.numero_factura || '', i.fecha_emision || '', i.fecha_operacion || i.fecha_emision || '',
+      provNombre, provNif, i.concepto || '', i.categoria_gasto || '',
       n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva),
+      pct(i.base_imponible, i.retencion_irpf || 0),
       n(i.total_factura),
       i.estado_contable || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || '',
-      '600000',
+      ctaGasto8(i), proveedorMap[key] || '41000000',
     ]);
   });
   return rows;
@@ -314,10 +348,10 @@ export async function exportarLibros({ invoices, expenses, year, companyName = '
       addSheet(wb, '2. P&L', buildPnL(invoices, expenses, year), [16, 20, 20, 22, 12, 20, 20, 20]);
 
       // 3. Facturas Emitidas
-      addSheet(wb, '3. Facturas Emitidas', buildFacturasEmitidas(invoices), [14, 14, 14, 24, 16, 28, 16, 12, 14, 12, 14, 14, 14, 16, 10, 8, 12]);
+      addSheet(wb, '3. Facturas Emitidas', buildFacturasEmitidas(invoices), [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14]);
 
       // 4. Facturas Recibidas
-      addSheet(wb, '4. Facturas Recibidas', buildFacturasRecibidas(invoices), [14, 14, 24, 16, 28, 16, 12, 14, 14, 16, 10, 8, 12]);
+      addSheet(wb, '4. Facturas Recibidas', buildFacturasRecibidas(invoices), [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 12, 14, 16, 10, 8, 14, 16]);
 
       // 5. Libro Ventas
       addSheet(wb, '5. Libro Ventas', buildLibroVentas(invoices), [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8]);
