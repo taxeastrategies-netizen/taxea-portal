@@ -211,12 +211,15 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
       const htmlBody = buildPremiumInvoiceEmail(invoice, company, validatedLink, templateId);
 
-      await base44.integrations.Core.SendEmail({
-        to: to[0],
+      const emailRes = await base44.functions.invoke('sendEmail', {
+        to: to,
+        cc: cc.length > 0 ? cc : undefined,
+        bcc: bcc.length > 0 ? bcc : undefined,
         from_name: senderName,
         subject,
-        body: htmlBody,
+        html: htmlBody,
       });
+      if (!emailRes.data?.ok) throw new Error(emailRes.data?.error || 'Error al enviar');
 
       // Log de envío con trazabilidad completa
       await base44.entities.InvoiceEmailLog.create({

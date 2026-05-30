@@ -126,12 +126,14 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
     setSending(true);
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
-      await base44.integrations.Core.SendEmail({
-        to: to[0],
+      const emailRes = await base44.functions.invoke('sendEmail', {
+        to: to,
+        cc: cc.length > 0 ? cc : undefined,
         from_name: senderName,
         subject,
-        body: buildEmailBody(doc, docType, company),
+        html: buildEmailBody(doc, docType, company),
       });
+      if (!emailRes.data?.ok) throw new Error(emailRes.data?.error || 'Error al enviar');
 
       // Actualizar estado a enviado
       const entityName = docType === 'quote' ? 'Quote' : 'Proforma';
