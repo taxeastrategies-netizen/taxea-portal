@@ -313,45 +313,8 @@ export default function TaxDashboard({ onNavigate }) {
           </ResponsiveContainer>
         </div>
 
-        {/* Obligaciones Widget */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-card flex flex-col">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-jakarta font-semibold text-foreground">Obligaciones</h3>
-            <button onClick={() => onNavigate('obligaciones')} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
-              Ver todas <ChevronRight className="w-3 h-3" />
-            </button>
-          </div>
-          {obligations.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground text-center">Sin obligaciones registradas</p>
-            </div>
-          ) : (
-            <div className="space-y-2 flex-1 overflow-y-auto">
-              {obligations.slice(0, 6).map(obl => {
-                const now = new Date();
-                const isOk = ['finalizado','presentado','pagado','domiciliado'].includes(obl.estado);
-                const isVencida = !isOk && obl.fecha_limite && new Date(obl.fecha_limite) < now;
-                const isProxima = !isOk && !isVencida && obl.fecha_limite && (new Date(obl.fecha_limite) - now) / 86400000 <= 15;
-                return (
-                  <div key={obl.id} className="flex items-center gap-2.5 py-1.5">
-                    {isOk ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" /> :
-                     isVencida ? <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" /> :
-                     isProxima ? <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" /> :
-                     <div className="w-4 h-4 rounded-full border-2 border-muted flex-shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground truncate">
-                        {obl.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' ')}
-                      </p>
-                      <p className={cn("text-xs truncate", isVencida ? "text-red-500" : isProxima ? "text-amber-500" : "text-muted-foreground")}>
-                        {obl.periodo} {obl.fecha_limite && `· ${new Date(obl.fecha_limite).toLocaleDateString('es-ES')}`}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Gastos por categoría */}
+        <GastosPorCategoria expenses={expenses} invoices={invoices} />
       </div>
 
       {/* Bottom row */}
@@ -440,8 +403,45 @@ export default function TaxDashboard({ onNavigate }) {
         </div>
       </div>
 
-      {/* Gastos por categoría */}
-      <GastosPorCategoria expenses={expenses} invoices={invoices} />
+      {/* Obligaciones */}
+      <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-jakarta font-semibold text-foreground">Obligaciones</h3>
+          <button onClick={() => onNavigate('obligaciones')} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
+            Ver todas <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+        {obligations.length === 0 ? (
+          <div className="flex items-center justify-center py-4">
+            <p className="text-xs text-muted-foreground">Sin obligaciones registradas</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {obligations.slice(0, 6).map(obl => {
+              const now = new Date();
+              const isOk = ['finalizado','presentado','pagado','domiciliado'].includes(obl.estado);
+              const isVencida = !isOk && obl.fecha_limite && new Date(obl.fecha_limite) < now;
+              const isProxima = !isOk && !isVencida && obl.fecha_limite && (new Date(obl.fecha_limite) - now) / 86400000 <= 15;
+              return (
+                <div key={obl.id} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-border/60 bg-secondary/20">
+                  {isOk ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" /> :
+                   isVencida ? <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" /> :
+                   isProxima ? <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" /> :
+                   <div className="w-4 h-4 rounded-full border-2 border-muted flex-shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">
+                      {obl.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' ')}
+                    </p>
+                    <p className={cn("text-xs truncate", isVencida ? "text-red-500" : isProxima ? "text-amber-500" : "text-muted-foreground")}>
+                      {obl.periodo} {obl.fecha_limite && `· ${new Date(obl.fecha_limite).toLocaleDateString('es-ES')}`}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Quick Access Modules */}
       <div>
