@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
 import NoCompanyState from '@/components/ui/NoCompanyState';
+import GastosPorCategoria from './GastosPorCategoria';
 
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -438,6 +439,9 @@ export default function TaxDashboard({ onNavigate }) {
           )}
         </div>
       </div>
+
+      {/* Gastos por categoría */}
+      <GastosPorCategoria expenses={expenses} invoices={invoices} />
 
       {/* Quick Access Modules */}
       <div>
