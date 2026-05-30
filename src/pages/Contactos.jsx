@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
-const EMPTY = { nombre: '', razon_social: '', nif_cif: '', tipo: 'cliente', direccion_fiscal: '', email: '', telefono: '', persona_contacto: '', notas: '', actividad: '', regimen_fiscal: '' };
+const EMPTY = { nombre: '', razon_social: '', nif_cif: '', tipo: 'cliente', email: '', telefono: '', direccion_fiscal: '', codigo_postal: '', ciudad: '', provincia: '', pais: 'España', organismo_publico: false, persona_contacto: '', notas: '', actividad: '', regimen_fiscal: '' };
 
 export default function Contactos() {
   const { company, loadingCompany } = useOutletContext() || {};
@@ -134,7 +135,7 @@ export default function Contactos() {
           <div className="grid grid-cols-2 gap-4 mt-2">
             <div className="col-span-2 space-y-1.5">
               <Label>Nombre / Razón social *</Label>
-              <Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} />
+              <Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Nombre del cliente" />
             </div>
             <div className="space-y-1.5">
               <Label>NIF / CIF</Label>
@@ -153,15 +154,38 @@ export default function Contactos() {
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="cliente@ejemplo.com" />
             </div>
             <div className="space-y-1.5">
               <Label>Teléfono</Label>
-              <Input value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
+              <Input value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} placeholder="+34 600 000 000" />
             </div>
             <div className="col-span-2 space-y-1.5">
-              <Label>Dirección fiscal</Label>
-              <Input value={form.direccion_fiscal} onChange={e => setForm(f => ({ ...f, direccion_fiscal: e.target.value }))} />
+              <Label>Dirección *</Label>
+              <Input value={form.direccion_fiscal} onChange={e => setForm(f => ({ ...f, direccion_fiscal: e.target.value }))} placeholder="Calle, número, piso..." />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Código Postal</Label>
+              <Input value={form.codigo_postal} onChange={e => setForm(f => ({ ...f, codigo_postal: e.target.value }))} placeholder="28001" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ciudad / Población</Label>
+              <Input value={form.ciudad} onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} placeholder="Ej. Villamayor" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Provincia</Label>
+              <Input value={form.provincia} onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))} placeholder="Ej. Salamanca" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>País</Label>
+              <Input value={form.pais} onChange={e => setForm(f => ({ ...f, pais: e.target.value }))} />
+            </div>
+            <div className="col-span-2 flex items-center justify-between bg-secondary/50 border border-border rounded-xl px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Organismo público</p>
+                <p className="text-xs text-muted-foreground">Activa si es una Administración Pública (FacturaE)</p>
+              </div>
+              <Switch checked={!!form.organismo_publico} onCheckedChange={v => setForm(f => ({ ...f, organismo_publico: v }))} />
             </div>
             <div className="col-span-2 space-y-1.5">
               <Label>Notas</Label>
