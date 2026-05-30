@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload, BarChart3 } from 'lucide-react';
+import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload, BarChart3, Trash2, Download, CheckSquare, Square } from 'lucide-react';
+import jsPDF from 'jspdf';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,8 @@ export default function IngresosGastos() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(null); // item or 'bulk'
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
@@ -92,22 +95,93 @@ export default function IngresosGastos() {
     const trimestre = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
     const base = parseFloat(form.base_imponible) || 0;
     const cuota = base * (parseFloat(form.tipo_impuesto) || 0) / 100;
-    const payload = {
-      ...form,
-      company_id: company.id,
-      base_imponible: base,
-      cuota_impuesto: cuota,
-      total: parseFloat(form.total) || base + cuota,
-      tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
-      anio: year, trimestre, subido_por: user?.email,
-    };
+    const total = parseFloat(form.total) || base + cuota;
     if (editing) {
-      if (editing._source === 'invoice') await base44.entities.Invoice.update(editing.id, { estado_contable: payload.estado });
-      else await base44.entities.Expense.update(editing.id, payload);
+      if (editing._source === 'invoice') {
+        await base44.entities.Invoice.update(editing.id, {
+          cliente_nombre: form.proveedor_cliente,
+          concepto: form.concepto,
+          fecha_emision: form.fecha,
+          base_imponible: base,
+          tipo_iva: parseFloat(form.tipo_impuesto) || 21,
+          cuota_iva: cuota,
+          total_factura: total,
+          estado_contable: form.estado,
+          categoria_gasto: form.categoria,
+          anio: year, trimestre,
+        });
+      } else {
+        await base44.entities.Expense.update(editing.id, {
+          ...form, company_id: company.id,
+          base_imponible: base, cuota_impuesto: cuota, total,
+          tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
+          anio: year, trimestre,
+        });
+      }
     } else {
-      await base44.entities.Expense.create(payload);
+      await base44.entities.Expense.create({
+        ...form, company_id: company.id,
+        base_imponible: base, cuota_impuesto: cuota, total,
+        tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
+        anio: year, trimestre, subido_por: user?.email,
+      });
     }
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
+  };
+
+  const handleDelete = async (item) => {
+    if (item._source === 'invoice') await base44.entities.Invoice.delete(item.id);
+    else await base44.entities.Expense.delete(item.id);
+    setSelected(s => { const n = new Set(s); n.delete(item.id); return n; });
+    load();
+  };
+
+  const handleBulkDelete = async () => {
+    const toDelete = filtered.filter(i => selected.has(i.id));
+    await Promise.all(toDelete.map(i =>
+      i._source === 'invoice' ? base44.entities.Invoice.delete(i.id) : base44.entities.Expense.delete(i.id)
+    ));
+    setSelected(new Set());
+    setConfirmDelete(null);
+    load();
+  };
+
+  const exportPDF = (rows) => {
+    const doc = new jsPDF({ orientation: rows.length > 20 ? 'landscape' : 'portrait' });
+    doc.setFontSize(14);
+    doc.text('Ingresos y Gastos — Taxea', 14, 18);
+    doc.setFontSize(9);
+    doc.text(`Año: ${filterAnio} · ${rows.length} registros · Generado: ${new Date().toLocaleDateString('es-ES')}`, 14, 25);
+    const headers = ['Tipo', 'Fecha', 'Proveedor/Cliente', 'Concepto', 'Base (€)', 'IVA%', 'Total (€)', 'T', 'Estado'];
+    const colWidths = [18, 22, 40, 50, 22, 12, 22, 10, 22];
+    let y = 32;
+    // Header row
+    doc.setFillColor(220, 50, 70); doc.setTextColor(255, 255, 255); doc.setFontSize(7);
+    let x = 14;
+    headers.forEach((h, i) => { doc.rect(x, y, colWidths[i], 6, 'F'); doc.text(h, x + 2, y + 4); x += colWidths[i]; });
+    y += 8;
+    doc.setTextColor(30, 30, 30); doc.setFontSize(7);
+    rows.forEach((item, idx) => {
+      if (y > 270) { doc.addPage(); y = 14; }
+      if (idx % 2 === 0) { doc.setFillColor(248, 248, 248); x = 14; colWidths.forEach(w => { doc.rect(x, y - 1, w, 6, 'F'); x += w; }); }
+      const cells = [
+        item.tipo === 'ingreso' ? 'Ingreso' : 'Gasto',
+        item.fecha || '—', (item.proveedor_cliente || '—').slice(0, 18),
+        (item.concepto || '—').slice(0, 24),
+        fmt(item.base_imponible), `${item.tipo_impuesto ?? 0}%`, fmt(item.total),
+        item.trimestre || '—', item.estado || '—',
+      ];
+      x = 14;
+      cells.forEach((cell, i) => { doc.text(String(cell), x + 2, y + 3.5); x += colWidths[i]; });
+      y += 7;
+    });
+    // Totals
+    y += 3;
+    doc.setFontSize(8); doc.setFont(undefined, 'bold');
+    const totalBase = rows.reduce((s, i) => s + (i.base_imponible || 0), 0);
+    const totalAll = rows.reduce((s, i) => s + (i.total || 0), 0);
+    doc.text(`Total base: ${fmt(totalBase)} €   Total: ${fmt(totalAll)} €`, 14, y);
+    doc.save(`ingresos-gastos-${filterAnio}.pdf`);
   };
 
   const filtered = useMemo(() => items.filter(i => {
@@ -205,6 +279,22 @@ export default function IngresosGastos() {
         </Select>
       </div>
 
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl">
+          <CheckSquare className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">{selected.size} seleccionado{selected.size !== 1 ? 's' : ''}</span>
+          <div className="flex-1" />
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => exportPDF(filtered.filter(i => selected.has(i.id)))}>
+            <Download className="w-3.5 h-3.5" /> Exportar PDF
+          </Button>
+          <Button size="sm" variant="destructive" className="gap-1.5" onClick={() => setConfirmDelete('bulk')}>
+            <Trash2 className="w-3.5 h-3.5" /> Eliminar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Cancelar</Button>
+        </div>
+      )}
+
       <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
         {loading ? (
           <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" /></div>
@@ -218,6 +308,16 @@ export default function IngresosGastos() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-secondary/50">
+                  <th className="px-4 py-3 w-8">
+                    <button onClick={() => {
+                      if (selected.size === filtered.length) setSelected(new Set());
+                      else setSelected(new Set(filtered.map(i => i.id)));
+                    }} className="text-muted-foreground hover:text-foreground">
+                      {selected.size === filtered.length && filtered.length > 0
+                        ? <CheckSquare className="w-4 h-4 text-primary" />
+                        : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Tipo</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Fecha</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs">Proveedor/Cliente</th>
@@ -233,7 +333,12 @@ export default function IngresosGastos() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map(item => (
-                  <tr key={item.id} className="hover:bg-secondary/30 transition-colors">
+                 <tr key={item.id} className={`hover:bg-secondary/30 transition-colors ${selected.has(item.id) ? 'bg-primary/5' : ''}`}>
+                    <td className="px-4 py-3 w-8">
+                      <button onClick={() => setSelected(s => { const n = new Set(s); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; })} className="text-muted-foreground hover:text-foreground">
+                        {selected.has(item.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4" />}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ${item.tipo === 'ingreso' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                         {item.tipo === 'ingreso' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -259,16 +364,19 @@ export default function IngresosGastos() {
                           <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {item._source !== 'invoice'
-                            ? <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setShowForm(true); }}>Editar</DropdownMenuItem>
-                            : <DropdownMenuItem asChild><a href="/tax-accounting/facturas">Ver en Facturas</a></DropdownMenuItem>
-                          }
+                          <DropdownMenuItem onClick={() => { setEditing(item); setForm(item._source === 'invoice' ? { tipo: item.tipo, fecha: item.fecha, proveedor_cliente: item.proveedor_cliente, concepto: item.concepto, base_imponible: item.base_imponible, tipo_impuesto: item.tipo_impuesto, cuota_impuesto: item.cuota_impuesto, total: item.total, estado: item.estado, categoria: item.categoria || 'otros' } : { ...item }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => exportPDF([item])}>
+                            <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
+                          </DropdownMenuItem>
                           {isAdmin && (
                             <DropdownMenuItem onClick={() => {
                               if (item._source === 'invoice') base44.entities.Invoice.update(item.id, { estado_contable: 'contabilizada' }).then(load);
                               else base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(load);
                             }}>Contabilizar</DropdownMenuItem>
                           )}
+                          <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(item)}>
+                            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -288,6 +396,21 @@ export default function IngresosGastos() {
           </div>
         )}
       </div>
+
+      {/* Confirm delete dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>¿Eliminar {confirmDelete === 'bulk' ? `${selected.size} registros` : 'este registro'}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => {
+              if (confirmDelete === 'bulk') handleBulkDelete();
+              else { handleDelete(confirmDelete); setConfirmDelete(null); }
+            }}>Eliminar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); } }}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
