@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2 } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -115,6 +115,32 @@ export default function Facturas() {
   };
 
   const activas = invoices.filter(i => !i.anulada);
+
+  const kpis = useMemo(() => {
+    const tipo = activas.filter(i => i.tipo === filterTipo);
+    const now = new Date();
+    const qMonth = now.getMonth();
+    const qNum = Math.floor(qMonth / 3);
+    const qStart = new Date(now.getFullYear(), qNum * 3, 1);
+    const qEnd = new Date(now.getFullYear(), qNum * 3 + 3, 0);
+    const esteT = tipo.filter(i => {
+      const d = new Date(i.fecha_emision || i.created_date);
+      return d >= qStart && d <= qEnd;
+    });
+    const pendientes = tipo.filter(i => i.estado_cobro === 'pendiente' || i.estado_cobro === 'vencida');
+    const vencidas = tipo.filter(i => i.estado_cobro === 'vencida');
+    const years = new Set(tipo.map(i => i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()).filter(Boolean));
+    return {
+      total: tipo.length,
+      totalValor: tipo.reduce((s, i) => s + (i.total_factura || 0), 0),
+      anios: years.size,
+      esteT: esteT.length,
+      esteTValor: esteT.reduce((s, i) => s + (i.total_factura || 0), 0),
+      pendientes: pendientes.length,
+      pendientesValor: pendientes.reduce((s, i) => s + (i.total_factura || 0), 0),
+      vencidas: vencidas.length,
+    };
+  }, [activas, filterTipo]);
   const anuladas = invoices.filter(i => i.anulada);
   const lista = showAnuladas ? anuladas : activas;
 
@@ -135,6 +161,8 @@ export default function Facturas() {
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="la sección de Facturas" />;
 
+  const fmtNum = n => (n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   return (
     <>
       {/* ── Listado de facturas ──────────────────────────────────────────── */}
@@ -144,6 +172,56 @@ export default function Facturas() {
             <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
           </Button>
         </PageHeader>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 bg-taxea-red/10 rounded-lg flex items-center justify-center">
+                <FileText className="w-3.5 h-3.5 text-taxea-red" />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">{filterTipo === 'emitida' ? 'Facturas Emitidas' : 'Facturas Recibidas'}</p>
+            </div>
+            <p className="text-3xl font-bold text-foreground mb-1">{kpis.total}</p>
+            <p className="text-xs text-muted-foreground">Valor: <span className="font-semibold text-foreground">{fmtNum(kpis.totalValor)} €</span></p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center">
+                <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">Años con facturas</p>
+            </div>
+            <p className="text-3xl font-bold text-foreground mb-1">{kpis.anios}</p>
+            <p className="text-xs text-muted-foreground">Total ejercicios fiscales</p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">Este Trimestre</p>
+            </div>
+            <p className="text-3xl font-bold text-foreground mb-1">{kpis.esteT}</p>
+            <p className="text-xs text-muted-foreground">Valor: <span className="font-semibold text-foreground">{fmtNum(kpis.esteTValor)} €</span></p>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <div className="flex items-center gap-2 mb-3">
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${kpis.vencidas > 0 ? 'bg-red-500/10' : 'bg-orange-400/10'}`}>
+                <AlertCircle className={`w-3.5 h-3.5 ${kpis.vencidas > 0 ? 'text-red-500' : 'text-orange-400'}`} />
+              </div>
+              <p className="text-xs font-medium text-muted-foreground">Pendientes de Cobro</p>
+            </div>
+            <p className={`text-3xl font-bold mb-1 ${kpis.vencidas > 0 ? 'text-red-500' : 'text-foreground'}`}>{kpis.pendientes}</p>
+            <p className="text-xs text-muted-foreground">
+              Valor: <span className="font-semibold text-foreground">{fmtNum(kpis.pendientesValor)} €</span>
+              {kpis.vencidas > 0 && <span className="ml-2 text-red-500 font-medium">{kpis.vencidas} vencidas</span>}
+            </p>
+          </div>
+        </div>
 
         {/* Tipo toggle + estado anuladas */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
