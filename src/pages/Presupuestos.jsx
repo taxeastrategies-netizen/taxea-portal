@@ -99,103 +99,70 @@ export default function Presupuestos() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Resumen */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <FileText className="w-4 h-4 text-blue-500" />
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">Total presupuestos</p>
+          <p className="text-3xl font-bold text-foreground mb-4">{kpis.total}</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="bg-gray-50 rounded-lg px-2 py-1.5">
+              <p className="text-xs text-muted-foreground">Borradores</p>
+              <p className="text-sm font-semibold text-foreground">{kpis.borradores}</p>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-foreground">Resumen</p>
-              <p className="text-xs text-muted-foreground">Estado general</p>
+            <div className="bg-blue-50 rounded-lg px-2 py-1.5">
+              <p className="text-xs text-blue-600">Enviados</p>
+              <p className="text-sm font-semibold text-blue-700">{kpis.enviados}</p>
             </div>
-          </div>
-          <p className="text-2xl font-bold text-foreground mb-3">{kpis.total}</p>
-          <div className="space-y-1">
-            {[
-              { label: 'Borradores', val: kpis.borradores, dot: 'bg-gray-400' },
-              { label: 'Enviados', val: kpis.enviados, dot: 'bg-blue-400' },
-              { label: 'Aceptados', val: kpis.aceptados, dot: 'bg-emerald-500' },
-              { label: 'Rechazados', val: kpis.rechazados, dot: 'bg-red-400' },
-            ].map(r => (
-              <div key={r.label} className="flex justify-between text-xs">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <span className={`w-1.5 h-1.5 rounded-full ${r.dot} inline-block`} /> {r.label}
-                </span>
-                <span className="font-medium">{r.val}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Valor económico */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
+            <div className="bg-emerald-50 rounded-lg px-2 py-1.5">
+              <p className="text-xs text-emerald-600">Aceptados</p>
+              <p className="text-sm font-semibold text-emerald-700">{kpis.aceptados}</p>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-foreground">Valor económico</p>
-              <p className="text-xs text-muted-foreground">Importe presupuestado</p>
-            </div>
-          </div>
-          <p className="text-xl font-bold text-emerald-600 mb-3">{fmt(kpis.valorTotal)} &#8364;</p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Presupuestos aceptados</span>
-              <span className="font-medium text-emerald-600">{fmt(kpis.valorAceptado)} &#8364;</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Pendientes de aceptar</span>
-              <span className="font-medium text-amber-600">{fmt(kpis.valorPendiente)} &#8364;</span>
+            <div className="bg-red-50 rounded-lg px-2 py-1.5">
+              <p className="text-xs text-red-500">Rechazados</p>
+              <p className="text-sm font-semibold text-red-600">{kpis.rechazados}</p>
             </div>
           </div>
         </div>
 
-        {/* Tasa de conversión */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-violet-500/10 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-violet-500" />
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">Valor total</p>
+          <p className="text-3xl font-bold text-foreground mb-1">{fmt(kpis.valorTotal)} <span className="text-lg font-medium text-muted-foreground">&#8364;</span></p>
+          <p className="text-xs text-muted-foreground mb-4">Importe presupuestado</p>
+          <div className="space-y-2 border-t border-border pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Aceptado</span>
+              <span className="text-xs font-semibold text-emerald-600">{fmt(kpis.valorAceptado)} &#8364;</span>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-foreground">Tasa de conversión</p>
-              <p className="text-xs text-muted-foreground">Efectividad</p>
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-violet-600 mb-3">{kpis.tasa}%</p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Presupuestos enviados</span>
-              <span className="font-medium">{kpis.enviados}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Presupuestos aceptados</span>
-              <span className="font-medium">{kpis.aceptados}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Por aceptar</span>
+              <span className="text-xs font-semibold text-amber-600">{fmt(kpis.valorPendiente)} &#8364;</span>
             </div>
           </div>
         </div>
 
-        {/* Pendientes */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
-              <Clock className="w-4 h-4 text-amber-500" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-foreground">Pendientes</p>
-              <p className="text-xs text-muted-foreground">Requieren seguimiento</p>
-            </div>
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">Tasa de conversión</p>
+          <p className="text-3xl font-bold text-taxea-red mb-1">{kpis.tasa}<span className="text-xl">%</span></p>
+          <p className="text-xs text-muted-foreground mb-4">Presupuestos aceptados</p>
+          <div className="w-full bg-muted rounded-full h-1.5">
+            <div className="bg-taxea-red h-1.5 rounded-full transition-all" style={{ width: `${kpis.tasa}%` }} />
           </div>
-          <p className="text-2xl font-bold text-amber-600 mb-3">{kpis.pendientes}</p>
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Por enviar</span>
-              <span className="font-medium">{kpis.borradores}</span>
+          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+            <span>{kpis.enviados} enviados</span>
+            <span>{kpis.aceptados} aceptados</span>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-3">Pendientes</p>
+          <p className="text-3xl font-bold text-amber-600 mb-1">{kpis.pendientes}</p>
+          <p className="text-xs text-muted-foreground mb-4">Requieren seguimiento</p>
+          <div className="space-y-2 border-t border-border pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Por enviar</span>
+              <span className="text-xs font-semibold">{kpis.borradores}</span>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Esperando respuesta</span>
-              <span className="font-medium">{kpis.enviados}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Esperando respuesta</span>
+              <span className="text-xs font-semibold text-amber-600">{kpis.enviados}</span>
             </div>
           </div>
         </div>
