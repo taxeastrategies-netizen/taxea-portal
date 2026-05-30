@@ -314,7 +314,7 @@ export default function TaxDashboard({ onNavigate }) {
         </div>
 
         {/* Gastos por categoría */}
-        <GastosPorCategoria expenses={expenses} invoices={invoices} />
+        <GastosPorCategoria invoices={invoices} />
       </div>
 
       {/* Bottom row */}

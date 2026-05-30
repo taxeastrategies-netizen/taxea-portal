@@ -37,21 +37,19 @@ function fmt(n) {
   return (n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export default function GastosPorCategoria({ expenses, invoices }) {
+export default function GastosPorCategoria({ invoices }) {
+  const currentYear = new Date().getFullYear();
+
   const data = useMemo(() => {
     const map = {};
 
-    // From expenses (tipo === 'gasto')
-    (expenses || [])
-      .filter(e => e.tipo === 'gasto' || !e.tipo)
-      .forEach(e => {
-        const cat = e.categoria || 'otros';
-        map[cat] = (map[cat] || 0) + (e.base_imponible || e.total || 0);
-      });
-
-    // From received invoices with categoria_gasto
+    // Solo facturas recibidas vía OCR con categoría asignada, del año actual
     (invoices || [])
-      .filter(i => i.tipo === 'recibida' && i.categoria_gasto)
+      .filter(i =>
+        i.tipo === 'recibida' &&
+        i.categoria_gasto &&
+        (i.anio === currentYear || new Date(i.fecha_emision || i.created_date).getFullYear() === currentYear)
+      )
       .forEach(i => {
         const cat = i.categoria_gasto;
         map[cat] = (map[cat] || 0) + (i.base_imponible || 0);
@@ -65,7 +63,7 @@ export default function GastosPorCategoria({ expenses, invoices }) {
         label: CATEGORY_LABELS[cat] || cat,
         value,
       }));
-  }, [expenses, invoices]);
+  }, [invoices, currentYear]);
 
   const total = data.reduce((s, d) => s + d.value, 0);
 
@@ -76,13 +74,13 @@ export default function GastosPorCategoria({ expenses, invoices }) {
         <div className="w-7 h-7 bg-taxea-red/10 rounded-lg flex items-center justify-center">
           <Layers className="w-4 h-4 text-taxea-red" />
         </div>
-        <h3 className="font-jakarta font-semibold text-foreground">Gastos por categoría</h3>
+        <h3 className="font-jakarta font-semibold text-foreground">Gastos por categoría <span className="text-xs font-normal text-muted-foreground">{new Date().getFullYear()}</span></h3>
       </div>
 
       {data.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <Layers className="w-9 h-9 text-muted-foreground/20 mb-2" />
-          <p className="text-xs text-muted-foreground">Sin datos de gastos disponibles</p>
+          <p className="text-xs text-muted-foreground">Sin facturas recibidas con categoría en {new Date().getFullYear()}</p>
         </div>
       ) : (
         <div className="flex flex-col sm:flex-row items-center gap-6">
