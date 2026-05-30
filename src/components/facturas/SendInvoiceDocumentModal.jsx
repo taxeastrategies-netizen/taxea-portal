@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { buildPremiumInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
+import { base44 as b44Client } from '@/api/base44Client';
+
+const GMAIL_CONNECTOR_ID = '6a10346bedd89bd7e97c35ed';
 
 const TEMPLATES = [
   { id: 'envio_factura',  label: 'Envío de factura' },
@@ -107,6 +110,9 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   const [copiedLink, setCopiedLink] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
+  const [gmailConnected, setGmailConnected] = useState(null); // null=checking, true, false
+  const [gmailEmail, setGmailEmail] = useState('');
+  const [connectingGmail, setConnectingGmail] = useState(false);
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -120,6 +126,14 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setTemplateId('envio_factura');
     setSubject(buildEmailSubject(invoice, company, 'envio_factura'));
     // Pre-generar PDF en segundo plano al abrir el modal
+    // Verificar conexión Gmail
+    setGmailConnected(null);
+    base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
+      if (res.data?.error === 'gmail_not_connected') { setGmailConnected(false); setGmailEmail(''); }
+      else if (res.data?.ok || res.data?.error === 'gmail_send_failed') { setGmailConnected(true); }
+      else { setGmailConnected(false); }
+    }).catch(() => setGmailConnected(false));
+
     if (!invoice?.archivo_url) {
       setPreparingPdf(true);
       ensureInvoicePdf(invoice, company, base44).then(result => {
@@ -272,7 +286,13 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         sent_at: new Date().toISOString(), sent_by: user?.full_name || user?.email,
         delivery_status: 'error_envio', error_message: e.message || 'Error desconocido al enviar.',
       }).catch(() => {});
-      setError('No se ha podido enviar el correo. La factura no se ha marcado como enviada. Revisa la configuración de email o vuelve a intentarlo.');
+      const errCode = e?.response?.data?.error || '';
+      if (errCode === 'gmail_not_connected') {
+        setGmailConnected(false);
+        setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
+      } else {
+        setError('No se ha podido enviar el correo. La factura no se ha marcado como enviada. Revisa la configuración de email o vuelve a intentarlo.');
+      }
     }
     setSending(false); setSendingStep('');
   };
@@ -304,6 +324,43 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+
+              {/* Estado Gmail */}
+              {gmailConnected === false && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
+                    <p className="text-xs text-amber-700 mt-0.5">Conecta tu cuenta Gmail para enviar facturas desde tu propio correo.</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setConnectingGmail(true);
+                      const url = await b44Client.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
+                      const popup = window.open(url, '_blank');
+                      const timer = setInterval(() => {
+                        if (!popup || popup.closed) {
+                          clearInterval(timer);
+                          setConnectingGmail(false);
+                          setGmailConnected(null);
+                          base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
+                            setGmailConnected(res.data?.error !== 'gmail_not_connected');
+                          }).catch(() => {});
+                        }
+                      }, 500);
+                    }}
+                    disabled={connectingGmail}
+                    className="text-xs bg-amber-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-amber-700 flex-shrink-0">
+                    {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
+                  </button>
+                </div>
+              )}
+              {gmailConnected === true && (
+                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-emerald-800">Email enviado desde tu cuenta Gmail</p>
+                </div>
+              )}
 
               {/* Estado del PDF */}
               {preparingPdf && (

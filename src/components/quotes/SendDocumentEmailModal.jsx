@@ -8,6 +8,9 @@ import { X, Send, ChevronDown, Loader2, CheckCircle2, AlertTriangle, Mail } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { base44 as b44Client } from '@/api/base44Client';
+
+const GMAIL_CONNECTOR_ID = '6a10346bedd89bd7e97c35ed';
 
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -89,12 +92,18 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [noEmailWarning, setNoEmailWarning] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(null);
+  const [connectingGmail, setConnectingGmail] = useState(false);
 
   useEffect(() => {
     if (!open || !doc) return;
     setSent(false); setError('');
     setSubject(buildSubject(doc, docType, company));
     loadClientEmail();
+    setGmailConnected(null);
+    base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
+      setGmailConnected(res.data?.error !== 'gmail_not_connected');
+    }).catch(() => setGmailConnected(false));
   }, [open, doc?.id]);
 
   const loadClientEmail = async () => {
@@ -145,7 +154,13 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
       setSent(true);
       onSent?.();
     } catch (e) {
-      setError('No se pudo enviar el email. Inténtalo de nuevo.');
+      const errCode = e?.response?.data?.error || '';
+      if (errCode === 'gmail_not_connected') {
+        setGmailConnected(false);
+        setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
+      } else {
+        setError('No se pudo enviar el email. Inténtalo de nuevo.');
+      }
     }
     setSending(false);
   };
@@ -172,6 +187,42 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {/* Estado Gmail */}
+            {gmailConnected === false && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
+                  <p className="text-xs text-amber-700 mt-0.5">Conecta tu Gmail para enviar desde tu propio correo.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    setConnectingGmail(true);
+                    const url = await b44Client.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
+                    const popup = window.open(url, '_blank');
+                    const timer = setInterval(() => {
+                      if (!popup || popup.closed) {
+                        clearInterval(timer);
+                        setConnectingGmail(false);
+                        base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
+                          setGmailConnected(res.data?.error !== 'gmail_not_connected');
+                        }).catch(() => {});
+                      }
+                    }, 500);
+                  }}
+                  disabled={connectingGmail}
+                  className="text-xs bg-amber-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-amber-700 flex-shrink-0">
+                  {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
+                </button>
+              </div>
+            )}
+            {gmailConnected === true && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                <p className="text-xs font-semibold text-emerald-800">Email enviado desde tu cuenta Gmail</p>
+              </div>
+            )}
+
             {noEmailWarning && (
               <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
