@@ -20,6 +20,7 @@ export default function TaxDashboard({ onNavigate }) {
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [obligations, setObligations] = useState([]);
+  const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [aiAlerts, setAiAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
@@ -35,14 +36,16 @@ export default function TaxDashboard({ onNavigate }) {
 
   const loadData = async () => {
     setLoading(true);
-    const [invData, expData, oblData] = await Promise.all([
+    const [invData, expData, oblData, qData] = await Promise.all([
       base44.entities.Invoice.filter({ company_id: company.id }),
       base44.entities.Expense.filter({ company_id: company.id }),
       base44.entities.TaxObligation.filter({ company_id: company.id }),
+      base44.entities.Quote.filter({ company_id: company.id }).catch(() => []),
     ]);
     setInvoices(invData || []);
     setExpenses(expData || []);
     setObligations(oblData || []);
+    setQuotes(qData || []);
     setLoading(false);
   };
 
@@ -99,15 +102,27 @@ export default function TaxDashboard({ onNavigate }) {
     const proxObl = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) > new Date())
       .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))[0];
 
+    const thisMonthRecibidas = invoices.filter(i => {
+      const d = new Date(i.fecha_emision || i.created_date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth && i.tipo === 'recibida';
+    });
+    const ivaRepercutido = thisMonthInvoices.reduce((s, i) => s + (i.cuota_iva || 0), 0);
+    const ivaSoportado = thisMonthRecibidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
+    const irpfIngresos = thisMonthInvoices.reduce((s, i) => s + (i.retencion_irpf ? (i.base_imponible || 0) * (i.retencion_irpf / 100) : 0), 0);
+    const irpfGastos = thisMonthRecibidas.reduce((s, i) => s + (i.retencion_irpf ? (i.base_imponible || 0) * (i.retencion_irpf / 100) : 0), 0);
+    const quotesPendientes = quotes.filter(q => ['pendiente','enviado','borrador'].includes(q.estado) || !q.estado);
     return {
-      ingresosMes, gastosMes, beneficioMes, ivaMes, irpfMes,
+      ingresosMes, gastosMes, beneficioMes, ivaMes: ivaRepercutido, irpfMes,
+      ivaRepercutido, ivaSoportado, irpfIngresos, irpfGastos,
       factPendientes: factPendientes.length,
       factPendientesImporte: factPendientes.reduce((s, i) => s + (i.total_factura || 0), 0),
       factVencidas: factVencidas.length,
       oblPendientes: oblPendientes.length,
       proxObl,
+      quotesPendientes: quotesPendientes.length,
+      quotesPendientesImporte: quotesPendientes.reduce((s, q) => s + (q.total || q.importe_total || 0), 0),
     };
-  }, [invoices, expenses, obligations, currentYear, currentMonth]);
+  }, [invoices, expenses, obligations, quotes, currentYear, currentMonth]);
 
   // Cashflow chart data (last 6 months)
   const cashflowData = useMemo(() => {
@@ -151,7 +166,7 @@ export default function TaxDashboard({ onNavigate }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-jakarta font-bold text-foreground">Tax & Accounting</h1>
+          <h1 className="text-2xl font-jakarta font-bold text-foreground">Tax &amp; Accounting</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{company.razon_social} · {currentMonthLabel} {currentYear}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -166,22 +181,28 @@ export default function TaxDashboard({ onNavigate }) {
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KPICard
-          label="Ingresos mes"
-          value={`${fmt(kpis.ingresosMes)} €`}
-          icon={TrendingUp}
-          color="text-emerald-500"
-          bg="bg-emerald-500/10"
-          onClick={() => onNavigate('ingresos-gastos')}
-        />
-        <KPICard
-          label="Gastos mes"
-          value={`${fmt(kpis.gastosMes)} €`}
-          icon={TrendingDown}
-          color="text-red-400"
-          bg="bg-red-400/10"
-          onClick={() => onNavigate('ingresos-gastos')}
-        />
+        <div onClick={() => onNavigate('ingresos-gastos')} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-taxea-red/30 hover:shadow-card-hover transition-all">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 mb-2">
+            <TrendingUp className="w-4 h-4 text-emerald-500" />
+          </div>
+          <p className="text-lg font-bold text-foreground">{fmt(kpis.ingresosMes)} &#8364;</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Ingresos mes</p>
+          <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
+            <p className="text-xs text-muted-foreground">IVA repercutido: <span className="font-medium text-foreground">{fmt(kpis.ivaRepercutido)} &#8364;</span></p>
+            <p className="text-xs text-muted-foreground">IRPF de ingresos: <span className="font-medium text-foreground">{fmt(kpis.irpfIngresos)} &#8364;</span></p>
+          </div>
+        </div>
+        <div onClick={() => onNavigate('ingresos-gastos')} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-taxea-red/30 hover:shadow-card-hover transition-all">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-400/10 mb-2">
+            <TrendingDown className="w-4 h-4 text-red-400" />
+          </div>
+          <p className="text-lg font-bold text-foreground">{fmt(kpis.gastosMes)} &#8364;</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Gastos mes</p>
+          <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
+            <p className="text-xs text-muted-foreground">IVA soportado: <span className="font-medium text-foreground">{fmt(kpis.ivaSoportado)} &#8364;</span></p>
+            <p className="text-xs text-muted-foreground">IRPF de gastos: <span className="font-medium text-foreground">{fmt(kpis.irpfGastos)} &#8364;</span></p>
+          </div>
+        </div>
         <KPICard
           label="Beneficio estimado"
           value={`${fmt(kpis.beneficioMes)} €`}
@@ -229,25 +250,18 @@ export default function TaxDashboard({ onNavigate }) {
         </div>
 
         <div
-          onClick={() => onNavigate('obligaciones')}
+          onClick={() => onNavigate('presupuestos')}
           className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-taxea-red/30 hover:shadow-card-hover transition-all group"
         >
           <div className="flex items-center justify-between mb-3">
             <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
-              <Clock className="w-4 h-4 text-amber-500" />
+              <Receipt className="w-4 h-4 text-amber-500" />
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-taxea-red transition-colors" />
           </div>
-          <p className="text-sm font-semibold text-foreground truncate">
-            {kpis.proxObl
-              ? kpis.proxObl.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' ')
-              : 'Sin vencimientos'}
-          </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {kpis.proxObl
-              ? `Próximo: ${new Date(kpis.proxObl.fecha_limite).toLocaleDateString('es-ES')}`
-              : 'Todo al día'}
-          </p>
+          <p className="text-xl font-bold text-foreground">{fmt(kpis.quotesPendientesImporte)} &#8364;</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{kpis.quotesPendientes} presupuesto{kpis.quotesPendientes !== 1 ? 's' : ''} pendiente{kpis.quotesPendientes !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-amber-500 mt-1 font-medium">Por aceptar</p>
         </div>
 
         <div className="bg-gradient-to-br from-taxea-red/5 to-taxea-red/10 border border-taxea-red/20 rounded-xl p-4">
