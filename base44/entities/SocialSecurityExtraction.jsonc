@@ -73,5 +73,19 @@
   "required": [
     "labor_ocr_document_id",
     "company_id"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
 }

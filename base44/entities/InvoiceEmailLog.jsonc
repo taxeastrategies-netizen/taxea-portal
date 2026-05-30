@@ -64,5 +64,19 @@
   "required": [
     "invoice_id",
     "to"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
 }

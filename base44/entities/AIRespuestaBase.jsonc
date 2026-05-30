@@ -69,7 +69,18 @@
     "create": {
       "creada_por": "{{user.email}}"
     },
-    "read": {},
+    "read": {
+      "$or": [
+        {
+          "creada_por": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "update": {
       "creada_por": "{{user.email}}"
     },

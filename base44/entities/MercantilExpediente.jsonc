@@ -133,5 +133,19 @@
   "required": [
     "sociedadId",
     "ejercicio"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.sociedadId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.sociedadId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.sociedadId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.sociedadId": "{{user.data.company_id}}"
+    }
+  }
 }

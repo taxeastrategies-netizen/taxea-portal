@@ -69,5 +69,68 @@
   "required": [
     "razon_social",
     "nif_cif"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "id": "{{user.data.company_id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "data.usuarios_autorizados": {
+            "$in": [
+              "{{user.email}}"
+            ]
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "id": "{{user.data.company_id}}"
+        },
+        {
+          "data.owner_email": "{{user.email}}"
+        },
+        {
+          "data.usuarios_autorizados": {
+            "$in": [
+              "{{user.email}}"
+            ]
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }

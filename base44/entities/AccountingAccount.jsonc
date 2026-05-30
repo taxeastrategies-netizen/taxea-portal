@@ -70,5 +70,19 @@
   "required": [
     "code",
     "name"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
 }

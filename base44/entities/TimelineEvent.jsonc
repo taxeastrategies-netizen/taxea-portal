@@ -86,23 +86,16 @@
   ],
   "rls": {
     "create": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     },
     "read": {
-      "$or": [
-        {
-          "company_id": "{{user.data.company_id}}"
-        },
-        {
-          "visibilidad": "ambos"
-        }
-      ]
+      "data.company_id": "{{user.data.company_id}}"
     },
     "update": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     },
     "delete": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     }
   }
 }

@@ -60,5 +60,19 @@
     "clientAccountId",
     "exportYear",
     "exportPeriod"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.clientAccountId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.clientAccountId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.clientAccountId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.clientAccountId": "{{user.data.company_id}}"
+    }
+  }
 }

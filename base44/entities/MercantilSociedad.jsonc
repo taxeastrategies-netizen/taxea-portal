@@ -63,5 +63,19 @@
   "required": [
     "nombreFiscal",
     "nif"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.clienteAccountId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.clienteAccountId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.clienteAccountId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.clienteAccountId": "{{user.data.company_id}}"
+    }
+  }
 }
