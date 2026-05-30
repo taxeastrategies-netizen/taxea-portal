@@ -116,6 +116,7 @@ datos_faltantes (array strings), alertas_fiscales (array strings), concepto`,
       anio: year,
       trimestre: trimestre(fecha),
       subido_por: user?.email,
+      categoria_gasto: form.categoria || 'otros',
     });
     await base44.entities.TimelineEvent.create({
       company_id: company.id,
