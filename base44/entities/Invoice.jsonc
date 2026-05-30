@@ -26,10 +26,22 @@
     "cliente_nif": {
       "type": "string"
     },
+    "cliente_email": {
+      "type": "string"
+    },
+    "cliente_direccion": {
+      "type": "string"
+    },
     "proveedor_nombre": {
       "type": "string"
     },
     "proveedor_nif": {
+      "type": "string"
+    },
+    "proveedor_email": {
+      "type": "string"
+    },
+    "proveedor_direccion": {
       "type": "string"
     },
     "concepto": {

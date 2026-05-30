@@ -45,51 +45,69 @@ export default function Contactos() {
       base44.entities.Contact.filter({ company_id: company.id }),
     ]);
 
-    const existingNifs = new Set(existing.map(c => c.nif_cif).filter(Boolean));
-    const existingNames = new Set(existing.map(c => c.nombre?.toLowerCase()).filter(Boolean));
+    // Index existing contacts by NIF (primary) and name (fallback)
+    const existingByNif = {};
+    const existingByName = {};
+    for (const c of existing) {
+      if (c.nif_cif) existingByNif[c.nif_cif.replace(/\s/g, '').toUpperCase()] = c;
+      else existingByName[c.nombre?.toLowerCase()] = c;
+    }
 
     const toCreate = [];
-    const seen = new Set();
+    const toUpdate = []; // { id, data }
+    const seen = new Set(); // keys already processed in this batch
+
+    const upsert = (nombre, nif, email, direccion, tipo) => {
+      if (!nombre) return;
+      const nifKey = nif ? nif.replace(/\s/g, '').toUpperCase() : null;
+      const nameKey = nombre.toLowerCase();
+      const batchKey = nifKey || nameKey;
+      if (seen.has(batchKey)) return;
+      seen.add(batchKey);
+
+      const existing = nifKey ? existingByNif[nifKey] : existingByName[nameKey];
+
+      if (existing) {
+        // Update if we have new data that's missing on the contact
+        const updates = {};
+        if (!existing.nif_cif && nifKey) updates.nif_cif = nif;
+        if (!existing.email && email) updates.email = email;
+        if (!existing.direccion_fiscal && direccion) updates.direccion_fiscal = direccion;
+        if (existing.tipo !== tipo && existing.tipo !== 'ambos') updates.tipo = 'ambos';
+        if (Object.keys(updates).length > 0) toUpdate.push({ id: existing.id, data: updates });
+      } else {
+        toCreate.push({
+          company_id: company.id,
+          nombre,
+          nif_cif: nif || '',
+          email: email || '',
+          direccion_fiscal: direccion || '',
+          tipo,
+          activo: true,
+        });
+        if (nifKey) existingByNif[nifKey] = { nombre };
+        else existingByName[nameKey] = { nombre };
+      }
+    };
 
     for (const inv of invoices || []) {
-      // Facturas emitidas → cliente
-      if (inv.cliente_nombre && !seen.has(inv.cliente_nombre + inv.cliente_nif)) {
-        seen.add(inv.cliente_nombre + inv.cliente_nif);
-        if ((inv.cliente_nif && !existingNifs.has(inv.cliente_nif)) ||
-            (!inv.cliente_nif && !existingNames.has(inv.cliente_nombre?.toLowerCase()))) {
-          toCreate.push({
-            company_id: company.id,
-            nombre: inv.cliente_nombre,
-            nif_cif: inv.cliente_nif || '',
-            email: inv.cliente_email || '',
-            tipo: 'cliente',
-            activo: true,
-          });
-          if (inv.cliente_nif) existingNifs.add(inv.cliente_nif);
-          else existingNames.add(inv.cliente_nombre?.toLowerCase());
-        }
+      if (inv.tipo === 'emitida' || !inv.tipo) {
+        upsert(inv.cliente_nombre, inv.cliente_nif, inv.cliente_email, inv.cliente_direccion, 'cliente');
       }
-      // Facturas recibidas → proveedor
-      if (inv.proveedor_nombre && !seen.has(inv.proveedor_nombre + inv.proveedor_nif)) {
-        seen.add(inv.proveedor_nombre + inv.proveedor_nif);
-        if ((inv.proveedor_nif && !existingNifs.has(inv.proveedor_nif)) ||
-            (!inv.proveedor_nif && !existingNames.has(inv.proveedor_nombre?.toLowerCase()))) {
-          toCreate.push({
-            company_id: company.id,
-            nombre: inv.proveedor_nombre,
-            nif_cif: inv.proveedor_nif || '',
-            tipo: 'proveedor',
-            activo: true,
-          });
-          if (inv.proveedor_nif) existingNifs.add(inv.proveedor_nif);
-          else existingNames.add(inv.proveedor_nombre?.toLowerCase());
-        }
+      if (inv.tipo === 'recibida') {
+        upsert(inv.proveedor_nombre, inv.proveedor_nif, inv.proveedor_email, inv.proveedor_direccion, 'proveedor');
+      }
+      // Also capture proveedor from emitidas if present (edge case)
+      if (inv.tipo === 'emitida' && inv.proveedor_nombre) {
+        upsert(inv.proveedor_nombre, inv.proveedor_nif, inv.proveedor_email, inv.proveedor_direccion, 'proveedor');
       }
     }
 
-    if (toCreate.length > 0) {
-      await base44.entities.Contact.bulkCreate(toCreate);
-    }
+    await Promise.all([
+      toCreate.length > 0 ? base44.entities.Contact.bulkCreate(toCreate) : Promise.resolve(),
+      ...toUpdate.map(({ id, data }) => base44.entities.Contact.update(id, data)),
+    ]);
+
     setSyncing(false);
     load();
   };
