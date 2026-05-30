@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Plus, BookMarked, MoreVertical, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Plus, Star, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,8 +29,26 @@ export default function NotasPredefinidas() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [user, setUser] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    base44.auth.me().then(u => {
+      setUser(u);
+      setIsAdmin(u?.role === 'admin' || u?.role === 'super_admin');
+      setFavoriteIds(u?.favorite_note_ids || []);
+    });
+  }, []);
+
+  const toggleFavorite = async (noteId) => {
+    const current = favoriteIds.includes(noteId)
+      ? favoriteIds.filter(id => id !== noteId)
+      : [...favoriteIds, noteId];
+    setFavoriteIds(current);
+    await base44.auth.updateMe({ favorite_note_ids: current });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -54,42 +72,87 @@ export default function NotasPredefinidas() {
 
   return (
     <div>
-      <PageHeader title="Notas Predefinidas" subtitle="Textos legales y fiscales reutilizables para facturas">
-        <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
-          <Plus className="w-4 h-4 mr-1.5" /> Nueva nota
-        </Button>
+      <PageHeader
+        title="Notas Predefinidas"
+        subtitle={isAdmin ? 'Gestiona las notas predefinidas. Los clientes pueden marcarlas como favoritas para usarlas en sus facturas.' : 'Marca tus notas favoritas para que aparezcan al crear facturas.'}
+      >
+        {isAdmin && (
+          <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
+            <Plus className="w-4 h-4 mr-1.5" /> Nueva nota
+          </Button>
+        )}
       </PageHeader>
+
+      {!isAdmin && (
+        <div className="flex items-center gap-2 mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+          <p className="text-sm text-amber-800">Las notas marcadas con ⭐ aparecerán automáticamente al crear nuevas facturas.</p>
+        </div>
+      )}
 
       {loading ? (
         <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" /></div>
       ) : (
         <div className="grid gap-3">
-          {notes.map(note => (
-            <div key={note.id} className={`bg-card rounded-xl border shadow-card p-5 ${note.activa ? 'border-border' : 'border-border opacity-50'}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className="font-jakarta font-semibold text-foreground text-sm">{note.titulo}</p>
-                    {note.categoria && (
-                      <span className="text-xs px-2 py-0.5 bg-teal-light text-teal rounded font-medium">{note.categoria}</span>
+          {notes.filter(n => n.activa).map(note => {
+            const isFav = favoriteIds.includes(note.id);
+            return (
+              <div key={note.id} className={`bg-card rounded-xl border shadow-card p-5 transition-all ${isFav ? 'border-amber-300 bg-amber-50/30' : 'border-border'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="font-jakarta font-semibold text-foreground text-sm">{note.titulo}</p>
+                      {note.categoria && (
+                        <span className="text-xs px-2 py-0.5 bg-teal-light text-teal rounded font-medium">{note.categoria}</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{note.texto}</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => toggleFavorite(note.id)}
+                      title={isFav ? 'Quitar de favoritas' : 'Marcar como favorita'}
+                      className={`p-2 rounded-lg transition-colors ${isFav ? 'text-amber-500 bg-amber-100 hover:bg-amber-200' : 'text-muted-foreground hover:text-amber-500 hover:bg-amber-50'}`}>
+                      <Star className={`w-4 h-4 ${isFav ? 'fill-amber-400' : ''}`} />
+                    </button>
+                    {isAdmin && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => { setEditing(note); setForm({ ...note }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => base44.entities.PredefinedNote.update(note.id, { activa: !note.activa }).then(load)}>
+                            Desactivar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{note.texto}</p>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground flex-shrink-0"><MoreVertical className="w-4 h-4" /></button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { setEditing(note); setForm({ ...note }); setShowForm(true); }}>Editar</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => base44.entities.PredefinedNote.update(note.id, { activa: !note.activa }).then(load)}>
-                      {note.activa ? 'Desactivar' : 'Activar'}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
+            );
+          })}
+          {isAdmin && notes.filter(n => !n.activa).length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Desactivadas</p>
+              {notes.filter(n => !n.activa).map(note => (
+                <div key={note.id} className="bg-card rounded-xl border border-border opacity-50 shadow-card p-5 mb-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-foreground">{note.titulo}</p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => base44.entities.PredefinedNote.update(note.id, { activa: true }).then(load)}>Activar</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 

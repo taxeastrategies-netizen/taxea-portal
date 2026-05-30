@@ -89,6 +89,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   );
 
   useEffect(() => {
+    const run = async () => {
     if (!open) { loadedRef.current = false; return; }
     if (editing && !loadedRef.current) {
       loadedRef.current = true;
@@ -101,6 +102,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     }
     setErrors({});
     setSaveError('');
+    };
+    run();
   }, [open, editing?.id]);
 
   const set = useCallback((field) => (e) => {
