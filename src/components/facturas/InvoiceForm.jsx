@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, UserSearch } from 'lucide-react';
+import ContactPickerModal from './ContactPickerModal';
 
 const IVA_RATES = [0, 4, 10, 21];
 const IGIC_RATES = [0, 3, 7, 9.5, 15];
@@ -81,6 +82,18 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const [customRetention, setCustomRetention] = useState(false);
   const [useCustomColetilla, setUseCustomColetilla] = useState(false);
   const loadedRef = useRef(false);
+  const [favoriteNotes, setFavoriteNotes] = useState([]);
+  const [showContactPicker, setShowContactPicker] = useState(false);
+
+  const handleSelectContact = (contact) => {
+    setForm(prev => ({
+      ...prev,
+      cliente_nombre: contact.nombre || prev.cliente_nombre,
+      cliente_nif: contact.nif_cif || prev.cliente_nif,
+      cliente_email: contact.email || prev.cliente_email,
+      cliente_direccion: contact.direccion_fiscal || prev.cliente_direccion,
+    }));
+  };
 
   const { cuota, retencionImporte, total } = calcTotals(
     form.base_imponible,
@@ -204,7 +217,16 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
 
           {/* Cliente */}
           <div className="space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datos del cliente</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datos del cliente</p>
+              <button
+                type="button"
+                onClick={() => setShowContactPicker(true)}
+                className="flex items-center gap-1.5 text-xs text-teal hover:text-teal-dark font-medium transition-colors">
+                <UserSearch className="w-3.5 h-3.5" />
+                Seleccionar contacto guardado
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Nombre / Razón social</Label>
@@ -399,6 +421,14 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             <Input value={form.comentarios || ''} onChange={set('comentarios')} placeholder="Notas adicionales..." />
           </div>
         </div>
+
+        <ContactPickerModal
+          open={showContactPicker}
+          onOpenChange={setShowContactPicker}
+          companyId={company?.id}
+          tipo={form.tipo === 'emitida' ? 'cliente' : 'proveedor'}
+          onSelect={handleSelectContact}
+        />
 
         {saveError && (
           <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-3">{saveError}</p>

@@ -26,6 +26,19 @@
     "direccion_fiscal": {
       "type": "string"
     },
+    "codigo_postal": {
+      "type": "string"
+    },
+    "ciudad": {
+      "type": "string"
+    },
+    "provincia": {
+      "type": "string"
+    },
+    "pais": {
+      "type": "string",
+      "default": "Espa\u00f1a"
+    },
     "email": {
       "type": "string"
     },
@@ -34,6 +47,10 @@
     },
     "persona_contacto": {
       "type": "string"
+    },
+    "organismo_publico": {
+      "type": "boolean",
+      "default": false
     },
     "notas": {
       "type": "string"
