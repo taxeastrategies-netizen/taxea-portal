@@ -122,6 +122,18 @@ export default function Register() {
     try {
       const res = await base44.auth.verifyOtp({ email, otpCode });
       base44.auth.setToken(res.access_token);
+      // Crear registro de suscripción pendiente para que el admin lo active
+      try {
+        const me = await base44.auth.me();
+        if (me?.id) {
+          await base44.entities.Subscription.create({
+            userId: me.id,
+            plan: 'sin_suscripcion',
+            status: 'pendiente_validacion',
+            requestedAt: new Date().toISOString(),
+          });
+        }
+      } catch {}
       window.location.href = '/';
     } catch (err) {
       setError(err.message || 'Código incorrecto. Inténtalo de nuevo.');

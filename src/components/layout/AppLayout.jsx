@@ -87,6 +87,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
           isAdmin={isAdmin}
           isSuperAdmin={isSuperAdmin}
           userRole={userRole}
+          isSubscriptionActive={isAdmin || subscription?.status === 'activa' || subscription?.status === 'prueba'}
         />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <TopBar

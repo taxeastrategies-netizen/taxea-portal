@@ -262,7 +262,7 @@ const ADMIN_ITEMS = [
   { to: '/admin-whatsapp', label: 'WhatsApp', icon: MessageCircle },
 ];
 
-export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole }) {
+export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole, isSubscriptionActive }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -372,26 +372,34 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                       );
                     }
 
+                    const isLockedBySubscription = !isAdmin && !isSubscriptionActive && !dept.adminOnly;
+
                     return (
                       <div key={dept.id}>
                         <button
-                          onClick={() => dept.adminOnly && !isAdmin ? (navigate('/coming-soon'), onClose()) : handleDeptClick(dept)}
+                          onClick={() => {
+                            if (dept.adminOnly && !isAdmin) { navigate('/coming-soon'); onClose(); return; }
+                            if (isLockedBySubscription) { navigate('/suscripcion'); onClose(); return; }
+                            handleDeptClick(dept);
+                          }}
                           className={cn(
                             "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 text-left group",
-                            isActiveDept
-                              ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-black/5`
-                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                            isLockedBySubscription
+                              ? "text-slate-400 opacity-60"
+                              : isActiveDept
+                                ? `${dept.activeBg} ${dept.activeColor} ring-1 ring-inset ring-black/5`
+                                : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                           )}
                         >
                           <DeptIcon className={cn(
                             "w-4 h-4 flex-shrink-0",
-                            isActiveDept ? dept.activeColor : "text-slate-400 group-hover:text-slate-600"
+                            isLockedBySubscription ? "text-slate-300" : isActiveDept ? dept.activeColor : "text-slate-400 group-hover:text-slate-600"
                           )} />
                           <span className="flex-1">{dept.label}</span>
-                          {dept.adminOnly && !isAdmin && (
+                          {(dept.adminOnly && !isAdmin) || isLockedBySubscription ? (
                             <Lock className="w-3 h-3 text-slate-300" />
-                          )}
-                          {hasModules && (!dept.adminOnly || isAdmin) && (
+                          ) : null}
+                          {hasModules && (!dept.adminOnly || isAdmin) && !isLockedBySubscription && (
                             <ChevronDown className={cn(
                               "w-3.5 h-3.5 transition-transform duration-200",
                               isExpanded ? "rotate-0" : "-rotate-90",
@@ -453,20 +461,25 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
             <div className="space-y-0.5">
               {UTILS_ITEMS.map(({ to, label, icon: Icon }) => {
                 const isActive = location.pathname.startsWith(to);
+                const isFreeUtil = to === '/ajustes' || to === '/suscripcion';
+                const isUtilLocked = !isAdmin && !isSubscriptionActive && !isFreeUtil;
                 return (
                   <Link
                     key={to}
-                    to={to}
+                    to={isUtilLocked ? '/suscripcion' : to}
                     onClick={onClose}
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
-                      isActive
-                        ? "bg-taxea-red/8 text-taxea-red"
-                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                      isUtilLocked
+                        ? "text-slate-400 opacity-60"
+                        : isActive
+                          ? "bg-taxea-red/8 text-taxea-red"
+                          : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                     )}
                   >
-                    <Icon className={cn("w-3.5 h-3.5 flex-shrink-0", isActive ? "text-taxea-red" : "text-slate-400")} />
-                    <span>{label}</span>
+                    <Icon className={cn("w-3.5 h-3.5 flex-shrink-0", isUtilLocked ? "text-slate-300" : isActive ? "text-taxea-red" : "text-slate-400")} />
+                    <span className="flex-1">{label}</span>
+                    {isUtilLocked && <Lock className="w-3 h-3 text-slate-300" />}
                   </Link>
                 );
               })}
