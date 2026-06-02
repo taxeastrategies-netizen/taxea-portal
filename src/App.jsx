@@ -122,7 +122,6 @@ function AppWithContext({ user }) {
         <Route path="/admin/estado-contable" element={<AdminEstadoContable />} />
         <Route path="/suscripcion" element={<Suscripcion />} />
         <Route path="/admin/users" element={<GestionUsuarios />} />
-        <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="/signup" element={<Navigate to="/login" replace />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
