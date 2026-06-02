@@ -1,0 +1,63 @@
+{
+  "name": "UserAuditLog",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "actionType": {
+      "type": "string",
+      "enum": [
+        "usuario_registrado",
+        "usuario_editado",
+        "rol_cambiado",
+        "usuario_eliminado",
+        "admin_accedi\u00f3_perfil",
+        "suscripcion_solicitada",
+        "suscripcion_activada",
+        "suscripcion_suspendida",
+        "suscripcion_cancelada",
+        "login_correcto",
+        "login_fallido"
+      ]
+    },
+    "actionBy": {
+      "type": "string"
+    },
+    "actionAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "details": {
+      "type": "string"
+    },
+    "ipAddress": {
+      "type": "string"
+    },
+    "userAgent": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "userId",
+    "actionType"
+  ],
+  "rls": {
+    "create": {},
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

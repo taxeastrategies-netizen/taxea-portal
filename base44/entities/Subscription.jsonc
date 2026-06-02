@@ -1,0 +1,60 @@
+{
+  "name": "Subscription",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "plan": {
+      "type": "string",
+      "enum": [
+        "sin_suscripcion",
+        "autonomo",
+        "empresa",
+        "premium",
+        "personalizado"
+      ],
+      "default": "sin_suscripcion"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sin_suscripcion",
+        "pendiente_seleccion",
+        "pendiente_pago",
+        "pendiente_validacion",
+        "activa",
+        "suspendida",
+        "cancelada",
+        "prueba",
+        "caducada"
+      ],
+      "default": "sin_suscripcion"
+    },
+    "paymentStatus": {
+      "type": "string"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "renewalAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cancelledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "userId"
+  ]
+}
