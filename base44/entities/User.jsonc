@@ -1,0 +1,55 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "user",
+        "admin",
+        "super_admin"
+      ],
+      "default": "user"
+    },
+    "company_id": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "username": {
+      "type": "string"
+    },
+    "business_type": {
+      "type": "string",
+      "enum": [
+        "autonomo",
+        "empresa"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "pendiente",
+        "suspendido",
+        "bloqueado",
+        "eliminado"
+      ],
+      "default": "activo"
+    },
+    "is_deleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "notes": {
+      "type": "string"
+    },
+    "nif": {
+      "type": "string"
+    },
+    "provincia": {
+      "type": "string"
+    }
+  }
+}

@@ -49,6 +49,8 @@ import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 import ComingSoon from './pages/ComingSoon';
 import AdminClients from './pages/AdminClients';
 import AdminEstadoContable from './pages/AdminEstadoContable';
+import Suscripcion from './pages/Suscripcion';
+import GestionUsuarios from './pages/GestionUsuarios';
 import SetupPassword from './pages/SetupPassword';
 import ResetPassword from './pages/ResetPassword';
 
@@ -117,6 +119,8 @@ function AppWithContext({ user }) {
         <Route path="/coming-soon" element={<ComingSoon />} />
         <Route path="/admin/clients" element={<AdminClients />} />
         <Route path="/admin/estado-contable" element={<AdminEstadoContable />} />
+        <Route path="/suscripcion" element={<Suscripcion />} />
+        <Route path="/admin/users" element={<GestionUsuarios />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="/signup" element={<Navigate to="/login" replace />} />
       </Route>

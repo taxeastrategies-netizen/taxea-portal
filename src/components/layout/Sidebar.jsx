@@ -8,7 +8,7 @@ import {
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine, DollarSign,
+  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine, DollarSign, CreditCard,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
   Folder, Zap, Megaphone
 } from 'lucide-react';
@@ -246,8 +246,11 @@ const DEPARTMENTS = DEPT_GROUPS.flatMap(g => g.depts);
 const UTILS_ITEMS = [
   { to: '/tareas', label: 'Tareas', icon: CheckSquare },
   { to: '/sugerencias', label: 'Mejoras', icon: Lightbulb },
+  { to: '/suscripcion', label: 'Suscripción', icon: CreditCard },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
 ];
+
+const ADMIN_USERS_ITEM = { to: '/admin/users', label: 'Gestión de usuarios', icon: UserCog };
 
 const ADMIN_ITEMS = [
   { to: '/admin/clients', label: 'Clientes y accesos', icon: Users },
@@ -471,6 +474,23 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
               })}
             </div>
           </div>
+
+          {/* Admin Users item (just above Admin section) */}
+          {isAdmin && (
+            <Link
+              to={ADMIN_USERS_ITEM.to}
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+                location.pathname.startsWith(ADMIN_USERS_ITEM.to)
+                  ? "bg-taxea-red/8 text-taxea-red"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              )}
+            >
+              <ADMIN_USERS_ITEM.icon className={cn("w-3.5 h-3.5 flex-shrink-0", location.pathname.startsWith(ADMIN_USERS_ITEM.to) ? "text-taxea-red" : "text-slate-400")} />
+              <span>{ADMIN_USERS_ITEM.label}</span>
+            </Link>
+          )}
 
           {/* Admin */}
           {isAdmin && (
