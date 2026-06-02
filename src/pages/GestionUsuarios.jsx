@@ -479,6 +479,10 @@ export default function GestionUsuarios() {
   const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setChangingRoleUser(null); setManagingSubUser(null); };
   const handleSaved = () => { closeModals(); loadData(); };
 
+  const pendingValidation = useMemo(() =>
+    users.filter(u => subscriptions.find(s => s.userId === u.id)?.status === 'pendiente_validacion'),
+    [users, subscriptions]);
+
   if (!isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -494,6 +498,22 @@ export default function GestionUsuarios() {
   return (
     <div>
       <PageHeader title="Gestión de Usuarios" subtitle="Administración de cuentas, roles y suscripciones" />
+
+      {pendingValidation.length > 0 && (
+        <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <div className="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+            {pendingValidation.length}
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-800">
+              {pendingValidation.length === 1 ? '1 usuario pendiente de activación' : `${pendingValidation.length} usuarios pendientes de activación`}
+            </p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              {pendingValidation.map(u => u.full_name || u.email).join(', ')}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mb-5 relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

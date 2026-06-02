@@ -53,6 +53,7 @@ import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
 import SetupPassword from './pages/SetupPassword';
 import ResetPassword from './pages/ResetPassword';
+import Register from './pages/Register';
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -148,6 +149,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
       <Route path="/setup-password" element={<SetupPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />

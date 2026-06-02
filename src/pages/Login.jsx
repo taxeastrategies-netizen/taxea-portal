@@ -4,6 +4,7 @@ import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, U
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Link } from 'react-router-dom';
 import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 
 const FEATURES = [
@@ -172,8 +173,13 @@ export default function Login() {
                 </button>
               </form>
 
-              {/* Aviso acceso exclusivo — NO hay registro público */}
-              <div className="mt-6 bg-secondary/60 border border-border rounded-xl p-4">
+              <div className="mt-5 text-center">
+                <span className="text-sm text-muted-foreground">¿Eres nuevo cliente? </span>
+                <Link to="/register" className="text-sm text-taxea-red hover:underline font-medium">Solicitar acceso</Link>
+              </div>
+
+              {/* Aviso acceso exclusivo */}
+              <div className="mt-4 bg-secondary/60 border border-border rounded-xl p-4">
                 <p className="text-xs text-muted-foreground text-center leading-relaxed">
                   Acceso exclusivo para clientes de Taxea con cuenta activa.<br />
                   <span className="text-foreground/60">Si eres cliente y no tienes acceso, contacta con tu asesor.</span>

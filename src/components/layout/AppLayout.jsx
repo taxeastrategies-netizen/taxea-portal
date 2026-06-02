@@ -6,12 +6,21 @@ import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 import { getImpersonation } from '@/lib/impersonation';
+import SubscriptionGate from './SubscriptionGate';
 
 export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [subscription, setSubscription] = useState(null);
   const location = useLocation();
   const trackedRef = useRef(false);
   const impersonation = getImpersonation();
+
+  useEffect(() => {
+    if (!user?.id || isAdmin) return;
+    base44.entities.Subscription.filter({ userId: user.id }).then(subs => {
+      setSubscription(subs?.[0] || null);
+    }).catch(() => {});
+  }, [user?.id, isAdmin]);
 
   // Tracking automático de primer acceso para clientes
   useEffect(() => {
@@ -60,6 +69,11 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     trackAccess();
   }, [user?.email, isAdmin]);
 
+  // Routes that are always accessible regardless of subscription
+  const FREE_PATHS = ['/', '/ajustes', '/suscripcion', '/notificaciones'];
+  const isFreePath = FREE_PATHS.some(p => location.pathname === p) || isAdmin;
+  const needsGate = !isFreePath;
+
   // Department pages get full-width, no max-width container
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
@@ -83,11 +97,23 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
           <main className="flex-1 overflow-y-auto">
             {isDeptPage ? (
               <div className="p-4 lg:p-6">
-                <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
+                {needsGate ? (
+                  <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
+                    <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
+                  </SubscriptionGate>
+                ) : (
+                  <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
+                )}
               </div>
             ) : (
               <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-                <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }} />
+                {needsGate ? (
+                  <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
+                    <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
+                  </SubscriptionGate>
+                ) : (
+                  <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
+                )}
               </div>
             )}
           </main>
