@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield } from 'lucide-react';
+import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -216,6 +216,153 @@ function DeleteUserModal({ targetUser, currentUser, onClose, onDeleted }) {
   );
 }
 
+function ManageSubscriptionModal({ targetUser, subscription, currentUser, onClose, onSaved }) {
+  const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState('');
+
+  const hasPendingSub = subscription && subscription.status === 'pendiente_validacion';
+  const hasActiveSub = subscription && subscription.status === 'activa';
+  const subCfg = SUB_CFG[subscription?.status] || SUB_CFG.sin_suscripcion;
+
+  const handleAction = async (action) => {
+    setSaving(true);
+    const newStatus = action === 'aceptar' ? 'activa' : 'cancelada';
+    const actionType = action === 'aceptar' ? 'suscripcion_activada' : 'suscripcion_cancelada';
+
+    if (subscription?.id) {
+      await base44.entities.Subscription.update(subscription.id, {
+        status: newStatus,
+        ...(action === 'aceptar' ? { startedAt: new Date().toISOString() } : { cancelledAt: new Date().toISOString() }),
+        ...(note ? { notes: note } : {}),
+      });
+    }
+    await base44.entities.UserAuditLog.create({
+      userId: targetUser.id,
+      actionType,
+      actionBy: currentUser?.email || 'admin',
+      actionAt: new Date().toISOString(),
+      details: `Suscripción ${action === 'aceptar' ? 'activada' : 'cancelada'} por administrador. Plan: ${subscription?.plan || '—'}${note ? `. Nota: ${note}` : ''}`,
+    });
+    setSaving(false);
+    onSaved();
+  };
+
+  const handleSuspend = async () => {
+    setSaving(true);
+    await base44.entities.Subscription.update(subscription.id, { status: 'suspendida' });
+    await base44.entities.UserAuditLog.create({
+      userId: targetUser.id, actionType: 'suscripcion_suspendida',
+      actionBy: currentUser?.email || 'admin', actionAt: new Date().toISOString(),
+      details: `Suscripción suspendida por administrador${note ? `. Nota: ${note}` : ''}`,
+    });
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <ModalShell title="Gestionar suscripción" onClose={onClose}>
+      <div className="py-4 space-y-4">
+        {/* Info usuario */}
+        <div className="bg-secondary/40 rounded-xl p-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Usuario</span>
+            <span className="font-medium">{targetUser.full_name || targetUser.email}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Plan solicitado</span>
+            <span className="font-medium capitalize">{subscription?.plan || '—'}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Estado actual</span>
+            <span className={`font-semibold ${subCfg.color}`}>{subCfg.label}</span>
+          </div>
+          {subscription?.requestedAt && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Solicitado el</span>
+              <span className="font-medium">{new Date(subscription.requestedAt).toLocaleDateString('es-ES')}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Sin suscripción */}
+        {!subscription && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-600 text-center">
+            Este usuario no tiene ninguna suscripción registrada.
+          </div>
+        )}
+
+        {/* Pendiente de validación → aceptar o rechazar */}
+        {hasPendingSub && (
+          <>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+              El usuario ha solicitado este plan. Valida si ha completado el pago para activarlo.
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Nota interna (opcional)</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                placeholder="Ej: Pago confirmado por transferencia..."
+                className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={() => handleAction('rechazar')} disabled={saving} variant="outline"
+                className="flex-1 border-red-200 text-red-600 hover:bg-red-50">
+                <XCircle className="w-4 h-4 mr-1.5" />
+                Rechazar
+              </Button>
+              <Button onClick={() => handleAction('aceptar')} disabled={saving}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                <CheckCircle className="w-4 h-4 mr-1.5" />
+                {saving ? 'Procesando...' : 'Aceptar y activar'}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* Activa → opción de suspender */}
+        {hasActiveSub && (
+          <>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 flex-shrink-0" /> Suscripción activa. Puedes suspenderla si es necesario.
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Motivo de suspensión (opcional)</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                placeholder="Ej: Impago mes de junio..."
+                className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+            </div>
+            <Button onClick={handleSuspend} disabled={saving} variant="outline"
+              className="w-full border-amber-200 text-amber-700 hover:bg-amber-50">
+              {saving ? 'Procesando...' : 'Suspender suscripción'}
+            </Button>
+          </>
+        )}
+
+        {/* Otros estados: cancelada, suspendida, caducada → reactivar */}
+        {subscription && !hasPendingSub && !hasActiveSub && (
+          <>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-600">
+              Puedes reactivar manualmente la suscripción de este usuario.
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Nota interna (opcional)</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+            </div>
+            <Button onClick={() => handleAction('aceptar')} disabled={saving}
+              className="w-full bg-green-600 hover:bg-green-700 text-white">
+              <CheckCircle className="w-4 h-4 mr-1.5" />
+              {saving ? 'Procesando...' : 'Reactivar suscripción'}
+            </Button>
+          </>
+        )}
+      </div>
+      <div className="flex justify-end pt-2 border-t border-border">
+        <Button variant="outline" onClick={onClose}>Cerrar</Button>
+      </div>
+    </ModalShell>
+  );
+}
+
 function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
   const [role, setRole] = useState(targetUser.role || 'user');
   const [saving, setSaving] = useState(false);
@@ -286,6 +433,7 @@ export default function GestionUsuarios() {
   const [viewingUser, setViewingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
   const [changingRoleUser, setChangingRoleUser] = useState(null);
+  const [managingSubUser, setManagingSubUser] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -312,7 +460,7 @@ export default function GestionUsuarios() {
   }, [users, search]);
 
   const getSubForUser = (userId) => subscriptions.find(s => s.userId === userId);
-  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setChangingRoleUser(null); };
+  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setChangingRoleUser(null); setManagingSubUser(null); };
   const handleSaved = () => { closeModals(); loadData(); };
 
   if (!isAdmin) {
@@ -386,6 +534,7 @@ export default function GestionUsuarios() {
                           <ActionBtn title="Acceder al perfil" onClick={() => setViewingUser(u)}><UserCheck className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Eliminar usuario" onClick={() => setDeletingUser(u)} danger><Trash2 className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Cambiar rol" onClick={() => setChangingRoleUser(u)}><ShieldCheck className="w-3.5 h-3.5" /></ActionBtn>
+                          <ActionBtn title="Gestionar suscripción" onClick={() => setManagingSubUser(u)}><CreditCard className="w-3.5 h-3.5" /></ActionBtn>
                         </div>
                       </td>
                     </tr>
@@ -407,6 +556,7 @@ export default function GestionUsuarios() {
       {viewingUser && <ViewProfileModal targetUser={viewingUser} subscription={getSubForUser(viewingUser.id)} adminUser={user} onClose={closeModals} />}
       {deletingUser && <DeleteUserModal targetUser={deletingUser} currentUser={user} onClose={closeModals} onDeleted={handleSaved} />}
       {changingRoleUser && <ChangeRoleModal targetUser={changingRoleUser} currentUser={user} onClose={closeModals} onChanged={handleSaved} />}
+      {managingSubUser && <ManageSubscriptionModal targetUser={managingSubUser} subscription={getSubForUser(managingSubUser.id)} currentUser={user} onClose={closeModals} onSaved={handleSaved} />}
     </div>
   );
 }
