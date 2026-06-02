@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { startImpersonation } from '@/lib/impersonation';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -120,6 +121,15 @@ function ViewProfileModal({ targetUser, subscription, adminUser, onClose }) {
     });
   }, []);
 
+  const handleImpersonate = () => {
+    startImpersonation({
+      clientAccountId: targetUser.data?.company_id || targetUser.id,
+      clientName: targetUser.full_name || targetUser.email,
+      clientEmail: targetUser.email,
+    });
+    window.location.href = '/';
+  };
+
   const subCfg = SUB_CFG[subscription?.status] || SUB_CFG.sin_suscripcion;
   const roleCfg = ROLE_CONFIG[targetUser.role] || ROLE_CONFIG.user;
 
@@ -162,7 +172,13 @@ function ViewProfileModal({ targetUser, subscription, adminUser, onClose }) {
           </div>
         )}
       </div>
-      <div className="flex justify-end"><Button onClick={onClose}>Cerrar</Button></div>
+      <div className="flex justify-between items-center pt-2 border-t border-border">
+        <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        <Button onClick={handleImpersonate} className="bg-teal hover:bg-teal-dark gap-2">
+          <ExternalLink className="w-4 h-4" />
+          Ver como este usuario
+        </Button>
+      </div>
     </ModalShell>
   );
 }
