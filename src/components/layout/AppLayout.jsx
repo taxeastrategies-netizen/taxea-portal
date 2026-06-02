@@ -22,6 +22,21 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     }).catch(() => {});
   }, [user?.id, isAdmin]);
 
+  // Verificar periódicamente si el usuario ha sido eliminado y expulsarlo
+  useEffect(() => {
+    if (!user?.id || isAdmin) return;
+    const checkDeleted = async () => {
+      const users = await base44.entities.User.filter({ id: user.id });
+      const u = users?.[0];
+      if (u?.is_deleted || u?.status === 'eliminado') {
+        base44.auth.logout('/login');
+      }
+    };
+    checkDeleted();
+    const interval = setInterval(checkDeleted, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id, isAdmin]);
+
   // Tracking automático de primer acceso para clientes
   useEffect(() => {
     if (!user?.email || isAdmin || trackedRef.current) return;
