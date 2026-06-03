@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle, ExternalLink, Ban } from 'lucide-react';
 import { startImpersonation } from '@/lib/impersonation';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -178,6 +178,83 @@ function ViewProfileModal({ targetUser, subscription, adminUser, onClose }) {
           <ExternalLink className="w-4 h-4" />
           Ver como este usuario
         </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function BlockUserModal({ targetUser, currentUser, onClose, onBlocked }) {
+  const [blocking, setBlocking] = useState(false);
+  const isSelf = targetUser.id === currentUser?.id;
+  const isAdminUser = ['admin', 'super_admin'].includes(targetUser.role);
+  const isAlreadyBlocked = targetUser.status === 'bloqueado';
+
+  const handleBlock = async () => {
+    setBlocking(true);
+    await base44.entities.User.update(targetUser.id, { status: 'bloqueado' });
+    await base44.entities.UserAuditLog.create({
+      userId: targetUser.id, actionType: 'usuario_editado',
+      actionBy: currentUser?.email || 'admin', actionAt: new Date().toISOString(),
+      details: 'Cuenta bloqueada (BANNED) por administrador',
+    });
+    setBlocking(false);
+    onBlocked();
+  };
+
+  const handleUnblock = async () => {
+    setBlocking(true);
+    await base44.entities.User.update(targetUser.id, { status: 'activo' });
+    await base44.entities.UserAuditLog.create({
+      userId: targetUser.id, actionType: 'usuario_editado',
+      actionBy: currentUser?.email || 'admin', actionAt: new Date().toISOString(),
+      details: 'Cuenta desbloqueada por administrador',
+    });
+    setBlocking(false);
+    onBlocked();
+  };
+
+  return (
+    <ModalShell title={isAlreadyBlocked ? 'Desbloquear cuenta' : 'Bloquear cuenta'} onClose={onClose}>
+      <div className="py-4">
+        {isSelf || isAdminUser ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+            {isSelf ? 'No puedes bloquear tu propia cuenta.' : 'No se puede bloquear una cuenta con permisos de administrador.'}
+          </div>
+        ) : isAlreadyBlocked ? (
+          <>
+            <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-green-800">Esta cuenta está actualmente bloqueada. ¿Deseas restaurar el acceso?</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Usuario: <strong className="text-foreground">{targetUser.full_name || targetUser.email}</strong>
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <Ban className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800">El usuario será expulsado de su sesión inmediatamente y al intentar iniciar sesión verá un mensaje de cuenta bloqueada.</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Usuario: <strong className="text-foreground">{targetUser.full_name || targetUser.email}</strong>
+            </p>
+          </>
+        )}
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        {!isSelf && !isAdminUser && (
+          isAlreadyBlocked ? (
+            <Button onClick={handleUnblock} disabled={blocking} className="bg-green-600 hover:bg-green-700 text-white">
+              {blocking ? 'Procesando...' : 'Desbloquear cuenta'}
+            </Button>
+          ) : (
+            <Button onClick={handleBlock} disabled={blocking} variant="destructive">
+              {blocking ? 'Bloqueando...' : 'Bloquear cuenta (BAN)'}
+            </Button>
+          )
+        )}
       </div>
     </ModalShell>
   );
@@ -448,6 +525,7 @@ export default function GestionUsuarios() {
   const [editingUser, setEditingUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [blockingUser, setBlockingUser] = useState(null);
   const [changingRoleUser, setChangingRoleUser] = useState(null);
   const [managingSubUser, setManagingSubUser] = useState(null);
 
@@ -476,7 +554,7 @@ export default function GestionUsuarios() {
   }, [users, search]);
 
   const getSubForUser = (userId) => subscriptions.find(s => s.userId === userId);
-  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setChangingRoleUser(null); setManagingSubUser(null); };
+  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setBlockingUser(null); setChangingRoleUser(null); setManagingSubUser(null); };
   const handleSaved = () => { closeModals(); loadData(); };
 
   const pendingValidation = useMemo(() =>
@@ -568,6 +646,7 @@ export default function GestionUsuarios() {
                         <div className="flex items-center gap-0.5">
                           <ActionBtn title="Editar usuario" onClick={() => setEditingUser(u)}><Pencil className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Acceder al perfil" onClick={() => setViewingUser(u)}><UserCheck className="w-3.5 h-3.5" /></ActionBtn>
+                          <ActionBtn title={u.status === 'bloqueado' ? 'Desbloquear cuenta' : 'Bloquear cuenta (BAN)'} onClick={() => setBlockingUser(u)} danger><Ban className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Eliminar usuario" onClick={() => setDeletingUser(u)} danger><Trash2 className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Cambiar rol" onClick={() => setChangingRoleUser(u)}><ShieldCheck className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Gestionar suscripción" onClick={() => setManagingSubUser(u)}><CreditCard className="w-3.5 h-3.5" /></ActionBtn>
@@ -590,6 +669,7 @@ export default function GestionUsuarios() {
 
       {editingUser && <EditUserModal targetUser={editingUser} onClose={closeModals} onSaved={handleSaved} />}
       {viewingUser && <ViewProfileModal targetUser={viewingUser} subscription={getSubForUser(viewingUser.id)} adminUser={user} onClose={closeModals} />}
+      {blockingUser && <BlockUserModal targetUser={blockingUser} currentUser={user} onClose={closeModals} onBlocked={handleSaved} />}
       {deletingUser && <DeleteUserModal targetUser={deletingUser} currentUser={user} onClose={closeModals} onDeleted={handleSaved} />}
       {changingRoleUser && <ChangeRoleModal targetUser={changingRoleUser} currentUser={user} onClose={closeModals} onChanged={handleSaved} />}
       {managingSubUser && <ManageSubscriptionModal targetUser={managingSubUser} subscription={getSubForUser(managingSubUser.id)} currentUser={user} onClose={closeModals} onSaved={handleSaved} />}

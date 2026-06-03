@@ -31,6 +31,9 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
         if (me?.is_deleted || me?.status === 'eliminado') {
           base44.auth.logout('/login');
         }
+        if (me?.status === 'bloqueado') {
+          base44.auth.logout('/login?banned=1');
+        }
       } catch {
         base44.auth.logout('/login');
       }

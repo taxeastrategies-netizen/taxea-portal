@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, Sparkles, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -88,6 +88,8 @@ export default function Login() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
+  const isBanned = new URLSearchParams(window.location.search).get('banned') === '1';
+
   const resetErrors = () => setError('');
 
   const handleLogin = async (e) => {
@@ -96,6 +98,14 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
+      // Verificar si la cuenta está bloqueada antes de redirigir
+      const me = await base44.auth.me();
+      if (me?.status === 'bloqueado') {
+        await base44.auth.logout();
+        setError('CUENTA BLOQUEADA — Tu acceso ha sido suspendido por el administrador. Contacta con Taxea Strategies para más información.');
+        setLoading(false);
+        return;
+      }
       window.location.href = '/';
     } catch (err) {
       setError(err.message || 'Credenciales incorrectas. Comprueba tu email y contraseña.');
@@ -127,6 +137,15 @@ export default function Login() {
               style={{ height: 44, width: 'auto', objectFit: 'contain', display: 'block' }}
             />
           </div>
+
+          {/* BANNED */}
+          {isBanned && (
+            <div className="mb-6 bg-red-950 border border-red-700 rounded-xl p-5 text-center animate-fade-in">
+              <Ban className="w-10 h-10 text-red-400 mx-auto mb-3" />
+              <p className="font-jakarta font-bold text-red-300 text-base mb-1">⛔ CUENTA BLOQUEADA</p>
+              <p className="text-sm text-red-400 leading-relaxed">Tu acceso ha sido suspendido por el administrador.<br />Contacta con Taxea Strategies para más información.</p>
+            </div>
+          )}
 
           {/* LOGIN */}
           {mode === 'login' && (
