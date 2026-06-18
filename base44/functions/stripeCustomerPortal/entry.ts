@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import Stripe from 'npm:stripe@17.7.0';
 
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY");
-const PUBLISHED_URL = "https://app.taxea.co";
+const PUBLISHED_URL = "https://taxeaportal.com";
 
 Deno.serve(async (req) => {
   try {
