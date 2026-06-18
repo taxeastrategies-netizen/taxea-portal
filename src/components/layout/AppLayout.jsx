@@ -128,6 +128,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
             onMenuToggle={() => setSidebarOpen(true)}
             user={user}
             companyName={company?.nombre_comercial || company?.razon_social}
+            isAdmin={isAdmin}
           />
           <main className="flex-1 overflow-y-auto">
             {isPortalLocked && !isOnLockedPath ? (

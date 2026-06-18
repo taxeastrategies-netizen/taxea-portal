@@ -1,4 +1,5 @@
 import { Menu, Bell, ChevronDown, LogOut, User, ChevronRight } from 'lucide-react';
+import OcrTopBarBadge from '@/components/ocr/OcrTopBarBadge';
 import { Link, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
@@ -29,7 +30,7 @@ const BREADCRUMBS = {
   '/': ['Dashboard'],
 };
 
-export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0 }) {
+export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdmin }) {
   const location = useLocation();
   const crumbs = BREADCRUMBS[location.pathname] || null;
 
@@ -62,7 +63,8 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
+        <OcrTopBarBadge isAdmin={isAdmin} />
         {/* Company badge — mobile */}
         {companyName && (
           <div className="sm:hidden flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5 mr-1">
