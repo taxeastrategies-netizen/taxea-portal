@@ -166,9 +166,9 @@ export default function AdminPagosClientes() {
   const loadData = async () => {
     setLoading(true);
     const [usersData, subsData, paymentsData] = await Promise.all([
-      base44.asServiceRole.entities.User.list('-created_date', 200),
-      base44.asServiceRole.entities.Subscription.list('-created_date', 200),
-      base44.asServiceRole.entities.PaymentRecord.list('-created_date', 500),
+      base44.entities.User.list('-created_date', 200),
+      base44.entities.Subscription.list('-created_date', 200),
+      base44.entities.PaymentRecord.list('-created_date', 500),
     ]);
     setUsers((usersData || []).filter(u => !u.is_deleted && u.role === 'user'));
     setSubscriptions(subsData || []);
