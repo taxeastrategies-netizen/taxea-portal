@@ -122,15 +122,30 @@ export default function Register() {
     try {
       const res = await base44.auth.verifyOtp({ email, otpCode });
       base44.auth.setToken(res.access_token);
-      // Crear registro de suscripción pendiente para que el admin lo active
+      // Marcar cuenta como bloqueada y crear suscripción inicial
       try {
         const me = await base44.auth.me();
         if (me?.id) {
+          await base44.entities.User.update(me.id, {
+            isPortalActive: false,
+            accountAccessStatus: 'locked',
+            adminActivationStatus: 'pending',
+            status: 'pendiente',
+          });
           await base44.entities.Subscription.create({
             userId: me.id,
+            planCode: 'sin_suscripcion',
             plan: 'sin_suscripcion',
-            status: 'pendiente_validacion',
+            status: 'pendiente_seleccion',
+            firstPaymentStatus: 'unpaid',
             requestedAt: new Date().toISOString(),
+          });
+          await base44.entities.UserAuditLog.create({
+            userId: me.id,
+            actionType: 'usuario_registrado',
+            actionBy: me.email,
+            actionAt: new Date().toISOString(),
+            details: 'Usuario registrado. Cuenta bloqueada a la espera de suscripción y activación.',
           });
         }
       } catch {}

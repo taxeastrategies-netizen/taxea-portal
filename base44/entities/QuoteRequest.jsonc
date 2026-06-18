@@ -1,0 +1,56 @@
+{
+  "name": "QuoteRequest",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "caseType": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "baja",
+        "media",
+        "alta"
+      ]
+    },
+    "phone": {
+      "type": "string"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Nueva",
+        "En revisi\u00f3n",
+        "Pendiente de informaci\u00f3n",
+        "Presupuestada",
+        "Aceptada",
+        "Rechazada",
+        "Cerrada"
+      ],
+      "default": "Nueva"
+    },
+    "assignedTo": {
+      "type": "string"
+    },
+    "adminNotes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "userId",
+    "caseType",
+    "description"
+  ]
+}

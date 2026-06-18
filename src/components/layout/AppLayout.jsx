@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { Lock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
@@ -12,6 +14,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const trackedRef = useRef(false);
   const impersonation = getImpersonation();
 
@@ -40,6 +43,13 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     };
     checkDeleted();
   }, [user?.id, isAdmin, location.pathname]);
+
+  // Redirigir usuarios con portal bloqueado
+  useEffect(() => {
+    if (isPortalLocked && !isOnLockedPath) {
+      navigate('/suscripcion', { replace: true });
+    }
+  }, [isPortalLocked, isOnLockedPath, navigate]);
 
   // Tracking automático de primer acceso para clientes
   useEffect(() => {
@@ -88,6 +98,11 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     trackAccess();
   }, [user?.email, isAdmin]);
 
+  // Portal access control: usuarios bloqueados solo ven Suscripción, Ajustes y Notificaciones
+  const PORTAL_LOCKED_PATHS = ['/suscripcion', '/ajustes', '/notificaciones'];
+  const isPortalLocked = !isAdmin && user && user.isPortalActive === false;
+  const isOnLockedPath = PORTAL_LOCKED_PATHS.some(p => location.pathname === p);
+  
   // Routes that are always accessible regardless of subscription
   const FREE_PATHS = ['/', '/ajustes', '/suscripcion', '/notificaciones'];
   const isFreePath = FREE_PATHS.some(p => location.pathname === p) || isAdmin;
@@ -115,7 +130,22 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
             companyName={company?.nombre_comercial || company?.razon_social}
           />
           <main className="flex-1 overflow-y-auto">
-            {isDeptPage ? (
+            {isPortalLocked ? (
+              <div className="flex items-center justify-center min-h-[60vh] p-6">
+                <div className="text-center max-w-md">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-5">
+                    <Lock className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <h2 className="font-jakarta font-bold text-xl mb-2">Acceso pendiente de activación</h2>
+                  <p className="text-muted-foreground text-sm mb-6">
+                    Tu cuenta todavía no está activa. Completa tu suscripción y espera la validación de Taxea.
+                  </p>
+                  <Button onClick={() => navigate('/suscripcion')} className="bg-teal hover:bg-teal-dark">
+                    Ir a Suscripción
+                  </Button>
+                </div>
+              </div>
+            ) : isDeptPage ? (
               <div className="p-4 lg:p-6">
                 {needsGate ? (
                   <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>

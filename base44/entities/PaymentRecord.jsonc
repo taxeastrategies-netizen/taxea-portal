@@ -1,0 +1,65 @@
+{
+  "name": "PaymentRecord",
+  "type": "object",
+  "properties": {
+    "userId": {
+      "type": "string"
+    },
+    "subscriptionId": {
+      "type": "string"
+    },
+    "stripeInvoiceId": {
+      "type": "string"
+    },
+    "stripePaymentIntentId": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid",
+        "failed",
+        "refunded"
+      ],
+      "default": "pending"
+    },
+    "paymentType": {
+      "type": "string",
+      "enum": [
+        "first_payment",
+        "renewal",
+        "manual_exception"
+      ],
+      "default": "first_payment"
+    },
+    "periodStart": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "periodEnd": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "paidAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failureCode": {
+      "type": "string"
+    },
+    "failureMessageSafe": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "userId"
+  ]
+}

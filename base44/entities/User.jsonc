@@ -27,6 +27,31 @@
         "empresa"
       ]
     },
+    "legal_form": {
+      "type": "string"
+    },
+    "tax_id": {
+      "type": "string"
+    },
+    "stripeCustomerId": {
+      "type": "string"
+    },
+    "billing_address": {
+      "type": "string"
+    },
+    "billing_postal_code": {
+      "type": "string"
+    },
+    "billing_city": {
+      "type": "string"
+    },
+    "billing_province": {
+      "type": "string"
+    },
+    "billing_country": {
+      "type": "string",
+      "default": "Espa\u00f1a"
+    },
     "status": {
       "type": "string",
       "enum": [
@@ -41,6 +66,35 @@
     "is_deleted": {
       "type": "boolean",
       "default": false
+    },
+    "accountAccessStatus": {
+      "type": "string",
+      "enum": [
+        "locked",
+        "active",
+        "suspended"
+      ],
+      "default": "locked"
+    },
+    "adminActivationStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "isPortalActive": {
+      "type": "boolean",
+      "default": false
+    },
+    "activatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "activatedBy": {
+      "type": "string"
     },
     "notes": {
       "type": "string"

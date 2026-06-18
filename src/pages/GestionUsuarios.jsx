@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle, ExternalLink, Ban } from 'lucide-react';
+import { Search, Pencil, UserCheck, Trash2, ShieldCheck, X, AlertTriangle, Shield, CreditCard, CheckCircle, XCircle, ExternalLink, Ban, Unlock, Clock, DollarSign } from 'lucide-react';
 import { startImpersonation } from '@/lib/impersonation';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -15,15 +15,26 @@ const ROLE_CONFIG = {
 };
 
 const SUB_CFG = {
-  sin_suscripcion:      { label: 'Sin suscripción',  color: 'text-slate-400' },
-  pendiente_seleccion:  { label: 'Pend. selección',  color: 'text-amber-500' },
-  pendiente_pago:       { label: 'Pend. pago',       color: 'text-orange-500' },
-  pendiente_validacion: { label: 'Pend. validación', color: 'text-blue-500' },
-  activa:               { label: 'Activa',           color: 'text-green-600' },
-  suspendida:           { label: 'Suspendida',       color: 'text-red-500' },
-  cancelada:            { label: 'Cancelada',        color: 'text-slate-500' },
-  prueba:               { label: 'En prueba',        color: 'text-purple-500' },
-  caducada:             { label: 'Caducada',         color: 'text-red-400' },
+  sin_suscripcion:      { label: 'Sin suscripción',    color: 'text-slate-400',  bg: 'bg-slate-50' },
+  pendiente_seleccion:  { label: 'Pend. selección',    color: 'text-amber-500',  bg: 'bg-amber-50' },
+  pendiente_pago:       { label: 'Pend. pago',         color: 'text-orange-500', bg: 'bg-orange-50' },
+  processing:           { label: 'Pago en proceso',    color: 'text-orange-500', bg: 'bg-orange-50' },
+  pendiente_validacion: { label: 'Pend. validación',   color: 'text-blue-500',   bg: 'bg-blue-50' },
+  paid_pending_activation: { label: 'Pago verificado (pend. activación)', color: 'text-green-600', bg: 'bg-green-50' },
+  activa:               { label: 'Activa',             color: 'text-blue-600',   bg: 'bg-blue-50' },
+  past_due:             { label: 'Incidencia de pago', color: 'text-red-500',    bg: 'bg-red-50' },
+  suspendida:           { label: 'Suspendida',         color: 'text-red-500',    bg: 'bg-red-50' },
+  cancelada:            { label: 'Cancelada',          color: 'text-slate-500',  bg: 'bg-slate-100' },
+  prueba:               { label: 'En prueba',          color: 'text-purple-500', bg: 'bg-purple-50' },
+  caducada:             { label: 'Caducada',           color: 'text-red-400',    bg: 'bg-red-50' },
+};
+
+const FP_CFG = {
+  unpaid:  { label: 'No pagado',  color: 'text-slate-400' },
+  pending: { label: 'Pendiente',  color: 'text-amber-500' },
+  processing: { label: 'En proceso', color: 'text-orange-500' },
+  paid:    { label: 'Pagado',     color: 'text-green-600' },
+  failed:  { label: 'Fallido',    color: 'text-red-500' },
 };
 
 const STATUS_OPTS = ['activo', 'pendiente', 'suspendido', 'bloqueado', 'eliminado'];
@@ -516,6 +527,71 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
   );
 }
 
+function ActivateAccountModal({ targetUser, subscription, currentUser, onClose, onActivated }) {
+  const [activating, setActivating] = useState(false);
+  const [note, setNote] = useState('');
+
+  const handleActivate = async () => {
+    setActivating(true);
+    await base44.entities.User.update(targetUser.id, {
+      isPortalActive: true,
+      accountAccessStatus: 'active',
+      adminActivationStatus: 'approved',
+      activatedAt: new Date().toISOString(),
+      activatedBy: currentUser?.id,
+      status: 'activo',
+    });
+    if (subscription?.id) {
+      await base44.entities.Subscription.update(subscription.id, { status: 'activa' });
+    }
+    await base44.entities.UserAuditLog.create({
+      userId: targetUser.id,
+      actionType: 'suscripcion_activada',
+      actionBy: currentUser?.email || 'admin',
+      actionAt: new Date().toISOString(),
+      details: `Cuenta activada por administrador. Plan: ${subscription?.planCode || subscription?.plan || '—'}${note ? `. Nota: ${note}` : ''}`,
+    });
+    setActivating(false);
+    onActivated();
+  };
+
+  return (
+    <ModalShell title="Activar cuenta" onClose={onClose}>
+      <div className="py-4 space-y-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <p className="text-sm text-green-800 font-medium">Pago verificado</p>
+          <p className="text-sm text-green-700 mt-1">Primer pago confirmado por Stripe. La cuenta está lista para activarse.</p>
+        </div>
+        <div className="bg-secondary/40 rounded-xl p-4 space-y-2 text-sm">
+          {[
+            ['Usuario', targetUser.full_name || targetUser.email],
+            ['Plan', subscription?.planName || subscription?.plan || '—'],
+            ['Importe', subscription?.amount ? `${subscription.amount} ${subscription.currency || 'EUR'}` : '—'],
+            ['Método', subscription?.paymentMethodBrand ? `${subscription.paymentMethodBrand} ····${subscription.paymentMethodLast4}` : '—'],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="font-medium text-right max-w-[60%] truncate">{value}</span>
+            </div>
+          ))}
+        </div>
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">Nota interna (opcional)</label>
+          <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+            placeholder="Nota interna sobre la activación..."
+            className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 pt-2 border-t border-border">
+        <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button onClick={handleActivate} disabled={activating} className="bg-green-600 hover:bg-green-700 text-white">
+          {activating ? 'Activando...' : 'Activar cuenta'}
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
 export default function GestionUsuarios() {
   const { user, isAdmin } = useOutletContext() || {};
   const [users, setUsers] = useState([]);
@@ -528,6 +604,7 @@ export default function GestionUsuarios() {
   const [blockingUser, setBlockingUser] = useState(null);
   const [changingRoleUser, setChangingRoleUser] = useState(null);
   const [managingSubUser, setManagingSubUser] = useState(null);
+  const [activatingUser, setActivatingUser] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -554,12 +631,35 @@ export default function GestionUsuarios() {
   }, [users, search]);
 
   const getSubForUser = (userId) => subscriptions.find(s => s.userId === userId);
-  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setBlockingUser(null); setChangingRoleUser(null); setManagingSubUser(null); };
+  const closeModals = () => { setEditingUser(null); setViewingUser(null); setDeletingUser(null); setBlockingUser(null); setChangingRoleUser(null); setManagingSubUser(null); setActivatingUser(null); };
   const handleSaved = () => { closeModals(); loadData(); };
 
   const pendingValidation = useMemo(() =>
     users.filter(u => subscriptions.find(s => s.userId === u.id)?.status === 'pendiente_validacion'),
     [users, subscriptions]);
+
+  const pendingActivation = useMemo(() =>
+    users.filter(u => {
+      const sub = subscriptions.find(s => s.userId === u.id);
+      return sub?.status === 'paid_pending_activation' && !u.isPortalActive;
+    }),
+    [users, subscriptions]);
+
+  const kpis = useMemo(() => ({
+    pendientesPago: users.filter(u => {
+      const sub = subscriptions.find(s => s.userId === u.id);
+      return sub && ['pendiente_pago','processing'].includes(sub.status);
+    }).length,
+    verificadosPendientes: pendingActivation.length,
+    activos: users.filter(u => {
+      const sub = subscriptions.find(s => s.userId === u.id);
+      return sub?.status === 'activa';
+    }).length,
+    incidencias: users.filter(u => {
+      const sub = subscriptions.find(s => s.userId === u.id);
+      return sub?.status === 'past_due';
+    }).length,
+  }), [users, subscriptions, pendingActivation]);
 
   if (!isAdmin) {
     return (
@@ -576,6 +676,51 @@ export default function GestionUsuarios() {
   return (
     <div>
       <PageHeader title="Gestión de Usuarios" subtitle="Administración de cuentas, roles y suscripciones" />
+
+      {/* KPI Bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: 'Pendientes de pago', value: kpis.pendientesPago, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Pagos verificados', value: kpis.verificadosPendientes, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'Usuarios activos', value: kpis.activos, icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Incidencias', value: kpis.incidencias, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50' },
+        ].map(kpi => (
+          <div key={kpi.label} className={`${kpi.bg} border border-border rounded-xl px-4 py-3 flex items-center gap-3`}>
+            <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
+            <div>
+              <p className="text-2xl font-jakarta font-bold">{kpi.value}</p>
+              <p className="text-xs text-muted-foreground">{kpi.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cola: Pendientes de activación */}
+      {pendingActivation.length > 0 && (
+        <div className="mb-5 bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Unlock className="w-4 h-4 text-green-600" />
+            <h3 className="font-jakarta font-semibold text-sm text-green-800">Pendientes de activación</h3>
+            <span className="bg-green-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{pendingActivation.length}</span>
+          </div>
+          <div className="space-y-2">
+            {pendingActivation.map(u => {
+              const sub = subscriptions.find(s => s.userId === u.id);
+              return (
+                <div key={u.id} className="flex items-center justify-between bg-white rounded-lg px-4 py-3 border border-green-100">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{u.full_name || u.email}</p>
+                    <p className="text-xs text-muted-foreground">{sub?.planName || sub?.plan || '—'} · {sub?.amount}€ · {sub?.paymentMethodBrand ? `${sub.paymentMethodBrand} ····${sub.paymentMethodLast4}` : '—'}</p>
+                  </div>
+                  <Button size="sm" onClick={() => setActivatingUser(u)} className="bg-green-600 hover:bg-green-700 text-white ml-3 flex-shrink-0">
+                    Activar cuenta
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {pendingValidation.length > 0 && (
         <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -613,7 +758,7 @@ export default function GestionUsuarios() {
             <table className="w-full text-sm">
               <thead className="bg-secondary/50 border-b border-border">
                 <tr>
-                  {['Nombre', 'Email', 'Usuario', 'Rol', 'Suscripción', 'Registro', 'Acciones'].map(col => (
+                  {['Nombre', 'Email', 'Plan', 'Pago', 'Suscripción', 'Acceso', 'Acciones'].map(col => (
                     <th key={col} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">{col}</th>
                   ))}
                 </tr>
@@ -623,29 +768,38 @@ export default function GestionUsuarios() {
                   const roleCfg = ROLE_CONFIG[u.role] || ROLE_CONFIG.user;
                   const sub = getSubForUser(u.id);
                   const subCfg = SUB_CFG[sub?.status] || SUB_CFG.sin_suscripcion;
+                  const fpCfg = FP_CFG[sub?.firstPaymentStatus] || FP_CFG.unpaid;
                   return (
                     <tr key={u.id} className="hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3">
-                        <p className="font-medium truncate max-w-[140px]">{u.full_name || '—'}</p>
-                        {u.phone && <p className="text-xs text-muted-foreground">{u.phone}</p>}
+                        <p className="font-medium truncate max-w-[120px]">{u.full_name || '—'}</p>
+                        <p className="text-xs text-muted-foreground">{u.business_type || ''}</p>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground truncate max-w-[160px]">{u.email}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{u.username || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground truncate max-w-[140px] text-xs">{u.email}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${roleCfg.bg} ${roleCfg.text}`}>
-                          {roleCfg.label}
+                        <span className="text-xs font-medium">{sub?.planName || sub?.plan || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium ${fpCfg.color}`}>{fpCfg.label}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs font-medium ${subCfg.bg} ${subCfg.color}`}>
+                          {subCfg.label}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${subCfg.color}`}>{subCfg.label}</span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
-                        {u.created_date ? new Date(u.created_date).toLocaleDateString('es-ES') : '—'}
+                        {u.isPortalActive
+                          ? <span className="text-xs text-green-600 font-medium">Activo</span>
+                          : <span className="text-xs text-amber-600 font-medium">Bloqueado</span>
+                        }
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-0.5">
                           <ActionBtn title="Editar usuario" onClick={() => setEditingUser(u)}><Pencil className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Acceder al perfil" onClick={() => setViewingUser(u)}><UserCheck className="w-3.5 h-3.5" /></ActionBtn>
+                          {sub?.status === 'paid_pending_activation' && (
+                            <ActionBtn title="Activar cuenta" onClick={() => setActivatingUser(u)}><Unlock className="w-3.5 h-3.5" /></ActionBtn>
+                          )}
                           <ActionBtn title={u.status === 'bloqueado' ? 'Desbloquear cuenta' : 'Bloquear cuenta (BAN)'} onClick={() => setBlockingUser(u)} danger><Ban className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Eliminar usuario" onClick={() => setDeletingUser(u)} danger><Trash2 className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Cambiar rol" onClick={() => setChangingRoleUser(u)}><ShieldCheck className="w-3.5 h-3.5" /></ActionBtn>
@@ -673,6 +827,7 @@ export default function GestionUsuarios() {
       {deletingUser && <DeleteUserModal targetUser={deletingUser} currentUser={user} onClose={closeModals} onDeleted={handleSaved} />}
       {changingRoleUser && <ChangeRoleModal targetUser={changingRoleUser} currentUser={user} onClose={closeModals} onChanged={handleSaved} />}
       {managingSubUser && <ManageSubscriptionModal targetUser={managingSubUser} subscription={getSubForUser(managingSubUser.id)} currentUser={user} onClose={closeModals} onSaved={handleSaved} />}
+      {activatingUser && <ActivateAccountModal targetUser={activatingUser} subscription={getSubForUser(activatingUser.id)} currentUser={user} onClose={closeModals} onActivated={handleSaved} />}
     </div>
   );
 }

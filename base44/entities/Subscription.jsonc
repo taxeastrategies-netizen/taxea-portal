@@ -5,6 +5,20 @@
     "userId": {
       "type": "string"
     },
+    "planCode": {
+      "type": "string",
+      "enum": [
+        "sin_suscripcion",
+        "basic_monthly",
+        "autonomo_monthly",
+        "mercantil_monthly",
+        "personalizado"
+      ],
+      "default": "sin_suscripcion"
+    },
+    "planName": {
+      "type": "string"
+    },
     "plan": {
       "type": "string",
       "enum": [
@@ -16,22 +30,87 @@
       ],
       "default": "sin_suscripcion"
     },
+    "amount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "interval": {
+      "type": "string",
+      "default": "month"
+    },
     "status": {
       "type": "string",
       "enum": [
         "sin_suscripcion",
         "pendiente_seleccion",
         "pendiente_pago",
-        "pendiente_validacion",
+        "processing",
+        "paid_pending_activation",
         "activa",
+        "past_due",
         "suspendida",
         "cancelada",
-        "prueba",
         "caducada"
       ],
       "default": "sin_suscripcion"
     },
+    "firstPaymentStatus": {
+      "type": "string",
+      "enum": [
+        "unpaid",
+        "pending",
+        "processing",
+        "paid",
+        "failed"
+      ],
+      "default": "unpaid"
+    },
     "paymentStatus": {
+      "type": "string"
+    },
+    "stripeCustomerId": {
+      "type": "string"
+    },
+    "stripeSubscriptionId": {
+      "type": "string"
+    },
+    "stripePriceId": {
+      "type": "string"
+    },
+    "currentPeriodStart": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "currentPeriodEnd": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cancelAtPeriodEnd": {
+      "type": "boolean",
+      "default": false
+    },
+    "cancelledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastPaymentAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nextRenewalAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "paymentMethodType": {
+      "type": "string"
+    },
+    "paymentMethodBrand": {
+      "type": "string"
+    },
+    "paymentMethodLast4": {
       "type": "string"
     },
     "startedAt": {
@@ -39,10 +118,6 @@
       "format": "date-time"
     },
     "renewalAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "cancelledAt": {
       "type": "string",
       "format": "date-time"
     },

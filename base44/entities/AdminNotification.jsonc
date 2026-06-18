@@ -1,0 +1,43 @@
+{
+  "name": "AdminNotification",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "pago_verificado",
+        "pago_fallido",
+        "renovacion_fallida",
+        "suscripcion_cancelada",
+        "suscripcion_finalizada",
+        "presupuesto_solicitado",
+        "discrepancia_stripe"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "subscriptionId": {
+      "type": "string"
+    },
+    "isRead": {
+      "type": "boolean",
+      "default": false
+    },
+    "readAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "type",
+    "title",
+    "message"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "StripeWebhookEvent",
+  "type": "object",
+  "properties": {
+    "stripeEventId": {
+      "type": "string"
+    },
+    "eventType": {
+      "type": "string"
+    },
+    "processed": {
+      "type": "boolean",
+      "default": false
+    },
+    "processedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "processingResult": {
+      "type": "string"
+    },
+    "relatedUserId": {
+      "type": "string"
+    },
+    "relatedSubscriptionId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "stripeEventId",
+    "eventType"
+  ]
+}
