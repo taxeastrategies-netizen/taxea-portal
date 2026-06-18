@@ -130,7 +130,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
             companyName={company?.nombre_comercial || company?.razon_social}
           />
           <main className="flex-1 overflow-y-auto">
-            {isPortalLocked ? (
+            {isPortalLocked && !isOnLockedPath ? (
               <div className="flex items-center justify-center min-h-[60vh] p-6">
                 <div className="text-center max-w-md">
                   <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto mb-5">
