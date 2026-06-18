@@ -215,6 +215,38 @@ function QuoteRequestForm({ user, onClose, onSent }) {
   );
 }
 
+function CustomerPortalButton({ subscription, label = 'Gestionar pago y suscripción', variant = 'outline' }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleOpen = async () => {
+    if (window.self !== window.top) {
+      alert('El portal de facturación solo funciona desde la aplicación publicada.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await base44.functions.invoke('stripeCustomerPortal', {});
+      if (res.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        alert(res.data?.error || 'No se pudo abrir el portal.');
+      }
+    } catch {
+      alert('Error al conectar con el portal de facturación.');
+    }
+    setLoading(false);
+  };
+
+  if (!subscription?.stripeCustomerId && !subscription?.stripeSubscriptionId) return null;
+
+  return (
+    <Button onClick={handleOpen} disabled={loading} variant={variant} className="gap-2">
+      <CreditCard className="w-4 h-4" />
+      {loading ? 'Abriendo portal...' : label}
+    </Button>
+  );
+}
+
 export default function Suscripcion() {
   const { user } = useOutletContext() || {};
   const [subscription, setSubscription] = useState(null);
@@ -381,24 +413,8 @@ export default function Suscripcion() {
           </div>
         )}
 
-        {hasActiveSub && (
-          <Button onClick={() => {
-            if (subscription.stripeCustomerId) {
-              window.open(`https://billing.stripe.com/p/login/test_xxxxx`, '_blank');
-            }
-          }} variant="outline" className="gap-2">
-            Gestionar pago y suscripción
-          </Button>
-        )}
-
-        {subscription?.status === 'past_due' && (
-          <Button onClick={() => {
-            if (subscription.stripeCustomerId) {
-              window.open(`https://billing.stripe.com/p/login/test_xxxxx`, '_blank');
-            }
-          }} className="bg-teal hover:bg-teal-dark mt-3">
-            Actualizar método de pago
-          </Button>
+        {(hasActiveSub || subscription?.status === 'past_due') && (
+          <CustomerPortalButton subscription={subscription} />
         )}
       </div>
 
@@ -512,14 +528,8 @@ export default function Suscripcion() {
       {subscription?.stripeSubscriptionId && (
         <div className="bg-card border border-border rounded-xl p-6 shadow-card">
           <h3 className="font-jakarta font-semibold mb-1">Historial de facturación</h3>
-          <p className="text-sm text-muted-foreground mb-4">Gestiona tus facturas y recibos desde el portal de facturación.</p>
-          <Button variant="outline" onClick={() => {
-            if (subscription.stripeCustomerId) {
-              window.open(`https://billing.stripe.com/p/login/test_xxxxx`, '_blank');
-            }
-          }}>
-            Ver portal de facturación
-          </Button>
+          <p className="text-sm text-muted-foreground mb-4">Gestiona tus facturas, método de pago y cancelación desde el portal de facturación.</p>
+          <CustomerPortalButton subscription={subscription} label="Ver portal de facturación" variant="outline" />
         </div>
       )}
 

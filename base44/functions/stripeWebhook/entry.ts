@@ -137,6 +137,9 @@ Deno.serve(async (req) => {
             await createAdminNotification(base44, userId, subId, 'pago_verificado',
               'Nuevo pago verificado pendiente de activación',
               `Primer pago confirmado (${amount}€). Usuario pendiente de activación.`);
+            await sendAdminEmail(base44,
+              `Pago confirmado — Activación pendiente`,
+              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nEl usuario está pendiente de activación manual.\n\nAccede al panel de administración para activar la cuenta: https://app.taxea.co/admin/users`);
           } else {
             await base44.asServiceRole.entities.Subscription.update(subId, {
               status: sub?.status === 'paid_pending_activation' ? 'activa' : sub?.status,
@@ -175,6 +178,9 @@ Deno.serve(async (req) => {
           });
           await createAdminNotification(base44, userId, subId, 'renovacion_fallida',
             'Renovación fallida', `El pago de la renovación ha fallado. Motivo: ${invoice.last_finalization_error?.code || 'desconocido'}`);
+          await sendAdminEmail(base44,
+            `Pago fallido — Renovación`,
+            `El pago de renovación de ${invoice.amount_due / 100}€ ha fallado para el usuario ${userId}.\n\nMotivo: ${invoice.last_finalization_error?.code || 'desconocido'}\n\nRevisa el estado en: https://app.taxea.co/admin/users`);
         }
         break;
       }
@@ -212,6 +218,9 @@ Deno.serve(async (req) => {
             });
             await createAdminNotification(base44, userId, subId, 'suscripcion_cancelada',
               'Suscripción cancelada', 'La suscripción ha sido cancelada. Acceso bloqueado.');
+            await sendAdminEmail(base44,
+              `Suscripción cancelada`,
+              `La suscripción del usuario ${userId} ha sido cancelada a través del portal de Stripe.\n\nEl acceso ha sido bloqueado automáticamente.`);
           }
         }
         break;
@@ -252,5 +261,32 @@ async function createAdminNotification(base44, userId, subscriptionId, type, tit
     });
   } catch (err) {
     console.error('Error creando notificación:', err);
+  }
+}
+
+async function sendAdminEmail(base44, subject, body) {
+  try {
+    // Buscar la política del admin (guardada en renewalPolicies del primer admin)
+    const admins = await base44.asServiceRole.entities.User.filter({ role: 'admin' });
+    const adminEmail = admins?.[0]?.renewalPolicies?.admin_notification_email || admins?.[0]?.email;
+    if (!adminEmail) return;
+
+    const notifyOnPayment = admins?.[0]?.renewalPolicies?.notify_admin_on_payment !== false;
+    const notifyOnFailure = admins?.[0]?.renewalPolicies?.notify_admin_on_failure !== false;
+
+    const isPaymentEmail = subject.toLowerCase().includes('pago confirmado') || subject.toLowerCase().includes('verificado');
+    const isFailureEmail = subject.toLowerCase().includes('fallido') || subject.toLowerCase().includes('cancelada');
+
+    if (isPaymentEmail && !notifyOnPayment) return;
+    if (isFailureEmail && !notifyOnFailure) return;
+
+    await base44.asServiceRole.integrations.Core.SendEmail({
+      to: adminEmail,
+      subject: `[Taxea Portal] ${subject}`,
+      body,
+    });
+    console.log(`Email admin enviado a ${adminEmail}: ${subject}`);
+  } catch (err) {
+    console.error('Error enviando email admin:', err);
   }
 }
