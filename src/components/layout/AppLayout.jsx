@@ -44,6 +44,11 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     checkDeleted();
   }, [user?.id, isAdmin, location.pathname]);
 
+  // Portal access control
+  const PORTAL_LOCKED_PATHS = ['/suscripcion', '/ajustes', '/notificaciones'];
+  const isPortalLocked = !isAdmin && user && user.isPortalActive === false;
+  const isOnLockedPath = PORTAL_LOCKED_PATHS.some(p => location.pathname === p);
+
   // Redirigir usuarios con portal bloqueado
   useEffect(() => {
     if (isPortalLocked && !isOnLockedPath) {
@@ -98,11 +103,6 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     trackAccess();
   }, [user?.email, isAdmin]);
 
-  // Portal access control: usuarios bloqueados solo ven Suscripción, Ajustes y Notificaciones
-  const PORTAL_LOCKED_PATHS = ['/suscripcion', '/ajustes', '/notificaciones'];
-  const isPortalLocked = !isAdmin && user && user.isPortalActive === false;
-  const isOnLockedPath = PORTAL_LOCKED_PATHS.some(p => location.pathname === p);
-  
   // Routes that are always accessible regardless of subscription
   const FREE_PATHS = ['/', '/ajustes', '/suscripcion', '/notificaciones'];
   const isFreePath = FREE_PATHS.some(p => location.pathname === p) || isAdmin;
