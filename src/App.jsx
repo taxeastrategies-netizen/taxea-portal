@@ -148,8 +148,15 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
     if (authError.type === 'auth_required') {
       const isOnLoginPage = window.location.pathname === '/login' || window.location.pathname === '/register';
-      if (!isOnLoginPage) { navigateToLogin(); }
-      return null;
+      if (!isOnLoginPage) { navigateToLogin(); return null; }
+      // Already on login/register — just render those routes
+      return (
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      );
     }
   }
 
