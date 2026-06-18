@@ -11,6 +11,18 @@ const PLAN_PRICES = {
   mercantil_monthly:"price_1TjegIDqzznToobk6B3tIuAY",
 };
 
+const PLAN_AMOUNTS = {
+  basic_monthly: 9.99,
+  autonomo_monthly: 69.99,
+  mercantil_monthly: 199.99,
+};
+
+const PLAN_NAMES = {
+  basic_monthly: 'Plan Básico',
+  autonomo_monthly: 'Plan Autónomo',
+  mercantil_monthly: 'Plan Mercantil',
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -24,21 +36,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Plan no válido' }, { status: 400 });
     }
 
-    // Validar elegibilidad
-    if (planCode === 'autonomo_monthly' && user.business_type !== 'autonomo') {
-      return Response.json({ error: 'Este plan está disponible exclusivamente para autónomos.' }, { status: 403 });
-    }
-    if (planCode === 'mercantil_monthly' && user.legal_form !== 'Sociedad Limitada') {
-      return Response.json({ error: 'Este plan está disponible exclusivamente para sociedades limitadas.' }, { status: 403 });
-    }
-
-    // Verificar suscripción existente
+    // Verificar si ya tiene suscripción activa o pago pendiente
     const existingSubs = await base44.entities.Subscription.filter({ userId: user.id });
     const activeSub = existingSubs.find(s =>
-      ['activa','paid_pending_activation','processing','pendiente_pago'].includes(s.status)
+      ['activa', 'paid_pending_activation', 'processing', 'pendiente_pago'].includes(s.status)
     );
     if (activeSub) {
-      return Response.json({ error: 'Ya tienes una suscripción activa o pendiente.' }, { status: 409 });
+      return Response.json({ error: 'Ya tienes una suscripción activa o pendiente de activación.' }, { status: 409 });
     }
 
     const stripe = new Stripe(STRIPE_SECRET);
@@ -48,8 +52,7 @@ Deno.serve(async (req) => {
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        name: user.full_name,
-        phone: user.phone,
+        name: user.full_name || user.email,
         metadata: { portalUserId: user.id, base44_app_id: APP_ID },
       });
       customerId = customer.id;
@@ -58,35 +61,30 @@ Deno.serve(async (req) => {
 
     // Crear/actualizar registro de suscripción local
     let subscription;
+    const subData = {
+      planCode,
+      planName: PLAN_NAMES[planCode],
+      amount: PLAN_AMOUNTS[planCode],
+      currency: 'EUR',
+      interval: 'month',
+      status: 'pendiente_pago',
+      firstPaymentStatus: 'pending',
+      stripePriceId: PLAN_PRICES[planCode],
+      stripeCustomerId: customerId,
+      requestedAt: new Date().toISOString(),
+    };
+
     if (existingSubs.length > 0) {
       subscription = existingSubs[0];
-      await base44.entities.Subscription.update(subscription.id, {
-        planCode,
-        planName: planCode === 'basic_monthly' ? 'Plan Básico' : planCode === 'autonomo_monthly' ? 'Plan Autónomo' : 'Plan Mercantil',
-        amount: planCode === 'basic_monthly' ? 9.99 : planCode === 'autonomo_monthly' ? 69.99 : 199.99,
-        status: 'pendiente_pago',
-        firstPaymentStatus: 'pending',
-        stripePriceId: PLAN_PRICES[planCode],
-        stripeCustomerId: customerId,
-        requestedAt: new Date().toISOString(),
-      });
+      await base44.entities.Subscription.update(subscription.id, subData);
     } else {
       subscription = await base44.entities.Subscription.create({
         userId: user.id,
-        planCode,
-        planName: planCode === 'basic_monthly' ? 'Plan Básico' : planCode === 'autonomo_monthly' ? 'Plan Autónomo' : 'Plan Mercantil',
-        amount: planCode === 'basic_monthly' ? 9.99 : planCode === 'autonomo_monthly' ? 69.99 : 199.99,
-        currency: 'EUR',
-        interval: 'month',
-        status: 'pendiente_pago',
-        firstPaymentStatus: 'pending',
-        stripePriceId: PLAN_PRICES[planCode],
-        stripeCustomerId: customerId,
-        requestedAt: new Date().toISOString(),
+        ...subData,
       });
     }
 
-    // Crear sesión de Checkout
+    // Crear sesión de Checkout en Stripe
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -107,9 +105,12 @@ Deno.serve(async (req) => {
           subscriptionId: subscription.id,
         },
       },
+      payment_method_types: ['card'],
+      locale: 'es',
     });
 
-    // Audit log
+    console.log(`Checkout creado: plan ${planCode}, user ${user.id}, session ${session.id}`);
+
     await base44.entities.UserAuditLog.create({
       userId: user.id,
       actionType: 'suscripcion_solicitada',

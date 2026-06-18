@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
     if (!signature) return Response.json({ error: 'Firma ausente' }, { status: 400 });
 
     const body = await req.text();
-    const stripe = new Stripe(STRIPE_SECRET);
+    const stripe = new Stripe(STRIPE_SECRET); // eslint-disable-line no-unused-vars
 
     let event;
     try {
@@ -106,6 +106,24 @@ Deno.serve(async (req) => {
           const amount = invoice.amount_paid / 100;
           const isFirst = invoice.billing_reason === 'subscription_create';
 
+          // Obtener método de pago del PaymentIntent expandido
+          let pmBrand = null, pmLast4 = null, pmType = null;
+          try {
+            if (invoice.payment_intent) {
+              const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent, {
+                expand: ['payment_method'],
+              });
+              const pm = pi.payment_method;
+              if (pm) {
+                pmType = pm.type;
+                pmBrand = pm.card?.brand || pm.type;
+                pmLast4 = pm.card?.last4;
+              }
+            }
+          } catch (pmErr) {
+            console.error('No se pudo obtener método de pago:', pmErr.message);
+          }
+
           await base44.asServiceRole.entities.PaymentRecord.create({
             userId,
             subscriptionId: subId,
@@ -115,38 +133,42 @@ Deno.serve(async (req) => {
             currency: invoice.currency?.toUpperCase() || 'EUR',
             status: 'paid',
             paymentType: isFirst ? 'first_payment' : 'renewal',
-            periodStart: invoice.period_start ? new Date(invoice.period_start * 1000).toISOString() : null,
-            periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
+            periodStart: invoice.lines?.data?.[0]?.period?.start ? new Date(invoice.lines.data[0].period.start * 1000).toISOString() : null,
+            periodEnd: invoice.lines?.data?.[0]?.period?.end ? new Date(invoice.lines.data[0].period.end * 1000).toISOString() : null,
             paidAt: new Date().toISOString(),
           });
 
           const sub = await base44.asServiceRole.entities.Subscription.get(subId);
+          const periodStart = invoice.lines?.data?.[0]?.period?.start;
+          const periodEnd = invoice.lines?.data?.[0]?.period?.end;
 
           if (isFirst) {
             await base44.asServiceRole.entities.Subscription.update(subId, {
               firstPaymentStatus: 'paid',
               status: 'paid_pending_activation',
               lastPaymentAt: new Date().toISOString(),
-              nextRenewalAt: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
-              currentPeriodStart: invoice.period_start ? new Date(invoice.period_start * 1000).toISOString() : null,
-              currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
-              paymentMethodType: invoice.payment_method_details?.type,
-              paymentMethodBrand: invoice.payment_method_details?.card?.brand,
-              paymentMethodLast4: invoice.payment_method_details?.card?.last4,
+              startedAt: new Date().toISOString(),
+              nextRenewalAt: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+              currentPeriodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+              currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+              paymentMethodType: pmType,
+              paymentMethodBrand: pmBrand,
+              paymentMethodLast4: pmLast4,
             });
             await createAdminNotification(base44, userId, subId, 'pago_verificado',
-              'Nuevo pago verificado pendiente de activación',
-              `Primer pago confirmado (${amount}€). Usuario pendiente de activación.`);
+              'Nuevo pago verificado — pendiente de activación',
+              `Primer pago confirmado (${amount}€). Activa la cuenta en: https://app.taxea.co/admin/pagos`);
             await sendAdminEmail(base44,
               `Pago confirmado — Activación pendiente`,
-              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nEl usuario está pendiente de activación manual.\n\nAccede al panel de administración para activar la cuenta: https://app.taxea.co/admin/users`);
+              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nActiva la cuenta desde el panel: https://app.taxea.co/admin/pagos`);
           } else {
+            // Renovación
             await base44.asServiceRole.entities.Subscription.update(subId, {
-              status: sub?.status === 'paid_pending_activation' ? 'activa' : sub?.status,
+              status: 'activa',
               lastPaymentAt: new Date().toISOString(),
-              nextRenewalAt: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
-              currentPeriodStart: invoice.period_start ? new Date(invoice.period_start * 1000).toISOString() : null,
-              currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000).toISOString() : null,
+              nextRenewalAt: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+              currentPeriodStart: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+              currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
             });
           }
         }

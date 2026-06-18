@@ -279,26 +279,17 @@ export default function Suscripcion() {
 
   const handleChoosePlan = (plan) => {
     setErrorMsg('');
-    // Validar elegibilidad
-    if (plan.eligibility === 'autonomo' && user.business_type !== 'autonomo') {
-      setErrorMsg('Este plan está disponible exclusivamente para autónomos.');
-      return;
-    }
-    if (plan.eligibility === 'empresa' && user.legal_form !== 'Sociedad Limitada') {
-      setErrorMsg('Este plan está disponible exclusivamente para sociedades limitadas.');
-      return;
-    }
     setSelectedPlan(plan);
     setAcceptNoAdvisory(false);
-    // Verificar si necesita datos de facturación
-    if (!user.tax_id || !user.billing_address || !user.billing_city) {
-      setShowBillingForm(true);
-    } else {
-      handleStartCheckout(plan);
-    }
+    setShowBillingForm(false);
+    handleStartCheckout(plan);
   };
 
   const handleStartCheckout = async (plan) => {
+    if (window.self !== window.top) {
+      alert('El pago solo funciona desde la aplicación publicada. Abre la app directamente en tu navegador.');
+      return;
+    }
     setCheckingOut(true);
     setErrorMsg('');
     try {
@@ -306,20 +297,18 @@ export default function Suscripcion() {
         planCode: plan.code,
       });
       if (response.data?.url) {
-        // Check if running in iframe
-        if (window.self !== window.top) {
-          alert('El pago solo funciona desde la aplicación publicada. Abre esta página directamente.');
-          setCheckingOut(false);
-          return;
-        }
         window.location.href = response.data.url;
       } else if (response.data?.error) {
         setErrorMsg(response.data.error);
+        setCheckingOut(false);
+      } else {
+        setErrorMsg('No se pudo iniciar el pago. Inténtalo de nuevo.');
+        setCheckingOut(false);
       }
     } catch (err) {
       setErrorMsg('Error al iniciar el pago. Inténtalo de nuevo.');
+      setCheckingOut(false);
     }
-    setCheckingOut(false);
   };
 
   const handleBillingComplete = async () => {
@@ -440,8 +429,15 @@ export default function Suscripcion() {
         <>
           <div className="mb-4">
             <h2 className="font-jakarta font-bold text-lg mb-1">Elige tu plan</h2>
-            <p className="text-sm text-muted-foreground">Selecciona el plan que mejor se adapta a tu actividad.</p>
+            <p className="text-sm text-muted-foreground">Selecciona el plan que mejor se adapta a tu actividad. Serás redirigido a Stripe para completar el pago de forma segura.</p>
           </div>
+
+          {checkingOut && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3 mb-5">
+              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <p className="text-sm text-blue-800 font-medium">Preparando el pago seguro con Stripe...</p>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-3 gap-5 mb-8">
             {PLANS.map(plan => {
@@ -493,7 +489,7 @@ export default function Suscripcion() {
                     onClick={() => handleChoosePlan(plan)}
                     disabled={(plan.requiresAcceptance && !acceptNoAdvisory) || checkingOut}
                     className="w-full bg-teal hover:bg-teal-dark">
-                    {checkingOut ? 'Redirigiendo al pago...' : 'Elegir plan'}
+                    {checkingOut ? 'Redirigiendo...' : 'Pagar con Stripe →'}
                   </Button>
                 </div>
               );
