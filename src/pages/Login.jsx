@@ -98,18 +98,9 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
-      // Verificar si la cuenta está bloqueada antes de redirigir
-      const me = await base44.auth.me();
-      if (me?.status === 'bloqueado') {
-        await base44.auth.logout();
-        setError('CUENTA BLOQUEADA — Tu acceso ha sido suspendido por el administrador. Contacta con Taxea Strategies para más información.');
-        setLoading(false);
-        return;
-      }
       window.location.href = '/';
     } catch (err) {
       setError(err.message || 'Credenciales incorrectas. Comprueba tu email y contraseña.');
-    } finally {
       setLoading(false);
     }
   };
