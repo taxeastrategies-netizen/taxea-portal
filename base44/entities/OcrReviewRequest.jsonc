@@ -1,0 +1,41 @@
+{
+  "name": "OcrReviewRequest",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "quotaPeriodId": {
+      "type": "string"
+    },
+    "requestedByUserId": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Nueva",
+        "En revisi\u00f3n",
+        "Aprobada",
+        "Rechazada",
+        "Resuelta"
+      ],
+      "default": "Nueva"
+    },
+    "adminResponse": {
+      "type": "string"
+    },
+    "resolvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "quotaPeriodId",
+    "requestedByUserId"
+  ]
+}

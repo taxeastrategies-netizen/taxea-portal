@@ -224,6 +224,47 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'checkout.session.completed': {
+        // Handle plan upgrade checkout (mode: payment)
+        const session2 = event.data.object;
+        const meta2 = session2.metadata || {};
+        if (meta2.eventType === 'plan_upgrade' && meta2.upgradeRequestId) {
+          const piId = session2.payment_intent;
+          await base44.asServiceRole.entities.PlanUpgradeRequest.update(meta2.upgradeRequestId, {
+            stripePaymentIntentId: piId,
+            status: session2.payment_status === 'paid' ? 'paid' : 'payment_processing',
+          });
+          if (session2.payment_status === 'paid') {
+            await applyPlanUpgrade(base44, stripe, meta2);
+          }
+        }
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const pi2 = event.data.object;
+        const piMeta = pi2.metadata || {};
+        if (piMeta.eventType === 'plan_upgrade' && piMeta.upgradeRequestId) {
+          await applyPlanUpgrade(base44, stripe, piMeta);
+        }
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const piFailed = event.data.object;
+        const piFailMeta = piFailed.metadata || {};
+        if (piFailMeta.upgradeRequestId) {
+          await base44.asServiceRole.entities.PlanUpgradeRequest.update(piFailMeta.upgradeRequestId, {
+            status: 'failed',
+            failedAt: new Date().toISOString(),
+            failureReasonSafe: piFailed.last_payment_error?.message?.substring(0, 200) || 'Pago fallido',
+          });
+          await createAdminNotification(base44, piFailMeta.portalUserId, null, 'pago_fallido',
+            'Ampliación de plan fallida', `El pago de ampliación al plan ${piFailMeta.toPlanCode} ha fallado.`);
+        }
+        break;
+      }
+
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
         const subId = sub.metadata?.subscriptionId;
@@ -270,6 +311,85 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
+async function applyPlanUpgrade(base44, stripe, meta) {
+  try {
+    const { upgradeRequestId, billingAccountId, fromPlanCode, toPlanCode, quarterKey, subscriptionId, portalUserId } = meta;
+
+    // Idempotency: check if already applied
+    const req2 = await base44.asServiceRole.entities.PlanUpgradeRequest.get(upgradeRequestId);
+    if (req2?.status === 'completed') return;
+
+    await base44.asServiceRole.entities.PlanUpgradeRequest.update(upgradeRequestId, { status: 'applying_plan' });
+
+    // Get plan catalog
+    const allPlans = await base44.asServiceRole.entities.PlanCatalog.filter({ planCode: toPlanCode });
+    const targetPlan = allPlans?.[0];
+    if (!targetPlan) throw new Error(`Plan destino ${toPlanCode} no encontrado`);
+
+    // Update local subscription
+    if (subscriptionId) {
+      await base44.asServiceRole.entities.Subscription.update(subscriptionId, {
+        planCode: toPlanCode,
+        planName: targetPlan.displayName,
+        amount: targetPlan.monthlyBasePrice,
+      });
+    }
+
+    // Update stripe subscription item to new price if available
+    if (targetPlan.stripePriceId && req2?.stripeSubscriptionId) {
+      const stripeSub = await stripe.subscriptions.retrieve(req2.stripeSubscriptionId);
+      const itemId = stripeSub.items.data?.[0]?.id;
+      if (itemId && targetPlan.stripePriceId) {
+        await stripe.subscriptions.update(req2.stripeSubscriptionId, {
+          items: [{ id: itemId, price: targetPlan.stripePriceId }],
+          proration_behavior: 'none',
+        });
+      }
+    }
+
+    // Expand OCR quota period limit
+    const periods = await base44.asServiceRole.entities.OcrQuotaPeriod.filter({ billingAccountId, quarterKey });
+    if (periods.length > 0) {
+      const period = periods[0];
+      const newLimit = targetPlan.isUnlimited ? null : (targetPlan.quarterlyOcrLimit || 0);
+      await base44.asServiceRole.entities.OcrQuotaPeriod.update(period.id, {
+        currentPlanCode: toPlanCode,
+        currentPlanLimit: newLimit ?? 0,
+        isUnlimited: targetPlan.isUnlimited || false,
+        status: targetPlan.isUnlimited ? 'unlimited' : 'available',
+      });
+    }
+
+    // Update ClientAccount OCR access
+    if (billingAccountId) {
+      await base44.asServiceRole.entities.ClientAccount.update(billingAccountId, {
+        ocrAccessStatus: 'allowed',
+        activePlanCode: toPlanCode,
+      });
+    }
+
+    await base44.asServiceRole.entities.PlanUpgradeRequest.update(upgradeRequestId, {
+      status: 'completed',
+      appliedAt: new Date().toISOString(),
+      paidAt: new Date().toISOString(),
+    });
+
+    await createAdminNotification(base44, portalUserId, subscriptionId, 'pago_verificado',
+      `Plan ampliado a ${targetPlan.displayName}`,
+      `Pago confirmado. El cliente ha ampliado de ${fromPlanCode} a ${toPlanCode}.`);
+
+    console.log(`Plan upgrade aplicado: ${upgradeRequestId}, ${fromPlanCode} → ${toPlanCode}`);
+  } catch (err) {
+    console.error('Error en applyPlanUpgrade:', err);
+    if (meta.upgradeRequestId) {
+      await base44.asServiceRole.entities.PlanUpgradeRequest.update(meta.upgradeRequestId, {
+        status: 'manual_review',
+        failureReasonSafe: err.message?.substring(0, 200),
+      });
+    }
+  }
+}
 
 async function createAdminNotification(base44, userId, subscriptionId, type, title, message) {
   try {

@@ -1,0 +1,59 @@
+{
+  "name": "OcrCreditReservation",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "quotaPeriodId": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "creditsReserved": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "reserved",
+        "consumed",
+        "released",
+        "expired"
+      ],
+      "default": "reserved"
+    },
+    "reservedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "consumedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "releasedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failureReasonSafe": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "quotaPeriodId",
+    "idempotencyKey"
+  ]
+}

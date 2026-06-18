@@ -1,0 +1,61 @@
+{
+  "name": "OcrUsageEvent",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "quotaPeriodId": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "sales_invoice",
+        "expense_invoice"
+      ]
+    },
+    "sourceModule": {
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "credits": {
+      "type": "number",
+      "default": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed",
+        "released"
+      ],
+      "default": "pending"
+    },
+    "isReprocess": {
+      "type": "boolean",
+      "default": false
+    },
+    "relatedPreviousEventId": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "quotaPeriodId",
+    "idempotencyKey"
+  ]
+}

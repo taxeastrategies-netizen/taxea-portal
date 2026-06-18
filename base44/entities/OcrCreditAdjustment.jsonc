@@ -1,0 +1,85 @@
+{
+  "name": "OcrCreditAdjustment",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "quotaPeriodId": {
+      "type": "string"
+    },
+    "adjustmentType": {
+      "type": "string",
+      "enum": [
+        "add_temporary_credits",
+        "remove_temporary_credits",
+        "correct_erroneous_consumption",
+        "temporary_unlimited_access",
+        "manual_block",
+        "manual_unblock"
+      ]
+    },
+    "credits": {
+      "type": "number",
+      "default": 0
+    },
+    "reason": {
+      "type": "string"
+    },
+    "internalNote": {
+      "type": "string"
+    },
+    "validFrom": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "validUntil": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "previousValue": {
+      "type": "number"
+    },
+    "newValue": {
+      "type": "number"
+    },
+    "createdByAdminId": {
+      "type": "string"
+    },
+    "reversedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reversedByAdminId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "quotaPeriodId",
+    "adjustmentType",
+    "reason"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

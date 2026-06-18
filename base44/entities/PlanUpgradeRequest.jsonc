@@ -1,0 +1,83 @@
+{
+  "name": "PlanUpgradeRequest",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "stripeSubscriptionId": {
+      "type": "string"
+    },
+    "fromPlanCode": {
+      "type": "string"
+    },
+    "toPlanCode": {
+      "type": "string"
+    },
+    "quarterKey": {
+      "type": "string"
+    },
+    "baseDifferenceAmount": {
+      "type": "number"
+    },
+    "taxAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "totalAmount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "chargePolicy": {
+      "type": "string",
+      "default": "full_difference_now"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "payment_pending",
+        "payment_processing",
+        "paid",
+        "applying_plan",
+        "completed",
+        "failed",
+        "cancelled",
+        "manual_review"
+      ],
+      "default": "draft"
+    },
+    "stripeCheckoutSessionId": {
+      "type": "string"
+    },
+    "stripePaymentIntentId": {
+      "type": "string"
+    },
+    "stripeInvoiceId": {
+      "type": "string"
+    },
+    "paidAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "appliedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "failureReasonSafe": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "fromPlanCode",
+    "toPlanCode"
+  ]
+}

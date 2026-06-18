@@ -3,25 +3,20 @@ import Stripe from 'npm:stripe@17.7.0';
 
 const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY");
 const APP_ID = Deno.env.get("BASE44_APP_ID");
-const PUBLISHED_URL = "https://app.taxea.co";
+const PUBLISHED_URL = "https://taxeaportal.com";
 
-const PLAN_PRICES = {
+// Legacy plan prices kept for existing subscribers
+const LEGACY_PLAN_PRICES = {
   basic_monthly:    "price_1TjegIDqzznToobkpNwexKOi",
-  autonomo_monthly: "price_1TjegIDqzznToobk1RtjRRuY",
-  mercantil_monthly:"price_1TjegIDqzznToobk6B3tIuAY",
 };
 
-const PLAN_AMOUNTS = {
-  basic_monthly: 9.99,
-  autonomo_monthly: 69.99,
-  mercantil_monthly: 199.99,
-};
-
-const PLAN_NAMES = {
-  basic_monthly: 'Plan Básico',
-  autonomo_monthly: 'Plan Autónomo',
-  mercantil_monthly: 'Plan Mercantil',
-};
+// New V3 plans — Stripe Price IDs to be set after creating products in Stripe dashboard
+// Until Stripe prices are created for V3 plans, fall back to creating checkout via price_data
+const PLAN_CATALOG_CODES = [
+  'platform_basic',
+  'autonomo_basic_70', 'autonomo_medium_150', 'autonomo_advanced_225', 'autonomo_pro_300', 'autonomo_ultra_350',
+  'company_basic_200', 'company_medium_260', 'company_advanced_350', 'company_pro_460', 'company_ultra_550',
+];
 
 Deno.serve(async (req) => {
   try {
@@ -32,8 +27,28 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { planCode, successUrl, cancelUrl } = body;
 
-    if (!PLAN_PRICES[planCode]) {
+    // Validate plan code
+    const isLegacy = !!LEGACY_PLAN_PRICES[planCode];
+    const isV3 = PLAN_CATALOG_CODES.includes(planCode);
+    if (!isLegacy && !isV3) {
       return Response.json({ error: 'Plan no válido' }, { status: 400 });
+    }
+
+    // For V3 plans, load from PlanCatalog
+    let planName, planAmount, stripePriceId;
+    if (isV3) {
+      const catalogPlans = await base44.asServiceRole.entities.PlanCatalog.filter({ planCode });
+      const catalogPlan = catalogPlans?.[0];
+      if (!catalogPlan || !catalogPlan.isActive) {
+        return Response.json({ error: 'Plan no disponible' }, { status: 400 });
+      }
+      planName = catalogPlan.displayName;
+      planAmount = catalogPlan.monthlyBasePrice;
+      stripePriceId = catalogPlan.stripePriceId || null;
+    } else {
+      planName = 'Plan Básico Plataforma';
+      planAmount = 9.99;
+      stripePriceId = LEGACY_PLAN_PRICES[planCode];
     }
 
     // Verificar si ya tiene suscripción activa o pago pendiente
@@ -63,13 +78,13 @@ Deno.serve(async (req) => {
     let subscription;
     const subData = {
       planCode,
-      planName: PLAN_NAMES[planCode],
-      amount: PLAN_AMOUNTS[planCode],
+      planName,
+      amount: planAmount,
       currency: 'EUR',
       interval: 'month',
       status: 'pendiente_pago',
       firstPaymentStatus: 'pending',
-      stripePriceId: PLAN_PRICES[planCode],
+      stripePriceId: stripePriceId || '',
       stripeCustomerId: customerId,
       requestedAt: new Date().toISOString(),
     };
@@ -84,11 +99,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Build line items — use Stripe Price ID if available, else price_data
+    const lineItem = stripePriceId
+      ? { price: stripePriceId, quantity: 1 }
+      : {
+          price_data: {
+            currency: 'eur',
+            unit_amount: Math.round(planAmount * 100),
+            recurring: { interval: 'month' },
+            product_data: { name: planName, description: 'Taxea Portal — cuota mensual sin impuestos' },
+          },
+          quantity: 1,
+        };
+
     // Crear sesión de Checkout en Stripe
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: PLAN_PRICES[planCode], quantity: 1 }],
+      line_items: [lineItem],
       success_url: successUrl || `${PUBLISHED_URL}/suscripcion?checkout=success`,
       cancel_url: cancelUrl || `${PUBLISHED_URL}/suscripcion?checkout=cancelled`,
       metadata: {

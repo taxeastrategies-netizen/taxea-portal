@@ -1,0 +1,65 @@
+{
+  "name": "PlanCatalog",
+  "type": "object",
+  "properties": {
+    "planCode": {
+      "type": "string"
+    },
+    "clientType": {
+      "type": "string",
+      "enum": [
+        "autonomo",
+        "company",
+        "platform"
+      ]
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "monthlyBasePrice": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "taxBehavior": {
+      "type": "string",
+      "default": "exclusive"
+    },
+    "quarterlyOcrLimit": {
+      "type": "number"
+    },
+    "isUnlimited": {
+      "type": "boolean",
+      "default": false
+    },
+    "stripeProductId": {
+      "type": "string"
+    },
+    "stripePriceId": {
+      "type": "string"
+    },
+    "nextPlanCode": {
+      "type": "string"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "contractVersion": {
+      "type": "string",
+      "default": "v3"
+    },
+    "sortOrder": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "planCode",
+    "clientType",
+    "displayName",
+    "monthlyBasePrice"
+  ]
+}

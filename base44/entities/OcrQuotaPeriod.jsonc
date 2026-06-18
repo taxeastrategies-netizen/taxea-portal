@@ -1,0 +1,71 @@
+{
+  "name": "OcrQuotaPeriod",
+  "type": "object",
+  "properties": {
+    "billingAccountId": {
+      "type": "string"
+    },
+    "quarterKey": {
+      "type": "string"
+    },
+    "periodStart": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodEnd": {
+      "type": "string",
+      "format": "date"
+    },
+    "planCodeAtStart": {
+      "type": "string"
+    },
+    "currentPlanCode": {
+      "type": "string"
+    },
+    "baseLimit": {
+      "type": "number",
+      "default": 0
+    },
+    "currentPlanLimit": {
+      "type": "number",
+      "default": 0
+    },
+    "manualCredits": {
+      "type": "number",
+      "default": 0
+    },
+    "consumedCredits": {
+      "type": "number",
+      "default": 0
+    },
+    "reservedCredits": {
+      "type": "number",
+      "default": 0
+    },
+    "isUnlimited": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "available",
+        "warning",
+        "critical",
+        "exhausted",
+        "manually_extended",
+        "unlimited",
+        "suspended"
+      ],
+      "default": "available"
+    },
+    "usageMigrationStatus": {
+      "type": "string",
+      "default": "ok"
+    }
+  },
+  "required": [
+    "billingAccountId",
+    "quarterKey"
+  ]
+}
