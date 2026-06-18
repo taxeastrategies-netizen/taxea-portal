@@ -52,6 +52,7 @@ import AdminEstadoContable from './pages/AdminEstadoContable';
 import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
 import AdminRenovacion from './pages/AdminRenovacion';
+import AdminPagosClientes from './pages/AdminPagosClientes';
 import SetupPassword from './pages/SetupPassword';
 import ResetPassword from './pages/ResetPassword';
 import Register from './pages/Register';
@@ -124,6 +125,7 @@ function AppWithContext({ user }) {
         <Route path="/suscripcion" element={<Suscripcion />} />
         <Route path="/admin/users" element={<GestionUsuarios />} />
         <Route path="/admin/renovacion" element={<AdminRenovacion />} />
+        <Route path="/admin/pagos" element={<AdminPagosClientes />} />
         <Route path="/signup" element={<Navigate to="/login" replace />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />

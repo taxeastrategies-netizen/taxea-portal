@@ -252,7 +252,8 @@ const UTILS_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: '/admin/users', label: 'Gestión de usuarios', icon: UserCog },
-  { to: '/admin/renovacion', label: 'Políticas de renovación', icon: CreditCard },
+  { to: '/admin/pagos', label: 'Control de pagos', icon: CreditCard },
+  { to: '/admin/renovacion', label: 'Políticas de renovación', icon: Settings },
   { to: '/admin/estado-contable', label: 'Estado contable', icon: BookOpen },
   { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },

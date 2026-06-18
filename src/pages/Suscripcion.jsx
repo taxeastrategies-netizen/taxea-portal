@@ -371,7 +371,9 @@ export default function Suscripcion() {
   const StatusIcon = cfg.icon;
   const hasActiveSub = subscription?.status === 'activa';
   const hasPaymentVerified = subscription?.status === 'paid_pending_activation';
-  const showPlans = !subscription || ['sin_suscripcion', 'pendiente_seleccion', 'pendiente_pago'].includes(subscription.status);
+  // Considerar sin suscripción real si no hay planCode o el status es sin_suscripcion/pendiente_seleccion
+  const isRealSubscription = subscription && subscription.status && !['sin_suscripcion', 'pendiente_seleccion'].includes(subscription.status);
+  const showPlans = !isRealSubscription;
 
   if (loading) {
     return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
@@ -398,8 +400,8 @@ export default function Suscripcion() {
         {hasActiveSub && subscription && (
           <div className="bg-secondary/40 rounded-xl p-4 space-y-2 text-sm mb-4">
             {[
-              ['Plan', subscription.planName],
-              ['Importe', `${subscription.amount?.toFixed(2)} €`],
+              ['Plan', subscription.planName || '—'],
+              ['Importe', subscription.amount != null ? `${Number(subscription.amount).toFixed(2)} €` : '—'],
               ['Periodicidad', 'Mensual'],
               ['Fecha de alta', subscription.startedAt ? new Date(subscription.startedAt).toLocaleDateString('es-ES') : '—'],
               ['Próxima renovación', subscription.nextRenewalAt ? new Date(subscription.nextRenewalAt).toLocaleDateString('es-ES') : '—'],
@@ -413,7 +415,7 @@ export default function Suscripcion() {
           </div>
         )}
 
-        {(hasActiveSub || subscription?.status === 'past_due') && (
+        {(hasActiveSub || subscription?.status === 'past_due') && subscription?.stripeCustomerId && (
           <CustomerPortalButton subscription={subscription} />
         )}
       </div>
