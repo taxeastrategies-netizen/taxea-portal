@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, UserSearch } from 'lucide-react';
 import ContactPickerModal from './ContactPickerModal';
 import RecurringFields from './RecurringFields';
-import { getDefaultRecurring, calculateNextRun, calculateDueDate } from '@/lib/recurringUtils';
+import { getDefaultRecurring, calculateNextRun } from '@/lib/recurringUtils';
 
 const IVA_RATES = [0, 4, 10, 21];
 const IGIC_RATES = [0, 3, 7, 9.5, 15];
