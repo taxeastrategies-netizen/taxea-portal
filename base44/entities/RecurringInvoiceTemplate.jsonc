@@ -1,0 +1,174 @@
+{
+  "name": "RecurringInvoiceTemplate",
+  "type": "object",
+  "properties": {
+    "ownerAccountId": {
+      "type": "string"
+    },
+    "createdByUserId": {
+      "type": "string"
+    },
+    "createdByEmail": {
+      "type": "string"
+    },
+    "clientId": {
+      "type": "string"
+    },
+    "contactId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "finished",
+        "error",
+        "pending_review",
+        "insufficient_data"
+      ],
+      "default": "active"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "auto_issue",
+        "draft_review"
+      ],
+      "default": "auto_issue"
+    },
+    "frequency": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "monthly",
+        "yearly"
+      ],
+      "default": "monthly"
+    },
+    "interval": {
+      "type": "number",
+      "default": 1
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "endDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "nextRunDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "lastRunDate": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dayOfWeek": {
+      "type": "number"
+    },
+    "dayOfMonth": {
+      "type": "number"
+    },
+    "monthOfYear": {
+      "type": "number"
+    },
+    "dueDateMode": {
+      "type": "string",
+      "enum": [
+        "same_day",
+        "days_after",
+        "fixed_day",
+        "manual"
+      ],
+      "default": "days_after"
+    },
+    "dueDaysAfterIssue": {
+      "type": "number",
+      "default": 30
+    },
+    "dueDayOfMonth": {
+      "type": "number"
+    },
+    "invoiceType": {
+      "type": "string",
+      "default": "emitida"
+    },
+    "concept": {
+      "type": "string"
+    },
+    "baseAmount": {
+      "type": "number"
+    },
+    "taxRate": {
+      "type": "number",
+      "default": 21
+    },
+    "taxType": {
+      "type": "string",
+      "default": "iva"
+    },
+    "retentionRate": {
+      "type": "number",
+      "default": 0
+    },
+    "totalAmount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "sendEmailAutomatically": {
+      "type": "boolean",
+      "default": false
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "clientNif": {
+      "type": "string"
+    },
+    "clientAddress": {
+      "type": "string"
+    },
+    "clientEmail": {
+      "type": "string"
+    },
+    "formaPago": {
+      "type": "string"
+    },
+    "coletillaFiscal": {
+      "type": "string"
+    },
+    "totalGenerated": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "ownerAccountId",
+    "frequency",
+    "startDate",
+    "nextRunDate",
+    "concept",
+    "baseAmount"
+  ],
+  "rls": {
+    "create": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    }
+  }
+}

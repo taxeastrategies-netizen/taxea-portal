@@ -1,0 +1,86 @@
+{
+  "name": "RecurringInvoiceRun",
+  "type": "object",
+  "properties": {
+    "recurringInvoiceTemplateId": {
+      "type": "string"
+    },
+    "ownerAccountId": {
+      "type": "string"
+    },
+    "runType": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "manual",
+        "retry"
+      ],
+      "default": "scheduled"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "generated",
+        "skipped_duplicate",
+        "error",
+        "draft_created"
+      ],
+      "default": "pending"
+    },
+    "runAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "triggeredByUserId": {
+      "type": "string"
+    },
+    "triggeredByEmail": {
+      "type": "string"
+    },
+    "periodStart": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodEnd": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodKey": {
+      "type": "string"
+    },
+    "generatedInvoiceId": {
+      "type": "string"
+    },
+    "generatedInvoiceNumber": {
+      "type": "string"
+    },
+    "skippedReason": {
+      "type": "string"
+    },
+    "safeErrorMessage": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "recurringInvoiceTemplateId",
+    "ownerAccountId",
+    "runType",
+    "status",
+    "periodKey"
+  ],
+  "rls": {
+    "create": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "update": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.ownerAccountId": "{{user.data.company_id}}"
+    }
+  }
+}
