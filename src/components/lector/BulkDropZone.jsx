@@ -14,7 +14,7 @@ export default function BulkDropZone({ onFilesAdded }) {
   const [dragging, setDragging] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
-  const processFiles = (fileList) => {
+  const processFiles = (fileList, captureMethod = 'file_picker') => {
     const files = Array.from(fileList).filter(f => {
       const ext = f.name.split('.').pop().toLowerCase();
       return ['pdf','jpg','jpeg','png','webp'].includes(ext);
@@ -30,13 +30,13 @@ export default function BulkDropZone({ onFilesAdded }) {
       ? valid.slice(0, Math.floor(MAX_FILES * (MAX_TOTAL_MB / totalMB)))
       : valid;
 
-    onFilesAdded(capped);
+    onFilesAdded(capped, captureMethod);
   };
 
   const onDrop = (e) => {
     e.preventDefault();
     setDragging(false);
-    processFiles(e.dataTransfer.files);
+    processFiles(e.dataTransfer.files, 'drag_drop');
   };
 
   return (
@@ -78,11 +78,11 @@ export default function BulkDropZone({ onFilesAdded }) {
         className="hidden"
         accept={ACCEPT}
         multiple
-        onChange={e => processFiles(e.target.files)}
+        onChange={e => { processFiles(e.target.files, 'file_picker'); e.target.value = ''; }}
       />
       {showScanner && (
         <MobileScanner
-          onCapture={(files) => { processFiles(files); }}
+          onCapture={(files) => { processFiles(files, 'camera'); }}
           onClose={() => setShowScanner(false)}
         />
       )}

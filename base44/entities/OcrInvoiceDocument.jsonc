@@ -60,6 +60,31 @@
     "fileHash": {
       "type": "string"
     },
+    "uploadSource": {
+      "type": "string",
+      "enum": [
+        "mobile_camera",
+        "mobile_upload",
+        "desktop_upload",
+        "admin_upload"
+      ]
+    },
+    "captureMethod": {
+      "type": "string",
+      "enum": [
+        "camera",
+        "file_picker",
+        "drag_drop"
+      ]
+    },
+    "uploadedFromDeviceType": {
+      "type": "string",
+      "enum": [
+        "mobile",
+        "tablet",
+        "desktop"
+      ]
+    },
     "uploadedAt": {
       "type": "string",
       "format": "date-time"

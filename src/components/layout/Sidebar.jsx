@@ -253,6 +253,7 @@ const UTILS_ITEMS = [
 const ADMIN_ITEMS = [
   { to: '/admin/users', label: 'Gestión de usuarios', icon: UserCog },
   { to: '/admin/pagos', label: 'Control de pagos', icon: CreditCard },
+  { to: '/admin/ocr-bandeja', label: 'Bandeja OCR', icon: ScanLine },
   { to: '/admin/ocr-credits', label: 'Créditos OCR', icon: ScanLine },
   { to: '/admin/renovacion', label: 'Políticas de renovación', icon: Settings },
   { to: '/admin/estado-contable', label: 'Estado contable', icon: BookOpen },

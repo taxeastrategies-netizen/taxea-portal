@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
+import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail } from '@/lib/ocrUploadUtils';
 
 const DOC_TYPE = 'income_invoice';
 const SOURCE_MODULE = 'ocr_income';
@@ -90,11 +91,21 @@ export default function LectorIngresos() {
     return unsub;
   }, [company?.id, loadDocs]);
 
-  const handleFilesAdded = async (files) => {
+  // Re-fetch when user returns to the tab (mobile-PC sync guarantee)
+  useEffect(() => {
+    const onFocus = () => { if (company?.id) loadDocs(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [company?.id, loadDocs]);
+
+  const handleFilesAdded = async (files, captureMethod = 'file_picker') => {
     if (!company?.id) return;
     setUploading(true);
     const progress = files.map(f => ({ name: f.name, size: f.size, status: 'uploading' }));
     setUploadProgress(progress);
+
+    const deviceType = detectDeviceType();
+    const uploadSource = detectUploadSource(captureMethod, isAdmin, deviceType);
 
     let successCount = 0;
     for (let i = 0; i < files.length; i++) {
@@ -115,6 +126,11 @@ export default function LectorIngresos() {
           }
         } catch {}
 
+        const auditEntry = buildAuditEntry({
+          user, action: 'documento_subido', newStatus: 'pending',
+          detail: `${captureMethod} from ${deviceType}`,
+        });
+
         await base44.entities.OcrInvoiceDocument.create({
           company_id: company.id,
           uploadedByUserId: user?.id,
@@ -127,9 +143,13 @@ export default function LectorIngresos() {
           fileMimeType: file.type,
           fileSize: file.size,
           fileStorageUrl: file_url,
+          uploadSource,
+          captureMethod,
+          uploadedFromDeviceType: deviceType,
           uploadedAt: new Date().toISOString(),
           lastStatusChangedAt: new Date().toISOString(),
           duplicateWarning,
+          auditTrail: [auditEntry],
         });
 
         await base44.entities.TimelineEvent.create({
@@ -162,11 +182,13 @@ export default function LectorIngresos() {
 
   const processOcr = async (doc) => {
     setProcessingIds(prev => new Set([...prev, doc.id]));
+    const now = new Date().toISOString();
     await base44.entities.OcrInvoiceDocument.update(doc.id, {
       status: 'processing',
-      analysisStartedAt: new Date().toISOString(),
-      lastStatusChangedAt: new Date().toISOString(),
+      analysisStartedAt: now,
+      lastStatusChangedAt: now,
       safeErrorMessage: '',
+      auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_iniciado', prevStatus: doc.status, newStatus: 'processing' })),
     });
     loadDocs();
 
@@ -176,17 +198,21 @@ export default function LectorIngresos() {
         file_urls: [doc.fileStorageUrl],
         response_json_schema: OCR_SCHEMA,
       });
+      const doneNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
         status: 'review_required',
         extractedData: JSON.stringify(result),
-        analysisCompletedAt: new Date().toISOString(),
-        lastStatusChangedAt: new Date().toISOString(),
+        analysisCompletedAt: doneNow,
+        lastStatusChangedAt: doneNow,
+        auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
       });
     } catch {
+      const failNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
         status: 'analysis_failed',
         safeErrorMessage: 'No se ha podido analizar automaticamente. El documento sigue guardado para revision manual.',
-        lastStatusChangedAt: new Date().toISOString(),
+        lastStatusChangedAt: failNow,
+        auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_fallido', prevStatus: 'processing', newStatus: 'analysis_failed' })),
       });
     }
     setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
@@ -227,30 +253,41 @@ export default function LectorIngresos() {
       trimestre: trimestre(fecha),
       subido_por: user?.email,
     });
+    const doc = documents.find(d => d.id === docId);
+    const now = new Date().toISOString();
     await base44.entities.OcrInvoiceDocument.update(docId, {
       status: 'accounted',
-      accountedAt: new Date().toISOString(),
+      accountedAt: now,
       linkedInvoiceId: inv?.id || '',
-      lastStatusChangedAt: new Date().toISOString(),
+      lastStatusChangedAt: now,
+      reviewedByAdminId: user?.id,
+      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv?.id}` })),
     });
     setReviewing(null);
     loadDocs();
   };
 
   const handleReject = async (docId) => {
+    const doc = documents.find(d => d.id === docId);
+    const now = new Date().toISOString();
     await base44.entities.OcrInvoiceDocument.update(docId, {
       status: 'rejected',
-      rejectedAt: new Date().toISOString(),
-      lastStatusChangedAt: new Date().toISOString(),
+      rejectedAt: now,
+      lastStatusChangedAt: now,
+      reviewedByAdminId: user?.id,
+      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
     });
     setReviewing(null);
     loadDocs();
   };
 
   const handleWithdraw = async (docId) => {
+    const doc = documents.find(d => d.id === docId);
+    const now = new Date().toISOString();
     await base44.entities.OcrInvoiceDocument.update(docId, {
       status: 'cancelled_by_client',
-      lastStatusChangedAt: new Date().toISOString(),
+      lastStatusChangedAt: now,
+      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'retirado_por_cliente', prevStatus: doc?.status, newStatus: 'cancelled_by_client' })),
     });
     loadDocs();
   };
