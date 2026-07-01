@@ -8,6 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, UserSearch } from 'lucide-react';
 import ContactPickerModal from './ContactPickerModal';
+import RecurringFields from './RecurringFields';
+import { getDefaultRecurring, calculateNextRun, calculateDueDate } from '@/lib/recurringUtils';
 
 const IVA_RATES = [0, 4, 10, 21];
 const IGIC_RATES = [0, 3, 7, 9.5, 15];
@@ -84,6 +86,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const loadedRef = useRef(false);
   const [favoriteNotes, setFavoriteNotes] = useState([]);
   const [showContactPicker, setShowContactPicker] = useState(false);
+  const [recurring, setRecurring] = useState(getDefaultRecurring());
 
   const handleSelectContact = (contact) => {
     setForm(prev => ({
@@ -109,9 +112,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       setForm({ ...getEmpty(), ...editing, aplica_retencion: (parseFloat(editing.retencion_irpf) || 0) > 0 });
       setCustomRetention(!RETENTION_RATES.includes(parseFloat(editing.retencion_irpf)));
       setUseCustomColetilla(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal));
+      setRecurring(getDefaultRecurring());
     } else if (!editing && !loadedRef.current) {
       loadedRef.current = true;
       setForm(getEmpty());
+      setRecurring(getDefaultRecurring());
     }
     setErrors({});
     setSaveError('');
@@ -162,13 +167,52 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       if (editing?.id) {
         await base44.entities.Invoice.update(editing.id, payload);
       } else {
-        await base44.entities.Invoice.create(payload);
+        const createdInvoice = await base44.entities.Invoice.create(payload);
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
           descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${payload.cliente_nombre || ''} · ${fmt(total)} €`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
+
+        // Create recurring template if enabled and invoice is "emitida"
+        if (recurring.enabled && payload.tipo === 'emitida') {
+          const nextRun = calculateNextRun(recurring, recurring.startDate);
+          await base44.entities.RecurringInvoiceTemplate.create({
+            ownerAccountId: company.id,
+            createdByUserId: user?.id,
+            createdByEmail: user?.email,
+            status: 'active',
+            mode: recurring.mode,
+            frequency: recurring.frequency,
+            interval: recurring.interval,
+            startDate: recurring.startDate,
+            endDate: recurring.endDate || null,
+            nextRunDate: nextRun,
+            dayOfWeek: recurring.dayOfWeek,
+            dayOfMonth: recurring.frequency === 'yearly' ? recurring.dayOfMonthYearly : recurring.dayOfMonth,
+            monthOfYear: recurring.monthOfYear,
+            dueDateMode: recurring.dueDateMode,
+            dueDaysAfterIssue: recurring.dueDaysAfterIssue,
+            dueDayOfMonth: recurring.dueDayOfMonth,
+            invoiceType: 'emitida',
+            concept: payload.concepto,
+            baseAmount: parseFloat(payload.base_imponible) || 0,
+            taxRate: parseFloat(payload.tipo_iva) || 0,
+            taxType: taxType.toLowerCase(),
+            retentionRate: payload.retencion_irpf || 0,
+            totalAmount: total,
+            currency: payload.moneda || 'EUR',
+            sendEmailAutomatically: false,
+            clientName: payload.cliente_nombre,
+            clientNif: payload.cliente_nif,
+            clientAddress: payload.cliente_direccion,
+            clientEmail: payload.cliente_email,
+            formaPago: payload.forma_pago,
+            coletillaFiscal: payload.coletilla_fiscal || '',
+            totalGenerated: 0,
+          }).catch(() => {});
+        }
       }
       onSaved?.();
       onOpenChange(false);
@@ -420,6 +464,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             <Label>Observaciones</Label>
             <Input value={form.comentarios || ''} onChange={set('comentarios')} placeholder="Notas adicionales..." />
           </div>
+
+          {/* Recurring */}
+          {!editing && form.tipo === 'emitida' && (
+            <RecurringFields recurring={recurring} setRecurring={setRecurring} />
+          )}
         </div>
 
         <ContactPickerModal

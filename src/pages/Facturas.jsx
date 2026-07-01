@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -14,6 +14,8 @@ import InvoiceForm from '@/components/facturas/InvoiceForm';
 import InvoiceViewer from '@/components/facturas/InvoiceViewer';
 import InvoiceDocumentWorkspace from '@/components/facturas/InvoiceDocumentWorkspace';
 import SendInvoiceDocumentModal from '@/components/facturas/SendInvoiceDocumentModal';
+import RecurringSection from '@/components/facturas/RecurringSection';
+import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
 import { cn } from '@/lib/utils';
 
 export default function Facturas() {
@@ -34,6 +36,8 @@ export default function Facturas() {
   const [anularTarget, setAnularTarget] = useState(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [anulando, setAnulando] = useState(false);
+  const [showRecurringView, setShowRecurringView] = useState(false);
+  const [showGenerateRecurring, setShowGenerateRecurring] = useState(false);
 
   useEffect(() => {
     if (company?.id) loadInvoices();
@@ -167,13 +171,23 @@ export default function Facturas() {
     <>
       {/* ── Listado de facturas ──────────────────────────────────────────── */}
       <div className="flex-1 min-w-0 overflow-y-auto">
-        <PageHeader title="Facturas" subtitle={`${filtered.length} facturas · ${filterTipo === 'emitida' ? 'Emitidas' : 'Recibidas'}`}>
-          <Button onClick={openNew} className="bg-teal hover:bg-teal-dark h-9">
-            <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
-          </Button>
+        <PageHeader
+          title={showRecurringView ? 'Facturas Recurrentes' : 'Facturas'}
+          subtitle={showRecurringView ? 'Plantillas de facturación automática' : `${filtered.length} facturas · ${filterTipo === 'emitida' ? 'Emitidas' : 'Recibidas'}`}
+        >
+          {showRecurringView ? (
+            <Button onClick={() => setShowGenerateRecurring(true)} variant="outline" className="h-9">
+              <Repeat className="w-4 h-4 mr-1.5" /> Generar pendientes
+            </Button>
+          ) : (
+            <Button onClick={openNew} className="bg-teal hover:bg-teal-dark h-9">
+              <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
+            </Button>
+          )}
         </PageHeader>
 
         {/* KPI Cards */}
+        {!showRecurringView && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
           <div className="bg-card border border-border rounded-xl p-4 shadow-card">
             <div className="flex items-center gap-2 mb-3">
@@ -222,30 +236,38 @@ export default function Facturas() {
             </p>
           </div>
         </div>
+        )}
 
         {/* Tipo toggle + estado anuladas */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit">
           {['emitida', 'recibida'].map(t => (
-            <button key={t} onClick={() => setFilterTipo(t)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterTipo === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <button key={t} onClick={() => { setFilterTipo(t); setShowRecurringView(false); }}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!showRecurringView && filterTipo === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
               {t === 'emitida' ? 'Emitidas' : 'Recibidas'}
             </button>
           ))}
-        </div>
-        <div className="flex gap-1.5">
-          <button onClick={() => setShowAnuladas(false)}
-            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${!showAnuladas ? 'bg-foreground text-background border-foreground' : 'bg-card text-muted-foreground border-border hover:border-foreground'}`}>
-            Activas ({activas.filter(i => i.tipo === filterTipo).length})
-          </button>
-          <button onClick={() => setShowAnuladas(true)}
-            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${showAnuladas ? 'bg-red-600 text-white border-red-600' : 'bg-card text-muted-foreground border-border hover:border-red-400'}`}>
-            Anuladas ({anuladas.filter(i => i.tipo === filterTipo).length})
+          <button onClick={() => setShowRecurringView(true)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5 ${showRecurringView ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Repeat className="w-3.5 h-3.5" /> Recurrentes
           </button>
         </div>
+        {!showRecurringView && (
+          <div className="flex gap-1.5">
+            <button onClick={() => setShowAnuladas(false)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${!showAnuladas ? 'bg-foreground text-background border-foreground' : 'bg-card text-muted-foreground border-border hover:border-foreground'}`}>
+              Activas ({activas.filter(i => i.tipo === filterTipo).length})
+            </button>
+            <button onClick={() => setShowAnuladas(true)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${showAnuladas ? 'bg-red-600 text-white border-red-600' : 'bg-card text-muted-foreground border-border hover:border-red-400'}`}>
+              Anuladas ({anuladas.filter(i => i.tipo === filterTipo).length})
+            </button>
+          </div>
+        )}
         </div>
 
         {/* Filtros */}
+        {!showRecurringView && (
         <div className="flex flex-wrap gap-3 mb-5">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -273,8 +295,12 @@ export default function Facturas() {
             </SelectContent>
           </Select>
         </div>
+        )}
 
-        {/* Tabla */}
+        {/* Recurring view or invoice table */}
+        {showRecurringView ? (
+          <RecurringSection company={company} user={user} isAdmin={isAdmin} />
+        ) : (
         <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
           {loading ? (
             <div className="p-12 text-center">
@@ -377,6 +403,7 @@ export default function Facturas() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* ── Vista completa de documento (workspace) ─────────────────────── */}
@@ -417,6 +444,12 @@ export default function Facturas() {
         company={company}
         user={user}
         onSent={handleSent}
+      />
+
+      <GenerateRecurringModal
+        open={showGenerateRecurring}
+        onOpenChange={setShowGenerateRecurring}
+        onDone={loadInvoices}
       />
 
       {/* Modal anular factura */}
