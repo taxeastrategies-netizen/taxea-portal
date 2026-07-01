@@ -28,6 +28,17 @@ JSON.parse = function (text, reviver) {
   return _origJsonParse.call(this, text, reviver);
 };
 
+// Patch Response.prototype.json — empty HTTP bodies (204, empty 200s) throw
+// "Unexpected end of input" when .json() is called, and this path does NOT
+// go through the global JSON.parse patch above.
+const _origResponseJson = Response.prototype.json;
+Response.prototype.json = function () {
+  return this.text().then((text) => {
+    if (text.trim() === '') return null;
+    return _origJsonParse(text);
+  });
+};
+
 const _origConsoleError = console.error.bind(console);
 console.error = function (...args) {
   if (args.some(shouldSuppress)) return;
