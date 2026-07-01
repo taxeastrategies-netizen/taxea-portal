@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user || user.role !== 'admin') return Response.json({ error: 'No autorizado' }, { status: 403 });
 
-    const { subscriptionId } = await req.json();
+    const { subscriptionId } = await req.json().catch(() => ({}));
     const sub = await base44.entities.Subscription.get(subscriptionId);
     if (!sub) return Response.json({ error: 'Suscripción no encontrada' }, { status: 404 });
 

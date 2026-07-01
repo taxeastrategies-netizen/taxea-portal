@@ -5,7 +5,7 @@ Deno.serve(async (req) => {
   const user = await base44.auth.me();
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { document_id } = await req.json();
+  const { document_id } = await req.json().catch(() => ({}));
   if (!document_id) return Response.json({ error: 'document_id required' }, { status: 400 });
 
   const docs = await base44.asServiceRole.entities.LaborOcrDocument.filter({ id: document_id });

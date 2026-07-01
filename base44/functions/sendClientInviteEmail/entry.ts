@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Acceso denegado' }, { status: 403 });
     }
 
-    const { email, clientName, setupUrl, isResend } = await req.json();
+    const { email, clientName, setupUrl, isResend } = await req.json().catch(() => ({}));
 
     if (!email || !clientName || !setupUrl) {
       return Response.json({ error: 'Faltan parámetros requeridos' }, { status: 400 });

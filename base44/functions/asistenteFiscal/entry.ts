@@ -158,7 +158,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { pregunta, company_id, historial = [], sesion_id } = await req.json();
+    const { pregunta, company_id, historial = [], sesion_id } = await req.json().catch(() => ({}));
     if (!pregunta || !company_id) return Response.json({ error: 'Faltan parámetros' }, { status: 400 });
 
     const impuesto = detectarImpuesto(pregunta);

@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Acceso restringido a administradores' }, { status: 403 });
     }
 
-    const { to, mensaje, whatsapp_log_id } = await req.json();
+    const { to, mensaje, whatsapp_log_id } = await req.json().catch(() => ({}));
 
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');

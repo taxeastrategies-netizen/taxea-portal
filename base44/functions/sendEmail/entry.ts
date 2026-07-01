@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { to, cc, bcc, subject, html, from_name } = await req.json();
+    const { to, cc, bcc, subject, html, from_name } = await req.json().catch(() => ({}));
     if (!to || !subject || !html) {
       return Response.json({ error: 'Faltan campos requeridos: to, subject, html' }, { status: 400 });
     }

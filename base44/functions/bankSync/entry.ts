@@ -428,7 +428,7 @@ Deno.serve(async (req) => {
   try { user = await base44.auth.me(); } catch { user = null; }
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const { action, bank_account_id, company_id } = body;
 
   if (!bank_account_id || !company_id) {

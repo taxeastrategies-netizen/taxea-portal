@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { toPlanCode } = body;
     if (!toPlanCode) return Response.json({ error: 'toPlanCode requerido' }, { status: 400 });
 

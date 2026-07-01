@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Solo administradores' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const {
       billingAccountId, quotaPeriodId, adjustmentType,
       credits = 0, reason, internalNote, validFrom, validUntil,

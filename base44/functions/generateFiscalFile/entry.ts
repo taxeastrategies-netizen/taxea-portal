@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { modeloCodigo, companyId, ejercicio, periodo, taxDraftId } = await req.json();
+    const { modeloCodigo, companyId, ejercicio, periodo, taxDraftId } = await req.json().catch(() => ({}));
     if (!modeloCodigo || !companyId || !ejercicio || !periodo) {
       return Response.json({ error: 'Parámetros incompletos: modeloCodigo, companyId, ejercicio, periodo requeridos.' }, { status: 400 });
     }

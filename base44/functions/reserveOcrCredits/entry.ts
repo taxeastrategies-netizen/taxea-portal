@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { documentId, batchId, documentType, sourceModule, credits = 1, idempotencyKey } = body;
 
     if (!idempotencyKey) return Response.json({ error: 'idempotencyKey requerido' }, { status: 400 });
