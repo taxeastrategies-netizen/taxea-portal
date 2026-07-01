@@ -111,7 +111,12 @@ export default function LectorIngresos() {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const uploadResult = await Promise.race([
+          base44.integrations.Core.UploadFile({ file }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000)),
+        ]);
+        const file_url = uploadResult?.file_url;
+        if (!file_url) throw new Error('No se recibió la URL del archivo subido.');
 
         let duplicateWarning = '';
         try {
@@ -165,8 +170,9 @@ export default function LectorIngresos() {
 
         progress[i].status = 'done';
         successCount++;
-      } catch {
+      } catch (err) {
         progress[i].status = 'error';
+        progress[i].error = err?.message === 'timeout' ? 'La subida tardó demasiado. Revisa tu conexión e inténtalo de nuevo.' : 'Error al subir el archivo. Inténtalo de nuevo.';
       }
       setUploadProgress([...progress]);
     }
@@ -176,7 +182,12 @@ export default function LectorIngresos() {
       setToast({ type: 'success', message: `${successCount} factura(s) recibida(s). Quedan pendientes de revision por Taxea.` });
       setTimeout(() => setToast(null), 6000);
     }
-    setTimeout(() => setUploadProgress([]), 5000);
+    const hadErrors = progress.some(p => p.status === 'error');
+    if (hadErrors && successCount === 0) {
+      setToast({ type: 'error', message: 'No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo.' });
+      setTimeout(() => setToast(null), 8000);
+    }
+    setTimeout(() => setUploadProgress([]), hadErrors ? 8000 : 5000);
     loadDocs();
   };
 
@@ -332,7 +343,12 @@ export default function LectorIngresos() {
                 </div>
                 {p.status === 'uploading' && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
                 {p.status === 'done' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                {p.status === 'error' && <XCircle className="w-4 h-4 text-red-500" />}
+                {p.status === 'error' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-500 hidden sm:inline">{p.error || 'Error'}</span>
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -340,9 +356,11 @@ export default function LectorIngresos() {
       )}
 
       {toast && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-          <p className="text-sm text-green-800">{toast.message}</p>
+        <div className={toast.type === 'error' ? 'bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-center gap-3' : 'bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-center gap-3'}>
+          {toast.type === 'error'
+            ? <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            : <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />}
+          <p className={toast.type === 'error' ? 'text-sm text-red-800' : 'text-sm text-green-800'}>{toast.message}</p>
         </div>
       )}
 
