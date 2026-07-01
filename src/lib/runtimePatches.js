@@ -83,7 +83,27 @@ if (_onMsgDesc && _onMsgDesc.set) {
   });
 }
 
-// 4. Suppress any remaining instances from reaching the console / error overlay.
+// 4. Patch fetch — intercept empty 204/205 responses before any handler sees them.
+const _origFetch = window.fetch;
+if (_origFetch) {
+  window.fetch = function (...args) {
+    return _origFetch.apply(this, args).then((response) => {
+      const clone = response.clone();
+      return clone.text().then((text) => {
+        if (!text || text.trim() === '') {
+          // Wrap the empty response so .json() returns null instead of throwing
+          Object.defineProperty(response, 'json', {
+            value: () => Promise.resolve(null),
+            configurable: true,
+          });
+        }
+        return response;
+      }).catch(() => response);
+    });
+  };
+}
+
+// 5. Suppress any remaining instances from reaching the console / error overlay.
 const _origConsoleError = console.error.bind(console);
 console.error = function (...args) {
   if (args.some(shouldSuppress)) return;
