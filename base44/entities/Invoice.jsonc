@@ -121,7 +121,9 @@
         "asiento_propuesto",
         "contabilizada",
         "rechazada",
-        "requiere_correccion"
+        "requiere_correccion",
+        "en_revision",
+        "revisada"
       ],
       "default": "pendiente"
     },
@@ -154,6 +156,37 @@
     "fecha_contabilizacion": {
       "type": "string",
       "format": "date-time"
+    },
+    "forma_pago": {
+      "type": "string"
+    },
+    "coletilla_fiscal": {
+      "type": "string"
+    },
+    "isRecurringGenerated": {
+      "type": "boolean",
+      "default": false
+    },
+    "recurringInvoiceTemplateId": {
+      "type": "string"
+    },
+    "recurringInvoiceRunId": {
+      "type": "string"
+    },
+    "recurringPeriodStart": {
+      "type": "string",
+      "format": "date"
+    },
+    "recurringPeriodEnd": {
+      "type": "string",
+      "format": "date"
+    },
+    "recurringPeriodKey": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string",
+      "default": "manual"
     }
   },
   "required": [
@@ -165,16 +198,16 @@
   ],
   "rls": {
     "create": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     },
     "read": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     },
     "update": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     },
     "delete": {
-      "company_id": "{{user.data.company_id}}"
+      "data.company_id": "{{user.data.company_id}}"
     }
   }
 }
