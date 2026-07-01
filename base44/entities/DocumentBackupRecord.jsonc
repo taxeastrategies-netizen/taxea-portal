@@ -1,0 +1,102 @@
+{
+  "name": "DocumentBackupRecord",
+  "type": "object",
+  "properties": {
+    "documentId": {
+      "type": "string"
+    },
+    "documentEntity": {
+      "type": "string"
+    },
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "documentType": {
+      "type": "string"
+    },
+    "sourceModule": {
+      "type": "string"
+    },
+    "originalFileName": {
+      "type": "string"
+    },
+    "fileStorageUrl": {
+      "type": "string"
+    },
+    "fileSize": {
+      "type": "number"
+    },
+    "mimeType": {
+      "type": "string"
+    },
+    "checksum": {
+      "type": "string"
+    },
+    "driveFileId": {
+      "type": "string"
+    },
+    "driveFolderId": {
+      "type": "string"
+    },
+    "drivePath": {
+      "type": "string"
+    },
+    "backupStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "backed_up",
+        "updated",
+        "failed",
+        "verified",
+        "deleted_in_origin"
+      ],
+      "default": "pending"
+    },
+    "lastBackedUpAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastVerifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "safeErrorMessage": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "documentId",
+    "documentEntity",
+    "backupStatus"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

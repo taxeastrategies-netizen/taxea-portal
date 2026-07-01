@@ -1,0 +1,107 @@
+{
+  "name": "BackupConfiguration",
+  "type": "object",
+  "properties": {
+    "driveConnectedAccountEmail": {
+      "type": "string"
+    },
+    "driveRootFolderId": {
+      "type": "string"
+    },
+    "driveRootFolderPath": {
+      "type": "string"
+    },
+    "backupMode": {
+      "type": "string",
+      "enum": [
+        "incremental_with_daily_manifest",
+        "full_daily_copy"
+      ],
+      "default": "incremental_with_daily_manifest"
+    },
+    "scheduleEnabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "scheduleTime": {
+      "type": "string",
+      "default": "03:00"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "Atlantic/Canary"
+    },
+    "lastSuccessfulBackupAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastBackupStatus": {
+      "type": "string",
+      "enum": [
+        "never",
+        "success",
+        "completed_with_errors",
+        "failed",
+        "running"
+      ],
+      "default": "never"
+    },
+    "alertEmail": {
+      "type": "string"
+    },
+    "retentionPolicy": {
+      "type": "string",
+      "enum": [
+        "indefinite_until_manual_policy",
+        "retain_1_year",
+        "retain_4_years",
+        "retain_6_years",
+        "custom"
+      ],
+      "default": "indefinite_until_manual_policy"
+    },
+    "folderNamingMode": {
+      "type": "string",
+      "enum": [
+        "client_name",
+        "client_id",
+        "both"
+      ],
+      "default": "both"
+    },
+    "rootFolderName": {
+      "type": "string",
+      "default": "Taxea Strategies - Backups"
+    },
+    "portalFolderName": {
+      "type": "string",
+      "default": "Taxea Portal"
+    }
+  },
+  "required": [
+    "backupMode",
+    "scheduleEnabled"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

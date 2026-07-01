@@ -1,0 +1,89 @@
+{
+  "name": "BackupJobItem",
+  "type": "object",
+  "properties": {
+    "backupJobId": {
+      "type": "string"
+    },
+    "documentId": {
+      "type": "string"
+    },
+    "documentEntity": {
+      "type": "string"
+    },
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "copied",
+        "skipped_existing",
+        "updated",
+        "failed",
+        "verified"
+      ],
+      "default": "pending"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "copy",
+        "skip",
+        "update",
+        "verify",
+        "fail"
+      ],
+      "default": "copy"
+    },
+    "driveFileId": {
+      "type": "string"
+    },
+    "drivePath": {
+      "type": "string"
+    },
+    "checksum": {
+      "type": "string"
+    },
+    "fileSize": {
+      "type": "number"
+    },
+    "safeErrorMessage": {
+      "type": "string"
+    },
+    "attempts": {
+      "type": "number",
+      "default": 1
+    }
+  },
+  "required": [
+    "backupJobId",
+    "documentId"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

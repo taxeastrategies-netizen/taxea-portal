@@ -1,0 +1,130 @@
+{
+  "name": "BackupJob",
+  "type": "object",
+  "properties": {
+    "jobType": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "manual",
+        "verification",
+        "retry_failed"
+      ],
+      "default": "manual"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "preparing",
+        "copying",
+        "verifying",
+        "completed",
+        "completed_with_errors",
+        "failed",
+        "cancelled"
+      ],
+      "default": "queued"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "durationSeconds": {
+      "type": "number"
+    },
+    "triggeredByUserId": {
+      "type": "string"
+    },
+    "triggeredByEmail": {
+      "type": "string"
+    },
+    "driveAccountEmail": {
+      "type": "string"
+    },
+    "driveRootFolderId": {
+      "type": "string"
+    },
+    "driveBackupFolderId": {
+      "type": "string"
+    },
+    "driveBackupFolderPath": {
+      "type": "string"
+    },
+    "backupMode": {
+      "type": "string"
+    },
+    "documentsScanned": {
+      "type": "number",
+      "default": 0
+    },
+    "documentsCopied": {
+      "type": "number",
+      "default": 0
+    },
+    "documentsSkipped": {
+      "type": "number",
+      "default": 0
+    },
+    "documentsFailed": {
+      "type": "number",
+      "default": 0
+    },
+    "documentsVerified": {
+      "type": "number",
+      "default": 0
+    },
+    "bytesCopied": {
+      "type": "number",
+      "default": 0
+    },
+    "manifestDriveFileId": {
+      "type": "string"
+    },
+    "manifestCsvDriveFileId": {
+      "type": "string"
+    },
+    "summaryDriveFileId": {
+      "type": "string"
+    },
+    "manifestChecksum": {
+      "type": "string"
+    },
+    "safeErrorMessage": {
+      "type": "string"
+    },
+    "internalErrorCode": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "jobType",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
