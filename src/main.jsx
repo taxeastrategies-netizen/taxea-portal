@@ -4,15 +4,18 @@ import App from '@/App.jsx'
 import '@/index.css'
 
 // Fix root cause: the SDK's WebSocket agent subscription calls JSON.parse()
-// on empty/incomplete messages, throwing "Unexpected end of input".
-// Patch JSON.parse to return {} for empty/whitespace-only input so the
-// SDK's `if (data._message)` check is simply skipped — no error thrown.
+// on empty/undefined/incomplete messages, throwing "Unexpected end of input".
+// Catch that specific error and return {} so the SDK skips the message gracefully.
 const _origJSONParse = JSON.parse;
 JSON.parse = function (text, reviver) {
-  if (typeof text === 'string' && text.trim() === '') {
-    return {};
+  try {
+    return _origJSONParse.call(this, text, reviver);
+  } catch (e) {
+    if (e instanceof SyntaxError && e.message.includes('Unexpected end of input')) {
+      return {};
+    }
+    throw e;
   }
-  return _origJSONParse.call(this, text, reviver);
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
