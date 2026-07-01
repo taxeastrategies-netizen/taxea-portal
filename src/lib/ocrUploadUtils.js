@@ -103,7 +103,6 @@ export function classifyUploadError(err) {
 }
 
 const ALLOWED_EXTS = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
-const ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 /**
  * Pre-validates a file before attempting upload.

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { ScanText, Play, CheckCircle, FileText, Loader2, XCircle } from 'lucide-react';
+import { Play, CheckCircle, FileText, Loader2, XCircle } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import BulkDropZone from '@/components/lector/BulkDropZone';
