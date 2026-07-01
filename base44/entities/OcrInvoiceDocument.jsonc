@@ -157,6 +157,9 @@
           "data.company_id": "{{user.data.company_id}}"
         },
         {
+          "data.uploadedByUserId": "{{user.id}}"
+        },
+        {
           "user_condition": {
             "role": "admin"
           }
@@ -169,6 +172,9 @@
           "data.company_id": "{{user.data.company_id}}"
         },
         {
+          "data.uploadedByUserId": "{{user.id}}"
+        },
+        {
           "user_condition": {
             "role": "admin"
           }
@@ -179,6 +185,9 @@
       "$or": [
         {
           "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "data.uploadedByUserId": "{{user.id}}"
         },
         {
           "user_condition": {
