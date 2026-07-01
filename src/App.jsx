@@ -29,7 +29,6 @@ import AdminPanel from './pages/AdminPanel';
 import Timeline from './pages/Timeline';
 import Tareas from './pages/Tareas';
 import DetectorErrores from './pages/DetectorErrores';
-import CRMInterno from './pages/CRMInterno';
 import Notificaciones from './pages/Notificaciones';
 import AsistenteFiscal from './pages/AsistenteFiscal';
 import AdminAsistente from './pages/AdminAsistente';
@@ -97,7 +96,6 @@ function AppWithContext({ user }) {
         <Route path="/ajustes" element={<Ajustes />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/errores" element={<DetectorErrores />} />
-        <Route path="/crm" element={<CRMInterno />} />
         <Route path="/notificaciones" element={<Notificaciones />} />
         <Route path="/asistente" element={<AsistenteFiscal />} />
         <Route path="/admin-asistente" element={<AdminAsistente />} />

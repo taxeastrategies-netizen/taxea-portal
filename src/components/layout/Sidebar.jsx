@@ -257,7 +257,6 @@ const ADMIN_ITEMS = [
   { to: '/admin/ocr-credits', label: 'Créditos OCR', icon: ScanLine },
   { to: '/admin/renovacion', label: 'Políticas de renovación', icon: Settings },
   { to: '/admin/estado-contable', label: 'Estado contable', icon: BookOpen },
-  { to: '/crm', label: 'CRM Interno', icon: BarChart2 },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
   { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },
   { to: '/admin-sugerencias', label: 'Buzón Sugerencias', icon: Lightbulb },
