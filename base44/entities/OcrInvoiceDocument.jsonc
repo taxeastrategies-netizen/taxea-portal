@@ -1,0 +1,168 @@
+{
+  "name": "OcrInvoiceDocument",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "uploadedByUserId": {
+      "type": "string"
+    },
+    "uploadedByEmail": {
+      "type": "string"
+    },
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "income_invoice",
+        "expense_invoice"
+      ]
+    },
+    "sourceModule": {
+      "type": "string",
+      "enum": [
+        "ocr_income",
+        "ocr_expense"
+      ],
+      "default": "ocr_expense"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "queued_for_analysis",
+        "processing",
+        "analysis_failed",
+        "review_required",
+        "validated",
+        "accounted",
+        "rejected",
+        "replacement_requested",
+        "cancelled_by_client"
+      ],
+      "default": "pending"
+    },
+    "originalFileName": {
+      "type": "string"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "fileMimeType": {
+      "type": "string"
+    },
+    "fileSize": {
+      "type": "number"
+    },
+    "fileStorageUrl": {
+      "type": "string"
+    },
+    "fileHash": {
+      "type": "string"
+    },
+    "uploadedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastStatusChangedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "analysisStartedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "analysisCompletedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedByAdminId": {
+      "type": "string"
+    },
+    "accountedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "linkedInvoiceId": {
+      "type": "string"
+    },
+    "rejectedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rejectionReason": {
+      "type": "string"
+    },
+    "safeErrorMessage": {
+      "type": "string"
+    },
+    "extractedData": {
+      "type": "string"
+    },
+    "validationWarnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "duplicateWarning": {
+      "type": "string"
+    },
+    "auditTrail": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "company_id",
+    "documentType",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
