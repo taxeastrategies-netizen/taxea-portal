@@ -10,7 +10,7 @@ import {
   Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine, DollarSign, CreditCard,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
-  Folder, Zap, Megaphone
+  Folder, Zap, Megaphone, HardDrive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -255,6 +255,7 @@ const ADMIN_ITEMS = [
   { to: '/admin/pagos', label: 'Control de pagos', icon: CreditCard },
   { to: '/admin/ocr-bandeja', label: 'Bandeja OCR', icon: ScanLine },
   { to: '/admin/ocr-credits', label: 'Créditos OCR', icon: ScanLine },
+  { to: '/admin/backup-drive', label: 'Seguridad y Copias', icon: HardDrive },
   { to: '/admin/renovacion', label: 'Políticas de renovación', icon: Settings },
   { to: '/admin/estado-contable', label: 'Estado contable', icon: BookOpen },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
