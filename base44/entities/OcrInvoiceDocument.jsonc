@@ -150,9 +150,7 @@
     "status"
   ],
   "rls": {
-    "create": {
-      "data.company_id": "{{user.data.company_id}}"
-    },
+    "create": {},
     "read": {
       "$or": [
         {
