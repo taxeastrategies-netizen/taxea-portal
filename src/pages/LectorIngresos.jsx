@@ -331,7 +331,7 @@ export default function LectorIngresos() {
   return (
     <div>
       <PageHeader title="Lector de Ingresos" subtitle="Entrega de facturas emitidas · Taxea revisa y contabiliza">
-        {isAdmin && pendingCount > 0 && (
+        {pendingCount > 0 && (
           <Button onClick={processAllPending} disabled={uploading} className="bg-teal hover:bg-teal-dark h-9 gap-2">
             <Play className="w-4 h-4" /> Procesar {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
           </Button>

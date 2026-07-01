@@ -122,7 +122,7 @@ export default function OcrDocumentTable({
                         <Eye className="w-3.5 h-3.5" />
                       </a>
                     )}
-                    {isAdmin && (doc.status === 'pending' || doc.status === 'analysis_failed') && (
+                    {(doc.status === 'pending' || doc.status === 'analysis_failed') && (
                       <button
                         onClick={() => onProcessOcr(doc)}
                         disabled={isProcessing}
@@ -132,7 +132,7 @@ export default function OcrDocumentTable({
                         {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                       </button>
                     )}
-                    {isAdmin && doc.status === 'review_required' && (
+                    {doc.status === 'review_required' && (
                       <button onClick={() => onReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisar y validar">
                         <CheckCircle className="w-3.5 h-3.5" />
                       </button>
