@@ -15,7 +15,7 @@ export default function OcrTopBarBadge({ isAdmin }) {
 
   if (isAdmin || !data || !data.period) return null;
 
-  const { period, pct, available, status } = data;
+  const { period, status } = data;
   const isUnlimited = period?.isUnlimited;
   const consumed = period?.consumedCredits || 0;
   const limit = (period?.currentPlanLimit || 0) + (period?.manualCredits || 0);

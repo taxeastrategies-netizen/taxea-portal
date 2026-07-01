@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden — solo administradores' }, { status: 403 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const email = body?.email?.trim()?.toLowerCase();
     const role = body?.role || 'user';
     const fullName = body?.full_name?.trim();
