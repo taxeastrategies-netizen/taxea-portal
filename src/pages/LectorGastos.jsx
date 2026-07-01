@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
-import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail } from '@/lib/ocrUploadUtils';
+import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail, classifyUploadError, generateTraceId, generateIdempotencyKey, validateFile } from '@/lib/ocrUploadUtils';
 
 const DOC_TYPE = 'expense_invoice';
 const SOURCE_MODULE = 'ocr_expense';
@@ -111,15 +111,30 @@ export default function LectorGastos() {
     const uploadSource = detectUploadSource(captureMethod, isAdmin, deviceType);
 
     let successCount = 0;
+    let errorCount = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+
+      // Pre-validate file before attempting upload
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        progress[i].status = 'error';
+        progress[i].error = validation.message;
+        errorCount++;
+        setUploadProgress([...progress]);
+        continue;
+      }
+
+      const traceId = generateTraceId();
+      const idempotencyKey = generateIdempotencyKey(file, company.id, user?.id);
+
       try {
         const uploadResult = await Promise.race([
           base44.integrations.Core.UploadFile({ file }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000)),
         ]);
         const file_url = uploadResult?.file_url;
-        if (!file_url) throw new Error('No se recibió la URL del archivo subido.');
+        if (!file_url) throw new Error('NO_URL_RETURNED: No se recibió la URL del archivo subido.');
 
         let duplicateWarning = '';
         try {
@@ -136,7 +151,7 @@ export default function LectorGastos() {
 
         const auditEntry = buildAuditEntry({
           user, action: 'documento_subido', newStatus: 'pending',
-          detail: `${captureMethod} from ${deviceType}`,
+          detail: `${captureMethod} from ${deviceType} | trace=${traceId} | idempotency=${idempotencyKey}`,
         });
 
         await base44.entities.OcrInvoiceDocument.create({
@@ -174,22 +189,27 @@ export default function LectorGastos() {
         progress[i].status = 'done';
         successCount++;
       } catch (err) {
+        const classified = classifyUploadError(err);
+        console.error(`[OCR Upload] trace=${traceId} file="${file.name}" code=${classified.errorCode} raw=${classified.rawError || err?.message || err}`);
         progress[i].status = 'error';
-        progress[i].error = err?.message === 'timeout' ? 'La subida tardó demasiado. Revisa tu conexión e inténtalo de nuevo.' : 'Error al subir el archivo. Inténtalo de nuevo.';
+        progress[i].error = classified.safeMessage;
+        errorCount++;
       }
       setUploadProgress([...progress]);
     }
 
     setUploading(false);
-    if (successCount > 0) {
+    if (successCount > 0 && errorCount === 0) {
       setToast({ type: 'success', message: `${successCount} factura(s) recibida(s). Quedan pendientes de revision por Taxea.` });
       setTimeout(() => setToast(null), 6000);
-    }
-    const hadErrors = progress.some(p => p.status === 'error');
-    if (hadErrors && successCount === 0) {
-      setToast({ type: 'error', message: 'No se pudo subir el archivo. Revisa tu conexión e inténtalo de nuevo.' });
+    } else if (successCount > 0 && errorCount > 0) {
+      setToast({ type: 'error', message: `Se han subido ${successCount} archivo(s) y ${errorCount} han fallado. Reintenta solo los fallidos.` });
+      setTimeout(() => setToast(null), 8000);
+    } else if (errorCount > 0) {
+      setToast({ type: 'error', message: progress[0]?.error || 'No se pudo subir el archivo. Inténtalo de nuevo.' });
       setTimeout(() => setToast(null), 8000);
     }
+    const hadErrors = errorCount > 0;
     setTimeout(() => setUploadProgress([]), hadErrors ? 8000 : 5000);
     loadDocs();
   };
