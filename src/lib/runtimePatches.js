@@ -19,11 +19,24 @@ function shouldSuppress(value) {
   try { return JSON.stringify(value).includes(SUPPRESS); } catch { return false; }
 }
 
-// 1. Patch JSON.parse — empty/whitespace strings return null instead of throwing.
+// 1. Patch JSON.parse — never throw "Unexpected end of input".
+//    Handles empty strings AND truncated/incomplete JSON fragments that the
+//    SDK's WebSocket handler may receive. Returns null instead of throwing.
 const _origJsonParse = JSON.parse;
 JSON.parse = function (text, reviver) {
-  if (typeof text === 'string' && text.trim() === '') return null;
-  return _origJsonParse.call(this, text, reviver);
+  if (typeof text !== 'string') {
+    if (text === null || text === undefined) return null;
+    return _origJsonParse.call(this, text, reviver);
+  }
+  if (text.trim() === '') return null;
+  try {
+    return _origJsonParse.call(this, text, reviver);
+  } catch (e) {
+    if (e instanceof SyntaxError && /Unexpected end of input|Unexpected token|JSON/i.test(e.message)) {
+      return null;
+    }
+    throw e;
+  }
 };
 
 // 2. Patch Response.prototype.json — empty HTTP bodies bypass JSON.parse patch.
