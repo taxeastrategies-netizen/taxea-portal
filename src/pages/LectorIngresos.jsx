@@ -269,6 +269,13 @@ export default function LectorIngresos() {
   const [validating, setValidating] = useState(false);
 
   const handleValidate = async (docId, form) => {
+    // Idempotencia: si ya tiene factura vinculada, no crear duplicado
+    const existingDoc = documents.find(d => d.id === docId);
+    if (existingDoc?.linkedInvoiceId) {
+      setToast({ type: 'error', message: 'Este documento ya fue procesado y tiene una factura vinculada.' });
+      setTimeout(() => setToast(null), 6000);
+      return;
+    }
     if (!form.numero_factura) {
       setToast({ type: 'error', message: 'El número de factura es obligatorio.' });
       setTimeout(() => setToast(null), 6000);
@@ -288,26 +295,28 @@ export default function LectorIngresos() {
     try {
       const fecha = form.fecha_emision || '';
       const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
-      // Limpiar campos vacíos para evitar errores de validación del esquema
-      const cleanForm = {};
-      for (const [k, v] of Object.entries(form)) {
-        if (v !== '' && v !== null && v !== undefined) cleanForm[k] = v;
-      }
       const inv = await Promise.race([
         base44.entities.Invoice.create({
-          ...cleanForm,
-          tipo: INVOICE_TIPO,
-          company_id: company.id,
+          numero_factura: form.numero_factura,
+          fecha_emision: form.fecha_emision,
+          fecha_vencimiento: form.fecha_vencimiento || undefined,
+          cliente_nombre: form.cliente_nombre || '',
+          cliente_nif: form.cliente_nif || '',
+          concepto: form.concepto || '',
           base_imponible: parseFloat(form.base_imponible) || 0,
           cuota_iva: parseFloat(form.cuota_iva) || 0,
           total_factura: parseFloat(form.total_factura) || 0,
           tipo_iva: parseFloat(form.tipo_iva) || 21,
           retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+          estado_cobro: form.estado_cobro || 'pendiente',
+          tipo: INVOICE_TIPO,
+          company_id: company.id,
           archivo_url: reviewing?.fileUrl || '',
           estado_contable: 'pendiente',
           anio: year,
           trimestre: trimestre(fecha),
           subido_por: user?.email,
+          origin: 'ocr',
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder. Inténtalo de nuevo.')), 30000)),
       ]);
@@ -320,9 +329,10 @@ export default function LectorIngresos() {
         status: 'accounted',
         accountedAt: now,
         linkedInvoiceId: inv.id,
+        reviewedAt: now,
         lastStatusChangedAt: now,
         reviewedByAdminId: user?.id,
-        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv?.id}` })),
+        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv.id}` })),
       });
       setReviewing(null);
       setToast({ type: 'success', message: 'Factura aprobada y guardada correctamente.' });
@@ -330,7 +340,7 @@ export default function LectorIngresos() {
       loadDocs();
     } catch (err) {
       console.error('[LectorIngresos] Error al aprobar:', err);
-      setToast({ type: 'error', message: `Error al guardar la factura: ${err?.message || 'inténtalo de nuevo'}` });
+      setToast({ type: 'error', message: `No se ha podido guardar la factura en el area financiera. El documento sigue pendiente de revision. (${err?.message || 'inténtalo de nuevo'})` });
       setTimeout(() => setToast(null), 8000);
     }
     setValidating(false);
