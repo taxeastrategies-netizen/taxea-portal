@@ -288,27 +288,38 @@ export default function LectorIngresos() {
     try {
       const fecha = form.fecha_emision || '';
       const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
-      const inv = await base44.entities.Invoice.create({
-        ...form,
-        tipo: INVOICE_TIPO,
-        company_id: company.id,
-        base_imponible: parseFloat(form.base_imponible) || 0,
-        cuota_iva: parseFloat(form.cuota_iva) || 0,
-        total_factura: parseFloat(form.total_factura) || 0,
-        tipo_iva: parseFloat(form.tipo_iva) || 21,
-        retencion_irpf: parseFloat(form.retencion_irpf) || 0,
-        archivo_url: reviewing?.fileUrl || '',
-        estado_contable: 'pendiente',
-        anio: year,
-        trimestre: trimestre(fecha),
-        subido_por: user?.email,
-      });
+      // Limpiar campos vacíos para evitar errores de validación del esquema
+      const cleanForm = {};
+      for (const [k, v] of Object.entries(form)) {
+        if (v !== '' && v !== null && v !== undefined) cleanForm[k] = v;
+      }
+      const inv = await Promise.race([
+        base44.entities.Invoice.create({
+          ...cleanForm,
+          tipo: INVOICE_TIPO,
+          company_id: company.id,
+          base_imponible: parseFloat(form.base_imponible) || 0,
+          cuota_iva: parseFloat(form.cuota_iva) || 0,
+          total_factura: parseFloat(form.total_factura) || 0,
+          tipo_iva: parseFloat(form.tipo_iva) || 21,
+          retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+          archivo_url: reviewing?.fileUrl || '',
+          estado_contable: 'pendiente',
+          anio: year,
+          trimestre: trimestre(fecha),
+          subido_por: user?.email,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder. Inténtalo de nuevo.')), 30000)),
+      ]);
+      if (!inv || !inv.id) {
+        throw new Error('No se pudo crear la factura. Verifica que tienes permisos sobre la empresa activa.');
+      }
       const doc = documents.find(d => d.id === docId);
       const now = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(docId, {
         status: 'accounted',
         accountedAt: now,
-        linkedInvoiceId: inv?.id || '',
+        linkedInvoiceId: inv.id,
         lastStatusChangedAt: now,
         reviewedByAdminId: user?.id,
         auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv?.id}` })),
