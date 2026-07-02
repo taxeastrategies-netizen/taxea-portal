@@ -59,18 +59,24 @@ export default function Facturas() {
   const handleAnular = async () => {
     if (!anularTarget || !motivoAnulacion.trim()) return;
     setAnulando(true);
-    await base44.entities.Invoice.update(anularTarget.id, {
+    const now = new Date().toISOString();
+    const updates = [base44.entities.Invoice.update(anularTarget.id, {
       anulada: true,
-      fecha_anulacion: new Date().toISOString(),
+      fecha_anulacion: now,
       motivo_anulacion: motivoAnulacion,
-    });
+    })];
     if (anularTarget.linked_journal_entry_id) {
-      await base44.entities.JournalEntry.update(anularTarget.linked_journal_entry_id, { status: 'anulado' });
+      updates.push(base44.entities.JournalEntry.update(anularTarget.linked_journal_entry_id, { status: 'anulado' }));
+    }
+    await Promise.all(updates);
+    // Actualización local en vez de recargar todo
+    setInvoices(prev => prev.map(i => i.id === anularTarget.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: motivoAnulacion } : i));
+    if (workspaceInvoice?.id === anularTarget.id) {
+      setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: motivoAnulacion }));
     }
     setAnulando(false);
     setAnularTarget(null);
     setMotivoAnulacion('');
-    loadInvoices();
   };
 
   const handleEliminar = async (inv) => {
