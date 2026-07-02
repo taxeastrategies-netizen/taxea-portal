@@ -66,6 +66,7 @@ export default function Facturas() {
       if (workspaceInvoice?.id === inv.id) {
         setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' }));
       }
+      triggerFinancialRefresh();
     } catch (e) {
       console.error('Error anulando:', e);
     }
@@ -82,6 +83,7 @@ export default function Facturas() {
       const annulledIds = new Set(data?.annulledIds || selectedIds);
       setInvoices(prev => prev.map(i => annulledIds.has(i.id) ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' } : i));
       setSelectedIds([]);
+      triggerFinancialRefresh();
     } catch (e) {
       console.error('Error anulación múltiple:', e);
     }
@@ -92,6 +94,7 @@ export default function Facturas() {
     if (!confirm(`¿Eliminar definitivamente la factura ${inv.numero_factura}? Esta acción no se puede deshacer.`)) return;
     await base44.entities.Invoice.delete(inv.id);
     loadInvoices();
+    triggerFinancialRefresh();
   };
 
   const openEdit = (inv) => { setEditing(inv); setShowForm(true); };
@@ -100,6 +103,7 @@ export default function Facturas() {
   const updateEstado = async (id, field, value) => {
     await base44.entities.Invoice.update(id, { [field]: value });
     loadInvoices();
+    triggerFinancialRefresh();
     // Actualizar factura en workspace si está abierta
     if (workspaceInvoice?.id === id) {
       setWorkspaceInvoice(prev => ({ ...prev, [field]: value }));
@@ -464,7 +468,7 @@ export default function Facturas() {
         editing={editing}
         company={company}
         user={user}
-        onSaved={loadInvoices}
+        onSaved={() => { loadInvoices(); triggerFinancialRefresh(); }}
       />
 
       <InvoiceViewer

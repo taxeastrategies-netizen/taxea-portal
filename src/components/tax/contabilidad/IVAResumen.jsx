@@ -17,7 +17,7 @@ export default function IVAResumen() {
     queryFn: async () => {
       const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
       const finData = res?.data || res;
-      return (finData?.invoices || []).filter(i => i.estado_contable === 'contabilizada');
+      return (finData?.invoices || []).filter(i => i.estado_contable === 'contabilizada' && !i.anulada);
     },
     enabled: !!company?.id,
   });

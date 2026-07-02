@@ -25,10 +25,10 @@ const TABS = [
 
 export default function LibroRegistros() {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
   const [activeTab, setActiveTab] = useState('ventas');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
+  const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
 
