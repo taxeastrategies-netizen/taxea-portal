@@ -74,7 +74,7 @@ export default function FinanceHeader({ company, period, setPeriod, lastSync, lo
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <div className={cn("w-1.5 h-1.5 rounded-full", loading ? "bg-amber-400 animate-pulse" : "bg-emerald-400")} />
           <span>
-            {loading ? "Sincronizando..." : `Actualizado ${formatDistanceToNow(lastSync, { locale: es, addSuffix: true })}`}
+            {loading ? "Sincronizando..." : lastSync ? `Actualizado ${formatDistanceToNow(lastSync, { locale: es, addSuffix: true })}` : 'Actualizado ahora'}
           </span>
           <button className="p-1 hover:text-foreground transition-colors rounded">
             <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
