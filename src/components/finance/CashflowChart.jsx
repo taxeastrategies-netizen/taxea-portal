@@ -37,21 +37,21 @@ export default function CashflowChart({ invoices, expenses }) {
 
       const ingresos = invoices
         .filter(i => {
-          try { return i.tipo === 'emitida' && isWithinInterval(parseISO(i.fecha_emision), interval); }
+          try { return i.tipo === 'emitida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
           catch { return false; }
         })
         .reduce((s, i) => s + (i.total_factura || 0), 0);
 
       const gastos = expenses
         .filter(e => {
-          try { return e.tipo === 'gasto' && isWithinInterval(parseISO(e.fecha), interval); }
+          try { return e.tipo === 'gasto' && !e.anulada && isWithinInterval(parseISO(e.fecha), interval); }
           catch { return false; }
         })
         .reduce((s, e) => s + (e.total || 0), 0);
 
       const gastosFacturas = invoices
         .filter(i => {
-          try { return i.tipo === 'recibida' && isWithinInterval(parseISO(i.fecha_emision), interval); }
+          try { return i.tipo === 'recibida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
           catch { return false; }
         })
         .reduce((s, i) => s + (i.total_factura || 0), 0);

@@ -78,7 +78,7 @@ function KpiCard({ title, value, subtitle, icon: KpiIcon, color, bgColor, glowCo
 }
 
 export default function KpiRow({ financials }) {
-  const { totalIngresos, gastoTotal, beneficio, ebitda, cashDisponible, burnRate, runway, ingresosDelta } = financials;
+  const { totalIngresos, gastoTotal, beneficio, ebitda, cashDisponible, burnRate, runway, ingresosDelta, sparkData: sd } = financials;
 
   const kpis = [
     {
@@ -91,7 +91,7 @@ export default function KpiRow({ financials }) {
       glowColor: 'emerald-500',
       delta: null,
       deltaLabel: 'Balance cobros confirmados',
-      sparkData: [40, 55, 48, 62, 70, 65, cashDisponible > 0 ? 80 : 30],
+      sparkData: sd?.cash || null,
       delay: 0,
     },
     {
@@ -104,7 +104,7 @@ export default function KpiRow({ financials }) {
       glowColor: 'blue-500',
       delta: ingresosDelta,
       deltaLabel: 'vs. periodo anterior',
-      sparkData: [30, 45, 38, 55, 52, 60, 70],
+      sparkData: sd?.ingresos || null,
       delay: 0.05,
     },
     {
@@ -117,7 +117,7 @@ export default function KpiRow({ financials }) {
       glowColor: 'red-500',
       delta: null,
       deltaLabel: null,
-      sparkData: [50, 45, 55, 48, 52, 50, 45],
+      sparkData: sd?.gastos || null,
       delay: 0.1,
     },
     {
@@ -130,7 +130,7 @@ export default function KpiRow({ financials }) {
       glowColor: 'primary',
       delta: null,
       deltaLabel: null,
-      sparkData: [20, 35, 28, 42, 38, 45, beneficio > 0 ? 55 : 20],
+      sparkData: sd?.beneficio || null,
       delay: 0.15,
     },
     {
@@ -142,8 +142,8 @@ export default function KpiRow({ financials }) {
       bgColor: 'bg-violet-500',
       glowColor: 'violet-500',
       delta: null,
-      deltaLabel: 'Estimación a partir de datos reales',
-      sparkData: [35, 42, 38, 50, 46, 52, 58],
+      deltaLabel: 'Resultado neto del periodo',
+      sparkData: sd?.ebitda || null,
       delay: 0.2,
     },
     {
@@ -156,7 +156,7 @@ export default function KpiRow({ financials }) {
       glowColor: 'amber-500',
       delta: null,
       deltaLabel: 'Operación estimada con gasto actual',
-      sparkData: [80, 75, 72, 68, 65, 62, 58],
+      sparkData: null,
       delay: 0.25,
     },
   ];

@@ -16,7 +16,7 @@ export default function FinancialTimeline({ invoices, expenses, obligations }) {
 
     // Recent invoices emitidas
     invoices
-      .filter(i => i.tipo === 'emitida')
+      .filter(i => i.tipo === 'emitida' && !i.anulada)
       .slice(-8)
       .forEach(i => {
         try {
@@ -36,7 +36,7 @@ export default function FinancialTimeline({ invoices, expenses, obligations }) {
       });
 
     // Recent expenses
-    expenses.slice(-5).forEach(e => {
+    expenses.filter(e => !e.anulada).slice(-5).forEach(e => {
       try {
         list.push({
           id: `exp-${e.id}`,

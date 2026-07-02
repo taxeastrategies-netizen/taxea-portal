@@ -11,7 +11,7 @@ import FinancialTimeline from './FinancialTimeline';
 import SmartWidgets from './SmartWidgets';
 import InsightsIA from './InsightsIA';
 import HealthScore from './FinanceHealthScore';
-import { subDays, subMonths, isAfter, parseISO } from 'date-fns';
+import { subDays, subMonths, isAfter, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { calculateFinancialKPIs, activeInvoices } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
 
@@ -54,8 +54,8 @@ export default function FinanceDashboard() {
     const beneficio = finKPIs.resultado;
     const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
 
-    // EBITDA approximation
-    const ebitda = beneficio + gastoTotal * 0.05;
+    // EBITDA = resultado neto real (sin amortizaciones inventadas)
+    const ebitda = beneficio;
 
     // Cash (sum of cobradas invoices, excluyendo anuladas)
     const cashDisponible = activeInvoices(invoices)
@@ -69,21 +69,31 @@ export default function FinanceDashboard() {
     const burnRate = gastoTotal / (periodDays / 30);
     const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
 
-    // DSO
+    // DSO — días reales desde emisión hasta cobro/vencimiento
     const invoicesEmitidas = activeInvoices(invoices).filter(i => i.tipo === 'emitida');
     const dso = invoicesEmitidas.length > 0
       ? invoicesEmitidas.reduce((s, i) => {
-          const days = i.estado_cobro === 'cobrada' ? 30 : 60;
-          return s + days;
+          try {
+            const emision = parseISO(i.fecha_emision);
+            if (i.estado_cobro === 'cobrada' && i.fecha_vencimiento) {
+              return s + Math.max(0, Math.round((parseISO(i.fecha_vencimiento) - emision) / 86400000));
+            }
+            return s + Math.max(0, Math.round((now - emision) / 86400000));
+          } catch { return s; }
         }, 0) / invoicesEmitidas.length
       : 0;
 
-    // DPO
+    // DPO — días reales desde emisión hasta pago/vencimiento
     const invoicesRecibidas = activeInvoices(invoices).filter(i => i.tipo === 'recibida');
     const dpo = invoicesRecibidas.length > 0
       ? invoicesRecibidas.reduce((s, i) => {
-          const days = i.estado_cobro === 'cobrada' ? 30 : 45;
-          return s + days;
+          try {
+            const emision = parseISO(i.fecha_emision);
+            if (i.estado_cobro === 'cobrada' && i.fecha_vencimiento) {
+              return s + Math.max(0, Math.round((parseISO(i.fecha_vencimiento) - emision) / 86400000));
+            }
+            return s + Math.max(0, Math.round((now - emision) / 86400000));
+          } catch { return s; }
         }, 0) / invoicesRecibidas.length
       : 0;
 
@@ -111,12 +121,38 @@ export default function FinanceDashboard() {
 
     const ingresosDelta = prevIngresos > 0 ? ((totalIngresos - prevIngresos) / prevIngresos) * 100 : 0;
 
+    // Spark data — series mensuales reales (7 meses) para mini-gráficas
+    const sparkMonths = Array.from({ length: 7 }, (_, i) => subMonths(now, 6 - i));
+    const sparkIngresos = sparkMonths.map(m => {
+      try {
+        return activeInvoices(invoices)
+          .filter(i => i.tipo === 'emitida' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) }))
+          .reduce((s, i) => s + (i.total_factura || 0), 0);
+      } catch { return 0; }
+    });
+    const sparkGastos = sparkMonths.map(m => {
+      try {
+        const exp = (expenses || []).filter(e => !e.anulada && e.tipo === 'gasto' && isWithinInterval(parseISO(e.fecha), { start: startOfMonth(m), end: endOfMonth(m) })).reduce((s, e) => s + (e.total || 0), 0);
+        const fac = activeInvoices(invoices).filter(i => i.tipo === 'recibida' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) })).reduce((s, i) => s + (i.total_factura || 0), 0);
+        return exp + fac;
+      } catch { return 0; }
+    });
+    const sparkCash = sparkMonths.map(m => {
+      try {
+        return activeInvoices(invoices)
+          .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) }))
+          .reduce((s, i) => s + (i.total_factura || 0), 0);
+      } catch { return 0; }
+    });
+    const sparkBeneficio = sparkIngresos.map((ing, i) => ing - sparkGastos[i]);
+    const sparkData = { ingresos: sparkIngresos, gastos: sparkGastos, cash: sparkCash, beneficio: sparkBeneficio, ebitda: sparkBeneficio };
+
     return {
       totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
       cashDisponible, cobrosPendientes, pagosPendientes,
       burnRate, runway, dso, dpo, workingCapital,
       upcoming, vencidas, ingresosDelta,
-      filteredInvoices, filteredExpenses,
+      filteredInvoices, filteredExpenses, sparkData,
     };
   }, [invoices, expenses, obligations, period]);
 

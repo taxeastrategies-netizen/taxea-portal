@@ -115,7 +115,7 @@ export default function FinanceHealthScore({ financials }) {
           <div className="space-y-1.5 mt-2">
             {[
               { label: 'Rentabilidad', pct: Math.min(100, Math.max(0, (financials.margenNeto + 5) * 2)), color: config.ring },
-              { label: 'Liquidez', pct: financials.runway ? Math.min(100, (financials.runway / 12) * 100) : 30, color: '#3b82f6' },
+              { label: 'Liquidez', pct: financials.runway ? Math.min(100, (financials.runway / 12) * 100) : 0, color: '#3b82f6' },
               { label: 'Cobros', pct: Math.max(0, 100 - (financials.dso / 90) * 100), color: '#10b981' },
             ].map(bar => (
               <div key={bar.label}>
