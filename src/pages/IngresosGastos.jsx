@@ -42,12 +42,12 @@ function fmt(n) {
 
 export default function IngresosGastos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
-  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: filterAnio });
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
+  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: filterAnio });
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);

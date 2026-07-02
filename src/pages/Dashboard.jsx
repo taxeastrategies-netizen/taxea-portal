@@ -101,6 +101,7 @@ function ScoreRing({ score }) {
 
 export default function Dashboard() {
   const { user, company, isAdmin, loadingCompany } = useOutletContext() || {};
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: selectedYear });
   const [obligations, setObligations] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -110,7 +111,6 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState([]);
   const [absences, setAbsences] = useState([]);
   const [hrDocuments, setHrDocuments] = useState([]);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [loading, setLoading] = useState(true);
 
   const currentYear = new Date().getFullYear();
