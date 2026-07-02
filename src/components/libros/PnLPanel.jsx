@@ -16,9 +16,9 @@ export default function PnLPanel({ invoices, expenses, year, quarter }) {
       return item.trimestre === quarter;
     }
 
-    const emitidas = invoices.filter(i => i.tipo === 'emitida' && inPeriod(i));
-    const gastosData = expenses.filter(e => e.tipo === 'gasto' && inPeriod(e));
-    const recibidas = invoices.filter(i => i.tipo === 'recibida' && inPeriod(i));
+    const emitidas = invoices.filter(i => i.tipo === 'emitida' && !i.anulada && inPeriod(i));
+    const gastosData = expenses.filter(e => e.tipo === 'gasto' && !e.anulada && inPeriod(e));
+    const recibidas = invoices.filter(i => i.tipo === 'recibida' && !i.anulada && inPeriod(i));
 
     const ingresos = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
     const gastosTotales = gastosData.reduce((s, e) => s + (e.base_imponible || 0), 0)

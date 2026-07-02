@@ -335,7 +335,10 @@ function buildCajaBancos(invoices, expenses) {
 }
 
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
-export async function exportarLibros({ invoices, expenses, year, companyName = 'Empresa' }) {
+export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, year, companyName = 'Empresa' }) {
+  // Filtrar facturas y gastos anulados — única fuente de datos activos
+  const invoices = (rawInvoices || []).filter(i => !i.anulada);
+  const expenses = (rawExpenses || []).filter(e => !e.anulada);
   return new Promise(resolve => {
     setTimeout(() => {
       const wb = XLSX.utils.book_new();

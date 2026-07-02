@@ -39,9 +39,13 @@ export default function LibroRegistros() {
     return filterTrimestre === 'all' || item.trimestre === filterTrimestre;
   }
 
-  const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida' && !i.anulada && inPeriod(i)), [invoices, filterTrimestre]);
-  const recibidas = useMemo(() => invoices.filter(i => i.tipo === 'recibida' && !i.anulada && inPeriod(i)), [invoices, filterTrimestre]);
-  const gastosF = useMemo(() => expenses.filter(e => e.tipo === 'gasto' && !e.anulada && inPeriod(e)), [expenses, filterTrimestre]);
+  // Facturas y gastos activos (sin anular) — única fuente de verdad para tablas, KPIs, exportaciones y P&L
+  const activeInvoices = useMemo(() => invoices.filter(i => !i.anulada), [invoices]);
+  const activeExpenses = useMemo(() => expenses.filter(e => !e.anulada), [expenses]);
+
+  const emitidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'emitida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
+  const recibidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'recibida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
+  const gastosF = useMemo(() => activeExpenses.filter(e => e.tipo === 'gasto' && inPeriod(e)), [activeExpenses, filterTrimestre]);
 
   // KPIs libro ventas
   const totalBaseV = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
@@ -59,7 +63,7 @@ export default function LibroRegistros() {
   const handleExport = async () => {
     setExporting(true);
     await exportarLibros({
-      invoices, expenses, year: filterAnio,
+      invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
     });
     setExporting(false);
@@ -68,7 +72,7 @@ export default function LibroRegistros() {
   const handleExportPDF = async () => {
     setExportingPDF(true);
     await exportarLibrosPDF({
-      invoices, expenses, year: filterAnio,
+      invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
     });
     setExportingPDF(false);
@@ -124,7 +128,7 @@ export default function LibroRegistros() {
 
       {/* P&L */}
       {activeTab === 'pnl' && (
-        <PnLPanel invoices={invoices} expenses={expenses} year={filterAnio} quarter={filterTrimestre === 'all' ? null : filterTrimestre} />
+        <PnLPanel invoices={activeInvoices} expenses={activeExpenses} year={filterAnio} quarter={filterTrimestre === 'all' ? null : filterTrimestre} />
       )}
 
       {/* Libro Ventas */}

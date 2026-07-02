@@ -158,7 +158,10 @@ function pageFooter(doc, pageNum, totalPages, pageW, pageH) {
 }
 
 // ── MAIN EXPORT ───────────────────────────────────────────────────────────────
-export async function exportarLibrosPDF({ invoices, expenses, year, companyName = 'Empresa' }) {
+export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawExpenses, year, companyName = 'Empresa' }) {
+  // Filtrar facturas y gastos anulados — única fuente de datos activos
+  const invoices = (rawInvoices || []).filter(i => !i.anulada);
+  const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
