@@ -19,12 +19,11 @@ export default function FinanceDashboard() {
   const ctx = useOutletContext() || {};
   const { company } = ctx;
 
+  const companyId = company?.id;
   const { invoices, expenses, loading: finLoading, lastSync } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
-
-  const companyId = company?.id;
 
   useEffect(() => {
     if (!companyId) { setLoading(false); return; }
