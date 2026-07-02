@@ -272,13 +272,6 @@ export default function LectorGastos() {
   const [validating, setValidating] = useState(false);
 
   const handleValidate = async (docId, form) => {
-    // Idempotencia: si ya tiene factura vinculada, no crear duplicado
-    const existingDoc = documents.find(d => d.id === docId);
-    if (existingDoc?.linkedInvoiceId) {
-      setToast({ type: 'error', message: 'Este documento ya fue procesado y tiene una factura vinculada.' });
-      setTimeout(() => setToast(null), 6000);
-      return;
-    }
     if (!form.proveedor_cliente) {
       setToast({ type: 'error', message: 'El nombre del proveedor es obligatorio.' });
       setTimeout(() => setToast(null), 6000);
@@ -294,54 +287,21 @@ export default function LectorGastos() {
       setTimeout(() => setToast(null), 6000);
       return;
     }
-    const numFactura = reviewing?.extracted?.numero_factura || form.numero_factura || '';
-    if (!numFactura) {
-      setToast({ type: 'error', message: 'El número de factura es obligatorio.' });
-      setTimeout(() => setToast(null), 6000);
-      return;
-    }
     setValidating(true);
     try {
-      const fecha = form.fecha || '';
-      const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
-      const inv = await Promise.race([
-        base44.entities.Invoice.create({
-          tipo: INVOICE_TIPO,
-          company_id: company.id,
-          numero_factura: numFactura,
-          proveedor_nombre: form.proveedor_cliente,
-          proveedor_nif: reviewing?.extracted?.nif_proveedor || '',
-          concepto: form.concepto || '',
-          fecha_emision: form.fecha,
-          base_imponible: parseFloat(form.base_imponible) || 0,
-          tipo_iva: parseFloat(form.tipo_impuesto) || 21,
-          cuota_iva: parseFloat(form.cuota_impuesto) || 0,
-          total_factura: parseFloat(form.total) || 0,
-          archivo_url: reviewing?.fileUrl || '',
-          estado_contable: 'pendiente',
-          estado_cobro: 'pendiente',
-          anio: year,
-          trimestre: trimestre(fecha),
-          subido_por: user?.email,
-          categoria_gasto: form.categoria || 'otros',
-          origin: 'ocr',
+      const res = await Promise.race([
+        base44.functions.invoke('approveOcrDocument', {
+          docId,
+          form,
+          invoiceType: 'recibida',
+          extractedData: reviewing?.extracted,
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder. Inténtalo de nuevo.')), 30000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder.')), 45000)),
       ]);
-      if (!inv || !inv.id) {
-        throw new Error('No se pudo crear la factura. Verifica que tienes permisos sobre la empresa activa.');
+      const result = res?.data || res;
+      if (!result?.success) {
+        throw new Error(result?.error || 'No se pudo crear la factura');
       }
-      const doc = documents.find(d => d.id === docId);
-      const now = new Date().toISOString();
-      await base44.entities.OcrInvoiceDocument.update(docId, {
-        status: 'accounted',
-        accountedAt: now,
-        linkedInvoiceId: inv.id,
-        reviewedAt: now,
-        lastStatusChangedAt: now,
-        reviewedByAdminId: user?.id,
-        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv.id}` })),
-      });
       setReviewing(null);
       setToast({ type: 'success', message: 'Factura de gasto aprobada y guardada correctamente.' });
       setTimeout(() => setToast(null), 6000);
