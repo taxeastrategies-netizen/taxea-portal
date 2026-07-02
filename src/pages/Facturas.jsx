@@ -56,40 +56,34 @@ export default function Facturas() {
   };
 
   const handleAnular = async (inv) => {
-    const now = new Date().toISOString();
-    const updates = [base44.entities.Invoice.update(inv.id, {
-      anulada: true,
-      fecha_anulacion: now,
-      motivo_anulacion: 'Anulación directa',
-    })];
-    if (inv.linked_journal_entry_id) {
-      updates.push(base44.entities.JournalEntry.update(inv.linked_journal_entry_id, { status: 'anulado' }));
+    setAnulando(true);
+    try {
+      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: [inv.id] });
+      const data = res?.data || res;
+      const now = data?.timestamp || new Date().toISOString();
+      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
+      if (workspaceInvoice?.id === inv.id) {
+        setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' }));
+      }
+    } catch (e) {
+      console.error('Error anulando:', e);
     }
-    await Promise.all(updates);
-    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
-    if (workspaceInvoice?.id === inv.id) {
-      setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' }));
-    }
+    setAnulando(false);
   };
 
   const handleAnularBulk = async () => {
     if (selectedIds.length === 0) return;
     setAnulando(true);
-    const now = new Date().toISOString();
-    const targets = invoices.filter(i => selectedIds.includes(i.id) && !i.anulada);
-    if (targets.length === 0) { setAnulando(false); return; }
-    await base44.entities.Invoice.bulkUpdate(
-      targets.map(t => ({ id: t.id, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' }))
-    );
-    const journalTargets = targets.filter(t => t.linked_journal_entry_id);
-    if (journalTargets.length > 0) {
-      await base44.entities.JournalEntry.bulkUpdate(
-        journalTargets.map(t => ({ id: t.linked_journal_entry_id, status: 'anulado' }))
-      );
+    try {
+      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: selectedIds });
+      const data = res?.data || res;
+      const now = data?.timestamp || new Date().toISOString();
+      const annulledIds = new Set(data?.annulledIds || selectedIds);
+      setInvoices(prev => prev.map(i => annulledIds.has(i.id) ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' } : i));
+      setSelectedIds([]);
+    } catch (e) {
+      console.error('Error anulación múltiple:', e);
     }
-    const updatedIds = new Set(targets.map(t => t.id));
-    setInvoices(prev => prev.map(i => updatedIds.has(i.id) ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' } : i));
-    setSelectedIds([]);
     setAnulando(false);
   };
 
