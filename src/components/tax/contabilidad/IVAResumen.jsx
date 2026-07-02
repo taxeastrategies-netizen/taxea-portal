@@ -2,17 +2,24 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { Receipt, AlertTriangle } from 'lucide-react';
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
 
 export default function IVAResumen() {
+  const { company } = useOutletContext() || {};
   const [filterAnio, setFilterAnio] = useState('todos');
   const [filterTrimestre, setFilterTrimestre] = useState('todos');
 
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-iva'],
-    queryFn: () => base44.entities.Invoice.filter({ estado_contable: 'contabilizada' }, '-fecha_emision', 1000),
+    queryKey: ['invoices-iva', company?.id],
+    queryFn: async () => {
+      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+      const finData = res?.data || res;
+      return (finData?.invoices || []).filter(i => i.estado_contable === 'contabilizada');
+    },
+    enabled: !!company?.id,
   });
 
   const anios = [...new Set(invoices.map(i => i.anio).filter(Boolean))].sort((a, b) => b - a);

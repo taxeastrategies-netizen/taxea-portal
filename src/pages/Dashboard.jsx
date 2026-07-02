@@ -122,14 +122,14 @@ export default function Dashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    const [inv, exp, obl, notif] = await Promise.all([
-      base44.entities.Invoice.filter({ company_id: company.id, anio: parseInt(selectedYear) }),
-      base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(selectedYear) }),
+    const [finRes, obl, notif] = await Promise.all([
+      base44.functions.invoke('getCompanyFinancials', { company_id: company.id, anio: selectedYear }),
       base44.entities.TaxObligation.filter({ company_id: company.id }, '-fecha_limite', 20),
       base44.entities.Notification.filter({ destinatario_email: user?.email, leida: false }, '-created_date', 5),
     ]);
-    setInvoices(inv || []);
-    setExpenses(exp || []);
+    const finData = finRes?.data || finRes;
+    setInvoices(finData?.invoices || []);
+    setExpenses(finData?.expenses || []);
     setObligations(obl || []);
     setNotifications(notif || []);
     setLoading(false);

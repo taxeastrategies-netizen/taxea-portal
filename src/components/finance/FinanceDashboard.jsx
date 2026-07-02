@@ -29,12 +29,12 @@ export default function FinanceDashboard() {
   useEffect(() => {
     if (!companyId) { setLoading(false); return; }
     Promise.all([
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
+      base44.functions.invoke('getCompanyFinancials', { company_id: companyId }),
       base44.entities.TaxObligation.filter({ company_id: companyId }),
-    ]).then(([inv, exp, obl]) => {
-      setInvoices(inv || []);
-      setExpenses(exp || []);
+    ]).then(([finRes, obl]) => {
+      const finData = finRes?.data || finRes;
+      setInvoices(finData?.invoices || []);
+      setExpenses(finData?.expenses || []);
       setObligations(obl || []);
     }).finally(() => setLoading(false));
   }, [companyId]);

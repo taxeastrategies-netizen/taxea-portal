@@ -44,10 +44,15 @@ export default function Facturas() {
     else if (!loadingCompany) setLoading(false);
   }, [company?.id, loadingCompany]);
 
+  const fetchInvoices = async () => {
+    const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+    const finData = res?.data || res;
+    return finData?.invoices || [];
+  };
+
   const loadInvoices = async () => {
     setLoading(true);
-    const data = await base44.entities.Invoice.filter({ company_id: company.id });
-    setInvoices(data || []);
+    setInvoices(await fetchInvoices());
     setLoading(false);
   };
 
@@ -102,8 +107,7 @@ export default function Facturas() {
   const handleSent = async () => {
     loadInvoices();
     if (workspaceInvoice) {
-      // Refrescar la factura en el workspace
-      const data = await base44.entities.Invoice.filter({ company_id: company.id });
+      const data = await fetchInvoices();
       const fresh = data?.find(i => i.id === workspaceInvoice.id);
       if (fresh) setWorkspaceInvoice(fresh);
     }
@@ -112,7 +116,7 @@ export default function Facturas() {
   const handleWorkspaceRefresh = async () => {
     loadInvoices();
     if (workspaceInvoice) {
-      const data = await base44.entities.Invoice.filter({ company_id: company.id });
+      const data = await fetchInvoices();
       const fresh = data?.find(i => i.id === workspaceInvoice.id);
       if (fresh) setWorkspaceInvoice(fresh);
     }

@@ -64,10 +64,10 @@ export default function IngresosGastos() {
 
   const load = async () => {
     setLoading(true);
-    const [expenses, invoices] = await Promise.all([
-      base44.entities.Expense.filter({ company_id: company.id, anio: parseInt(filterAnio) }),
-      base44.entities.Invoice.filter({ company_id: company.id, anio: parseInt(filterAnio) }),
-    ]);
+    const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id, anio: filterAnio });
+    const finData = res?.data || res;
+    const expenses = finData?.expenses || [];
+    const invoices = finData?.invoices || [];
     const invoiceItems = (invoices || []).map(inv => ({
       _source: 'invoice',
       id: inv.id,

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,12 +27,18 @@ const CAT_LABEL = {
 };
 
 export default function LibroRegistroRecibidas() {
+  const { company } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
 
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-recibidas'],
-    queryFn: () => base44.entities.Invoice.filter({ tipo: 'recibida' }, '-fecha_emision', 500),
+    queryKey: ['invoices-recibidas', company?.id],
+    queryFn: async () => {
+      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+      const finData = res?.data || res;
+      return (finData?.invoices || []).filter(i => i.tipo === 'recibida');
+    },
+    enabled: !!company?.id,
   });
 
   const anios = [...new Set(invoices.map(i => i.anio).filter(Boolean))].sort((a, b) => b - a);

@@ -37,14 +37,14 @@ export default function TaxDashboard({ onNavigate }) {
 
   const loadData = async () => {
     setLoading(true);
-    const [invData, expData, oblData, qData] = await Promise.all([
-      base44.entities.Invoice.filter({ company_id: company.id }),
-      base44.entities.Expense.filter({ company_id: company.id }),
+    const [finRes, oblData, qData] = await Promise.all([
+      base44.functions.invoke('getCompanyFinancials', { company_id: company.id }),
       base44.entities.TaxObligation.filter({ company_id: company.id }),
       base44.entities.Quote.filter({ company_id: company.id }).catch(() => []),
     ]);
-    setInvoices(invData || []);
-    setExpenses(expData || []);
+    const finData = finRes?.data || finRes;
+    setInvoices(finData?.invoices || []);
+    setExpenses(finData?.expenses || []);
     setObligations(oblData || []);
     setQuotes(qData || []);
     setLoading(false);

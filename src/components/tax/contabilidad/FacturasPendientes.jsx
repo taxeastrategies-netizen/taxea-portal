@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ const ESTADO_CFG = {
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
 
 export default function FacturasPendientes() {
+  const { company } = useOutletContext() || {};
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('todas');
@@ -31,8 +33,13 @@ export default function FacturasPendientes() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
 
   const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-contabilidad'],
-    queryFn: () => base44.entities.Invoice.list('-fecha_emision', 200),
+    queryKey: ['invoices-contabilidad', company?.id],
+    queryFn: async () => {
+      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+      const finData = res?.data || res;
+      return finData?.invoices || [];
+    },
+    enabled: !!company?.id,
   });
 
   const markRechazada = useMutation({
