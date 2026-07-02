@@ -45,16 +45,9 @@ export function useCompanyContext(user) {
         const own = await base44.entities.Company.filter({ owner_email: user.email }, '-created_date', 1);
         if (own?.length > 0) {
           const c = own[0];
-          // Sincronizar company_id en el token del usuario si no coincide
+          // Sincronizar company_id en el usuario si no coincide (invalida caché servidor)
           if (user.data?.company_id !== c.id) {
-            try {
-              await base44.auth.updateMe({ company_id: c.id });
-              // Refrescar para que el nuevo token tenga el company_id correcto
-              setTimeout(() => window.location.reload(), 500);
-              return; // No setear loading=false, la página se recargará
-            } catch (e) {
-              console.error('Error sincronizando company_id:', e);
-            }
+            try { await base44.auth.updateMe({ company_id: c.id }); } catch {}
           }
           companyCache.set(cacheKey, c);
           setCompany(c);
@@ -65,13 +58,7 @@ export function useCompanyContext(user) {
         const all = await base44.entities.Company.list('-created_date', 50);
         const found = all?.find(c => c.usuarios_autorizados?.includes(user.email)) || null;
         if (found && user.data?.company_id !== found.id) {
-          try {
-            await base44.auth.updateMe({ company_id: found.id });
-            setTimeout(() => window.location.reload(), 500);
-            return;
-          } catch (e) {
-            console.error('Error sincronizando company_id:', e);
-          }
+          try { await base44.auth.updateMe({ company_id: found.id }); } catch {}
         }
         companyCache.set(cacheKey, found);
         setCompany(found);
