@@ -11,6 +11,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import StatusBadge from '@/components/ui/StatusBadge';
 import EstadoFiscal from '@/components/EstadoFiscal';
 import { calcularHealthScore } from '@/lib/healthScoreCalc';
+import { calculateFinancialKPIs, calculateMonthlyData, activeInvoices } from '@/lib/financialCore';
+import { useFinancialData, triggerFinancialRefresh } from '@/hooks/useFinancialData';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -99,8 +101,7 @@ function ScoreRing({ score }) {
 
 export default function Dashboard() {
   const { user, company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: selectedYear });
   const [obligations, setObligations] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -118,21 +119,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (company?.id) loadData();
     else if (!loadingCompany) setLoading(false);
-  }, [company?.id, selectedYear, loadingCompany]);
+  }, [company?.id, loadingCompany]);
 
   const loadData = async () => {
     setLoading(true);
-    const [finRes, obl, notif] = await Promise.all([
-      base44.functions.invoke('getCompanyFinancials', { company_id: company.id, anio: selectedYear }),
+    const [obl, notif] = await Promise.all([
       base44.entities.TaxObligation.filter({ company_id: company.id }, '-fecha_limite', 20),
       base44.entities.Notification.filter({ destinatario_email: user?.email, leida: false }, '-created_date', 5),
     ]);
-    const finData = finRes?.data || finRes;
-    setInvoices(finData?.invoices || []);
-    setExpenses(finData?.expenses || []);
     setObligations(obl || []);
     setNotifications(notif || []);
-    setLoading(false);
 
     const [tsk, errs, crm, emp, abs, hrdocs] = await Promise.all([
       base44.entities.Task.filter({ company_id: company.id }, '-updated_date', 30),
@@ -148,15 +144,18 @@ export default function Dashboard() {
     setEmployees(emp || []);
     setAbsences(abs || []);
     setHrDocuments(hrdocs || []);
+    setLoading(false);
   };
 
   const derived = useMemo(() => {
-    const totalIngresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const totalGastos = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
-    const resultado = totalIngresos - totalGastos;
-    const ivaRepercutido = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
-    const ivaSoportado = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.cuota_iva || 0), 0);
-    const facturasPendientes = invoices.filter(i => i.estado_contable === 'pendiente').length;
+    // ── KPIs financieros unificados (excluyen anuladas, metricas consistentes) ──
+    const finKPIs = calculateFinancialKPIs(invoices, expenses, { year: selectedYear });
+    const totalIngresos = finKPIs.totalIngresos;
+    const totalGastos = finKPIs.totalGastos;
+    const resultado = finKPIs.resultado;
+    const ivaRepercutido = finKPIs.ivaRepercutido;
+    const ivaSoportado = finKPIs.ivaSoportado;
+    const facturasPendientes = finKPIs.facturasPendientesContabilizar;
     const tareasVencidas = tasks.filter(t => t.fecha_limite && new Date(t.fecha_limite) < new Date() && !['completada', 'cancelada'].includes(t.estado));
     const erroresCriticos = errors.filter(e => e.severidad === 'critica' && !['resuelto', 'ignorado'].includes(e.estado));
     const now = new Date();
@@ -165,8 +164,8 @@ export default function Dashboard() {
       const diff = (new Date(o.fecha_limite) - now) / 86400000;
       return diff >= 0 && diff <= 15;
     });
-    const facturasCobrar = invoices.filter(i => i.tipo === 'emitida' && ['pendiente', 'enviada'].includes(i.estado_contable));
-    const facturasVencidas = invoices.filter(i => i.tipo === 'emitida' && i.fecha_vencimiento && new Date(i.fecha_vencimiento) < now && !['cobrada', 'anulada'].includes(i.estado_contable));
+    const facturasCobrar = finKPIs.emitidas.filter(i => ['pendiente', 'enviada'].includes(i.estado_contable));
+    const facturasVencidas = finKPIs.facturasVencidasList;
     const estadoFiscal = (() => {
       if (erroresCriticos.length > 0 || tareasVencidas.length > 0) return 'rojo';
       if (facturasPendientes > 0 || obligations.some(o => o.estado === 'pendiente_documentacion')) return 'amarillo';
@@ -177,18 +176,7 @@ export default function Dashboard() {
     const margen = totalIngresos > 0 ? Math.round((resultado / totalIngresos) * 100) : 0;
     const recentActivity = [...invoices.slice(-3), ...expenses.slice(-3)]
       .sort((a, b) => new Date(b.created_date) - new Date(a.created_date)).slice(0, 5);
-    const monthlyChart = (() => {
-      const data = MONTHS.map((m, idx) => ({ month: m, ingresos: 0, gastos: 0 }));
-      invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-        const d = new Date(i.fecha_emision || i.created_date);
-        if (!isNaN(d)) data[d.getMonth()].ingresos += Math.round(i.total_factura || 0);
-      });
-      expenses.filter(e => e.tipo === 'gasto').forEach(e => {
-        const d = new Date(e.fecha || e.created_date);
-        if (!isNaN(d)) data[d.getMonth()].gastos += Math.round(e.total || 0);
-      });
-      return data;
-    })();
+    const monthlyChart = calculateMonthlyData(invoices, expenses, selectedYear);
     const empleadosActivos = employees.filter(e => !e.estado || e.estado === 'activo');
     const ausenciasPendientes = absences.filter(a => ['pendiente', 'solicitada'].includes(a.estado));
     const hrDocsPendientes = hrDocuments.filter(d => ['pendiente', 'revision'].includes(d.estado));
@@ -198,9 +186,9 @@ export default function Dashboard() {
       facturasCobrar, facturasVencidas, estadoFiscal, healthScore, healthMotivos,
       margen, recentActivity, monthlyChart, empleadosActivos, ausenciasPendientes, hrDocsPendientes
     };
-  }, [invoices, expenses, obligations, tasks, errors, employees, absences, hrDocuments]);
+  }, [invoices, expenses, obligations, tasks, errors, employees, absences, hrDocuments, selectedYear]);
 
-  if (loading || loadingCompany) return <DashboardSkeleton />;
+  if (loading || loadingCompany || finLoading) return <DashboardSkeleton />;
 
   if (!company) return (
     <div className="animate-fade-in max-w-xl mx-auto mt-16 text-center">

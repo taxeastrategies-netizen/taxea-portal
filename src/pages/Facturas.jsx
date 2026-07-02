@@ -17,6 +17,7 @@ import SendInvoiceDocumentModal from '@/components/facturas/SendInvoiceDocumentM
 import RecurringSection from '@/components/facturas/RecurringSection';
 import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
 import { cn } from '@/lib/utils';
+import { triggerFinancialRefresh } from '@/hooks/useFinancialData';
 
 export default function Facturas() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};

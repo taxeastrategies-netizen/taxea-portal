@@ -13,13 +13,14 @@ import { Button } from '@/components/ui/button';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import GastosPorCategoria from './GastosPorCategoria';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 export default function TaxDashboard({ onNavigate }) {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id);
   const [obligations, setObligations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,14 +38,10 @@ export default function TaxDashboard({ onNavigate }) {
 
   const loadData = async () => {
     setLoading(true);
-    const [finRes, oblData, qData] = await Promise.all([
-      base44.functions.invoke('getCompanyFinancials', { company_id: company.id }),
+    const [oblData, qData] = await Promise.all([
       base44.entities.TaxObligation.filter({ company_id: company.id }),
       base44.entities.Quote.filter({ company_id: company.id }).catch(() => []),
     ]);
-    const finData = finRes?.data || finRes;
-    setInvoices(finData?.invoices || []);
-    setExpenses(finData?.expenses || []);
     setObligations(oblData || []);
     setQuotes(qData || []);
     setLoading(false);
@@ -81,43 +78,38 @@ export default function TaxDashboard({ onNavigate }) {
     setLoadingAlerts(false);
   };
 
-  // KPIs
+  // KPIs - Usa calculateFinancialKPIs para consistencia con todos los demas dashboards
   const kpis = useMemo(() => {
-    const thisMonthInvoices = invoices.filter(i => {
+    // KPIs del mes actual (mismas reglas que el resto de la app)
+    const monthInvs = invoices.filter(i => {
       const d = new Date(i.fecha_emision || i.created_date);
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth && i.tipo === 'emitida';
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
-    const thisMonthExpenses = expenses.filter(e => {
+    const monthExps = expenses.filter(e => {
       const d = new Date(e.fecha || e.created_date);
       return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
+    const monthKPIs = calculateFinancialKPIs(monthInvs, monthExps);
 
-    const ingresosMes = thisMonthInvoices.reduce((s, i) => s + (i.base_imponible || 0), 0);
-    const gastosMes = thisMonthExpenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.base_imponible || e.total || 0), 0);
-    const beneficioMes = ingresosMes - gastosMes;
-    const ivaMes = thisMonthInvoices.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-    const irpfMes = thisMonthInvoices.reduce((s, i) => s + (i.retencion_irpf ? (i.base_imponible * i.retencion_irpf / 100) : 0), 0);
-    const factPendientes = invoices.filter(i => i.estado_cobro === 'pendiente' && i.tipo === 'emitida');
-    const factVencidas = invoices.filter(i => i.estado_cobro === 'vencida' && i.tipo === 'emitida');
+    const factPendientes = monthKPIs.emitidas.filter(i => i.estado_cobro === 'pendiente');
     const oblPendientes = obligations.filter(o => !['finalizado','presentado','pagado','domiciliado'].includes(o.estado));
     const proxObl = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) > new Date())
       .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))[0];
 
-    const thisMonthRecibidas = invoices.filter(i => {
-      const d = new Date(i.fecha_emision || i.created_date);
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth && i.tipo === 'recibida';
-    });
-    const ivaRepercutido = thisMonthInvoices.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-    const ivaSoportado = thisMonthRecibidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-    const irpfIngresos = thisMonthInvoices.reduce((s, i) => s + (i.retencion_irpf ? (i.base_imponible || 0) * (i.retencion_irpf / 100) : 0), 0);
-    const irpfGastos = thisMonthRecibidas.reduce((s, i) => s + (i.retencion_irpf ? (i.base_imponible || 0) * (i.retencion_irpf / 100) : 0), 0);
     const quotesPendientes = quotes.filter(q => ['pendiente','enviado','borrador'].includes(q.estado) || !q.estado);
     return {
-      ingresosMes, gastosMes, beneficioMes, ivaMes: ivaRepercutido, irpfMes,
-      ivaRepercutido, ivaSoportado, irpfIngresos, irpfGastos,
+      ingresosMes: monthKPIs.totalIngresos,
+      gastosMes: monthKPIs.totalGastos,
+      beneficioMes: monthKPIs.resultado,
+      ivaMes: monthKPIs.ivaRepercutido,
+      irpfMes: monthKPIs.retencionIngresos,
+      ivaRepercutido: monthKPIs.ivaRepercutido,
+      ivaSoportado: monthKPIs.ivaSoportado,
+      irpfIngresos: monthKPIs.retencionIngresos,
+      irpfGastos: monthKPIs.retencionGastos,
       factPendientes: factPendientes.length,
       factPendientesImporte: factPendientes.reduce((s, i) => s + (i.total_factura || 0), 0),
-      factVencidas: factVencidas.length,
+      factVencidas: monthKPIs.facturasVencidas,
       oblPendientes: oblPendientes.length,
       proxObl,
       quotesPendientes: quotesPendientes.length,
@@ -125,20 +117,23 @@ export default function TaxDashboard({ onNavigate }) {
     };
   }, [invoices, expenses, obligations, quotes, currentYear, currentMonth]);
 
-  // Cashflow chart data (last 6 months)
+  // Cashflow chart data (last 6 months) - Usa total_factura consistente con el resto
   const cashflowData = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(currentYear, currentMonth - 5 + i, 1);
       const m = d.getMonth();
       const y = d.getFullYear();
-      const ing = invoices.filter(inv => {
+      const monthInvs = invoices.filter(inv => {
         const fd = new Date(inv.fecha_emision || inv.created_date);
-        return fd.getMonth() === m && fd.getFullYear() === y && inv.tipo === 'emitida';
-      }).reduce((s, inv) => s + (inv.base_imponible || 0), 0);
-      const gas = expenses.filter(e => {
+        return fd.getMonth() === m && fd.getFullYear() === y && !inv.anulada;
+      });
+      const monthExps = expenses.filter(e => {
         const fd = new Date(e.fecha || e.created_date);
-        return fd.getMonth() === m && fd.getFullYear() === y && e.tipo === 'gasto';
-      }).reduce((s, e) => s + (e.base_imponible || e.total || 0), 0);
+        return fd.getMonth() === m && fd.getFullYear() === y && !e.anulada;
+      });
+      const ing = monthInvs.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
+      const gas = monthExps.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0)
+        + monthInvs.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.total_factura || 0), 0);
       return { mes: MONTHS_ES[m], ingresos: Math.round(ing), gastos: Math.round(gas), beneficio: Math.round(ing - gas) };
     });
   }, [invoices, expenses, currentYear, currentMonth]);
@@ -153,7 +148,7 @@ export default function TaxDashboard({ onNavigate }) {
     return items.sort((a, b) => b.date - a.date).slice(0, 8);
   }, [invoices, expenses, obligations]);
 
-  if (loadingCompany || loading) return (
+  if (loadingCompany || loading || finLoading) return (
     <div className="flex items-center justify-center h-48">
       <div className="w-6 h-6 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
     </div>

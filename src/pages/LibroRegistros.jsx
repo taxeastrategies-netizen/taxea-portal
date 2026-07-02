@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import PnLPanel from '@/components/libros/PnLPanel.jsx';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';
 import { exportarLibrosPDF } from '@/components/libros/ExportPDF.jsx';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -24,28 +25,12 @@ const TABS = [
 
 export default function LibroRegistros() {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
   const [activeTab, setActiveTab] = useState('ventas');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
-
-  useEffect(() => {
-    if (company?.id) load();
-    else if (!loadingCompany) setLoading(false);
-  }, [company?.id, filterAnio, loadingCompany]);
-
-  const load = async () => {
-    setLoading(true);
-    const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id, anio: filterAnio });
-    const finData = res?.data || res;
-    setInvoices(finData?.invoices || []);
-    setExpenses(finData?.expenses || []);
-    setLoading(false);
-  };
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
@@ -54,9 +39,9 @@ export default function LibroRegistros() {
     return filterTrimestre === 'all' || item.trimestre === filterTrimestre;
   }
 
-  const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida' && inPeriod(i)), [invoices, filterTrimestre]);
-  const recibidas = useMemo(() => invoices.filter(i => i.tipo === 'recibida' && inPeriod(i)), [invoices, filterTrimestre]);
-  const gastosF = useMemo(() => expenses.filter(e => e.tipo === 'gasto' && inPeriod(e)), [expenses, filterTrimestre]);
+  const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida' && !i.anulada && inPeriod(i)), [invoices, filterTrimestre]);
+  const recibidas = useMemo(() => invoices.filter(i => i.tipo === 'recibida' && !i.anulada && inPeriod(i)), [invoices, filterTrimestre]);
+  const gastosF = useMemo(() => expenses.filter(e => e.tipo === 'gasto' && !e.anulada && inPeriod(e)), [expenses, filterTrimestre]);
 
   // KPIs libro ventas
   const totalBaseV = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
@@ -89,7 +74,7 @@ export default function LibroRegistros() {
     setExportingPDF(false);
   };
 
-  if (loadingCompany && loading) return (
+  if (loadingCompany && loading && !invoices.length) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="el Libro de Registros" />;

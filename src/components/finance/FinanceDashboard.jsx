@@ -12,86 +12,66 @@ import SmartWidgets from './SmartWidgets';
 import InsightsIA from './InsightsIA';
 import HealthScore from './FinanceHealthScore';
 import { subDays, subMonths, isAfter, parseISO } from 'date-fns';
+import { calculateFinancialKPIs, activeInvoices } from '@/lib/financialCore';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 export default function FinanceDashboard() {
   const ctx = useOutletContext() || {};
   const { company } = ctx;
 
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, loading: finLoading, lastSync } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
-  const [lastSync] = useState(new Date());
 
   const companyId = company?.id;
 
   useEffect(() => {
     if (!companyId) { setLoading(false); return; }
-    Promise.all([
-      base44.functions.invoke('getCompanyFinancials', { company_id: companyId }),
-      base44.entities.TaxObligation.filter({ company_id: companyId }),
-    ]).then(([finRes, obl]) => {
-      const finData = finRes?.data || finRes;
-      setInvoices(finData?.invoices || []);
-      setExpenses(finData?.expenses || []);
-      setObligations(obl || []);
-    }).finally(() => setLoading(false));
+    base44.entities.TaxObligation.filter({ company_id: companyId })
+      .then(obl => setObligations(obl || []))
+      .finally(() => setLoading(false));
   }, [companyId]);
 
-  // ── Derived financial data ──────────────────────────────────────────────────
+  // ── Derived financial data (usa capa unificada) ───────────────────────────
   const financials = useMemo(() => {
     const now = new Date();
     const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
     const cutoff = subDays(now, periodDays);
 
-    const filteredInvoices = invoices.filter(i => {
+    // Filtrar por periodo pero excluyendo anuladas (via activeInvoices)
+    const filteredInvoices = activeInvoices(invoices).filter(i => {
       try { return isAfter(parseISO(i.fecha_emision), cutoff); } catch { return false; }
     });
-    const filteredExpenses = expenses.filter(e => {
-      try { return isAfter(parseISO(e.fecha), cutoff); } catch { return false; }
+    const filteredExpenses = (expenses || []).filter(e => {
+      try { return !e.anulada && isAfter(parseISO(e.fecha), cutoff); } catch { return false; }
     });
 
-    const totalIngresos = filteredInvoices
-      .filter(i => i.tipo === 'emitida')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+    // KPIs unificados del periodo filtrado
+    const finKPIs = calculateFinancialKPIs(filteredInvoices, filteredExpenses);
 
-    const totalGastos = filteredExpenses
-      .filter(e => e.tipo === 'gasto')
-      .reduce((s, e) => s + (e.total || 0), 0);
-
-    const totalGastosContab = filteredInvoices
-      .filter(i => i.tipo === 'recibida')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-
-    const gastoTotal = totalGastos + totalGastosContab;
-    const beneficio = totalIngresos - gastoTotal;
+    const totalIngresos = finKPIs.totalIngresos;
+    const gastoTotal = finKPIs.totalGastos;
+    const beneficio = finKPIs.resultado;
     const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
 
-    // EBITDA approximation (beneficio + amortizaciones estimadas ~5% gastos)
+    // EBITDA approximation
     const ebitda = beneficio + gastoTotal * 0.05;
 
-    // Cash (sum of cobradas invoices)
-    const cashDisponible = invoices
+    // Cash (sum of cobradas invoices, excluyendo anuladas)
+    const cashDisponible = activeInvoices(invoices)
       .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
       .reduce((s, i) => s + (i.total_factura || 0), 0);
 
-    // Pending collections
-    const cobrosPendientes = invoices
-      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'pendiente')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const cobrosPendientes = finKPIs.cobrosPendientes;
+    const pagosPendientes = finKPIs.pagosPendientes;
 
-    // Pending payments
-    const pagosPendientes = invoices
-      .filter(i => i.tipo === 'recibida' && i.estado_cobro === 'pendiente')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-
-    // Burn rate (monthly avg spend)
+    // Burn rate
     const burnRate = gastoTotal / (periodDays / 30);
     const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
 
-    // DSO (days sales outstanding)
-    const invoicesEmitidas = invoices.filter(i => i.tipo === 'emitida');
+    // DSO
+    const invoicesEmitidas = activeInvoices(invoices).filter(i => i.tipo === 'emitida');
     const dso = invoicesEmitidas.length > 0
       ? invoicesEmitidas.reduce((s, i) => {
           const days = i.estado_cobro === 'cobrada' ? 30 : 60;
@@ -100,7 +80,7 @@ export default function FinanceDashboard() {
       : 0;
 
     // DPO
-    const invoicesRecibidas = invoices.filter(i => i.tipo === 'recibida');
+    const invoicesRecibidas = activeInvoices(invoices).filter(i => i.tipo === 'recibida');
     const dpo = invoicesRecibidas.length > 0
       ? invoicesRecibidas.reduce((s, i) => {
           const days = i.estado_cobro === 'cobrada' ? 30 : 45;
@@ -108,10 +88,8 @@ export default function FinanceDashboard() {
         }, 0) / invoicesRecibidas.length
       : 0;
 
-    // Working capital
     const workingCapital = cobrosPendientes - pagosPendientes;
 
-    // Upcoming obligations
     const upcoming = obligations.filter(o => {
       try {
         const d = parseISO(o.fecha_limite);
@@ -119,12 +97,11 @@ export default function FinanceDashboard() {
       } catch { return false; }
     });
 
-    // Overdue invoices
-    const vencidas = invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'vencida');
+    const vencidas = finKPIs.facturasVencidasList;
 
     // Previous period comparison
     const prevCutoff = subDays(cutoff, periodDays);
-    const prevIngresos = invoices
+    const prevIngresos = activeInvoices(invoices)
       .filter(i => {
         try {
           const d = parseISO(i.fecha_emision);
@@ -159,7 +136,7 @@ export default function FinanceDashboard() {
         loading={loading}
       />
 
-      {!loading && (
+      {!loading && !finLoading && (
         <>
           <KpiRow financials={financials} period={period} />
 
@@ -187,7 +164,7 @@ export default function FinanceDashboard() {
         </>
       )}
 
-      {loading && (
+      {(loading || finLoading) && (
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />

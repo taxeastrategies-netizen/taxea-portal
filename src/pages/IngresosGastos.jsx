@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
+import { useFinancialData, triggerFinancialRefresh } from '@/hooks/useFinancialData';
 
 const CATEGORIAS = [
   { value: 'ventas_servicios', label: 'Ventas / Servicios' },
@@ -40,53 +42,46 @@ function fmt(n) {
 
 export default function IngresosGastos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
-  const [items, setItems] = useState([]);
+  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: filterAnio });
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState(new Set());
-  const [confirmDelete, setConfirmDelete] = useState(null); // item or 'bulk'
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
 
-  useEffect(() => {
-    if (company?.id) load();
-    else if (!loadingCompany) setLoading(false);
-  }, [company?.id, filterAnio, loadingCompany]);
-
-  const load = async () => {
-    setLoading(true);
-    const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id, anio: filterAnio });
-    const finData = res?.data || res;
-    const expenses = finData?.expenses || [];
-    const invoices = finData?.invoices || [];
-    const invoiceItems = (invoices || []).map(inv => ({
-      _source: 'invoice',
-      id: inv.id,
-      tipo: inv.tipo === 'emitida' ? 'ingreso' : 'gasto',
-      fecha: inv.fecha_emision,
-      proveedor_cliente: inv.cliente_nombre,
-      concepto: inv.concepto,
-      base_imponible: inv.base_imponible,
-      tipo_impuesto: inv.tipo_iva,
-      cuota_impuesto: inv.cuota_iva,
-      total: inv.total_factura,
-      trimestre: inv.trimestre,
-      estado: inv.estado_contable,
-      categoria: inv.categoria || (inv.tipo === 'emitida' ? 'ventas_servicios' : 'otros'),
-      numero_factura: inv.numero_factura,
-    }));
-    setItems([...(expenses || []).map(e => ({ ...e, _source: 'expense' })), ...invoiceItems]);
-    setLoading(false);
-  };
+  // Items unificados: facturas (excluyendo anuladas) + expenses
+  const items = useMemo(() => {
+    const invoiceItems = (invoices || [])
+      .filter(inv => !inv.anulada)
+      .map(inv => ({
+        _source: 'invoice',
+        _original: inv,
+        id: inv.id,
+        tipo: inv.tipo === 'emitida' ? 'ingreso' : 'gasto',
+        fecha: inv.fecha_emision,
+        proveedor_cliente: inv.cliente_nombre,
+        concepto: inv.concepto,
+        base_imponible: inv.base_imponible,
+        tipo_impuesto: inv.tipo_iva,
+        cuota_impuesto: inv.cuota_iva,
+        total: inv.total_factura,
+        trimestre: inv.trimestre,
+        estado: inv.estado_contable,
+        categoria: inv.categoria || (inv.tipo === 'emitida' ? 'ventas_servicios' : 'otros'),
+        numero_factura: inv.numero_factura,
+      }));
+    const expenseItems = (expenses || []).map(e => ({ ...e, _source: 'expense' }));
+    return [...expenseItems, ...invoiceItems];
+  }, [invoices, expenses]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -126,14 +121,14 @@ export default function IngresosGastos() {
         anio: year, trimestre, subido_por: user?.email,
       });
     }
-    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
+    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); triggerFinancialRefresh();
   };
 
   const handleDelete = async (item) => {
     if (item._source === 'invoice') await base44.entities.Invoice.delete(item.id);
     else await base44.entities.Expense.delete(item.id);
     setSelected(s => { const n = new Set(s); n.delete(item.id); return n; });
-    load();
+    triggerFinancialRefresh();
   };
 
   const handleBulkDelete = async () => {
@@ -143,7 +138,7 @@ export default function IngresosGastos() {
     ));
     setSelected(new Set());
     setConfirmDelete(null);
-    load();
+    triggerFinancialRefresh();
   };
 
   const exportPDF = (rows) => {
@@ -195,14 +190,16 @@ export default function IngresosGastos() {
   const ingresos = useMemo(() => filtered.filter(i => i.tipo === 'ingreso'), [filtered]);
   const gastos = useMemo(() => filtered.filter(i => i.tipo === 'gasto'), [filtered]);
 
-  const totalIngresos = ingresos.reduce((s, i) => s + (i.total || 0), 0);
-  const totalGastos = gastos.reduce((s, i) => s + (i.total || 0), 0);
-  const totalBaseIng = ingresos.reduce((s, i) => s + (i.base_imponible || 0), 0);
-  const totalBaseGas = gastos.reduce((s, i) => s + (i.base_imponible || 0), 0);
-  const resultado = totalIngresos - totalGastos;
+  // KPIs unificados (excluyen anuladas, mismas reglas que todos los dashboards)
+  const finKPIs = calculateFinancialKPIs(invoices, expenses, { year: filterAnio, quarter: filterTrimestre });
+  const totalIngresos = finKPIs.totalIngresos;
+  const totalGastos = finKPIs.totalGastos;
+  const totalBaseIng = finKPIs.baseIngresos;
+  const totalBaseGas = finKPIs.baseGastos;
+  const resultado = finKPIs.resultado;
   const margen = totalIngresos > 0 ? ((totalIngresos - totalGastos) / totalIngresos * 100).toFixed(1) : '0.0';
 
-  if (loadingCompany && loading) return (
+  if ((loadingCompany && finLoading) || finLoading) return (
     <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="Ingresos y Gastos" />;
@@ -296,7 +293,7 @@ export default function IngresosGastos() {
       )}
 
       <div className="bg-card rounded-xl border border-border shadow-card overflow-hidden">
-        {loading ? (
+        {finLoading ? (
           <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" /></div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
@@ -370,8 +367,8 @@ export default function IngresosGastos() {
                           </DropdownMenuItem>
                           {isAdmin && (
                             <DropdownMenuItem onClick={() => {
-                              if (item._source === 'invoice') base44.entities.Invoice.update(item.id, { estado_contable: 'contabilizada' }).then(load);
-                              else base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(load);
+                              if (item._source === 'invoice') base44.entities.Invoice.update(item.id, { estado_contable: 'contabilizada' }).then(triggerFinancialRefresh);
+                              else base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(triggerFinancialRefresh);
                             }}>Contabilizar</DropdownMenuItem>
                           )}
                           <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(item)}>
