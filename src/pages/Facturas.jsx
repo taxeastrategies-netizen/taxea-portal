@@ -33,8 +33,7 @@ export default function Facturas() {
   const [workspaceInvoice, setWorkspaceInvoice] = useState(null);
   const [sendingInvoice, setSendingInvoice] = useState(null);
   const [showAnuladas, setShowAnuladas] = useState(false);
-  const [anularTarget, setAnularTarget] = useState(null);
-  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
   const [anulando, setAnulando] = useState(false);
   const [showRecurringView, setShowRecurringView] = useState(false);
   const [showGenerateRecurring, setShowGenerateRecurring] = useState(false);
@@ -56,27 +55,42 @@ export default function Facturas() {
     setLoading(false);
   };
 
-  const handleAnular = async () => {
-    if (!anularTarget || !motivoAnulacion.trim()) return;
-    setAnulando(true);
+  const handleAnular = async (inv) => {
     const now = new Date().toISOString();
-    const updates = [base44.entities.Invoice.update(anularTarget.id, {
+    const updates = [base44.entities.Invoice.update(inv.id, {
       anulada: true,
       fecha_anulacion: now,
-      motivo_anulacion: motivoAnulacion,
+      motivo_anulacion: 'Anulación directa',
     })];
-    if (anularTarget.linked_journal_entry_id) {
-      updates.push(base44.entities.JournalEntry.update(anularTarget.linked_journal_entry_id, { status: 'anulado' }));
+    if (inv.linked_journal_entry_id) {
+      updates.push(base44.entities.JournalEntry.update(inv.linked_journal_entry_id, { status: 'anulado' }));
     }
     await Promise.all(updates);
-    // Actualización local en vez de recargar todo
-    setInvoices(prev => prev.map(i => i.id === anularTarget.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: motivoAnulacion } : i));
-    if (workspaceInvoice?.id === anularTarget.id) {
-      setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: motivoAnulacion }));
+    setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
+    if (workspaceInvoice?.id === inv.id) {
+      setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' }));
     }
+  };
+
+  const handleAnularBulk = async () => {
+    if (selectedIds.length === 0) return;
+    setAnulando(true);
+    const now = new Date().toISOString();
+    const targets = invoices.filter(i => selectedIds.includes(i.id) && !i.anulada);
+    if (targets.length === 0) { setAnulando(false); return; }
+    await base44.entities.Invoice.bulkUpdate(
+      targets.map(t => ({ id: t.id, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' }))
+    );
+    const journalTargets = targets.filter(t => t.linked_journal_entry_id);
+    if (journalTargets.length > 0) {
+      await base44.entities.JournalEntry.bulkUpdate(
+        journalTargets.map(t => ({ id: t.linked_journal_entry_id, status: 'anulado' }))
+      );
+    }
+    const updatedIds = new Set(targets.map(t => t.id));
+    setInvoices(prev => prev.map(i => updatedIds.has(i.id) ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' } : i));
+    setSelectedIds([]);
     setAnulando(false);
-    setAnularTarget(null);
-    setMotivoAnulacion('');
   };
 
   const handleEliminar = async (inv) => {
@@ -307,6 +321,18 @@ export default function Facturas() {
         </div>
         )}
 
+        {/* Bulk action bar */}
+        {selectedIds.length > 0 && !showRecurringView && (
+          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+            <span className="text-sm font-medium text-red-700">{selectedIds.length} factura(s) seleccionada(s)</span>
+            <div className="flex-1" />
+            <Button variant="destructive" size="sm" disabled={anulando} onClick={handleAnularBulk} className="gap-1.5">
+              {anulando ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Anulando...</> : <><Ban className="w-3.5 h-3.5" /> Anular seleccionadas</>}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>Limpiar</Button>
+          </div>
+        )}
+
         {/* Recurring view or invoice table */}
         {showRecurringView ? (
           <RecurringSection company={company} user={user} isAdmin={isAdmin} />
@@ -327,6 +353,9 @@ export default function Facturas() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
+                    <th className="w-10 px-4 py-3">
+                      <input type="checkbox" className="rounded border-border" checked={filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id))} onChange={e => { if (e.target.checked) setSelectedIds(filtered.map(i => i.id)); else setSelectedIds([]); }} />
+                    </th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nº Factura</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cliente</th>
@@ -342,7 +371,10 @@ export default function Facturas() {
                   {filtered.map(inv => (
                     <tr key={inv.id}
                       onClick={() => handleOpenWorkspace(inv)}
-                      className="hover:bg-secondary/30 transition-colors cursor-pointer">
+                      className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-red-50/50' : ''}`}>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} />
+                      </td>
                       <td className="px-4 py-3 font-medium text-foreground">
                          {inv.numero_factura}
                          {inv.anulada && <span className="ml-1.5 text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">ANULADA</span>}
@@ -393,7 +425,7 @@ export default function Facturas() {
                                  </DropdownMenuItem>
                                )}
                                {!inv.anulada && (
-                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => { setAnularTarget(inv); setMotivoAnulacion(''); }}>
+                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleAnular(inv)}>
                                    <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
                                  </DropdownMenuItem>
                                )}
@@ -462,42 +494,6 @@ export default function Facturas() {
         onDone={loadInvoices}
       />
 
-      {/* Modal anular factura */}
-      {anularTarget && (
-        <Dialog open onOpenChange={() => setAnularTarget(null)}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="font-jakarta flex items-center gap-2">
-                <Ban className="w-5 h-5 text-red-600" /> Anular factura {anularTarget.numero_factura}
-              </DialogTitle>
-            </DialogHeader>
-            {anularTarget.linked_journal_entry_id && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-800">
-                ⚠️ Esta factura tiene un asiento contable vinculado que también quedará anulado.
-              </div>
-            )}
-            <div className="space-y-2">
-              <label className="text-xs font-medium">Motivo de anulación <span className="text-red-500">*</span></label>
-              <input
-                className="w-full border border-input rounded-md px-3 py-2 text-sm"
-                placeholder="Ej: Error en importe, factura duplicada..."
-                value={motivoAnulacion}
-                onChange={e => setMotivoAnulacion(e.target.value)}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setAnularTarget(null)}>Cancelar</Button>
-              <Button
-                variant="destructive"
-                disabled={!motivoAnulacion.trim() || anulando}
-                onClick={handleAnular}
-              >
-                {anulando ? 'Anulando...' : 'Confirmar anulación'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </>
   );
 }
