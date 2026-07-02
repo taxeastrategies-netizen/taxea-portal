@@ -266,50 +266,85 @@ export default function LectorIngresos() {
     });
   };
 
+  const [validating, setValidating] = useState(false);
+
   const handleValidate = async (docId, form) => {
-    const fecha = form.fecha_emision || '';
-    const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
-    const inv = await base44.entities.Invoice.create({
-      ...form,
-      tipo: INVOICE_TIPO,
-      company_id: company.id,
-      base_imponible: parseFloat(form.base_imponible) || 0,
-      cuota_iva: parseFloat(form.cuota_iva) || 0,
-      total_factura: parseFloat(form.total_factura) || 0,
-      tipo_iva: parseFloat(form.tipo_iva) || 21,
-      retencion_irpf: parseFloat(form.retencion_irpf) || 0,
-      archivo_url: reviewing?.fileUrl || '',
-      estado_contable: 'pendiente',
-      anio: year,
-      trimestre: trimestre(fecha),
-      subido_por: user?.email,
-    });
-    const doc = documents.find(d => d.id === docId);
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(docId, {
-      status: 'accounted',
-      accountedAt: now,
-      linkedInvoiceId: inv?.id || '',
-      lastStatusChangedAt: now,
-      reviewedByAdminId: user?.id,
-      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv?.id}` })),
-    });
-    setReviewing(null);
-    loadDocs();
+    if (!form.numero_factura) {
+      setToast({ type: 'error', message: 'El número de factura es obligatorio.' });
+      setTimeout(() => setToast(null), 6000);
+      return;
+    }
+    if (!form.fecha_emision) {
+      setToast({ type: 'error', message: 'La fecha de emisión es obligatoria.' });
+      setTimeout(() => setToast(null), 6000);
+      return;
+    }
+    if (!form.base_imponible || parseFloat(form.base_imponible) <= 0) {
+      setToast({ type: 'error', message: 'La base imponible debe ser mayor que 0.' });
+      setTimeout(() => setToast(null), 6000);
+      return;
+    }
+    setValidating(true);
+    try {
+      const fecha = form.fecha_emision || '';
+      const year = fecha ? new Date(fecha).getFullYear() : new Date().getFullYear();
+      const inv = await base44.entities.Invoice.create({
+        ...form,
+        tipo: INVOICE_TIPO,
+        company_id: company.id,
+        base_imponible: parseFloat(form.base_imponible) || 0,
+        cuota_iva: parseFloat(form.cuota_iva) || 0,
+        total_factura: parseFloat(form.total_factura) || 0,
+        tipo_iva: parseFloat(form.tipo_iva) || 21,
+        retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+        archivo_url: reviewing?.fileUrl || '',
+        estado_contable: 'pendiente',
+        anio: year,
+        trimestre: trimestre(fecha),
+        subido_por: user?.email,
+      });
+      const doc = documents.find(d => d.id === docId);
+      const now = new Date().toISOString();
+      await base44.entities.OcrInvoiceDocument.update(docId, {
+        status: 'accounted',
+        accountedAt: now,
+        linkedInvoiceId: inv?.id || '',
+        lastStatusChangedAt: now,
+        reviewedByAdminId: user?.id,
+        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc?.status, newStatus: 'accounted', detail: `invoice=${inv?.id}` })),
+      });
+      setReviewing(null);
+      setToast({ type: 'success', message: 'Factura aprobada y guardada correctamente.' });
+      setTimeout(() => setToast(null), 6000);
+      loadDocs();
+    } catch (err) {
+      console.error('[LectorIngresos] Error al aprobar:', err);
+      setToast({ type: 'error', message: `Error al guardar la factura: ${err?.message || 'inténtalo de nuevo'}` });
+      setTimeout(() => setToast(null), 8000);
+    }
+    setValidating(false);
   };
 
   const handleReject = async (docId) => {
-    const doc = documents.find(d => d.id === docId);
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(docId, {
-      status: 'rejected',
-      rejectedAt: now,
-      lastStatusChangedAt: now,
-      reviewedByAdminId: user?.id,
-      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
-    });
-    setReviewing(null);
-    loadDocs();
+    setValidating(true);
+    try {
+      const doc = documents.find(d => d.id === docId);
+      const now = new Date().toISOString();
+      await base44.entities.OcrInvoiceDocument.update(docId, {
+        status: 'rejected',
+        rejectedAt: now,
+        lastStatusChangedAt: now,
+        reviewedByAdminId: user?.id,
+        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
+      });
+      setReviewing(null);
+      loadDocs();
+    } catch (err) {
+      console.error('[LectorIngresos] Error al rechazar:', err);
+      setToast({ type: 'error', message: `Error al rechazar: ${err?.message || 'inténtalo de nuevo'}` });
+      setTimeout(() => setToast(null), 8000);
+    }
+    setValidating(false);
   };
 
   const handleWithdraw = async (docId) => {
@@ -396,6 +431,7 @@ export default function LectorIngresos() {
             onApprove={handleValidate}
             onReject={handleReject}
             onCancel={() => setReviewing(null)}
+            loading={validating}
           />
         </div>
       )}

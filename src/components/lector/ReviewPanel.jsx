@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel }) {
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading }) {
   const [form, setForm] = useState(doc.formData || {});
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
@@ -20,11 +20,11 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel }
           <p className="text-xs text-muted-foreground">Revisión humana obligatoria</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
-            <XCircle className="w-3.5 h-3.5" /> Rechazar
+          <Button size="sm" variant="outline" disabled={loading} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
+            <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
-          <Button size="sm" className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
-            <CheckCircle className="w-3.5 h-3.5" /> Aprobar y guardar
+          <Button size="sm" disabled={loading} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : 'Aprobar y guardar'}
           </Button>
           <button onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
         </div>
