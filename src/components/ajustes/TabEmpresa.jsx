@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { getImpersonation } from '@/lib/impersonation';
 import { Building2, Save, ImagePlus, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
   const [errors, setErrors] = useState({});
   const [dirty, setDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const logoInputRef = useRef(null);
   const loadedRef = useRef(false);
 
@@ -74,8 +76,11 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     setSaveStatus(null);
+    setErrorMessage('');
     try {
-      const payload = { ...form, owner_email: user?.email, activa: true };
+      const imp = getImpersonation();
+      const ownerEmail = imp?.clientEmail || user?.email;
+      const payload = { ...form, owner_email: ownerEmail, activa: true };
       if (company?.id) await base44.entities.Company.update(company.id, payload);
       else await base44.entities.Company.create(payload);
       setDirty(false);
@@ -83,7 +88,11 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
       if (refreshCompany) refreshCompany();
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(null), 4000);
-    } catch { setSaveStatus('error'); }
+    } catch (e) {
+      console.error('Error guardando empresa:', e);
+      setErrorMessage(e?.message || 'Error desconocido al guardar');
+      setSaveStatus('error');
+    }
     finally { setSaving(false); }
   };
 
