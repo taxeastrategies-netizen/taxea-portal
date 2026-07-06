@@ -79,10 +79,24 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
     setErrorMessage('');
     try {
       const imp = getImpersonation();
+      const isImpersonating = !!imp?.clientEmail;
       const ownerEmail = imp?.clientEmail || user?.email;
       const payload = { ...form, owner_email: ownerEmail, activa: true };
-      if (company?.id) await base44.entities.Company.update(company.id, payload);
-      else await base44.entities.Company.create(payload);
+
+      if (isImpersonating) {
+        // Admin impersonando: usar función backend con service role
+        const response = await base44.functions.invoke('saveCompanyAsAdmin', {
+          companyData: payload,
+          clientEmail: ownerEmail,
+          companyId: company?.id || null,
+        });
+        if (response.data?.error) throw new Error(response.data.error);
+      } else {
+        // Usuario normal: SDK directo
+        if (company?.id) await base44.entities.Company.update(company.id, payload);
+        else await base44.entities.Company.create(payload);
+      }
+
       setDirty(false);
       loadedRef.current = false;
       if (refreshCompany) refreshCompany();
