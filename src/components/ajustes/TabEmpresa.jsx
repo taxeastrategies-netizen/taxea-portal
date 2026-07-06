@@ -159,7 +159,7 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
       </div>
       {dirty && !saveStatus && <p className="mt-4 text-xs text-amber-600">Cambios sin guardar</p>}
       {saveStatus === 'success' && <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5"><CheckCircle2 className="w-4 h-4" />Guardado correctamente.</div>}
-      {saveStatus === 'error' && <div className="mt-4 flex items-center gap-2 text-sm text-destructive bg-red-50 border border-red-200 rounded-lg px-4 py-2.5"><AlertCircle className="w-4 h-4" />Error al guardar.</div>}
+      {saveStatus === 'error' && <div className="mt-4 flex items-start gap-2 text-sm text-destructive bg-red-50 border border-red-200 rounded-lg px-4 py-2.5"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /><span>Error al guardar{errorMessage ? `: ${errorMessage}` : ''}.</span></div>}
       <div className="flex justify-end mt-5">
         <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
           <Save className="w-4 h-4 mr-2" />{saving ? 'Guardando...' : 'Guardar cambios'}
