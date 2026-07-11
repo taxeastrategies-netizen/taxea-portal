@@ -25,6 +25,7 @@ export default function Facturas() {
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
+  const [filterAnio, setFilterAnio] = useState('all');
   const [filterTipo, setFilterTipo] = useState('emitida');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -143,8 +144,20 @@ export default function Facturas() {
 
   const activas = invoices.filter(i => !i.anulada);
 
+  const aniosDisponibles = useMemo(() => {
+    const years = new Set();
+    invoices.forEach(i => {
+      const y = i.anio || new Date(i.fecha_emision || i.created_date).getFullYear();
+      if (y) years.add(y);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [invoices]);
+
   const kpis = useMemo(() => {
-    const tipo = activas.filter(i => i.tipo === filterTipo);
+    let tipo = activas.filter(i => i.tipo === filterTipo);
+    if (filterAnio !== 'all') {
+      tipo = tipo.filter(i => (i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()) === parseInt(filterAnio));
+    }
     const now = new Date();
     const qMonth = now.getMonth();
     const qNum = Math.floor(qMonth / 3);
@@ -156,11 +169,10 @@ export default function Facturas() {
     });
     const pendientes = tipo.filter(i => i.estado_cobro === 'pendiente' || i.estado_cobro === 'vencida');
     const vencidas = tipo.filter(i => i.estado_cobro === 'vencida');
-    const years = new Set(tipo.map(i => i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()).filter(Boolean));
     return {
       total: tipo.length,
       totalValor: tipo.reduce((s, i) => s + (i.total_factura || 0), 0),
-      anios: years.size,
+      anios: new Set(tipo.map(i => i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()).filter(Boolean)).size,
       esteT: esteT.length,
       esteTValor: esteT.reduce((s, i) => s + (i.total_factura || 0), 0),
       pendientes: pendientes.length,
@@ -178,7 +190,8 @@ export default function Facturas() {
       i.concepto?.toLowerCase().includes(search.toLowerCase());
     const matchEstado = filterEstado === 'all' || i.estado_contable === filterEstado;
     const matchTrimestre = filterTrimestre === 'all' || i.trimestre === filterTrimestre;
-    return matchSearch && matchEstado && matchTrimestre && i.tipo === filterTipo;
+    const matchAnio = filterAnio === 'all' || (i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()) === parseInt(filterAnio);
+    return matchSearch && matchEstado && matchTrimestre && matchAnio && i.tipo === filterTipo;
   });
 
   if (loadingCompany && loading) return (
@@ -315,6 +328,15 @@ export default function Facturas() {
               <SelectItem value="T2">T2</SelectItem>
               <SelectItem value="T3">T3</SelectItem>
               <SelectItem value="T4">T4</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterAnio} onValueChange={setFilterAnio}>
+            <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Año" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los años</SelectItem>
+              {aniosDisponibles.map(y => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
