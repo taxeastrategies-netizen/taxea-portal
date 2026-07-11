@@ -65,6 +65,67 @@
     },
     "notes": {
       "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "importKey": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "nif": {
+      "type": "string"
+    },
+    "grupoNombre": {
+      "type": "string"
+    },
+    "nivelCuenta": {
+      "type": "string"
+    },
+    "direccion": {
+      "type": "string"
+    },
+    "codPos": {
+      "type": "string"
+    },
+    "poblacion": {
+      "type": "string"
+    },
+    "provincia": {
+      "type": "string"
+    },
+    "pais": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "correo": {
+      "type": "string"
+    },
+    "web": {
+      "type": "string"
+    },
+    "ventaCompra": {
+      "type": "string"
+    },
+    "retencion": {
+      "type": "string"
+    },
+    "tipoRegistro": {
+      "type": "string"
     }
   },
   "required": [
@@ -76,7 +137,16 @@
       "data.companyId": "{{user.data.company_id}}"
     },
     "read": {
-      "data.companyId": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
       "data.companyId": "{{user.data.company_id}}"
