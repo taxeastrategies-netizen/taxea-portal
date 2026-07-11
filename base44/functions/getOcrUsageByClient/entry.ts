@@ -36,47 +36,34 @@ Deno.serve(async (req) => {
       const yr = year ? parseInt(year) : now.getUTCFullYear();
       startDate = new Date(Date.UTC(yr, 0, 1));
       endDate = new Date(Date.UTC(yr + 1, 0, 1));
-    } else {
-      // all time
     }
+    // periodType === 'all' → no date filter
 
-    // Fetch all completed usage events (paginate)
-    const allEvents = [];
-    let skip = 0;
-    const limit = 500;
-    while (true) {
-      const batch = await base44.asServiceRole.entities.OcrUsageEvent.filter(
-        { status: 'completed' },
-        '-completedAt',
-        limit
-      ).catch(() => []);
-      if (!batch || batch.length === 0) break;
-      allEvents.push(...batch);
-      if (batch.length < limit) break;
-      skip += limit;
-    }
+    // Fetch all OCR documents (the real historical record of every scan)
+    const allDocs = await base44.asServiceRole.entities.OcrInvoiceDocument.list('-uploadedAt', 5000).catch(() => []);
 
-    // Filter by date range if set
-    let filtered = allEvents;
+    // Filter by date range
+    let filtered = allDocs || [];
     if (startDate && endDate) {
-      filtered = allEvents.filter(e => {
-        const d = e.completedAt ? new Date(e.completedAt) : null;
-        return d && d >= startDate && d < endDate;
+      filtered = filtered.filter(d => {
+        if (!d.uploadedAt) return false;
+        const dt = new Date(d.uploadedAt);
+        return dt >= startDate && dt < endDate;
       });
     }
 
-    // Group by billingAccountId
-    const counts = {};
-    filtered.forEach(e => {
-      const cid = e.billingAccountId || 'unknown';
-      counts[cid] = (counts[cid] || 0) + 1;
+    // Count scans per userId
+    const countsByUser = {};
+    const allTimeCountsByUser = {};
+    (allDocs || []).forEach(d => {
+      const uid = d.uploadedByUserId;
+      if (!uid) return;
+      allTimeCountsByUser[uid] = (allTimeCountsByUser[uid] || 0) + 1;
     });
-
-    // Also get total for each client (all-time) for reference
-    const allTimeCounts = {};
-    allEvents.forEach(e => {
-      const cid = e.billingAccountId || 'unknown';
-      allTimeCounts[cid] = (allTimeCounts[cid] || 0) + 1;
+    filtered.forEach(d => {
+      const uid = d.uploadedByUserId;
+      if (!uid) return;
+      countsByUser[uid] = (countsByUser[uid] || 0) + 1;
     });
 
     return Response.json({
@@ -84,9 +71,9 @@ Deno.serve(async (req) => {
       startDate: startDate?.toISOString() || null,
       endDate: endDate?.toISOString() || null,
       totalScans: filtered.length,
-      totalScansAllTime: allEvents.length,
-      clientCounts: counts,
-      clientCountsAllTime: allTimeCounts,
+      totalScansAllTime: (allDocs || []).length,
+      countsByUser,
+      allTimeCountsByUser,
     });
   } catch (error) {
     console.error('[getOcrUsageByClient] Error:', error.message);

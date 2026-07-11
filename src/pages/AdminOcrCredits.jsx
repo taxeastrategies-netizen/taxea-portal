@@ -17,7 +17,7 @@ const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', '
 
 export default function AdminOcrCredits() {
   const { isAdmin } = useOutletContext() || {};
-  const [clients, setClients] = useState([]);
+  const [users, setUsers] = useState([]);
   const [usageData, setUsageData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -31,11 +31,11 @@ export default function AdminOcrCredits() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [clientsRes, usageRes] = await Promise.all([
-        base44.entities.ClientAccount.list('-created_date', 500),
+      const [usersRes, usageRes] = await Promise.all([
+        base44.entities.User.list('-created_date', 500),
         base44.functions.invoke('getOcrUsageByClient', { periodType, year, month, quarter }),
       ]);
-      setClients(clientsRes || []);
+      setUsers((usersRes || []).filter(u => u.role === 'user' && !u.is_deleted));
       setUsageData(usageRes?.data || null);
     } catch (err) {
       console.error('[AdminOcrCredits] Error:', err);
@@ -58,47 +58,44 @@ export default function AdminOcrCredits() {
     );
   }
 
-  const clientCounts = usageData?.clientCounts || {};
-  const clientCountsAllTime = usageData?.clientCountsAllTime || {};
-  const periodCount = usageData?.totalScans || 0;
+  const countsByUser = usageData?.countsByUser || {};
+  const allTimeCountsByUser = usageData?.allTimeCountsByUser || {};
 
-  // Build rows: all clients with their scan counts
-  const rows = clients.map(c => ({
-    id: c.id,
-    name: c.displayName || c.legalName || c.email || 'Sin nombre',
-    taxId: c.taxId || '—',
-    email: c.email || '—',
-    clientType: c.clientType || '—',
-    scans: clientCounts[c.id] || 0,
-    scansAllTime: clientCountsAllTime[c.id] || 0,
+  // Build rows from users
+  const rows = users.map(u => ({
+    id: u.id,
+    name: u.full_name || u.email || 'Sin nombre',
+    email: u.email || '—',
+    scans: countsByUser[u.id] || 0,
+    scansAllTime: allTimeCountsByUser[u.id] || 0,
+    createdDate: u.created_date,
   }));
 
-  // Also include unknown clients that have scans but no ClientAccount record
-  const knownIds = new Set(clients.map(c => c.id));
-  Object.entries(clientCounts).forEach(([cid, count]) => {
-    if (!knownIds.has(cid) && cid !== 'unknown') {
+  // Also include unknown users that have scans but no User record
+  const knownIds = new Set(users.map(u => u.id));
+  Object.entries(allTimeCountsByUser).forEach(([uid, count]) => {
+    if (!knownIds.has(uid)) {
       rows.push({
-        id: cid,
-        name: `Cliente no registrado (${cid.substring(0, 8)})`,
-        taxId: '—',
+        id: uid,
+        name: `Usuario no registrado (${uid.substring(0, 8)})`,
         email: '—',
-        clientType: '—',
-        scans: count,
-        scansAllTime: clientCountsAllTime[cid] || 0,
+        scans: countsByUser[uid] || 0,
+        scansAllTime: count,
+        createdDate: null,
       });
     }
   });
 
-  // Sort by scans descending
   rows.sort((a, b) => b.scans - a.scans);
 
   const filtered = rows.filter(r => {
     if (!search) return true;
     const s = search.toLowerCase();
-    return r.name.toLowerCase().includes(s) || r.taxId.toLowerCase().includes(s) || r.email.toLowerCase().includes(s);
+    return r.name.toLowerCase().includes(s) || r.email.toLowerCase().includes(s);
   });
 
   const totalScans = rows.reduce((s, r) => s + r.scans, 0);
+  const totalAllTime = rows.reduce((s, r) => s + r.scansAllTime, 0);
   const activeClients = rows.filter(r => r.scans > 0).length;
 
   const yearOptions = [];
@@ -107,8 +104,8 @@ export default function AdminOcrCredits() {
   return (
     <div>
       <PageHeader
-        title="Créditos OCR por cliente"
-        subtitle="Escaneos OCR realizados por cada cliente — filtra por día, mes, trimestre o año"
+        title="Créditos OCR por usuario"
+        subtitle="Escaneos OCR realizados por cada usuario de la plataforma — filtrar por día, mes, trimestre o año"
         actions={
           <Button variant="outline" size="sm" onClick={load} className="gap-1">
             <RefreshCw className="w-3.5 h-3.5" /> Actualizar
@@ -117,7 +114,7 @@ export default function AdminOcrCredits() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-card border border-border rounded-xl p-4 shadow-card">
           <div className="flex items-center gap-2 mb-1">
             <ScanLine className="w-4 h-4 text-primary" />
@@ -127,15 +124,22 @@ export default function AdminOcrCredits() {
         </div>
         <div className="bg-card border border-border rounded-xl p-4 shadow-card">
           <div className="flex items-center gap-2 mb-1">
+            <ScanLine className="w-4 h-4 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Histórico total</span>
+          </div>
+          <p className="text-2xl font-jakarta font-bold text-foreground">{totalAllTime}</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+          <div className="flex items-center gap-2 mb-1">
             <ScanLine className="w-4 h-4 text-emerald-600" />
-            <span className="text-xs text-muted-foreground">Clientes activos</span>
+            <span className="text-xs text-muted-foreground">Usuarios activos</span>
           </div>
           <p className="text-2xl font-jakarta font-bold text-emerald-600">{activeClients}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 shadow-card">
           <div className="flex items-center gap-2 mb-1">
             <ScanLine className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Total clientes</span>
+            <span className="text-xs text-muted-foreground">Total usuarios</span>
           </div>
           <p className="text-2xl font-jakarta font-bold text-foreground">{rows.length}</p>
         </div>
@@ -148,7 +152,7 @@ export default function AdminOcrCredits() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar cliente, NIF o email..."
+            placeholder="Buscar usuario o email..."
             className="h-9 pl-9 pr-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring w-64"
           />
         </div>
@@ -223,7 +227,7 @@ export default function AdminOcrCredits() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center text-muted-foreground">
-          No hay clientes ni escaneos para los filtros seleccionados.
+          No hay usuarios ni escaneos para los filtros seleccionados.
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
@@ -231,9 +235,8 @@ export default function AdminOcrCredits() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Cliente</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">NIF/CIF</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Tipo</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Usuario</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Email</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Escaneos (periodo)</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Escaneos (histórico)</th>
                 </tr>
@@ -242,8 +245,7 @@ export default function AdminOcrCredits() {
                 {filtered.map(row => (
                   <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-3 font-medium">{row.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{row.taxId}</td>
-                    <td className="px-4 py-3 text-muted-foreground capitalize">{row.clientType}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{row.email}</td>
                     <td className="px-4 py-3 text-right">
                       <span className={`font-mono font-semibold ${row.scans > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
                         {row.scans}
@@ -252,11 +254,10 @@ export default function AdminOcrCredits() {
                     <td className="px-4 py-3 text-right font-mono text-muted-foreground">{row.scansAllTime}</td>
                   </tr>
                 ))}
-                {/* Summary row */}
                 <tr className="bg-muted/30 font-semibold border-t-2 border-border">
-                  <td className="px-4 py-3" colSpan={3}>Total</td>
+                  <td className="px-4 py-3" colSpan={2}>Total</td>
                   <td className="px-4 py-3 text-right font-mono text-primary">{totalScans}</td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{usageData?.totalScansAllTime || 0}</td>
+                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{totalAllTime}</td>
                 </tr>
               </tbody>
             </table>
