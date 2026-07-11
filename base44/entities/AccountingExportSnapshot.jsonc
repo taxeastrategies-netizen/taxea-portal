@@ -45,6 +45,18 @@
         "type": "string"
       }
     },
+    "expenseIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "expenseFingerprints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "fileName": {
       "type": "string"
     },
@@ -61,6 +73,10 @@
       "default": 0
     },
     "newReceivedCount": {
+      "type": "number",
+      "default": 0
+    },
+    "newExpenseCount": {
       "type": "number",
       "default": 0
     },

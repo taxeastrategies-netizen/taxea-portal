@@ -1,4 +1,8 @@
-import * as XLSX from 'xlsx';
+// Excel export using SpreadsheetML (XML) for cell style support (green highlighting)
+
+function escapeXml(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const n = v => parseFloat(v) || 0;
@@ -10,18 +14,46 @@ function quarter(fecha) {
   return m < 3 ? 'T1' : m < 6 ? 'T2' : m < 9 ? 'T3' : 'T4';
 }
 
-function addSheet(wb, name, rows, colWidths) {
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = colWidths.map(w => ({ wch: w }));
-  // Auto-filter on header row
-  if (rows.length > 1) {
-    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: rows[0].length - 1 } }) };
-  }
-  XLSX.utils.book_append_sheet(wb, ws, name);
+function sheetToXML(name, rows, colWidths, newRowIndices = []) {
+  const newRowSet = new Set(newRowIndices.map(i => i + 1));
+  let xml = `<Worksheet ss:Name="${escapeXml(name)}">\n<Table>\n`;
+  colWidths.forEach(w => { xml += `<Column ss:Width="${w * 7}"/>\n`; });
+  rows.forEach((row, r) => {
+    const styleId = r === 0 ? 'Header' : newRowSet.has(r) ? 'NewRow' : 'Default';
+    xml += `<Row ss:StyleID="${styleId}">\n`;
+    row.forEach(cell => {
+      const type = typeof cell === 'number' ? 'Number' : 'String';
+      xml += `<Cell><Data ss:Type="${type}">${escapeXml(cell)}</Data></Cell>\n`;
+    });
+    xml += '</Row>\n';
+  });
+  xml += '</Table>\n</Worksheet>\n';
+  return xml;
+}
+
+function downloadSpreadsheetML(sheets, filename) {
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<?mso-application progid="Excel.Sheet"?>\n';
+  xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n';
+  xml += '<Styles>\n';
+  xml += '<Style ss:ID="Default"><Alignment ss:Vertical="Bottom"/></Style>\n';
+  xml += '<Style ss:ID="Header"><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><Font ss:Bold="1" ss:Color="#1E293B"/><Alignment ss:Vertical="Center"/></Style>\n';
+  xml += '<Style ss:ID="NewRow"><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/><Font ss:Color="#14532D" ss:Bold="1"/></Style>\n';
+  xml += '</Styles>\n';
+  sheets.forEach(s => { xml += sheetToXML(s.name, s.rows, s.colWidths, s.newRowIndices); });
+  xml += '</Workbook>';
+  const blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── Hoja 1: Resumen Fiscal ──────────────────────────────────────────────────
-function buildResumenFiscal(invoices, expenses, year, companyName) {
+function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDate, newEmitted, newReceived, newExpenses) {
   const emitidas = invoices.filter(i => i.tipo === 'emitida');
   const recibidas = invoices.filter(i => i.tipo === 'recibida');
   const gastos = expenses.filter(e => e.tipo === 'gasto');
@@ -67,6 +99,14 @@ function buildResumenFiscal(invoices, expenses, year, companyName) {
     ['Nº gastos registrados', gastos.length],
     [],
     ['Generado por Taxea Portal', new Date().toLocaleDateString('es-ES')],
+    [],
+    ['── CONTROL DE EXPORTACIÓN ──', ''],
+    lastExportDate
+      ? ['Última descarga', new Date(lastExportDate).toLocaleString('es-ES')]
+      : ['Primera exportación', new Date().toLocaleString('es-ES')],
+    ['Facturas emitidas nuevas (verde)', lastExportDate ? newEmitted : 0],
+    ['Facturas recibidas nuevas (verde)', lastExportDate ? newReceived : 0],
+    ['Gastos nuevos (verde)', lastExportDate ? newExpenses : 0],
   ];
   return rows;
 }
@@ -335,53 +375,42 @@ function buildCajaBancos(invoices, expenses) {
 }
 
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
-export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, year, companyName = 'Empresa' }) {
+export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate }) {
   // Filtrar facturas y gastos anulados — única fuente de datos activos
   const invoices = (rawInvoices || []).filter(i => !i.anulada);
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
+  const newInvIds = newInvoiceIds || new Set();
+  const newExpIds = newExpenseIds || new Set();
   return new Promise(resolve => {
     setTimeout(() => {
-      const wb = XLSX.utils.book_new();
+      const emitidas = invoices.filter(i => i.tipo === 'emitida');
+      const recibidas = invoices.filter(i => i.tipo === 'recibida');
+      const gastos = expenses.filter(e => e.tipo === 'gasto');
+      const newEmitidaIdx = emitidas.map((inv, idx) => newInvIds.has(inv.id) ? idx : -1).filter(i => i >= 0);
+      const newRecibidaIdx = recibidas.map((inv, idx) => newInvIds.has(inv.id) ? idx : -1).filter(i => i >= 0);
+      const newComprasIdx = [
+        ...recibidas.map((inv, idx) => newInvIds.has(inv.id) ? idx : -1).filter(i => i >= 0),
+        ...gastos.map((exp, idx) => newExpIds.has(exp.id) ? idx + recibidas.length : -1).filter(i => i >= 0),
+      ];
+      const newGastosCount = gastos.filter(e => newExpIds.has(e.id)).length;
 
-      // 1. Resumen Fiscal
-      const resumenRows = buildResumenFiscal(invoices, expenses, year, companyName);
-      addSheet(wb, '1. Resumen Fiscal', resumenRows, [40, 20]);
+      const sheets = [
+        { name: '1. Resumen Fiscal', rows: buildResumenFiscal(invoices, expenses, year, companyName, lastExportDate, newEmitidaIdx.length, newRecibidaIdx.length, newGastosCount), colWidths: [40, 20], newRowIndices: [] },
+        { name: '2. P&L', rows: buildPnL(invoices, expenses, year), colWidths: [16, 20, 20, 22, 12, 20, 20, 20], newRowIndices: [] },
+        { name: '3. Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: newEmitidaIdx },
+        { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
+        { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8], newRowIndices: newEmitidaIdx },
+        { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 10, 14, 14, 10, 10, 8, 12], newRowIndices: newComprasIdx },
+        { name: '7. Libro Diario', rows: buildLibroDiario(invoices, expenses), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
+        { name: '8. Libro Mayor', rows: buildLibroMayor(invoices, expenses), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
+        { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
+        { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
+        { name: '11. Caja y Bancos', rows: buildCajaBancos(invoices, expenses), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] },
+      ];
 
-      // 2. P&L
-      addSheet(wb, '2. P&L', buildPnL(invoices, expenses, year), [16, 20, 20, 22, 12, 20, 20, 20]);
-
-      // 3. Facturas Emitidas
-      addSheet(wb, '3. Facturas Emitidas', buildFacturasEmitidas(invoices), [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14]);
-
-      // 4. Facturas Recibidas
-      addSheet(wb, '4. Facturas Recibidas', buildFacturasRecibidas(invoices), [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 12, 14, 16, 10, 8, 14, 16]);
-
-      // 5. Libro Ventas
-      addSheet(wb, '5. Libro Ventas', buildLibroVentas(invoices), [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8]);
-
-      // 6. Libro Compras
-      addSheet(wb, '6. Libro Compras', buildLibroCompras(invoices, expenses), [14, 14, 24, 16, 28, 20, 16, 10, 14, 14, 10, 10, 8, 12]);
-
-      // 7. Libro Diario
-      addSheet(wb, '7. Libro Diario', buildLibroDiario(invoices, expenses), [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8]);
-
-      // 8. Libro Mayor
-      addSheet(wb, '8. Libro Mayor', buildLibroMayor(invoices, expenses), [12, 28, 20, 20, 18]);
-
-      // 9. Resumen IVA/IGIC
-      addSheet(wb, '9. Resumen IVA-IGIC', buildResumenIVA(invoices, expenses), [12, 14, 22, 22, 22, 22, 22]);
-
-      // 10. Resumen IRPF
-      addSheet(wb, '10. Resumen IRPF', buildResumenIRPF(invoices), [12, 14, 22, 16, 20, 20, 24]);
-
-      // 11. Caja y Bancos
-      addSheet(wb, '11. Caja y Bancos', buildCajaBancos(invoices, expenses), [14, 42, 16, 10, 14, 16, 16, 10]);
-
-      // Nombre del archivo
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
-      const filename = `Taxea_Libros_${safeName}_${year}.xlsx`;
-
-      XLSX.writeFile(wb, filename);
+      const filename = `Taxea_Libros_${safeName}_${year}.xls`;
+      downloadSpreadsheetML(sheets, filename);
       resolve();
     }, 50);
   });

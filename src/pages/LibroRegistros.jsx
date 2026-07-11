@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { BookOpen, Download, FileText } from 'lucide-react';
+import { BookOpen, Download, FileText, Clock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -24,13 +24,14 @@ const TABS = [
 ];
 
 export default function LibroRegistros() {
-  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
+  const { company, isAdmin, loadingCompany, user } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('ventas');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
   const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [lastSnapshot, setLastSnapshot] = useState(null);
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
@@ -42,6 +43,31 @@ export default function LibroRegistros() {
   // Facturas y gastos activos (sin anular) — única fuente de verdad para tablas, KPIs, exportaciones y P&L
   const activeInvoices = useMemo(() => invoices.filter(i => !i.anulada), [invoices]);
   const activeExpenses = useMemo(() => expenses.filter(e => !e.anulada), [expenses]);
+
+  // Load last export snapshot for this company + year
+  useEffect(() => {
+    if (!company?.id) return;
+    (async () => {
+      try {
+        const snaps = await base44.entities.AccountingExportSnapshot.filter({
+          clientAccountId: company.id,
+          exportYear: Number(filterAnio),
+        }, '-exportedAt', 5);
+        setLastSnapshot(snaps?.[0] || null);
+      } catch {
+        setLastSnapshot(null);
+      }
+    })();
+  }, [company?.id, filterAnio]);
+
+  // Compute new items since last export
+  const lastEmittedIds = new Set(lastSnapshot?.emittedInvoiceIds || []);
+  const lastReceivedIds = new Set(lastSnapshot?.receivedInvoiceIds || []);
+  const lastExpenseIds = new Set(lastSnapshot?.expenseIds || []);
+  const newEmittedCount = activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).length;
+  const newReceivedCount = activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).length;
+  const newExpenseCount = activeExpenses.filter(e => !lastExpenseIds.has(e.id)).length;
+  const totalNewCount = newEmittedCount + newReceivedCount + newExpenseCount;
 
   const emitidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'emitida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
   const recibidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'recibida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
@@ -62,10 +88,40 @@ export default function LibroRegistros() {
 
   const handleExport = async () => {
     setExporting(true);
+    const newInvoiceIds = new Set([
+      ...activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
+      ...activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
+    ]);
+    const newExpenseIds = new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id));
     await exportarLibros({
       invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
+      newInvoiceIds, newExpenseIds,
+      lastExportDate: lastSnapshot?.exportedAt,
     });
+    // Save snapshot
+    const exportedAt = new Date().toISOString();
+    const emittedIds = activeInvoices.filter(i => i.tipo === 'emitida').map(i => i.id);
+    const receivedIds = activeInvoices.filter(i => i.tipo === 'recibida').map(i => i.id);
+    const expIds = activeExpenses.map(e => e.id);
+    try {
+      await base44.entities.AccountingExportSnapshot.create({
+        clientAccountId: company.id,
+        clientName: company?.razon_social || company?.nombre_comercial || '',
+        exportYear: Number(filterAnio),
+        exportPeriod: 'all',
+        exportedAt,
+        exportedBy: user?.email || '',
+        emittedInvoiceIds: emittedIds,
+        receivedInvoiceIds: receivedIds,
+        expenseIds: expIds,
+        totalEmitted: emittedIds.length,
+        totalReceived: receivedIds.length,
+        newEmittedCount, newReceivedCount, newExpenseCount,
+        status: 'ok',
+      });
+      setLastSnapshot({ exportedAt, emittedInvoiceIds: emittedIds, receivedInvoiceIds: receivedIds, expenseIds: expIds });
+    } catch (e) { /* silent */ }
     setExporting(false);
   };
 
@@ -107,10 +163,21 @@ export default function LibroRegistros() {
               : <><FileText className="w-4 h-4" /> Exportar PDF</>
             }
           </Button>
+          {lastSnapshot?.exportedAt && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 bg-secondary/50 rounded-lg">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Última descarga: {new Date(lastSnapshot.exportedAt).toLocaleDateString('es-ES')}</span>
+              {totalNewCount > 0 && (
+                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                  +{totalNewCount} nuevos
+                </span>
+              )}
+            </div>
+          )}
           <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExport} disabled={exporting}>
             {exporting
               ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando Excel…</>
-              : <><Download className="w-4 h-4" /> Exportar Excel</>
+              : <><Download className="w-4 h-4" /> Exportar Excel {totalNewCount > 0 ? `(+${totalNewCount} nuevos)` : ''}</>
             }
           </Button>
         </div>
