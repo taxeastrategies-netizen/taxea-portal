@@ -9,8 +9,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const manualTrigger = body?.manual === true;
     const targetCompanyId = body?.company_id || null;
+    const focus = body?.focus || null; // 'errores' | 'predictivos' | 'mejoras' | null
 
     const isManual = manualTrigger || body?.manual === 'true';
+    const validFocus = ['errores', 'predictivos', 'mejoras'].includes(focus) ? focus : null;
 
     // === 1. Gather platform-wide stats ===
     const [
@@ -110,6 +112,23 @@ Deno.serve(async (req) => {
     };
 
     // === 3. Build LLM prompt ===
+    const focusInstructions = validFocus === 'errores'
+      ? `FOCO EXCLUSIVO: ANÁLISIS DE ERRORES Y PROBLEMAS ACTIVOS.
+Genera ÚNICAMENTE la sección "errores". Sé extremadamente exhaustivo: examina cada entidad, cada métrica, cada relación entre datos.
+Busca errores de integridad de datos, inconsistencias fiscales, registros huérfanos, configuraciones incorrectas, facturas duplicadas o sin trimestre, gastos sin categoría, usuarios sin empresa, suscripciones en estado inválido, tareas vencidas, pagos fallidos, OCRs atascados.
+Para cada error, especifica exactamente qué registro o conjunto de registros está afectado (emails, IDs, cantidades).`
+      : validFocus === 'predictivos'
+      ? `FOCO EXCLUSIVO: ANÁLISIS PREDICTIVO Y DE RIESGOS FUTUROS.
+Genera ÚNICAMENTE la sección "predictivos". Piensa como un analista de riesgos: ¿qué podría fallar en los próximos días/semanas?
+Analiza tendencias: suscripciones a punto de caducar, empresas con cargas administrativas desbalanceadas, usuarios sin onboarding completo que podrían churnear, facturas anuladas como síntoma de problemas de UX, cuellos de botella administrativos.
+Considera riesgos fiscales: trimestres sin facturas, empresas sin movimientos, patrones de anulación.`
+      : validFocus === 'mejoras'
+      ? `FOCO EXCLUSIVO: IDEAS DE MEJORA E INNOVACIÓN.
+Genera ÚNICAMENTE la sección "mejoras". Sé creativo pero práctico: basa las ideas en los datos reales de la plataforma.
+Propón: automatizaciones que eliminen trabajo manual, mejoras visuales en dashboards, nuevas funcionalidades de IA, herramientas de productividad fiscal, mejoras móviles, integraciones nuevas, optimizaciones de rendimiento.
+Prioriza mejoras que resuelvan problemas detectados en los datos reales de la plataforma.`
+      : '';
+
     const prompt = `Eres un analista de plataforma experto en sistemas SaaS de administración fiscal y contable (Taxea Strategies).
 Analiza los siguientes datos de la plataforma y genera un informe estructurado en JSON.
 
@@ -117,7 +136,7 @@ DATOS DE LA PLATAFORMA:
 ${JSON.stringify(platformData, null, 2)}
 
 INSTRUCCIONES:
-Genera un análisis profundo e inteligente que incluya:
+${focusInstructions || `Genera un análisis profundo e inteligente que incluya:
 
 1. **errores**: Lista de errores detectados, ORDENADOS DE MÁS GRAVE A MENOS GRAVE. Cada error debe incluir:
    - tipo: título corto del error
@@ -139,7 +158,7 @@ Genera un análisis profundo e inteligente que incluya:
    - tipo: "nueva_funcionalidad" | "mejora_visual" | "ia" | "rendimiento" | "movil" | "dashboard" | "contabilidad" | "facturacion"
    - prioridad: "critica" | "alta" | "media" | "baja"
 
-Sé específico, práctico y accionable. Prioriza problemas reales detectados en los datos sobre genéricos.`;
+Sé específico, práctico y accionable. Prioriza problemas reales detectados en los datos sobre genéricos.`}`;
 
     // === 4. Call LLM ===
     const llmResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
@@ -196,62 +215,69 @@ Sé específico, práctico y accionable. Prioriza problemas reales detectados en
     const savedErrors = [];
     const savedSuggestions = [];
 
-    // Save errors
-    for (const err of (analysis.errores || []).slice(0, 20)) {
-      try {
-        const rec = await base44.asServiceRole.entities.FiscalError.create({
-          company_id: companyId,
-          tipo: err.tipo,
-          descripcion: err.descripcion,
-          severidad: ['baja', 'media', 'alta', 'critica'].includes(err.severidad) ? err.severidad : 'media',
-          estado: 'detectado',
-          accion_recomendada: err.accion_recomendada || '',
-          fuente,
-          categoria_analisis: ['fiscal', 'datos', 'rendimiento', 'seguridad', 'plataforma', 'predictivo'].includes(err.categoria) ? err.categoria : 'plataforma',
-          etiquetas: ['ia', isManual ? 'manual' : 'diario'],
-        });
-        savedErrors.push(rec);
-      } catch (e) { console.error('Error saving FiscalError:', e.message); }
+    // Save errors (skip if focused on mejoras)
+    if (!validFocus || validFocus === 'errores') {
+      for (const err of (analysis.errores || []).slice(0, 20)) {
+        try {
+          const rec = await base44.asServiceRole.entities.FiscalError.create({
+            company_id: companyId,
+            tipo: err.tipo,
+            descripcion: err.descripcion,
+            severidad: ['baja', 'media', 'alta', 'critica'].includes(err.severidad) ? err.severidad : 'media',
+            estado: 'detectado',
+            accion_recomendada: err.accion_recomendada || '',
+            fuente,
+            categoria_analisis: ['fiscal', 'datos', 'rendimiento', 'seguridad', 'plataforma', 'predictivo'].includes(err.categoria) ? err.categoria : 'plataforma',
+            etiquetas: ['ia', isManual ? 'manual' : 'diario', validFocus ? 'focado' : 'completo'].filter(Boolean),
+          });
+          savedErrors.push(rec);
+        } catch (e) { console.error('Error saving FiscalError:', e.message); }
+      }
     }
 
-    // Save predictive items as errors with categoria_predictivo
-    for (const pred of (analysis.predictivos || []).slice(0, 10)) {
-      try {
-        const rec = await base44.asServiceRole.entities.FiscalError.create({
-          company_id: companyId,
-          tipo: `[PREDICTIVO] ${pred.tipo}`,
-          descripcion: pred.descripcion,
-          severidad: ['baja', 'media', 'alta', 'critica'].includes(pred.severidad) ? pred.severidad : 'media',
-          estado: 'detectado',
-          accion_recomendada: pred.accion_recomendada || '',
-          fuente,
-          categoria_analisis: 'predictivo',
-          etiquetas: ['ia', 'predictivo', isManual ? 'manual' : 'diario'],
-        });
-        savedErrors.push(rec);
-      } catch (e) { console.error('Error saving predictive:', e.message); }
+    // Save predictive items (skip if focused on errores or mejoras)
+    if (!validFocus || validFocus === 'predictivos') {
+      for (const pred of (analysis.predictivos || []).slice(0, 10)) {
+        try {
+          const rec = await base44.asServiceRole.entities.FiscalError.create({
+            company_id: companyId,
+            tipo: `[PREDICTIVO] ${pred.tipo}`,
+            descripcion: pred.descripcion,
+            severidad: ['baja', 'media', 'alta', 'critica'].includes(pred.severidad) ? pred.severidad : 'media',
+            estado: 'detectado',
+            accion_recomendada: pred.accion_recomendada || '',
+            fuente,
+            categoria_analisis: 'predictivo',
+            etiquetas: ['ia', 'predictivo', isManual ? 'manual' : 'diario', validFocus ? 'focado' : 'completo'].filter(Boolean),
+          });
+          savedErrors.push(rec);
+        } catch (e) { console.error('Error saving predictive:', e.message); }
+      }
     }
 
-    // Save improvement suggestions
-    for (const mej of (analysis.mejoras || []).slice(0, 15)) {
-      try {
-        const rec = await base44.asServiceRole.entities.Sugerencia.create({
-          company_id: companyId,
-          titulo: mej.titulo,
-          descripcion: mej.descripcion,
-          tipo: ['nueva_funcionalidad', 'mejora_visual', 'ia', 'contabilidad', 'facturacion', 'dashboard', 'rendimiento', 'movil', 'otro'].includes(mej.tipo) ? mej.tipo : 'otro',
-          prioridad: ['baja', 'media', 'alta', 'critica'].includes(mej.prioridad) ? mej.prioridad : 'media',
-          estado: 'nueva',
-          usuario_email: user.email,
-          usuario_nombre: 'Análisis IA',
-          publica: false,
-        });
-        savedSuggestions.push(rec);
-      } catch (e) { console.error('Error saving suggestion:', e.message); }
+    // Save improvement suggestions (skip if focused on errores or predictivos)
+    if (!validFocus || validFocus === 'mejoras') {
+      for (const mej of (analysis.mejoras || []).slice(0, 15)) {
+        try {
+          const rec = await base44.asServiceRole.entities.Sugerencia.create({
+            company_id: companyId,
+            titulo: mej.titulo,
+            descripcion: mej.descripcion,
+            tipo: ['nueva_funcionalidad', 'mejora_visual', 'ia', 'contabilidad', 'facturacion', 'dashboard', 'rendimiento', 'movil', 'otro'].includes(mej.tipo) ? mej.tipo : 'otro',
+            prioridad: ['baja', 'media', 'alta', 'critica'].includes(mej.prioridad) ? mej.prioridad : 'media',
+            estado: 'nueva',
+            usuario_email: user.email,
+            usuario_nombre: 'Análisis IA',
+            publica: false,
+          });
+          savedSuggestions.push(rec);
+        } catch (e) { console.error('Error saving suggestion:', e.message); }
+      }
     }
 
     return Response.json({
       status: 'ok',
+      focus: validFocus || 'completo',
       analysis,
       saved: {
         errors: savedErrors.length,

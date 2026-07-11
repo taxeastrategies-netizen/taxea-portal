@@ -45,6 +45,7 @@ export default function DetectorErrores() {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzingTab, setAnalyzingTab] = useState(null);
   const [activeTab, setActiveTab] = useState('errores');
   const [filterSeveridad, setFilterSeveridad] = useState('all');
   const [filterEstado, setFilterEstado] = useState('all');
@@ -79,17 +80,17 @@ export default function DetectorErrores() {
 
   useEffect(() => { if (company?.id || isAdmin) load(); }, [company?.id, isAdmin, load]);
 
-  const runAnalysis = async () => {
-    setAnalyzing(true);
+  const runAnalysis = async (focus = null) => {
+    if (focus) setAnalyzingTab(focus); else setAnalyzing(true);
     try {
-      const resp = await base44.functions.invoke('runPlatformAnalysis', { manual: true });
+      const resp = await base44.functions.invoke('runPlatformAnalysis', { manual: true, focus });
       if (resp?.data?.status === 'ok') {
         await load();
       }
     } catch (e) {
       console.error('Analysis failed:', e);
     }
-    setAnalyzing(false);
+    if (focus) setAnalyzingTab(null); else setAnalyzing(false);
   };
 
   const updateEstado = async (id, estado) => {
@@ -143,8 +144,8 @@ export default function DetectorErrores() {
         title="Detector de Errores y Sugerencias de Mejora IA"
         subtitle="Análisis inteligente de la plataforma con detección predictiva e ideas de mejora"
         actions={
-          <Button onClick={runAnalysis} disabled={analyzing} className="bg-teal hover:bg-teal-dark gap-2">
-            {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analizando...</> : <><Brain className="w-4 h-4" /> Análisis IA manual</>}
+          <Button onClick={() => runAnalysis(null)} disabled={analyzing || analyzingTab} className="bg-teal hover:bg-teal-dark gap-2">
+            {analyzing ? <><RefreshCw className="w-4 h-4 animate-spin" /> Analizando...</> : <><Brain className="w-4 h-4" /> Análisis IA completo</>}
           </Button>
         }
       />
@@ -198,31 +199,45 @@ export default function DetectorErrores() {
         ))}
       </div>
 
-      {/* Filters only on errors/predictive tabs */}
-      {activeTab !== 'mejoras' && (
-        <div className="flex flex-wrap gap-3 mb-5">
-          <Select value={filterSeveridad} onValueChange={setFilterSeveridad}>
-            <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Severidad" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="critica">Crítica</SelectItem>
-              <SelectItem value="alta">Alta</SelectItem>
-              <SelectItem value="media">Media</SelectItem>
-              <SelectItem value="baja">Baja</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={filterEstado} onValueChange={setFilterEstado}>
-            <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="detectado">Detectado</SelectItem>
-              <SelectItem value="en_revision">En revisión</SelectItem>
-              <SelectItem value="pendiente_cliente">Pdte. cliente</SelectItem>
-              <SelectItem value="resuelto">Resuelto</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+      {/* Per-tab action bar */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        {activeTab !== 'mejoras' && (
+          <>
+            <Select value={filterSeveridad} onValueChange={setFilterSeveridad}>
+              <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Severidad" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="critica">Crítica</SelectItem>
+                <SelectItem value="alta">Alta</SelectItem>
+                <SelectItem value="media">Media</SelectItem>
+                <SelectItem value="baja">Baja</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterEstado} onValueChange={setFilterEstado}>
+              <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="detectado">Detectado</SelectItem>
+                <SelectItem value="en_revision">En revisión</SelectItem>
+                <SelectItem value="pendiente_cliente">Pdte. cliente</SelectItem>
+                <SelectItem value="resuelto">Resuelto</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        )}
+        <div className="flex-1" />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => runAnalysis(activeTab)}
+          disabled={analyzing || analyzingTab !== null}
+          className="gap-2 border-teal/30 text-teal hover:bg-teal-light"
+        >
+          {analyzingTab === activeTab
+            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Analizando...</>
+            : <><Brain className="w-3.5 h-3.5" /> Analizar {activeTab === 'errores' ? 'errores' : activeTab === 'predictivos' ? 'riesgos' : 'mejoras'}</>}
+        </Button>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16">
