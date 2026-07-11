@@ -5,8 +5,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-  RefreshCw, Eye, Play, CheckCircle, Loader2, Ban, FileText, Image,
-  Filter, Inbox, AlertTriangle, Clock, X,
+  RefreshCw, Eye, Play, Loader2, Ban, FileText, Image,
+  Inbox, AlertTriangle, Clock, X, CheckCircle, XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { buildAuditEntry, appendAuditTrail } from '@/lib/ocrUploadUtils';
+import ReviewPanel from '@/components/lector/ReviewPanel';
 
 const STATUS_CONFIG = {
   pending:               { label: 'Pendiente',                  color: 'text-amber-600',  bg: 'bg-amber-50' },
@@ -48,6 +49,85 @@ const STATUS_FILTERS = [
   { key: 'closed',  label: 'Cerrados',     match: (s) => ['rejected','replacement_requested','cancelled_by_client'].includes(s) },
 ];
 
+const OCR_PROMPT_EXPENSE = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
+Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero),
+tipo_impuesto (numero %), cuota_impuesto (numero), total (numero),
+categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
+cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
+es_factura_completa (boolean), es_proveedor_extranjero (boolean),
+datos_faltantes (array strings), alertas_fiscales (array strings), concepto`;
+
+const OCR_SCHEMA_EXPENSE = {
+  type: 'object',
+  properties: {
+    proveedor: { type: 'string' }, nif_proveedor: { type: 'string' },
+    fecha: { type: 'string' }, numero_factura: { type: 'string' },
+    base_imponible: { type: 'number' }, tipo_impuesto: { type: 'number' },
+    cuota_impuesto: { type: 'number' }, total: { type: 'number' },
+    categoria_sugerida: { type: 'string' }, cuenta_pgc: { type: 'string' },
+    confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
+    es_factura_completa: { type: 'boolean' }, es_proveedor_extranjero: { type: 'boolean' },
+    datos_faltantes: { type: 'array', items: { type: 'string' } },
+    alertas_fiscales: { type: 'array', items: { type: 'string' } },
+    concepto: { type: 'string' },
+  }
+};
+
+const OCR_PROMPT_INCOME = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
+Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (numero),
+tipo_iva (numero %), cuota_iva (numero), retencion_irpf (numero %), total_factura (numero),
+fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+alertas_fiscales (array strings), datos_faltantes (array strings)`;
+
+const OCR_SCHEMA_INCOME = {
+  type: 'object',
+  properties: {
+    numero_factura: { type: 'string' }, fecha: { type: 'string' },
+    cliente_nombre: { type: 'string' }, cliente_nif: { type: 'string' },
+    concepto: { type: 'string' }, base_imponible: { type: 'number' },
+    tipo_iva: { type: 'number' }, cuota_iva: { type: 'number' },
+    retencion_irpf: { type: 'number' }, total_factura: { type: 'number' },
+    fecha_vencimiento: { type: 'string' }, estado_cobro_sugerido: { type: 'string' },
+    alertas_fiscales: { type: 'array', items: { type: 'string' } },
+    datos_faltantes: { type: 'array', items: { type: 'string' } },
+  }
+};
+
+const parseExtracted = (raw) => {
+  if (!raw) return null;
+  if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return null; } }
+  return raw;
+};
+
+const mapFormGastos = (r) => ({
+  proveedor_cliente: r?.proveedor || '',
+  concepto: r?.concepto || '',
+  fecha: r?.fecha || '',
+  base_imponible: r?.base_imponible || '',
+  tipo_impuesto: r?.tipo_impuesto || 21,
+  cuota_impuesto: r?.cuota_impuesto || '',
+  total: r?.total || '',
+  categoria: r?.categoria_sugerida || 'otros',
+  cuenta_pgc: r?.cuenta_pgc || '',
+  confianza_pgc: r?.confianza_pgc || 0,
+  motivo_clasificacion: r?.motivo_clasificacion || '',
+});
+
+const mapFormIngresos = (r) => ({
+  numero_factura: r?.numero_factura || '',
+  fecha_emision: r?.fecha || '',
+  cliente_nombre: r?.cliente_nombre || '',
+  cliente_nif: r?.cliente_nif || '',
+  concepto: r?.concepto || '',
+  base_imponible: r?.base_imponible || '',
+  tipo_iva: r?.tipo_iva || 21,
+  cuota_iva: r?.cuota_iva || '',
+  retencion_irpf: r?.retencion_irpf || 0,
+  total_factura: r?.total_factura || '',
+  fecha_vencimiento: r?.fecha_vencimiento || '',
+  estado_cobro: r?.estado_cobro_sugerido || 'pendiente',
+});
+
 function fileIcon(name) {
   const ext = name?.split('.').pop()?.toLowerCase();
   return ['jpg','jpeg','png','webp'].includes(ext) ? Image : FileText;
@@ -65,6 +145,14 @@ export default function AdminOcrBandeja() {
   const [filterClient, setFilterClient] = useState('all');
   const [rejectModal, setRejectModal] = useState(null);
   const [auditModal, setAuditModal] = useState(null);
+  const [reviewing, setReviewing] = useState(null);
+  const [validating, setValidating] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (type, message, ms = 6000) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), ms);
+  };
 
   const loadDocs = useCallback(async () => {
     setLoading(true);
@@ -124,16 +212,8 @@ export default function AdminOcrBandeja() {
     loadDocs();
 
     const isExpense = doc.documentType === 'expense_invoice';
-    const prompt = isExpense
-      ? `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null. Datos: proveedor, nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero), tipo_impuesto (numero %), cuota_impuesto (numero), total (numero), categoria_sugerida, concepto.`
-      : `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null. Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (numero), tipo_iva (numero %), cuota_iva (numero), total_factura (numero), fecha_vencimiento (YYYY-MM-DD).`;
-
-    const schema = {
-      type: 'object',
-      properties: isExpense
-        ? { proveedor: {type:'string'}, nif_proveedor: {type:'string'}, fecha: {type:'string'}, numero_factura: {type:'string'}, base_imponible: {type:'number'}, tipo_impuesto: {type:'number'}, cuota_impuesto: {type:'number'}, total: {type:'number'}, categoria_sugerida: {type:'string'}, concepto: {type:'string'} }
-        : { numero_factura: {type:'string'}, fecha: {type:'string'}, cliente_nombre: {type:'string'}, cliente_nif: {type:'string'}, concepto: {type:'string'}, base_imponible: {type:'number'}, tipo_iva: {type:'number'}, cuota_iva: {type:'number'}, total_factura: {type:'number'}, fecha_vencimiento: {type:'string'} },
-    };
+    const prompt = isExpense ? OCR_PROMPT_EXPENSE : OCR_PROMPT_INCOME;
+    const schema = isExpense ? OCR_SCHEMA_EXPENSE : OCR_SCHEMA_INCOME;
 
     try {
       const result = await base44.integrations.Core.InvokeLLM({
@@ -160,28 +240,80 @@ export default function AdminOcrBandeja() {
     loadDocs();
   };
 
-  const handleValidate = async (doc) => {
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(doc.id, {
-      status: 'validated',
-      reviewedAt: now,
-      reviewedByAdminId: user?.id,
-      lastStatusChangedAt: now,
-      auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'validado', prevStatus: doc.status, newStatus: 'validated' })),
+  const handleReview = (doc) => {
+    const extracted = parseExtracted(doc.extractedData);
+    const isExpense = doc.documentType === 'expense_invoice';
+    const formData = isExpense ? mapFormGastos(extracted) : mapFormIngresos(extracted);
+    setReviewing({
+      id: doc.id,
+      documentType: doc.documentType,
+      file: { name: doc.originalFileName, size: doc.fileSize },
+      fileUrl: doc.fileStorageUrl,
+      extracted,
+      formData,
     });
-    loadDocs();
   };
 
-  const handleAccount = async (doc) => {
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(doc.id, {
-      status: 'accounted',
-      accountedAt: now,
-      reviewedByAdminId: user?.id,
-      lastStatusChangedAt: now,
-      auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'contabilizado', prevStatus: doc.status, newStatus: 'accounted' })),
-    });
-    loadDocs();
+  const handleApprove = async (docId, form) => {
+    const isExpense = reviewing?.documentType === 'expense_invoice';
+    const invoiceType = isExpense ? 'recibida' : 'emitida';
+
+    if (isExpense) {
+      if (!form.proveedor_cliente) { showToast('error', 'El nombre del proveedor es obligatorio.'); return; }
+      if (!form.fecha) { showToast('error', 'La fecha de la factura es obligatoria.'); return; }
+    } else {
+      if (!form.numero_factura) { showToast('error', 'El número de factura es obligatorio.'); return; }
+      if (!form.fecha_emision) { showToast('error', 'La fecha de emisión es obligatoria.'); return; }
+    }
+    if (!form.base_imponible || parseFloat(form.base_imponible) <= 0) {
+      showToast('error', 'La base imponible debe ser mayor que 0.'); return;
+    }
+
+    setValidating(true);
+    try {
+      const res = await Promise.race([
+        base44.functions.invoke('approveOcrDocument', {
+          docId,
+          form,
+          invoiceType,
+          extractedData: reviewing?.extracted,
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder.')), 45000)),
+      ]);
+      const result = res?.data || res;
+      if (!result?.success) {
+        throw new Error(result?.error || 'No se pudo crear la factura');
+      }
+      setReviewing(null);
+      showToast('success', 'Factura revisada, aprobada y contabilizada correctamente. Ya disponible en Libros e Ingresos/Gastos del cliente.');
+      window.dispatchEvent(new Event('financials:refresh'));
+      loadDocs();
+    } catch (err) {
+      console.error('[AdminOcrBandeja] Error al aprobar:', err);
+      showToast('error', `No se ha podido guardar la factura. El documento sigue pendiente de revision. (${err?.message || 'inténtalo de nuevo'})`, 8000);
+    }
+    setValidating(false);
+  };
+
+  const handleRejectFromPanel = async (docId) => {
+    setValidating(true);
+    try {
+      const doc = documents.find(d => d.id === docId);
+      const now = new Date().toISOString();
+      await base44.entities.OcrInvoiceDocument.update(docId, {
+        status: 'rejected',
+        rejectedAt: now,
+        reviewedByAdminId: user?.id,
+        lastStatusChangedAt: now,
+        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
+      });
+      setReviewing(null);
+      loadDocs();
+    } catch (err) {
+      console.error('[AdminOcrBandeja] Error al rechazar:', err);
+      showToast('error', `Error al rechazar: ${err?.message || 'inténtalo de nuevo'}`, 8000);
+    }
+    setValidating(false);
   };
 
   const handleReject = async (docId, reason) => {
@@ -222,8 +354,8 @@ export default function AdminOcrBandeja() {
   return (
     <div>
       <PageHeader
-        title="Bandeja OCR Pendiente"
-        subtitle="Cola cross-cliente de facturas entregadas · Ingresos y gastos"
+        title="Bandeja OCR"
+        subtitle="Cola cross-cliente de facturas entregadas · Revisión contable y contabilización"
       >
         <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
           <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
@@ -237,6 +369,30 @@ export default function AdminOcrBandeja() {
         <KpiCard icon={CheckCircle} label="Procesados" value={counts.done} color="text-green-600" bg="bg-green-50" />
         <KpiCard icon={Inbox} label="Total" value={documents.length} color="text-foreground" bg="bg-secondary" />
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className={toast.type === 'error' ? 'bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-center gap-3' : 'bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-center gap-3'}>
+          {toast.type === 'error'
+            ? <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+            : <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />}
+          <p className={toast.type === 'error' ? 'text-sm text-red-800' : 'text-sm text-green-800'}>{toast.message}</p>
+        </div>
+      )}
+
+      {/* Review Panel */}
+      {reviewing && (
+        <div className="mb-5">
+          <ReviewPanel
+            doc={reviewing}
+            tipo={reviewing.documentType === 'expense_invoice' ? 'gastos' : 'ingresos'}
+            onApprove={handleApprove}
+            onReject={handleRejectFromPanel}
+            onCancel={() => setReviewing(null)}
+            loading={validating}
+          />
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-card border border-border rounded-xl shadow-card mb-5">
@@ -346,10 +502,7 @@ export default function AdminOcrBandeja() {
                       )}
                       {doc.status === 'review_required' && (
                         <>
-                          <button onClick={() => handleValidate(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-green-600" title="Validar">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleAccount(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-green-700" title="Contabilizar">
+                          <button onClick={() => handleReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisión contable">
                             <FileText className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleRequestReplacement(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-orange-600" title="Pedir sustitucion">
