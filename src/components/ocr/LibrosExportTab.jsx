@@ -15,6 +15,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 export default function LibrosExportTab({ user }) {
   const [clients, setClients] = useState([]);
   const [snapshots, setSnapshots] = useState({});
+  const [liveStatus, setLiveStatus] = useState({}); // { 'clientId-year': { newCount, newEmitted, newReceived, newExpense } }
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [year, setYear] = useState(CURRENT_YEAR);
@@ -39,6 +40,31 @@ export default function LibrosExportTab({ user }) {
       });
       setClients(cls || []);
       setSnapshots(latest);
+
+      // Fetch live invoice/expense IDs for all clients to compute "new" counts
+      const clientIds = (cls || []).map(c => c.id);
+      if (clientIds.length > 0) {
+        try {
+          const res = await base44.functions.invoke('getClientExportStatus', { clientIds, anio: Number(year) });
+          const data = res?.data?.clients || res?.clients || {};
+          const status = {};
+          clientIds.forEach(cid => {
+            const snap = latest[`${cid}-${year}`];
+            const live = data[cid];
+            if (!snap || !live) return;
+            const lastE = new Set(snap.emittedInvoiceIds || []);
+            const lastR = new Set(snap.receivedInvoiceIds || []);
+            const lastX = new Set(snap.expenseIds || []);
+            const newE = (live.emittedInvoiceIds || []).filter(id => !lastE.has(id)).length;
+            const newR = (live.receivedInvoiceIds || []).filter(id => !lastR.has(id)).length;
+            const newX = (live.expenseIds || []).filter(id => !lastX.has(id)).length;
+            status[`${cid}-${year}`] = { newCount: newE + newR + newX, newEmitted: newE, newReceived: newR, newExpense: newX };
+          });
+          setLiveStatus(status);
+        } catch (err) {
+          console.error('[LibrosExport] Live status error:', err);
+        }
+      }
     } catch {}
     setLoading(false);
     setRefreshing(false);
@@ -124,6 +150,8 @@ export default function LibrosExportTab({ user }) {
           newExpenseCount: expenses.filter(e => !lastExpenseIds.has(e.id)).length,
         },
       }));
+      // Reset live "new" count for this client since we just exported
+      setLiveStatus(prev => ({ ...prev, [`${client.id}-${year}`]: { newCount: 0, newEmitted: 0, newReceived: 0, newExpense: 0 } }));
     } catch (err) {
       console.error('[LibrosExport] Error:', err);
     }
@@ -190,7 +218,8 @@ export default function LibrosExportTab({ user }) {
             {filtered.map(client => {
               const snap = snapshots[`${client.id}-${year}`];
               const isExporting = exporting[client.id];
-              const newCount = (snap?.newEmittedCount || 0) + (snap?.newReceivedCount || 0) + (snap?.newExpenseCount || 0);
+              const live = liveStatus[`${client.id}-${year}`];
+              const newCount = live?.newCount ?? ((snap?.newEmittedCount || 0) + (snap?.newReceivedCount || 0) + (snap?.newExpenseCount || 0));
               const hasExported = !!snap?.exportedAt;
 
               return (
@@ -210,7 +239,7 @@ export default function LibrosExportTab({ user }) {
 
                   <div className="w-24 text-center hidden lg:block">
                     {hasExported && newCount > 0 ? (
-                      <span className="bg-green-100 text-green-700 text-[11px] font-semibold px-2 py-0.5 rounded-full">
+                      <span className="bg-amber-100 text-amber-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-amber-300">
                         +{newCount} nuevos
                       </span>
                     ) : hasExported ? (
@@ -239,7 +268,7 @@ export default function LibrosExportTab({ user }) {
                         {isExporting
                           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           : <Download className="w-3.5 h-3.5" />}
-                        {hasExported && newCount > 0 ? `Libro (+${newCount})` : `Libro ${year}`}
+                        {hasExported && newCount > 0 ? `Libro (+${newCount} nuevos)` : `Libro ${year}`}
                       </Button>
                       <Button
                         size="sm"
