@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   RefreshCw, Eye, Play, Loader2, Ban, FileText, Image,
-  Inbox, AlertTriangle, Clock, X, CheckCircle, XCircle,
+  Inbox, AlertTriangle, Clock, X, CheckCircle, XCircle, Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -147,6 +147,8 @@ export default function AdminOcrBandeja() {
   const [auditModal, setAuditModal] = useState(null);
   const [reviewing, setReviewing] = useState(null);
   const [validating, setValidating] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (type, message, ms = 6000) => {
@@ -238,6 +240,34 @@ export default function AdminOcrBandeja() {
     }
     setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
     loadDocs();
+  };
+
+  const processAll = async () => {
+    const pending = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed');
+    if (pending.length === 0) {
+      showToast('error', 'No hay documentos pendientes para procesar.');
+      return;
+    }
+    setBatchProcessing(true);
+    let ok = 0, fail = 0;
+    for (let i = 0; i < pending.length; i++) {
+      const doc = pending[i];
+      setBatchProgress({ current: i + 1, total: pending.length, name: doc.originalFileName || 'Documento' });
+      try {
+        await processOcr(doc);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBatchProcessing(false);
+    setBatchProgress(null);
+    loadDocs();
+    if (fail === 0) {
+      showToast('success', `${ok} documento(s) procesado(s). Ya están listos para tu revisión manual.`);
+    } else {
+      showToast('error', `${ok} procesados OK, ${fail} fallaron. Revisa la lista para detalles.`, 8000);
+    }
   };
 
   const handleReview = (doc) => {
@@ -357,10 +387,37 @@ export default function AdminOcrBandeja() {
         title="Bandeja OCR"
         subtitle="Cola cross-cliente de facturas entregadas · Revisión contable y contabilización"
       >
+        <Button
+          onClick={processAll}
+          disabled={batchProcessing || counts.pending === 0 && !documents.some(d => d.status === 'analysis_failed')}
+          size="sm"
+          className="gap-2"
+        >
+          {batchProcessing
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Zap className="w-4 h-4" />}
+          {batchProcessing ? 'Procesando...' : 'Procesar todo'}
+        </Button>
         <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
           <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
         </Button>
       </PageHeader>
+
+      {/* Batch progress */}
+      {batchProgress && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3">
+          <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-blue-800 font-medium">
+              Procesando {batchProgress.current} de {batchProgress.total}
+            </p>
+            <p className="text-xs text-blue-600 truncate">{batchProgress.name}</p>
+          </div>
+          <span className="text-sm font-bold text-blue-700 flex-shrink-0">
+            {Math.round((batchProgress.current / batchProgress.total) * 100)}%
+          </span>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
