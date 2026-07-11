@@ -47,7 +47,6 @@ import Law from './pages/Law';
 import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
 import ComingSoon from './pages/ComingSoon';
 import AdminClients from './pages/AdminClients';
-import AdminEstadoContable from './pages/AdminEstadoContable';
 import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
 import AdminRenovacion from './pages/AdminRenovacion';
@@ -121,7 +120,7 @@ function AppWithContext({ user }) {
         <Route path="/law/:subdept/:module" element={<Law />} />
         <Route path="/coming-soon" element={<ComingSoon />} />
         <Route path="/admin/clients" element={<AdminClients />} />
-        <Route path="/admin/estado-contable" element={<AdminEstadoContable />} />
+        <Route path="/admin/estado-contable" element={<Navigate to="/admin/ocr-bandeja" replace />} />
         <Route path="/suscripcion" element={<Suscripcion />} />
         <Route path="/admin/users" element={<GestionUsuarios />} />
         <Route path="/admin/renovacion" element={<AdminRenovacion />} />

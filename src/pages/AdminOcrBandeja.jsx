@@ -15,6 +15,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { buildAuditEntry, appendAuditTrail } from '@/lib/ocrUploadUtils';
 import ReviewPanel from '@/components/lector/ReviewPanel';
+import LibrosExportTab from '@/components/ocr/LibrosExportTab';
 
 const STATUS_CONFIG = {
   pending:               { label: 'Pendiente',                  color: 'text-amber-600',  bg: 'bg-amber-50' },
@@ -150,6 +151,7 @@ export default function AdminOcrBandeja() {
   const [batchProcessing, setBatchProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [toast, setToast] = useState(null);
+  const [activeTab, setActiveTab] = useState('ocr');
 
   const showToast = (type, message, ms = 6000) => {
     setToast({ type, message });
@@ -385,208 +387,236 @@ export default function AdminOcrBandeja() {
     <div>
       <PageHeader
         title="Bandeja OCR"
-        subtitle="Cola cross-cliente de facturas entregadas · Revisión contable y contabilización"
+        subtitle="Procesamiento de facturas · Contabilización · Exportación de libros"
       >
-        <Button
-          onClick={processAll}
-          disabled={batchProcessing || counts.pending === 0 && !documents.some(d => d.status === 'analysis_failed')}
-          size="sm"
-          className="gap-2"
-        >
-          {batchProcessing
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Zap className="w-4 h-4" />}
-          {batchProcessing ? 'Procesando...' : 'Procesar todo'}
-        </Button>
-        <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
-        </Button>
+        {activeTab === 'ocr' && (
+          <>
+            <Button
+              onClick={processAll}
+              disabled={batchProcessing || counts.pending === 0 && !documents.some(d => d.status === 'analysis_failed')}
+              size="sm"
+              className="gap-2"
+            >
+              {batchProcessing
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Zap className="w-4 h-4" />}
+              {batchProcessing ? 'Procesando...' : 'Procesar todo'}
+            </Button>
+            <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
+            </Button>
+          </>
+        )}
       </PageHeader>
 
-      {/* Batch progress */}
-      {batchProgress && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3">
-          <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-blue-800 font-medium">
-              Procesando {batchProgress.current} de {batchProgress.total}
-            </p>
-            <p className="text-xs text-blue-600 truncate">{batchProgress.name}</p>
-          </div>
-          <span className="text-sm font-bold text-blue-700 flex-shrink-0">
-            {Math.round((batchProgress.current / batchProgress.total) * 100)}%
-          </span>
-        </div>
-      )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <KpiCard icon={Clock} label="Pendientes" value={counts.pending} color="text-amber-600" bg="bg-amber-50" />
-        <KpiCard icon={Loader2} label="En proceso" value={counts.active} color="text-blue-600" bg="bg-blue-50" />
-        <KpiCard icon={CheckCircle} label="Procesados" value={counts.done} color="text-green-600" bg="bg-green-50" />
-        <KpiCard icon={Inbox} label="Total" value={documents.length} color="text-foreground" bg="bg-secondary" />
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5">
+        <button
+          onClick={() => setActiveTab('ocr')}
+          className={cn('px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap',
+            activeTab === 'ocr' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+        >
+          Documentos OCR
+        </button>
+        <button
+          onClick={() => setActiveTab('libros')}
+          className={cn('px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap',
+            activeTab === 'libros' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}
+        >
+          Libros Registro
+        </button>
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div className={toast.type === 'error' ? 'bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-center gap-3' : 'bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-center gap-3'}>
-          {toast.type === 'error'
-            ? <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-            : <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />}
-          <p className={toast.type === 'error' ? 'text-sm text-red-800' : 'text-sm text-green-800'}>{toast.message}</p>
-        </div>
-      )}
+      {activeTab === 'libros' && <LibrosExportTab user={user} />}
 
-      {/* Review Panel */}
-      {reviewing && (
-        <div className="mb-5">
-          <ReviewPanel
-            doc={reviewing}
-            tipo={reviewing.documentType === 'expense_invoice' ? 'gastos' : 'ingresos'}
-            onApprove={handleApprove}
-            onReject={handleRejectFromPanel}
-            onCancel={() => setReviewing(null)}
-            loading={validating}
-          />
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="bg-card border border-border rounded-xl shadow-card mb-5">
-        <div className="flex flex-wrap gap-2 p-3 border-b border-border">
-          {STATUS_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilterStatus(f.key)}
-              className={cn(
-                'px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors',
-                filterStatus === f.key ? 'bg-teal text-white' : 'text-muted-foreground hover:bg-secondary'
-              )}
-            >
-              {f.label} ({counts[f.key]})
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 p-3">
-          <Input
-            placeholder="Buscar por archivo, email o cliente..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="h-8 max-w-xs text-sm"
-          />
-          <select
-            value={filterType}
-            onChange={e => setFilterType(e.target.value)}
-            className="h-8 text-sm border border-input rounded-md px-2 bg-transparent"
-          >
-            <option value="all">Todos los tipos</option>
-            <option value="income_invoice">Ingresos</option>
-            <option value="expense_invoice">Gastos</option>
-          </select>
-          <select
-            value={filterClient}
-            onChange={e => setFilterClient(e.target.value)}
-            className="h-8 text-sm border border-input rounded-md px-2 bg-transparent max-w-[200px]"
-          >
-            <option value="all">Todos los clientes</option>
-            {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.razon_social || c.nombre_comercial || c.id}</option>
-            ))}
-          </select>
-          {(search || filterType !== 'all' || filterClient !== 'all') && (
-            <Button variant="ghost" size="sm" className="h-8 gap-1" onClick={() => { setSearch(''); setFilterType('all'); setFilterClient('all'); }}>
-              <X className="w-3 h-3" /> Limpiar
-            </Button>
+      {activeTab === 'ocr' && (
+        <>
+          {/* Batch progress */}
+          {batchProgress && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-blue-600 animate-spin flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-blue-800 font-medium">
+                  Procesando {batchProgress.current} de {batchProgress.total}
+                </p>
+                <p className="text-xs text-blue-600 truncate">{batchProgress.name}</p>
+              </div>
+              <span className="text-sm font-bold text-blue-700 flex-shrink-0">
+                {Math.round((batchProgress.current / batchProgress.total) * 100)}%
+              </span>
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
-        {loading ? (
-          <div className="py-12 text-center">
-            <div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" />
+          {/* KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <KpiCard icon={Clock} label="Pendientes" value={counts.pending} color="text-amber-600" bg="bg-amber-50" />
+            <KpiCard icon={Loader2} label="En proceso" value={counts.active} color="text-blue-600" bg="bg-blue-50" />
+            <KpiCard icon={CheckCircle} label="Procesados" value={counts.done} color="text-green-600" bg="bg-green-50" />
+            <KpiCard icon={Inbox} label="Total" value={documents.length} color="text-foreground" bg="bg-secondary" />
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-12 text-center">
-            <Inbox className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No hay documentos que coincidan con los filtros.</p>
+
+          {/* Toast */}
+          {toast && (
+            <div className={toast.type === 'error' ? 'bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-center gap-3' : 'bg-green-50 border border-green-200 rounded-xl p-4 mb-5 flex items-center gap-3'}>
+              {toast.type === 'error'
+                ? <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                : <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />}
+              <p className={toast.type === 'error' ? 'text-sm text-red-800' : 'text-sm text-green-800'}>{toast.message}</p>
+            </div>
+          )}
+
+          {/* Review Panel */}
+          {reviewing && (
+            <div className="mb-5">
+              <ReviewPanel
+                doc={reviewing}
+                tipo={reviewing.documentType === 'expense_invoice' ? 'gastos' : 'ingresos'}
+                onApprove={handleApprove}
+                onReject={handleRejectFromPanel}
+                onCancel={() => setReviewing(null)}
+                loading={validating}
+              />
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="bg-card border border-border rounded-xl shadow-card mb-5">
+            <div className="flex flex-wrap gap-2 p-3 border-b border-border">
+              {STATUS_FILTERS.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilterStatus(f.key)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors',
+                    filterStatus === f.key ? 'bg-teal text-white' : 'text-muted-foreground hover:bg-secondary'
+                  )}
+                >
+                  {f.label} ({counts[f.key]})
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 p-3">
+              <Input
+                placeholder="Buscar por archivo, email o cliente..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-8 max-w-xs text-sm"
+              />
+              <select
+                value={filterType}
+                onChange={e => setFilterType(e.target.value)}
+                className="h-8 text-sm border border-input rounded-md px-2 bg-transparent"
+              >
+                <option value="all">Todos los tipos</option>
+                <option value="income_invoice">Ingresos</option>
+                <option value="expense_invoice">Gastos</option>
+              </select>
+              <select
+                value={filterClient}
+                onChange={e => setFilterClient(e.target.value)}
+                className="h-8 text-sm border border-input rounded-md px-2 bg-transparent max-w-[200px]"
+              >
+                <option value="all">Todos los clientes</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.razon_social || c.nombre_comercial || c.id}</option>
+                ))}
+              </select>
+              {(search || filterType !== 'all' || filterClient !== 'all') && (
+                <Button variant="ghost" size="sm" className="h-8 gap-1" onClick={() => { setSearch(''); setFilterType('all'); setFilterClient('all'); }}>
+                  <X className="w-3 h-3" /> Limpiar
+                </Button>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="divide-y divide-border max-h-[700px] overflow-y-auto">
-            {filtered.map(doc => {
-              const cfg = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
-              const Icon = fileIcon(doc.originalFileName);
-              const isProcessing = processingIds.has(doc.id);
-              const comp = companyMap[doc.company_id];
-              return (
-                <div key={doc.id} className="px-4 py-3 hover:bg-secondary/20 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium text-foreground truncate">{doc.originalFileName || 'Documento'}</p>
-                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0',
-                          doc.documentType === 'income_invoice' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
-                          {TYPE_LABELS[doc.documentType] || doc.documentType}
+
+          {/* Table */}
+          <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
+            {loading ? (
+              <div className="py-12 text-center">
+                <div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" />
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center">
+                <Inbox className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No hay documentos que coincidan con los filtros.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border max-h-[700px] overflow-y-auto">
+                {filtered.map(doc => {
+                  const cfg = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
+                  const Icon = fileIcon(doc.originalFileName);
+                  const isProcessing = processingIds.has(doc.id);
+                  const comp = companyMap[doc.company_id];
+                  return (
+                    <div key={doc.id} className="px-4 py-3 hover:bg-secondary/20 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-foreground truncate">{doc.originalFileName || 'Documento'}</p>
+                            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0',
+                              doc.documentType === 'income_invoice' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
+                              {TYPE_LABELS[doc.documentType] || doc.documentType}
+                            </span>
+                            {doc.duplicateWarning && (
+                              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">Duplicado</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {comp?.razon_social || comp?.nombre_comercial || 'Cliente desconocido'}
+                            {' · '}
+                            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {doc.uploadedByEmail ? ` · ${doc.uploadedByEmail}` : ''}
+                            {doc.uploadSource ? ` · ${SOURCE_LABELS[doc.uploadSource] || doc.uploadSource}` : ''}
+                          </p>
+                        </div>
+                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0', cfg.bg, cfg.color)}>
+                          {isProcessing && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                          {cfg.label}
                         </span>
-                        {doc.duplicateWarning && (
-                          <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">Duplicado</span>
-                        )}
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          {doc.fileStorageUrl && (
+                            <a href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento">
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {(doc.status === 'pending' || doc.status === 'analysis_failed') && (
+                            <button onClick={() => processOcr(doc)} disabled={isProcessing} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal disabled:opacity-50" title="Procesar OCR">
+                              {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          {doc.status === 'review_required' && (
+                            <>
+                              <button onClick={() => handleReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisión contable">
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleRequestReplacement(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-orange-600" title="Pedir sustitucion">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => setRejectModal(doc)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Rechazar">
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                          <button onClick={() => setAuditModal(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground" title="Ver historial">
+                            <Clock className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {comp?.razon_social || comp?.nombre_comercial || 'Cliente desconocido'}
-                        {' · '}
-                        {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
-                        {doc.uploadedByEmail ? ` · ${doc.uploadedByEmail}` : ''}
-                        {doc.uploadSource ? ` · ${SOURCE_LABELS[doc.uploadSource] || doc.uploadSource}` : ''}
-                      </p>
+                      {doc.safeErrorMessage && (
+                        <p className="text-xs text-red-500 mt-1.5 pl-7">{doc.safeErrorMessage}</p>
+                      )}
+                      {doc.rejectionReason && (
+                        <p className="text-xs text-red-500 mt-1.5 pl-7">Motivo: {doc.rejectionReason}</p>
+                      )}
                     </div>
-                    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0', cfg.bg, cfg.color)}>
-                      {isProcessing && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                      {cfg.label}
-                    </span>
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
-                      {doc.fileStorageUrl && (
-                        <a href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento">
-                          <Eye className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                      {(doc.status === 'pending' || doc.status === 'analysis_failed') && (
-                        <button onClick={() => processOcr(doc)} disabled={isProcessing} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal disabled:opacity-50" title="Procesar OCR">
-                          {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
-                      {doc.status === 'review_required' && (
-                        <>
-                          <button onClick={() => handleReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisión contable">
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleRequestReplacement(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-orange-600" title="Pedir sustitucion">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => setRejectModal(doc)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Rechazar">
-                            <Ban className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                      <button onClick={() => setAuditModal(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground" title="Ver historial">
-                        <Clock className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  {doc.safeErrorMessage && (
-                    <p className="text-xs text-red-500 mt-1.5 pl-7">{doc.safeErrorMessage}</p>
-                  )}
-                  {doc.rejectionReason && (
-                    <p className="text-xs text-red-500 mt-1.5 pl-7">Motivo: {doc.rejectionReason}</p>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Reject modal */}
       {rejectModal && (
