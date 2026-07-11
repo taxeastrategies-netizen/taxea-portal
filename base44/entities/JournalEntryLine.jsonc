@@ -57,10 +57,99 @@
     },
     "entryStatus": {
       "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "importKey": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "asientoKey": {
+      "type": "string"
+    },
+    "asientoNumero": {
+      "type": "number"
+    },
+    "orden": {
+      "type": "number"
+    },
+    "fechaOriginal": {
+      "type": "string"
+    },
+    "mes": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    },
+    "subcuenta": {
+      "type": "string"
+    },
+    "nombreSubcuenta": {
+      "type": "string"
+    },
+    "cuenta4": {
+      "type": "string"
+    },
+    "cuenta3": {
+      "type": "string"
+    },
+    "grupo": {
+      "type": "string"
+    },
+    "grupoNombre": {
+      "type": "string"
+    },
+    "claseAsiento": {
+      "type": "string"
+    },
+    "concepto": {
+      "type": "string"
+    },
+    "documento": {
+      "type": "string"
+    },
+    "factura": {
+      "type": "string"
+    },
+    "proyecto": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string"
+    },
+    "divisa": {
+      "type": "string"
+    },
+    "punteado": {
+      "type": "string"
+    },
+    "tipoRegistro": {
+      "type": "string"
+    },
+    "debeE": {
+      "type": "number",
+      "default": 0
+    },
+    "haberE": {
+      "type": "number",
+      "default": 0
     }
   },
   "required": [
-    "journalEntryId",
     "accountCode"
   ],
   "rls": {
@@ -68,7 +157,16 @@
       "data.companyId": "{{user.data.company_id}}"
     },
     "read": {
-      "data.companyId": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
       "data.companyId": "{{user.data.company_id}}"
