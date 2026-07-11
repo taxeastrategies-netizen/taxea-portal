@@ -47,13 +47,14 @@ export default function LibrosExportTab({ user }) {
   useEffect(() => { load(); }, [load]);
 
   const fetchClientData = async (client) => {
-    const [invoices, expenses] = await Promise.all([
-      base44.entities.Invoice.filter({ company_id: client.id }, '-fecha_emision', 500).catch(() => []),
-      base44.entities.Expense.filter({ company_id: client.id }, '-fecha', 500).catch(() => []),
-    ]);
+    const res = await base44.functions.invoke('getCompanyFinancials', {
+      company_id: client.id,
+      anio: Number(year),
+    });
+    const data = res?.data || res;
     return {
-      invoices: (invoices || []).filter(i => !i.anulada && i.anio === Number(year)),
-      expenses: (expenses || []).filter(e => !e.anulada && e.anio === Number(year)),
+      invoices: (data.invoices || []).filter(i => !i.anulada),
+      expenses: (data.expenses || []).filter(e => !e.anulada),
     };
   };
 
