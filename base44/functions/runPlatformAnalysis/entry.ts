@@ -119,14 +119,30 @@ Busca errores de integridad de datos, inconsistencias fiscales, registros huérf
 Para cada error, especifica exactamente qué registro o conjunto de registros está afectado (emails, IDs, cantidades).`
       : validFocus === 'predictivos'
       ? `FOCO EXCLUSIVO: ANÁLISIS PREDICTIVO Y DE RIESGOS FUTUROS.
-Genera ÚNICAMENTE la sección "predictivos". Piensa como un analista de riesgos: ¿qué podría fallar en los próximos días/semanas?
+Genera ÚNICAMENTE la sección "predictivos". Mínimo 5 predicciones. Piensa como un analista de riesgos: ¿qué podría fallar en los próximos días/semanas/meses?
 Analiza tendencias: suscripciones a punto de caducar, empresas con cargas administrativas desbalanceadas, usuarios sin onboarding completo que podrían churnear, facturas anuladas como síntoma de problemas de UX, cuellos de botella administrativos.
-Considera riesgos fiscales: trimestres sin facturas, empresas sin movimientos, patrones de anulación.`
+Considera riesgos fiscales: trimestres sin facturas, empresas sin movimientos, patrones de anulación, fechas límite AEAT próximas, empresas que podrían tener problemas con Hacienda.
+Considera riesgos de negocio: usuarios que podrían cancelar, empresas inactivas, falta de adopción de módulos.
+Considera riesgos técnicos: datos huérfanos acumulándose, degradación de rendimiento por volumen, deudas técnicas.
+Usa EXACTAMENTE estos valores para "severidad" (minúsculas): "critica", "alta", "media", "baja"`
       : validFocus === 'mejoras'
-      ? `FOCO EXCLUSIVO: IDEAS DE MEJORA E INNOVACIÓN.
-Genera ÚNICAMENTE la sección "mejoras". Sé creativo pero práctico: basa las ideas en los datos reales de la plataforma.
-Propón: automatizaciones que eliminen trabajo manual, mejoras visuales en dashboards, nuevas funcionalidades de IA, herramientas de productividad fiscal, mejoras móviles, integraciones nuevas, optimizaciones de rendimiento.
-Prioriza mejoras que resuelvan problemas detectados en los datos reales de la plataforma.`
+      ? `FOCO EXCLUSIVO: IDEAS DE MEJORA E INNOVACIÓN PARA UNA PLATAFORMA SaaS DE GESTIÓN FISCAL Y CONTABLE.
+Genera ÚNICAMENTE la sección "mejoras". Mínimo 8 ideas, todas accionables.
+
+Usa tu conocimiento de internet para analizar qué hacen plataformas competidoras (Holded, Anfix, Declarando, Quipu, Sage, Odoo, ASPEC, A3, Wolters Kluwer) y qué características tienen que Taxea Strategies aún no implementa.
+
+Categorías de ideas a generar:
+1. **Automatizaciones inteligentes**: qué trabajo manual repetitivo se puede eliminar (conciliación bancaria, categorización automática de gastos, recordatorios fiscales, generación de modelos)
+2. **Mejoras visuales y UX**: dashboards más intuitivos, widgets de KPIs en tiempo real, vistas de calendario fiscal, gráficos de tendencias
+3. **Nuevas funcionalidades de IA**: asistente fiscal conversacional, predicción de liquidez, detección de anomalías fiscales, clasificación automática de facturas
+4. **Productividad fiscal**: plantillas de modelos preconfiguradas, alertas de vencimientos AEAT, cálculo automático de trimestres
+5. **Mejoras móviles**: escaneo rápido de facturas, notificaciones push de vencimientos, dashboard móvil simplificado
+6. **Integraciones**: conexión con bancos (PSD2), sincronización con AEAT, exportación a contabilidad externa
+7. **Crecimiento y retención**: gamificación de onboarding, tutoriales interactivos, dashboard de salud fiscal de la empresa
+
+Para cada idea, especifica claramente: qué problema resuelve, qué impacto tendría, y cómo implementarla técnicamente.
+Usa EXACTAMENTE estos valores para "tipo": "nueva_funcionalidad", "mejora_visual", "ia", "rendimiento", "movil", "dashboard", "contabilidad", "facturacion"
+Usa EXACTAMENTE estos valores para "prioridad" (minúsculas): "critica", "alta", "media", "baja"`
       : '';
 
     const prompt = `Eres un analista de plataforma experto en sistemas SaaS de administración fiscal y contable (Taxea Strategies).
@@ -161,8 +177,12 @@ ${focusInstructions || `Genera un análisis profundo e inteligente que incluya:
 Sé específico, práctico y accionable. Prioriza problemas reales detectados en los datos sobre genéricos.`}`;
 
     // === 4. Call LLM ===
+    // Use web search for improvements/competitor analysis; plain LLM for errors/predictions
+    const useWebSearch = !validFocus || validFocus === 'mejoras';
     const llmResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt,
+      add_context_from_internet: useWebSearch,
+      model: useWebSearch ? 'gemini_3_flash' : null,
       response_json_schema: {
         type: "object",
         properties: {
@@ -219,15 +239,17 @@ Sé específico, práctico y accionable. Prioriza problemas reales detectados en
     if (!validFocus || validFocus === 'errores') {
       for (const err of (analysis.errores || []).slice(0, 20)) {
         try {
+          const sevRaw = (err.severidad || '').toLowerCase().trim();
+          const catRaw = (err.categoria || '').toLowerCase().trim();
           const rec = await base44.asServiceRole.entities.FiscalError.create({
             company_id: companyId,
             tipo: err.tipo,
             descripcion: err.descripcion,
-            severidad: ['baja', 'media', 'alta', 'critica'].includes(err.severidad) ? err.severidad : 'media',
+            severidad: ['baja', 'media', 'alta', 'critica'].includes(sevRaw) ? sevRaw : 'media',
             estado: 'detectado',
             accion_recomendada: err.accion_recomendada || '',
             fuente,
-            categoria_analisis: ['fiscal', 'datos', 'rendimiento', 'seguridad', 'plataforma', 'predictivo'].includes(err.categoria) ? err.categoria : 'plataforma',
+            categoria_analisis: ['fiscal', 'datos', 'rendimiento', 'seguridad', 'plataforma', 'predictivo'].includes(catRaw) ? catRaw : 'plataforma',
             etiquetas: ['ia', isManual ? 'manual' : 'diario', validFocus ? 'focado' : 'completo'].filter(Boolean),
           });
           savedErrors.push(rec);
@@ -239,11 +261,12 @@ Sé específico, práctico y accionable. Prioriza problemas reales detectados en
     if (!validFocus || validFocus === 'predictivos') {
       for (const pred of (analysis.predictivos || []).slice(0, 10)) {
         try {
+          const predSevRaw = (pred.severidad || '').toLowerCase().trim();
           const rec = await base44.asServiceRole.entities.FiscalError.create({
             company_id: companyId,
             tipo: `[PREDICTIVO] ${pred.tipo}`,
             descripcion: pred.descripcion,
-            severidad: ['baja', 'media', 'alta', 'critica'].includes(pred.severidad) ? pred.severidad : 'media',
+            severidad: ['baja', 'media', 'alta', 'critica'].includes(predSevRaw) ? predSevRaw : 'media',
             estado: 'detectado',
             accion_recomendada: pred.accion_recomendada || '',
             fuente,
@@ -257,18 +280,33 @@ Sé específico, práctico y accionable. Prioriza problemas reales detectados en
 
     // Save improvement suggestions (skip if focused on errores or predictivos)
     if (!validFocus || validFocus === 'mejoras') {
+      const tipoMap = {
+        'nueva_funcionalidad': 'nueva_funcionalidad', 'mejora_visual': 'mejora_visual',
+        'ia': 'ia', 'contabilidad': 'contabilidad', 'facturacion': 'facturacion',
+        'dashboard': 'dashboard', 'rendimiento': 'rendimiento', 'movil': 'movil',
+        'otro': 'otro',
+        'automatizacion': 'nueva_funcionalidad', 'automatización': 'nueva_funcionalidad',
+        'inteligencia artificial': 'ia', 'productividad': 'nueva_funcionalidad',
+        'optimizacion': 'rendimiento', 'optimización': 'rendimiento',
+        'optimizacion de base de datos': 'rendimiento',
+        'integracion': 'nueva_funcionalidad', 'integración': 'nueva_funcionalidad',
+      };
+      const prioMap = { 'critica': 'critica', 'alta': 'alta', 'media': 'media', 'baja': 'baja' };
+
       for (const mej of (analysis.mejoras || []).slice(0, 15)) {
         try {
+          const tipoRaw = (mej.tipo || '').toLowerCase().trim();
+          const prioRaw = (mej.prioridad || '').toLowerCase().trim();
           const rec = await base44.asServiceRole.entities.Sugerencia.create({
             company_id: companyId,
             titulo: mej.titulo,
             descripcion: mej.descripcion,
-            tipo: ['nueva_funcionalidad', 'mejora_visual', 'ia', 'contabilidad', 'facturacion', 'dashboard', 'rendimiento', 'movil', 'otro'].includes(mej.tipo) ? mej.tipo : 'otro',
-            prioridad: ['baja', 'media', 'alta', 'critica'].includes(mej.prioridad) ? mej.prioridad : 'media',
+            tipo: tipoMap[tipoRaw] || 'otro',
+            prioridad: prioMap[prioRaw] || 'media',
             estado: 'nueva',
             usuario_email: user.email,
             usuario_nombre: 'Análisis IA',
-            publica: false,
+            publica: true,
           });
           savedSuggestions.push(rec);
         } catch (e) { console.error('Error saving suggestion:', e.message); }
