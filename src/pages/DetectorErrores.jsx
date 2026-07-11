@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const SEVERIDAD = {
   baja: { label: 'Baja', class: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-400', order: 4 },
@@ -57,13 +58,14 @@ export default function DetectorErrores() {
       const companyId = isAdmin ? 'platform' : company?.id;
       if (!companyId && !isAdmin) { setLoading(false); return; }
 
-      // Admin: load platform-wide + own company errors; Client: own only
+      // Admin: RLS allows admin to read all; Client: RLS filters to own company + platform
       const fetchErrors = isAdmin
-        ? base44.asServiceRole.entities.FiscalError.list('-created_date', 100)
+        ? base44.entities.FiscalError.list('-created_date', 100)
         : base44.entities.FiscalError.filter({ company_id: company.id }, '-created_date');
+      // Sugerencia RLS: admin reads all; non-admin sees publica=true or own — no company_id filter needed
       const fetchSuggestions = isAdmin
-        ? base44.asServiceRole.entities.Sugerencia.list('-created_date', 50)
-        : base44.entities.Sugerencia.filter({ company_id: company.id }, '-created_date');
+        ? base44.entities.Sugerencia.list('-created_date', 50)
+        : base44.entities.Sugerencia.list('-created_date', 50);
 
       const [errData, sugData] = await Promise.all([fetchErrors, fetchSuggestions]);
       setErrors(errData || []);
@@ -85,10 +87,17 @@ export default function DetectorErrores() {
     try {
       const resp = await base44.functions.invoke('runPlatformAnalysis', { manual: true, focus });
       if (resp?.data?.status === 'ok') {
+        const saved = resp.data.saved || {};
+        const label = focus === 'errores' ? 'errores' : focus === 'predictivos' ? 'predicciones' : focus === 'mejoras' ? 'mejoras' : 'elementos';
+        const count = focus === 'mejoras' ? (saved.suggestions || 0) : (saved.errors || 0);
+        toast.success(`Análisis completado: ${count} ${label} guardadas`);
         await load();
+      } else {
+        toast.error('El análisis no devolvió resultados');
       }
     } catch (e) {
       console.error('Analysis failed:', e);
+      toast.error('Error al ejecutar el análisis: ' + (e.message || 'desconocido'));
     }
     if (focus) setAnalyzingTab(null); else setAnalyzing(false);
   };
