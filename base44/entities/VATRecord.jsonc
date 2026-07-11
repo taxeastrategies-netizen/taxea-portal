@@ -1,0 +1,119 @@
+{
+  "name": "VATRecord",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "importKey": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaOriginal": {
+      "type": "string"
+    },
+    "mes": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    },
+    "asiento": {
+      "type": "string"
+    },
+    "orden": {
+      "type": "string"
+    },
+    "subcuenta": {
+      "type": "string"
+    },
+    "contra": {
+      "type": "string"
+    },
+    "venCom": {
+      "type": "string"
+    },
+    "factura": {
+      "type": "string"
+    },
+    "baseimp": {
+      "type": "number",
+      "default": 0
+    },
+    "cuota": {
+      "type": "number",
+      "default": 0
+    },
+    "iva": {
+      "type": "number",
+      "default": 0
+    },
+    "baseret": {
+      "type": "number",
+      "default": 0
+    },
+    "cuotaRet": {
+      "type": "number",
+      "default": 0
+    },
+    "retencion": {
+      "type": "number",
+      "default": 0
+    },
+    "nif": {
+      "type": "string"
+    },
+    "nom": {
+      "type": "string"
+    },
+    "tipoRegistro": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

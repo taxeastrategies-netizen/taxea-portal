@@ -1,0 +1,86 @@
+{
+  "name": "ProfitLossLine",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "subcuenta": {
+      "type": "string"
+    },
+    "nombreSubcuenta": {
+      "type": "string"
+    },
+    "grupo": {
+      "type": "string"
+    },
+    "naturaleza": {
+      "type": "string"
+    },
+    "debeOperativo": {
+      "type": "number",
+      "default": 0
+    },
+    "haberOperativo": {
+      "type": "number",
+      "default": 0
+    },
+    "importePyg": {
+      "type": "number",
+      "default": 0
+    },
+    "impactoResultado": {
+      "type": "number",
+      "default": 0
+    },
+    "lineas": {
+      "type": "number"
+    },
+    "nota": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

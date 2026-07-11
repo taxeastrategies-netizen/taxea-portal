@@ -1,0 +1,80 @@
+{
+  "name": "ImportControlIssue",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "control": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string"
+    },
+    "delta": {
+      "type": "number",
+      "default": 0
+    },
+    "detalle": {
+      "type": "string"
+    },
+    "valorA": {
+      "type": "string"
+    },
+    "fuenteA": {
+      "type": "string"
+    },
+    "valorB": {
+      "type": "string"
+    },
+    "fuenteB": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "control"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

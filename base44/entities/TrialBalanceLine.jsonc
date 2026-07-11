@@ -1,0 +1,100 @@
+{
+  "name": "TrialBalanceLine",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "cuenta": {
+      "type": "string"
+    },
+    "nombre": {
+      "type": "string"
+    },
+    "nivelCuenta": {
+      "type": "string"
+    },
+    "grupo": {
+      "type": "string"
+    },
+    "grupoNombre": {
+      "type": "string"
+    },
+    "saldoInicial": {
+      "type": "number",
+      "default": 0
+    },
+    "debePeriodo": {
+      "type": "number",
+      "default": 0
+    },
+    "haberPeriodo": {
+      "type": "number",
+      "default": 0
+    },
+    "debeAcumulado": {
+      "type": "number",
+      "default": 0
+    },
+    "haberAcumulado": {
+      "type": "number",
+      "default": 0
+    },
+    "debeSaldo": {
+      "type": "number",
+      "default": 0
+    },
+    "haberSaldo": {
+      "type": "number",
+      "default": 0
+    },
+    "saldoFirmado": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio",
+    "cuenta"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

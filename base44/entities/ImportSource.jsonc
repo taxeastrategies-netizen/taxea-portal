@@ -1,0 +1,85 @@
+{
+  "name": "ImportSource",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "fuente": {
+      "type": "string"
+    },
+    "ruta": {
+      "type": "string"
+    },
+    "tipo": {
+      "type": "string"
+    },
+    "tamanoBytes": {
+      "type": "number"
+    },
+    "modificado": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "registrosDeclarados": {
+      "type": "number"
+    },
+    "lineasDiario": {
+      "type": "number"
+    },
+    "subcuentas": {
+      "type": "number"
+    },
+    "lineasIva": {
+      "type": "number"
+    },
+    "lineasRetencion": {
+      "type": "number"
+    },
+    "proyectos": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "companyId",
+    "fuente"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

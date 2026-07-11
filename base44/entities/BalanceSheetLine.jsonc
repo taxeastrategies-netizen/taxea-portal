@@ -1,0 +1,84 @@
+{
+  "name": "BalanceSheetLine",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "fuente": {
+      "type": "string"
+    },
+    "seccion": {
+      "type": "string"
+    },
+    "codigo": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "nivelCuenta": {
+      "type": "string"
+    },
+    "importe2025": {
+      "type": "number",
+      "default": 0
+    },
+    "importe2024": {
+      "type": "number",
+      "default": 0
+    },
+    "etiquetaOriginal": {
+      "type": "string"
+    },
+    "pagina": {
+      "type": "number"
+    },
+    "lineaPagina": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

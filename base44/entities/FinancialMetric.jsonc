@@ -1,0 +1,69 @@
+{
+  "name": "FinancialMetric",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "familia": {
+      "type": "string"
+    },
+    "metrica": {
+      "type": "string"
+    },
+    "valor": {
+      "type": "number",
+      "default": 0
+    },
+    "unidad": {
+      "type": "string"
+    },
+    "nota": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio",
+    "metrica"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}

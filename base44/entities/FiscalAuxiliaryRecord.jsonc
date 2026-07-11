@@ -1,0 +1,107 @@
+{
+  "name": "FiscalAuxiliaryRecord",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "sourceFile": {
+      "type": "string"
+    },
+    "importKey": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "validationStatus": {
+      "type": "string",
+      "default": "BORRADOR_PENDIENTE_REVISION"
+    },
+    "importBatch": {
+      "type": "string"
+    },
+    "seccion": {
+      "type": "string"
+    },
+    "fecha": {
+      "type": "string",
+      "format": "date"
+    },
+    "fechaOriginal": {
+      "type": "string"
+    },
+    "mes": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    },
+    "asiento": {
+      "type": "string"
+    },
+    "orden": {
+      "type": "string"
+    },
+    "subcuenta": {
+      "type": "string"
+    },
+    "contra": {
+      "type": "string"
+    },
+    "baseRet": {
+      "type": "number",
+      "default": 0
+    },
+    "cuotaRet": {
+      "type": "number",
+      "default": 0
+    },
+    "porcRet": {
+      "type": "number",
+      "default": 0
+    },
+    "claveRet": {
+      "type": "string"
+    },
+    "codproyecto": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "tipoRegistro": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "ejercicio"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}
