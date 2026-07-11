@@ -96,16 +96,24 @@
   ],
   "rls": {
     "create": {
-      "data.clientAccountId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
-      "data.clientAccountId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "update": {
-      "data.clientAccountId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.clientAccountId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
