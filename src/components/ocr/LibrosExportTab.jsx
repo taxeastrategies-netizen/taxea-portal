@@ -27,8 +27,8 @@ export default function LibrosExportTab({ user }) {
     setLoading(true);
     try {
       const [cls, snaps] = await Promise.all([
-        base44.entities.Company.list('-created_date', 200).catch(() => []),
-        base44.entities.AccountingExportSnapshot.list('-exportedAt', 500).catch(() => []),
+        base44.entities.Company.list('-created_date', 200).catch(err => { console.error('[LibrosExport] Company list error:', err); return []; }),
+        base44.entities.AccountingExportSnapshot.list('-exportedAt', 500).catch(err => { console.error('[LibrosExport] Snapshot list error:', err); return []; }),
       ]);
       const latest = {};
       (snaps || []).forEach(s => {
@@ -110,7 +110,7 @@ export default function LibrosExportTab({ user }) {
         newReceivedCount: invoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).length,
         newExpenseCount: expenses.filter(e => !lastExpenseIds.has(e.id)).length,
         status: 'ok',
-      }).catch(() => null);
+      }).catch(err => { console.error('[LibrosExport] Snapshot save error:', err); return null; });
 
       setSnapshots(prev => ({
         ...prev,
