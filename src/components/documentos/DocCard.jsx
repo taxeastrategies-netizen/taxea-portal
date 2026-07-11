@@ -1,7 +1,22 @@
-import { Download, Eye, MoreVertical, FileText, FileImage, FileSpreadsheet, File } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Eye, MoreVertical, FileText, FileImage, FileSpreadsheet, File, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getCarpetaLabel } from './CarpetasTree';
 import { cn } from '@/lib/utils';
+
+async function downloadFile(url, filename) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('No se pudo descargar el archivo');
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename || 'documento';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(blobUrl);
+}
 
 const ESTADO_COLORS = {
   pendiente: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -103,6 +118,21 @@ export default function DocCard({ doc, isAdmin, onUpdate, view = 'grid' }) {
 }
 
 function DocActions({ doc, isAdmin, onUpdate }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async (e) => {
+    e.preventDefault();
+    if (!doc.archivo_url || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadFile(doc.archivo_url, doc.nombre || 'documento');
+    } catch {
+      // Fallback: abrir en nueva pestaña como último recurso
+      window.open(doc.archivo_url, '_blank');
+    }
+    setDownloading(false);
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -118,10 +148,10 @@ function DocActions({ doc, isAdmin, onUpdate }) {
                 <Eye className="w-3.5 h-3.5" /> Ver documento
               </a>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <a href={doc.archivo_url} download className="flex items-center gap-2">
-                <Download className="w-3.5 h-3.5" /> Descargar
-              </a>
+            <DropdownMenuItem onClick={handleDownload} disabled={downloading}>
+              {downloading
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Descargando...</>
+                : <><Download className="w-3.5 h-3.5" /> Descargar</>}
             </DropdownMenuItem>
           </>
         )}
