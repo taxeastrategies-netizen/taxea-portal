@@ -1,14 +1,17 @@
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Eye } from 'lucide-react';
 import { endImpersonation } from '@/lib/impersonation';
+import { base44 } from '@/api/base44Client';
 
 export default function ImpersonationBanner({ impersonation }) {
   const navigate = useNavigate();
 
   if (!impersonation) return null;
 
-  const handleExit = () => {
+  const handleExit = async () => {
     endImpersonation();
+    // Limpiar company_id del admin al salir de impersonación
+    try { await base44.auth.updateMe({ company_id: null }); } catch {}
     navigate('/admin/clients');
     window.location.reload();
   };

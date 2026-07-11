@@ -16,7 +16,9 @@ export function useCompanyContext(user) {
   const loadCompany = useCallback(async () => {
     if (!user) { setLoading(false); return; }
 
-    const cacheKey = user.email;
+    const imp = isAdminRole(user.role) ? getImpersonation() : null;
+    // Cache key incluye el estado de impersonación para evitar devolver caché sin impersonar
+    const cacheKey = imp?.clientEmail ? `${user.email}::imp:${imp.clientEmail}` : user.email;
     if (companyCache.has(cacheKey)) {
       setCompany(companyCache.get(cacheKey));
       setLoading(false);
@@ -27,18 +29,24 @@ export function useCompanyContext(user) {
 
     try {
       if (isAdminRole(user.role)) {
-        // Admin: check if impersonating a client
-        const imp = getImpersonation();
-        setLoading(false); // render inmediato
         if (imp?.clientEmail) {
           const own = await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1);
           const c = own?.[0] || null;
+          // Sincronizar company_id en el servidor para que la RLS permita acceso a entidades del cliente
+          if (c && user.data?.company_id !== c.id) {
+            try { await base44.auth.updateMe({ company_id: c.id }); } catch {}
+          }
+          companyCache.set(cacheKey, c);
           setCompany(c);
         } else {
-          // Admin sin impersonación: sin empresa asignada (no mezclar datos de clientes)
+          // Admin sin impersonación: limpiar company_id y sin empresa asignada
+          if (user.data?.company_id) {
+            try { await base44.auth.updateMe({ company_id: null }); } catch {}
+          }
           companyCache.set(cacheKey, null);
           setCompany(null);
         }
+        setLoading(false);
       } else {
         // Cliente: buscar empresa propia
         const own = await base44.entities.Company.filter({ owner_email: user.email }, '-created_date', 1);
@@ -73,7 +81,12 @@ export function useCompanyContext(user) {
   }, [loadCompany]);
 
   const refreshCompany = () => {
-    if (user?.email) companyCache.delete(user.email);
+    // Limpiar tanto la caché normal como la de impersonación
+    const imp = isAdminRole(user?.role) ? getImpersonation() : null;
+    if (user?.email) {
+      companyCache.delete(user.email);
+      if (imp?.clientEmail) companyCache.delete(`${user.email}::imp:${imp.clientEmail}`);
+    }
     // Small delay to allow the DB write to propagate
     setTimeout(() => loadCompany(), 300);
   };
