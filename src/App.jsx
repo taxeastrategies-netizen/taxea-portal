@@ -51,7 +51,6 @@ import AdminEstadoContable from './pages/AdminEstadoContable';
 import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
 import AdminRenovacion from './pages/AdminRenovacion';
-import AdminPagosClientes from './pages/AdminPagosClientes';
 import AdminOcrCredits from './pages/AdminOcrCredits';
 import AdminOcrBandeja from './pages/AdminOcrBandeja';
 import AdminBackupDrive from './pages/AdminBackupDrive';
@@ -126,7 +125,6 @@ function AppWithContext({ user }) {
         <Route path="/suscripcion" element={<Suscripcion />} />
         <Route path="/admin/users" element={<GestionUsuarios />} />
         <Route path="/admin/renovacion" element={<AdminRenovacion />} />
-        <Route path="/admin/pagos" element={<AdminPagosClientes />} />
         <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
         <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
         <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
