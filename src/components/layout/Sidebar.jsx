@@ -255,7 +255,6 @@ const ADMIN_ITEMS = [
   { to: '/admin/ocr-bandeja', label: 'Bandeja OCR', icon: ScanLine },
   { to: '/admin/ocr-credits', label: 'Créditos OCR', icon: ScanLine },
   { to: '/admin/backup-drive', label: 'Seguridad y Copias', icon: HardDrive },
-  { to: '/admin/renovacion', label: 'Políticas de renovación', icon: Settings },
   { to: '/errores', label: 'Detector Errores', icon: AlertTriangle },
   { to: '/admin-asistente', label: 'Panel IA Fiscal', icon: Brain },
   { to: '/admin-sugerencias', label: 'Buzón Sugerencias', icon: Lightbulb },
