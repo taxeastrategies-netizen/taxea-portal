@@ -51,6 +51,7 @@ import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
 
 import AdminOcrCredits from './pages/AdminOcrCredits';
+import ImportacionContable from './pages/ImportacionContable';
 import AdminOcrBandeja from './pages/AdminOcrBandeja';
 import AdminBackupDrive from './pages/AdminBackupDrive';
 import SetupPassword from './pages/SetupPassword';
@@ -126,6 +127,7 @@ function AppWithContext({ user }) {
 
         <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
         <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
+        <Route path="/importacion-contable" element={<ImportacionContable />} />
         <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
         <Route path="/signup" element={<Navigate to="/login" replace />} />
       </Route>
