@@ -11,10 +11,11 @@ import { cn } from '@/lib/utils';
 
 const ALL_CARPETAS = getAllCarpetas();
 
-// IA: clasificar documento por nombre
+// IA: clasificar documento por nombre (con timeout de 15s)
 async function clasificarConIA(nombre) {
   try {
-    const result = await base44.integrations.Core.InvokeLLM({
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
+    const llmCall = base44.integrations.Core.InvokeLLM({
       prompt: `Analiza el nombre de este documento y clasifícalo en la carpeta correcta de un despacho fiscal/legal.
 Documento: "${nombre}"
 
@@ -31,10 +32,19 @@ Responde SOLO con el id de la carpeta más apropiada (ej: "fiscal_modelos_aeat")
         }
       }
     });
+    const result = await Promise.race([llmCall, timeout]);
     return result;
   } catch {
     return null;
   }
+}
+
+// Upload con timeout
+function uploadWithTimeout(file) {
+  return Promise.race([
+    base44.integrations.Core.UploadFile({ file }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout al subir archivo')), 60000))
+  ]);
 }
 
 export default function UploadDialog({ open, onClose, company, user, onSuccess }) {
@@ -69,29 +79,39 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
     if (f) handleFile(f);
   };
 
+  const [uploadError, setUploadError] = useState('');
+
   const handleUpload = async () => {
     if (!file || !formData.nombre || !formData.carpeta) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.entities.Document.create({
-      company_id: company.id,
-      nombre: formData.nombre,
-      carpeta: formData.carpeta,
-      comentarios: formData.comentarios,
-      archivo_url: file_url,
-      tipo_archivo: file.type,
-      anio: new Date().getFullYear(),
-      estado: 'pendiente',
-      subido_por: user?.email,
-      etiquetas,
-    });
-    setUploading(false);
-    setFile(null);
-    setFormData({ nombre: '', carpeta: '', comentarios: '' });
-    setEtiquetas([]);
-    setSugerencia(null);
-    onSuccess();
-    onClose();
+    setUploadError('');
+    try {
+      const { file_url } = await uploadWithTimeout(file);
+      if (!file_url) throw new Error('No se obtuvo URL del archivo subido');
+      await base44.entities.Document.create({
+        company_id: company.id,
+        nombre: formData.nombre,
+        carpeta: formData.carpeta,
+        comentarios: formData.comentarios,
+        archivo_url: file_url,
+        tipo_archivo: file.type,
+        anio: new Date().getFullYear(),
+        estado: 'pendiente',
+        subido_por: user?.email,
+        etiquetas,
+      });
+      setUploading(false);
+      setFile(null);
+      setFormData({ nombre: '', carpeta: '', comentarios: '' });
+      setEtiquetas([]);
+      setSugerencia(null);
+      onSuccess();
+      onClose();
+    } catch (e) {
+      console.error('Error subiendo documento:', e);
+      setUploadError(e?.message || 'Error al subir el documento. Inténtalo de nuevo.');
+      setUploading(false);
+    }
   };
 
   const close = () => {
@@ -208,6 +228,12 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
             inp.click();
           }}>📷 Usar cámara</Button>
         </div>
+
+        {uploadError && (
+          <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {uploadError}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={close}>Cancelar</Button>
