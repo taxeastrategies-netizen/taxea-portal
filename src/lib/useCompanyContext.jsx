@@ -35,10 +35,9 @@ export function useCompanyContext(user) {
           const c = own?.[0] || null;
           setCompany(c);
         } else {
-          const all = await base44.entities.Company.list('-created_date', 1);
-          const c = all?.[0] || null;
-          companyCache.set(cacheKey, c);
-          setCompany(c);
+          // Admin sin impersonación: sin empresa asignada (no mezclar datos de clientes)
+          companyCache.set(cacheKey, null);
+          setCompany(null);
         }
       } else {
         // Cliente: buscar empresa propia
