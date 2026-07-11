@@ -188,7 +188,7 @@ function buildFacturasEmitidas(invoices) {
 // ─── Hoja 4: Facturas Recibidas ──────────────────────────────────────────────
 function buildFacturasRecibidas(invoices) {
   const proveedorMap = buildProveedorMap(invoices);
-  const header = ['Nº Factura','Fecha Emisión','Fecha Operación','Proveedor','NIF/CIF Proveedor','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Retenciones (€)','Total Factura (€)','Estado Contable','Trimestre','Año','Cta. Gasto (6xx)','Cta. Proveedor (40x/41x)'];
+  const header = ['Nº Factura','Fecha Emisión','Fecha Operación','Proveedor','NIF/CIF Proveedor','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Retención IRPF %','Importe Retención (€)','Total Factura (€)','Estado Contable','Trimestre','Año','Cta. Gasto (6xx)','Cta. Proveedor (40x/41x)'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     const provNombre = i.proveedor_nombre || i.cliente_nombre || '';
@@ -198,7 +198,7 @@ function buildFacturasRecibidas(invoices) {
       i.numero_factura || '', i.fecha_emision || '', i.fecha_operacion || i.fecha_emision || '',
       provNombre, provNif, i.concepto || '', i.categoria_gasto || '',
       n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva),
-      pct(i.base_imponible, i.retencion_irpf || 0),
+      n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
       n(i.total_factura),
       i.estado_contable || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || '',
@@ -227,13 +227,15 @@ function buildLibroVentas(invoices) {
 
 // ─── Hoja 6: Libro Compras y Gastos (AEAT 303) ──────────────────────────────
 function buildLibroCompras(invoices, expenses) {
-  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA %','Cuota IVA (€)','Total (€)','Deducible','Trimestre','Año','Cuenta Contable'];
+  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA %','Cuota IVA (€)','Retención IRPF %','Importe Retención (€)','Total (€)','Deducible','Trimestre','Año','Cuenta Contable'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     rows.push([
       i.fecha_emision || '', i.numero_factura || '',
       i.cliente_nombre || '', i.cliente_nif || '', i.concepto || '', 'Factura recibida',
-      n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva), n(i.total_factura),
+      n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva),
+      n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
+      n(i.total_factura),
       'Sí', i.trimestre || quarter(i.fecha_emision), i.anio || '', '600000',
     ]);
   });
@@ -241,7 +243,9 @@ function buildLibroCompras(invoices, expenses) {
     rows.push([
       e.fecha || '', '',
       e.proveedor_cliente || '', '', e.concepto || '', e.categoria || '',
-      n(e.base_imponible), n(e.tipo_impuesto), n(e.cuota_impuesto), n(e.total),
+      n(e.base_imponible), n(e.tipo_impuesto), n(e.cuota_impuesto),
+      n(e.retencion_irpf), pct(e.base_imponible, e.retencion_irpf || 0),
+      n(e.total),
       'Sí', e.trimestre || quarter(e.fecha), e.anio || '', '600000',
     ]);
   });
@@ -272,14 +276,30 @@ function buildLibroDiario(invoices, expenses) {
     asiento++;
   });
 
+  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
+    const base = n(i.base_imponible);
+    const iva = n(i.cuota_iva);
+    const ret = pct(i.base_imponible, i.retencion_irpf);
+    const total = n(i.total_factura);
+    const q = i.trimestre || quarter(i.fecha_emision);
+    const yr = i.anio || '';
+    rows.push([i.fecha_emision || '', asiento, '600000', 'Compras', i.concepto || '', base, '', '4000000', i.numero_factura || '', i.proveedor_nif || '', q, yr]);
+    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4720000', 'H.P. IVA soportado', 'IVA ' + (n(i.tipo_iva) || 21) + '%', iva, '', '4000000', i.numero_factura || '', '', q, yr]);
+    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4730000', 'H.P. IRPF soportado', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4000000', i.numero_factura || '', '', q, yr]);
+    rows.push([i.fecha_emision || '', asiento, '4000000', 'Proveedores', i.proveedor_nombre || '', '', total, '600000', i.numero_factura || '', '', q, yr]);
+    asiento++;
+  });
+
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
     const base = n(e.base_imponible);
     const iva = n(e.cuota_impuesto);
     const total = n(e.total);
     const q = e.trimestre || quarter(e.fecha);
     const yr = e.anio || '';
+    const ret = pct(e.base_imponible, e.retencion_irpf);
     rows.push([e.fecha || '', asiento, '600000', 'Compras y gastos', e.concepto || '', base, '', '4000000', '', '', q, yr]);
     if (iva > 0) rows.push([e.fecha || '', asiento, '4720000', 'H.P. IVA soportado', 'IVA ' + n(e.tipo_impuesto) + '%', iva, '', '4000000', '', '', q, yr]);
+    if (ret > 0) rows.push([e.fecha || '', asiento, '4730000', 'H.P. IRPF soportado', 'Retención ' + n(e.retencion_irpf) + '%', ret, '', '4000000', '', '', q, yr]);
     rows.push([e.fecha || '', asiento, '4000000', 'Proveedores', e.proveedor_cliente || '', '', total, '600000', '', '', q, yr]);
     asiento++;
   });
@@ -302,9 +322,16 @@ function buildLibroMayor(invoices, expenses) {
     addCuenta('4770000', 'H.P. IVA repercutido', 0, n(i.cuota_iva));
     if (n(i.retencion_irpf) > 0) addCuenta('4751000', 'H.P. IRPF retenido', pct(i.base_imponible, i.retencion_irpf), 0);
   });
+  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
+    addCuenta('600000', 'Compras', n(i.base_imponible), 0);
+    addCuenta('4720000', 'H.P. IVA soportado', n(i.cuota_iva), 0);
+    if (n(i.retencion_irpf) > 0) addCuenta('4730000', 'H.P. IRPF soportado', pct(i.base_imponible, i.retencion_irpf), 0);
+    addCuenta('4000000', 'Proveedores', 0, n(i.total_factura));
+  });
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
     addCuenta('600000', 'Compras y gastos', n(e.base_imponible), 0);
     addCuenta('4720000', 'H.P. IVA soportado', n(e.cuota_impuesto), 0);
+    if (n(e.retencion_irpf) > 0) addCuenta('4730000', 'H.P. IRPF soportado', pct(e.base_imponible, e.retencion_irpf), 0);
     addCuenta('4000000', 'Proveedores', 0, n(e.total));
   });
 
@@ -398,9 +425,9 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '1. Resumen Fiscal', rows: buildResumenFiscal(invoices, expenses, year, companyName, lastExportDate, newEmitidaIdx.length, newRecibidaIdx.length, newGastosCount), colWidths: [40, 20], newRowIndices: [] },
         { name: '2. P&L', rows: buildPnL(invoices, expenses, year), colWidths: [16, 20, 20, 22, 12, 20, 20, 20], newRowIndices: [] },
         { name: '3. Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: newEmitidaIdx },
-        { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
+        { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
         { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8], newRowIndices: newEmitidaIdx },
-        { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 10, 14, 14, 10, 10, 8, 12], newRowIndices: newComprasIdx },
+        { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 10, 14, 10, 14, 14, 10, 10, 8, 12], newRowIndices: newComprasIdx },
         { name: '7. Libro Diario', rows: buildLibroDiario(invoices, expenses), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
         { name: '8. Libro Mayor', rows: buildLibroMayor(invoices, expenses), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },

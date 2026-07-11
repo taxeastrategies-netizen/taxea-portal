@@ -119,7 +119,8 @@ function IngresosFields({ form, set }) {
       <F label="Base imponible (€)"><Input type="number" step="0.01" value={form.base_imponible || ''} onChange={e => set('base_imponible', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Tipo IVA/IGIC %"><Input type="number" value={form.tipo_iva || 21} onChange={e => set('tipo_iva', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Cuota IVA (€)"><Input type="number" step="0.01" value={form.cuota_iva || ''} onChange={e => set('cuota_iva', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Retención IRPF %"><Input type="number" value={form.retencion_irpf || 0} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Retención IRPF %"><Input type="number" step="0.01" value={form.retencion_irpf || 0} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Importe retención (€)"><Input type="number" step="0.01" value={form.importe_retencion || ''} onChange={e => set('importe_retencion', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Total (€)"><Input type="number" step="0.01" value={form.total_factura || ''} onChange={e => set('total_factura', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Estado cobro">
         <Select value={form.estado_cobro || 'pendiente'} onValueChange={v => set('estado_cobro', v)}>
@@ -162,6 +163,8 @@ function GastosFields({ form, set }) {
       <F label="Base imponible (€)"><Input type="number" step="0.01" value={form.base_imponible || ''} onChange={e => set('base_imponible', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Tipo IVA/IGIC %"><Input type="number" value={form.tipo_impuesto || 21} onChange={e => set('tipo_impuesto', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Cuota impuesto (€)"><Input type="number" step="0.01" value={form.cuota_impuesto || ''} onChange={e => set('cuota_impuesto', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Retención IRPF %"><Input type="number" step="0.01" value={form.retencion_irpf || 0} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Importe retención (€)"><Input type="number" step="0.01" value={form.importe_retencion || ''} onChange={e => set('importe_retencion', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Total (€)"><Input type="number" step="0.01" value={form.total || ''} onChange={e => set('total', e.target.value)} className="h-8 text-sm" /></F>
     </div>
   );

@@ -35,6 +35,8 @@ const mapForm = (r) => ({
   tipo_iva: r?.tipo_iva || 21,
   cuota_iva: r?.cuota_iva || '',
   retencion_irpf: r?.retencion_irpf || 0,
+  retencion_tipo: r?.retencion_tipo || 'ninguna',
+  importe_retencion: r?.importe_retencion || 0,
   total_factura: r?.total_factura || '',
   fecha_vencimiento: r?.fecha_vencimiento || '',
   estado_cobro: r?.estado_cobro_sugerido || 'pendiente',
@@ -42,8 +44,9 @@ const mapForm = (r) => ({
 
 const OCR_PROMPT = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
 Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (número),
-tipo_iva (número %), cuota_iva (número), retencion_irpf (número %), total_factura (número),
-fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+tipo_iva (número %), cuota_iva (número), retencion_irpf (número %, 0 si no aplica),
+retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, 0 si no aplica),
+total_factura (número), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
 alertas_fiscales (array strings), datos_faltantes (array strings)`;
 
 const OCR_SCHEMA = {
@@ -53,7 +56,8 @@ const OCR_SCHEMA = {
     cliente_nombre: { type: 'string' }, cliente_nif: { type: 'string' },
     concepto: { type: 'string' }, base_imponible: { type: 'number' },
     tipo_iva: { type: 'number' }, cuota_iva: { type: 'number' },
-    retencion_irpf: { type: 'number' }, total_factura: { type: 'number' },
+    retencion_irpf: { type: 'number' }, retencion_tipo: { type: 'string' }, importe_retencion: { type: 'number' },
+    total_factura: { type: 'number' },
     fecha_vencimiento: { type: 'string' }, estado_cobro_sugerido: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },

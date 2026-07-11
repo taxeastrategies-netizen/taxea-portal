@@ -49,6 +49,13 @@
     "cuota_impuesto": {
       "type": "number"
     },
+    "retencion_irpf": {
+      "type": "number",
+      "default": 0
+    },
+    "retencion_tipo": {
+      "type": "string"
+    },
     "total": {
       "type": "number"
     },

@@ -37,11 +37,15 @@ const mapForm = (r) => ({
   cuenta_pgc: r?.cuenta_pgc || '',
   confianza_pgc: r?.confianza_pgc || 0,
   motivo_clasificacion: r?.motivo_clasificacion || '',
+  retencion_irpf: r?.retencion_irpf || 0,
+  retencion_tipo: r?.retencion_tipo || 'ninguna',
+  importe_retencion: r?.importe_retencion || 0,
 });
 
 const OCR_PROMPT = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
 Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número),
 tipo_impuesto (número %), cuota_impuesto (número), total (número),
+retencion_irpf (número %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, 0 si no aplica),
 categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
 cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
 es_factura_completa (boolean), es_proveedor_extranjero (boolean),
@@ -60,6 +64,9 @@ const OCR_SCHEMA = {
     datos_faltantes: { type: 'array', items: { type: 'string' } },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     concepto: { type: 'string' },
+    retencion_irpf: { type: 'number' },
+    retencion_tipo: { type: 'string' },
+    importe_retencion: { type: 'number' },
   }
 };
 

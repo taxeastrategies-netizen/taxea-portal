@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
         base_imponible: parseFloat(form.base_imponible) || 0,
         tipo_iva: parseFloat(form.tipo_impuesto) || 21,
         cuota_iva: parseFloat(form.cuota_impuesto) || 0,
+        retencion_irpf: parseFloat(form.retencion_irpf) || 0,
         total_factura: parseFloat(form.total) || 0,
         estado_cobro: 'pendiente',
         tipo: 'recibida',
