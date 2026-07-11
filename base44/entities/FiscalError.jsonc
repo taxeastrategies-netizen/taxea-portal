@@ -49,6 +49,28 @@
     },
     "nota_interna": {
       "type": "string"
+    },
+    "fuente": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "sistema",
+        "ia_diario",
+        "ia_manual"
+      ],
+      "default": "manual"
+    },
+    "categoria_analisis": {
+      "type": "string",
+      "enum": [
+        "fiscal",
+        "datos",
+        "rendimiento",
+        "seguridad",
+        "plataforma",
+        "predictivo"
+      ],
+      "default": "fiscal"
     }
   },
   "required": [
@@ -59,16 +81,55 @@
   ],
   "rls": {
     "create": {
-      "company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "read": {
-      "company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "data.company_id": "platform"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }
