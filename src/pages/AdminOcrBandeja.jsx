@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import PageHeader from '@/components/ui/PageHeader';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { buildAuditEntry, appendAuditTrail } from '@/lib/ocrUploadUtils';
+import { runBatch, debounce } from '@/lib/batchProcessor';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import LibrosExportTab from '@/components/ocr/LibrosExportTab';
 
@@ -182,13 +183,15 @@ export default function AdminOcrBandeja() {
     setLoading(false);
   }, []);
 
+  const debouncedLoadDocs = useMemo(() => debounce(loadDocs, 1500), [loadDocs]);
+
   useEffect(() => { if (isAdmin) loadDocs(); }, [isAdmin, loadDocs]);
 
   useEffect(() => {
     if (!isAdmin) return;
-    const unsub = base44.entities.OcrInvoiceDocument.subscribe(() => loadDocs());
-    return unsub;
-  }, [isAdmin, loadDocs]);
+    const unsub = base44.entities.OcrInvoiceDocument.subscribe(() => debouncedLoadDocs());
+    return () => { unsub(); debouncedLoadDocs.cancel(); };
+  }, [isAdmin, debouncedLoadDocs]);
 
   const companyMap = companies.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
@@ -224,7 +227,7 @@ export default function AdminOcrBandeja() {
       safeErrorMessage: '',
       auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_iniciado', prevStatus: doc.status, newStatus: 'processing' })),
     });
-    loadDocs();
+    debouncedLoadDocs();
 
     const isExpense = doc.documentType === 'expense_invoice';
     const prompt = isExpense ? OCR_PROMPT_EXPENSE : OCR_PROMPT_INCOME;
@@ -252,7 +255,7 @@ export default function AdminOcrBandeja() {
       });
     }
     setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
-    loadDocs();
+    debouncedLoadDocs();
   };
 
   const processAll = async () => {
@@ -262,17 +265,12 @@ export default function AdminOcrBandeja() {
       return;
     }
     setBatchProcessing(true);
-    let ok = 0, fail = 0;
-    for (let i = 0; i < pending.length; i++) {
-      const doc = pending[i];
-      setBatchProgress({ current: i + 1, total: pending.length, name: doc.originalFileName || 'Documento' });
-      try {
-        await processOcr(doc);
-        ok++;
-      } catch {
-        fail++;
-      }
-    }
+    let done = 0;
+    const { succeeded: ok, failed: fail } = await runBatch(pending, async (doc) => {
+      done++;
+      setBatchProgress({ current: done, total: pending.length, name: doc.originalFileName || 'Documento' });
+      await processOcr(doc);
+    }, { concurrency: 5 });
     setBatchProcessing(false);
     setBatchProgress(null);
     loadDocs();
