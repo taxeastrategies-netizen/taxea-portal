@@ -8,8 +8,9 @@ import {
   ArrowLeft, Share2, MoreVertical, Send, Download,
   Printer, ZoomIn, ZoomOut, FileText, ChevronRight,
   ExternalLink, Copy, CheckCircle2, Clock, AlertTriangle,
-  Mail, X
+  Mail, X, ChevronLeft
 } from 'lucide-react';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -325,8 +326,28 @@ export default function InvoiceDocumentWorkspace({
   onSend,
   onEdit,
   onRefresh,
+  invoicesList,
+  onNavigate,
 }) {
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const currentIndex = invoicesList && invoice ? invoicesList.findIndex(i => i.id === invoice.id) : -1;
+  const hasPrev = currentIndex > 0;
+  const hasNext = invoicesList && currentIndex >= 0 && currentIndex < invoicesList.length - 1;
+
+  const goPrev = () => { if (hasPrev && onNavigate) onNavigate(invoicesList[currentIndex - 1]); };
+  const goNext = () => { if (hasNext && onNavigate) onNavigate(invoicesList[currentIndex + 1]); };
+
+  useEffect(() => {
+    if (!invoicesList || !onNavigate) return;
+    const handler = (e) => {
+      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA' || e.target?.isContentEditable) return;
+      if (e.key === 'ArrowLeft' && hasPrev) { e.preventDefault(); goPrev(); }
+      if (e.key === 'ArrowRight' && hasNext) { e.preventDefault(); goNext(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [currentIndex, hasPrev, hasNext, invoicesList, onNavigate]);
 
   if (!invoice) return null;
 
@@ -427,6 +448,29 @@ export default function InvoiceDocumentWorkspace({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Navegación entre facturas */}
+          {invoicesList && invoicesList.length > 1 && (
+            <div className="flex items-center gap-1 ml-1 pl-2 border-l border-border">
+              <button
+                onClick={goPrev}
+                disabled={!hasPrev}
+                className="p-1.5 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Factura anterior (←)">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-muted-foreground tabular-nums px-1">
+                {currentIndex + 1} / {invoicesList.length}
+              </span>
+              <button
+                onClick={goNext}
+                disabled={!hasNext}
+                className="p-1.5 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Factura siguiente (→)">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Botón principal Enviar — solo para facturas emitidas */}
           {!isRecibida && (

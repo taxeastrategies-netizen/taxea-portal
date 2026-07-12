@@ -480,6 +480,8 @@ export default function Facturas() {
           onSend={handleSend}
           onEdit={(inv) => { openEdit(inv); }}
           onRefresh={handleWorkspaceRefresh}
+          invoicesList={filtered}
+          onNavigate={(inv) => setWorkspaceInvoice(inv)}
         />
       )}
 
