@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -9,6 +9,7 @@ import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
 import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail, classifyUploadError, generateTraceId, generateIdempotencyKey, validateFile } from '@/lib/ocrUploadUtils';
+import { runBatch, debounce } from '@/lib/batchProcessor';
 
 const DOC_TYPE = 'income_invoice';
 const SOURCE_MODULE = 'ocr_income';
@@ -89,11 +90,13 @@ export default function LectorIngresos() {
 
   useEffect(() => { if (company?.id) loadDocs(); }, [company?.id, loadDocs]);
 
+  const debouncedLoadDocs = useMemo(() => debounce(loadDocs, 1200), [loadDocs]);
+
   useEffect(() => {
     if (!company?.id) return;
-    const unsub = base44.entities.OcrInvoiceDocument.subscribe(() => loadDocs());
-    return unsub;
-  }, [company?.id, loadDocs]);
+    const unsub = base44.entities.OcrInvoiceDocument.subscribe(() => debouncedLoadDocs());
+    return () => { unsub(); debouncedLoadDocs.cancel(); };
+  }, [company?.id, debouncedLoadDocs]);
 
   // Re-fetch when user returns to the tab (mobile-PC sync guarantee)
   useEffect(() => {
@@ -111,93 +114,69 @@ export default function LectorIngresos() {
     const deviceType = detectDeviceType();
     const uploadSource = detectUploadSource(captureMethod, isAdmin, deviceType);
 
-    let successCount = 0;
-    let errorCount = 0;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-
-      // Pre-validate file before attempting upload
+    const { succeeded: successCount, failed: errorCount } = await runBatch(files, async (file, i) => {
       const validation = validateFile(file);
-      if (!validation.valid) {
-        progress[i].status = 'error';
-        progress[i].error = validation.message;
-        errorCount++;
-        setUploadProgress([...progress]);
-        continue;
-      }
+      if (!validation.valid) throw new Error(validation.message);
 
       const traceId = generateTraceId();
       const idempotencyKey = generateIdempotencyKey(file, company.id, user?.id);
 
-      try {
-        const uploadResult = await Promise.race([
-          base44.integrations.Core.UploadFile({ file }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 60000)),
-        ]);
-        const file_url = uploadResult?.file_url;
-        if (!file_url) throw new Error('NO_URL_RETURNED: No se recibió la URL del archivo subido.');
+      const uploadResult = await Promise.race([
+        base44.integrations.Core.UploadFile({ file }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 120000)),
+      ]);
+      const file_url = uploadResult?.file_url;
+      if (!file_url) throw new Error('NO_URL_RETURNED');
 
-        let duplicateWarning = '';
-        try {
-          const existing = await base44.entities.OcrInvoiceDocument.filter({
-            company_id: company.id,
-            documentType: DOC_TYPE,
-            originalFileName: file.name,
-            status: { $ne: 'cancelled_by_client' },
-          });
-          if (existing?.length > 0) {
-            duplicateWarning = `Ya existe un documento con el nombre "${file.name}" subido anteriormente.`;
-          }
-        } catch {}
-
-        const auditEntry = buildAuditEntry({
+      await base44.entities.OcrInvoiceDocument.create({
+        company_id: company.id,
+        uploadedByUserId: user?.id,
+        uploadedByEmail: user?.email,
+        documentType: DOC_TYPE,
+        sourceModule: SOURCE_MODULE,
+        status: 'pending',
+        originalFileName: file.name,
+        fileName: file.name,
+        fileMimeType: file.type,
+        fileSize: file.size,
+        fileStorageUrl: file_url,
+        uploadSource,
+        captureMethod,
+        uploadedFromDeviceType: deviceType,
+        uploadedAt: new Date().toISOString(),
+        lastStatusChangedAt: new Date().toISOString(),
+        auditTrail: [buildAuditEntry({
           user, action: 'documento_subido', newStatus: 'pending',
           detail: `${captureMethod} from ${deviceType} | trace=${traceId} | idempotency=${idempotencyKey}`,
-        });
+        })],
+      });
 
-        await base44.entities.OcrInvoiceDocument.create({
-          company_id: company.id,
-          uploadedByUserId: user?.id,
-          uploadedByEmail: user?.email,
-          documentType: DOC_TYPE,
-          sourceModule: SOURCE_MODULE,
-          status: 'pending',
-          originalFileName: file.name,
-          fileName: file.name,
-          fileMimeType: file.type,
-          fileSize: file.size,
-          fileStorageUrl: file_url,
-          uploadSource,
-          captureMethod,
-          uploadedFromDeviceType: deviceType,
-          uploadedAt: new Date().toISOString(),
-          lastStatusChangedAt: new Date().toISOString(),
-          duplicateWarning,
-          auditTrail: [auditEntry],
-        });
+      // Fire-and-forget timeline event — no await to keep upload fast
+      base44.entities.TimelineEvent.create({
+        company_id: company.id,
+        tipo: 'documento_subido',
+        titulo: `Factura de ingreso entregada: ${file.name}`,
+        descripcion: 'Documento pendiente de revision por Taxea',
+        color: 'verde',
+        usuario_email: user?.email,
+        automatico: true,
+        visibilidad: 'ambos',
+      }).catch(() => {});
 
-        await base44.entities.TimelineEvent.create({
-          company_id: company.id,
-          tipo: 'documento_subido',
-          titulo: `Factura de ingreso entregada: ${file.name}`,
-          descripcion: 'Documento pendiente de revision por Taxea',
-          color: 'verde',
-          usuario_email: user?.email,
-          automatico: true,
-          visibilidad: 'ambos',
-        }).catch(() => {});
-
-        progress[i].status = 'done';
-        successCount++;
-      } catch (err) {
-        const classified = classifyUploadError(err);
-        console.error(`[OCR Upload] trace=${traceId} file="${file.name}" code=${classified.errorCode} raw=${classified.rawError || err?.message || err}`);
-        progress[i].status = 'error';
-        progress[i].error = classified.safeMessage;
-        errorCount++;
-      }
+      progress[i].status = 'done';
       setUploadProgress([...progress]);
-    }
+    }, {
+      concurrency: 5,
+      onItemComplete: (i, { ok, error }) => {
+        if (!ok) {
+          const classified = classifyUploadError(error);
+          console.error(`[OCR Upload] file="${files[i].name}" code=${classified.errorCode} raw=${classified.rawError || error?.message || error}`);
+          progress[i].status = 'error';
+          progress[i].error = classified.safeMessage;
+          setUploadProgress([...progress]);
+        }
+      },
+    });
 
     setUploading(false);
     if (successCount > 0 && errorCount === 0) {
@@ -225,7 +204,7 @@ export default function LectorIngresos() {
       safeErrorMessage: '',
       auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_iniciado', prevStatus: doc.status, newStatus: 'processing' })),
     });
-    loadDocs();
+    debouncedLoadDocs();
 
     try {
       const result = await base44.integrations.Core.InvokeLLM({
@@ -251,12 +230,12 @@ export default function LectorIngresos() {
       });
     }
     setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
-    loadDocs();
+    debouncedLoadDocs();
   };
 
   const processAllPending = async () => {
     const pending = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed');
-    for (const doc of pending) { await processOcr(doc); }
+    await runBatch(pending, (doc) => processOcr(doc), { concurrency: 3 });
   };
 
   const handleReview = (doc) => {
