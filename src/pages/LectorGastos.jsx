@@ -41,15 +41,19 @@ const mapForm = (r) => ({
   retencion_irpf: r?.retencion_irpf || 0,
   retencion_tipo: r?.retencion_tipo || 'ninguna',
   importe_retencion: r?.importe_retencion || 0,
+  es_rectificativa: r?.es_rectificativa || false,
+  factura_rectificada: r?.factura_rectificada || '',
 });
 
 const OCR_PROMPT = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
-Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número),
-tipo_impuesto (número %), cuota_impuesto (número), total (número),
-retencion_irpf (número %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, 0 si no aplica),
+IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número, negativo si rectificativa),
+tipo_impuesto (número %), cuota_impuesto (número, negativo si rectificativa), total (número, negativo si rectificativa),
+retencion_irpf (número %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
 categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
 cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
 es_factura_completa (boolean), es_proveedor_extranjero (boolean),
+es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
 datos_faltantes (array strings), alertas_fiscales (array strings), concepto`;
 
 const OCR_SCHEMA = {
@@ -62,6 +66,7 @@ const OCR_SCHEMA = {
     categoria_sugerida: { type: 'string' }, cuenta_pgc: { type: 'string' },
     confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
     es_factura_completa: { type: 'boolean' }, es_proveedor_extranjero: { type: 'boolean' },
+    es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     concepto: { type: 'string' },

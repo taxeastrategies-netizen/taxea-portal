@@ -41,13 +41,17 @@ const mapForm = (r) => ({
   total_factura: r?.total_factura || '',
   fecha_vencimiento: r?.fecha_vencimiento || '',
   estado_cobro: r?.estado_cobro_sugerido || 'pendiente',
+  es_rectificativa: r?.es_rectificativa || false,
+  factura_rectificada: r?.factura_rectificada || '',
 });
 
 const OCR_PROMPT = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
-Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (número),
-tipo_iva (número %), cuota_iva (número), retencion_irpf (número %, 0 si no aplica),
-retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, 0 si no aplica),
-total_factura (número), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (número, negativo si rectificativa),
+tipo_iva (número %), cuota_iva (número, negativo si rectificativa), retencion_irpf (número %, 0 si no aplica),
+retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
+total_factura (número, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
 alertas_fiscales (array strings), datos_faltantes (array strings)`;
 
 const OCR_SCHEMA = {
@@ -60,6 +64,7 @@ const OCR_SCHEMA = {
     retencion_irpf: { type: 'number' }, retencion_tipo: { type: 'string' }, importe_retencion: { type: 'number' },
     total_factura: { type: 'number' },
     fecha_vencimiento: { type: 'string' }, estado_cobro_sugerido: { type: 'string' },
+    es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
   }

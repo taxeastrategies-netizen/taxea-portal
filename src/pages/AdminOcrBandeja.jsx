@@ -52,12 +52,14 @@ const STATUS_FILTERS = [
 ];
 
 const OCR_PROMPT_EXPENSE = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
-Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero),
-tipo_impuesto (numero %), cuota_impuesto (numero), total (numero),
-retencion_irpf (numero %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, 0 si no aplica),
+IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero, negativo si rectificativa),
+tipo_impuesto (numero %), cuota_impuesto (numero, negativo si rectificativa), total (numero, negativo si rectificativa),
+retencion_irpf (numero %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, negativo si rectificativa, 0 si no aplica),
 categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
 cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
 es_factura_completa (boolean), es_proveedor_extranjero (boolean),
+es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (numero de factura original rectificada, si aparece),
 datos_faltantes (array strings), alertas_fiscales (array strings), concepto`;
 
 const OCR_SCHEMA_EXPENSE = {
@@ -70,6 +72,7 @@ const OCR_SCHEMA_EXPENSE = {
     categoria_sugerida: { type: 'string' }, cuenta_pgc: { type: 'string' },
     confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
     es_factura_completa: { type: 'boolean' }, es_proveedor_extranjero: { type: 'boolean' },
+    es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     concepto: { type: 'string' },
@@ -80,10 +83,12 @@ const OCR_SCHEMA_EXPENSE = {
 };
 
 const OCR_PROMPT_INCOME = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
-Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (numero),
-tipo_iva (numero %), cuota_iva (numero), retencion_irpf (numero %, 0 si no aplica),
-retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, 0 si no aplica),
-total_factura (numero), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (numero, negativo si rectificativa),
+tipo_iva (numero %), cuota_iva (numero, negativo si rectificativa), retencion_irpf (numero %, 0 si no aplica),
+retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, negativo si rectificativa, 0 si no aplica),
+total_factura (numero, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
+es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (numero de factura original rectificada, si aparece),
 alertas_fiscales (array strings), datos_faltantes (array strings)`;
 
 const OCR_SCHEMA_INCOME = {
@@ -96,6 +101,7 @@ const OCR_SCHEMA_INCOME = {
     retencion_irpf: { type: 'number' }, retencion_tipo: { type: 'string' }, importe_retencion: { type: 'number' },
     total_factura: { type: 'number' },
     fecha_vencimiento: { type: 'string' }, estado_cobro_sugerido: { type: 'string' },
+    es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
   }

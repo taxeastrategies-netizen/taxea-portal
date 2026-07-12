@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2, MinusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading }) {
   const [form, setForm] = useState(doc.formData || {});
@@ -93,6 +94,29 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
                 </ul>
               </div>
             </div>
+          )}
+
+          {/* Banner rectificativa */}
+          {form.es_rectificativa && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 flex gap-2">
+              <MinusCircle className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-purple-700">Factura rectificativa (abono)</p>
+                <p className="text-xs text-purple-600 mt-0.5">Los importes son negativos y disminuyen la base, IGIC/IVA y totales del periodo.</p>
+                {form.factura_rectificada && <p className="text-xs text-purple-500 mt-0.5">Rectifica factura: {form.factura_rectificada}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Toggle rectificativa */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox checked={form.es_rectificativa || false} onCheckedChange={(v) => set('es_rectificativa', v === true)} />
+            <span className="text-xs font-medium text-foreground">Es factura rectificativa / abono</span>
+          </label>
+          {form.es_rectificativa && (
+            <F label="Factura rectificada (nº original)" col2>
+              <Input value={form.factura_rectificada || ''} onChange={e => set('factura_rectificada', e.target.value)} className="h-8 text-sm" placeholder="Nº factura original" />
+            </F>
           )}
 
           {/* Campos según tipo */}

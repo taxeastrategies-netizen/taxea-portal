@@ -48,8 +48,12 @@ Deno.serve(async (req) => {
     }
 
     const baseImponible = parseFloat(form.base_imponible) || 0;
-    if (baseImponible <= 0) {
-      return Response.json({ error: 'La base imponible debe ser mayor que 0' }, { status: 400 });
+    const esRectificativa = form.es_rectificativa === true || form.es_rectificativa === 'true' || extractedData?.es_rectificativa === true;
+    if (baseImponible === 0) {
+      return Response.json({ error: 'La base imponible no puede ser 0' }, { status: 400 });
+    }
+    if (baseImponible < 0 && !esRectificativa) {
+      return Response.json({ error: 'Base imponible negativa solo permitida en facturas rectificativas. Marca la opción es_rectificativa.' }, { status: 400 });
     }
 
     // 4. Build invoice data
@@ -81,6 +85,8 @@ Deno.serve(async (req) => {
         archivo_url: doc.fileStorageUrl || '',
         subido_por: user.email || '',
         origin: 'ocr',
+        es_rectificativa: esRectificativa,
+        factura_rectificada: form.factura_rectificada || extractedData?.factura_rectificada || undefined,
       };
     } else {
       // recibida / gasto
@@ -105,6 +111,8 @@ Deno.serve(async (req) => {
         archivo_url: doc.fileStorageUrl || '',
         subido_por: user.email || '',
         origin: 'ocr',
+        es_rectificativa: esRectificativa,
+        factura_rectificada: form.factura_rectificada || extractedData?.factura_rectificada || undefined,
       };
     }
 
@@ -158,9 +166,9 @@ Deno.serve(async (req) => {
         company_id: doc.company_id,
         tipo: 'factura_contabilizada',
         titulo: invoiceType === 'emitida'
-          ? `Factura emitida aprobada via OCR: ${numeroFactura}`
-          : `Factura recibida aprobada via OCR: ${numeroFactura}`,
-        descripcion: `Factura ${invoiceType === 'emitida' ? 'emitida' : 'recibida'} creada desde documento OCR. Total: ${invoiceData.total_factura} EUR`,
+          ? `Factura emitida aprobada via OCR: ${numeroFactura}${esRectificativa ? ' (RECTIFICATIVA)' : ''}`
+          : `Factura recibida aprobada via OCR: ${numeroFactura}${esRectificativa ? ' (RECTIFICATIVA)' : ''}`,
+        descripcion: `Factura ${invoiceType === 'emitida' ? 'emitida' : 'recibida'} creada desde documento OCR. Total: ${invoiceData.total_factura} EUR${esRectificativa ? ' · Factura rectificativa (importes negativos)' : ''}`,
         color: 'verde',
         usuario_email: user.email || '',
         automatico: true,

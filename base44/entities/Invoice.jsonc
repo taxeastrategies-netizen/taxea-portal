@@ -187,6 +187,13 @@
     "origin": {
       "type": "string",
       "default": "manual"
+    },
+    "es_rectificativa": {
+      "type": "boolean",
+      "default": false
+    },
+    "factura_rectificada": {
+      "type": "string"
     }
   },
   "required": [
