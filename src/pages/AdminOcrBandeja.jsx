@@ -162,6 +162,8 @@ export default function AdminOcrBandeja() {
   const [validating, setValidating] = useState(false);
   const [batchProcessing, setBatchProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
+  const [validatingAll, setValidatingAll] = useState(false);
+  const [validateProgress, setValidateProgress] = useState(null);
   const [toast, setToast] = useState(null);
   const [activeTab, setActiveTab] = useState('ocr');
 
@@ -256,6 +258,36 @@ export default function AdminOcrBandeja() {
     }
     setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
     debouncedLoadDocs();
+  };
+
+  const validateAll = async () => {
+    const reviewDocs = documents.filter(d => d.status === 'review_required');
+    if (reviewDocs.length === 0) {
+      showToast('error', 'No hay documentos pendientes de revisión para validar.');
+      return;
+    }
+    setValidatingAll(true);
+    let done = 0;
+    const { succeeded: ok, failed: fail } = await runBatch(reviewDocs, async (doc) => {
+      done++;
+      setValidateProgress({ current: done, total: reviewDocs.length, name: doc.originalFileName || 'Documento' });
+      const extracted = parseExtracted(doc.extractedData);
+      const isExpense = doc.documentType === 'expense_invoice';
+      const invoiceType = isExpense ? 'recibida' : 'emitida';
+      const form = isExpense ? mapFormGastos(extracted) : mapFormIngresos(extracted);
+      const res = await base44.functions.invoke('approveOcrDocument', { docId: doc.id, form, invoiceType, extractedData: extracted });
+      const result = res?.data || res;
+      if (!result?.success) throw new Error(result?.error || 'Error al contabilizar');
+    }, { concurrency: 5 });
+    setValidatingAll(false);
+    setValidateProgress(null);
+    window.dispatchEvent(new Event('financials:refresh'));
+    loadDocs();
+    if (fail === 0) {
+      showToast('success', `${ok} factura(s) contabilizada(s) automáticamente con los datos de la IA.`);
+    } else {
+      showToast('error', `${ok} contabilizadas OK, ${fail} fallaron. Revisa la lista para detalles.`, 8000);
+    }
   };
 
   const processAll = async () => {
@@ -411,6 +443,18 @@ export default function AdminOcrBandeja() {
                 : <Zap className="w-4 h-4" />}
               {batchProcessing ? 'Procesando...' : 'Procesar todo'}
             </Button>
+            <Button
+              onClick={validateAll}
+              disabled={validatingAll || batchProcessing || counts.review_required === 0}
+              size="sm"
+              className="gap-2"
+              variant="default"
+            >
+              {validatingAll
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <CheckCircle className="w-4 h-4" />}
+              {validatingAll ? 'Validando...' : 'Todo validado'}
+            </Button>
             <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
             </Button>
@@ -440,6 +484,21 @@ export default function AdminOcrBandeja() {
 
       {activeTab === 'ocr' && (
         <>
+          {validateProgress && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-green-600 animate-spin flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-green-800 font-medium">
+                  Contabilizando {validateProgress.current} de {validateProgress.total}
+                </p>
+                <p className="text-xs text-green-600 truncate">{validateProgress.name}</p>
+              </div>
+              <span className="text-sm font-bold text-green-700 flex-shrink-0">
+                {Math.round((validateProgress.current / validateProgress.total) * 100)}%
+              </span>
+            </div>
+          )}
+
           {/* Batch progress */}
           {batchProgress && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3">
