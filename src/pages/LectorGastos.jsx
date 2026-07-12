@@ -80,6 +80,7 @@ export default function LectorGastos() {
   const [reviewing, setReviewing] = useState(null);
   const [processingIds, setProcessingIds] = useState(new Set());
   const [toast, setToast] = useState(null);
+  const [validatingAll, setValidatingAll] = useState(false);
 
   const loadDocs = useCallback(async () => {
     if (!company?.id) return;
@@ -333,17 +334,53 @@ export default function LectorGastos() {
     loadDocs();
   };
 
+  const validateAll = async () => {
+    const reviewDocs = documents.filter(d => d.status === 'review_required');
+    if (reviewDocs.length === 0) {
+      setToast({ type: 'error', message: 'No hay documentos pendientes de validación.' });
+      setTimeout(() => setToast(null), 6000);
+      return;
+    }
+    setValidatingAll(true);
+    const { succeeded: ok, failed: fail } = await runBatch(reviewDocs, async (doc) => {
+      const extracted = parseExtracted(doc.extractedData);
+      const form = mapForm(extracted);
+      const res = await base44.functions.invoke('approveOcrDocument', {
+        docId: doc.id, form, invoiceType: 'recibida', extractedData: extracted,
+      });
+      const result = res?.data || res;
+      if (!result?.success) throw new Error(result?.error || 'Error al contabilizar');
+    }, { concurrency: 5 });
+    setValidatingAll(false);
+    window.dispatchEvent(new Event('financials:refresh'));
+    loadDocs();
+    if (fail === 0) {
+      setToast({ type: 'success', message: `${ok} factura(s) contabilizada(s) automáticamente con los datos de la IA.` });
+      setTimeout(() => setToast(null), 6000);
+    } else {
+      setToast({ type: 'error', message: `${ok} contabilizadas OK, ${fail} fallaron. Revisa la lista para detalles.` });
+      setTimeout(() => setToast(null), 8000);
+    }
+  };
+
   if (loadingCompany) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
   if (!company) return <NoCompanyState pageName="el Lector de Gastos" />;
 
   const pendingCount = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed').length;
+  const reviewCount = documents.filter(d => d.status === 'review_required').length;
 
   return (
     <div>
       <PageHeader title="Lector de Gastos" subtitle="Entrega de facturas recibidas y tickets · Taxea revisa y contabiliza">
         {pendingCount > 0 && (
-          <Button onClick={processAllPending} disabled={uploading} className="bg-teal hover:bg-teal-dark h-9 gap-2">
+          <Button onClick={processAllPending} disabled={uploading || validatingAll} className="bg-teal hover:bg-teal-dark h-9 gap-2">
             <Play className="w-4 h-4" /> Procesar {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
+          </Button>
+        )}
+        {reviewCount > 0 && (
+          <Button onClick={validateAll} disabled={uploading || validatingAll} variant="default" className="h-9 gap-2">
+            {validatingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {validatingAll ? 'Validando...' : `Validar ${reviewCount} revisada${reviewCount > 1 ? 's' : ''}`}
           </Button>
         )}
       </PageHeader>
