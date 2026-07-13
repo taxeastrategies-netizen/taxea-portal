@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
+import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -39,6 +40,7 @@ export default function Facturas() {
   const [anulando, setAnulando] = useState(false);
   const [showRecurringView, setShowRecurringView] = useState(false);
   const [showGenerateRecurring, setShowGenerateRecurring] = useState(false);
+  const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
 
   useEffect(() => {
     if (company?.id) loadInvoices();
@@ -216,9 +218,14 @@ export default function Facturas() {
               <Repeat className="w-4 h-4 mr-1.5" /> Generar pendientes
             </Button>
           ) : (
-            <Button onClick={openNew} className="bg-teal hover:bg-teal-dark h-9">
-              <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setShowDuplicateCheck(true)} className="h-9 gap-2">
+                <CopyCheck className="w-4 h-4" /> Chequeo duplicado
+              </Button>
+              <Button onClick={openNew} className="bg-teal hover:bg-teal-dark h-9">
+                <Plus className="w-4 h-4 mr-1.5" /> Nueva Factura
+              </Button>
+            </>
           )}
         </PageHeader>
 
@@ -515,6 +522,14 @@ export default function Facturas() {
         open={showGenerateRecurring}
         onOpenChange={setShowGenerateRecurring}
         onDone={loadInvoices}
+      />
+
+      <DuplicateCheckModal
+        open={showDuplicateCheck}
+        onClose={() => { setShowDuplicateCheck(false); loadInvoices(); }}
+        companyId={company?.id}
+        scope={filterTipo === 'emitida' ? 'invoices_emitida' : 'invoices_recibida'}
+        scopeLabel={filterTipo === 'emitida' ? 'Facturas Emitidas' : 'Facturas Recibidas'}
       />
 
     </>

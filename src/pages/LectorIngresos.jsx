@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Play, CheckCircle, FileText, Loader2, XCircle } from 'lucide-react';
+import { Play, CheckCircle, FileText, Loader2, XCircle, CopyCheck } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
+import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
 import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail, classifyUploadError, generateTraceId, generateIdempotencyKey, validateFile } from '@/lib/ocrUploadUtils';
 import { runBatch, debounce } from '@/lib/batchProcessor';
 
@@ -90,6 +91,7 @@ export default function LectorIngresos() {
   const [processingIds, setProcessingIds] = useState(new Set());
   const [toast, setToast] = useState(null);
   const [validatingAll, setValidatingAll] = useState(false);
+  const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
 
   const loadDocs = useCallback(async () => {
     if (!company?.id) return;
@@ -381,6 +383,9 @@ export default function LectorIngresos() {
   return (
     <div>
       <PageHeader title="Lector de Ingresos" subtitle="Entrega de facturas emitidas · Taxea revisa y contabiliza">
+        <Button variant="outline" onClick={() => setShowDuplicateCheck(true)} className="h-9 gap-2">
+          <CopyCheck className="w-4 h-4" /> Chequeo duplicado
+        </Button>
         {pendingCount > 0 && (
           <Button onClick={processAllPending} disabled={uploading || validatingAll} className="bg-teal hover:bg-teal-dark h-9 gap-2">
             <Play className="w-4 h-4" /> Procesar {pendingCount} pendiente{pendingCount > 1 ? 's' : ''}
@@ -468,6 +473,14 @@ export default function LectorIngresos() {
         onWithdraw={handleWithdraw}
         processingIds={processingIds}
         emptyMessage="Todavia no hay facturas de ingreso entregadas en este apartado."
+      />
+
+      <DuplicateCheckModal
+        open={showDuplicateCheck}
+        onClose={() => { setShowDuplicateCheck(false); loadDocs(); }}
+        companyId={company?.id}
+        scope="ocr_income"
+        scopeLabel="Lector de Ingresos"
       />
     </div>
   );
