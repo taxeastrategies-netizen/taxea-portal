@@ -34,7 +34,7 @@ const mapForm = (r) => ({
   cliente_nif: r?.cliente_nif || '',
   concepto: r?.concepto || '',
   base_imponible: r?.base_imponible || '',
-  tipo_iva: r?.tipo_iva || 21,
+  tipo_iva: r?.tipo_iva ?? 21,
   cuota_iva: r?.cuota_iva || '',
   retencion_irpf: r?.retencion_irpf || 0,
   retencion_tipo: r?.retencion_tipo || 'ninguna',

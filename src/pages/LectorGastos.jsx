@@ -33,7 +33,7 @@ const mapForm = (r) => ({
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
   base_imponible: r?.base_imponible || '',
-  tipo_impuesto: r?.tipo_impuesto || 21,
+  tipo_impuesto: r?.tipo_impuesto ?? 21,
   cuota_impuesto: r?.cuota_impuesto || '',
   total: r?.total || '',
   categoria: r?.categoria_sugerida || 'otros',
