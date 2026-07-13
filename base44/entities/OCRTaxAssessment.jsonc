@@ -1,0 +1,135 @@
+{
+  "name": "OCRTaxAssessment",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "ocrDocumentId": {
+      "type": "string"
+    },
+    "fiscalProfileId": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "counterpartyId": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "ingreso",
+        "gasto"
+      ],
+      "default": "gasto"
+    },
+    "detectedTax": {
+      "type": "string"
+    },
+    "proposedTreatment": {
+      "type": "string"
+    },
+    "proposedTaxRate": {
+      "type": "number"
+    },
+    "proposedTaxAmount": {
+      "type": "number"
+    },
+    "proposedWithholdingRate": {
+      "type": "number"
+    },
+    "proposedWithholdingAmount": {
+      "type": "number"
+    },
+    "deductibleAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "nonDeductibleAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "reverseChargeAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "confidence": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft_ocr_extracted",
+        "pending_fiscal_classification",
+        "review_required",
+        "blocked_missing_fiscal_profile",
+        "blocked_conflict_ocr_vs_config",
+        "ready_to_post",
+        "posted",
+        "processed",
+        "rejected",
+        "superseded_by_rectification"
+      ],
+      "default": "pending_fiscal_classification"
+    },
+    "reviewReasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "appliedRules": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "explanation": {
+      "type": "string"
+    },
+    "approvedBy": {
+      "type": "string"
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "company_id",
+    "ocrDocumentId",
+    "direction"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
+}

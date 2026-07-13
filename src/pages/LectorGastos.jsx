@@ -54,7 +54,13 @@ categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/softwar
 cuenta_pgc (cuenta 6XX PGC), confianza_pgc (0-100), motivo_clasificacion,
 es_factura_completa (boolean), es_proveedor_extranjero (boolean),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
-datos_faltantes (array strings), alertas_fiscales (array strings), concepto`;
+datos_faltantes (array strings), alertas_fiscales (array strings), concepto,
+impuesto_detectado (string: IVA/IGIC/ninguno segun lo que aparezca en la factura),
+tipo_operacion (string: interior/intracomunitaria/exportacion/importacion/adquisicion_intracomunitaria/inversion_sujeto_pasivo/isp),
+pais_proveedor (string codigo pais si se identifica, ej: ES, PT, FR, US),
+es_profesional_pf (boolean, true si el proveedor parece ser profesional persona fisica con NIF que empieza por numero o ciertas letras),
+es_arrendamiento (boolean, true si el concepto parece alquiler de local/inmueble),
+nif_vies (string, NIF-IVA UE si aparece en factura intracomunitaria)`;
 
 const OCR_SCHEMA = {
   type: 'object',
@@ -73,6 +79,12 @@ const OCR_SCHEMA = {
     retencion_irpf: { type: 'number' },
     retencion_tipo: { type: 'string' },
     importe_retencion: { type: 'number' },
+    impuesto_detectado: { type: 'string' },
+    tipo_operacion: { type: 'string' },
+    pais_proveedor: { type: 'string' },
+    es_profesional_pf: { type: 'boolean' },
+    es_arrendamiento: { type: 'boolean' },
+    nif_vies: { type: 'string' },
   }
 };
 
@@ -449,6 +461,7 @@ export default function LectorGastos() {
             onReject={handleReject}
             onCancel={() => setReviewing(null)}
             loading={validating}
+            companyId={company?.id}
           />
         </div>
       )}

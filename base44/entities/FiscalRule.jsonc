@@ -1,0 +1,145 @@
+{
+  "name": "FiscalRule",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "tax": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "irpf",
+        "facturacion",
+        "contabilidad"
+      ],
+      "default": "iva"
+    },
+    "territory": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "regime": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "ingreso",
+        "gasto",
+        "ambos"
+      ],
+      "default": "ambos"
+    },
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "emitida",
+        "recibida",
+        "rectificativa",
+        "simplificada",
+        "proforma",
+        "presupuesto"
+      ],
+      "default": "emitida"
+    },
+    "operationType": {
+      "type": "string"
+    },
+    "counterpartyCondition": {
+      "type": "string"
+    },
+    "ocrCondition": {
+      "type": "string"
+    },
+    "resultTreatment": {
+      "type": "string"
+    },
+    "taxRate": {
+      "type": "number"
+    },
+    "withholdingRate": {
+      "type": "number"
+    },
+    "deductiblePercent": {
+      "type": "number",
+      "default": 100
+    },
+    "accountingMapping": {
+      "type": "string"
+    },
+    "booksImpact": {
+      "type": "string"
+    },
+    "modelsImpact": {
+      "type": "string"
+    },
+    "invoiceMention": {
+      "type": "string"
+    },
+    "autoApprovalAllowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "baja",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
+    },
+    "sourceUrl": {
+      "type": "string"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "tax",
+    "resultTreatment"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
+}

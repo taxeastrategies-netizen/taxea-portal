@@ -1,0 +1,168 @@
+{
+  "name": "FiscalProfile",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "fiscalName": {
+      "type": "string"
+    },
+    "taxId": {
+      "type": "string"
+    },
+    "entityType": {
+      "type": "string",
+      "enum": [
+        "autonomo",
+        "sociedad",
+        "comunidad_bienes",
+        "sociedad_civil",
+        "asociacion_fundacion",
+        "entidad_publica",
+        "otra"
+      ],
+      "default": "autonomo"
+    },
+    "mainTerritory": {
+      "type": "string",
+      "enum": [
+        "peninsula_baleares",
+        "canarias",
+        "ceuta_melilla",
+        "ue",
+        "no_ue"
+      ],
+      "default": "peninsula_baleares"
+    },
+    "taxAuthority": {
+      "type": "string",
+      "enum": [
+        "aeat",
+        "atc",
+        "ambas",
+        "otra"
+      ],
+      "default": "aeat"
+    },
+    "filingFrequency": {
+      "type": "string",
+      "enum": [
+        "trimestral",
+        "mensual",
+        "anual",
+        "ocasional"
+      ],
+      "default": "trimestral"
+    },
+    "fiscalYear": {
+      "type": "number"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    },
+    "isLargeCompany": {
+      "type": "boolean",
+      "default": false
+    },
+    "isREDEME": {
+      "type": "boolean",
+      "default": false
+    },
+    "usesSII": {
+      "type": "boolean",
+      "default": false
+    },
+    "usesVeriFactu": {
+      "type": "boolean",
+      "default": false
+    },
+    "indirectTaxDefault": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "no_aplica",
+        "mixto"
+      ],
+      "default": "iva"
+    },
+    "defaultVatRate": {
+      "type": "number",
+      "default": 21
+    },
+    "defaultIgicRate": {
+      "type": "number",
+      "default": 7
+    },
+    "subjectToIRPF": {
+      "type": "boolean",
+      "default": false
+    },
+    "irpfEstimation": {
+      "type": "string",
+      "enum": [
+        "directa_normal",
+        "directa_simplificada",
+        "objetiva_modulos",
+        "no_aplica"
+      ],
+      "default": "no_aplica"
+    },
+    "defaultWithholdingRate": {
+      "type": "number",
+      "default": 0
+    },
+    "professionalActivityStartDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "isProfessionalWithRetention": {
+      "type": "boolean",
+      "default": false
+    },
+    "isPropertyLessor": {
+      "type": "boolean",
+      "default": false
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "fiscalName",
+    "mainTerritory"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
+}

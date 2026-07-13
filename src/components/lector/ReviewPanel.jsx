@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import FiscalAssessmentPanel from './FiscalAssessmentPanel';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading }) {
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId }) {
   const [form, setForm] = useState(doc.formData || {});
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
@@ -118,6 +119,21 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
               <Input value={form.factura_rectificada || ''} onChange={e => set('factura_rectificada', e.target.value)} className="h-8 text-sm" placeholder="Nº factura original" />
             </F>
           )}
+
+          {/* Panel de evaluación fiscal automática */}
+          <FiscalAssessmentPanel
+            ocrData={doc.extracted}
+            companyId={companyId}
+            direction={tipo === 'ingresos' ? 'ingreso' : 'gasto'}
+            counterpartyName={tipo === 'ingresos' ? form.cliente_nombre : form.proveedor_cliente}
+            counterpartyTaxId={tipo === 'ingresos' ? form.cliente_nif : doc.extracted?.nif_proveedor}
+            invoiceBase={parseFloat(form.base_imponible) || 0}
+            invoiceTaxRate={parseFloat(tipo === 'ingresos' ? form.tipo_iva : form.tipo_impuesto) || 0}
+            invoiceTaxAmount={parseFloat(tipo === 'ingresos' ? form.cuota_iva : form.cuota_impuesto) || 0}
+            invoiceWithholdingRate={parseFloat(form.retencion_irpf) || 0}
+            invoiceWithholdingAmount={parseFloat(form.importe_retencion) || 0}
+            esProveedorExtranjero={doc.extracted?.es_proveedor_extranjero}
+          />
 
           {/* Campos según tipo */}
           {tipo === 'ingresos' ? (

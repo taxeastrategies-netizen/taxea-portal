@@ -1,0 +1,169 @@
+{
+  "name": "FiscalActivity",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "fiscalProfileId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "iaeCode": {
+      "type": "string"
+    },
+    "cnaeCode": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "territory": {
+      "type": "string",
+      "enum": [
+        "peninsula_baleares",
+        "canarias",
+        "ceuta_melilla",
+        "ue",
+        "no_ue"
+      ],
+      "default": "peninsula_baleares"
+    },
+    "activityType": {
+      "type": "string",
+      "enum": [
+        "profesional",
+        "empresarial",
+        "comercial_minorista",
+        "agricola_ganadera",
+        "inmobiliaria",
+        "financiera_seguros",
+        "sanitaria",
+        "educativa",
+        "cultural_deportiva",
+        "hosteleria",
+        "ecommerce",
+        "servicios_digitales",
+        "construccion_inmuebles",
+        "transporte",
+        "otra"
+      ],
+      "default": "profesional"
+    },
+    "indirectTax": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "no_aplica",
+        "mixto"
+      ],
+      "default": "iva"
+    },
+    "indirectTaxRegime": {
+      "type": "string",
+      "enum": [
+        "general",
+        "exenta_limitada",
+        "exenta_plena",
+        "no_sujeta",
+        "simplificado",
+        "agricola_ganadera",
+        "recargo_equivalencia",
+        "criterio_caja",
+        "rebu",
+        "agencias_viajes",
+        "oro_inversion",
+        "grupo_entidades",
+        "comerciante_minorista_igic",
+        "pequeno_empresario_igic",
+        "mixto"
+      ],
+      "default": "general"
+    },
+    "incomeDefaultTreatment": {
+      "type": "string"
+    },
+    "expenseDefaultTreatment": {
+      "type": "string"
+    },
+    "deductionRight": {
+      "type": "string",
+      "enum": [
+        "pleno",
+        "limitado",
+        "sin_derecho",
+        "prorrata_general",
+        "prorrata_especial",
+        "sector_diferenciado"
+      ],
+      "default": "pleno"
+    },
+    "proRataPercent": {
+      "type": "number",
+      "default": 100
+    },
+    "defaultTaxRate": {
+      "type": "number",
+      "default": 21
+    },
+    "defaultWithholdingRate": {
+      "type": "number",
+      "default": 0
+    },
+    "accountingDefaults": {
+      "type": "string"
+    },
+    "expectedModels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "automationLevel": {
+      "type": "string",
+      "enum": [
+        "automatico",
+        "proponer_revisar",
+        "siempre_revisar"
+      ],
+      "default": "proponer_revisar"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "company_id",
+    "name",
+    "activityType",
+    "indirectTax"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Building2, Shield, Users, CheckSquare, Bell, User } from 'lucide-react';
+import { Building2, Shield, Users, CheckSquare, Bell, User, Landmark } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
 import TabEmpresa from '@/components/ajustes/TabEmpresa';
@@ -8,9 +8,11 @@ import TabSeguridad from '@/components/ajustes/TabSeguridad';
 import TabAfiliados from '@/components/ajustes/TabAfiliados';
 import TabOnboarding from '@/components/ajustes/TabOnboarding';
 import TabNotificaciones from '@/components/ajustes/TabNotificaciones';
+import TabFiscal from '@/components/ajustes/TabFiscal';
 
 const TABS = [
   { id: 'empresa',        label: 'Empresa',        icon: Building2 },
+  { id: 'fiscal',         label: 'Fiscalidad',     icon: Landmark },
   { id: 'onboarding',     label: 'Primeros pasos', icon: CheckSquare },
   { id: 'seguridad',      label: 'Seguridad',      icon: Shield },
   { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
@@ -50,6 +52,7 @@ export default function Ajustes() {
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           {activeTab === 'empresa'        && <TabEmpresa company={company} user={user} refreshCompany={refreshCompany} />}
+          {activeTab === 'fiscal'         && <TabFiscal />}
           {activeTab === 'seguridad'      && <TabSeguridad user={user} />}
           {activeTab === 'afiliados'      && <TabAfiliados user={user} />}
           {activeTab === 'onboarding'     && <TabOnboarding company={company} />}

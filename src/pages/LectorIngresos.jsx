@@ -52,7 +52,12 @@ tipo_iva (número %), cuota_iva (número, negativo si rectificativa), retencion_
 retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
 total_factura (número, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
-alertas_fiscales (array strings), datos_faltantes (array strings)`;
+alertas_fiscales (array strings), datos_faltantes (array strings),
+impuesto_detectado (string: IVA/IGIC/ninguno segun lo que aparezca en la factura),
+tipo_operacion (string: interior/intracomunitaria/exportacion/adquisicion_intracomunitaria/inversion_sujeto_pasivo/isp),
+pais_cliente (string codigo pais si se identifica, ej: ES, PT, FR, US),
+es_cliente_ue (boolean, true si el cliente tiene NIF-IVA UE y parece operacion intracomunitaria),
+nif_vies (string, NIF-IVA UE del cliente si aparece en factura intracomunitaria)`;
 
 const OCR_SCHEMA = {
   type: 'object',
@@ -67,6 +72,11 @@ const OCR_SCHEMA = {
     es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
+    impuesto_detectado: { type: 'string' },
+    tipo_operacion: { type: 'string' },
+    pais_cliente: { type: 'string' },
+    es_cliente_ue: { type: 'boolean' },
+    nif_vies: { type: 'string' },
   }
 };
 
@@ -443,6 +453,7 @@ export default function LectorIngresos() {
             onReject={handleReject}
             onCancel={() => setReviewing(null)}
             loading={validating}
+            companyId={company?.id}
           />
         </div>
       )}
