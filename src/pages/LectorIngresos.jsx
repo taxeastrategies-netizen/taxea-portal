@@ -44,6 +44,7 @@ const mapForm = (r) => ({
   estado_cobro: r?.estado_cobro_sugerido || 'pendiente',
   es_rectificativa: r?.es_rectificativa || false,
   factura_rectificada: r?.factura_rectificada || '',
+  situacion_impuesto: r?.situacion_impuesto || 'sujeta_gravada',
 });
 
 const buildOcrPrompt = (company, fiscalProfile, activity) => {
@@ -62,7 +63,7 @@ CONTEXTO FISCAL DEL EMISOR:
 - El CLIENTE es la otra parte que aparece en la factura como destinatario (NO el emisor).
 - Territorio: ${territory === 'canarias' ? 'Canarias (IGIC)' : territory}
 - Régimen: ${regime}
-${isComercianteMinorista ? '- Es COMERCIANTE MINORISTA: NO repercute IGIC/IVA en sus facturas de venta al por menor. tipo_iva=0, cuota_iva=0.' : ''}
+${isComercianteMinorista ? '- Es COMERCIANTE MINORISTA: NO repercute IGIC/IVA en sus facturas de venta al por menor. tipo_iva=0, cuota_iva=0, situacion_impuesto="sujeta_exenta".' : ''}
 ${!isProfessionalRetention && !isPropertyLessor ? '- NO es profesional con retención NI arrendador de inmuebles. NO aplicar retenciones IRPF (retencion_irpf=0, importe_retencion=0, retencion_tipo="ninguna") a menos que aparezca explícitamente en la factura.' : ''}
 ${isPropertyLessor ? '- Es arrendador de inmuebles: puede aplicar retención IRPF 19% si aparece en la factura.' : ''}
 ${isProfessionalRetention ? '- Es profesional con retención IRPF: aplicar retención si corresponde.' : ''}
@@ -80,6 +81,7 @@ total_factura (número, negativo si rectificativa), fecha_vencimiento (YYYY-MM-D
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
 alertas_fiscales (array strings), datos_faltantes (array strings),
 impuesto_detectado (string: IVA/IGIC/ninguno segun lo que aparezca en la factura),
+situacion_impuesto (string: sujeta_gravada/sujeta_exenta/no_sujeta - sujeta_gravada si aplica IGIC/IVA, sujeta_exenta si la operación está exenta, no_sujeta si no está sujeta al impuesto),
 tipo_operacion (string: interior/intracomunitaria/exportacion/adquisicion_intracomunitaria/inversion_sujeto_pasivo/isp),
 pais_cliente (string codigo pais si se identifica, ej: ES, PT, FR, US),
 es_cliente_ue (boolean, true si el cliente tiene NIF-IVA UE y parece operacion intracomunitaria),
@@ -100,6 +102,7 @@ const OCR_SCHEMA = {
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
     impuesto_detectado: { type: 'string' },
+    situacion_impuesto: { type: 'string' },
     tipo_operacion: { type: 'string' },
     pais_cliente: { type: 'string' },
     es_cliente_ue: { type: 'boolean' },

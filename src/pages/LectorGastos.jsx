@@ -29,6 +29,7 @@ const parseExtracted = (raw) => {
 
 const mapForm = (r) => ({
   proveedor_cliente: r?.proveedor || '',
+  nif_proveedor: r?.nif_proveedor || '',
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
   base_imponible: r?.base_imponible || '',
@@ -44,10 +45,26 @@ const mapForm = (r) => ({
   importe_retencion: r?.importe_retencion || 0,
   es_rectificativa: r?.es_rectificativa || false,
   factura_rectificada: r?.factura_rectificada || '',
+  situacion_impuesto: r?.situacion_impuesto || 'sujeta_gravada',
 });
 
-const OCR_PROMPT = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
-IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+const buildOcrPrompt = (company, fiscalProfile, activity) => {
+  const territory = fiscalProfile?.mainTerritory || '';
+  const regime = activity?.indirectTaxRegime || '';
+  const isCanarias = territory === 'canarias';
+
+  return `Analiza este documento fiscal (factura, ticket o justificante de gasto) RECIBIDO por la empresa y extrae los datos en JSON.
+CONTEXTO FISCAL DEL RECEPTOR:
+- Territorio: ${isCanarias ? 'Canarias (IGIC)' : territory}
+- Régimen: ${regime}
+- El PROVEEDOR es quien EMITE la factura (no la empresa receptora).
+- Extrae el NIF del proveedor (nif_proveedor) tal como aparece en la factura.
+
+REGLAS:
+- Si no encuentras un dato, usa null.
+- Si es factura rectificativa (abono, nota de crédito, importes negativos), marca es_rectificativa=true y extrae importes con signo negativo.
+- Solo extrae retenciones si aparecen EXPLÍCITAMENTE en la factura. No las inventes.
+
 Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número, negativo si rectificativa),
 tipo_impuesto (número %), cuota_impuesto (número, negativo si rectificativa), total (número, negativo si rectificativa),
 retencion_irpf (número %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
@@ -57,11 +74,13 @@ es_factura_completa (boolean), es_proveedor_extranjero (boolean),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
 datos_faltantes (array strings), alertas_fiscales (array strings), concepto,
 impuesto_detectado (string: IVA/IGIC/ninguno segun lo que aparezca en la factura),
+situacion_impuesto (string: sujeta_gravada/sujeta_exenta/no_sujeta - sujeta_gravada si aplica IGIC/IVA, sujeta_exenta si la operación está exenta, no_sujeta si no está sujeta al impuesto),
 tipo_operacion (string: interior/intracomunitaria/exportacion/importacion/adquisicion_intracomunitaria/inversion_sujeto_pasivo/isp),
 pais_proveedor (string codigo pais si se identifica, ej: ES, PT, FR, US),
 es_profesional_pf (boolean, true si el proveedor parece ser profesional persona fisica con NIF que empieza por numero o ciertas letras),
 es_arrendamiento (boolean, true si el concepto parece alquiler de local/inmueble),
 nif_vies (string, NIF-IVA UE si aparece en factura intracomunitaria)`;
+};
 
 const OCR_SCHEMA = {
   type: 'object',
@@ -81,6 +100,7 @@ const OCR_SCHEMA = {
     retencion_tipo: { type: 'string' },
     importe_retencion: { type: 'number' },
     impuesto_detectado: { type: 'string' },
+    situacion_impuesto: { type: 'string' },
     tipo_operacion: { type: 'string' },
     pais_proveedor: { type: 'string' },
     es_profesional_pf: { type: 'boolean' },
@@ -100,6 +120,20 @@ export default function LectorGastos() {
   const [toast, setToast] = useState(null);
   const [validatingAll, setValidatingAll] = useState(false);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
+  const [fiscalContext, setFiscalContext] = useState({});
+
+  useEffect(() => {
+    if (!company?.id) return;
+    Promise.all([
+      base44.entities.FiscalProfile.filter({ company_id: company.id, active: true }),
+      base44.entities.FiscalActivity.filter({ company_id: company.id, active: true }),
+    ]).then(([profiles, activities]) => {
+      setFiscalContext({
+        profile: profiles?.[0] || null,
+        activity: activities?.[0] || null,
+      });
+    }).catch(() => {});
+  }, [company?.id]);
 
   const loadDocs = useCallback(async () => {
     if (!company?.id) return;
@@ -234,7 +268,7 @@ export default function LectorGastos() {
 
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: OCR_PROMPT,
+        prompt: buildOcrPrompt(company, fiscalContext.profile, fiscalContext.activity),
         file_urls: [doc.fileStorageUrl],
         response_json_schema: OCR_SCHEMA,
       });

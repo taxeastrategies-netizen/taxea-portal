@@ -172,6 +172,16 @@ function IngresosFields({ form, set }) {
           </SelectContent>
         </Select>
       </F>
+      <F label="Situación impuesto" col2>
+        <Select value={form.situacion_impuesto || 'sujeta_gravada'} onValueChange={v => set('situacion_impuesto', v)}>
+          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sujeta_gravada">Sujeta y gravada (aplica IGIC/IVA)</SelectItem>
+            <SelectItem value="sujeta_exenta">Sujeta pero exenta</SelectItem>
+            <SelectItem value="no_sujeta">No sujeta</SelectItem>
+          </SelectContent>
+        </Select>
+      </F>
     </div>
   );
 }
@@ -192,6 +202,7 @@ function GastosFields({ form, set }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <F label="Proveedor" col2><Input value={form.proveedor_cliente || ''} onChange={e => set('proveedor_cliente', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="NIF/CIF proveedor"><Input value={form.nif_proveedor || ''} onChange={e => set('nif_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Fecha"><Input type="date" value={form.fecha || ''} onChange={e => set('fecha', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Categoría">
         <Select value={form.categoria || 'otros'} onValueChange={v => set('categoria', v)}>
@@ -206,6 +217,16 @@ function GastosFields({ form, set }) {
       <F label="Retención IRPF %"><Input type="number" step="0.01" value={form.retencion_irpf || 0} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Importe retención (€)"><Input type="number" step="0.01" value={form.importe_retencion || ''} onChange={e => set('importe_retencion', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Total (€)"><Input type="number" step="0.01" value={form.total || ''} onChange={e => set('total', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Situación impuesto" col2>
+        <Select value={form.situacion_impuesto || 'sujeta_gravada'} onValueChange={v => set('situacion_impuesto', v)}>
+          <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sujeta_gravada">Sujeta y gravada (aplica IGIC/IVA)</SelectItem>
+            <SelectItem value="sujeta_exenta">Sujeta pero exenta</SelectItem>
+            <SelectItem value="no_sujeta">No sujeta</SelectItem>
+          </SelectContent>
+        </Select>
+      </F>
     </div>
   );
 }
