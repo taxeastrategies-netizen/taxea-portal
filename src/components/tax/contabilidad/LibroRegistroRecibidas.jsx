@@ -4,7 +4,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownCircle, Search, Eye } from 'lucide-react';
+import { ArrowDownCircle, Search, Eye, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -27,9 +27,15 @@ const CAT_LABEL = {
 };
 
 export default function LibroRegistroRecibidas() {
-  const { company } = useOutletContext() || {};
+  const { company, fiscalProfile } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
+
+  // Comerciante minorista en Canarias: sin derecho a deducción de IGIC
+  // El IGIC soportado en facturas recibidas NO es deducible → se trata como mayor gasto
+  const isComercianteMinorista = fiscalProfile?.indirectTaxDefault === 'igic'
+    && fiscalProfile?.mainTerritory === 'canarias'
+    && fiscalProfile?.activities?.some(a => a.indirectTaxRegime === 'comerciante_minorista_igic' || a.deductionRight === 'sin_derecho');
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices-recibidas', company?.id],
@@ -53,11 +59,17 @@ export default function LibroRegistroRecibidas() {
     return matchAnio && matchSearch;
   });
 
-  const totales = filtered.reduce((acc, inv) => ({
-    base: acc.base + (inv.base_imponible || 0),
-    iva: acc.iva + (inv.cuota_iva || 0),
-    total: acc.total + (inv.total_factura || 0),
-  }), { base: 0, iva: 0, total: 0 });
+  const totales = filtered.reduce((acc, inv) => {
+    const base = inv.base_imponible || 0;
+    const cuota = inv.cuota_iva || 0;
+    return {
+      base: acc.base + base,
+      iva: acc.iva + cuota,
+      // Mayor gasto: base + IGIC no deducible
+      gastoTotal: acc.gastoTotal + (isComercianteMinorista ? base + cuota : base),
+      total: acc.total + (inv.total_factura || 0),
+    };
+  }, { base: 0, iva: 0, gastoTotal: 0, total: 0 });
 
   if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando...</div>;
 
@@ -70,6 +82,16 @@ export default function LibroRegistroRecibidas() {
           <p className="text-xs text-muted-foreground">Se alimenta exclusivamente de facturas de gasto registradas.</p>
         </div>
       </div>
+
+      {isComercianteMinorista && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-800">
+            <p className="font-semibold">Régimen especial de comerciante minorista (IGIC)</p>
+            <p className="mt-0.5">El IGIC soportado en facturas recibidas <strong>no es deducible</strong>. Se trata como <strong>mayor gasto contable</strong>: el coste real de cada factura = Base + Cuota IGIC.</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-48">
@@ -93,7 +115,7 @@ export default function LibroRegistroRecibidas() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-auto">
-          <table className="w-full text-xs min-w-[1000px]">
+          <table className={cn("w-full text-xs", isComercianteMinorista ? "min-w-[1100px]" : "min-w-[1000px]")}>
             <thead className="bg-muted/40 border-b border-border">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fecha</th>
@@ -102,8 +124,11 @@ export default function LibroRegistroRecibidas() {
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">NIF/CIF</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Concepto</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Base</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">IVA %</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">IGIC %</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IGIC</th>
+                {isComercianteMinorista && (
+                  <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Gasto total</th>
+                )}
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Total</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Categoría</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Estado</th>
@@ -120,7 +145,12 @@ export default function LibroRegistroRecibidas() {
                   <td className="px-3 py-2 max-w-32 truncate text-muted-foreground">{inv.concepto || '—'}</td>
                   <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
                   <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono">{fmt(inv.cuota_iva)}</td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">{fmt(inv.cuota_iva)}</td>
+                  {isComercianteMinorista && (
+                    <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">
+                      {fmt((inv.base_imponible || 0) + (inv.cuota_iva || 0))}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
                   <td className="px-3 py-2 text-muted-foreground">{CAT_LABEL[inv.categoria_gasto] || inv.categoria_gasto || '—'}</td>
                   <td className="px-3 py-2">
@@ -143,7 +173,10 @@ export default function LibroRegistroRecibidas() {
                 <td colSpan={5} className="px-3 py-2 text-xs font-bold">TOTAL ({filtered.length} facturas)</td>
                 <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.base)}</td>
                 <td />
-                <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.iva)}</td>
+                <td className="px-3 py-2 text-right font-mono font-bold text-muted-foreground">{fmt(totales.iva)}</td>
+                {isComercianteMinorista && (
+                  <td className="px-3 py-2 text-right font-mono font-bold text-amber-700">{fmt(totales.gastoTotal)}</td>
+                )}
                 <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.total)}</td>
                 <td colSpan={3} />
               </tr>
