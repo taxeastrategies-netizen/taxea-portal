@@ -56,6 +56,59 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Base imponible negativa solo permitida en facturas rectificativas. Marca la opción es_rectificativa.' }, { status: 400 });
     }
 
+    // 3.5. Fiscal engine check: evaluate treatment before allowing contabilización
+    let fiscalAssessment = null;
+    try {
+      const direction = invoiceType === 'emitida' ? 'ingreso' : 'gasto';
+      const counterpartyName = invoiceType === 'emitida' ? form.cliente_nombre : form.proveedor_cliente;
+      const counterpartyTaxId = invoiceType === 'emitida' ? form.cliente_nif : extractedData?.nif_proveedor;
+      const invoiceBase = parseFloat(form.base_imponible) || 0;
+      const invoiceTaxRate = parseFloat(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) || 0;
+      const invoiceTaxAmount = parseFloat(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) || 0;
+      const invoiceWithholdingRate = parseFloat(form.retencion_irpf) || 0;
+      const invoiceWithholdingAmount = parseFloat(form.importe_retencion) || 0;
+
+      const profiles = await base44.asServiceRole.entities.FiscalProfile.filter({ company_id: doc.company_id, active: true });
+      if (profiles && profiles.length > 0) {
+        // Profile exists - run fiscal evaluation
+        const assessmentRes = await base44.functions.invoke('evaluateFiscalTreatment', {
+          ocrData: extractedData,
+          companyId: doc.company_id,
+          direction,
+          counterpartyName,
+          counterpartyTaxId,
+          invoiceBase,
+          invoiceTaxRate,
+          invoiceTaxAmount,
+          invoiceWithholdingRate,
+          invoiceWithholdingAmount,
+          esProveedorExtranjero: extractedData?.es_proveedor_extranjero,
+          detectedOperationType: extractedData?.tipo_operacion,
+          ocrDocumentId: docId,
+        });
+        fiscalAssessment = assessmentRes?.data || assessmentRes;
+
+        // Block if fiscal engine says blocked
+        if (fiscalAssessment?.status === 'blocked_conflict_ocr_vs_config') {
+          return Response.json({
+            error: 'BLOQUEO FISCAL: ' + (fiscalAssessment.alerts?.[0] || 'Conflicto entre datos OCR y configuración fiscal del cliente.'),
+            fiscalStatus: fiscalAssessment.status,
+            fiscalAlerts: fiscalAssessment.alerts,
+          }, { status: 422 });
+        }
+        if (fiscalAssessment?.status === 'blocked_missing_fiscal_profile') {
+          return Response.json({
+            error: 'Falta configuración fiscal. Configura el perfil fiscal en Ajustes > Fiscalidad antes de contabilizar.',
+            fiscalStatus: fiscalAssessment.status,
+          }, { status: 422 });
+        }
+        // For review_required, log warning but allow approval (human reviewer decided)
+        console.log('[approveOcrDocument] Fiscal assessment:', fiscalAssessment.status, 'confidence:', fiscalAssessment.confidence);
+      }
+    } catch (fiscalError) {
+      console.warn('[approveOcrDocument] Fiscal check failed (non-blocking):', fiscalError.message);
+    }
+
     // 4. Build invoice data
     const year = new Date(fechaEmision).getFullYear();
     const month = new Date(fechaEmision).getMonth() + 1;
@@ -122,7 +175,17 @@ Deno.serve(async (req) => {
     });
 
     // 5. Create the Invoice with service role (bypasses RLS)
-    console.log('[approveOcrDocument] Creating invoice for company:', doc.company_id, 'type:', invoiceType);
+    console.log('[approveOcrDocument] Creating invoice for company:', doc.company_id, 'type:', invoiceType, 'fiscalStatus:', fiscalAssessment?.status);
+    if (fiscalAssessment) {
+      invoiceData.fiscalAssessment = JSON.stringify({
+        status: fiscalAssessment.status,
+        treatment: fiscalAssessment.proposedTreatment,
+        confidence: fiscalAssessment.confidence,
+        alerts: fiscalAssessment.alerts,
+        appliedRules: fiscalAssessment.appliedRules,
+        explanation: fiscalAssessment.explanation,
+      });
+    }
     const inv = await base44.asServiceRole.entities.Invoice.create(invoiceData);
 
     if (!inv || !inv.id) {

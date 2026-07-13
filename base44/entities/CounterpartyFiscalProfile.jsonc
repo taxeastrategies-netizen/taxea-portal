@@ -1,0 +1,115 @@
+{
+  "name": "CounterpartyFiscalProfile",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "taxId": {
+      "type": "string"
+    },
+    "vatId": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "territory": {
+      "type": "string",
+      "enum": [
+        "tai",
+        "canarias",
+        "ceuta_melilla",
+        "ue_iva",
+        "no_ue",
+        "desconocido"
+      ],
+      "default": "desconocido"
+    },
+    "counterpartyType": {
+      "type": "string",
+      "enum": [
+        "particular",
+        "autonomo",
+        "sociedad",
+        "entidad_publica",
+        "no_residente",
+        "plataforma_digital",
+        "proveedor_extranjero",
+        "otro"
+      ],
+      "default": "otro"
+    },
+    "isBusiness": {
+      "type": "boolean",
+      "default": false
+    },
+    "viesStatus": {
+      "type": "string",
+      "enum": [
+        "validado",
+        "no_validado",
+        "no_aplica",
+        "pendiente"
+      ],
+      "default": "pendiente"
+    },
+    "knownRegime": {
+      "type": "string"
+    },
+    "defaultTaxTreatment": {
+      "type": "string"
+    },
+    "defaultWithholdingRate": {
+      "type": "number",
+      "default": 0
+    },
+    "isRecurrentRule": {
+      "type": "boolean",
+      "default": false
+    },
+    "approvedRule": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.company_id": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.company_id": "{{user.data.company_id}}"
+    }
+  }
+}

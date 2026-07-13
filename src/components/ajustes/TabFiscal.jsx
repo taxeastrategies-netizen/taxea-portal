@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Building2, Briefcase, Shield, Loader2, CheckCircle, AlertTriangle, Plus, Trash2, Save } from 'lucide-react';
+import CounterpartyManager from './CounterpartyManager';
+import FiscalRulesManager from './FiscalRulesManager';
+import FiscalTestSimulator from './FiscalTestSimulator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -453,6 +456,15 @@ export default function TabFiscal() {
           </div>
         )}
       </div>
+
+      {/* Sección 5: Contrapartes fiscales */}
+      <CounterpartyManager companyId={company?.id} />
+
+      {/* Sección 6: Reglas fiscales personalizadas */}
+      <FiscalRulesManager companyId={company?.id} />
+
+      {/* Sección 7: Simulador de prueba */}
+      <FiscalTestSimulator companyId={company?.id} />
 
       {profile?.reviewedAt && (
         <div className="text-xs text-muted-foreground text-right">
