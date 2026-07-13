@@ -46,8 +46,33 @@ const mapForm = (r) => ({
   factura_rectificada: r?.factura_rectificada || '',
 });
 
-const OCR_PROMPT = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
-IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
+const buildOcrPrompt = (company, fiscalProfile, activity) => {
+  const issuerName = company?.razon_social || company?.nombre_comercial || '';
+  const issuerNif = company?.nif_cif || '';
+  const territory = fiscalProfile?.mainTerritory || '';
+  const regime = activity?.indirectTaxRegime || '';
+  const isComercianteMinorista = regime === 'comerciante_minorista_igic' || regime === 'recargo_equivalencia';
+  const isCanarias = territory === 'canarias';
+  const isPropertyLessor = fiscalProfile?.isPropertyLessor || false;
+  const isProfessionalRetention = fiscalProfile?.isProfessionalWithRetention || false;
+
+  return `Analiza esta factura EMITIDA por ${issuerName} (NIF: ${issuerNif}) y extrae los datos en JSON.
+CONTEXTO FISCAL DEL EMISOR:
+- El EMISOR (proveedor) de esta factura es ${issuerName}, NIF ${issuerNif}. NO es el cliente.
+- El CLIENTE es la otra parte que aparece en la factura como destinatario (NO el emisor).
+- Territorio: ${territory === 'canarias' ? 'Canarias (IGIC)' : territory}
+- Régimen: ${regime}
+${isComercianteMinorista ? '- Es COMERCIANTE MINORISTA: NO repercute IGIC/IVA en sus facturas de venta al por menor. tipo_iva=0, cuota_iva=0.' : ''}
+${!isProfessionalRetention && !isPropertyLessor ? '- NO es profesional con retención NI arrendador de inmuebles. NO aplicar retenciones IRPF (retencion_irpf=0, importe_retencion=0, retencion_tipo="ninguna") a menos que aparezca explícitamente en la factura.' : ''}
+${isPropertyLessor ? '- Es arrendador de inmuebles: puede aplicar retención IRPF 19% si aparece en la factura.' : ''}
+${isProfessionalRetention ? '- Es profesional con retención IRPF: aplicar retención si corresponde.' : ''}
+
+REGLAS:
+- Si no encuentras un dato, usa null.
+- cliente_nombre y cliente_nif deben ser los del CLIENTE (destinatario), NUNCA los del emisor ${issuerName}.
+- Si es factura rectificativa (abono, nota de crédito, importes negativos), marca es_rectificativa=true y extrae importes con signo negativo.
+- Solo extrae retenciones si aparecen EXPLÍCITAMENTE en la factura. No las inventes.
+
 Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (número, negativo si rectificativa),
 tipo_iva (número %), cuota_iva (número, negativo si rectificativa), retencion_irpf (número %, 0 si no aplica),
 retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
@@ -59,6 +84,7 @@ tipo_operacion (string: interior/intracomunitaria/exportacion/adquisicion_intrac
 pais_cliente (string codigo pais si se identifica, ej: ES, PT, FR, US),
 es_cliente_ue (boolean, true si el cliente tiene NIF-IVA UE y parece operacion intracomunitaria),
 nif_vies (string, NIF-IVA UE del cliente si aparece en factura intracomunitaria)`;
+};
 
 const OCR_SCHEMA = {
   type: 'object',
@@ -92,6 +118,20 @@ export default function LectorIngresos() {
   const [toast, setToast] = useState(null);
   const [validatingAll, setValidatingAll] = useState(false);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
+  const [fiscalContext, setFiscalContext] = useState({});
+
+  useEffect(() => {
+    if (!company?.id) return;
+    Promise.all([
+      base44.entities.FiscalProfile.filter({ company_id: company.id, active: true }),
+      base44.entities.FiscalActivity.filter({ company_id: company.id, active: true }),
+    ]).then(([profiles, activities]) => {
+      setFiscalContext({
+        profile: profiles?.[0] || null,
+        activity: activities?.[0] || null,
+      });
+    }).catch(() => {});
+  }, [company?.id]);
 
   const loadDocs = useCallback(async () => {
     if (!company?.id) return;
@@ -226,7 +266,7 @@ export default function LectorIngresos() {
 
     try {
       const result = await base44.integrations.Core.InvokeLLM({
-        prompt: OCR_PROMPT,
+        prompt: buildOcrPrompt(company, fiscalContext.profile, fiscalContext.activity),
         file_urls: [doc.fileStorageUrl],
         response_json_schema: OCR_SCHEMA,
       });
