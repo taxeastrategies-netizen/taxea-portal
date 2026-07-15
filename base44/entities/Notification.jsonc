@@ -41,20 +41,56 @@
   ],
   "rls": {
     "create": {
-      "company_id": "{{user.data.company_id}}",
-      "destinatario_email": "{{user.email}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}",
+          "data.destinatario_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "read": {
-      "company_id": "{{user.data.company_id}}",
-      "destinatario_email": "{{user.email}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}",
+          "data.destinatario_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "company_id": "{{user.data.company_id}}",
-      "destinatario_email": "{{user.email}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}",
+          "data.destinatario_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "company_id": "{{user.data.company_id}}",
-      "destinatario_email": "{{user.email}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}",
+          "data.destinatario_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }
