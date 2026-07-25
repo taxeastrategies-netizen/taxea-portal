@@ -52,5 +52,54 @@
     "userId",
     "caseType",
     "description"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "data.userId": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.userId": "{{user.id}}"
+        },
+        {
+          "data.assignedTo": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.userId": "{{user.id}}"
+        },
+        {
+          "data.assignedTo": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }

@@ -150,7 +150,21 @@
     "status"
   ],
   "rls": {
-    "create": {},
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "data.uploadedByUserId": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "read": {
       "$or": [
         {

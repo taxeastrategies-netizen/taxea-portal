@@ -43,7 +43,21 @@
     "actionType"
   ],
   "rls": {
-    "create": {},
+    "create": {
+      "$or": [
+        {
+          "data.userId": "{{user.id}}"
+        },
+        {
+          "data.actionBy": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "read": {
       "user_condition": {
         "role": "admin"
