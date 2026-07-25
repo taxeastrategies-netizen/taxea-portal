@@ -1,0 +1,95 @@
+{
+  "name": "TaxeaAuditLegalSource",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "findingId": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "authority": {
+      "type": "string"
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "normativa",
+        "consulta_vinculante",
+        "resolucion_teac",
+        "jurisprudencia",
+        "doctrina_administrativa",
+        "manual_oficial",
+        "otra"
+      ],
+      "default": "normativa"
+    },
+    "url": {
+      "type": "string"
+    },
+    "publicationDate": {
+      "type": "string"
+    },
+    "consultedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "articleOrReference": {
+      "type": "string"
+    },
+    "shortExcerpt": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "relevance": {
+      "type": "string"
+    },
+    "authorityLevel": {
+      "type": "string",
+      "enum": [
+        "oficial_primario",
+        "oficial_secundario",
+        "contexto"
+      ],
+      "default": "oficial_primario"
+    },
+    "validityWarning": {
+      "type": "string"
+    },
+    "discarded": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

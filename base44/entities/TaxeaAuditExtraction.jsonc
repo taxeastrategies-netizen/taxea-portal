@@ -1,0 +1,86 @@
+{
+  "name": "TaxeaAuditExtraction",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "fileId": {
+      "type": "string"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "extractionType": {
+      "type": "string"
+    },
+    "rawText": {
+      "type": "string"
+    },
+    "structuredDataJson": {
+      "type": "string"
+    },
+    "tablesJson": {
+      "type": "string"
+    },
+    "extractedData": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "default": 0
+    },
+    "page": {
+      "type": "number"
+    },
+    "sheet": {
+      "type": "string"
+    },
+    "row": {
+      "type": "number"
+    },
+    "column": {
+      "type": "string"
+    },
+    "reliability": {
+      "type": "string",
+      "enum": [
+        "fiable",
+        "no_verificable",
+        "ocr_dudoso",
+        "lectura_parcial",
+        "requiere_revision_manual"
+      ],
+      "default": "fiable"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "fileId"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

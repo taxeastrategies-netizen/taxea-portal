@@ -1,0 +1,90 @@
+{
+  "name": "TaxeaAuditRunLog",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "runType": {
+      "type": "string",
+      "enum": [
+        "inventario",
+        "extraccion",
+        "ocr",
+        "cruces",
+        "riesgos",
+        "investigacion_juridica",
+        "informe",
+        "email"
+      ],
+      "default": "extraccion"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "en_progreso",
+        "completado",
+        "con_error"
+      ],
+      "default": "en_progreso"
+    },
+    "filesProcessed": {
+      "type": "number",
+      "default": 0
+    },
+    "findingsCreated": {
+      "type": "number",
+      "default": 0
+    },
+    "sourcesFound": {
+      "type": "number",
+      "default": 0
+    },
+    "errorMessage": {
+      "type": "string"
+    },
+    "modelUsed": {
+      "type": "string"
+    },
+    "triggeredBy": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "runType"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

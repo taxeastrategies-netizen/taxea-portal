@@ -22,6 +22,16 @@ Deno.serve(async (req) => {
       notes: (auditCase.notes || '') + `\n[Análisis iniciado por ${user.email} el ${new Date().toISOString()}]`
     });
 
+    // Create run log
+    const runLog = await base44.asServiceRole.entities.TaxeaAuditRunLog.create({
+      auditCaseId,
+      runType: 'extraccion',
+      startedAt: new Date().toISOString(),
+      status: 'en_progreso',
+      triggeredBy: user.email,
+      modelUsed: 'claude_sonnet_4_6'
+    });
+
     // Get all files for this case
     const files = await base44.asServiceRole.entities.TaxeaAuditFile.filter({ auditCaseId });
     if (!files || files.length === 0) {
@@ -135,6 +145,20 @@ Reglas críticas:
           extractedAt: new Date().toISOString()
         });
 
+        // Create extraction record with structured data
+        await base44.asServiceRole.entities.TaxeaAuditExtraction.create({
+          auditCaseId,
+          fileId: file.id,
+          fileName: file.originalName,
+          extractionType: 'document_intelligence',
+          rawText: '',
+          structuredDataJson: JSON.stringify(llmResponse.extractedData || []),
+          tablesJson: '',
+          extractedData: llmResponse.extractedData || [],
+          confidence: llmResponse.hasTextLayer ? 0.9 : 0.6,
+          reliability: llmResponse.hasTextLayer === false ? 'ocr_dudoso' : 'fiable'
+        });
+
         // Create findings
         if (llmResponse.findings && llmResponse.findings.length > 0) {
           const findingRecords = llmResponse.findings.map((f, idx) => {
@@ -223,6 +247,14 @@ Incluye al final: "Borrador pendiente de revisión profesional. No sustituye ase
       recommendation: recommendation,
       impactEstimated: `${allFindings.length} hallazgos: ${bloqueos.length} bloqueos, ${errores.length} errores, ${riesgos.length} riesgos, ${noVerificables.length} no verificables`,
       summaryMarkdown: typeof summaryResponse === 'string' ? summaryResponse : JSON.stringify(summaryResponse)
+    });
+
+    // Update run log
+    await base44.asServiceRole.entities.TaxeaAuditRunLog.update(runLog.id, {
+      finishedAt: new Date().toISOString(),
+      status: 'completado',
+      filesProcessed,
+      findingsCreated: findingsCreated.length
     });
 
     return Response.json({

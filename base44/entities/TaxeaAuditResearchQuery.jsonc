@@ -1,0 +1,71 @@
+{
+  "name": "TaxeaAuditResearchQuery",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "findingId": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "searchDate": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "ejecutada",
+        "sin_resultados",
+        "con_error"
+      ],
+      "default": "pendiente"
+    },
+    "resultsCount": {
+      "type": "number",
+      "default": 0
+    },
+    "sourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "discardedSources": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "query"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

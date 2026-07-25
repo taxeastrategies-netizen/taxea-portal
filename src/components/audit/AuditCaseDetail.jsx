@@ -13,6 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ReactMarkdown from 'react-markdown';
+import AuditInvestigationTab from '@/components/audit/AuditInvestigationTab';
+import AuditHistoryTab from '@/components/audit/AuditHistoryTab';
+import AuditEmailTab from '@/components/audit/AuditEmailTab';
 
 const VERDICT_LABELS = {
   ok: { label: 'OK', color: 'bg-green-50 text-green-700 border-green-200' },
@@ -198,6 +201,33 @@ export default function AuditCaseDetail({ caseId, onBack }) {
         </Badge>
       </div>
 
+      {/* Tarjetas iniciales */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className={`rounded-xl border p-3 ${auditCase.recommendation === 'no_presentar' ? 'bg-red-50 border-red-200' : auditCase.recommendation === 'parar_24_48h' ? 'bg-orange-50 border-orange-200' : auditCase.recommendation === 'pendiente_documentacion' ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Recomendación</p>
+          <p className="text-sm font-bold mt-0.5">
+            {auditCase.recommendation === 'ok_continuar' ? 'OK para continuar' :
+             auditCase.recommendation === 'revisar_antes_cerrar' ? 'Revisar antes de cerrar' :
+             auditCase.recommendation === 'parar_24_48h' ? 'Parar 24-48h' :
+             auditCase.recommendation === 'no_presentar' ? 'No presentar' :
+             auditCase.recommendation === 'pendiente_documentacion' ? 'Pendiente documentación' :
+             'Solo borrador'}
+          </p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-3">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Impacto estimado</p>
+          <p className="text-xs font-medium mt-0.5 text-foreground">{auditCase.impactEstimated || 'Sin cuantificar'}</p>
+        </div>
+        <div className={`rounded-xl border p-3 ${auditCase.riskLevel === 'critico' ? 'bg-red-50 border-red-200' : auditCase.riskLevel === 'alto' ? 'bg-orange-50 border-orange-200' : auditCase.riskLevel === 'medio' ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Riesgo</p>
+          <p className="text-sm font-bold mt-0.5 capitalize">{auditCase.riskLevel}</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-3">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Estado</p>
+          <p className="text-sm font-bold mt-0.5 capitalize">{auditCase.status.replace(/_/g, ' ')}</p>
+        </div>
+      </div>
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
         <div className="bg-card rounded-lg border border-border p-3">
@@ -267,10 +297,13 @@ export default function AuditCaseDetail({ caseId, onBack }) {
       )}
 
       <Tabs defaultValue="documentos" className="w-full">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="documentos">Documentos ({files.length})</TabsTrigger>
           <TabsTrigger value="hallazgos">Hallazgos ({findings.length})</TabsTrigger>
+          <TabsTrigger value="investigacion">Investigación</TabsTrigger>
           <TabsTrigger value="informe">Informe ({reports.length})</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
+          <TabsTrigger value="historial">Historial</TabsTrigger>
         </TabsList>
 
         {/* Documentos */}
@@ -359,6 +392,11 @@ export default function AuditCaseDetail({ caseId, onBack }) {
           )}
         </TabsContent>
 
+        {/* Investigación jurídica */}
+        <TabsContent value="investigacion" className="mt-4">
+          <AuditInvestigationTab caseId={caseId} />
+        </TabsContent>
+
         {/* Informe */}
         <TabsContent value="informe" className="mt-4">
           {reports.length === 0 ? (
@@ -386,6 +424,15 @@ export default function AuditCaseDetail({ caseId, onBack }) {
               ))}
             </div>
           )}
+        </TabsContent>
+        {/* Email */}
+        <TabsContent value="email" className="mt-4">
+          <AuditEmailTab caseId={caseId} />
+        </TabsContent>
+
+        {/* Historial */}
+        <TabsContent value="historial" className="mt-4">
+          <AuditHistoryTab caseId={caseId} />
         </TabsContent>
       </Tabs>
 
