@@ -1,0 +1,118 @@
+{
+  "name": "TaxeaAuditFinding",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "findingCode": {
+      "type": "string"
+    },
+    "area": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "documentClaim": {
+      "type": "string"
+    },
+    "verification": {
+      "type": "string"
+    },
+    "exactEvidence": {
+      "type": "string"
+    },
+    "legalBasisSummary": {
+      "type": "string"
+    },
+    "legalSourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "economicEffect": {
+      "type": "string"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "ok_parcial",
+        "error",
+        "diferencia",
+        "no_verificable",
+        "falta_doc",
+        "criterio",
+        "aviso",
+        "opcion",
+        "riesgo",
+        "bloquea"
+      ],
+      "default": "no_verificable"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "bloquea",
+        "alta",
+        "media",
+        "baja",
+        "posterior",
+        "ccaa",
+        "menor"
+      ],
+      "default": "media"
+    },
+    "actionRecommended": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "detectado",
+        "en_revision",
+        "aceptado",
+        "descartado",
+        "excluido_informe",
+        "resuelto"
+      ],
+      "default": "detectado"
+    },
+    "humanDecision": {
+      "type": "string"
+    },
+    "adminComment": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "findingCode",
+    "area",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

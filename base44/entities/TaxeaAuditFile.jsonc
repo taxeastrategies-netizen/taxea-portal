@@ -1,0 +1,107 @@
+{
+  "name": "TaxeaAuditFile",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "originalName": {
+      "type": "string"
+    },
+    "storagePath": {
+      "type": "string"
+    },
+    "mimeType": {
+      "type": "string"
+    },
+    "extension": {
+      "type": "string"
+    },
+    "size": {
+      "type": "number"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "uploadStatus": {
+      "type": "string",
+      "enum": [
+        "subido",
+        "procesando",
+        "ocr_pendiente",
+        "ocr_procesado",
+        "extraido",
+        "clasificado",
+        "con_error",
+        "duplicado_posible",
+        "requiere_revision_manual",
+        "excluido_admin"
+      ],
+      "default": "subido"
+    },
+    "processingStatus": {
+      "type": "string"
+    },
+    "documentType": {
+      "type": "string"
+    },
+    "pageCount": {
+      "type": "number"
+    },
+    "sheetCount": {
+      "type": "number"
+    },
+    "hasTextLayer": {
+      "type": "boolean",
+      "default": false
+    },
+    "requiresOcr": {
+      "type": "boolean",
+      "default": false
+    },
+    "documentDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "whatItAccredits": {
+      "type": "string"
+    },
+    "uploadedBy": {
+      "type": "string"
+    },
+    "extractedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "errorMessage": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "originalName",
+    "storagePath"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

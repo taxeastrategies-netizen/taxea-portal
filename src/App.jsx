@@ -49,6 +49,7 @@ import ComingSoon from './pages/ComingSoon';
 import AdminClients from './pages/AdminClients';
 import Suscripcion from './pages/Suscripcion';
 import GestionUsuarios from './pages/GestionUsuarios';
+import AdminAudit from './pages/AdminAudit';
 
 import AdminOcrCredits from './pages/AdminOcrCredits';
 import ImportacionContable from './pages/ImportacionContable';
@@ -124,6 +125,7 @@ function AppWithContext({ user }) {
         <Route path="/admin/estado-contable" element={<Navigate to="/admin/ocr-bandeja" replace />} />
         <Route path="/suscripcion" element={<Suscripcion />} />
         <Route path="/admin/users" element={<GestionUsuarios />} />
+        <Route path="/admin/audit" element={<AdminAudit />} />
 
         <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
         <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />

@@ -252,6 +252,7 @@ const UTILS_ITEMS = [
 
 const ADMIN_ITEMS = [
   { to: '/admin/users', label: 'Gestión de usuarios', icon: UserCog },
+  { to: '/admin/audit', label: 'Audit', icon: Shield },
   { to: '/admin/ocr-bandeja', label: 'Bandeja OCR', icon: ScanLine },
   { to: '/admin/ocr-credits', label: 'Créditos OCR', icon: ScanLine },
   { to: '/admin/backup-drive', label: 'Seguridad y Copias', icon: HardDrive },

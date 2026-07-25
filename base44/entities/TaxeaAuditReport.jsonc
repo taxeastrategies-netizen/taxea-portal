@@ -1,0 +1,83 @@
+{
+  "name": "TaxeaAuditReport",
+  "type": "object",
+  "properties": {
+    "auditCaseId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "default": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "reportType": {
+      "type": "string",
+      "enum": [
+        "informe_completo",
+        "resumen_ejecutivo",
+        "solo_bloqueos",
+        "informe_gestoria",
+        "informe_cliente",
+        "anexo_juridico",
+        "inventario_documental",
+        "replica_calculos",
+        "excel_hallazgos"
+      ],
+      "default": "informe_completo"
+    },
+    "markdownContent": {
+      "type": "string"
+    },
+    "pdfUrl": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "generado",
+        "aprobado",
+        "obsoleto"
+      ],
+      "default": "generado"
+    },
+    "generatedBy": {
+      "type": "string"
+    },
+    "approvedByAdmin": {
+      "type": "string"
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "auditCaseId",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "name": "TaxeaAuditCase",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "clientId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "clientNif": {
+      "type": "string"
+    },
+    "auditType": {
+      "type": "string",
+      "enum": [
+        "revision_modelo_fiscal",
+        "revision_modelo_200",
+        "revision_iva",
+        "revision_igic",
+        "revision_irpf",
+        "revision_retenciones",
+        "revision_contable",
+        "revision_escrituras_societarias",
+        "revision_contratos",
+        "revision_operaciones_vinculadas",
+        "revision_requerimiento_aeat_atc",
+        "revision_cierre_anual",
+        "revision_cierre_trimestral",
+        "due_diligence_documental",
+        "auditoria_libre"
+      ],
+      "default": "auditoria_libre"
+    },
+    "jurisdiction": {
+      "type": "string",
+      "enum": [
+        "espana_aeat",
+        "canarias_atc",
+        "ccaa",
+        "ue",
+        "otro"
+      ],
+      "default": "espana_aeat"
+    },
+    "taxYear": {
+      "type": "number"
+    },
+    "period": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "borrador",
+        "documentos_subidos",
+        "procesando",
+        "pendiente_ocr",
+        "analisis_completado",
+        "investigacion_pendiente",
+        "investigacion_completada",
+        "informe_generado",
+        "pendiente_revision_admin",
+        "validado_admin",
+        "cerrado",
+        "con_error"
+      ],
+      "default": "borrador"
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": [
+        "ok_continuar",
+        "revisar_antes_cerrar",
+        "parar_24_48h",
+        "no_presentar",
+        "pendiente_documentacion",
+        "solo_borrador"
+      ],
+      "default": "solo_borrador"
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": [
+        "bajo",
+        "medio",
+        "alto",
+        "critico"
+      ],
+      "default": "bajo"
+    },
+    "impactEstimated": {
+      "type": "string"
+    },
+    "summaryMarkdown": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "locked": {
+      "type": "boolean",
+      "default": false
+    },
+    "createdBy": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
