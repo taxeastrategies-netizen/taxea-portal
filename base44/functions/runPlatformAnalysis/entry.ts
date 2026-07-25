@@ -6,6 +6,10 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      return Response.json({ error: 'Forbidden: admin access required' }, { status: 403 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const manualTrigger = body?.manual === true;
     const targetCompanyId = body?.company_id || null;

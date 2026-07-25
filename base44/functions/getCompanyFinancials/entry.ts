@@ -13,6 +13,12 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'company_id es obligatorio' }, { status: 400 });
     }
 
+    // Ownership check: non-admin users can only access their own company's financials
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    if (!isAdmin && company_id !== user.data?.company_id) {
+      return Response.json({ error: 'Forbidden: cannot access financials from another company' }, { status: 403 });
+    }
+
     const filter = { company_id };
     if (anio) filter.anio = parseInt(anio);
 

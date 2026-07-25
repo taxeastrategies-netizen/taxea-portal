@@ -19,6 +19,12 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Documento OCR no encontrado' }, { status: 404 });
     }
 
+    // 1.5. Ownership check: non-admin users can only approve their own company's documents
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    if (!isAdmin && doc.company_id !== user.data?.company_id) {
+      return Response.json({ error: 'Forbidden: document does not belong to your company' }, { status: 403 });
+    }
+
     // 2. Idempotency: if already linked, return existing
     if (doc.linkedInvoiceId) {
       return Response.json({
