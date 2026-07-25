@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     };
 
     // Augment clients with subscription + payment data
-    const augmentedClients = (clients || []).map(c => {
+    let augmentedClients = (clients || []).map(c => {
       const subs = subByUserId[c.id] || subByUserId[c.userId] || [];
       const activeSub = subs.find(s => ['activa', 'paid_pending_activation', 'past_due', 'processing'].includes(s.status)) || subs[0];
       const userPayments = paymentsByUserId[c.id] || paymentsByUserId[c.userId] || [];
@@ -187,15 +187,55 @@ Deno.serve(async (req) => {
       if (c.accessStatus === 'activa' && c.billingMethod === 'stripe' && !c.stripeCustomerId) issues.push({ type: 'missing_payment_method', severity: 'alta', clientName: c.displayName || c.legalName, explanation: 'Cliente con cobro Stripe sin Customer ID' });
     }
 
-    // Stripe customers without local match
-    const localEmails = new Set((clients || []).map(c => c.email?.toLowerCase().trim()).filter(Boolean));
+    // Match Stripe customers to local clients by email, filling stripeCustomerId if missing
+    const stripeByEmail = {};
+    for (const sc of stripeCustomers) {
+      const email = sc.email?.toLowerCase().trim();
+      if (email) stripeByEmail[email] = sc;
+    }
+    const localEmailsSet = new Set((clients || []).map(c => c.email?.toLowerCase().trim()).filter(Boolean));
+
+    // Enrich local clients with stripeCustomerId matched by email
+    augmentedClients = augmentedClients.map(c => {
+      const email = c.email?.toLowerCase().trim();
+      const sc = email ? stripeByEmail[email] : null;
+      if (sc && !c.stripeCustomerId) {
+        return { ...c, stripeCustomerId: sc.id, stripeCustomerName: sc.name, _stripeMatchedByEmail: true };
+      }
+      if (sc) {
+        return { ...c, stripeCustomerName: sc.name };
+      }
+      return c;
+    });
+
+    // Stripe customers without local match → add as synthetic client entries
     const stripeOrphans = stripeCustomers
-      .filter(sc => { const email = sc.email?.toLowerCase().trim(); return email && !localEmails.has(email); })
-      .map(sc => ({ id: sc.id, email: sc.email, name: sc.name, created: sc.created }));
+      .filter(sc => { const email = sc.email?.toLowerCase().trim(); return email && !localEmailsSet.has(email); })
+      .map(sc => ({
+        id: null,
+        _isStripeOnly: true,
+        stripeCustomerId: sc.id,
+        email: sc.email,
+        legalName: sc.name || sc.email,
+        displayName: sc.name || sc.email,
+        accessStatus: 'pendiente_primer_acceso',
+        billingStatus: 'pendiente_vincular',
+        paymentStatus: 'pendiente',
+        billingMethod: 'stripe',
+        monthlyFee: 0,
+        contractAmount: 0,
+        created_date: sc.created ? new Date(sc.created * 1000).toISOString() : null,
+        subscription: null,
+        lastPayment: null,
+        overdueAmount: 0,
+        subscriptionCount: 0,
+      }));
+
+    const allClients = [...augmentedClients, ...stripeOrphans];
 
     return Response.json({
-      kpis, stripe: stripeSummary, clients: augmentedClients,
-      dataQualityIssues: issues, stripeCustomersWithoutLocal: stripeOrphans,
+      kpis, stripe: stripeSummary, clients: allClients,
+      dataQualityIssues: issues, stripeCustomersWithoutLocal: stripeOrphans.map(o => ({ id: o.stripeCustomerId, email: o.email, name: o.legalName, created: o.created_date })),
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

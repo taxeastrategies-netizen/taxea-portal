@@ -48,7 +48,10 @@ function MobileClientCard({ c }) {
     <div className="border border-border rounded-lg p-3 space-y-2">
       <div className="flex items-start justify-between">
         <div>
-          <p className="font-medium text-sm">{c.displayName || c.legalName}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-medium text-sm">{c.displayName || c.legalName}</p>
+            {c._isStripeOnly && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">Solo Stripe</span>}
+          </div>
           <p className="text-xs text-muted-foreground">{c.email} · {c.taxId || '—'}</p>
         </div>
         <span className={cn('text-[11px] font-medium px-2 py-0.5 rounded-full', BILLING_STATUS_STYLE[c.billingStatus] || 'bg-slate-100 text-slate-600')}>
@@ -152,9 +155,12 @@ export default function BillingClientsTable({ clients, issues }) {
                 </thead>
                 <tbody>
                   {filtered.map(c => (
-                    <tr key={c.id} className="border-b border-border/50 hover:bg-accent/30">
+                    <tr key={c.id || c.stripeCustomerId} className="border-b border-border/50 hover:bg-accent/30">
                       <td className="py-2.5 pr-3">
-                        <p className="font-medium">{c.displayName || c.legalName}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-medium">{c.displayName || c.legalName}</p>
+                          {c._isStripeOnly && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">Solo Stripe</span>}
+                        </div>
                         <p className="text-xs text-muted-foreground">{c.email}</p>
                       </td>
                       <td className="py-2.5 pr-3 text-xs">{c.taxId || '—'}</td>
@@ -178,7 +184,7 @@ export default function BillingClientsTable({ clients, issues }) {
               </table>
             </div>
             <div className="lg:hidden space-y-2">
-              {filtered.map(c => <MobileClientCard key={c.id} c={c} />)}
+              {filtered.map(c => <MobileClientCard key={c.id || c.stripeCustomerId} c={c} />)}
             </div>
           </>
         )}
