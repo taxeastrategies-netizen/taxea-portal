@@ -1,0 +1,83 @@
+{
+  "name": "StripePayout",
+  "type": "object",
+  "properties": {
+    "stripePayoutId": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_transit",
+        "paid",
+        "failed",
+        "canceled"
+      ],
+      "default": "pending"
+    },
+    "arrivalDate": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effectiveAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "bankAccountMasked": {
+      "type": "string"
+    },
+    "failureCode": {
+      "type": "string"
+    },
+    "failureMessageSafe": {
+      "type": "string"
+    },
+    "reconciled": {
+      "type": "boolean",
+      "default": false
+    },
+    "reconciledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "stripeCreatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "stripePayoutId",
+    "amount",
+    "currency"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

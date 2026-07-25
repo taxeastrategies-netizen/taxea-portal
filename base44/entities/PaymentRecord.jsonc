@@ -8,14 +8,47 @@
     "subscriptionId": {
       "type": "string"
     },
+    "clientAccountId": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "stripe",
+        "manual"
+      ],
+      "default": "stripe"
+    },
     "stripeInvoiceId": {
       "type": "string"
     },
     "stripePaymentIntentId": {
       "type": "string"
     },
+    "stripeChargeId": {
+      "type": "string"
+    },
+    "stripeBalanceTransactionId": {
+      "type": "string"
+    },
     "amount": {
       "type": "number"
+    },
+    "feeAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "netAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "refundAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "disputeAmount": {
+      "type": "number",
+      "default": 0
     },
     "currency": {
       "type": "string",
@@ -25,9 +58,11 @@
       "type": "string",
       "enum": [
         "pending",
+        "processing",
         "paid",
         "failed",
-        "refunded"
+        "refunded",
+        "disputed"
       ],
       "default": "pending"
     },
@@ -39,6 +74,18 @@
         "manual_exception"
       ],
       "default": "first_payment"
+    },
+    "paymentMethod": {
+      "type": "string"
+    },
+    "manualReference": {
+      "type": "string"
+    },
+    "manualEvidenceUrl": {
+      "type": "string"
+    },
+    "createdByAdmin": {
+      "type": "string"
     },
     "periodStart": {
       "type": "string",

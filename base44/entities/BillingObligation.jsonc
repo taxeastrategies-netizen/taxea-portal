@@ -1,0 +1,96 @@
+{
+  "name": "BillingObligation",
+  "type": "object",
+  "properties": {
+    "clientAccountId": {
+      "type": "string"
+    },
+    "userId": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "periodStart": {
+      "type": "string",
+      "format": "date"
+    },
+    "periodEnd": {
+      "type": "string",
+      "format": "date"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "dueDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "stripe",
+        "transfer",
+        "cash",
+        "external_sepa",
+        "other"
+      ],
+      "default": "stripe"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "no_vencido",
+        "procesando",
+        "requiere_accion",
+        "fallido",
+        "vencido",
+        "incobrable",
+        "cancelado",
+        "pendiente_manual",
+        "pagado"
+      ],
+      "default": "no_vencido"
+    },
+    "paymentRecordId": {
+      "type": "string"
+    },
+    "taxeaInvoiceId": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "clientAccountId",
+    "amount",
+    "dueDate"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

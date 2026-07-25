@@ -1,0 +1,110 @@
+{
+  "name": "ReconciliationIssue",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "stripe_customer_missing",
+        "local_client_missing",
+        "price_mismatch",
+        "status_mismatch",
+        "duplicate_email",
+        "multiple_subscriptions",
+        "payment_without_invoice",
+        "invoice_without_payment",
+        "stale_sync",
+        "missing_payment_method",
+        "zero_fee",
+        "missing_tax_id",
+        "other"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "baja",
+        "media",
+        "alta",
+        "critica"
+      ],
+      "default": "media"
+    },
+    "clientAccountId": {
+      "type": "string"
+    },
+    "clientName": {
+      "type": "string"
+    },
+    "stripeObjectId": {
+      "type": "string"
+    },
+    "stripeObjectType": {
+      "type": "string"
+    },
+    "taxeaValue": {
+      "type": "string"
+    },
+    "stripeValue": {
+      "type": "string"
+    },
+    "difference": {
+      "type": "number",
+      "default": 0
+    },
+    "explanation": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "abierta",
+        "en_revision",
+        "resuelta",
+        "ignorada"
+      ],
+      "default": "abierta"
+    },
+    "assignedTo": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
+    "detectedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolvedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "type",
+    "severity"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

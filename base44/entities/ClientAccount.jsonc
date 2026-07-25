@@ -168,6 +168,56 @@
     },
     "notes": {
       "type": "string"
+    },
+    "stripeCustomerId": {
+      "type": "string"
+    },
+    "billingMethod": {
+      "type": "string",
+      "enum": [
+        "stripe",
+        "transfer",
+        "cash",
+        "external_sepa",
+        "other",
+        "pendiente"
+      ],
+      "default": "pendiente"
+    },
+    "contractAmount": {
+      "type": "number",
+      "default": 0
+    },
+    "billingFrequency": {
+      "type": "string",
+      "enum": [
+        "monthly",
+        "quarterly",
+        "annual"
+      ],
+      "default": "monthly"
+    },
+    "billingDay": {
+      "type": "number"
+    },
+    "billingStatus": {
+      "type": "string",
+      "enum": [
+        "al_dia",
+        "en_proceso",
+        "pago_fallido",
+        "transferencia_pendiente",
+        "pendiente_vincular",
+        "cancelado"
+      ],
+      "default": "pendiente_vincular"
+    },
+    "lastStripeSyncAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dataQualityStatus": {
+      "type": "string"
     }
   },
   "required": [

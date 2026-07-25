@@ -251,6 +251,7 @@ const UTILS_ITEMS = [
 ];
 
 const ADMIN_ITEMS = [
+  { to: '/admin/clientes-cobros', label: 'Clientes y cobros', icon: Wallet },
   { to: '/admin/users', label: 'Gestión de usuarios', icon: UserCog },
   { to: '/admin/audit', label: 'Audit', icon: Shield },
   { to: '/admin/ocr-bandeja', label: 'Bandeja OCR', icon: ScanLine },
