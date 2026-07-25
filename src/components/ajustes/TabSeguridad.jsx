@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Shield, Lock, Monitor, LogOut, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Shield, Lock, Monitor, LogOut, CheckCircle, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
 
 export default function TabSeguridad({ user }) {
@@ -10,6 +11,10 @@ export default function TabSeguridad({ user }) {
   const [showPw, setShowPw] = useState({ current: false, nueva: false });
   const [pwStatus, setPwStatus] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
   const handleChangePassword = async () => {
     if (pwForm.nueva !== pwForm.confirm) { setPwStatus('mismatch'); return; }
@@ -25,6 +30,24 @@ export default function TabSeguridad({ user }) {
   };
 
   const handleLogout = () => base44.auth.logout('/login');
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirm !== 'ELIMINAR') {
+      setDeleteError('Debes escribir ELIMINAR para confirmar');
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await base44.auth.updateMe({ is_deleted: true, status: 'eliminado' });
+      setDeleteOpen(false);
+      base44.auth.logout('/login');
+    } catch (err) {
+      setDeleteError(err.message || 'Error al eliminar la cuenta');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -102,6 +125,48 @@ export default function TabSeguridad({ user }) {
         <p className="text-sm font-medium text-foreground mb-1">🔒 Privacidad y RGPD</p>
         <p className="text-xs text-muted-foreground leading-relaxed">Todos tus datos son privados y confidenciales. Solo tú y tu asesor de Taxea Strategies tienen acceso. Portal en cumplimiento con el RGPD y la LOPDGDD.</p>
       </div>
+
+      {/* Zona de peligro — Eliminar cuenta */}
+      <div className="bg-card border border-destructive/30 rounded-xl shadow-card p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 bg-destructive/10 rounded-lg flex items-center justify-center"><Trash2 className="w-4 h-4 text-destructive" /></div>
+          <div>
+            <h2 className="font-jakarta font-semibold text-foreground">Eliminar cuenta</h2>
+            <p className="text-xs text-muted-foreground">Esta acción es irreversible</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+          Al eliminar tu cuenta, se marcará como eliminada y perderás acceso al portal. Tus datos fiscales y contables serán conservados según las obligaciones legales. Esta acción no se puede deshacer.
+        </p>
+        <Button variant="outline" size="sm" className="gap-2 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => { setDeleteOpen(true); setDeleteConfirm(''); setDeleteError(null); }}>
+          <Trash2 className="w-3.5 h-3.5" /> Eliminar mi cuenta
+        </Button>
+      </div>
+
+      {/* Modal de confirmación */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Eliminar cuenta</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Estás a punto de eliminar tu cuenta de Taxea Strategies. Esta acción es <strong className="text-foreground">irreversible</strong>.
+            </p>
+            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-2">Para confirmar, escribe <strong className="text-destructive">ELIMINAR</strong> en el campo:</p>
+              <Input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="ELIMINAR" />
+            </div>
+            {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleting || deleteConfirm !== 'ELIMINAR'}>
+              {deleting ? 'Eliminando...' : 'Eliminar cuenta'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

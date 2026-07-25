@@ -112,7 +112,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background flex-col">
+    <div className="flex h-screen overflow-hidden bg-background flex-col safe-area-padded">
       {impersonation && <ImpersonationBanner impersonation={impersonation} />}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar

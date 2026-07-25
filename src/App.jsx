@@ -1,3 +1,4 @@
+import React, { Suspense, lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -9,55 +10,60 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import AppLayout from '@/components/layout/AppLayout';
 import { useCompanyContext, isAdminRole } from '@/lib/useCompanyContext';
 
-// Pages
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Facturas from './pages/Facturas';
-import IngresosGastos from './pages/IngresosGastos';
-import Presupuestos from './pages/Presupuestos';
-import Proformas from './pages/Proformas';
-import Contactos from './pages/Contactos';
-import Productos from './pages/Productos';
-import NotasPredefinidas from './pages/NotasPredefinidas';
-import LibroRegistros from './pages/LibroRegistros';
-import LectorGastos from './pages/LectorGastos';
-import LectorIngresos from './pages/LectorIngresos';
-import ObligacionesFiscales from './pages/ObligacionesFiscales';
-import Documentos from './pages/Documentos';
-import Ajustes from './pages/Ajustes';
-import AdminPanel from './pages/AdminPanel';
-import Timeline from './pages/Timeline';
-import Tareas from './pages/Tareas';
-import DetectorErrores from './pages/DetectorErrores';
-import Notificaciones from './pages/Notificaciones';
-import AsistenteFiscal from './pages/AsistenteFiscal';
-import AdminAsistente from './pages/AdminAsistente';
-import BuzonSugerencias from './pages/BuzonSugerencias';
-import AdminSugerencias from './pages/AdminSugerencias';
-import AdminAfiliados from './pages/AdminAfiliados';
-import SubidaMasivaModelos from './pages/SubidaMasivaModelos';
-import AdminWhatsApp from './pages/AdminWhatsApp';
-import TaxAccounting from './pages/TaxAccounting';
-import Finance from './pages/Finance';
-import PeopleHR from './pages/PeopleHR.jsx';
-import Logistics from './pages/Logistics';
-import Operations from './pages/Operations';
-import Growth from './pages/Growth';
-import Law from './pages/Law';
-import PublicInvoiceViewer from './pages/PublicInvoiceViewer';
-import ComingSoon from './pages/ComingSoon';
-import AdminClients from './pages/AdminClients';
-import Suscripcion from './pages/Suscripcion';
-import GestionUsuarios from './pages/GestionUsuarios';
-import AdminAudit from './pages/AdminAudit';
+// Code-split pages for smaller initial bundle (iOS/Android WebView performance)
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Facturas = lazy(() => import('./pages/Facturas'));
+const IngresosGastos = lazy(() => import('./pages/IngresosGastos'));
+const Presupuestos = lazy(() => import('./pages/Presupuestos'));
+const Proformas = lazy(() => import('./pages/Proformas'));
+const Contactos = lazy(() => import('./pages/Contactos'));
+const Productos = lazy(() => import('./pages/Productos'));
+const NotasPredefinidas = lazy(() => import('./pages/NotasPredefinidas'));
+const LibroRegistros = lazy(() => import('./pages/LibroRegistros'));
+const LectorGastos = lazy(() => import('./pages/LectorGastos'));
+const LectorIngresos = lazy(() => import('./pages/LectorIngresos'));
+const ObligacionesFiscales = lazy(() => import('./pages/ObligacionesFiscales'));
+const Documentos = lazy(() => import('./pages/Documentos'));
+const Ajustes = lazy(() => import('./pages/Ajustes'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const Timeline = lazy(() => import('./pages/Timeline'));
+const Tareas = lazy(() => import('./pages/Tareas'));
+const DetectorErrores = lazy(() => import('./pages/DetectorErrores'));
+const Notificaciones = lazy(() => import('./pages/Notificaciones'));
+const AsistenteFiscal = lazy(() => import('./pages/AsistenteFiscal'));
+const AdminAsistente = lazy(() => import('./pages/AdminAsistente'));
+const BuzonSugerencias = lazy(() => import('./pages/BuzonSugerencias'));
+const AdminSugerencias = lazy(() => import('./pages/AdminSugerencias'));
+const AdminAfiliados = lazy(() => import('./pages/AdminAfiliados'));
+const SubidaMasivaModelos = lazy(() => import('./pages/SubidaMasivaModelos'));
+const AdminWhatsApp = lazy(() => import('./pages/AdminWhatsApp'));
+const TaxAccounting = lazy(() => import('./pages/TaxAccounting'));
+const Finance = lazy(() => import('./pages/Finance'));
+const PeopleHR = lazy(() => import('./pages/PeopleHR.jsx'));
+const Logistics = lazy(() => import('./pages/Logistics'));
+const Operations = lazy(() => import('./pages/Operations'));
+const Growth = lazy(() => import('./pages/Growth'));
+const Law = lazy(() => import('./pages/Law'));
+const PublicInvoiceViewer = lazy(() => import('./pages/PublicInvoiceViewer'));
+const ComingSoon = lazy(() => import('./pages/ComingSoon'));
+const AdminClients = lazy(() => import('./pages/AdminClients'));
+const Suscripcion = lazy(() => import('./pages/Suscripcion'));
+const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
+const AdminAudit = lazy(() => import('./pages/AdminAudit'));
+const AdminOcrCredits = lazy(() => import('./pages/AdminOcrCredits'));
+const ImportacionContable = lazy(() => import('./pages/ImportacionContable'));
+const AdminOcrBandeja = lazy(() => import('./pages/AdminOcrBandeja'));
+const AdminBackupDrive = lazy(() => import('./pages/AdminBackupDrive'));
+const SetupPassword = lazy(() => import('./pages/SetupPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const Register = lazy(() => import('./pages/Register'));
 
-import AdminOcrCredits from './pages/AdminOcrCredits';
-import ImportacionContable from './pages/ImportacionContable';
-import AdminOcrBandeja from './pages/AdminOcrBandeja';
-import AdminBackupDrive from './pages/AdminBackupDrive';
-import SetupPassword from './pages/SetupPassword';
-import ResetPassword from './pages/ResetPassword';
-import Register from './pages/Register';
+const PageLoader = () => (
+  <div className="fixed inset-0 flex items-center justify-center bg-background safe-area-padded">
+    <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
@@ -67,7 +73,7 @@ function AppWithContext({ user }) {
   // Admins no esperan a loadingCompany para ver el layout
   if (loadingCompany && !isAdmin) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
+      <div className="fixed inset-0 flex items-center justify-center bg-background safe-area-padded">
         <div className="text-center">
           <div className="w-10 h-10 border-2 border-taxea-red border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-sm text-muted-foreground">Cargando tu portal...</p>
@@ -77,64 +83,65 @@ function AppWithContext({ user }) {
   }
 
   return (
-    <Routes>
-      <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} refreshCompany={refreshCompany} />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/tareas" element={<Tareas />} />
-        <Route path="/timeline" element={<Timeline />} />
-        <Route path="/facturas" element={<Facturas />} />
-        <Route path="/ingresos-gastos" element={<IngresosGastos />} />
-        <Route path="/presupuestos" element={<Presupuestos />} />
-        <Route path="/proformas" element={<Proformas />} />
-        <Route path="/contactos" element={<Contactos />} />
-        <Route path="/productos" element={<Productos />} />
-        <Route path="/notas" element={<NotasPredefinidas />} />
-        <Route path="/libro-registros" element={<LibroRegistros />} />
-        <Route path="/lector-gastos" element={<LectorGastos />} />
-        <Route path="/lector-ingresos" element={<LectorIngresos />} />
-        <Route path="/obligaciones" element={<ObligacionesFiscales />} />
-        <Route path="/documentos" element={<Documentos />} />
-        <Route path="/ajustes" element={<Ajustes />} />
-        <Route path="/admin" element={<AdminPanel />} />
-        <Route path="/errores" element={<DetectorErrores />} />
-        <Route path="/notificaciones" element={<Notificaciones />} />
-        <Route path="/asistente" element={<AsistenteFiscal />} />
-        <Route path="/admin-asistente" element={<AdminAsistente />} />
-        <Route path="/sugerencias" element={<BuzonSugerencias />} />
-        <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
-        <Route path="/admin-afiliados" element={<AdminAfiliados />} />
-        <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
-        <Route path="/admin-whatsapp" element={<AdminWhatsApp />} />
-        <Route path="/tax-accounting" element={<TaxAccounting />} />
-        <Route path="/tax-accounting/:module" element={<TaxAccounting />} />
-        <Route path="/finance" element={<Finance />} />
-        <Route path="/finance/:module" element={<Finance />} />
-        <Route path="/people" element={<PeopleHR />} />
-        <Route path="/people/:module" element={<PeopleHR />} />
-        <Route path="/logistics" element={<Logistics />} />
-        <Route path="/logistics/:module" element={<Logistics />} />
-        <Route path="/operations" element={<Operations />} />
-        <Route path="/operations/:module" element={<Operations />} />
-        <Route path="/growth" element={<Growth />} />
-        <Route path="/growth/:module" element={<Growth />} />
-        <Route path="/law" element={<Law />} />
-        <Route path="/law/:subdept" element={<Law />} />
-        <Route path="/law/:subdept/:module" element={<Law />} />
-        <Route path="/coming-soon" element={<ComingSoon />} />
-        <Route path="/admin/clients" element={<AdminClients />} />
-        <Route path="/admin/estado-contable" element={<Navigate to="/admin/ocr-bandeja" replace />} />
-        <Route path="/suscripcion" element={<Suscripcion />} />
-        <Route path="/admin/users" element={<GestionUsuarios />} />
-        <Route path="/admin/audit" element={<AdminAudit />} />
-
-        <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
-        <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
-        <Route path="/importacion-contable" element={<ImportacionContable />} />
-        <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
-        <Route path="/signup" element={<Navigate to="/login" replace />} />
-      </Route>
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} refreshCompany={refreshCompany} />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/tareas" element={<Tareas />} />
+          <Route path="/timeline" element={<Timeline />} />
+          <Route path="/facturas" element={<Facturas />} />
+          <Route path="/ingresos-gastos" element={<IngresosGastos />} />
+          <Route path="/presupuestos" element={<Presupuestos />} />
+          <Route path="/proformas" element={<Proformas />} />
+          <Route path="/contactos" element={<Contactos />} />
+          <Route path="/productos" element={<Productos />} />
+          <Route path="/notas" element={<NotasPredefinidas />} />
+          <Route path="/libro-registros" element={<LibroRegistros />} />
+          <Route path="/lector-gastos" element={<LectorGastos />} />
+          <Route path="/lector-ingresos" element={<LectorIngresos />} />
+          <Route path="/obligaciones" element={<ObligacionesFiscales />} />
+          <Route path="/documentos" element={<Documentos />} />
+          <Route path="/ajustes" element={<Ajustes />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/errores" element={<DetectorErrores />} />
+          <Route path="/notificaciones" element={<Notificaciones />} />
+          <Route path="/asistente" element={<AsistenteFiscal />} />
+          <Route path="/admin-asistente" element={<AdminAsistente />} />
+          <Route path="/sugerencias" element={<BuzonSugerencias />} />
+          <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
+          <Route path="/admin-afiliados" element={<AdminAfiliados />} />
+          <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
+          <Route path="/admin-whatsapp" element={<AdminWhatsApp />} />
+          <Route path="/tax-accounting" element={<TaxAccounting />} />
+          <Route path="/tax-accounting/:module" element={<TaxAccounting />} />
+          <Route path="/finance" element={<Finance />} />
+          <Route path="/finance/:module" element={<Finance />} />
+          <Route path="/people" element={<PeopleHR />} />
+          <Route path="/people/:module" element={<PeopleHR />} />
+          <Route path="/logistics" element={<Logistics />} />
+          <Route path="/logistics/:module" element={<Logistics />} />
+          <Route path="/operations" element={<Operations />} />
+          <Route path="/operations/:module" element={<Operations />} />
+          <Route path="/growth" element={<Growth />} />
+          <Route path="/growth/:module" element={<Growth />} />
+          <Route path="/law" element={<Law />} />
+          <Route path="/law/:subdept" element={<Law />} />
+          <Route path="/law/:subdept/:module" element={<Law />} />
+          <Route path="/coming-soon" element={<ComingSoon />} />
+          <Route path="/admin/clients" element={<AdminClients />} />
+          <Route path="/admin/estado-contable" element={<Navigate to="/admin/ocr-bandeja" replace />} />
+          <Route path="/suscripcion" element={<Suscripcion />} />
+          <Route path="/admin/users" element={<GestionUsuarios />} />
+          <Route path="/admin/audit" element={<AdminAudit />} />
+          <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
+          <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
+          <Route path="/importacion-contable" element={<ImportacionContable />} />
+          <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
+          <Route path="/signup" element={<Navigate to="/login" replace />} />
+        </Route>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -143,7 +150,7 @@ const AuthenticatedApp = () => {
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
+      <div className="fixed inset-0 flex items-center justify-center bg-background safe-area-padded">
         <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -156,27 +163,31 @@ const AuthenticatedApp = () => {
       if (!isOnLoginPage) { navigateToLogin(); return null; }
       // Already on login/register — just render those routes
       return (
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
       );
     }
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
-      <Route path="/setup-password" element={<SetupPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route path="/*" element={<AppWithContext user={user} />} />
-      </Route>
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
+        <Route path="/setup-password" element={<SetupPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route path="/*" element={<AppWithContext user={user} />} />
+        </Route>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </Suspense>
   );
 };
 

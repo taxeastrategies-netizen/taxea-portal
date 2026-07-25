@@ -39,25 +39,25 @@
   }
 
   .dark {
-    --background: 220 20% 97%;
-    --foreground: 220 15% 16%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 15% 16%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 15% 16%;
-    --primary: 350 72% 38%;
+    --background: 222 22% 7%;
+    --foreground: 210 20% 95%;
+    --card: 222 18% 11%;
+    --card-foreground: 210 20% 95%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 350 70% 52%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 15% 95%;
-    --secondary-foreground: 220 15% 30%;
-    --muted: 220 14% 93%;
-    --muted-foreground: 220 10% 48%;
-    --accent: 350 60% 95%;
-    --accent-foreground: 350 72% 32%;
-    --destructive: 0 72% 51%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 210 15% 85%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 215 12% 62%;
+    --accent: 350 35% 20%;
+    --accent-foreground: 350 55% 78%;
+    --destructive: 0 62% 48%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 90%;
-    --input: 220 13% 92%;
-    --ring: 350 72% 38%;
+    --border: 220 13% 22%;
+    --input: 220 13% 20%;
+    --ring: 350 70% 52%;
   }
 }
 
@@ -68,10 +68,27 @@
 
   body {
     @apply bg-background text-foreground font-inter antialiased;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-jakarta;
+  }
+
+  /* Disable text selection on interactive elements for native app feel */
+  button,
+  a,
+  [role="button"],
+  select,
+  [role="menuitem"],
+  [role="menu"],
+  [role="option"],
+  .lucide,
+  svg {
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
@@ -135,5 +152,23 @@
   .card-premium:hover {
     box-shadow: 0 8px 32px rgba(0,0,0,0.07), 0 2px 8px rgba(0,0,0,0.04);
     transform: translateY(-1px);
+  }
+
+  /* Safe area insets for iOS/Android WebView notches and home indicators */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-padded {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-area-pt {
+    padding-top: calc(env(safe-area-inset-top) + 0.5rem);
+  }
+  .safe-area-pb {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
   }
 }
