@@ -70,18 +70,32 @@ function MobileClientCard({ c }) {
 export default function BillingClientsTable({ clients, issues }) {
   const [tab, setTab] = useState('todos');
   const [search, setSearch] = useState('');
+  const [stripeOnly, setStripeOnly] = useState(false);
 
-  const filtered = useMemo(() => filterClients(clients, tab, search), [clients, tab, search]);
+  const filtered = useMemo(() => {
+    let result = filterClients(clients, tab, search);
+    if (stripeOnly) result = result.filter(c => !!c.stripeCustomerId);
+    return result;
+  }, [clients, tab, search, stripeOnly]);
 
   return (
     <Card>
       <CardContent className="pt-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-3 flex-1 flex-wrap">
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente, NIF, email..." className="pl-8 h-9" />
             </div>
+            <button
+              onClick={() => setStripeOnly(s => !s)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors',
+                stripeOnly ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground border-border hover:bg-accent'
+              )}
+            >
+              Solo Stripe
+            </button>
           </div>
         </div>
 
