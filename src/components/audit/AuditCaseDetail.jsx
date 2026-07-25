@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown';
 import AuditInvestigationTab from '@/components/audit/AuditInvestigationTab';
 import AuditHistoryTab from '@/components/audit/AuditHistoryTab';
 import AuditEmailTab from '@/components/audit/AuditEmailTab';
+import { exportReportToPDF, exportReportToDOCX } from '@/lib/auditReportExport';
 
 const VERDICT_LABELS = {
   ok: { label: 'OK', color: 'bg-green-50 text-green-700 border-green-200' },
@@ -173,6 +174,15 @@ export default function AuditCaseDetail({ caseId, onBack }) {
     a.download = `${report.title}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = async (report) => {
+    try {
+      await exportReportToPDF(report);
+      toast.success('PDF exportado');
+    } catch (err) {
+      toast.error('Error exportando PDF: ' + err.message);
+    }
   };
 
   if (isLoading || !auditCase) {
@@ -413,9 +423,17 @@ export default function AuditCaseDetail({ caseId, onBack }) {
                       <p className="font-medium text-foreground">{r.title}</p>
                       <p className="text-xs text-muted-foreground">v{r.version} · {r.reportType} · {r.generatedBy}</p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => downloadReport(r)} className="h-8">
-                      <Download className="w-3.5 h-3.5 mr-1.5" /> Markdown
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="sm" onClick={() => downloadReport(r)} className="h-8">
+                        <Download className="w-3.5 h-3.5 mr-1.5" /> MD
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleExportPDF(r)} className="h-8">
+                        <Download className="w-3.5 h-3.5 mr-1.5" /> PDF
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => exportReportToDOCX(r)} className="h-8">
+                        <Download className="w-3.5 h-3.5 mr-1.5" /> DOCX
+                      </Button>
+                    </div>
                   </div>
                   <div className="p-4 prose prose-sm max-w-none">
                     <ReactMarkdown>{r.markdownContent}</ReactMarkdown>
