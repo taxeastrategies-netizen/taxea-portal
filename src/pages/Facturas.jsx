@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
@@ -32,8 +32,10 @@ export default function Facturas() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
-  // workspaceInvoice: factura abierta en la vista completa de documento
-  const [workspaceInvoice, setWorkspaceInvoice] = useState(null);
+  // workspaceInvoice: factura abierta en la vista completa de documento (URL-driven)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const workspaceInvoiceId = searchParams.get('factura');
+  const workspaceInvoice = workspaceInvoiceId ? invoices.find(i => i.id === workspaceInvoiceId) : null;
   const [sendingInvoice, setSendingInvoice] = useState(null);
   const [showAnuladas, setShowAnuladas] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -66,9 +68,6 @@ export default function Facturas() {
       const data = res?.data || res;
       const now = data?.timestamp || new Date().toISOString();
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
-      if (workspaceInvoice?.id === inv.id) {
-        setWorkspaceInvoice(prev => ({ ...prev, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' }));
-      }
       triggerFinancialRefresh();
     } catch (e) {
       console.error('Error anulando:', e);
@@ -107,18 +106,16 @@ export default function Facturas() {
     await base44.entities.Invoice.update(id, { [field]: value });
     loadInvoices();
     triggerFinancialRefresh();
-    // Actualizar factura en workspace si está abierta
-    if (workspaceInvoice?.id === id) {
-      setWorkspaceInvoice(prev => ({ ...prev, [field]: value }));
-    }
   };
 
   const handleOpenWorkspace = (inv) => {
-    setWorkspaceInvoice(inv);
+    setSearchParams({ factura: inv.id });
   };
 
   const handleCloseWorkspace = () => {
-    setWorkspaceInvoice(null);
+    const p = new URLSearchParams(searchParams);
+    p.delete('factura');
+    setSearchParams(p);
     loadInvoices(); // Refrescar listado al volver
   };
 
@@ -128,20 +125,10 @@ export default function Facturas() {
 
   const handleSent = async () => {
     loadInvoices();
-    if (workspaceInvoice) {
-      const data = await fetchInvoices();
-      const fresh = data?.find(i => i.id === workspaceInvoice.id);
-      if (fresh) setWorkspaceInvoice(fresh);
-    }
   };
 
   const handleWorkspaceRefresh = async () => {
     loadInvoices();
-    if (workspaceInvoice) {
-      const data = await fetchInvoices();
-      const fresh = data?.find(i => i.id === workspaceInvoice.id);
-      if (fresh) setWorkspaceInvoice(fresh);
-    }
   };
 
   const activas = invoices.filter(i => !i.anulada);
@@ -488,7 +475,7 @@ export default function Facturas() {
           onEdit={(inv) => { openEdit(inv); }}
           onRefresh={handleWorkspaceRefresh}
           invoicesList={filtered}
-          onNavigate={(inv) => setWorkspaceInvoice(inv)}
+          onNavigate={(inv) => setSearchParams({ factura: inv.id })}
         />
       )}
 

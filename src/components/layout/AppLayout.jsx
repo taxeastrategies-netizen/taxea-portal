@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import FloatingActions from '../FloatingActions';
+import MobileBottomNav from './MobileBottomNav';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 import { getImpersonation } from '@/lib/impersonation';
 import SubscriptionGate from './SubscriptionGate';
@@ -147,7 +148,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
                 </div>
               </div>
             ) : isDeptPage ? (
-              <div className="p-4 lg:p-6">
+              <div className="p-4 pb-20 lg:p-6 lg:pb-6">
                 {needsGate ? (
                   <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
                     <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
@@ -157,7 +158,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
                 )}
               </div>
             ) : (
-              <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
+              <div className="p-4 pb-20 lg:p-6 lg:pb-6 max-w-[1400px] mx-auto">
                 {needsGate ? (
                   <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
                     <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
@@ -171,6 +172,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
         </div>
         <FloatingActions />
       </div>
+      <MobileBottomNav />
     </div>
   );
 }

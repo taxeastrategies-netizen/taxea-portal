@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { startImpersonation } from '@/lib/impersonation';
 import {
@@ -61,7 +61,9 @@ export default function AdminClients() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPayment, setFilterPayment] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedClient, setSelectedClient] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedClientId = searchParams.get('client');
+  const selectedClient = selectedClientId ? clients.find(c => c.id === selectedClientId) : null;
   const [activeTab, setActiveTab] = useState('resumen');
   const [actionLoading, setActionLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
@@ -103,7 +105,6 @@ export default function AdminClients() {
     await base44.entities.ClientAccount.update(client.id, { accessStatus: newStatus });
     await logAction(client.id, client.legalName, actionMap[newStatus] || 'datos_editados', `Estado cambiado a: ${newStatus}`);
     await load();
-    if (selectedClient?.id === client.id) setSelectedClient(prev => ({ ...prev, accessStatus: newStatus }));
     setActionLoading(false);
     setConfirmAction(null);
   };
@@ -145,7 +146,6 @@ export default function AdminClients() {
       await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl, isResend: true });
       await logAction(client.id, client.legalName, 'credenciales_generadas', 'Admin reenvió enlace de acceso al cliente.');
       await load();
-      if (selectedClient?.id === client.id) setSelectedClient(prev => ({ ...prev, setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() }));
     } catch (e) { alert('Error al reenviar: ' + e.message); }
     setActionLoading(false);
   };
@@ -193,7 +193,7 @@ export default function AdminClients() {
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setSelectedClient(null)} className="gap-1.5">
+          <Button variant="ghost" size="sm" onClick={() => { const p = new URLSearchParams(searchParams); p.delete('client'); setSearchParams(p); }} className="gap-1.5">
             <ArrowLeft className="w-4 h-4" />Clientes
           </Button>
           <span className="text-muted-foreground">/</span>
@@ -572,7 +572,7 @@ export default function AdminClients() {
                       <LogIn className="w-3.5 h-3.5" />
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" onClick={() => { setSelectedClient(client); setActiveTab('resumen'); }}
+                  <Button size="sm" variant="ghost" onClick={() => { setSearchParams({ client: client.id }); setActiveTab('resumen'); }}
                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Eye className="w-3.5 h-3.5 mr-1" />Ver
                   </Button>

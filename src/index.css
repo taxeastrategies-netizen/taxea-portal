@@ -172,3 +172,13 @@
     padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
   }
 }
+
+/* Mobile touch target accessibility — minimum 44px for interactive elements */
+@media (max-width: 767px) {
+  button,
+  [role="button"],
+  [role="combobox"],
+  select {
+    min-height: 44px;
+  }
+}
