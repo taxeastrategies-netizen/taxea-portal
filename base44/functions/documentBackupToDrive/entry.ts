@@ -99,6 +99,21 @@ async function findOrCreateFolder(name, parentId, token) {
   return await createRes.json();
 }
 
+// Folder cache to avoid redundant Drive API calls during backup
+const folderCache = new Map();
+async function findOrCreateFolderCached(name, parentId, token) {
+  const key = `${parentId || 'root'}:${name}`;
+  if (folderCache.has(key)) return folderCache.get(key);
+  const promise = findOrCreateFolder(name, parentId, token);
+  folderCache.set(key, promise);
+  try {
+    return await promise;
+  } catch (e) {
+    folderCache.delete(key);
+    throw e;
+  }
+}
+
 async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) {
   const boundary = 'taxea_backup_' + Math.random().toString(36).slice(2);
   const metadata = JSON.stringify({ name, parents: parentId ? [parentId] : [] });
@@ -330,7 +345,8 @@ Deno.serve(async (req) => {
       const documents = await scanAllDocuments(base44);
       await base44.asServiceRole.entities.BackupJob.update(job.id, { documentsScanned: documents.length });
 
-      for (const { record, source } of documents) {
+      // Per-document processing (extracted for parallel batching)
+      const processDoc = async ({ record, source }) => {
         const fileUrl = record[source.urlField];
         const docId = record.id;
         const key = `${source.entity}:${docId}`;
@@ -344,8 +360,7 @@ Deno.serve(async (req) => {
         const mimeType = guessMimeType(displayName, source.mimeField ? record[source.mimeField] : null);
 
         if (skipExisting) {
-          skipped++;
-          manifestEntries.push({
+          return { type: 'skipped', manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName,
@@ -353,8 +368,7 @@ Deno.serve(async (req) => {
             mimeType, checksum: existing?.checksum || '',
             driveFileId: existing?.driveFileId || '', drivePath: existing?.drivePath || '',
             status: 'skipped_existing', lastVerifiedAt: existing?.lastVerifiedAt || '',
-          });
-          continue;
+          }};
         }
 
         // Download file from storage
@@ -364,8 +378,6 @@ Deno.serve(async (req) => {
           if (!dlRes.ok) throw new Error(`HTTP ${dlRes.status}`);
           contentBytes = new Uint8Array(await dlRes.arrayBuffer());
         } catch (e) {
-          failed++;
-          failedItems.push({ documentId: docId, error: `download: ${e.message}` });
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
@@ -374,7 +386,7 @@ Deno.serve(async (req) => {
           if (existing) {
             await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, { backupStatus: 'failed', safeErrorMessage: `download: ${e.message}` });
           }
-          continue;
+          return { type: 'failed', docId, error: `download: ${e.message}` };
         }
 
         const checksum = await computeChecksum(contentBytes);
@@ -382,29 +394,24 @@ Deno.serve(async (req) => {
 
         // Check if content changed (checksum mismatch with existing)
         if (!isFullCopy && existing && existing.backupStatus === 'backed_up' && existing.checksum === checksum) {
-          skipped++;
-          manifestEntries.push({
+          return { type: 'skipped', manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName, size: fileSize,
             mimeType, checksum, driveFileId: existing.driveFileId, drivePath: existing.drivePath,
             status: 'skipped_existing', lastVerifiedAt: existing.lastVerifiedAt || '',
-          });
-          continue;
+          }};
         }
 
-        // Create client folder + subfolder
+        // Create client folder + subfolder (cached to avoid redundant Drive API calls)
         const cFolderName = clientFolderName(record[source.companyField], companyName, config.folderNamingMode);
-        const clientFolder = await findOrCreateFolder(cFolderName, dayFolder.id, accessToken);
-        const subFolder = await findOrCreateFolder(subfolder, clientFolder.id, accessToken);
+        const clientFolder = await findOrCreateFolderCached(cFolderName, dayFolder.id, accessToken);
+        const subFolder = await findOrCreateFolderCached(subfolder, clientFolder.id, accessToken);
         const drivePath = `${now.full}/${cFolderName}/${subfolder}/${safeFileName}`;
 
         // Upload to Drive
         try {
           const uploaded = await uploadFileToDrive(safeFileName, subFolder.id, contentBytes, mimeType, accessToken);
-          copied++;
-          bytesCopied += fileSize;
-
           const nowIso = new Date().toISOString();
           if (existing) {
             await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
@@ -428,16 +435,14 @@ Deno.serve(async (req) => {
             clientAccountId: record[source.companyField], clientName: companyName,
             status: 'copied', action: 'copy', driveFileId: uploaded.id, drivePath, checksum, fileSize,
           });
-          manifestEntries.push({
+          return { type: 'copied', fileSize, manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName, size: fileSize,
             mimeType, checksum, driveFileId: uploaded.id, drivePath,
             status: 'copied', lastVerifiedAt: nowIso,
-          });
+          }};
         } catch (e) {
-          failed++;
-          failedItems.push({ documentId: docId, error: `upload: ${e.message}` });
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
@@ -446,7 +451,41 @@ Deno.serve(async (req) => {
           if (existing) {
             await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, { backupStatus: 'failed', safeErrorMessage: `upload: ${e.message}` });
           }
+          return { type: 'failed', docId, error: `upload: ${e.message}` };
         }
+      };
+
+      // Process documents in parallel batches with time budget
+      const TIME_BUDGET_MS = 240000; // 4 minutes — leave room before function timeout
+      const BATCH_SIZE = 5;
+      const startTime = Date.now();
+      let timeBudgetExceeded = false;
+
+      for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+        if (Date.now() - startTime > TIME_BUDGET_MS) { timeBudgetExceeded = true; break; }
+        const batch = documents.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            const r = result.value;
+            if (r.type === 'copied') { copied++; bytesCopied += r.fileSize; manifestEntries.push(r.manifest); }
+            else if (r.type === 'skipped') { skipped++; manifestEntries.push(r.manifest); }
+            else if (r.type === 'failed') { failed++; failedItems.push({ documentId: r.docId, error: r.error }); }
+          } else {
+            failed++;
+            failedItems.push({ documentId: 'unknown', error: result.reason?.message || 'Unknown error' });
+          }
+        }
+        // Update progress periodically
+        if (i % 25 === 0) {
+          await base44.asServiceRole.entities.BackupJob.update(job.id, {
+            documentsCopied: copied, documentsSkipped: skipped, documentsFailed: failed,
+          }).catch(() => {});
+        }
+      }
+
+      if (timeBudgetExceeded) {
+        failedItems.push({ documentId: 'timeout', error: 'Tiempo límite alcanzado — se reanudará en la próxima ejecución' });
       }
 
       // ── Verification phase ──
