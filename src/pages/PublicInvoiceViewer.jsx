@@ -169,8 +169,9 @@ export default function PublicInvoiceViewer() {
 
   const loadInvoice = async (t) => {
     try {
-      // El token ES el ID de la factura
-      const inv = await base44.entities.Invoice.get(t);
+      // Buscar por public_token seguro (no por ID de la factura)
+      const results = await base44.entities.Invoice.filter({ public_token: t });
+      const inv = results?.[0];
       if (!inv) {
         setError('La factura no existe, ha sido desactivada o el enlace ha caducado.');
         setLoading(false);

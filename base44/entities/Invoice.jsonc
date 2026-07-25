@@ -194,6 +194,9 @@
     },
     "factura_rectificada": {
       "type": "string"
+    },
+    "public_token": {
+      "type": "string"
     }
   },
   "required": [

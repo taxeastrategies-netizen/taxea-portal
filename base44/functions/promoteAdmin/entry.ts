@@ -1,25 +1,27 @@
 /**
  * promoteAdmin — Promueve un email específico a super_admin.
- * Solo puede ser invocado por quien ya es admin o super_admin,
- * O por el email de bootstrap definido en la variable de entorno SUPER_ADMIN_EMAIL.
+ * Solo puede ser invocado por quien ya es admin o super_admin.
+ * El primer super_admin debe inicializarse de forma segura durante el despliegue
+ * (ej. directamente desde el panel de Base44), no mediante coincidencia de email.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-
-const BOOTSTRAP_EMAIL = 'taxeastrategies@gmail.com';
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
-    const targetEmail = body.email || BOOTSTRAP_EMAIL;
+    const targetEmail = body.email;
 
-    // Permitir si el que llama es el bootstrap email O ya es admin/super_admin
+    if (!targetEmail) {
+      return Response.json({ error: 'email is required' }, { status: 400 });
+    }
+
+    // Solo admin/super_admin pueden promover — sin bypass por email
     const caller = await base44.auth.me().catch(() => null);
     const callerIsAdmin = caller && ['admin', 'super_admin'].includes(caller.role);
-    const callerIsBootstrap = caller?.email === BOOTSTRAP_EMAIL;
 
-    if (!callerIsAdmin && !callerIsBootstrap) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if (!callerIsAdmin) {
+      return Response.json({ error: 'Forbidden: admin access required' }, { status: 403 });
     }
 
     // Buscar el usuario por email

@@ -6,11 +6,25 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    const userCompanyId = user.data?.company_id;
+
     const body = await req.json().catch(() => ({}));
     const { clientIds, anio } = body;
 
     if (!Array.isArray(clientIds) || clientIds.length === 0) {
       return Response.json({ error: 'clientIds array is required' }, { status: 400 });
+    }
+
+    // Authorization: non-admin users can only query their own company_id
+    if (!isAdmin) {
+      if (!userCompanyId) {
+        return Response.json({ error: 'Forbidden: no company context' }, { status: 403 });
+      }
+      const foreign = clientIds.filter(cid => cid !== userCompanyId);
+      if (foreign.length > 0) {
+        return Response.json({ error: 'Forbidden: cannot access data from other companies' }, { status: 403 });
+      }
     }
 
     const year = anio ? parseInt(anio) : null;
