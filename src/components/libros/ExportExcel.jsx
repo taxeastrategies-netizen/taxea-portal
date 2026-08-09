@@ -138,20 +138,20 @@ function buildPnL(invoices, expenses, year) {
 }
 
 // ─── Account mapping helpers ─────────────────────────────────────────────────
-const GASTO_CUENTAS_8 = {
-  ventas_servicios: '70000000', compras: '60000000', suministros: '62800000',
-  alquiler: '62100000', publicidad_marketing: '62700000',
-  servicios_profesionales: '62300000', software: '62800000',
-  transporte: '62400000', dietas: '62500000', gastos_financieros: '66900000',
-  seguros: '62500000', otros: '62900000',
+const GASTO_CUENTAS = {
+  ventas_servicios: '7000000000', compras: '6000000000', suministros: '6280000000',
+  alquiler: '6210000000', publicidad_marketing: '6270000000',
+  servicios_profesionales: '6230000000', software: '6280000000',
+  transporte: '6240000000', dietas: '6250000000', gastos_financieros: '6690000000',
+  seguros: '6250000000', otros: '6290000000',
 };
-function ctaIngreso8(inv) { return n(inv.tipo_iva) === 0 ? '70500000' : '70000000'; }
-function ctaGasto8(inv) { return GASTO_CUENTAS_8[inv.categoria_gasto] || '60000000'; }
+function ctaIngreso(inv) { return n(inv.tipo_iva) === 0 ? '7050000000' : '7000000000'; }
+function ctaGasto(inv) { return GASTO_CUENTAS[inv.categoria_gasto] || '6000000000'; }
 function buildClienteMap(invoices) {
   const map = {}; let c = 1;
   invoices.filter(i => i.tipo === 'emitida').forEach(i => {
     const k = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
-    if (k && !map[k]) map[k] = `4300${String(c++).padStart(4, '0')}`;
+    if (k && !map[k]) map[k] = `4300${String(c++).padStart(6, '0')}`;
   });
   return map;
 }
@@ -159,7 +159,7 @@ function buildProveedorMap(invoices) {
   const map = {}; let c = 1;
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     const k = i.proveedor_nif ? i.proveedor_nif.toUpperCase() : (i.proveedor_nombre || i.cliente_nombre || '').toLowerCase();
-    if (k && !map[k]) map[k] = `4100${String(c++).padStart(4, '0')}`;
+    if (k && !map[k]) map[k] = `4100${String(c++).padStart(6, '0')}`;
   });
   return map;
 }
@@ -179,7 +179,7 @@ function buildFacturasEmitidas(invoices) {
       n(i.total_factura),
       i.estado_cobro || '', i.estado_contable || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || new Date(i.fecha_emision || '').getFullYear() || '',
-      ctaIngreso8(i), clienteMap[key] || '43000000',
+      ctaIngreso(i), clienteMap[key] || '4300000000',
     ]);
   });
   return rows;
@@ -202,7 +202,7 @@ function buildFacturasRecibidas(invoices) {
       n(i.total_factura),
       i.estado_contable || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || '',
-      ctaGasto8(i), proveedorMap[key] || '41000000',
+      ctaGasto(i), proveedorMap[key] || '4100000000',
     ]);
   });
   return rows;
@@ -236,7 +236,7 @@ function buildLibroCompras(invoices, expenses) {
       n(i.base_imponible), n(i.tipo_iva) || 21, n(i.cuota_iva),
       n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
       n(i.total_factura),
-      'Sí', i.trimestre || quarter(i.fecha_emision), i.anio || '', '600000',
+      'Sí', i.trimestre || quarter(i.fecha_emision), i.anio || '', '6000000000',
     ]);
   });
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
@@ -246,7 +246,7 @@ function buildLibroCompras(invoices, expenses) {
       n(e.base_imponible), n(e.tipo_impuesto), n(e.cuota_impuesto),
       n(e.retencion_irpf), pct(e.base_imponible, e.retencion_irpf || 0),
       n(e.total),
-      'Sí', e.trimestre || quarter(e.fecha), e.anio || '', '600000',
+      'Sí', e.trimestre || quarter(e.fecha), e.anio || '', '6000000000',
     ]);
   });
   return rows;
@@ -266,13 +266,13 @@ function buildLibroDiario(invoices, expenses) {
     const q = i.trimestre || quarter(i.fecha_emision);
     const yr = i.anio || '';
     // Clientes
-    rows.push([i.fecha_emision || '', asiento, '4300000', 'Clientes', i.concepto || '', total, '', '700000', i.numero_factura || '', i.cliente_nif || '', q, yr]);
+    rows.push([i.fecha_emision || '', asiento, '4300000000', 'Clientes', i.concepto || '', total, '', '7000000000', i.numero_factura || '', i.cliente_nif || '', q, yr]);
     // Ventas
-    rows.push([i.fecha_emision || '', asiento, '700000', 'Ventas de servicios', i.concepto || '', '', base, '4300000', i.numero_factura || '', '', q, yr]);
+    rows.push([i.fecha_emision || '', asiento, '7000000000', 'Ventas de servicios', i.concepto || '', '', base, '4300000000', i.numero_factura || '', '', q, yr]);
     // IVA repercutido
-    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4770000', 'H.P. IVA repercutido', 'IVA ' + (n(i.tipo_iva) || 21) + '%', '', iva, '4300000', i.numero_factura || '', '', q, yr]);
+    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4770000000', 'H.P. IVA repercutido', 'IVA ' + (n(i.tipo_iva) || 21) + '%', '', iva, '4300000000', i.numero_factura || '', '', q, yr]);
     // IRPF
-    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4751000', 'H.P. IRPF retenido', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4300000', i.numero_factura || '', '', q, yr]);
+    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4751000000', 'H.P. IRPF retenido', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4300000000', i.numero_factura || '', '', q, yr]);
     asiento++;
   });
 
@@ -283,10 +283,10 @@ function buildLibroDiario(invoices, expenses) {
     const total = n(i.total_factura);
     const q = i.trimestre || quarter(i.fecha_emision);
     const yr = i.anio || '';
-    rows.push([i.fecha_emision || '', asiento, '600000', 'Compras', i.concepto || '', base, '', '4000000', i.numero_factura || '', i.proveedor_nif || '', q, yr]);
-    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4720000', 'H.P. IVA soportado', 'IVA ' + (n(i.tipo_iva) || 21) + '%', iva, '', '4000000', i.numero_factura || '', '', q, yr]);
-    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4730000', 'H.P. IRPF soportado', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4000000', i.numero_factura || '', '', q, yr]);
-    rows.push([i.fecha_emision || '', asiento, '4000000', 'Proveedores', i.proveedor_nombre || '', '', total, '600000', i.numero_factura || '', '', q, yr]);
+    rows.push([i.fecha_emision || '', asiento, '6000000000', 'Compras', i.concepto || '', base, '', '4000000000', i.numero_factura || '', i.proveedor_nif || '', q, yr]);
+    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4720000000', 'H.P. IVA soportado', 'IVA ' + (n(i.tipo_iva) || 21) + '%', iva, '', '4000000000', i.numero_factura || '', '', q, yr]);
+    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4730000000', 'H.P. IRPF soportado', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4000000000', i.numero_factura || '', '', q, yr]);
+    rows.push([i.fecha_emision || '', asiento, '4000000000', 'Proveedores', i.proveedor_nombre || '', '', total, '6000000000', i.numero_factura || '', '', q, yr]);
     asiento++;
   });
 
@@ -297,10 +297,10 @@ function buildLibroDiario(invoices, expenses) {
     const q = e.trimestre || quarter(e.fecha);
     const yr = e.anio || '';
     const ret = pct(e.base_imponible, e.retencion_irpf);
-    rows.push([e.fecha || '', asiento, '600000', 'Compras y gastos', e.concepto || '', base, '', '4000000', '', '', q, yr]);
-    if (iva > 0) rows.push([e.fecha || '', asiento, '4720000', 'H.P. IVA soportado', 'IVA ' + n(e.tipo_impuesto) + '%', iva, '', '4000000', '', '', q, yr]);
-    if (ret > 0) rows.push([e.fecha || '', asiento, '4730000', 'H.P. IRPF soportado', 'Retención ' + n(e.retencion_irpf) + '%', ret, '', '4000000', '', '', q, yr]);
-    rows.push([e.fecha || '', asiento, '4000000', 'Proveedores', e.proveedor_cliente || '', '', total, '600000', '', '', q, yr]);
+    rows.push([e.fecha || '', asiento, '6000000000', 'Compras y gastos', e.concepto || '', base, '', '4000000000', '', '', q, yr]);
+    if (iva > 0) rows.push([e.fecha || '', asiento, '4720000000', 'H.P. IVA soportado', 'IVA ' + n(e.tipo_impuesto) + '%', iva, '', '4000000000', '', '', q, yr]);
+    if (ret > 0) rows.push([e.fecha || '', asiento, '4730000000', 'H.P. IRPF soportado', 'Retención ' + n(e.retencion_irpf) + '%', ret, '', '4000000000', '', '', q, yr]);
+    rows.push([e.fecha || '', asiento, '4000000000', 'Proveedores', e.proveedor_cliente || '', '', total, '6000000000', '', '', q, yr]);
     asiento++;
   });
 
@@ -317,22 +317,22 @@ function buildLibroMayor(invoices, expenses) {
   };
 
   invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-    addCuenta('4300000', 'Clientes', n(i.total_factura), 0);
-    addCuenta('700000', 'Ventas de servicios', 0, n(i.base_imponible));
-    addCuenta('4770000', 'H.P. IVA repercutido', 0, n(i.cuota_iva));
-    if (n(i.retencion_irpf) > 0) addCuenta('4751000', 'H.P. IRPF retenido', pct(i.base_imponible, i.retencion_irpf), 0);
+    addCuenta('4300000000', 'Clientes', n(i.total_factura), 0);
+    addCuenta('7000000000', 'Ventas de servicios', 0, n(i.base_imponible));
+    addCuenta('4770000000', 'H.P. IVA repercutido', 0, n(i.cuota_iva));
+    if (n(i.retencion_irpf) > 0) addCuenta('4751000000', 'H.P. IRPF retenido', pct(i.base_imponible, i.retencion_irpf), 0);
   });
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
-    addCuenta('600000', 'Compras', n(i.base_imponible), 0);
-    addCuenta('4720000', 'H.P. IVA soportado', n(i.cuota_iva), 0);
-    if (n(i.retencion_irpf) > 0) addCuenta('4730000', 'H.P. IRPF soportado', pct(i.base_imponible, i.retencion_irpf), 0);
-    addCuenta('4000000', 'Proveedores', 0, n(i.total_factura));
+    addCuenta('6000000000', 'Compras', n(i.base_imponible), 0);
+    addCuenta('4720000000', 'H.P. IVA soportado', n(i.cuota_iva), 0);
+    if (n(i.retencion_irpf) > 0) addCuenta('4730000000', 'H.P. IRPF soportado', pct(i.base_imponible, i.retencion_irpf), 0);
+    addCuenta('4000000000', 'Proveedores', 0, n(i.total_factura));
   });
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
-    addCuenta('600000', 'Compras y gastos', n(e.base_imponible), 0);
-    addCuenta('4720000', 'H.P. IVA soportado', n(e.cuota_impuesto), 0);
-    if (n(e.retencion_irpf) > 0) addCuenta('4730000', 'H.P. IRPF soportado', pct(e.base_imponible, e.retencion_irpf), 0);
-    addCuenta('4000000', 'Proveedores', 0, n(e.total));
+    addCuenta('6000000000', 'Compras y gastos', n(e.base_imponible), 0);
+    addCuenta('4720000000', 'H.P. IVA soportado', n(e.cuota_impuesto), 0);
+    if (n(e.retencion_irpf) > 0) addCuenta('4730000000', 'H.P. IRPF soportado', pct(e.base_imponible, e.retencion_irpf), 0);
+    addCuenta('4000000000', 'Proveedores', 0, n(e.total));
   });
 
   const header = ['Cuenta', 'Descripción', 'Debe Acumulado (€)', 'Haber Acumulado (€)', 'Saldo (€)'];

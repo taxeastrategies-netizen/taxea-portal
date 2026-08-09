@@ -15,7 +15,7 @@ function buildClienteAccounts(invoices) {
   let counter = 1;
   invoices.filter(i => i.tipo === 'emitida').forEach(i => {
     const key = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
-    if (key && !map[key]) map[key] = `4300${String(counter++).padStart(4, '0')}`;
+    if (key && !map[key]) map[key] = `4300${String(counter++).padStart(6, '0')}`;
   });
   return map;
 }
@@ -24,22 +24,22 @@ function buildProveedorAccounts(invoices) {
   let counter = 1;
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     const key = i.proveedor_nif ? i.proveedor_nif.toUpperCase() : (i.proveedor_nombre || '').toLowerCase();
-    if (key && !map[key]) map[key] = `4100${String(counter++).padStart(4, '0')}`;
+    if (key && !map[key]) map[key] = `4100${String(counter++).padStart(6, '0')}`;
   });
   return map;
 }
 const GASTO_CUENTAS = {
-  ventas_servicios: '70000000', compras: '60000000', suministros: '62800000',
-  alquiler: '62100000', publicidad_marketing: '62700000',
-  servicios_profesionales: '62300000', software: '62800000',
-  transporte: '62400000', dietas: '62500000', gastos_financieros: '66900000',
-  seguros: '62500000', otros: '62900000',
+  ventas_servicios: '7000000000', compras: '6000000000', suministros: '6280000000',
+  alquiler: '6210000000', publicidad_marketing: '6270000000',
+  servicios_profesionales: '6230000000', software: '6280000000',
+  transporte: '6240000000', dietas: '6250000000', gastos_financieros: '6690000000',
+  seguros: '6250000000', otros: '6290000000',
 };
 function ctaGasto(inv) {
-  return GASTO_CUENTAS[inv.categoria_gasto] || '60000000';
+  return GASTO_CUENTAS[inv.categoria_gasto] || '6000000000';
 }
 function ctaIngreso(inv) {
-  return n(inv.tipo_iva) === 0 ? '70500000' : '70000000';
+  return n(inv.tipo_iva) === 0 ? '7050000000' : '7000000000';
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     const total = n(inv.total_factura);
     totBaseE += base; totIvaE += iva; totRetE += ret; totTotalE += total;
     const key = inv.cliente_nif ? inv.cliente_nif.toUpperCase() : (inv.cliente_nombre || '').toLowerCase();
-    const ctaCliente = clienteMap[key] || '43000000';
+    const ctaCliente = clienteMap[key] || '4300000000';
     y = tableRow(doc, [
       inv.numero_factura || '—', fmtDate(inv.fecha_emision), inv.cliente_nombre || '—',
       inv.cliente_nif || '—', fmt(base), fmt(iva), fmt(ret), fmt(total),
@@ -257,7 +257,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     const provNombre = inv.proveedor_nombre || inv.cliente_nombre || '—';
     const provNif = inv.proveedor_nif || inv.cliente_nif || '—';
     const key = provNif !== '—' ? provNif.toUpperCase() : provNombre.toLowerCase();
-    const ctaProv = proveedorMap[key] || '40000000';
+    const ctaProv = proveedorMap[key] || '4000000000';
     const catLabel = inv.categoria_gasto ? inv.categoria_gasto.replace(/_/g, ' ') : '—';
     y = tableRow(doc, [
       inv.numero_factura || '—', fmtDate(inv.fecha_emision), provNombre,

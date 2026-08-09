@@ -88,11 +88,12 @@ export default function LibroRegistros() {
 
   const handleExport = async () => {
     setExporting(true);
-    const newInvoiceIds = new Set([
+    const hasBaseline = !!lastSnapshot;
+    const newInvoiceIds = hasBaseline ? new Set([
       ...activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
       ...activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
-    ]);
-    const newExpenseIds = new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id));
+    ]) : new Set();
+    const newExpenseIds = hasBaseline ? new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
     await exportarLibros({
       invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
