@@ -94,15 +94,16 @@ export default function LibrosExportTab({ user }) {
       const { invoices, expenses } = await fetchClientData(client);
       const snap = snapshots[`${client.id}-${year}`];
 
+      const hasBaseline = !!snap;
       const lastEmittedIds = new Set(snap?.emittedInvoiceIds || []);
       const lastReceivedIds = new Set(snap?.receivedInvoiceIds || []);
       const lastExpenseIds = new Set(snap?.expenseIds || []);
 
-      const newInvoiceIds = new Set([
+      const newInvoiceIds = hasBaseline ? new Set([
         ...invoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
         ...invoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
-      ]);
-      const newExpenseIds = new Set(expenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id));
+      ]) : new Set();
+      const newExpenseIds = hasBaseline ? new Set(expenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
 
       const companyName = client.razon_social || client.nombre_comercial || 'Empresa';
       await exportarLibros({
