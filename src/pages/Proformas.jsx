@@ -48,13 +48,13 @@ export default function Proformas() {
   const kpis = useMemo(() => {
     const total = items.length;
     const borradores = items.filter(i => i.estado === 'borrador' || !i.estado).length;
-    const enviadas = items.filter(i => i.estado === 'enviado').length;
-    const aceptadas = items.filter(i => i.estado === 'aceptado').length;
-    const convertidas = items.filter(i => i.estado === 'convertida' || i.estado === 'facturada').length;
-    const pendientes = items.filter(i => ['enviado', 'pendiente'].includes(i.estado)).length;
+    const enviadas = items.filter(i => i.estado === 'enviada').length;
+    const aceptadas = items.filter(i => i.estado === 'aceptada').length;
+    const convertidas = items.filter(i => i.estado === 'convertida_factura').length;
+    const pendientes = items.filter(i => i.estado === 'enviada').length;
     const valorTotal = items.reduce((s, i) => s + (i.total || 0), 0);
-    const valorAceptado = items.filter(i => i.estado === 'aceptado').reduce((s, i) => s + (i.total || 0), 0);
-    const valorPendiente = items.filter(i => ['enviado', 'pendiente'].includes(i.estado)).reduce((s, i) => s + (i.total || 0), 0);
+    const valorAceptado = items.filter(i => ['aceptada', 'convertida_factura'].includes(i.estado)).reduce((s, i) => s + (i.total || 0), 0);
+    const valorPendiente = items.filter(i => i.estado === 'enviada').reduce((s, i) => s + (i.total || 0), 0);
     const tasa = total > 0 ? Math.round(((aceptadas + convertidas) / total) * 100) : 0;
     return { total, borradores, enviadas, aceptadas, convertidas, pendientes, valorTotal, valorAceptado, valorPendiente, tasa };
   }, [items]);
@@ -181,14 +181,14 @@ export default function Proformas() {
       {/* Filters + Search */}
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-        {['todos', 'borrador', 'enviado', 'aceptado', 'convertida'].map(s => (
+        {['todos', 'borrador', 'enviada', 'aceptada', 'convertida_factura'].map(s => (
           <button key={s} onClick={() => setFilterStatus(s)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
               filterStatus === s
                 ? 'bg-taxea-red text-white border-taxea-red'
                 : 'bg-card border-border text-muted-foreground hover:border-taxea-red/40'
             }`}>
-            {s === 'todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
+            {s === 'todos' ? 'Todos' : s === 'convertida_factura' ? 'Convertidas' : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         ))}
         {years.length > 0 && (
@@ -253,7 +253,7 @@ export default function Proformas() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setSelectedDoc(p)}>Ver documento</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setEditing(p); setShowForm(true); }}>Editar</DropdownMenuItem>
+                            {p.estado !== 'convertida_factura' && <DropdownMenuItem onClick={() => { setEditing(p); setShowForm(true); }}>Editar</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
