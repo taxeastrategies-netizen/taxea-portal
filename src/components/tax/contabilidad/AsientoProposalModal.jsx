@@ -1,17 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertCircle, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getWithholdingAmount } from '@/lib/accountingUtils';
 
 const fmt = (n) => n != null ? Number(n).toFixed(2) : '0.00';
 
-function buildProposal(invoice) {
+function buildProposal(invoice, config = {}) {
   const base = invoice.base_imponible || 0;
   const iva = invoice.cuota_iva || (base * (invoice.tipo_iva || 0) / 100);
-  const retencion = invoice.retencion_irpf || 0;
+  const retencion = getWithholdingAmount(invoice);
+  const mappings = Array.isArray(config.mappings) ? config.mappings : [];
+  const category = invoice.categoria_gasto || invoice.categoria || (invoice.tipo === 'emitida' ? 'ventas_servicios' : 'otros');
+  const mapped = mappings.find(item => item.categoria === category && item.tipo === (invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'));
   const total = invoice.total_factura || (base + iva - retencion);
 
   if (invoice.tipo === 'emitida') {
@@ -21,11 +25,11 @@ function buildProposal(invoice) {
     // Haber: 705 base imponible
     // Haber: 477 IVA repercutido
     const lines = [
-      { cuenta: '430', nombre: 'Clientes', debe: total, haber: 0 },
+      { cuenta: config.clientAccount || '430', nombre: 'Clientes', debe: total, haber: 0 },
     ];
-    if (retencion > 0) lines.push({ cuenta: '473', nombre: 'H.P. retenciones e ingresos a cuenta', debe: retencion, haber: 0 });
-    lines.push({ cuenta: '705', nombre: 'Prestaciones de servicios', debe: 0, haber: base });
-    if (iva > 0) lines.push({ cuenta: '477', nombre: 'IVA repercutido', debe: 0, haber: iva });
+    if (retencion > 0) lines.push({ cuenta: config.withholdingReceivableAccount || '473', nombre: 'H.P. retenciones e ingresos a cuenta', debe: retencion, haber: 0 });
+    lines.push({ cuenta: mapped?.cuenta || '705', nombre: mapped?.nombre || 'Prestaciones de servicios', debe: 0, haber: base });
+    if (iva > 0) lines.push({ cuenta: config.outputTaxAccount || '477', nombre: 'Impuesto repercutido', debe: 0, haber: iva });
     return lines;
   } else {
     // total_factura ya es neto (base + iva - retención)
@@ -34,11 +38,11 @@ function buildProposal(invoice) {
     // Haber: 410 por el importe neto que pagamos (total_factura)
     // Haber: 4751 retención que practicamos al proveedor
     const lines = [
-      { cuenta: '629', nombre: 'Gasto (pendiente de clasificar)', debe: base, haber: 0 },
+      { cuenta: mapped?.cuenta || '629', nombre: mapped?.nombre || 'Gasto (pendiente de clasificar)', debe: base, haber: 0 },
     ];
-    if (iva > 0) lines.push({ cuenta: '472', nombre: 'IVA soportado', debe: iva, haber: 0 });
-    lines.push({ cuenta: '410', nombre: 'Proveedores', debe: 0, haber: total });
-    if (retencion > 0) lines.push({ cuenta: '4751', nombre: 'Retenciones practicadas', debe: 0, haber: retencion });
+    if (iva > 0) lines.push({ cuenta: config.inputTaxAccount || '472', nombre: 'Impuesto soportado deducible', debe: iva, haber: 0 });
+    lines.push({ cuenta: config.supplierAccount || '410', nombre: 'Proveedores', debe: 0, haber: total });
+    if (retencion > 0) lines.push({ cuenta: config.withholdingPayableAccount || '4751', nombre: 'Retenciones practicadas', debe: 0, haber: retencion });
     return lines;
   }
 }
@@ -49,6 +53,19 @@ export default function AsientoProposalModal({ invoice, onClose, onConfirmed }) 
   const [fecha, setFecha] = useState(invoice.fecha_emision || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!invoice.company_id) return;
+    base44.entities.AccountingConfiguration.filter({ companyId: invoice.company_id }, '-updatedAt', 1)
+      .then(records => {
+        const config = records?.[0];
+        if (!config) return;
+        let mappings = [];
+        try { mappings = JSON.parse(config.mappingsJson || '[]'); } catch { mappings = []; }
+        setLines(buildProposal(invoice, { ...config, mappings }));
+      })
+      .catch(() => {});
+  }, [invoice.id, invoice.company_id]);
 
   const totalDebe = lines.reduce((s, l) => s + (Number(l.debe) || 0), 0);
   const totalHaber = lines.reduce((s, l) => s + (Number(l.haber) || 0), 0);
@@ -68,44 +85,21 @@ export default function AsientoProposalModal({ invoice, onClose, onConfirmed }) 
     if (lines.some(l => !l.cuenta)) { setError('Todas las líneas deben tener cuenta contable.'); return; }
 
     setSaving(true);
-    const source = invoice.tipo === 'emitida' ? 'factura_emitida' : 'factura_recibida';
-    const entry = await base44.entities.JournalEntry.create({
-      companyId: invoice.company_id,
-      date: fecha,
-      type: invoice.tipo === 'emitida' ? 'ingreso' : 'gasto',
-      description: descripcion,
-      documentId: invoice.id,
-      source,
-      status: 'confirmado',
-      totalDebit: totalDebe,
-      totalCredit: totalHaber,
-      isBalanced: true,
-      confirmedAt: new Date().toISOString(),
-    });
-
-    await base44.entities.JournalEntryLine.bulkCreate(
-      lines.map((l, i) => ({
-        journalEntryId: entry.id,
+    try {
+      await base44.functions.invoke('accountingOperations', {
+        action: 'post_invoice',
         companyId: invoice.company_id,
-        lineNumber: i + 1,
-        accountCode: l.cuenta,
-        accountName: l.nombre,
+        invoiceId: invoice.id,
+        date: fecha,
         description: descripcion,
-        debit: Number(l.debe) || 0,
-        credit: Number(l.haber) || 0,
-        documentId: invoice.id,
-        entryStatus: 'confirmado',
-      }))
-    );
-
-    await base44.entities.Invoice.update(invoice.id, {
-      estado_contable: 'contabilizada',
-      linked_journal_entry_id: entry.id,
-      fecha_contabilizacion: new Date().toISOString(),
-    });
-
-    setSaving(false);
-    onConfirmed();
+        lines,
+      });
+      onConfirmed();
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || 'No se pudo contabilizar la factura.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
