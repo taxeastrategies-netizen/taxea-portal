@@ -10,27 +10,27 @@
     },
     "clientAccount": {
       "type": "string",
-      "default": "430"
+      "default": "43000000"
     },
     "supplierAccount": {
       "type": "string",
-      "default": "410"
+      "default": "41000000"
     },
     "outputTaxAccount": {
       "type": "string",
-      "default": "477"
+      "default": "47700000"
     },
     "inputTaxAccount": {
       "type": "string",
-      "default": "472"
+      "default": "47200000"
     },
     "withholdingReceivableAccount": {
       "type": "string",
-      "default": "473"
+      "default": "47300000"
     },
     "withholdingPayableAccount": {
       "type": "string",
-      "default": "4751"
+      "default": "47510000"
     },
     "updatedBy": {
       "type": "string"
@@ -38,6 +38,26 @@
     "updatedAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "accountDigits": {
+      "type": "number",
+      "default": 8
+    },
+    "customerSequencePrefix": {
+      "type": "string",
+      "default": "4300"
+    },
+    "supplierSequencePrefix": {
+      "type": "string",
+      "default": "4000"
+    },
+    "creditorSequencePrefix": {
+      "type": "string",
+      "default": "4100"
+    },
+    "accountingSchemaVersion": {
+      "type": "string",
+      "default": "pgc8-v1"
     }
   },
   "required": [
