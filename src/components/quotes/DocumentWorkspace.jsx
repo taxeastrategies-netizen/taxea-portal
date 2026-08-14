@@ -10,6 +10,9 @@ import {
   ArrowRight, Edit, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { base44 } from '@/api/base44Client';
 import DocumentVisualRender from './DocumentVisualRender';
@@ -37,6 +40,10 @@ const fmtDate = (d) => {
 function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onClose }) {
   const [converting, setConverting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [convertError, setConvertError] = useState('');
 
   const isQuote = docType === 'quote';
   const entityName = isQuote ? 'Quote' : 'Proforma';
@@ -45,30 +52,80 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
   const isConverted = statusKey === 'convertido_factura' || statusKey === 'convertida_factura';
 
   const convertToInvoice = async () => {
+    const cleanNumber = invoiceNumber.trim();
+    if (!cleanNumber || !invoiceDate) {
+      setConvertError('Indica el número definitivo y la fecha de emisión.');
+      return;
+    }
     setConverting(true);
-    const num = isQuote ? doc.numero_presupuesto : doc.numero_proforma;
-    await base44.entities.Invoice.create({
-      company_id: company.id,
-      numero_factura: `F-${num}`,
-      fecha_emision: new Date().toISOString().split('T')[0],
-      cliente_nombre: doc.cliente_nombre,
-      cliente_nif: doc.cliente_nif,
-      concepto: doc.concepto || '',
-      base_imponible: doc.base_imponible,
-      tipo_iva: doc.tipo_impuesto,
-      cuota_iva: (doc.base_imponible || 0) * (doc.tipo_impuesto || 21) / 100,
-      total_factura: doc.total,
-      tipo: 'emitida',
-      estado_cobro: 'pendiente',
-      estado_contable: 'pendiente',
-      anio: new Date().getFullYear(),
-      trimestre: ['T1', 'T2', 'T3', 'T4'][Math.floor(new Date().getMonth() / 3)],
-      subido_por: user?.email,
-    });
-    const estadoConvertido = isQuote ? 'convertido_factura' : 'convertida_factura';
-    await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
-    setConverting(false);
-    onRefresh?.();
+    setConvertError('');
+    try {
+      const estadoConvertido = isQuote ? 'convertido_factura' : 'convertida_factura';
+      const sourceType = isQuote ? 'presupuesto' : 'proforma';
+      const existingSource = await base44.entities.Invoice.filter({
+        company_id: company.id,
+        source_document_id: doc.id,
+      });
+      if ((existingSource || []).some(invoice => !invoice.anulada)) {
+        await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
+        setShowConvertDialog(false);
+        onRefresh?.();
+        return;
+      }
+      const duplicateNumber = await base44.entities.Invoice.filter({
+        company_id: company.id,
+        numero_factura: cleanNumber,
+      });
+      if ((duplicateNumber || []).some(invoice => !invoice.anulada)) {
+        setConvertError('Ya existe una factura activa con ese número. Usa otra numeración.');
+        return;
+      }
+      const base = Number(doc.base_imponible) || 0;
+      const parsedTaxRate = Number(doc.tipo_impuesto);
+      const taxRate = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
+      const parsedTaxAmount = Number(doc.cuota_impuesto);
+      const taxAmount = Number.isFinite(parsedTaxAmount) ? parsedTaxAmount : base * taxRate / 100;
+      const parsedRetentionRate = Number(doc.retencion_irpf);
+      const retentionRate = Number.isFinite(parsedRetentionRate) ? parsedRetentionRate : 0;
+      const retentionAmount = base * retentionRate / 100;
+      const date = new Date(`${invoiceDate}T12:00:00`);
+      await base44.entities.Invoice.create({
+        company_id: company.id,
+        numero_factura: cleanNumber,
+        fecha_emision: invoiceDate,
+        fecha_operacion: invoiceDate,
+        cliente_nombre: doc.cliente_nombre,
+        cliente_nif: doc.cliente_nif,
+        cliente_email: doc.cliente_email,
+        cliente_direccion: doc.cliente_direccion,
+        concepto: doc.concepto || '',
+        base_imponible: base,
+        tipo_iva: taxRate,
+        cuota_iva: taxAmount,
+        retencion_irpf: retentionRate,
+        importe_retencion: retentionAmount,
+        total_factura: Number(doc.total) || base + taxAmount - retentionAmount,
+        forma_pago: doc.forma_pago,
+        coletilla_fiscal: doc.coletilla_fiscal,
+        tipo: 'emitida',
+        estado_cobro: 'pendiente',
+        estado_contable: 'pendiente',
+        anio: date.getFullYear(),
+        trimestre: ['T1', 'T2', 'T3', 'T4'][Math.floor(date.getMonth() / 3)],
+        subido_por: user?.email,
+        origin: sourceType,
+        source_document_type: sourceType,
+        source_document_id: doc.id,
+      });
+      await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
+      setShowConvertDialog(false);
+      onRefresh?.();
+    } catch (error) {
+      console.error('Error convirtiendo documento:', error);
+      setConvertError('No se pudo crear la factura. No se ha marcado el documento como convertido.');
+    } finally {
+      setConverting(false);
+    }
   };
 
   const updateStatus = async (estado) => {
@@ -104,8 +161,8 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
             <span className="font-medium">{fmt(doc?.base_imponible)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">IVA ({doc?.tipo_impuesto || 21}%)</span>
-            <span className="font-medium">{fmt(doc?.cuota_impuesto || (doc?.base_imponible * (doc?.tipo_impuesto || 21) / 100))}</span>
+            <span className="text-muted-foreground">Impuesto ({doc?.tipo_impuesto ?? 0}%)</span>
+            <span className="font-medium">{fmt(doc?.cuota_impuesto ?? (doc?.base_imponible * (doc?.tipo_impuesto ?? 0) / 100))}</span>
           </div>
           <div className="flex justify-between text-sm font-bold pt-1 border-t border-border">
             <span>Total</span>
@@ -139,9 +196,11 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
         </Button>
 
         {/* Editar */}
-        <Button variant="outline" onClick={() => onEdit?.(doc)} className="w-full h-9 text-sm gap-2">
-          <Edit className="w-3.5 h-3.5" /> Editar documento
-        </Button>
+        {!isConverted && (
+          <Button variant="outline" onClick={() => onEdit?.(doc)} className="w-full h-9 text-sm gap-2">
+            <Edit className="w-3.5 h-3.5" /> Editar documento
+          </Button>
+        )}
 
         {/* Cambiar estado */}
         {!isConverted && (
@@ -163,10 +222,9 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
 
         {/* Convertir en factura */}
         {!isConverted && (
-          <Button variant="outline" onClick={convertToInvoice} disabled={converting}
+          <Button variant="outline" onClick={() => { setConvertError(''); setShowConvertDialog(true); }}
             className="w-full h-9 text-sm gap-2 text-violet-700 border-violet-200 hover:bg-violet-50">
-            {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
-            {converting ? 'Convirtiendo…' : 'Convertir en factura'}
+            <ArrowRight className="w-3.5 h-3.5" /> Convertir en factura
           </Button>
         )}
 
@@ -177,6 +235,33 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
           </div>
         )}
       </div>
+
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Crear factura definitiva</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            La factura no podrá editarse después. Si hay un error habrá que anularla y emitir una nueva o rectificativa.
+          </p>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Número de factura *</Label>
+              <Input value={invoiceNumber} onChange={event => setInvoiceNumber(event.target.value)} placeholder="F-2026-001" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Fecha de emisión *</Label>
+              <Input type="date" value={invoiceDate} onChange={event => setInvoiceDate(event.target.value)} />
+            </div>
+          </div>
+          {convertError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{convertError}</p>}
+          <div className="flex justify-end gap-3 mt-2">
+            <Button variant="outline" onClick={() => setShowConvertDialog(false)} disabled={converting}>Cancelar</Button>
+            <Button onClick={convertToInvoice} disabled={converting} className="bg-violet-700 hover:bg-violet-800">
+              {converting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+              Crear factura
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
