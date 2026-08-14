@@ -166,9 +166,18 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     };
     try {
       if (editing?.id) {
-        await base44.entities.Invoice.update(editing.id, payload);
+        setSaveError('Las facturas definitivas no se editan. Anula la factura y emite una nueva o rectificativa.');
+        return;
       } else {
-        const createdInvoice = await base44.entities.Invoice.create(payload);
+        const duplicates = await base44.entities.Invoice.filter({
+          company_id: company.id,
+          numero_factura: payload.numero_factura.trim(),
+        });
+        if ((duplicates || []).some(invoice => !invoice.anulada)) {
+          setSaveError('Ya existe una factura activa con ese número. Usa otra numeración.');
+          return;
+        }
+        await base44.entities.Invoice.create({ ...payload, numero_factura: payload.numero_factura.trim() });
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
@@ -228,7 +237,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar factura' : 'Nueva factura'}</DialogTitle>
+          <DialogTitle>Nueva factura definitiva</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
