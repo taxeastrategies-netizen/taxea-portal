@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowUpCircle, Search, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { getWithholdingAmount } from '@/lib/accountingUtils';
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
 
@@ -53,7 +54,7 @@ export default function LibroRegistroEmitidas() {
   const totales = filtered.reduce((acc, inv) => ({
     base: acc.base + (inv.base_imponible || 0),
     iva: acc.iva + (inv.cuota_iva || 0),
-    retencion: acc.retencion + (inv.retencion_irpf || 0),
+    retencion: acc.retencion + getWithholdingAmount(inv),
     total: acc.total + (inv.total_factura || 0),
   }), { base: 0, iva: 0, retencion: 0, total: 0 });
 
@@ -127,7 +128,7 @@ export default function LibroRegistroEmitidas() {
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
                     <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.cuota_iva)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{inv.retencion_irpf ? fmt(inv.retencion_irpf) : '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono">{getWithholdingAmount(inv) ? fmt(getWithholdingAmount(inv)) : '—'}</td>
                     <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
                     <td className="px-3 py-2">
                       <span className={cn('text-[10px] font-medium px-1.5 py-0.5 rounded-full', ESTADO_CFG[inv.estado_contable] || 'bg-slate-100 text-slate-500')}>
