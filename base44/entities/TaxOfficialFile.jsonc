@@ -51,6 +51,7 @@
     "estado": {
       "type": "string",
       "enum": [
+        "borrador",
         "generado",
         "descargado",
         "validado_internamente",
