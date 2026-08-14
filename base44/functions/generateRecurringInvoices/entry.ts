@@ -134,12 +134,19 @@ Deno.serve(async (req) => {
     } catch { /* scheduled — no user */ }
 
     // Load active templates
+    const activeCompanyId = user?.data?.company_id;
+    if (isManual && !activeCompanyId) {
+      return Response.json({ error: 'Selecciona una empresa antes de generar facturas recurrentes.' }, { status: 403 });
+    }
     let templates = [];
     if (body.templateId) {
       const tmpl = await base44.asServiceRole.entities.RecurringInvoiceTemplate.get(body.templateId);
-      if (tmpl) templates = [tmpl];
+      if (tmpl && (!isManual || tmpl.ownerAccountId === activeCompanyId)) templates = [tmpl];
+      else if (tmpl) return Response.json({ error: 'La plantilla no pertenece a la empresa activa.' }, { status: 403 });
     } else {
-      templates = await base44.asServiceRole.entities.RecurringInvoiceTemplate.filter({ status: 'active' });
+      templates = await base44.asServiceRole.entities.RecurringInvoiceTemplate.filter(
+        isManual ? { status: 'active', ownerAccountId: activeCompanyId } : { status: 'active' }
+      );
     }
 
     const results = {
@@ -299,6 +306,7 @@ Deno.serve(async (req) => {
           tipo_iva: taxRate,
           cuota_iva: cuota,
           retencion_irpf: retentionRate,
+          importe_retencion: retencion,
           total_factura: total,
           moneda: tmpl.currency || 'EUR',
           trimestre: getTrimestre(runDate),
