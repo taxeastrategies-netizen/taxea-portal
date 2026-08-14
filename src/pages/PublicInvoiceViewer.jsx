@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Download, Printer, AlertTriangle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getWithholdingAmount } from '@/lib/accountingUtils';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 
@@ -34,8 +35,8 @@ function InvoicePublicRender({ invoice, company }) {
             : <img src={LOGO_URL} alt="Taxea Strategies" className="h-8 object-contain mb-2" />
           }
           <div className="text-xs text-slate-500 leading-relaxed mt-1 space-y-0.5">
-            <p className="font-semibold text-slate-800">{company?.nombre || company?.razon_social || 'Emisor'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold text-slate-800">{company?.nombre_comercial || company?.razon_social || 'Emisor'}</p>
+            {company?.nif_cif && <p>NIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
           </div>
         </div>
@@ -54,8 +55,8 @@ function InvoicePublicRender({ invoice, company }) {
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Emisor</div>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
-            <p className="font-semibold">{company?.nombre || '—'}</p>
-            {company?.nif && <p>NIF: {company.nif}</p>}
+            <p className="font-semibold">{company?.nombre_comercial || company?.razon_social || '—'}</p>
+            {company?.nif_cif && <p>NIF: {company.nif_cif}</p>}
             {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
           </div>
         </div>
@@ -113,13 +114,13 @@ function InvoicePublicRender({ invoice, company }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
-            <span className="text-slate-500">IVA ({invoice.tipo_iva || 21}%)</span>
+            <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {invoice.retencion_irpf > 0 && (
             <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
               <span className="text-slate-500">Retención IRPF</span>
-              <span className="font-medium text-red-600">−{fmt(invoice.retencion_irpf)}</span>
+              <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
             </div>
           )}
           <div className="flex justify-between py-2 mt-1 rounded-lg px-2" style={{ backgroundColor: `${brandColor}10` }}>
@@ -169,34 +170,15 @@ export default function PublicInvoiceViewer() {
 
   const loadInvoice = async (t) => {
     try {
-      // Buscar por public_token seguro (no por ID de la factura)
-      const results = await base44.entities.Invoice.filter({ public_token: t });
-      const inv = results?.[0];
-      if (!inv) {
-        setError('La factura no existe, ha sido desactivada o el enlace ha caducado.');
+      const response = await base44.functions.invoke('getPublicInvoice', { token: t, action: 'view' });
+      const data = response?.data || response;
+      if (!data?.ok || !data?.invoice) {
+        setError(data?.error || 'La factura no existe, ha sido desactivada o el enlace ha caducado.');
         setLoading(false);
         return;
       }
-      setInvoice(inv);
-
-      // Registrar apertura
-      base44.entities.InvoiceTimelineEvent.create({
-        invoice_id: inv.id,
-        company_id: inv.company_id,
-        event_type: 'enlace_publico_abierto',
-        event_label: 'Factura vista por destinatario',
-        event_detail: 'El destinatario ha abierto el enlace público de la factura.',
-        created_at: new Date().toISOString(),
-        origin: 'cliente',
-      }).catch(() => {});
-
-
-
-      // Cargar datos del emisor (company) — solo lo necesario, sin datos internos
-      if (inv.company_id) {
-        const comps = await base44.entities.Company.filter({ id: inv.company_id });
-        if (comps?.length > 0) setCompany(comps[0]);
-      }
+      setInvoice(data.invoice);
+      setCompany(data.company || null);
     } catch (e) {
       setError('Error al cargar la factura. Inténtalo de nuevo.');
     }
@@ -210,16 +192,7 @@ export default function PublicInvoiceViewer() {
     a.download = `Factura_${invoice.numero_factura || token}.pdf`;
     a.target = '_blank';
     a.click();
-    // Registrar descarga
-    base44.entities.InvoiceTimelineEvent.create({
-      invoice_id: invoice.id,
-      company_id: invoice.company_id,
-      event_type: 'enlace_publico_descarga',
-      event_label: 'PDF descargado por destinatario',
-      event_detail: 'El destinatario ha descargado el PDF desde el enlace público.',
-      created_at: new Date().toISOString(),
-      origin: 'cliente',
-    }).catch(() => {});
+    base44.functions.invoke('getPublicInvoice', { token, action: 'download' }).catch(() => {});
 
   };
 
@@ -375,13 +348,13 @@ export default function PublicInvoiceViewer() {
                     <span className="font-medium text-slate-800">{fmt(invoice.base_imponible)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">IVA ({invoice.tipo_iva || 21}%)</span>
+                    <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
                     <span className="font-medium text-slate-800">{fmt(invoice.cuota_iva)}</span>
                   </div>
                   {invoice.retencion_irpf > 0 && (
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Retención IRPF</span>
-                      <span className="font-medium text-red-600">−{fmt(invoice.retencion_irpf)}</span>
+                      <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold border-t border-slate-100 pt-2 mt-1">
