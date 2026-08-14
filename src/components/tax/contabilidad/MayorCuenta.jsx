@@ -6,26 +6,33 @@ import { cn } from '@/lib/utils';
 
 const fmt = n => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function MayorCuenta({ account, onClose }) {
+export default function MayorCuenta({ account, companyId, onClose }) {
   const [lines, setLines] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (account) load();
-  }, [account]);
+  }, [account, companyId]);
 
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.JournalEntryLine.filter(
-      { accountCode: account.code },
-      'lineNumber',
-      200
-    ).catch(() => []);
-    // Only confirmed entries
-    const confirmed = (data || []).filter(l => l.entryStatus === 'confirmado' || l.entryStatus === 'pendiente_revision');
-    // Sort by date (we don't have date on line, use created_date)
-    const sorted = confirmed.sort((a, b) => new Date(a.created_date) - new Date(b.created_date));
-    // Compute running balance
+    if (!companyId) return;
+    const [data, entries] = await Promise.all([
+      base44.entities.JournalEntryLine.filter(
+        { companyId, accountCode: account.code },
+        'lineNumber',
+        2000
+      ).catch(() => []),
+      base44.entities.JournalEntry.filter({ companyId, status: 'confirmado' }, 'date', 2000).catch(() => []),
+    ]);
+    const entryMap = new Map((entries || []).map(entry => [entry.id, entry]));
+    const confirmed = (data || [])
+      .filter(line => entryMap.has(line.journalEntryId))
+      .map(line => ({ ...line, entryDate: line.entryDate || entryMap.get(line.journalEntryId)?.date }));
+    const sorted = confirmed.sort((a, b) => {
+      const dateDiff = new Date(a.entryDate || 0) - new Date(b.entryDate || 0);
+      return dateDiff || Number(a.lineNumber || 0) - Number(b.lineNumber || 0);
+    });
     let balance = Number(account.openingDebit || 0) - Number(account.openingCredit || 0);
     const withBalance = sorted.map(l => {
       balance += Number(l.debit || 0) - Number(l.credit || 0);
@@ -74,7 +81,7 @@ export default function MayorCuenta({ account, onClose }) {
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-secondary/50">
               <tr>
-                {['Asiento','Descripción','Debe','Haber','Saldo acum.','Contr.','✓'].map(h => (
+                {['Fecha','Asiento','Descripción','Debe','Haber','Saldo acum.','Contr.','✓'].map(h => (
                   <th key={h} className={cn('px-3 py-2 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide', ['Debe','Haber','Saldo acum.'].includes(h) && 'text-right')}>{h}</th>
                 ))}
               </tr>
@@ -82,6 +89,7 @@ export default function MayorCuenta({ account, onClose }) {
             <tbody className="divide-y divide-border">
               {lines.map((line, i) => (
                 <tr key={i} className="hover:bg-secondary/20">
+                  <td className="px-3 py-2 font-mono text-muted-foreground">{line.entryDate || '—'}</td>
                   <td className="px-3 py-2 font-mono text-primary">{line.journalEntryId?.slice(-6)}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate text-foreground">{line.description || '—'}</td>
                   <td className="px-3 py-2 text-right font-mono">{Number(line.debit) > 0 ? fmt(line.debit) : ''}</td>
