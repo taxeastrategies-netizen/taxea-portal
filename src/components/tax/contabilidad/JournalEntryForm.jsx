@@ -42,34 +42,29 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
     const validLines = lines.filter(l => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0));
     if (validLines.length < 2) { setError('Se necesitan al menos 2 líneas con cuenta e importe.'); return; }
 
+    if (!companyId) { setError('No se ha podido identificar la empresa activa.'); return; }
+
     setSaving(true);
-    const entry = await base44.entities.JournalEntry.create({
-      ...form,
-      companyId,
-      totalDebit,
-      totalCredit,
-      isBalanced,
-      status: asStatus,
-      entryNumber: `A-${Date.now().toString().slice(-6)}`,
-    });
-
-    await base44.entities.JournalEntryLine.bulkCreate(
-      validLines.map((l, i) => ({
-        journalEntryId: entry.id,
+    try {
+      await base44.functions.invoke('accountingOperations', {
+        action: 'create_manual',
         companyId,
-        lineNumber: i + 1,
-        accountCode: l.accountCode,
-        accountName: l.accountName,
-        description: l.description || form.description,
-        debit: Number(l.debit || 0),
-        credit: Number(l.credit || 0),
-        entryStatus: asStatus,
-      }))
-    );
-
-    setSaving(false);
-    onSaved?.();
-    onClose();
+        entry: { ...form, status: asStatus },
+        lines: validLines.map(l => ({
+          accountCode: l.accountCode,
+          accountName: l.accountName,
+          description: l.description || form.description,
+          debit: Number(l.debit || 0),
+          credit: Number(l.credit || 0),
+        })),
+      });
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.error || err?.message || 'No se pudo guardar el asiento.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
