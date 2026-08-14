@@ -49,7 +49,10 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
       await base44.functions.invoke('accountingOperations', {
         action: 'create_manual',
         companyId,
-        entry: { ...form, status: asStatus },
+        date: form.date,
+        description: form.description,
+        type: form.type,
+        status: asStatus,
         lines: validLines.map(l => ({
           accountCode: l.accountCode,
           accountName: l.accountName,
