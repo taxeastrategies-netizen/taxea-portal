@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Plus, Search, AlertTriangle, CheckCircle, Clock, XCircle,
+  Plus, Search, CheckCircle, Clock,
   Building2, ChevronRight, RefreshCw, FileText, AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

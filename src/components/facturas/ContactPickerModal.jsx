@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Search, UserCheck } from 'lucide-react';
 
 export default function ContactPickerModal({ open, onOpenChange, companyId, tipo = 'all', onSelect }) {

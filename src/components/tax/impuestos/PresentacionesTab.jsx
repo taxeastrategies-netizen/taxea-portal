@@ -3,8 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { Button } from '@/components/ui/button';
-import { Send, Upload, CheckCircle, FileText, ExternalLink, FileDown, AlertTriangle } from 'lucide-react';
+import { Send, Upload, FileText, ExternalLink, FileDown, AlertTriangle } from 'lucide-react';
 
 const ESTADO_CONFIG = {
   pendiente:             { label: 'Pendiente',        color: 'bg-amber-100 text-amber-700' },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext, Link } from 'react-router-dom';
+import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Clock, FileText, CheckCircle, AlertTriangle, Info, MessageSquare, Plus, Lock } from 'lucide-react';

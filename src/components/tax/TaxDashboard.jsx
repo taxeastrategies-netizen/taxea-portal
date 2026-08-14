@@ -3,14 +3,14 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import {
-  TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
+  TrendingUp, TrendingDown,
   FileText, Calendar, AlertTriangle, CheckCircle2, Clock,
   Zap, ScanLine, ScanText, BookOpen, Plus, ChevronRight,
   Activity, BarChart3, Brain, Sparkles, CircleDollarSign,
-  Receipt, Target, AlertCircle, Eye
+  Receipt, AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import GastosPorCategoria from './GastosPorCategoria';
 import { calculateFinancialKPIs } from '@/lib/financialCore';

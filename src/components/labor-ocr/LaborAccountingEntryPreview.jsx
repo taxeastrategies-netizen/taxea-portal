@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { CheckCircle2, AlertTriangle, Edit3, Info, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

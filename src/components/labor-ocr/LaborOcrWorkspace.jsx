@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useCompanyContext } from '@/lib/useCompanyContext';
-import { useAuth } from '@/lib/AuthContext';
 import {
-  ScanText, Upload, FileText, Users, ShieldCheck, AlertTriangle,
-  ChevronRight, Plus, History, Settings, X, CheckCircle2, Loader2
+  ScanText, Upload, FileText, ShieldCheck, AlertTriangle,
+  ChevronRight, History, Settings, X, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

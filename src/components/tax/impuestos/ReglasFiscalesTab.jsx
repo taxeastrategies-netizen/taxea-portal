@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { Button } from '@/components/ui/button';
-import { BookOpen, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
+import { Edit2, X } from 'lucide-react';
 
 const REGLAS_PREDEFINIDAS = [
   { tipo: 'exencion', codigo: 'IVA-0', descripcion: 'Facturación exenta de IVA (art. 20 LIVA)', activa: true },

@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
 import { getPeriodosDelModelo } from './aeatDeadlines';
-import { Calendar, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const ESTADO_PERIODO = {
   sin_datos: { label: 'Sin datos', color: 'bg-gray-100 text-gray-500' },

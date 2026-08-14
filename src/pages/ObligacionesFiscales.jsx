@@ -18,7 +18,6 @@ import KPIsObligaciones from '@/components/obligaciones/KPIsObligaciones';
 import VistaTimeline from '@/components/obligaciones/VistaTimeline';
 import ProximosVencimientos from '@/components/obligaciones/ProximosVencimientos';
 import CalendarioGeneral from '@/components/obligaciones/CalendarioGeneral';
-import StatusBadge from '@/components/ui/StatusBadge';
 
 const TABS = [
   { id: 'proximos', label: 'Próximos vencimientos', icon: Clock },

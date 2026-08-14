@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Button } from '@/components/ui/button';
-import { Repeat, Play, Pause, Trash2, Eye, ChevronRight, ChevronDown, FileText, AlertCircle } from 'lucide-react';
-import { formatFrequency, calculateNextRun, FREQUENCY_LABELS, STATUS_LABELS, MODE_LABELS } from '@/lib/recurringUtils';
+import { Repeat, Play, Pause, Trash2, Eye, ChevronRight, ChevronDown, FileText } from 'lucide-react';
+import { formatFrequency, STATUS_LABELS, MODE_LABELS } from '@/lib/recurringUtils';
 import { cn } from '@/lib/utils';
 
 const fmt = n => (n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

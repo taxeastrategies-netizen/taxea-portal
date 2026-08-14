@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { ArrowLeft, Plus, Trash2, Save, Settings } from 'lucide-react';
+import { ArrowLeft, Save, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const CONCEPT_TYPES = [

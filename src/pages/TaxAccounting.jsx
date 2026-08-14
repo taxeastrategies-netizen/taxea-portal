@@ -4,7 +4,6 @@ import Facturas from './Facturas';
 import IngresosGastos from './IngresosGastos';
 import Presupuestos from './Presupuestos';
 import Proformas from './Proformas';
-import Productos from './Productos';
 import NotasPredefinidas from './NotasPredefinidas';
 import LibroRegistros from './LibroRegistros';
 import LectorGastos from './LectorGastos';

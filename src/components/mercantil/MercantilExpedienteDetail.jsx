@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ArrowLeft, BookText, FileCheck, FolderOpen, Clock,
-  AlertTriangle, CheckCircle, Building2, AlertCircle, Save
+  AlertTriangle, Building2, AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import MercantilLibrosTab from './MercantilLibrosTab';

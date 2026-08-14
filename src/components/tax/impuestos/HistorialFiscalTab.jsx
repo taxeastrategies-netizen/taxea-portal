@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { History, FileCheck, FilePen, Send, ChevronDown } from 'lucide-react';
+import { History, FileCheck, FilePen, Send } from 'lucide-react';
 
 const ESTADO_CONFIG = {
   presentado:        { label: 'Presentado',  color: 'bg-green-100 text-green-700', icon: FileCheck },

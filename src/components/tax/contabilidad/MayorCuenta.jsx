@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { X, ExternalLink, CheckCircle } from 'lucide-react';
+import { X, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const fmt = n => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -2,8 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertTriangle, AlertCircle, CheckCircle, Info } from 'lucide-react';
-import { getPeriodosDelModelo } from './aeatDeadlines';
+import { AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
 
 function fmt(n) { return n != null ? `${Number(n).toFixed(2)} €` : '—'; }
 

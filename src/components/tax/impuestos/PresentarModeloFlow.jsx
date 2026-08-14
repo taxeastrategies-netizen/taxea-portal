@@ -10,7 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import {
-  AlertCircle, CheckCircle, FileDown, ExternalLink, Upload,
+  AlertCircle, CheckCircle, FileDown, Upload,
   Loader2, FileText, Shield, ChevronRight, X, AlertTriangle
 } from 'lucide-react';
 

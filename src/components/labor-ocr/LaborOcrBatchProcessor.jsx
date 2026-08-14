@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
   ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, XCircle,
-  Clock, FileText, Eye, MoreVertical, Filter, Download,
-  Users, TrendingUp, ShieldCheck, ScanText, Loader2
+  Clock, FileText, ScanText, Loader2
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const STATUS_CONFIG = {

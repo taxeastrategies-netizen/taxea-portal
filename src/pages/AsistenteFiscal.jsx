@@ -6,10 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import MensajeChat from '@/components/asistente/MensajeChat';
 import SugerenciasRapidas from '@/components/asistente/SugerenciasRapidas';
 import {
-  Send, Sparkles, MessageSquare, ChevronDown,
-  AlertCircle, CheckSquare, Trash2, RefreshCw, BarChart2
+  Send, Sparkles, MessageSquare,
+  AlertCircle, RefreshCw, BarChart2
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const AVISO_LEGAL = 'La información facilitada tiene carácter orientativo y general. No constituye asesoramiento fiscal vinculante ni sustituye la revisión profesional personalizada por parte de Taxea Strategies.';
 
