@@ -212,7 +212,7 @@ export default function FacturasPendientes() {
                         )}
                         {!inv.anulada && (inv.estado_contable === 'pendiente' || inv.estado_contable === 'asiento_propuesto' || inv.estado_contable === 'requiere_correccion') && (
                           <Button size="sm" className="h-6 px-2 text-[10px]" onClick={() => openModal(inv)}>
-                            {inv.estado_contable === 'asiento_propuesto' ? 'Ver asiento' : 'Proponer asiento'}
+                            {inv.estado_contable === 'asiento_propuesto' ? 'Revisar asiento' : 'Revisar y contabilizar'}
                           </Button>
                         )}
                         {!inv.anulada && inv.estado_contable === 'pendiente' && (
