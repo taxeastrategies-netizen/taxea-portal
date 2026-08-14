@@ -7,7 +7,7 @@ import {
   isCanonical8,
   postInvoice,
   seedOperationalPgc,
-} from '../_shared/accountingEngine.ts';
+} from './accountingEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
