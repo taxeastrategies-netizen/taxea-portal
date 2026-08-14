@@ -323,7 +323,6 @@ export default function InvoiceDocumentWorkspace({
   isAdmin,
   onClose,
   onSend,
-  onEdit,
   onRefresh,
   invoicesList,
   onNavigate,
@@ -423,11 +422,6 @@ export default function InvoiceDocumentWorkspace({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-sm w-44">
-              {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(invoice)}>
-                  Editar factura
-                </DropdownMenuItem>
-              )}
               {invoice.archivo_url && (
                 <DropdownMenuItem asChild>
                   <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
@@ -502,7 +496,6 @@ export default function InvoiceDocumentWorkspace({
             isAdmin={isAdmin}
             onClose={onClose}
             onSend={onSend}
-            onEdit={onEdit}
             onRefresh={onRefresh}
           />
         </div>
