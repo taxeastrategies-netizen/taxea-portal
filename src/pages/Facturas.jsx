@@ -30,7 +30,6 @@ export default function Facturas() {
   const [filterTipo, setFilterTipo] = useState('emitida');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
   const [viewing, setViewing] = useState(null);
   // workspaceInvoice: factura abierta en la vista completa de documento (URL-driven)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -64,7 +63,7 @@ export default function Facturas() {
   const handleAnular = async (inv) => {
     setAnulando(true);
     try {
-      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: [inv.id] });
+      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: [inv.id], companyId: company?.id });
       const data = res?.data || res;
       const now = data?.timestamp || new Date().toISOString();
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
@@ -79,7 +78,7 @@ export default function Facturas() {
     if (selectedIds.length === 0) return;
     setAnulando(true);
     try {
-      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: selectedIds });
+      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: selectedIds, companyId: company?.id });
       const data = res?.data || res;
       const now = data?.timestamp || new Date().toISOString();
       const annulledIds = new Set(data?.annulledIds || selectedIds);
@@ -92,8 +91,7 @@ export default function Facturas() {
     setAnulando(false);
   };
 
-  const openEdit = (inv) => { setEditing(inv); setShowForm(true); };
-  const openNew = () => { setEditing(null); setShowForm(true); };
+  const openNew = () => setShowForm(true);
 
   const updateEstado = async (id, field, value) => {
     await base44.entities.Invoice.update(id, { [field]: value });
@@ -415,14 +413,12 @@ export default function Facturas() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                               <DropdownMenuItem onClick={() => openEdit(inv)}>Editar</DropdownMenuItem>
-                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento definitivo</DropdownMenuItem>
                                <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
                                <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_cobro', 'cobrada')}>Marcar cobrada</DropdownMenuItem>
                                {isAdmin && (
                                  <>
-                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>En revisión</DropdownMenuItem>
-                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'contabilizada')}>Contabilizar</DropdownMenuItem>
+                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
                                  </>
                                )}
                                {inv.archivo_url && (
@@ -461,7 +457,6 @@ export default function Facturas() {
           isAdmin={isAdmin}
           onClose={handleCloseWorkspace}
           onSend={handleSend}
-          onEdit={(inv) => { openEdit(inv); }}
           onRefresh={handleWorkspaceRefresh}
           invoicesList={filtered}
           onNavigate={(inv) => setSearchParams({ factura: inv.id })}
@@ -471,8 +466,8 @@ export default function Facturas() {
       {/* ── Modales ───────────────────────────────────────────────────────── */}
       <InvoiceForm
         open={showForm}
-        onOpenChange={v => { setShowForm(v); if (!v) setEditing(null); }}
-        editing={editing}
+        onOpenChange={setShowForm}
+        editing={null}
         company={company}
         user={user}
         onSaved={() => { loadInvoices(); triggerFinancialRefresh(); }}
