@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { BarChart2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { classifyPgcAccount } from '@/lib/accountingUtils';
 import { cn } from '@/lib/utils';
 
 const fmt = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n ?? 0);
@@ -29,19 +31,24 @@ function Section({ title, items, total }) {
   );
 }
 
-export default function BalancePyG() {
+export default function BalancePyG({ companyId }) {
+  const [year, setYear] = useState(String(new Date().getFullYear()));
   const { data: entries = [], isLoading: le } = useQuery({
-    queryKey: ['journal-entries-balance'],
-    queryFn: () => base44.entities.JournalEntry.filter({ status: 'confirmado' }, '-date', 1000),
+    queryKey: ['journal-entries-balance', companyId],
+    queryFn: () => base44.entities.JournalEntry.filter({ companyId, status: 'confirmado' }, '-date', 2000),
+    enabled: Boolean(companyId),
   });
 
   const { data: lines = [], isLoading: ll } = useQuery({
-    queryKey: ['journal-lines-balance'],
-    queryFn: () => base44.entities.JournalEntryLine.list('-created_date', 5000),
+    queryKey: ['journal-lines-balance', companyId],
+    queryFn: () => base44.entities.JournalEntryLine.filter({ companyId }, '-created_date', 5000),
+    enabled: Boolean(companyId),
   });
 
-  const confirmedIds = useMemo(() => new Set(entries.map(e => e.id)), [entries]);
-  const confirmedLines = useMemo(() => lines.filter(l => confirmedIds.has(l.journalEntryId)), [lines, confirmedIds]);
+  const years = useMemo(() => [...new Set(entries.map(e => e.ejercicio || (e.date ? new Date(e.date).getFullYear() : null)).filter(Boolean))].sort((a, b) => b - a), [entries]);
+  const selectedEntries = useMemo(() => entries.filter(entry => String(entry.ejercicio || (entry.date ? new Date(entry.date).getFullYear() : '')) === year), [entries, year]);
+  const entryMap = useMemo(() => new Map(selectedEntries.map(e => [e.id, e])), [selectedEntries]);
+  const confirmedLines = useMemo(() => lines.filter(l => entryMap.has(l.journalEntryId)), [lines, entryMap]);
 
   // Build saldo per account from confirmed lines
   const accountSaldos = useMemo(() => {
@@ -55,16 +62,11 @@ export default function BalancePyG() {
     return Object.values(map).map(a => ({ ...a, saldo: a.debit - a.credit }));
   }, [confirmedLines]);
 
-  // Balance accounts: groups 1-5
-  const balanceAccounts = accountSaldos.filter(a => /^[12345]/.test(a.code));
-  // PyG accounts: group 6 (gastos), group 7 (ingresos)
-  const gastoAccounts = accountSaldos.filter(a => a.code.startsWith('6'));
-  const ingresoAccounts = accountSaldos.filter(a => a.code.startsWith('7'));
-
-  // Activo: saldo > 0 (deudor)
-  const activo = balanceAccounts.filter(a => a.saldo > 0).sort((a, b) => a.code.localeCompare(b.code));
-  // Pasivo/Patrimonio: saldo < 0 (acreedor) — mostrar en positivo
-  const pasivo = balanceAccounts.filter(a => a.saldo < 0).sort((a, b) => a.code.localeCompare(b.code));
+  const classified = accountSaldos.map(account => ({ ...account, classification: classifyPgcAccount(account.code) }));
+  const gastoAccounts = classified.filter(a => a.classification === 'gasto');
+  const ingresoAccounts = classified.filter(a => a.classification === 'ingreso');
+  const activo = classified.filter(a => a.classification === 'activo').sort((a, b) => a.code.localeCompare(b.code));
+  const pasivo = classified.filter(a => ['pasivo', 'patrimonio'].includes(a.classification)).sort((a, b) => a.code.localeCompare(b.code));
 
   const totalIngresos = ingresoAccounts.reduce((s, a) => s + Math.abs(a.saldo), 0);
   const totalGastos = gastoAccounts.reduce((s, a) => s + Math.abs(a.saldo), 0);
@@ -93,16 +95,20 @@ export default function BalancePyG() {
         <BarChart2 className="w-5 h-5 text-primary" />
         <div>
           <p className="font-jakarta font-semibold">Balance y Cuenta de Pérdidas y Ganancias</p>
-          <p className="text-xs text-muted-foreground">Calculado desde {entries.length} asientos confirmados.</p>
+          <p className="text-xs text-muted-foreground">Calculado desde {selectedEntries.length} asientos confirmados del ejercicio {year}.</p>
         </div>
+        <Select value={year} onValueChange={setYear}>
+          <SelectTrigger className="ml-auto w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>{years.map(item => <SelectItem key={item} value={String(item)}>{item}</SelectItem>)}</SelectContent>
+        </Select>
         {accountSaldos.length > 0 && (
-          <span className={cn('ml-auto text-xs font-medium px-2.5 py-1 rounded-full border', cuadra ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
+          <span className={cn('text-xs font-medium px-2.5 py-1 rounded-full border', cuadra ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
             {cuadra ? '✓ Balance cuadrado' : '⚠ Balance pendiente de cuadrar'}
           </span>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* BALANCE */}
         <div className="bg-card border border-border rounded-xl p-5">
           <p className="font-jakarta font-bold text-sm mb-3">Balance de situación</p>
