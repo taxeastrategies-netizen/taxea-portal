@@ -71,7 +71,7 @@ function drawTaxeaHeader(doc, companyName, period, pageW) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(255, 255, 255);
-  doc.text('LIBRO DE REGISTROS OFICIAL', pageW / 2, 12, { align: 'center' });
+  doc.text('LIBRO REGISTRO — BORRADOR DE REVISIÓN', pageW / 2, 12, { align: 'center' });
 
   // Subtitle
   doc.setFont('helvetica', 'normal');
