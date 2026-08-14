@@ -60,19 +60,19 @@ export function useFinancialData(companyId, options = {}) {
     return () => window.removeEventListener('focus', onFocus);
   }, [fetch, autoRefresh]);
 
-  // Suscripcion en tiempo real a cambios en Invoice
+  // Suscripción en tiempo real a cambios en facturas y gastos
   useEffect(() => {
     if (!companyId || !autoRefresh) return;
-    let unsubscribe = null;
+    const unsubscribers = [];
     try {
-      unsubscribe = base44.entities.Invoice.subscribe(() => {
-        // Cuando hay un cambio en facturas, re-fetch para mantener todo sincronizado
-        fetch();
-      });
-    } catch (e) {
-      // subscribe puede no estar disponible en todos los entornos
-    }
-    return () => { if (unsubscribe) unsubscribe(); };
+      const unsubscribeInvoices = base44.entities.Invoice.subscribe(() => fetch());
+      if (unsubscribeInvoices) unsubscribers.push(unsubscribeInvoices);
+    } catch {}
+    try {
+      const unsubscribeExpenses = base44.entities.Expense.subscribe(() => fetch());
+      if (unsubscribeExpenses) unsubscribers.push(unsubscribeExpenses);
+    } catch {}
+    return () => { unsubscribers.forEach(unsubscribe => unsubscribe()); };
   }, [companyId, fetch, autoRefresh]);
 
   // Escuchar evento global de refresh (para que cualquier mutacion dispare actualizacion)
