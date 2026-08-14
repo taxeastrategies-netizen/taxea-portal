@@ -107,7 +107,7 @@ export default function PresentacionesTab() {
         </div>
       </div>
 
-      {/* Borradores tributarios generados */
+      {/* Borradores tributarios generados */}
       {officialFiles.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
