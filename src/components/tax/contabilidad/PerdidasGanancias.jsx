@@ -61,7 +61,7 @@ function Section({ title, accounts, sign }) {
   );
 }
 
-export default function PerdidasGanancias() {
+export default function PerdidasGanancias({ companyId }) {
   const [accounts, setAccounts] = useState([]);
   const [lines, setLines] = useState([]);
   const [entries, setEntries] = useState([]);
@@ -69,11 +69,12 @@ export default function PerdidasGanancias() {
   const [year, setYear] = useState(CURRENT_YEAR);
 
   const load = async () => {
+    if (!companyId) return;
     setLoading(true);
     const [accs, lns, ents] = await Promise.all([
-      base44.entities.AccountingAccount.list('code', 300).catch(() => []),
-      base44.entities.JournalEntryLine.list('created_date', 1000).catch(() => []),
-      base44.entities.JournalEntry.list('-date', 500).catch(() => []),
+      base44.entities.AccountingAccount.filter({ companyId }, 'code', 1000).catch(() => []),
+      base44.entities.JournalEntryLine.filter({ companyId }, 'created_date', 5000).catch(() => []),
+      base44.entities.JournalEntry.filter({ companyId }, '-date', 2000).catch(() => []),
     ]);
     setAccounts(accs || []);
     setLines(lns || []);
@@ -81,9 +82,9 @@ export default function PerdidasGanancias() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [year]);
+  useEffect(() => { load(); }, [year, companyId]);
 
-  const confirmedEntryIds = useMemo(() => new Set(entries.filter(e => e.status === 'confirmado').map(e => e.id)), [entries]);
+  const confirmedEntryIds = useMemo(() => new Set(entries.filter(e => e.status === 'confirmado' && String(e.ejercicio || new Date(e.date).getFullYear()) === String(year)).map(e => e.id)), [entries, year]);
   const pendingCount = entries.filter(e => e.status === 'pendiente_revision' || e.status === 'borrador').length;
 
   const accountsWithSaldos = useMemo(() => {
