@@ -344,8 +344,10 @@ export default function AdminOcrBandeja() {
       if (!form.numero_factura) { showToast('error', 'El número de factura es obligatorio.'); return; }
       if (!form.fecha_emision) { showToast('error', 'La fecha de emisión es obligatoria.'); return; }
     }
-    if (!form.base_imponible || parseFloat(form.base_imponible) <= 0) {
-      showToast('error', 'La base imponible debe ser mayor que 0.'); return;
+    const baseValue = parseFloat(form.base_imponible);
+    const isRectificative = form.es_rectificativa === true || form.es_rectificativa === 'true';
+    if (!Number.isFinite(baseValue) || baseValue === 0 || (baseValue < 0 && !isRectificative)) {
+      showToast('error', 'La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.'); return;
     }
 
     setValidating(true);
