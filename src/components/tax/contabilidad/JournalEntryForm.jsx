@@ -41,7 +41,7 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
     if (asStatus === 'confirmado' && !isBalanced) { setError('El asiento no cuadra. Debe = Haber para confirmar.'); return; }
     const validLines = lines.filter(l => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0));
     if (validLines.length < 2) { setError('Se necesitan al menos 2 líneas con cuenta e importe.'); return; }
-    if (validLines.some(l => !/^\\d{8}$/.test(l.accountCode))) { setError('Todas las cuentas deben tener exactamente 8 dígitos.'); return; }
+    if (validLines.some(l => !/^\d{8}$/.test(l.accountCode))) { setError('Todas las cuentas deben tener exactamente 8 dígitos.'); return; }
     if (validLines.some(l => !accounts.some(a => a.code === l.accountCode))) { setError('Todas las cuentas deben existir en el plan contable de la empresa.'); return; }
 
     if (!companyId) { setError('No se ha podido identificar la empresa activa.'); return; }
@@ -114,7 +114,7 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
                   <div className="flex items-center gap-1">
                     <Input
                       value={line.accountCode}
-                      onChange={e => updateLine(i, 'accountCode', e.target.value.replace(/\\D/g, '').slice(0, 8))}
+                      onChange={e => updateLine(i, 'accountCode', e.target.value.replace(/\D/g, '').slice(0, 8))}
                       placeholder="00000000"
                       inputMode="numeric"
                       maxLength={8}
