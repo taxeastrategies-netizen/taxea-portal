@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
+import { getWithholdingAmount } from '@/lib/accountingUtils';
 import {
   X, Send, Copy, Link, MoreVertical, ChevronRight,
   FileText, CreditCard, Clock, Mail, Tag, Paperclip,
@@ -249,8 +250,8 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             {/* Importes */}
             <Section title="Importes" icon={CreditCard}>
               <InfoRow label="Base imponible" value={fmt(invoice.base_imponible)} />
-              <InfoRow label={`IVA (${invoice.tipo_iva || 21}%)`} value={fmt(invoice.cuota_iva)} />
-              {invoice.retencion_irpf > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(invoice.retencion_irpf)}`} valueClass="text-red-600" />}
+              <InfoRow label={`IVA (${invoice.tipo_iva ?? 21}%)`} value={fmt(invoice.cuota_iva)} />
+              {invoice.retencion_irpf > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
               <div className="flex items-center justify-between py-2 mt-1 bg-secondary/50 rounded-lg px-2">
                 <span className="text-sm font-semibold text-foreground">Total factura</span>
                 <span className="text-sm font-bold text-foreground">{fmt(invoice.total_factura)}</span>
