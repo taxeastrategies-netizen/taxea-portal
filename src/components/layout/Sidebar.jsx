@@ -4,11 +4,11 @@ import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
-  Shield, CheckSquare, Clock, AlertTriangle, BarChart2, Bell,
+  Shield, CheckSquare, Clock, AlertTriangle, BarChart2,
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
-  Package, BookMarked, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Cog, Heart, Gavel, Building2, Target, PenLine, DollarSign, CreditCard,
+  Package, BookOpen, ScanLine, ScanText, Calendar,
+  Lock, Wallet, Scale, UserCog, Heart, Gavel, Building2, Target, DollarSign, CreditCard,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
   Folder, Zap, Megaphone, HardDrive
 } from 'lucide-react';

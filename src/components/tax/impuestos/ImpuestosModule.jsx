@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Settings, FileText, FilePen, Send, Archive, Calendar, BookOpen, AlertTriangle, History } from 'lucide-react';
+import { LayoutDashboard, Settings, FilePen, Send, Calendar, BookOpen, AlertTriangle, History } from 'lucide-react';
 import ImpuestosPanel from './ImpuestosPanel';
 import ConfiguracionFiscal from './ConfiguracionFiscal';
 import ModelosConfig from './ModelosConfig';

@@ -8,12 +8,10 @@ import { getWithholdingAmount } from '@/lib/accountingUtils';
 import {
   ArrowLeft, Share2, MoreVertical, Send, Download,
   Printer, ZoomIn, ZoomOut, FileText, ChevronRight,
-  ExternalLink, Copy, CheckCircle2, Clock, AlertTriangle,
-  Mail, X, ChevronLeft
+  ExternalLink, Copy, CheckCircle2, ChevronLeft
 } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';

@@ -5,15 +5,14 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  ArrowLeft, Send, Download, Printer, ZoomIn, ZoomOut,
-  FileText, MoreVertical, CheckCircle2, XCircle, Clock,
+  ArrowLeft, Send, Printer, ZoomIn, ZoomOut,
+  FileText, CheckCircle2, XCircle,
   ArrowRight, Edit, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { base44 } from '@/api/base44Client';
 import DocumentVisualRender from './DocumentVisualRender';
 import SendDocumentEmailModal from './SendDocumentEmailModal';

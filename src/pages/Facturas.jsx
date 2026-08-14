@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, TrendingUp, CalendarDays, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ import InvoiceDocumentWorkspace from '@/components/facturas/InvoiceDocumentWorks
 import SendInvoiceDocumentModal from '@/components/facturas/SendInvoiceDocumentModal';
 import RecurringSection from '@/components/facturas/RecurringSection';
 import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
-import { cn } from '@/lib/utils';
 import { triggerFinancialRefresh } from '@/hooks/useFinancialData';
 
 export default function Facturas() {

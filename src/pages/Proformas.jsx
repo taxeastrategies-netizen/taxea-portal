@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Receipt, MoreVertical, Search, Filter, ArrowRight, FileCheck, Download } from 'lucide-react';
+import { Plus, Receipt, MoreVertical, Search, Filter, Download } from 'lucide-react';
 import { downloadProformasPDF } from '@/lib/generateSummaryPDF';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';

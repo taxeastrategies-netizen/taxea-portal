@@ -9,12 +9,10 @@ import { getWithholdingAmount } from '@/lib/accountingUtils';
 import {
   X, Send, Copy, Link, MoreVertical, ChevronRight,
   FileText, CreditCard, Clock, Mail, Tag, Paperclip,
-  BookOpen, ExternalLink, CheckCircle2, AlertTriangle,
-  User, Calendar, Building2, RefreshCw, Plus, Download,
+  BookOpen, ExternalLink, CheckCircle2, AlertTriangle, RefreshCw, Download,
   Eye, RotateCcw, MessageSquare, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger
