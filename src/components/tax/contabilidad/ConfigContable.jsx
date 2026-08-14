@@ -21,17 +21,17 @@ const CATEGORIAS_GASTO = [
 ];
 
 const DEFAULT_MAPPINGS = [
-  { categoria: 'ventas_servicios', tipo: 'ingreso', cuenta: '705', nombre: 'Prestaciones de servicios' },
-  { categoria: 'compras', tipo: 'gasto', cuenta: '600', nombre: 'Compras de mercancías' },
-  { categoria: 'suministros', tipo: 'gasto', cuenta: '628', nombre: 'Suministros' },
-  { categoria: 'alquiler', tipo: 'gasto', cuenta: '621', nombre: 'Arrendamientos y cánones' },
-  { categoria: 'publicidad_marketing', tipo: 'gasto', cuenta: '627', nombre: 'Publicidad, propaganda y relaciones públicas' },
-  { categoria: 'servicios_profesionales', tipo: 'gasto', cuenta: '623', nombre: 'Servicios de profesionales independientes' },
-  { categoria: 'software', tipo: 'gasto', cuenta: '629', nombre: 'Otros servicios' },
-  { categoria: 'transporte', tipo: 'gasto', cuenta: '624', nombre: 'Transportes' },
-  { categoria: 'dietas', tipo: 'gasto', cuenta: '629', nombre: 'Otros servicios' },
-  { categoria: 'gastos_financieros', tipo: 'gasto', cuenta: '669', nombre: 'Otros gastos financieros' },
-  { categoria: 'seguros', tipo: 'gasto', cuenta: '625', nombre: 'Primas de seguros' },
+  { categoria: 'ventas_servicios', tipo: 'ingreso', cuenta: '70500000', nombre: 'Prestaciones de servicios' },
+  { categoria: 'compras', tipo: 'gasto', cuenta: '60000000', nombre: 'Compras de mercancías' },
+  { categoria: 'suministros', tipo: 'gasto', cuenta: '62800000', nombre: 'Suministros' },
+  { categoria: 'alquiler', tipo: 'gasto', cuenta: '62100000', nombre: 'Arrendamientos y cánones' },
+  { categoria: 'publicidad_marketing', tipo: 'gasto', cuenta: '62700000', nombre: 'Publicidad, propaganda y relaciones públicas' },
+  { categoria: 'servicios_profesionales', tipo: 'gasto', cuenta: '62300000', nombre: 'Servicios de profesionales independientes' },
+  { categoria: 'software', tipo: 'gasto', cuenta: '62910000', nombre: 'Software y servicios digitales' },
+  { categoria: 'transporte', tipo: 'gasto', cuenta: '62400000', nombre: 'Transportes' },
+  { categoria: 'dietas', tipo: 'gasto', cuenta: '62920000', nombre: 'Dietas y manutención' },
+  { categoria: 'gastos_financieros', tipo: 'gasto', cuenta: '66900000', nombre: 'Otros gastos financieros' },
+  { categoria: 'seguros', tipo: 'gasto', cuenta: '62500000', nombre: 'Primas de seguros' },
 ];
 
 export default function ConfigContable({ companyId, user }) {
@@ -50,7 +50,12 @@ export default function ConfigContable({ companyId, user }) {
         setConfigId(records[0].id);
         try {
           const parsed = JSON.parse(records[0].mappingsJson || '[]');
-          if (Array.isArray(parsed) && parsed.length) setMappings(parsed);
+          if (Array.isArray(parsed) && parsed.length) {
+            setMappings(parsed.map(item => ({
+              ...item,
+              cuenta: String(item.cuenta || '').replace(/\D/g, '').padEnd(8, '0').slice(0, 8),
+            })));
+          }
         } catch {
           setError('La configuración guardada no se pudo leer; se muestran los valores estándar.');
         }
@@ -67,6 +72,10 @@ export default function ConfigContable({ companyId, user }) {
   const add = () => { setMappings(prev => [...prev, { categoria: 'otros', tipo: 'gasto', cuenta: '', nombre: '' }]); setSaved(false); };
   const save = async () => {
     if (!companyId) { setError('No se ha identificado la empresa activa.'); return; }
+    if (mappings.some(item => !/^\d{8}$/.test(item.cuenta))) {
+      setError('Todas las cuentas del mapeo deben tener exactamente 8 dígitos.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -110,15 +119,17 @@ export default function ConfigContable({ companyId, user }) {
 
       {/* IVA accounts */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-        <p className="text-sm font-semibold">Cuentas de IVA</p>
+        <p className="text-sm font-semibold">Cuentas de IVA / IGIC a 8 dígitos</p>
         <div className="grid grid-cols-2 gap-3 text-xs">
           {[
-            { label: 'IVA repercutido (ventas)', cuenta: '477' },
-            { label: 'IVA soportado deducible (compras)', cuenta: '472' },
-            { label: 'Clientes (deudores)', cuenta: '430' },
-            { label: 'Proveedores / acreedores', cuenta: '410' },
-            { label: 'Retenciones y pagos a cuenta (soportadas)', cuenta: '473' },
-            { label: 'Retenciones practicadas (proveedores)', cuenta: '4751' },
+            { label: 'IVA repercutido (ventas)', cuenta: '47700000' },
+            { label: 'IVA soportado deducible (compras)', cuenta: '47200000' },
+            { label: 'IGIC repercutido (ventas)', cuenta: '47770000' },
+            { label: 'IGIC soportado deducible (compras)', cuenta: '47270000' },
+            { label: 'Clientes: cabecera de secuencia', cuenta: '43000000' },
+            { label: 'Acreedores: cabecera de secuencia', cuenta: '41000000' },
+            { label: 'Retenciones soportadas', cuenta: '47300000' },
+            { label: 'Retenciones practicadas', cuenta: '47510000' },
           ].map(item => (
             <div key={item.label} className="flex items-center justify-between border border-border rounded-lg px-3 py-2">
               <span className="text-muted-foreground">{item.label}</span>
@@ -170,7 +181,7 @@ export default function ConfigContable({ companyId, user }) {
                   </Select>
                 </td>
                 <td className="px-3 py-1.5">
-                  <Input value={m.cuenta} onChange={e => update(idx, 'cuenta', e.target.value)} className="h-7 w-20 font-mono text-xs" placeholder="705" />
+                  <Input value={m.cuenta} onChange={e => update(idx, 'cuenta', e.target.value.replace(/\D/g, '').slice(0, 8))} className="h-7 w-28 font-mono text-xs" placeholder="00000000" inputMode="numeric" maxLength={8} />
                 </td>
                 <td className="px-3 py-1.5">
                   <Input value={m.nombre} onChange={e => update(idx, 'nombre', e.target.value)} className="h-7 text-xs" placeholder="Nombre de la cuenta..." />
