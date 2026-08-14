@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
@@ -33,6 +34,14 @@ export default function ContabilidadModule() {
   const { company, user } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('facturas');
   const companyId = company?.id;
+
+  useEffect(() => {
+    if (!companyId) return;
+    base44.functions.invoke('accountingOperations', {
+      action: 'seed_pgc',
+      companyId,
+    }).catch(error => console.warn('[Contabilidad] No se pudo inicializar el plan PGC8:', error?.message));
+  }, [companyId]);
 
   return (
     <div className="space-y-0">
