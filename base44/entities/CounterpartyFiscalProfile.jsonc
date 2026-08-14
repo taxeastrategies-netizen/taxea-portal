@@ -83,6 +83,27 @@
     },
     "notes": {
       "type": "string"
+    },
+    "accountingRole": {
+      "type": "string",
+      "enum": [
+        "cliente",
+        "proveedor",
+        "acreedor"
+      ]
+    },
+    "accountingAccountId": {
+      "type": "string"
+    },
+    "accountingAccountCode": {
+      "type": "string"
+    },
+    "accountingAssignedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
     }
   },
   "required": [
