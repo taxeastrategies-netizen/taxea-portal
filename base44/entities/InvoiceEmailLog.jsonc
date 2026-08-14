@@ -32,6 +32,12 @@
         "type": "string"
       }
     },
+    "public_invoice_url": {
+      "type": "string"
+    },
+    "pdf_attachment_name": {
+      "type": "string"
+    },
     "sent_at": {
       "type": "string",
       "format": "date-time"
