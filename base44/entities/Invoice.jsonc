@@ -78,6 +78,19 @@
       "type": "number",
       "default": 0
     },
+    "importe_retencion": {
+      "type": "number",
+      "default": 0
+    },
+    "fiscal_treatment": {
+      "type": "string"
+    },
+    "deductible_tax_amount": {
+      "type": "number"
+    },
+    "non_deductible_tax_amount": {
+      "type": "number"
+    },
     "total_factura": {
       "type": "number"
     },
@@ -197,6 +210,23 @@
     },
     "public_token": {
       "type": "string"
+    },
+    "public_token_expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "public_token_revoked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "estado_envio": {
+      "type": "string",
+      "enum": [
+        "no_enviada",
+        "enviada",
+        "error_envio"
+      ],
+      "default": "no_enviada"
     }
   },
   "required": [
