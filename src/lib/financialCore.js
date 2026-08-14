@@ -1,3 +1,5 @@
+import { getWithholdingAmount, roundMoney } from './accountingUtils';
+
 /**
  * Financial Core - Capa de calculo financiero unificada
  * 
@@ -112,8 +114,8 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   const ivaNeto = ivaRepercutido - ivaSoportado;
   
   // ── Retenciones IRPF ──
-  const retencionIngresos = emitidas.reduce((s, i) => s + ((i.base_imponible || 0) * (i.retencion_irpf || 0) / 100), 0);
-  const retencionGastos = recibidas.reduce((s, i) => s + ((i.base_imponible || 0) * (i.retencion_irpf || 0) / 100), 0);
+  const retencionIngresos = emitidas.reduce((s, i) => s + getWithholdingAmount(i), 0);
+  const retencionGastos = recibidas.reduce((s, i) => s + getWithholdingAmount(i), 0);
   
   // ── Resultado ──
   const resultado = totalIngresos - totalGastos;
@@ -224,14 +226,14 @@ export function calculateMonthlyData(invoices, expenses, year) {
   activeInvoices(invoices).filter(i => i.tipo === 'emitida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
-      data[d.getMonth()].ingresos += Math.round(i.total_factura || 0);
+      data[d.getMonth()].ingresos += Number(i.total_factura) || 0;
     }
   });
   
   activeExpenses(expenses).filter(e => e.tipo === 'gasto').forEach(e => {
     const d = new Date(e.fecha || e.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
-      data[d.getMonth()].gastos += Math.round(e.total || 0);
+      data[d.getMonth()].gastos += Number(e.total) || 0;
     }
   });
   
@@ -239,11 +241,11 @@ export function calculateMonthlyData(invoices, expenses, year) {
   activeInvoices(invoices).filter(i => i.tipo === 'recibida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
-      data[d.getMonth()].gastos += Math.round(i.total_factura || 0);
+      data[d.getMonth()].gastos += Number(i.total_factura) || 0;
     }
   });
   
-  return data;
+  return data.map(item => ({ ...item, ingresos: roundMoney(item.ingresos), gastos: roundMoney(item.gastos) }));
 }
 
 // ── Formato ─────────────────────────────────────────────────────────────────
