@@ -19,13 +19,11 @@ export function getAccountingYear(record) {
 
 export function classifyPgcAccount(code, saldo = 0) {
   const c = String(code || '');
-  if (c.startsWith('1')) return 'patrimonio_pasivo';
+  if (/^(10|11|12|13)/.test(c)) return 'patrimonio';
+  if (/^(14|15|16|17|18|40|41|475|476|477|50|51|52)/.test(c)) return 'pasivo';
   if (/^[23]/.test(c)) return 'activo';
-  if (/^(40|41|475|476|477)/.test(c)) return 'patrimonio_pasivo';
-  if (/^(43|44|46|470|471|472|473|474)/.test(c)) return 'activo';
-  if (/^(50|51|52)/.test(c)) return 'patrimonio_pasivo';
-  if (/^(53|54|57)/.test(c)) return 'activo';
+  if (/^(43|44|46|470|471|472|473|474|53|54|55|56|57)/.test(c)) return 'activo';
   if (c.startsWith('6')) return 'gasto';
   if (c.startsWith('7')) return 'ingreso';
-  return saldo >= 0 ? 'activo' : 'patrimonio_pasivo';
+  return saldo >= 0 ? 'activo' : 'pasivo';
 }
