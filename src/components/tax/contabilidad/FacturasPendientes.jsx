@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban, Trash2 } from 'lucide-react';
+import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AsientoProposalModal from './AsientoProposalModal';
 
@@ -48,15 +48,12 @@ export default function FacturasPendientes() {
   });
 
   const anularFactura = useMutation({
-    mutationFn: async ({ id, motivo, journalEntryId }) => {
-      await base44.entities.Invoice.update(id, {
-        anulada: true,
-        fecha_anulacion: new Date().toISOString(),
-        motivo_anulacion: motivo,
+    mutationFn: async ({ id, motivo }) => {
+      return base44.functions.invoke('anularFacturas', {
+        invoiceIds: [id],
+        motivo,
+        companyId: company?.id,
       });
-      if (journalEntryId) {
-        await base44.entities.JournalEntry.update(journalEntryId, { status: 'anulado' });
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
@@ -64,11 +61,6 @@ export default function FacturasPendientes() {
       setAnularTarget(null);
       setMotivoAnulacion('');
     },
-  });
-
-  const eliminarFactura = useMutation({
-    mutationFn: (id) => base44.entities.Invoice.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] }),
   });
 
   const activas = invoices.filter(i => !i.anulada);
@@ -235,12 +227,7 @@ export default function FacturasPendientes() {
                             <Ban className="w-2.5 h-2.5" /> Anular
                           </Button>
                         )}
-                        {inv.anulada && (
-                          <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-red-700 hover:bg-red-50 gap-1"
-                            onClick={() => { if (confirm(`¿Eliminar definitivamente la factura ${inv.numero_factura}? Esta acción no se puede deshacer.`)) eliminarFactura.mutate(inv.id); }}>
-                            <Trash2 className="w-2.5 h-2.5" /> Eliminar
-                          </Button>
-                        )}
+
                       </div>
                     </td>
                   </tr>
@@ -288,7 +275,7 @@ export default function FacturasPendientes() {
               <Button
                 variant="destructive"
                 disabled={!motivoAnulacion.trim() || anularFactura.isPending}
-                onClick={() => anularFactura.mutate({ id: anularTarget.id, motivo: motivoAnulacion, journalEntryId: anularTarget.linked_journal_entry_id })}
+                onClick={() => anularFactura.mutate({ id: anularTarget.id, motivo: motivoAnulacion })}
               >
                 {anularFactura.isPending ? 'Anulando...' : 'Confirmar anulación'}
               </Button>
