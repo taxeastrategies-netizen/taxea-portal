@@ -58,6 +58,10 @@
     "entryStatus": {
       "type": "string"
     },
+    "entryDate": {
+      "type": "string",
+      "format": "date"
+    },
     "ejercicio": {
       "type": "number"
     },
