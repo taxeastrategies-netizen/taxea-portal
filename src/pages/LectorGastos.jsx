@@ -322,8 +322,10 @@ export default function LectorGastos() {
       setTimeout(() => setToast(null), 6000);
       return;
     }
-    if (!form.base_imponible || parseFloat(form.base_imponible) <= 0) {
-      setToast({ type: 'error', message: 'La base imponible debe ser mayor que 0.' });
+    const baseValue = parseFloat(form.base_imponible);
+    const isRectificative = form.es_rectificativa === true || form.es_rectificativa === 'true';
+    if (!Number.isFinite(baseValue) || baseValue === 0 || (baseValue < 0 && !isRectificative)) {
+      setToast({ type: 'error', message: 'La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.' });
       setTimeout(() => setToast(null), 6000);
       return;
     }
@@ -343,7 +345,7 @@ export default function LectorGastos() {
         throw new Error(result?.error || 'No se pudo crear la factura');
       }
       setReviewing(null);
-      setToast({ type: 'success', message: 'Factura de gasto aprobada y guardada correctamente.' });
+      setToast({ type: 'success', message: 'Factura de gasto guardada como pendiente de revisión contable.' });
       setTimeout(() => setToast(null), 6000);
       loadDocs();
     } catch (err) {
