@@ -80,6 +80,19 @@
       "type": "string",
       "format": "date-time"
     },
+    "annulledAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "annulledBy": {
+      "type": "string"
+    },
+    "annulmentReason": {
+      "type": "string"
+    },
+    "reversalEntryId": {
+      "type": "string"
+    },
     "tags": {
       "type": "array",
       "items": {
