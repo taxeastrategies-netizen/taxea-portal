@@ -1,4 +1,5 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
+import { postInvoice, SCHEMA_VERSION } from './accountingEngine.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -184,6 +185,10 @@ Deno.serve(async (req) => {
       };
     }
 
+    invoiceData.ocr_document_id = docId;
+    invoiceData.accounting_review_status = 'pendiente_revision';
+    invoiceData.accounting_schema_version = SCHEMA_VERSION;
+
     // Remove undefined keys
     Object.keys(invoiceData).forEach(k => {
       if (invoiceData[k] === undefined) delete invoiceData[k];
@@ -210,6 +215,31 @@ Deno.serve(async (req) => {
 
     console.log('[approveOcrDocument] Invoice created:', inv.id);
 
+    let posting;
+    try {
+      posting = await postInvoice(base44.asServiceRole, doc.company_id, inv, user.email, {
+        ocrDocumentId: docId,
+        source: 'OCR',
+        status: 'confirmado',
+      });
+    } catch (postingError) {
+      await base44.asServiceRole.entities.Invoice.update(inv.id, {
+        estado_contable: 'requiere_correccion',
+        accounting_review_status: 'requiere_correccion',
+        comentarios: `Error al generar el asiento OCR: ${postingError.message}`,
+      });
+      await base44.asServiceRole.entities.OcrInvoiceDocument.update(docId, {
+        status: 'review_required',
+        safeErrorMessage: `La factura se guardó, pero el asiento no pudo generarse: ${postingError.message}`,
+        lastStatusChangedAt: new Date().toISOString(),
+      });
+      return Response.json({
+        error: 'La factura se ha conservado, pero el asiento contable necesita corrección manual.',
+        detail: postingError.message,
+        invoiceId: inv.id,
+      }, { status: 422 });
+    }
+
     // 6. Build audit trail entry
     const auditEntry = JSON.stringify({
       action: 'contabilizado',
@@ -218,7 +248,7 @@ Deno.serve(async (req) => {
       timestamp: new Date().toISOString(),
       prevStatus: doc.status,
       newStatus: 'accounted',
-      detail: `invoice=${inv.id} type=${invoiceType}`,
+      detail: `invoice=${inv.id} journalEntry=${posting.entry.id} type=${invoiceType} schema=${SCHEMA_VERSION}`,
       source: 'approveOcrDocument',
     });
 
@@ -230,6 +260,8 @@ Deno.serve(async (req) => {
       status: 'accounted',
       accountedAt: now,
       linkedInvoiceId: inv.id,
+      linkedJournalEntryId: posting.entry.id,
+      accountingSchemaVersion: SCHEMA_VERSION,
       reviewedAt: now,
       lastStatusChangedAt: now,
       reviewedByAdminId: user.id,
@@ -259,7 +291,9 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       invoiceId: inv.id,
-      message: 'Factura creada y documento contabilizado correctamente'
+      journalEntryId: posting.entry.id,
+      accountCode: posting.proposal?.counterparty?.account?.code || '',
+      message: 'Factura creada, validada y contabilizada con asiento de 8 dígitos'
     });
 
   } catch (error) {
