@@ -9,6 +9,10 @@ const BRAND_COLOR = '#b91c1c'; // taxea-red — usar solo como acento, nunca com
 const fmt = (n) =>
   typeof n === 'number' ? n.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : '—';
 
+const withholdingAmount = (invoice) => invoice?.importe_retencion != null
+  ? Number(invoice.importe_retencion) || 0
+  : (Number(invoice?.base_imponible) || 0) * (Number(invoice?.retencion_irpf) || 0) / 100;
+
 const fmtDate = (d) => {
   if (!d) return '—';
   try { return new Date(d).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }); }
@@ -43,8 +47,8 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
   const invDue = invoice?.fecha_vencimiento ? fmtDate(invoice.fecha_vencimiento) : null;
   const invBase = fmt(invoice?.base_imponible);
   const invIva = fmt(invoice?.cuota_iva);
-  const invIvaPct = invoice?.tipo_iva || 21;
-  const invRetention = invoice?.retencion_irpf > 0 ? fmt(invoice.retencion_irpf) : null;
+  const invIvaPct = invoice?.tipo_iva ?? 21;
+  const invRetention = invoice?.retencion_irpf > 0 ? fmt(withholdingAmount(invoice)) : null;
   const invTotal = fmt(invoice?.total_factura);
   const invConcept = invoice?.concepto || '';
   const paymentMethod = invoice?.metodo_pago || 'Transferencia bancaria';
@@ -388,7 +392,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     Y += 4;
     addTotRow('Base imponible', fmtN(invoice.base_imponible));
     addTotRow(`IVA (${invoice.tipo_iva || 21}%)`, fmtN(invoice.cuota_iva));
-    if (invoice.retencion_irpf > 0) addTotRow('Retención IRPF', `−${fmtN(invoice.retencion_irpf)}`, false, [220, 38, 38]);
+    if (invoice.retencion_irpf > 0) addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
     doc.line(totX, Y, totX + totW, Y); Y += 4;
     addTotRow('Total', fmtN(invoice.total_factura), true, red);
 
@@ -453,7 +457,7 @@ export function generateInvoiceAccountingEntry(invoice) {
   const total = invoice.total_factura || 0;
   const base = invoice.base_imponible || 0;
   const iva = invoice.cuota_iva || 0;
-  const retencion = invoice.retencion_irpf || 0;
+  const retencion = withholdingAmount(invoice);
   const warnings = [];
 
   // Determinar cuentas según configuración o PGC por defecto
