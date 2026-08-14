@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle, BookOpen, Trash2 } from 'lucide-react';
+import { Plus, Search, RefreshCw, CheckCircle, Clock, AlertTriangle, XCircle, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import JournalEntryForm from './JournalEntryForm';
 
@@ -27,7 +27,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function LibroDiario() {
+export default function LibroDiario({ companyId, user }) {
   const [entries, setEntries] = useState([]);
   const [lines, setLines] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -37,13 +37,15 @@ export default function LibroDiario() {
   const [filterType, setFilterType] = useState('all');
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState(null);
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
 
   const load = async () => {
+    if (!companyId) return;
     setLoading(true);
     const [ents, lns, accs] = await Promise.all([
-      base44.entities.JournalEntry.list('-date', 200).catch(() => []),
-      base44.entities.JournalEntryLine.list('lineNumber', 1000).catch(() => []),
-      base44.entities.AccountingAccount.list('code', 300).catch(() => []),
+      base44.entities.JournalEntry.filter({ companyId }, '-date', 1000).catch(() => []),
+      base44.entities.JournalEntryLine.filter({ companyId }, 'lineNumber', 5000).catch(() => []),
+      base44.entities.AccountingAccount.filter({ companyId }, 'code', 1000).catch(() => []),
     ]);
     setEntries(ents || []);
     setLines(lns || []);
@@ -51,41 +53,42 @@ export default function LibroDiario() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [companyId]);
 
   const handleConfirm = async (entry) => {
     const entryLines = lines.filter(l => l.journalEntryId === entry.id);
     const td = entryLines.reduce((s, l) => s + Number(l.debit || 0), 0);
     const tc = entryLines.reduce((s, l) => s + Number(l.credit || 0), 0);
     if (Math.abs(td - tc) > 0.01) { alert('El asiento no cuadra. Debe = Haber.'); return; }
-    await base44.entities.JournalEntry.update(entry.id, { status: 'confirmado', confirmedAt: new Date().toISOString() });
-    await Promise.all(entryLines.map(l => base44.entities.JournalEntryLine.update(l.id, { entryStatus: 'confirmado' })));
-    load();
+    try {
+      await base44.functions.invoke('accountingOperations', { action: 'confirm', companyId, entryId: entry.id });
+      load();
+    } catch (err) {
+      alert(err?.response?.data?.error || err?.message || 'No se pudo confirmar el asiento.');
+    }
   };
 
   const handleAnular = async (entry) => {
-    if (!confirm('¿Anular este asiento? Quedará marcado como anulado.')) return;
-    await base44.entities.JournalEntry.update(entry.id, { status: 'anulado' });
-    load();
+    const reason = prompt('Motivo de anulación del asiento:');
+    if (!reason?.trim()) return;
+    try {
+      await base44.functions.invoke('accountingOperations', {
+        action: 'annul', companyId, entryId: entry.id, reason: reason.trim(),
+      });
+      load();
+    } catch (err) {
+      alert(err?.response?.data?.error || err?.message || 'No se pudo anular el asiento.');
+    }
   };
 
-  const handleEliminar = async (entry) => {
-    const msg = entry.status === 'confirmado'
-      ? `¿Eliminar el asiento confirmado "${entry.description}"? Esta acción es irreversible y elimina su trazabilidad contable.`
-      : `¿Eliminar el asiento "${entry.description}"?`;
-    if (!confirm(msg)) return;
-    await base44.entities.JournalEntry.delete(entry.id);
-    // Delete lines too
-    const entryLines = lines.filter(l => l.journalEntryId === entry.id);
-    await Promise.all(entryLines.map(l => base44.entities.JournalEntryLine.delete(l.id)));
-    load();
-  };
-
+  const years = [...new Set(entries.map(e => e.ejercicio || (e.date ? new Date(e.date).getFullYear() : null)).filter(Boolean))].sort((a, b) => b - a);
   const filtered = entries.filter(e => {
     const matchSearch = !search || e.description?.toLowerCase().includes(search.toLowerCase()) || e.entryNumber?.includes(search);
     const matchStatus = filterStatus === 'all' || e.status === filterStatus;
     const matchType = filterType === 'all' || e.type === filterType;
-    return matchSearch && matchStatus && matchType;
+    const entryYear = e.ejercicio || (e.date ? new Date(e.date).getFullYear() : null);
+    const matchYear = filterYear === 'all' || String(entryYear) === filterYear;
+    return matchSearch && matchStatus && matchType && matchYear;
   });
 
   return (
@@ -107,6 +110,13 @@ export default function LibroDiario() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input placeholder="Buscar asiento..." value={search} onChange={e => setSearch(e.target.value)} className="pl-8 h-8 text-xs" />
         </div>
+        <Select value={filterYear} onValueChange={setFilterYear}>
+          <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder="Ejercicio" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {years.map(year => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Estado" /></SelectTrigger>
           <SelectContent>
@@ -173,12 +183,9 @@ export default function LibroDiario() {
                       {entry.status === 'borrador' || entry.status === 'pendiente_revision' ? (
                         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleConfirm(entry)}>Confirmar</Button>
                       ) : null}
-                      {entry.status !== 'anulado' && entry.status !== 'confirmado' && (
+                      {entry.status !== 'anulado' && (
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => handleAnular(entry)}>Anular</Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600" onClick={() => handleEliminar(entry)} title="Eliminar asiento">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
                     </div>
                   </div>
 
@@ -215,7 +222,7 @@ export default function LibroDiario() {
         )}
       </div>
 
-      {showNewEntry && <JournalEntryForm open accounts={accounts} onClose={() => setShowNewEntry(false)} onSaved={load} />}
+      {showNewEntry && <JournalEntryForm open accounts={accounts} companyId={companyId} user={user} onClose={() => setShowNewEntry(false)} onSaved={load} />}
     </div>
   );
 }
