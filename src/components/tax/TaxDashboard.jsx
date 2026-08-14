@@ -24,6 +24,7 @@ export default function TaxDashboard({ onNavigate }) {
   const [obligations, setObligations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fiscalProfile, setFiscalProfile] = useState(null);
   const [aiAlerts, setAiAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
@@ -38,12 +39,14 @@ export default function TaxDashboard({ onNavigate }) {
 
   const loadData = async () => {
     setLoading(true);
-    const [oblData, qData] = await Promise.all([
+    const [oblData, qData, profiles] = await Promise.all([
       base44.entities.TaxObligation.filter({ company_id: company.id }),
       base44.entities.Quote.filter({ company_id: company.id }).catch(() => []),
+      base44.entities.FiscalProfile.filter({ company_id: company.id, active: true }).catch(() => []),
     ]);
     setObligations(oblData || []);
     setQuotes(qData || []);
+    setFiscalProfile(profiles?.[0] || null);
     setLoading(false);
   };
 
@@ -157,6 +160,9 @@ export default function TaxDashboard({ onNavigate }) {
 
   const fmt = (n) => n?.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00';
   const taxLabel = company.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
+  const fiscalSetupComplete = Boolean(
+    company.razon_social && company.nif_cif && company.actividad && company.regimen_fiscal && company.tipo_impuesto && fiscalProfile
+  );
 
   return (
     <div className="space-y-6">
@@ -175,6 +181,19 @@ export default function TaxDashboard({ onNavigate }) {
           </Button>
         </div>
       </div>
+
+      {!fiscalSetupComplete && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-900">Completa el encuadre fiscal antes de automatizar</p>
+            <p className="text-xs text-amber-800 mt-0.5">Actividad, régimen, IVA/IGIC e IRPF determinan cómo se proponen impuestos, retenciones y asientos. Las facturas permanecerán pendientes hasta disponer de una configuración revisada.</p>
+          </div>
+          <Button asChild size="sm" variant="outline" className="border-amber-300 bg-white">
+            <a href="/ajustes">Abrir ajustes fiscales</a>
+          </Button>
+        </div>
+      )}
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
