@@ -63,7 +63,7 @@ export default function PresentacionesTab() {
   return (
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Presentaciones y ficheros oficiales</h2>
+        <h2 className="text-sm font-semibold text-foreground">Presentaciones acreditadas y borradores tributarios</h2>
         <p className="text-xs text-muted-foreground">{submissions.length} registros</p>
       </div>
 
@@ -77,7 +77,7 @@ export default function PresentacionesTab() {
               <p className="text-xs text-gray-400">Modelos 303, 111, 115, 130, 390, 347, 349, 190, 180, 193, 123</p>
             </div>
           </div>
-          <p className="text-xs text-gray-500 mb-3">Presentación por fichero .dat en Sede Electrónica AEAT. El botón <strong>Presentar modelo</strong> genera el fichero oficial y abre el flujo asistido.</p>
+          <p className="text-xs text-gray-500 mb-3">Taxea calcula borradores internos. Una presentación solo debe marcarse como realizada cuando exista justificante o CSV de la AEAT.</p>
           <div className="flex items-center gap-2">
             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-medium flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" /> Flujo asistido activo
@@ -107,11 +107,11 @@ export default function PresentacionesTab() {
         </div>
       </div>
 
-      {/* Ficheros oficiales generados */}
+      {/* Borradores tributarios generados */
       {officialFiles.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Ficheros oficiales generados</p>
+            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Borradores tributarios generados</p>
             <span className="text-xs text-gray-400">{officialFiles.length} ficheros</span>
           </div>
           <div className="divide-y divide-gray-100">
