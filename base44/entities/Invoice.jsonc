@@ -201,6 +201,16 @@
       "type": "string",
       "default": "manual"
     },
+    "source_document_type": {
+      "type": "string",
+      "enum": [
+        "presupuesto",
+        "proforma"
+      ]
+    },
+    "source_document_id": {
+      "type": "string"
+    },
     "es_rectificativa": {
       "type": "boolean",
       "default": false
