@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, Trash2, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
+import { Plus, Search, Download, Eye, MoreVertical, FileText, Send, Ban, TrendingUp, CalendarDays, Clock, AlertCircle, Repeat, CopyCheck } from 'lucide-react';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageHeader from '@/components/ui/PageHeader';
@@ -90,13 +90,6 @@ export default function Facturas() {
       console.error('Error anulación múltiple:', e);
     }
     setAnulando(false);
-  };
-
-  const handleEliminar = async (inv) => {
-    if (!confirm(`¿Eliminar definitivamente la factura ${inv.numero_factura}? Esta acción no se puede deshacer.`)) return;
-    await base44.entities.Invoice.delete(inv.id);
-    loadInvoices();
-    triggerFinancialRefresh();
   };
 
   const openEdit = (inv) => { setEditing(inv); setShowForm(true); };
@@ -444,11 +437,7 @@ export default function Facturas() {
                                    <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
                                  </DropdownMenuItem>
                                )}
-                               {inv.anulada && (
-                                 <DropdownMenuItem className="text-red-700 focus:text-red-700" onClick={() => handleEliminar(inv)}>
-                                   <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar definitivamente
-                                 </DropdownMenuItem>
-                               )}
+
                              </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
