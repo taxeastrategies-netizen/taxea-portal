@@ -22,7 +22,8 @@ const TYPE_COLORS = {
 function inferType(code) {
   const c = String(code || '');
   const g = c.charAt(0);
-  if (g === '1' || g === '2') return 'activo';
+  if (g === '1') return 'patrimonio';
+  if (g === '2') return 'activo';
   if (g === '3') return 'activo'; // existencias
   if (c.startsWith('4')) {
     if (c.startsWith('40')) return 'proveedor';
@@ -30,13 +31,13 @@ function inferType(code) {
     if (c.startsWith('47')) return 'impuesto';
     return 'pasivo';
   }
-  if (g === '5') return 'banco';
+  if (g === '5') return c.startsWith('57') ? 'banco' : (c.startsWith('52') ? 'pasivo' : 'activo');
   if (g === '6') return 'gasto';
   if (g === '7') return 'ingreso';
   return 'otro';
 }
 
-export default function CuadrosCuentas() {
+export default function CuadrosCuentas({ companyId, user }) {
   const [accounts, setAccounts] = useState([]);
   const [lines, setLines] = useState([]);
   const [confirmedIds, setConfirmedIds] = useState(new Set());
@@ -48,11 +49,12 @@ export default function CuadrosCuentas() {
   const [showNewEntry, setShowNewEntry] = useState(false);
 
   const load = async () => {
+    if (!companyId) return;
     setLoading(true);
     const [accs, lns, entries] = await Promise.all([
-      base44.entities.AccountingAccount.list('code', 500).catch(() => []),
-      base44.entities.JournalEntryLine.list('-created_date', 2000).catch(() => []),
-      base44.entities.JournalEntry.list('-date', 1000).catch(() => []),
+      base44.entities.AccountingAccount.filter({ companyId }, 'code', 1000).catch(() => []),
+      base44.entities.JournalEntryLine.filter({ companyId }, '-created_date', 5000).catch(() => []),
+      base44.entities.JournalEntry.filter({ companyId }, '-date', 2000).catch(() => []),
     ]);
 
     // Confirmed = entries with status confirmado OR contabilizada (some may use different value)
@@ -65,7 +67,7 @@ export default function CuadrosCuentas() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [companyId]);
 
   // Build combined account list: real AccountingAccount records + synthesized from journal lines
   const accountsWithBalances = useMemo(() => {
@@ -237,8 +239,8 @@ export default function CuadrosCuentas() {
         </div>
       </div>
 
-      {selectedAccount && <MayorCuenta account={selectedAccount} onClose={() => setSelectedAccount(null)} />}
-      {showNewEntry && <JournalEntryForm open accounts={accounts} onClose={() => setShowNewEntry(false)} onSaved={load} />}
+      {selectedAccount && <MayorCuenta account={selectedAccount} companyId={companyId} onClose={() => setSelectedAccount(null)} />}
+      {showNewEntry && <JournalEntryForm open accounts={accounts} companyId={companyId} user={user} onClose={() => setShowNewEntry(false)} onSaved={load} />}
     </div>
   );
 }
