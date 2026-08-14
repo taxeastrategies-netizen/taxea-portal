@@ -73,6 +73,21 @@
     },
     "evidence": {
       "type": "string"
+    },
+    "invoiceId": {
+      "type": "string"
+    },
+    "ocrDocumentId": {
+      "type": "string"
+    },
+    "counterpartyAccountCode": {
+      "type": "string"
+    },
+    "resultAccountCode": {
+      "type": "string"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
     }
   },
   "required": [
