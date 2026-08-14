@@ -27,18 +27,15 @@ const TAX_MODULES = [
   { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
   { id: 'proformas', label: 'Proformas', icon: Receipt, path: '/tax-accounting/proformas' },
 
-  { id: 'notas', label: 'Notas Predefinidas', icon: BookMarked, path: '/tax-accounting/notas' },
-  { id: 'libros', label: 'Libros Registro', icon: BookOpen, path: '/tax-accounting/libros' },
-  { id: 'lector-gastos', label: 'Lector de Gastos', icon: ScanLine, path: '/tax-accounting/lector-gastos' },
-  { id: 'lector-ingresos', label: 'Lector de Ingresos', icon: ScanText, path: '/tax-accounting/lector-ingresos' },
-  { id: 'obligaciones', label: 'Obligaciones Fiscales', icon: Calendar, path: '/tax-accounting/obligaciones' },
-  { id: 'impuestos', label: 'Impuestos', icon: FileCheck, path: '/tax-accounting/impuestos' },
+  { id: 'libros', label: 'Libros e informes', icon: BookOpen, path: '/tax-accounting/libros' },
+  { id: 'lector-gastos', label: 'OCR facturas recibidas', icon: ScanLine, path: '/tax-accounting/lector-gastos' },
+  { id: 'lector-ingresos', label: 'OCR facturas emitidas', icon: ScanText, path: '/tax-accounting/lector-ingresos' },
+  { id: 'obligaciones', label: 'Calendario y obligaciones', icon: Calendar, path: '/tax-accounting/obligaciones' },
+  { id: 'impuestos', label: 'Modelos tributarios', icon: FileCheck, path: '/tax-accounting/impuestos' },
   { id: 'contabilidad', label: 'Contabilidad', icon: BookOpen, path: '/tax-accounting/contabilidad' },
   { id: 'registro-mercantil', label: 'Registro Mercantil', icon: Building2, path: '/tax-accounting/registro-mercantil' },
   { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },
-  { id: 'asistente', label: 'Asistente IA', icon: Sparkles, path: '/tax-accounting/asistente' },
-  { id: 'notificaciones', label: 'Notificaciones', icon: Bell, path: '/tax-accounting/notificaciones' },
-  { id: 'timeline', label: 'Timeline', icon: Clock, path: '/tax-accounting/timeline' },
+  { id: 'asistente', label: 'Asistente fiscal IA', icon: Sparkles, path: '/tax-accounting/asistente' },
 ];
 
 const DEPT_GROUPS = [
