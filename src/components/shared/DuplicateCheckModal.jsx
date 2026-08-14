@@ -88,7 +88,11 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
         if (item.entityType === 'OcrInvoiceDocument') {
           await base44.entities.OcrInvoiceDocument.delete(item.id);
         } else if (item.entityType === 'Invoice') {
-          await base44.entities.Invoice.delete(item.id);
+          await base44.functions.invoke('anularFacturas', {
+            invoiceIds: [item.id],
+            motivo: 'Duplicado detectado y revisado',
+            companyId,
+          });
         }
         deleted++;
       } catch {
@@ -98,9 +102,9 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
 
     setDeleting(false);
     if (errors === 0) {
-      toast.success(`${deleted} duplicados eliminados correctamente`);
+      toast.success(`${deleted} duplicados tratados correctamente`);
     } else {
-      toast.warning(`${deleted} eliminados, ${errors} errores`);
+      toast.warning(`${deleted} tratados, ${errors} errores`);
     }
     setResult(null);
     onClose();
