@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
 
     // 3.5. Fiscal engine check: evaluate treatment before allowing contabilización
     let fiscalAssessment = null;
+    let fiscalProfileExists = false;
     try {
       const direction = invoiceType === 'emitida' ? 'ingreso' : 'gasto';
       const counterpartyName = invoiceType === 'emitida' ? form.cliente_nombre : form.proveedor_cliente;
@@ -76,6 +77,7 @@ Deno.serve(async (req) => {
 
       const profiles = await base44.asServiceRole.entities.FiscalProfile.filter({ company_id: doc.company_id, active: true });
       if (profiles && profiles.length > 0) {
+        fiscalProfileExists = true;
         // Profile exists - run fiscal evaluation
         const assessmentRes = await base44.functions.invoke('evaluateFiscalTreatment', {
           ocrData: extractedData,
@@ -112,7 +114,12 @@ Deno.serve(async (req) => {
         console.log('[approveOcrDocument] Fiscal assessment:', fiscalAssessment.status, 'confidence:', fiscalAssessment.confidence);
       }
     } catch (fiscalError) {
-      console.warn('[approveOcrDocument] Fiscal check failed (non-blocking):', fiscalError.message);
+      console.error('[approveOcrDocument] Fiscal check failed:', fiscalError.message);
+      if (fiscalProfileExists) {
+        return Response.json({
+          error: 'No se pudo validar el tratamiento fiscal. La factura permanece pendiente para evitar una contabilización incorrecta.',
+        }, { status: 503 });
+      }
     }
 
     // 4. Build invoice data
@@ -135,6 +142,7 @@ Deno.serve(async (req) => {
         tipo_iva: parseFloat(form.tipo_iva) || 21,
         cuota_iva: parseFloat(form.cuota_iva) || 0,
         retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+        importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
         total_factura: parseFloat(form.total_factura) || 0,
         estado_cobro: form.estado_cobro || 'pendiente',
         tipo: 'emitida',
@@ -160,6 +168,7 @@ Deno.serve(async (req) => {
         tipo_iva: parseFloat(form.tipo_impuesto) || 21,
         cuota_iva: parseFloat(form.cuota_impuesto) || 0,
         retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+        importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
         total_factura: parseFloat(form.total) || 0,
         estado_cobro: 'pendiente',
         tipo: 'recibida',
