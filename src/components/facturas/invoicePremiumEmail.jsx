@@ -391,7 +391,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     doc.line(totX, Y, totX + totW, Y);
     Y += 4;
     addTotRow('Base imponible', fmtN(invoice.base_imponible));
-    addTotRow(`IVA (${invoice.tipo_iva || 21}%)`, fmtN(invoice.cuota_iva));
+    addTotRow(`IVA (${invoice.tipo_iva ?? 21}%)`, fmtN(invoice.cuota_iva));
     if (invoice.retencion_irpf > 0) addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
     doc.line(totX, Y, totX + totW, Y); Y += 4;
     addTotRow('Total', fmtN(invoice.total_factura), true, red);
