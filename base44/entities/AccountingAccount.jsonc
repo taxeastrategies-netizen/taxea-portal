@@ -126,6 +126,32 @@
     },
     "tipoRegistro": {
       "type": "string"
+    },
+    "canonical8": {
+      "type": "boolean",
+      "default": false
+    },
+    "codeLength": {
+      "type": "number",
+      "default": 8
+    },
+    "parentCode": {
+      "type": "string"
+    },
+    "counterpartyProfileId": {
+      "type": "string"
+    },
+    "sequencePrefix": {
+      "type": "string"
+    },
+    "migratedFromCode": {
+      "type": "string"
+    },
+    "migrationBatch": {
+      "type": "string"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
     }
   },
   "required": [
