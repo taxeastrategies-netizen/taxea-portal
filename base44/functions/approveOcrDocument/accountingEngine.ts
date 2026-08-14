@@ -220,10 +220,23 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const absWithholding = Math.abs(withholding);
   const absTotal = Math.abs(total);
   const category = invoice.categoria_gasto || (invoice.tipo === 'emitida' ? 'ventas_servicios' : 'otros');
+  let configuredCode = '';
+  let configuredName = '';
+  try {
+    const configurations = await svc.entities.AccountingConfiguration.filter({ companyId }, '-updatedAt', 1);
+    const mappings = JSON.parse(configurations?.[0]?.mappingsJson || '[]');
+    const mapped = Array.isArray(mappings)
+      ? mappings.find(item => item.categoria === category && item.tipo === (invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'))
+      : null;
+    configuredCode = mapped?.cuenta ? canonical8(mapped.cuenta) : '';
+    configuredName = clean(mapped?.nombre);
+  } catch (error) {
+    console.warn('[accountingEngine] Configuración contable no aplicable:', error.message);
+  }
   const resultCode = invoice.revenue_expense_account_code
     ? canonical8(invoice.revenue_expense_account_code)
-    : CATEGORY_ACCOUNT[category] || (invoice.tipo === 'emitida' ? '70500000' : '62900000');
-  const resultDef = ACCOUNT_DEFS[resultCode] || [invoice.tipo === 'emitida' ? 'Ingresos' : 'Gastos', invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'];
+    : configuredCode || CATEGORY_ACCOUNT[category] || (invoice.tipo === 'emitida' ? '70500000' : '62900000');
+  const resultDef = ACCOUNT_DEFS[resultCode] || [configuredName || (invoice.tipo === 'emitida' ? 'Ingresos' : 'Gastos'), invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'];
   const resultAccount = await ensureAccount(svc, companyId, resultCode, resultDef[0], resultDef[1]);
   const taxCode = taxKind === 'igic'
     ? (invoice.tipo === 'emitida' ? '47770000' : '47270000')
