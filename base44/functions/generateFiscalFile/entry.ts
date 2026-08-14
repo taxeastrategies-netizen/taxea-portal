@@ -1,15 +1,9 @@
 /**
- * generateFiscalFile — Tax Filing Connector Layer
- * Genera el fichero oficial por modelo según diseño de registro AEAT/ATC.
+ * generateFiscalFile — cálculo interno y exportación de revisión tributaria.
  *
- * Fuentes oficiales:
- *  - AEAT Modelo 303: BOE diseño de registro vigente (https://www.agenciatributaria.es/AEAT.internet/Inicio/Ayuda/Modelos__Procedimientos_y_Servicios/Ayuda_Modelo_303/)
- *  - AEAT Modelo 111: BOE
- *  - ATC Modelo 420: ATC (https://www.gobiernodecanarias.org/tributos/)
- *
- * IMPORTANTE: Los adaptadores por modelo aplican el diseño de registro oficial.
- * No se fabrican formatos sin validación. Los modelos sin diseño validado
- * devuelven un CSV de revisión con advertencia explícita.
+ * La función calcula el borrador desde facturas contabilizadas. Hasta que cada
+ * adaptador se valide contra el diseño vigente del ejercicio, genera únicamente
+ * un archivo auxiliar de revisión, nunca un fichero presentado como oficial.
  */
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
@@ -261,12 +255,15 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Parámetros incompletos: modeloCodigo, companyId, ejercicio, periodo requeridos.' }, { status: 400 });
     }
 
-    // 1. Cargar datos del cliente
-    const company = await base44.entities.ClientAccount.get(companyId);
-    if (!company) return Response.json({ error: 'Cliente no encontrado.' }, { status: 404 });
+    // 1. Validar empresa activa y cargar sus datos reales
+    if (user.data?.company_id !== companyId) {
+      return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
+    }
+    const company = await base44.asServiceRole.entities.Company.get(companyId);
+    if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
 
     // 2. Cargar facturas del período
-    const invoices = await base44.entities.Invoice.filter({ company_id: companyId });
+    const invoices = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId });
     const yearNum = parseInt(ejercicio);
 
     const facturasPeriodo = invoices.filter(f => {
@@ -292,10 +289,14 @@ Deno.serve(async (req) => {
       byTipo[t].cuota += f.cuota_iva || 0;
     });
 
-    const cuotaSoportada = recibidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
+    const cuotaSoportada = recibidas.reduce((s, f) => s + (f.deductible_tax_amount ?? f.cuota_iva ?? 0), 0);
     const cuotaRepercutida = Object.values(byTipo).reduce((s, v) => s + v.cuota, 0);
     const resultado = cuotaRepercutida - cuotaSoportada;
-    const retenciones = recibidas.reduce((s, f) => s + (f.retencion_irpf || 0), 0);
+    const getRetention = (f) => f.importe_retencion != null
+      ? Number(f.importe_retencion) || 0
+      : (Number(f.base_imponible) || 0) * (Number(f.retencion_irpf) || 0) / 100;
+    const retainedInvoices = recibidas.filter(f => getRetention(f) !== 0);
+    const retenciones = retainedInvoices.reduce((s, f) => s + getRetention(f), 0);
 
     const datos = {
       baseImponible4:  byTipo[4]?.base  || 0,
@@ -309,8 +310,8 @@ Deno.serve(async (req) => {
       resultado,
       baseImponible: emitidas.reduce((s, f) => s + (f.base_imponible || 0), 0),
       cuotaIGIC: cuotaRepercutida,
-      perceptores: recibidas.filter(f => f.retencion_irpf > 0).length,
-      baseRetenciones: recibidas.reduce((s, f) => s + (f.base_imponible || 0), 0),
+      perceptores: retainedInvoices.length,
+      baseRetenciones: retainedInvoices.reduce((s, f) => s + (f.base_imponible || 0), 0),
       cuotaRetenciones: retenciones,
     };
 
@@ -326,8 +327,8 @@ Deno.serve(async (req) => {
     if (sinNif.length > 0) {
       avisos.push(`${sinNif.length} factura(s) sin NIF del contraparte.`);
     }
-    if (!company.taxId) {
-      erroresBloqueo.push('El cliente no tiene NIF/CIF configurado.');
+    if (!company.nif_cif) {
+      erroresBloqueo.push('La empresa no tiene NIF/CIF configurado.');
     }
 
     if (erroresBloqueo.length > 0) {
@@ -335,23 +336,22 @@ Deno.serve(async (req) => {
     }
 
     // 5. Generar fichero
-    const nif = company.taxId || '';
-    const razonSocial = company.legalName || company.displayName || '';
-    const adapterFn = ADAPTERS[modeloCodigo];
+    const nif = company.nif_cif || '';
+    const razonSocial = company.razon_social || company.nombre_comercial || '';
     const administracion = ADMINISTRACION_POR_MODELO[modeloCodigo] || 'AEAT';
 
-    let resultado_fichero;
-    if (adapterFn) {
-      resultado_fichero = adapterFn({ nif, razonSocial, ejercicio: yearNum, periodo, datos });
-    } else {
-      resultado_fichero = FallbackAdapter({ modeloCodigo, nif, razonSocial, ejercicio: yearNum, periodo, datos });
-    }
+    // Modo seguro: mantener el cálculo interno y bloquear cualquier apariencia
+    // de fichero oficial hasta validar el adaptador del modelo y ejercicio.
+    const resultado_fichero = FallbackAdapter({
+      modeloCodigo, nif, razonSocial, ejercicio: yearNum, periodo, datos,
+    });
+    avisos.push(`El modelo ${modeloCodigo} se ha calculado como borrador interno. El archivo no es presentable ante ${administracion}.`);
 
     const hash = await hashContent(resultado_fichero.contenido);
     const fechaGeneracion = new Date().toISOString();
 
     // 6. Guardar en TaxOfficialFile
-    const fileRecord = await base44.entities.TaxOfficialFile.create({
+    const fileRecord = await base44.asServiceRole.entities.TaxOfficialFile.create({
       companyId,
       modeloCodigo,
       ejercicio: yearNum,
@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
       hash,
       generadoPor: user.email,
       fechaGeneracion,
-      estado: 'generado',
+      estado: 'borrador',
       errores: [],
       avisos: [...(resultado_fichero.avisos || []), ...avisos],
       taxDraftId: taxDraftId || null,
