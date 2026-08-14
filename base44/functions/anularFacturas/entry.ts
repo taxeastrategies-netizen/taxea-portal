@@ -6,14 +6,16 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     const userCompanyId = user.data?.company_id;
-    if (!isAdmin && !userCompanyId) {
-      return Response.json({ error: 'Forbidden: no company context' }, { status: 403 });
+    if (!userCompanyId) {
+      return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
     }
 
     const body = await req.json();
-    const { invoiceIds, motivo } = body || {};
+    const { invoiceIds, motivo, companyId } = body || {};
+    if (companyId && companyId !== userCompanyId) {
+      return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
+    }
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
       return Response.json({ error: 'invoiceIds required' }, { status: 400 });
     }
@@ -25,12 +27,9 @@ Deno.serve(async (req) => {
     const allInvoices = await base44.asServiceRole.entities.Invoice.list('-created_date', 5000);
     const targets = allInvoices.filter(i => invoiceIds.includes(i.id) && !i.anulada);
 
-    // Ownership check: non-admin users can only annul invoices from their own company
-    if (!isAdmin) {
-      const foreign = targets.filter(t => t.company_id !== userCompanyId);
-      if (foreign.length > 0) {
-        return Response.json({ error: 'Forbidden: cannot annul invoices from another company' }, { status: 403 });
-      }
+    const foreign = targets.filter(t => t.company_id !== userCompanyId);
+    if (foreign.length > 0) {
+      return Response.json({ error: 'No se pueden anular facturas de otra empresa.' }, { status: 403 });
     }
 
     if (targets.length === 0) {
@@ -54,8 +53,28 @@ Deno.serve(async (req) => {
 
     if (journalIds.length > 0) {
       await base44.asServiceRole.entities.JournalEntry.bulkUpdate(
-        journalIds.map(id => ({ id, status: 'anulado' }))
-      ).catch(() => {});
+        journalIds.map(id => ({
+          id,
+          status: 'anulado',
+          annulledAt: now,
+          annulledBy: user.email,
+          annulmentReason: motivoFinal,
+          validationStatus: 'ANULADO',
+        }))
+      );
+
+      for (const journalEntryId of journalIds) {
+        const entryLines = await base44.asServiceRole.entities.JournalEntryLine.filter({
+          companyId: userCompanyId,
+          journalEntryId,
+        });
+        await Promise.all(entryLines.map(line =>
+          base44.asServiceRole.entities.JournalEntryLine.update(line.id, {
+            entryStatus: 'anulado',
+            validationStatus: 'ANULADO',
+          })
+        ));
+      }
     }
 
     return Response.json({
