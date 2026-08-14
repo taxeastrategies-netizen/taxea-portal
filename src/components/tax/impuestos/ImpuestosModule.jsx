@@ -5,9 +5,7 @@ import ConfiguracionFiscal from './ConfiguracionFiscal';
 import ModelosConfig from './ModelosConfig';
 import BorradoresTab from './BorradoresTab';
 import PresentacionesTab from './PresentacionesTab';
-import ImpuestosComingSoon from './ImpuestosComingSoon';
 import CalendarioFiscalTab from './CalendarioFiscalTab';
-import ReglasFiscalesTab from './ReglasFiscalesTab';
 import ErroresValidacionesTab from './ErroresValidacionesTab';
 import HistorialFiscalTab from './HistorialFiscalTab';
 
@@ -17,9 +15,7 @@ const TABS = [
   { id: 'modelos', label: 'Modelos', icon: BookOpen },
   { id: 'borradores', label: 'Borradores', icon: FilePen },
   { id: 'presentaciones', label: 'Presentaciones', icon: Send },
-  { id: 'justificantes', label: 'Justificantes', icon: Archive },
   { id: 'calendario', label: 'Calendario fiscal', icon: Calendar },
-  { id: 'reglas', label: 'Reglas fiscales', icon: BookOpen },
   { id: 'errores', label: 'Errores y validaciones', icon: AlertTriangle },
   { id: 'historial', label: 'Historial', icon: History },
 ];
@@ -35,10 +31,9 @@ export default function ImpuestosModule() {
       case 'borradores': return <BorradoresTab />;
       case 'presentaciones': return <PresentacionesTab />;
       case 'calendario': return <CalendarioFiscalTab />;
-      case 'reglas': return <ReglasFiscalesTab />;
       case 'errores': return <ErroresValidacionesTab />;
       case 'historial': return <HistorialFiscalTab />;
-      default: return <ImpuestosComingSoon tab={TABS.find(t => t.id === activeTab)?.label} />;
+      default: return <ImpuestosPanel onGoToConfig={() => setActiveTab('configuracion')} />;
     }
   };
 
