@@ -87,6 +87,20 @@
     },
     "subido_por": {
       "type": "string"
+    },
+    "anulada": {
+      "type": "boolean",
+      "default": false
+    },
+    "fecha_anulacion": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "motivo_anulacion": {
+      "type": "string"
+    },
+    "anulada_por": {
+      "type": "string"
     }
   },
   "required": [
