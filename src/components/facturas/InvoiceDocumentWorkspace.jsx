@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { getWithholdingAmount } from '@/lib/accountingUtils';
 import {
   ArrowLeft, Share2, MoreVertical, Send, Download,
   Printer, ZoomIn, ZoomOut, FileText, ChevronRight,
@@ -275,13 +276,13 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
-            <span className="text-slate-500">IVA ({invoice.tipo_iva || 21}%)</span>
+            <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {invoice.retencion_irpf > 0 && (
             <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
               <span className="text-slate-500">Retención IRPF</span>
-              <span className="font-medium text-red-600">−{fmt(invoice.retencion_irpf)}</span>
+              <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
             </div>
           )}
           <div className="flex justify-between py-2 mt-1 rounded-lg px-2" style={{ backgroundColor: `${brandColor}10` }}>
