@@ -31,6 +31,41 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, schemaVersion: SCHEMA_VERSION, ...result });
     }
 
+    if (action === 'create_account') {
+      const code = String(body.code || '').trim();
+      const name = String(body.name || '').trim();
+      if (!isCanonical8(code) || !/^[1-7]/.test(code)) {
+        return Response.json({ error: 'La subcuenta debe tener exactamente 8 dígitos y pertenecer a los grupos 1 a 7 del PGC.' }, { status: 400 });
+      }
+      if (!name) return Response.json({ error: 'El nombre de la cuenta es obligatorio.' }, { status: 400 });
+      const duplicate = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
+      if (duplicate?.length) return Response.json({ error: `La cuenta ${code} ya existe.` }, { status: 409 });
+      const group = code.slice(0, 1);
+      const type = body.type || (
+        group === '1' ? 'patrimonio'
+          : ['2', '3'].includes(group) ? 'activo'
+            : group === '4' ? (code.startsWith('40') || code.startsWith('41') ? 'proveedor' : code.startsWith('43') ? 'cliente' : code.startsWith('47') ? 'impuesto' : 'pasivo')
+              : group === '5' ? (code.startsWith('57') ? 'banco' : 'activo')
+                : group === '6' ? 'gasto' : 'ingreso'
+      );
+      const account = await svc.entities.AccountingAccount.create({
+        companyId,
+        code,
+        name,
+        type,
+        group,
+        subgroup1: code.slice(0, 2),
+        subgroup2: code.slice(0, 3),
+        subgroup3: code.slice(0, 4),
+        status: 'activa',
+        isSystemAccount: false,
+        canonical8: true,
+        codeLength: 8,
+        accountingSchemaVersion: SCHEMA_VERSION,
+      });
+      return Response.json({ success: true, account });
+    }
+
     if (action === 'create_manual') {
       const { date, description, type = 'manual', status = 'borrador', lines = [] } = body;
       if (!date || !String(description || '').trim()) {
