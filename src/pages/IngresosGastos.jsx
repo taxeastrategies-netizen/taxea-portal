@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload, BarChart3, Trash2, Download, CheckSquare, Square } from 'lucide-react';
+import { Plus, Search, TrendingUp, TrendingDown, MoreVertical, Upload, BarChart3, Ban, Download, CheckSquare, Square, Eye } from 'lucide-react';
 import jsPDF from 'jspdf';
 import PageHeader from '@/components/ui/PageHeader';
 import StatusBadge from '@/components/ui/StatusBadge';
@@ -41,7 +41,7 @@ function fmt(n) {
 }
 
 export default function IngresosGastos() {
-  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
+  const { company, user, loadingCompany } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [filterTipo, setFilterTipo] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
@@ -52,6 +52,7 @@ export default function IngresosGastos() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -76,52 +77,51 @@ export default function IngresosGastos() {
         total: inv.total_factura,
         trimestre: inv.trimestre,
         estado: inv.estado_contable,
-        categoria: inv.categoria || (inv.tipo === 'emitida' ? 'ventas_servicios' : 'otros'),
+        categoria: inv.categoria_gasto || (inv.tipo === 'emitida' ? 'ventas_servicios' : 'otros'),
         numero_factura: inv.numero_factura,
       }));
-    const expenseItems = (expenses || []).map(e => ({ ...e, _source: 'expense' }));
+    const expenseItems = (expenses || []).filter(e => !e.anulada).map(e => ({ ...e, _source: 'expense' }));
     return [...expenseItems, ...invoiceItems];
   }, [invoices, expenses]);
 
   const handleSave = async () => {
-    setSaving(true);
-    const year = form.fecha ? new Date(form.fecha).getFullYear() : new Date().getFullYear();
-    const month = form.fecha ? new Date(form.fecha).getMonth() + 1 : new Date().getMonth() + 1;
-    const trimestre = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
-    const base = parseFloat(form.base_imponible) || 0;
-    const cuota = base * (parseFloat(form.tipo_impuesto) || 0) / 100;
-    const total = parseFloat(form.total) || base + cuota;
-    if (editing) {
-      if (editing._source === 'invoice') {
-        await base44.entities.Invoice.update(editing.id, {
-          cliente_nombre: form.proveedor_cliente,
-          concepto: form.concepto,
-          fecha_emision: form.fecha,
-          base_imponible: base,
-          tipo_iva: parseFloat(form.tipo_impuesto) || 21,
-          cuota_iva: cuota,
-          total_factura: total,
-          estado_contable: form.estado,
-          categoria_gasto: form.categoria,
-          anio: year, trimestre,
-        });
-      } else {
-        await base44.entities.Expense.update(editing.id, {
-          ...form, company_id: company.id,
-          base_imponible: base, cuota_impuesto: cuota, total,
-          tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
-          anio: year, trimestre,
-        });
-      }
-    } else {
-      await base44.entities.Expense.create({
-        ...form, company_id: company.id,
-        base_imponible: base, cuota_impuesto: cuota, total,
-        tipo_impuesto: parseFloat(form.tipo_impuesto) || 21,
-        anio: year, trimestre, subido_por: user?.email,
-      });
+    setFormError('');
+    const base = Number(form.base_imponible);
+    const taxRate = Number(form.tipo_impuesto);
+    if (!form.fecha || !form.concepto?.trim() || !Number.isFinite(base) || base < 0 || !Number.isFinite(taxRate) || taxRate < 0) {
+      setFormError('Completa la fecha y el concepto e introduce importes válidos.');
+      return;
     }
-    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); triggerFinancialRefresh();
+    setSaving(true);
+    try {
+      const year = new Date(form.fecha).getFullYear();
+      const month = new Date(form.fecha).getMonth() + 1;
+      const trimestre = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
+      const cuota = base * taxRate / 100;
+      const enteredTotal = Number(form.total);
+      const total = form.total === '' || !Number.isFinite(enteredTotal) ? base + cuota : enteredTotal;
+      const payload = {
+        ...form,
+        company_id: company.id,
+        base_imponible: base,
+        cuota_impuesto: cuota,
+        total,
+        tipo_impuesto: taxRate,
+        anio: year,
+        trimestre,
+      };
+      if (editing?.id) await base44.entities.Expense.update(editing.id, payload);
+      else await base44.entities.Expense.create({ ...payload, subido_por: user?.email, anulada: false });
+      setShowForm(false);
+      setEditing(null);
+      setForm(EMPTY);
+      triggerFinancialRefresh();
+    } catch (error) {
+      console.error('Error guardando registro:', error);
+      setFormError('No se pudo guardar el registro. Revisa los datos e inténtalo de nuevo.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (item) => {
@@ -132,7 +132,12 @@ export default function IngresosGastos() {
         companyId: company?.id,
       });
     } else {
-      await base44.entities.Expense.delete(item.id);
+      await base44.entities.Expense.update(item.id, {
+        anulada: true,
+        fecha_anulacion: new Date().toISOString(),
+        motivo_anulacion: 'Anulación desde Ingresos y Gastos',
+        anulada_por: user?.email,
+      });
     }
     setSelected(s => { const n = new Set(s); n.delete(item.id); return n; });
     triggerFinancialRefresh();
@@ -149,7 +154,13 @@ export default function IngresosGastos() {
         companyId: company?.id,
       });
     }
-    await Promise.all(expenseIds.map(id => base44.entities.Expense.delete(id)));
+    const annulledAt = new Date().toISOString();
+    await Promise.all(expenseIds.map(id => base44.entities.Expense.update(id, {
+      anulada: true,
+      fecha_anulacion: annulledAt,
+      motivo_anulacion: 'Anulación múltiple desde Ingresos y Gastos',
+      anulada_por: user?.email,
+    })));
     setSelected(new Set());
     setConfirmDelete(null);
     triggerFinancialRefresh();
@@ -300,7 +311,7 @@ export default function IngresosGastos() {
             <Download className="w-3.5 h-3.5" /> Exportar PDF
           </Button>
           <Button size="sm" variant="destructive" className="gap-1.5" onClick={() => setConfirmDelete('bulk')}>
-            <Trash2 className="w-3.5 h-3.5" /> Eliminar
+            <Ban className="w-3.5 h-3.5" /> Anular
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Cancelar</Button>
         </div>
@@ -375,18 +386,20 @@ export default function IngresosGastos() {
                           <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setEditing(item); setForm(item._source === 'invoice' ? { tipo: item.tipo, fecha: item.fecha, proveedor_cliente: item.proveedor_cliente, concepto: item.concepto, base_imponible: item.base_imponible, tipo_impuesto: item.tipo_impuesto, cuota_impuesto: item.cuota_impuesto, total: item.total, estado: item.estado, categoria: item.categoria || 'otros' } : { ...item }); setShowForm(true); }}>Editar</DropdownMenuItem>
+                          {item._source === 'invoice' ? (
+                            <DropdownMenuItem asChild>
+                              <Link to={`/tax-accounting/facturas?factura=${item.id}`}>
+                                <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir factura definitiva
+                              </Link>
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setFormError(''); setShowForm(true); }}>Editar registro manual</DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => exportPDF([item])}>
                             <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
                           </DropdownMenuItem>
-                          {isAdmin && (
-                            <DropdownMenuItem onClick={() => {
-                              if (item._source === 'invoice') base44.entities.Invoice.update(item.id, { estado_contable: 'contabilizada' }).then(triggerFinancialRefresh);
-                              else base44.entities.Expense.update(item.id, { estado: 'contabilizado' }).then(triggerFinancialRefresh);
-                            }}>Contabilizar</DropdownMenuItem>
-                          )}
                           <DropdownMenuItem className="text-destructive" onClick={() => setConfirmDelete(item)}>
-                            <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Eliminar
+                            <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -412,13 +425,13 @@ export default function IngresosGastos() {
       <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>¿Procesar {confirmDelete === 'bulk' ? `${selected.size} registros` : 'este registro'}?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Las facturas conservarán su trazabilidad y quedarán anuladas; los registros manuales de gasto seleccionados se eliminarán.</p>
+          <p className="text-sm text-muted-foreground">Los registros conservarán su trazabilidad y quedarán anulados. No se eliminará ningún dato contable.</p>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
             <Button variant="destructive" onClick={() => {
               if (confirmDelete === 'bulk') handleBulkDelete();
               else { handleDelete(confirmDelete); setConfirmDelete(null); }
-            }}>Confirmar</Button>
+            }}>Confirmar anulación</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -499,6 +512,7 @@ export default function IngresosGastos() {
               </Select>
             </div>
           </div>
+          {formError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-4">{formError}</p>}
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">{saving ? 'Guardando...' : 'Guardar'}</Button>
