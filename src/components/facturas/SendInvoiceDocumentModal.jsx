@@ -128,10 +128,10 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     // Pre-generar PDF en segundo plano al abrir el modal
     // Verificar conexión Gmail
     setGmailConnected(null);
-    base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
-      if (res.data?.error === 'gmail_not_connected') { setGmailConnected(false); setGmailEmail(''); }
-      else if (res.data?.ok || res.data?.error === 'gmail_send_failed') { setGmailConnected(true); }
-      else { setGmailConnected(false); }
+    base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
+      const status = res?.data || res;
+      setGmailConnected(Boolean(status?.connected));
+      setGmailEmail(status?.email || '');
     }).catch(() => setGmailConnected(false));
 
     if (!invoice?.archivo_url) {
@@ -154,7 +154,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     if (!token) {
       token = generatePublicToken();
       try {
-        await base44.entities.Invoice.update(invoice.id, { public_token: token });
+        await base44.entities.Invoice.update(invoice.id, {
+          public_token: token,
+          public_token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          public_token_revoked_at: null,
+        });
       } catch (e) {
         console.error('Failed to save public_token:', e);
       }
@@ -241,6 +245,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         from_name: senderName,
         subject,
         html: htmlBody,
+        attachments: [{
+          url: finalPdfUrl,
+          name: `Factura_${String(invoice.numero_factura || 'factura').replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`,
+          mimeType: 'application/pdf',
+        }],
       });
       if (!emailRes.data?.ok) throw new Error(emailRes.data?.error || 'Error al enviar');
 
@@ -352,8 +361,10 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                           clearInterval(timer);
                           setConnectingGmail(false);
                           setGmailConnected(null);
-                          base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
-                            setGmailConnected(res.data?.error !== 'gmail_not_connected');
+                          base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
+                            const status = res?.data || res;
+                            setGmailConnected(Boolean(status?.connected));
+                            setGmailEmail(status?.email || '');
                           }).catch(() => {});
                         }
                       }, 500);
@@ -367,7 +378,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               {gmailConnected === true && (
                 <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <p className="text-xs font-semibold text-emerald-800">Email enviado desde tu cuenta Gmail</p>
+                  <p className="text-xs font-semibold text-emerald-800">Gmail conectado{gmailEmail ? `: ${gmailEmail}` : ''}</p>
                 </div>
               )}
 
