@@ -139,10 +139,20 @@ export default function DocumentForm({ open, onOpenChange, editing, docType, com
       total: total,
     };
     try {
+      const cleanNumber = String(payload[numField] || '').trim();
+      const duplicates = await base44.entities[entityName].filter({
+        company_id: company.id,
+        [numField]: cleanNumber,
+      });
+      if ((duplicates || []).some(document => document.id !== editing?.id)) {
+        setSaveError(`Ya existe un ${docLabel} con ese número.`);
+        return;
+      }
+      const cleanPayload = { ...payload, [numField]: cleanNumber };
       if (editing?.id) {
-        await base44.entities[entityName].update(editing.id, payload);
+        await base44.entities[entityName].update(editing.id, cleanPayload);
       } else {
-        await base44.entities[entityName].create(payload);
+        await base44.entities[entityName].create(cleanPayload);
       }
       onSaved?.();
       onOpenChange(false);
