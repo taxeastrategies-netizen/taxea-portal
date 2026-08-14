@@ -425,9 +425,11 @@ export default function InvoiceDocumentWorkspace({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-sm w-44">
-              <DropdownMenuItem onClick={() => onEdit?.(invoice)}>
-                Editar factura
-              </DropdownMenuItem>
+              {onEdit && (
+                <DropdownMenuItem onClick={() => onEdit(invoice)}>
+                  Editar factura
+                </DropdownMenuItem>
+              )}
               {invoice.archivo_url && (
                 <DropdownMenuItem asChild>
                   <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
