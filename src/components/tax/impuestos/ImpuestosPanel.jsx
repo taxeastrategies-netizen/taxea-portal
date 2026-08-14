@@ -73,7 +73,7 @@ function PeriodRow({ periodo, ejercicio, modeloCodigo, savedPeriod, invoices, on
           {savedPeriod?.estado !== 'presentado' && savedPeriod?.estado !== 'no_aplica' && (
             <button onClick={() => onPresentar(periodo)}
               className="text-xs text-green-700 hover:text-green-900 font-medium flex items-center gap-0.5 bg-green-50 px-2 py-0.5 rounded-md border border-green-200">
-              <Send className="w-3 h-3 mr-0.5" /> Presentar
+              <Send className="w-3 h-3 mr-0.5" /> Preparar
             </button>
           )}
         </div>
@@ -324,7 +324,7 @@ export default function ImpuestosPanel({ onGoToConfig }) {
                   <div className="mt-3 flex justify-end">
                     <Button size="sm" className="gap-1.5 h-7 text-xs"
                       onClick={() => { setDetailData(null); setPresentarFlow({ periodo: detailData.periodo }); }}>
-                      <Send className="w-3 h-3" /> Presentar modelo
+                      <Send className="w-3 h-3" /> Preparar modelo
                     </Button>
                   </div>
                 </div>
