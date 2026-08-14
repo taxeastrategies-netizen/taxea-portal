@@ -151,6 +151,28 @@
     "haberE": {
       "type": "number",
       "default": 0
+    },
+    "sourceLineType": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "tercero",
+        "ingreso",
+        "gasto",
+        "impuesto",
+        "retencion",
+        "banco",
+        "ajuste"
+      ]
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
+    },
+    "migratedFromCode": {
+      "type": "string"
+    },
+    "migrationBatch": {
+      "type": "string"
     }
   },
   "required": [
