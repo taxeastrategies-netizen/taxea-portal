@@ -237,6 +237,43 @@
         "error_envio"
       ],
       "default": "no_enviada"
+    },
+    "ocr_document_id": {
+      "type": "string"
+    },
+    "counterparty_account_id": {
+      "type": "string"
+    },
+    "counterparty_account_code": {
+      "type": "string"
+    },
+    "revenue_expense_account_id": {
+      "type": "string"
+    },
+    "revenue_expense_account_code": {
+      "type": "string"
+    },
+    "indirect_tax_kind": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "no_aplica",
+        "mixto"
+      ]
+    },
+    "accounting_schema_version": {
+      "type": "string"
+    },
+    "accounting_review_status": {
+      "type": "string",
+      "enum": [
+        "pendiente_revision",
+        "validada_contabilizada",
+        "requiere_correccion",
+        "asiento_anulado"
+      ],
+      "default": "pendiente_revision"
     }
   },
   "required": [
