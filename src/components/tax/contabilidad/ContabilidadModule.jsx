@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
   ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2
@@ -29,7 +30,9 @@ const TABS = [
 ];
 
 export default function ContabilidadModule() {
+  const { company, user } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('facturas');
+  const companyId = company?.id;
 
   return (
     <div className="space-y-0">
@@ -60,15 +63,15 @@ export default function ContabilidadModule() {
       {/* Content */}
       <div>
         {activeTab === 'facturas' && <FacturasPendientes />}
-        {activeTab === 'diario' && <LibroDiario />}
-        {activeTab === 'manuales' && <AsientosManualesTab />}
-        {activeTab === 'cuentas' && <CuadrosCuentas />}
+        {activeTab === 'diario' && <LibroDiario companyId={companyId} user={user} />}
+        {activeTab === 'manuales' && <AsientosManualesTab companyId={companyId} user={user} />}
+        {activeTab === 'cuentas' && <CuadrosCuentas companyId={companyId} user={user} />}
         {activeTab === 'emitidas' && <LibroRegistroEmitidas />}
         {activeTab === 'recibidas' && <LibroRegistroRecibidas />}
         {activeTab === 'iva' && <IVAResumen />}
-        {activeTab === 'mayores' && <MayoresTab />}
-        {activeTab === 'balance' && <BalancePyG />}
-        {activeTab === 'config' && <ConfigContable />}
+        {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
+        {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
+        {activeTab === 'config' && <ConfigContable companyId={companyId} user={user} />}
       </div>
     </div>
   );
