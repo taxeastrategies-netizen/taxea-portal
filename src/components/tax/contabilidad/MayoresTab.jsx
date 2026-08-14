@@ -7,14 +7,27 @@ import { cn } from '@/lib/utils';
 
 const fmt = n => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function MayoresTab() {
+export default function MayoresTab({ companyId }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
-  const { data: lines = [], isLoading } = useQuery({
-    queryKey: ['journal-lines-mayores'],
-    queryFn: () => base44.entities.JournalEntryLine.filter({ entryStatus: 'confirmado' }, 'lineNumber', 2000),
+  const { data: entries = [], isLoading: loadingEntries } = useQuery({
+    queryKey: ['journal-entries-mayores', companyId],
+    queryFn: () => base44.entities.JournalEntry.filter({ companyId, status: 'confirmado' }, 'date', 2000),
+    enabled: Boolean(companyId),
   });
+
+  const { data: allLines = [], isLoading: loadingLines } = useQuery({
+    queryKey: ['journal-lines-mayores', companyId],
+    queryFn: () => base44.entities.JournalEntryLine.filter({ companyId }, 'lineNumber', 5000),
+    enabled: Boolean(companyId),
+  });
+
+  const entryMap = new Map(entries.map(entry => [entry.id, entry]));
+  const lines = allLines
+    .filter(line => entryMap.has(line.journalEntryId))
+    .map(line => ({ ...line, entryDate: line.entryDate || entryMap.get(line.journalEntryId)?.date }))
+    .sort((a, b) => new Date(a.entryDate || 0) - new Date(b.entryDate || 0) || Number(a.lineNumber || 0) - Number(b.lineNumber || 0));
 
   // Build accounts dynamically from confirmed lines
   const accountMap = {};
@@ -34,7 +47,7 @@ export default function MayoresTab() {
     !search || a.code.includes(search) || a.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando mayores...</div>;
+  if (loadingEntries || loadingLines) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando mayores...</div>;
 
   if (accounts.length === 0) {
     return (
@@ -100,6 +113,7 @@ export default function MayoresTab() {
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-muted/50">
                   <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Fecha</th>
                     <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Descripción</th>
                     <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Debe</th>
                     <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Haber</th>
@@ -113,6 +127,7 @@ export default function MayoresTab() {
                       runningBalance += (Number(line.debit) || 0) - (Number(line.credit) || 0);
                       return (
                         <tr key={i} className="hover:bg-muted/20">
+                          <td className="px-3 py-2 font-mono text-muted-foreground">{line.entryDate || '—'}</td>
                           <td className="px-3 py-2 text-muted-foreground">{line.description || '—'}</td>
                           <td className="px-3 py-2 text-right font-mono">{Number(line.debit) > 0 ? fmt(line.debit) : ''}</td>
                           <td className="px-3 py-2 text-right font-mono">{Number(line.credit) > 0 ? fmt(line.credit) : ''}</td>
