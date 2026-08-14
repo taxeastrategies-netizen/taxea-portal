@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import MayorCuenta from './MayorCuenta';
 import JournalEntryForm from './JournalEntryForm';
 
@@ -47,6 +48,9 @@ export default function CuadrosCuentas({ companyId, user }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
+  const [showNewAccount, setShowNewAccount] = useState(false);
+  const [newAccount, setNewAccount] = useState({ code: '', name: '' });
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   const load = async () => {
     if (!companyId) return;
@@ -68,6 +72,31 @@ export default function CuadrosCuentas({ companyId, user }) {
   };
 
   useEffect(() => { load(); }, [companyId]);
+
+  const createAccount = async () => {
+    const code = newAccount.code.replace(/\D/g, '');
+    if (!/^[1-7]\d{7}$/.test(code) || !newAccount.name.trim()) {
+      toast.error('Indica una subcuenta PGC de 8 dígitos y su nombre.');
+      return;
+    }
+    setCreatingAccount(true);
+    try {
+      await base44.functions.invoke('accountingOperations', {
+        action: 'create_account',
+        companyId,
+        code,
+        name: newAccount.name.trim(),
+      });
+      toast.success(`Subcuenta ${code} creada`);
+      setNewAccount({ code: '', name: '' });
+      setShowNewAccount(false);
+      await load();
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error.message || 'No se pudo crear la cuenta.');
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
 
   // Build combined account list: real AccountingAccount records + synthesized from journal lines
   const accountsWithBalances = useMemo(() => {
@@ -140,9 +169,39 @@ export default function CuadrosCuentas({ companyId, user }) {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={load} className="h-8 gap-1.5"><RefreshCw className="w-3.5 h-3.5" /></Button>
+          <Button size="sm" variant="outline" onClick={() => setShowNewAccount(value => !value)} className="h-8 gap-1.5"><Plus className="w-3.5 h-3.5" />Nueva subcuenta</Button>
           <Button size="sm" onClick={() => setShowNewEntry(true)} className="h-8 gap-1.5"><Plus className="w-3.5 h-3.5" />Nuevo asiento</Button>
         </div>
       </div>
+
+      {showNewAccount && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="grid gap-3 md:grid-cols-[180px_1fr_auto] md:items-end">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground">Subcuenta PGC</label>
+              <Input
+                inputMode="numeric"
+                maxLength={8}
+                placeholder="Ej. 62300001"
+                value={newAccount.code}
+                onChange={event => setNewAccount(current => ({ ...current, code: event.target.value.replace(/\D/g, '').slice(0, 8) }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground">Nombre</label>
+              <Input
+                placeholder="Descripción de la cuenta"
+                value={newAccount.name}
+                onChange={event => setNewAccount(current => ({ ...current, name: event.target.value }))}
+              />
+            </div>
+            <Button onClick={createAccount} disabled={creatingAccount}>
+              {creatingAccount ? 'Creando…' : 'Crear cuenta'}
+            </Button>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">La cuenta se añadirá solo a esta empresa y quedará disponible en el libro diario y los mayores.</p>
+        </div>
+      )}
 
       {/* Summary by group */}
       {hasAnyActivity && (
