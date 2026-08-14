@@ -101,8 +101,9 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
     setSubject(buildSubject(doc, docType, company));
     loadClientEmail();
     setGmailConnected(null);
-    base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
-      setGmailConnected(res.data?.error !== 'gmail_not_connected');
+    base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
+      const status = res?.data || res;
+      setGmailConnected(Boolean(status?.connected));
     }).catch(() => setGmailConnected(false));
   }, [open, doc?.id]);
 
@@ -204,8 +205,9 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
                       if (!popup || popup.closed) {
                         clearInterval(timer);
                         setConnectingGmail(false);
-                        base44.functions.invoke('sendEmail', { to: ['check@check.com'], subject: 'x', html: 'x' }).then(res => {
-                          setGmailConnected(res.data?.error !== 'gmail_not_connected');
+                        base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
+                          const status = res?.data || res;
+                          setGmailConnected(Boolean(status?.connected));
                         }).catch(() => {});
                       }
                     }, 500);
