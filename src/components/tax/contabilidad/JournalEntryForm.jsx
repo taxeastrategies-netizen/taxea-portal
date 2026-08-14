@@ -41,6 +41,8 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
     if (asStatus === 'confirmado' && !isBalanced) { setError('El asiento no cuadra. Debe = Haber para confirmar.'); return; }
     const validLines = lines.filter(l => l.accountCode && (Number(l.debit) > 0 || Number(l.credit) > 0));
     if (validLines.length < 2) { setError('Se necesitan al menos 2 líneas con cuenta e importe.'); return; }
+    if (validLines.some(l => !/^\\d{8}$/.test(l.accountCode))) { setError('Todas las cuentas deben tener exactamente 8 dígitos.'); return; }
+    if (validLines.some(l => !accounts.some(a => a.code === l.accountCode))) { setError('Todas las cuentas deben existir en el plan contable de la empresa.'); return; }
 
     if (!companyId) { setError('No se ha podido identificar la empresa activa.'); return; }
 
@@ -104,7 +106,7 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
           {/* Lines */}
           <div className="border border-border rounded-xl overflow-hidden">
             <div className="grid grid-cols-[2fr_3fr_1fr_1fr_auto] gap-0 bg-secondary/50 px-3 py-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-              <span>Cuenta</span><span>Descripción</span><span className="text-right">Debe</span><span className="text-right">Haber</span><span />
+              <span>Cuenta (8 dígitos)</span><span>Descripción</span><span className="text-right">Debe</span><span className="text-right">Haber</span><span />
             </div>
             <div className="divide-y divide-border">
               {lines.map((line, i) => (
@@ -112,9 +114,11 @@ export default function JournalEntryForm({ open, onClose, onSaved, accounts = []
                   <div className="flex items-center gap-1">
                     <Input
                       value={line.accountCode}
-                      onChange={e => updateLine(i, 'accountCode', e.target.value)}
-                      placeholder="Cta."
-                      className="h-7 text-xs w-20 flex-shrink-0"
+                      onChange={e => updateLine(i, 'accountCode', e.target.value.replace(/\\D/g, '').slice(0, 8))}
+                      placeholder="00000000"
+                      inputMode="numeric"
+                      maxLength={8}
+                      className="h-7 text-xs w-24 flex-shrink-0 font-mono"
                       list={`accs-${i}`}
                     />
                     <datalist id={`accs-${i}`}>
