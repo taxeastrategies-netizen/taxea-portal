@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { Settings2, Plus, Trash2, Save, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,9 +34,30 @@ const DEFAULT_MAPPINGS = [
   { categoria: 'seguros', tipo: 'gasto', cuenta: '625', nombre: 'Primas de seguros' },
 ];
 
-export default function ConfigContable() {
+export default function ConfigContable({ companyId, user }) {
   const [mappings, setMappings] = useState(DEFAULT_MAPPINGS);
+  const [configId, setConfigId] = useState(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!companyId) return;
+    let active = true;
+    base44.entities.AccountingConfiguration.filter({ companyId }, '-updatedAt', 1)
+      .then(records => {
+        if (!active || !records?.[0]) return;
+        setConfigId(records[0].id);
+        try {
+          const parsed = JSON.parse(records[0].mappingsJson || '[]');
+          if (Array.isArray(parsed) && parsed.length) setMappings(parsed);
+        } catch {
+          setError('La configuración guardada no se pudo leer; se muestran los valores estándar.');
+        }
+      })
+      .catch(() => setError('No se pudo cargar la configuración contable.'))
+    return () => { active = false; };
+  }, [companyId]);
 
   const update = (idx, field, val) => {
     setMappings(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
@@ -43,7 +65,28 @@ export default function ConfigContable() {
   };
   const remove = (idx) => { setMappings(prev => prev.filter((_, i) => i !== idx)); setSaved(false); };
   const add = () => { setMappings(prev => [...prev, { categoria: 'otros', tipo: 'gasto', cuenta: '', nombre: '' }]); setSaved(false); };
-  const save = () => setSaved(true);
+  const save = async () => {
+    if (!companyId) { setError('No se ha identificado la empresa activa.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const payload = {
+        companyId,
+        mappingsJson: JSON.stringify(mappings),
+        updatedBy: user?.email || '',
+        updatedAt: new Date().toISOString(),
+      };
+      const record = configId
+        ? await base44.entities.AccountingConfiguration.update(configId, payload)
+        : await base44.entities.AccountingConfiguration.create(payload);
+      if (!configId) setConfigId(record.id);
+      setSaved(true);
+    } catch (err) {
+      setError(err?.message || 'No se pudo guardar la configuración contable.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -55,8 +98,8 @@ export default function ConfigContable() {
             <p className="text-xs text-muted-foreground">Mapea categorías de factura a cuentas contables del PGC. Estas reglas guían las propuestas de asiento.</p>
           </div>
         </div>
-        <Button size="sm" className="gap-1.5 h-8" onClick={save}>
-          <Save className="w-3.5 h-3.5" /> {saved ? '✓ Guardado' : 'Guardar cambios'}
+        <Button size="sm" className="gap-1.5 h-8" onClick={save} disabled={saving}>
+          <Save className="w-3.5 h-3.5" /> {saving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar cambios'}
         </Button>
       </div>
 
@@ -83,8 +126,10 @@ export default function ConfigContable() {
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground italic">Cuentas PGC estándar. La personalización por cliente se configurará en próximas versiones.</p>
+        <p className="text-[11px] text-muted-foreground italic">Cuentas PGC estándar. Los mapeos personalizados de esta empresa se guardan y se aplican en sus propuestas de asiento.</p>
       </div>
+
+      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
       {/* Category mappings */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
