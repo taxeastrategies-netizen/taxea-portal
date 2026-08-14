@@ -1,0 +1,69 @@
+{
+  "name": "AccountingConfiguration",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "mappingsJson": {
+      "type": "string"
+    },
+    "clientAccount": {
+      "type": "string",
+      "default": "430"
+    },
+    "supplierAccount": {
+      "type": "string",
+      "default": "410"
+    },
+    "outputTaxAccount": {
+      "type": "string",
+      "default": "477"
+    },
+    "inputTaxAccount": {
+      "type": "string",
+      "default": "472"
+    },
+    "withholdingReceivableAccount": {
+      "type": "string",
+      "default": "473"
+    },
+    "withholdingPayableAccount": {
+      "type": "string",
+      "default": "4751"
+    },
+    "updatedBy": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "companyId"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}
