@@ -177,14 +177,14 @@ export default function Presupuestos() {
       {/* Filters + Search */}
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-        {['todos', 'borrador', 'enviado', 'aceptado', 'rechazado'].map(s => (
+        {['todos', 'borrador', 'enviado', 'aceptado', 'rechazado', 'convertido_factura'].map(s => (
           <button key={s} onClick={() => setFilterStatus(s)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
               filterStatus === s
                 ? 'bg-taxea-red text-white border-taxea-red'
                 : 'bg-card border-border text-muted-foreground hover:border-taxea-red/40'
             }`}>
-            {s === 'todos' ? 'Todos' : s.charAt(0).toUpperCase() + s.slice(1)}
+            {s === 'todos' ? 'Todos' : s === 'convertido_factura' ? 'Convertidos' : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         ))}
         {years.length > 0 && (
@@ -247,8 +247,12 @@ export default function Presupuestos() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setSelectedDoc(q)}>Ver documento</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => { setEditing(q); setShowForm(true); }}>Editar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => base44.entities.Quote.update(q.id, { estado: 'aceptado' }).then(load)}>Marcar aceptado</DropdownMenuItem>
+                            {q.estado !== 'convertido_factura' && (
+                              <>
+                                <DropdownMenuItem onClick={() => { setEditing(q); setShowForm(true); }}>Editar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => base44.entities.Quote.update(q.id, { estado: 'aceptado' }).then(load)}>Marcar aceptado</DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
