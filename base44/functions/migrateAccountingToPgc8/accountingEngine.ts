@@ -117,9 +117,13 @@ async function ensureAccount(svc, companyId, codeInput, name, type = 'otro', ext
 
 export async function seedOperationalPgc(svc, companyId) {
   const created = [];
+  const existing = await svc.entities.AccountingAccount.filter({ companyId }, 'code', 5000);
+  const knownCodes = new Set((existing || []).map(account => clean(account.code)));
   for (const [code, [name, type]] of Object.entries(ACCOUNT_DEFS)) {
-    const before = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
-    if (!before?.length) created.push((await ensureAccount(svc, companyId, code, name, type)).id);
+    if (!knownCodes.has(code)) {
+      created.push((await ensureAccount(svc, companyId, code, name, type)).id);
+      knownCodes.add(code);
+    }
   }
   return { total: Object.keys(ACCOUNT_DEFS).length, created: created.length };
 }
@@ -203,7 +207,14 @@ async function getTaxKind(svc, companyId, invoice) {
   const treatment = clean(invoice.fiscal_treatment).toLowerCase();
   if (treatment.includes('igic')) return 'igic';
   const profiles = await svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 1);
-  return profiles?.[0]?.indirectTaxDefault || (profiles?.[0]?.mainTerritory === 'canarias' ? 'igic' : 'iva');
+  const profile = profiles?.[0];
+  const defaultKind = profile?.indirectTaxDefault || (profile?.mainTerritory === 'canarias' ? 'igic' : 'iva');
+  if (defaultKind === 'mixto') {
+    if (treatment.includes('igic')) return 'igic';
+    if (treatment.includes('iva')) return 'iva';
+    throw new Error('El perfil fiscal es mixto. Indica IVA o IGIC en la factura antes de contabilizar.');
+  }
+  return defaultKind;
 }
 
 export async function buildInvoicePosting(svc, companyId, invoice) {
@@ -211,12 +222,22 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const taxKind = await getTaxKind(svc, companyId, invoice);
   const base = money(invoice.base_imponible);
   const tax = money(invoice.cuota_iva);
+  const deductibleTax = invoice.tipo === 'recibida' && invoice.deductible_tax_amount != null
+    ? money(invoice.deductible_tax_amount)
+    : tax;
+  const nonDeductibleTax = invoice.tipo === 'recibida'
+    ? money(invoice.non_deductible_tax_amount != null ? invoice.non_deductible_tax_amount : tax - deductibleTax)
+    : 0;
   const withholding = money(invoice.importe_retencion || (base * Number(invoice.retencion_irpf || 0) / 100));
   const total = money(invoice.total_factura || base + tax - withholding);
   if (!invoice.es_rectificativa && base <= 0) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
   const absBase = Math.abs(base);
   const absTax = Math.abs(tax);
+  const absDeductibleTax = Math.abs(deductibleTax);
+  const absNonDeductibleTax = Math.abs(nonDeductibleTax);
+  const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : absTax;
+  const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax : absBase;
   const absWithholding = Math.abs(withholding);
   const absTotal = Math.abs(total);
   const category = invoice.categoria_gasto || (invoice.tipo === 'emitida' ? 'ventas_servicios' : 'otros');
@@ -241,7 +262,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const taxCode = taxKind === 'igic'
     ? (invoice.tipo === 'emitida' ? '47770000' : '47270000')
     : (invoice.tipo === 'emitida' ? '47700000' : '47200000');
-  const taxAccount = absTax > 0 && taxKind !== 'no_aplica'
+  const taxAccount = taxPostingAmount > 0 && taxKind !== 'no_aplica'
     ? await ensureAccount(svc, companyId, taxCode, ACCOUNT_DEFS[taxCode][0], 'impuesto')
     : null;
   const retentionCode = invoice.tipo === 'emitida' ? '47300000' : '47510000';
@@ -266,13 +287,13 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     lines = [
       line(counterparty.account, sign * absTotal > 0 ? absTotal : 0, sign * absTotal < 0 ? absTotal : 0, 'tercero'),
       ...(absWithholding ? [line(retentionAccount, sign > 0 ? absWithholding : 0, sign < 0 ? absWithholding : 0, 'retencion')] : []),
-      line(resultAccount, sign < 0 ? absBase : 0, sign > 0 ? absBase : 0, 'ingreso'),
-      ...(taxAccount ? [line(taxAccount, sign < 0 ? absTax : 0, sign > 0 ? absTax : 0, 'impuesto')] : []),
+      line(resultAccount, sign < 0 ? resultPostingAmount : 0, sign > 0 ? resultPostingAmount : 0, 'ingreso'),
+      ...(taxAccount ? [line(taxAccount, sign < 0 ? taxPostingAmount : 0, sign > 0 ? taxPostingAmount : 0, 'impuesto')] : []),
     ];
   } else {
     lines = [
-      line(resultAccount, sign > 0 ? absBase : 0, sign < 0 ? absBase : 0, 'gasto'),
-      ...(taxAccount ? [line(taxAccount, sign > 0 ? absTax : 0, sign < 0 ? absTax : 0, 'impuesto')] : []),
+      line(resultAccount, sign > 0 ? resultPostingAmount : 0, sign < 0 ? resultPostingAmount : 0, 'gasto'),
+      ...(taxAccount ? [line(taxAccount, sign > 0 ? taxPostingAmount : 0, sign < 0 ? taxPostingAmount : 0, 'impuesto')] : []),
       line(counterparty.account, sign < 0 ? absTotal : 0, sign > 0 ? absTotal : 0, 'tercero'),
       ...(absWithholding ? [line(retentionAccount, sign < 0 ? absWithholding : 0, sign > 0 ? absWithholding : 0, 'retencion')] : []),
     ];
@@ -404,9 +425,11 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     });
     return { alreadyPosted: true, entry: duplicate[0] };
   }
-  const proposal = options.lines?.length
-    ? { lines: options.lines }
-    : await buildInvoicePosting(svc, companyId, invoice);
+  const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
+  const proposal = {
+    ...generatedProposal,
+    lines: options.lines?.length ? options.lines : generatedProposal.lines,
+  };
   const created = await createJournalEntry(svc, companyId, {
     date: options.date || invoice.fecha_emision,
     description: options.description || invoice.concepto || `Factura ${invoice.numero_factura}`,
