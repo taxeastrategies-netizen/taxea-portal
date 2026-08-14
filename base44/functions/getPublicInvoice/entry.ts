@@ -44,6 +44,18 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
+    await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+      invoice_id: invoice.id,
+      company_id: invoice.company_id,
+      event_type: body.action === 'download' ? 'enlace_publico_descarga' : 'enlace_publico_abierto',
+      event_label: body.action === 'download' ? 'PDF descargado por destinatario' : 'Factura vista por destinatario',
+      event_detail: body.action === 'download'
+        ? 'El destinatario ha descargado el PDF desde el enlace público.'
+        : 'El destinatario ha abierto el enlace público de la factura.',
+      created_at: new Date().toISOString(),
+      origin: 'cliente',
+    }).catch(() => {});
+
     const publicInvoice = pick(invoice, [
       'numero_factura', 'fecha_emision', 'fecha_vencimiento', 'cliente_nombre',
       'cliente_nif', 'cliente_direccion', 'concepto', 'base_imponible',
