@@ -86,7 +86,7 @@ function InfoRow({ label, value, valueClass = '' }) {
 }
 
 // ── Panel principal ────────────────────────────────────────────────────────────
-export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onEdit, onRefresh, company, user, isAdmin }) {
+export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onRefresh, company }) {
   const [tab, setTab] = useState('general');
   const [emailLogs, setEmailLogs] = useState([]);
   const [timeline, setTimeline] = useState([]);
@@ -171,7 +171,6 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="text-sm">
-                {onEdit && <DropdownMenuItem onClick={() => onEdit(invoice)}>Editar factura</DropdownMenuItem>}
                 {invoice.archivo_url && (
                   <DropdownMenuItem asChild>
                     <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
