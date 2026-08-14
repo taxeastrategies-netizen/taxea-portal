@@ -101,14 +101,19 @@ export default function IngresosGastos() {
       const enteredTotal = Number(form.total);
       const total = form.total === '' || !Number.isFinite(enteredTotal) ? base + cuota : enteredTotal;
       const payload = {
-        ...form,
         company_id: company.id,
+        tipo: form.tipo,
+        fecha: form.fecha,
+        proveedor_cliente: form.proveedor_cliente,
+        concepto: form.concepto.trim(),
+        categoria: form.categoria || 'otros',
         base_imponible: base,
         cuota_impuesto: cuota,
         total,
         tipo_impuesto: taxRate,
         anio: year,
         trimestre,
+        estado: editing?.estado || 'pendiente',
       };
       if (editing?.id) await base44.entities.Expense.update(editing.id, payload);
       else await base44.entities.Expense.create({ ...payload, subido_por: user?.email, anulada: false });
@@ -498,18 +503,6 @@ export default function IngresosGastos() {
             <div className="space-y-1.5">
               <Label>Total (€)</Label>
               <Input type="number" step="0.01" value={form.total} onChange={e => setForm(f => ({ ...f, total: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="en_revision">En revisión</SelectItem>
-                  <SelectItem value="revisado">Revisado</SelectItem>
-                  <SelectItem value="contabilizado">Contabilizado</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
           {formError && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-4">{formError}</p>}
