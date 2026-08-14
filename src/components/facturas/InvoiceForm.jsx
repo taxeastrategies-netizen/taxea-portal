@@ -158,6 +158,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       tipo_iva: parseFloat(form.tipo_iva) || 0,
       cuota_iva: cuota,
       retencion_irpf: form.aplica_retencion ? (parseFloat(form.retencion_irpf) || 0) : 0,
+      importe_retencion: form.aplica_retencion ? retencionImporte : 0,
       total_factura: total,
       anio: year,
       trimestre,
