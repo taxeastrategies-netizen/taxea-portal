@@ -125,17 +125,31 @@ export default function IngresosGastos() {
   };
 
   const handleDelete = async (item) => {
-    if (item._source === 'invoice') await base44.entities.Invoice.delete(item.id);
-    else await base44.entities.Expense.delete(item.id);
+    if (item._source === 'invoice') {
+      await base44.functions.invoke('anularFacturas', {
+        invoiceIds: [item.id],
+        motivo: 'Anulación desde Ingresos y Gastos',
+        companyId: company?.id,
+      });
+    } else {
+      await base44.entities.Expense.delete(item.id);
+    }
     setSelected(s => { const n = new Set(s); n.delete(item.id); return n; });
     triggerFinancialRefresh();
   };
 
   const handleBulkDelete = async () => {
     const toDelete = filtered.filter(i => selected.has(i.id));
-    await Promise.all(toDelete.map(i =>
-      i._source === 'invoice' ? base44.entities.Invoice.delete(i.id) : base44.entities.Expense.delete(i.id)
-    ));
+    const invoiceIds = toDelete.filter(i => i._source === 'invoice').map(i => i.id);
+    const expenseIds = toDelete.filter(i => i._source !== 'invoice').map(i => i.id);
+    if (invoiceIds.length) {
+      await base44.functions.invoke('anularFacturas', {
+        invoiceIds,
+        motivo: 'Anulación múltiple desde Ingresos y Gastos',
+        companyId: company?.id,
+      });
+    }
+    await Promise.all(expenseIds.map(id => base44.entities.Expense.delete(id)));
     setSelected(new Set());
     setConfirmDelete(null);
     triggerFinancialRefresh();
@@ -397,14 +411,14 @@ export default function IngresosGastos() {
       {/* Confirm delete dialog */}
       <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>¿Eliminar {confirmDelete === 'bulk' ? `${selected.size} registros` : 'este registro'}?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+          <DialogHeader><DialogTitle>¿Procesar {confirmDelete === 'bulk' ? `${selected.size} registros` : 'este registro'}?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Las facturas conservarán su trazabilidad y quedarán anuladas; los registros manuales de gasto seleccionados se eliminarán.</p>
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
             <Button variant="destructive" onClick={() => {
               if (confirmDelete === 'bulk') handleBulkDelete();
               else { handleDelete(confirmDelete); setConfirmDelete(null); }
-            }}>Eliminar</Button>
+            }}>Confirmar</Button>
           </div>
         </DialogContent>
       </Dialog>
