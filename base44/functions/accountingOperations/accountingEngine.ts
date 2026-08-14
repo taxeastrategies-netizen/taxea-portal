@@ -117,9 +117,13 @@ async function ensureAccount(svc, companyId, codeInput, name, type = 'otro', ext
 
 export async function seedOperationalPgc(svc, companyId) {
   const created = [];
+  const existing = await svc.entities.AccountingAccount.filter({ companyId }, 'code', 5000);
+  const knownCodes = new Set((existing || []).map(account => clean(account.code)));
   for (const [code, [name, type]] of Object.entries(ACCOUNT_DEFS)) {
-    const before = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
-    if (!before?.length) created.push((await ensureAccount(svc, companyId, code, name, type)).id);
+    if (!knownCodes.has(code)) {
+      created.push((await ensureAccount(svc, companyId, code, name, type)).id);
+      knownCodes.add(code);
+    }
   }
   return { total: Object.keys(ACCOUNT_DEFS).length, created: created.length };
 }
@@ -421,9 +425,11 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     });
     return { alreadyPosted: true, entry: duplicate[0] };
   }
-  const proposal = options.lines?.length
-    ? { lines: options.lines }
-    : await buildInvoicePosting(svc, companyId, invoice);
+  const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
+  const proposal = {
+    ...generatedProposal,
+    lines: options.lines?.length ? options.lines : generatedProposal.lines,
+  };
   const created = await createJournalEntry(svc, companyId, {
     date: options.date || invoice.fecha_emision,
     description: options.description || invoice.concepto || `Factura ${invoice.numero_factura}`,
