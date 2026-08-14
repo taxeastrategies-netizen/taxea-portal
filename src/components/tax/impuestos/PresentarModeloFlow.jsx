@@ -93,7 +93,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
     onError: (err) => setErroresBloqueo([err.message || 'Error generando fichero.']),
   });
 
-  // ── Registrar presentación final
+  // ── Registrar estado final
   const registrarSubmission = useMutation({
     mutationFn: (data) => base44.entities.TaxSubmission.create(data),
     onSuccess: (sub) => {
@@ -136,7 +136,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
       taxOfficialFileId: fichero?.id || null,
       usuarioPresentador: 'asesor',
       fechaEnvio: new Date().toISOString(),
-      estado: viaSeleccionada === 'presentacion_manual_externa' ? 'pendiente' : 'enviado',
+      estado: viaSeleccionada === 'presentacion_manual_externa' && (justificanteNum || csvCode) ? 'presentado' : 'pendiente',
       numeroJustificante: justificanteNum || null,
       csv: csvCode || null,
       importeFinal: parseFloat(resumen?.resultado || 0),
@@ -144,7 +144,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
     });
   }
 
-  const STEPS = ['Validación', 'Fichero', 'Vía', 'Confirmación', 'Resultado'];
+  const STEPS = ['Validación', 'Borrador', 'Destino', 'Registro', 'Resultado'];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
@@ -153,7 +153,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Presentar modelo {modelo}</h2>
+            <h2 className="text-base font-bold text-gray-900">Preparar modelo {modelo}</h2>
             <p className="text-xs text-gray-500">{clienteNombre} · {clienteNif} · {periodo} {ejercicio} · {administracion}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
@@ -226,7 +226,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
 
               <Button className="w-full gap-2" onClick={() => generarFichero.mutate()} disabled={generarFichero.isPending}>
                 {generarFichero.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                {generarFichero.isPending ? 'Validando datos y generando fichero…' : 'Validar y generar fichero oficial'}
+                {generarFichero.isPending ? 'Validando datos y generando fichero…' : 'Validar y generar borrador de revisión'}
               </Button>
             </div>
           )}
@@ -234,12 +234,12 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
           {/* PASO 2 — Fichero generado */}
           {step === 2 && fichero && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-gray-800">Paso 2 — Fichero oficial generado</h3>
+              <h3 className="text-sm font-semibold text-gray-800">Paso 2 — Borrador tributario generado</h3>
 
               <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-semibold text-green-800">Fichero generado correctamente</span>
+                  <span className="font-semibold text-green-800">Borrador calculado correctamente</span>
                 </div>
                 {[
                   ['Nombre', fichero.nombreFichero],
@@ -283,7 +283,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
                   <FileDown className="w-4 h-4" /> Descargar fichero
                 </Button>
                 <Button className="flex-1 gap-2" onClick={() => setStep(3)}>
-                  Elegir vía de presentación <ChevronRight className="w-4 h-4" />
+                  Elegir destino del borrador <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
             </div>
@@ -292,34 +292,11 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
           {/* PASO 3 — Elegir vía */}
           {step === 3 && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-gray-800">Paso 3 — Elige la vía de presentación</h3>
-              <p className="text-xs text-gray-500">Solo se muestran las opciones aplicables a este modelo y administración.</p>
+              <h3 className="text-sm font-semibold text-gray-800">Paso 3 — Elige el destino</h3>
+              <p className="text-xs text-gray-500">El archivo actual es de revisión y no puede subirse como fichero oficial a AEAT o ATC.</p>
 
               <div className="space-y-2">
-                {administracion === 'AEAT' && (
-                  <ViaOption
-                    id="fichero_oficial_sede"
-                    selected={viaSeleccionada}
-                    onSelect={setViaSeleccionada}
-                    title="Subir fichero en sede AEAT"
-                    desc="Descarga el fichero .dat y súbelo en la Sede Electrónica de la AEAT. Recomendado cuando no existe API directa validada."
-                    badge="Flujo asistido"
-                    badgeColor="bg-blue-100 text-blue-700"
-                    icon={<ExternalLink className="w-4 h-4 text-blue-600" />}
-                  />
-                )}
-                {administracion === 'ATC' && (
-                  <ViaOption
-                    id="fichero_oficial_sede"
-                    selected={viaSeleccionada}
-                    onSelect={setViaSeleccionada}
-                    title="Subir fichero en sede ATC"
-                    desc="Descarga el fichero y súbelo en la sede de la Agencia Tributaria Canaria."
-                    badge="Flujo asistido"
-                    badgeColor="bg-orange-100 text-orange-700"
-                    icon={<ExternalLink className="w-4 h-4 text-orange-600" />}
-                  />
-                )}
+
                 <ViaOption
                   id="exportacion_a3"
                   selected={viaSeleccionada}
@@ -342,24 +319,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
                 />
               </div>
 
-              {viaSeleccionada === 'fichero_oficial_sede' && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 space-y-2">
-                  <p className="font-medium">Instrucciones para flujo asistido:</p>
-                  <ol className="list-decimal ml-4 space-y-1">
-                    <li>Descarga el fichero <span className="font-mono">{fichero?.nombreFichero}</span> (paso anterior).</li>
-                    <li>Abre la sede electrónica {administracion}.</li>
-                    <li>Selecciona el Modelo {modelo} → Presentación telemática por fichero.</li>
-                    <li>Sube el fichero descargado.</li>
-                    <li>Anota el número de justificante y CSV que te devuelva la sede.</li>
-                    <li>Vuelve aquí y registra el justificante.</li>
-                  </ol>
-                  {sedeUrl && (
-                    <Button size="sm" variant="outline" className="gap-1.5 mt-2 text-xs h-7 border-blue-300 text-blue-700" onClick={abrirSede}>
-                      <ExternalLink className="w-3 h-3" /> Abrir sede {administracion}
-                    </Button>
-                  )}
-                </div>
-              )}
+
 
               <Button className="w-full" disabled={!viaSeleccionada} onClick={() => setStep(4)}>
                 Continuar <ChevronRight className="w-4 h-4 ml-1" />
@@ -415,8 +375,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
                   className="mt-0.5 flex-shrink-0" />
                 <label htmlFor="confirm" className="text-xs text-amber-800 cursor-pointer">
                   <strong>Confirmo que he revisado los datos del modelo {modelo}, período {periodo} {ejercicio}</strong>
-                  {' '}y autorizo registrar esta presentación en Taxea Portal.
-                  No se puede deshacer una vez marcado como presentado.
+                  {' '}y autorizo registrar este borrador o, si aporto justificante/CSV, la presentación externa en Taxea Portal.
                 </label>
               </div>
 
@@ -425,7 +384,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
                 <Button className="flex-1 gap-2" disabled={!confirmado || registrarSubmission.isPending}
                   onClick={confirmarPresentacion}>
                   {registrarSubmission.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                  Registrar presentación
+                  Registrar estado
                 </Button>
               </div>
             </div>
@@ -438,7 +397,7 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
                 <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mb-3">
                   <CheckCircle className="w-8 h-8 text-green-600" />
                 </div>
-                <h3 className="text-base font-bold text-gray-900">Presentación registrada</h3>
+                <h3 className="text-base font-bold text-gray-900">Estado registrado</h3>
                 <p className="text-sm text-gray-500 mt-1">
                   El modelo {modelo} — {periodo} {ejercicio} ha sido registrado en Taxea.
                 </p>
