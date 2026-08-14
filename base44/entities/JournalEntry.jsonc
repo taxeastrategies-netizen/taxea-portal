@@ -144,6 +144,18 @@
     },
     "fuente": {
       "type": "string"
+    },
+    "ocrDocumentId": {
+      "type": "string"
+    },
+    "postingKey": {
+      "type": "string"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
+    },
+    "migrationBatch": {
+      "type": "string"
     }
   },
   "required": [
