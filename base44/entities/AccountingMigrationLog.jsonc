@@ -1,0 +1,121 @@
+{
+  "name": "AccountingMigrationLog",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "dry_run",
+        "apply"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "started",
+        "completed",
+        "partial",
+        "failed"
+      ]
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "accountsScanned": {
+      "type": "number",
+      "default": 0
+    },
+    "accountsCreated": {
+      "type": "number",
+      "default": 0
+    },
+    "accountsUpdated": {
+      "type": "number",
+      "default": 0
+    },
+    "linesScanned": {
+      "type": "number",
+      "default": 0
+    },
+    "linesUpdated": {
+      "type": "number",
+      "default": 0
+    },
+    "invoicesScanned": {
+      "type": "number",
+      "default": 0
+    },
+    "invoicesBackfilled": {
+      "type": "number",
+      "default": 0
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "executedBy": {
+      "type": "string"
+    },
+    "checkpointId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "batchId",
+    "schemaVersion",
+    "mode",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
