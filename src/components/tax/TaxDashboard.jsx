@@ -101,7 +101,7 @@ export default function TaxDashboard({ onNavigate }) {
       ingresosMes: monthKPIs.totalIngresos,
       gastosMes: monthKPIs.totalGastos,
       beneficioMes: monthKPIs.resultado,
-      ivaMes: monthKPIs.ivaRepercutido,
+      ivaMes: monthKPIs.ivaNeto,
       irpfMes: monthKPIs.retencionIngresos,
       ivaRepercutido: monthKPIs.ivaRepercutido,
       ivaSoportado: monthKPIs.ivaSoportado,
@@ -156,6 +156,7 @@ export default function TaxDashboard({ onNavigate }) {
   if (!company) return <NoCompanyState pageName="Tax & Accounting" />;
 
   const fmt = (n) => n?.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00';
+  const taxLabel = company.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
 
   return (
     <div className="space-y-6">
@@ -184,7 +185,7 @@ export default function TaxDashboard({ onNavigate }) {
           <p className="text-lg font-bold text-foreground">{fmt(kpis.ingresosMes)} &#8364;</p>
           <p className="text-xs text-muted-foreground mt-0.5">Ingresos mes</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
-            <p className="text-xs text-muted-foreground">IVA repercutido: <span className="font-medium text-foreground">{fmt(kpis.ivaRepercutido)} &#8364;</span></p>
+            <p className="text-xs text-muted-foreground">{taxLabel} repercutido: <span className="font-medium text-foreground">{fmt(kpis.ivaRepercutido)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de ingresos: <span className="font-medium text-foreground">{fmt(kpis.irpfIngresos)} &#8364;</span></p>
           </div>
         </div>
@@ -195,7 +196,7 @@ export default function TaxDashboard({ onNavigate }) {
           <p className="text-lg font-bold text-foreground">{fmt(kpis.gastosMes)} &#8364;</p>
           <p className="text-xs text-muted-foreground mt-0.5">Gastos mes</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
-            <p className="text-xs text-muted-foreground">IVA soportado: <span className="font-medium text-foreground">{fmt(kpis.ivaSoportado)} &#8364;</span></p>
+            <p className="text-xs text-muted-foreground">{taxLabel} soportado: <span className="font-medium text-foreground">{fmt(kpis.ivaSoportado)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de gastos: <span className="font-medium text-foreground">{fmt(kpis.irpfGastos)} &#8364;</span></p>
           </div>
         </div>
@@ -208,7 +209,7 @@ export default function TaxDashboard({ onNavigate }) {
           onClick={() => onNavigate('ingresos-gastos')}
         />
         <KPICard
-          label="IVA estimado"
+          label={`${taxLabel} estimado`}
           value={`${fmt(kpis.ivaMes)} €`}
           icon={CircleDollarSign}
           color="text-blue-400"
