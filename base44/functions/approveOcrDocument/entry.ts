@@ -138,6 +138,13 @@ Deno.serve(async (req) => {
         fecha_vencimiento: form.fecha_vencimiento || undefined,
         cliente_nombre: form.cliente_nombre || '',
         cliente_nif: form.cliente_nif || '',
+        cliente_email: form.cliente_email || extractedData?.email_cliente || extractedData?.cliente_email || '',
+        cliente_telefono: form.cliente_telefono || extractedData?.telefono_cliente || extractedData?.cliente_telefono || '',
+        cliente_direccion: form.cliente_direccion || extractedData?.direccion_cliente || extractedData?.cliente_direccion || '',
+        cliente_codigo_postal: form.cliente_codigo_postal || extractedData?.codigo_postal_cliente || extractedData?.cliente_codigo_postal || '',
+        cliente_ciudad: form.cliente_ciudad || extractedData?.ciudad_cliente || extractedData?.cliente_ciudad || '',
+        cliente_provincia: form.cliente_provincia || extractedData?.provincia_cliente || extractedData?.cliente_provincia || '',
+        cliente_pais: form.cliente_pais || extractedData?.pais_cliente || extractedData?.cliente_pais || '',
         concepto: form.concepto || '',
         base_imponible: parseFloat(form.base_imponible) || 0,
         tipo_iva: parseFloat(form.tipo_iva) || 21,
@@ -163,7 +170,14 @@ Deno.serve(async (req) => {
         numero_factura: numeroFactura,
         fecha_emision: form.fecha,
         proveedor_nombre: form.proveedor_cliente || '',
-        proveedor_nif: extractedData?.nif_proveedor || '',
+        proveedor_nif: form.nif_proveedor || extractedData?.nif_proveedor || '',
+        proveedor_email: form.email_proveedor || extractedData?.email_proveedor || extractedData?.proveedor_email || '',
+        proveedor_telefono: form.telefono_proveedor || extractedData?.telefono_proveedor || extractedData?.proveedor_telefono || '',
+        proveedor_direccion: form.direccion_proveedor || extractedData?.direccion_proveedor || extractedData?.proveedor_direccion || '',
+        proveedor_codigo_postal: form.codigo_postal_proveedor || extractedData?.codigo_postal_proveedor || extractedData?.proveedor_codigo_postal || '',
+        proveedor_ciudad: form.ciudad_proveedor || extractedData?.ciudad_proveedor || extractedData?.proveedor_ciudad || '',
+        proveedor_provincia: form.provincia_proveedor || extractedData?.provincia_proveedor || extractedData?.proveedor_provincia || '',
+        proveedor_pais: form.pais_proveedor || extractedData?.pais_proveedor || extractedData?.proveedor_pais || '',
         concepto: form.concepto || '',
         base_imponible: parseFloat(form.base_imponible) || 0,
         tipo_iva: parseFloat(form.tipo_impuesto) || 21,
@@ -214,6 +228,11 @@ Deno.serve(async (req) => {
     }
 
     console.log('[approveOcrDocument] Invoice created:', inv.id);
+
+    await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
+      action: 'sync_invoice',
+      invoiceId: inv.id,
+    }).catch((error) => console.warn('[approveOcrDocument] Contact sync failed:', error?.message || error));
 
     let posting;
     try {
