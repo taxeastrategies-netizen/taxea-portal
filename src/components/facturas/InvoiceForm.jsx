@@ -63,6 +63,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     cliente_nif: '',
     cliente_direccion: '',
     cliente_email: '',
+    cliente_telefono: '',
+    cliente_codigo_postal: '',
+    cliente_ciudad: '',
+    cliente_provincia: '',
+    cliente_pais: 'España',
     concepto: '',
     base_imponible: '',
     tipo_iva: taxType === 'IGIC' ? 7 : 21,
@@ -94,7 +99,12 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       cliente_nombre: contact.nombre || prev.cliente_nombre,
       cliente_nif: contact.nif_cif || prev.cliente_nif,
       cliente_email: contact.email || prev.cliente_email,
+      cliente_telefono: contact.telefono || prev.cliente_telefono,
       cliente_direccion: contact.direccion_fiscal || prev.cliente_direccion,
+      cliente_codigo_postal: contact.codigo_postal || prev.cliente_codigo_postal,
+      cliente_ciudad: contact.ciudad || prev.cliente_ciudad,
+      cliente_provincia: contact.provincia || prev.cliente_provincia,
+      cliente_pais: contact.pais || prev.cliente_pais,
     }));
   };
 
@@ -177,7 +187,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           setSaveError('Ya existe una factura activa con ese número. Usa otra numeración.');
           return;
         }
-        await base44.entities.Invoice.create({ ...payload, numero_factura: payload.numero_factura.trim() });
+        const createdInvoice = await base44.entities.Invoice.create({ ...payload, numero_factura: payload.numero_factura.trim() });
+        await base44.functions.invoke('syncInvoiceContacts', {
+          action: 'sync_invoice',
+          invoiceId: createdInvoice.id,
+        }).catch(error => console.error('[InvoiceForm] Contact sync failed:', error));
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
@@ -292,11 +306,31 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Dirección fiscal</Label>
-                <Input value={form.cliente_direccion || ''} onChange={set('cliente_direccion')} placeholder="Calle, número, CP, municipio" />
+                <Input value={form.cliente_direccion || ''} onChange={set('cliente_direccion')} placeholder="Calle y número" />
               </div>
               <div className="space-y-1.5">
                 <Label>Email</Label>
                 <Input type="email" value={form.cliente_email || ''} onChange={set('cliente_email')} placeholder="cliente@ejemplo.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Teléfono</Label>
+                <Input value={form.cliente_telefono || ''} onChange={set('cliente_telefono')} placeholder="+34 600 000 000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Código postal</Label>
+                <Input value={form.cliente_codigo_postal || ''} onChange={set('cliente_codigo_postal')} placeholder="38001" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Ciudad</Label>
+                <Input value={form.cliente_ciudad || ''} onChange={set('cliente_ciudad')} placeholder="Santa Cruz de Tenerife" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Provincia</Label>
+                <Input value={form.cliente_provincia || ''} onChange={set('cliente_provincia')} placeholder="Santa Cruz de Tenerife" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>País</Label>
+                <Input value={form.cliente_pais || ''} onChange={set('cliente_pais')} placeholder="España" />
               </div>
             </div>
           </div>
