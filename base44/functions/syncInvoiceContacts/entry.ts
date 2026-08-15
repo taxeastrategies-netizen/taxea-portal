@@ -76,15 +76,16 @@ const partyFromOcr = (doc, override) => {
 };
 
 const findExisting = (contacts, party) => {
+  const activeContacts = contacts.filter((contact) => contact.activo !== false && !contact.merged_into_contact_id);
   const nif = taxKey(party.nif_cif);
   const email = emailKey(party.email);
   const phone = phoneKey(party.telefono);
   const name = nameKey(party.nombre);
   return (
-    (nif && contacts.find((c) => taxKey(c.nif_cif) === nif)) ||
-    (email && contacts.find((c) => emailKey(c.email) === email || (c.emails || []).some((v) => emailKey(v) === email))) ||
-    (phone && contacts.find((c) => phoneKey(c.telefono) === phone || (c.telefonos || []).some((v) => phoneKey(v) === phone))) ||
-    (name && contacts.find((c) => nameKey(c.nombre || c.razon_social) === name)) ||
+    (nif && activeContacts.find((c) => taxKey(c.nif_cif) === nif)) ||
+    (email && activeContacts.find((c) => emailKey(c.email) === email || (c.emails || []).some((v) => emailKey(v) === email))) ||
+    (phone && activeContacts.find((c) => phoneKey(c.telefono) === phone || (c.telefonos || []).some((v) => phoneKey(v) === phone))) ||
+    (name && activeContacts.find((c) => nameKey(c.nombre || c.razon_social) === name)) ||
     null
   );
 };
