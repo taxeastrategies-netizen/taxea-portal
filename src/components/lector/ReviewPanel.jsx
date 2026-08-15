@@ -155,6 +155,13 @@ function IngresosFields({ form, set }) {
       <F label="Cliente" col2><Input value={form.cliente_nombre || ''} onChange={e => set('cliente_nombre', e.target.value)} className="h-8 text-sm" /></F>
       <F label="NIF/CIF cliente"><Input value={form.cliente_nif || ''} onChange={e => set('cliente_nif', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Fecha vencimiento"><Input type="date" value={form.fecha_vencimiento || ''} onChange={e => set('fecha_vencimiento', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Email"><Input type="email" value={form.cliente_email || ''} onChange={e => set('cliente_email', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Teléfono"><Input value={form.cliente_telefono || ''} onChange={e => set('cliente_telefono', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Dirección fiscal" col2><Input value={form.cliente_direccion || ''} onChange={e => set('cliente_direccion', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Código postal"><Input value={form.cliente_codigo_postal || ''} onChange={e => set('cliente_codigo_postal', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Ciudad"><Input value={form.cliente_ciudad || ''} onChange={e => set('cliente_ciudad', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Provincia"><Input value={form.cliente_provincia || ''} onChange={e => set('cliente_provincia', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="País"><Input value={form.cliente_pais || ''} onChange={e => set('cliente_pais', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Concepto" col2><Input value={form.concepto || ''} onChange={e => set('concepto', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Base imponible (€)"><Input type="number" step="0.01" value={form.base_imponible || ''} onChange={e => set('base_imponible', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Tipo IVA/IGIC %"><Input type="number" value={form.tipo_iva ?? 21} onChange={e => set('tipo_iva', e.target.value)} className="h-8 text-sm" /></F>
@@ -204,6 +211,13 @@ function GastosFields({ form, set }) {
       <F label="Proveedor" col2><Input value={form.proveedor_cliente || ''} onChange={e => set('proveedor_cliente', e.target.value)} className="h-8 text-sm" /></F>
       <F label="NIF/CIF proveedor"><Input value={form.nif_proveedor || ''} onChange={e => set('nif_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Fecha"><Input type="date" value={form.fecha || ''} onChange={e => set('fecha', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Email"><Input type="email" value={form.email_proveedor || ''} onChange={e => set('email_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Teléfono"><Input value={form.telefono_proveedor || ''} onChange={e => set('telefono_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Dirección fiscal" col2><Input value={form.direccion_proveedor || ''} onChange={e => set('direccion_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Código postal"><Input value={form.codigo_postal_proveedor || ''} onChange={e => set('codigo_postal_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Ciudad"><Input value={form.ciudad_proveedor || ''} onChange={e => set('ciudad_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Provincia"><Input value={form.provincia_proveedor || ''} onChange={e => set('provincia_proveedor', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="País"><Input value={form.pais_proveedor || ''} onChange={e => set('pais_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Categoría">
         <Select value={form.categoria || 'otros'} onValueChange={v => set('categoria', v)}>
           <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
