@@ -11,6 +11,7 @@ const emailKey = (value) => clean(value).toLowerCase();
 const phoneKey = (value) => clean(value).replace(/\D/g, '').replace(/^00/, '');
 const nameKey = (value) => clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 const unique = (values) => [...new Set((values || []).map(clean).filter(Boolean))];
+const isPlaceholderName = (value) => /^(proveedor|cliente|desconocido|sin identificar|varios|n\/a|no consta)$/i.test(clean(value));
 
 const parseExtracted = (raw) => {
   if (!raw) return {};
@@ -131,7 +132,7 @@ const contactPayload = (party, current) => {
 async function syncParty(svc, contactsByCompany, party) {
   party.nombre = clean(party.nombre);
   party.company_id = clean(party.company_id);
-  if (!party.company_id || !party.nombre) return { skipped: true };
+  if (!party.company_id || !party.nombre || isPlaceholderName(party.nombre)) return { skipped: true };
 
   let contacts = contactsByCompany.get(party.company_id);
   if (!contacts) {
