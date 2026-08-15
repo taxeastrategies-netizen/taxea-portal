@@ -29,7 +29,22 @@
     "cliente_email": {
       "type": "string"
     },
+    "cliente_telefono": {
+      "type": "string"
+    },
     "cliente_direccion": {
+      "type": "string"
+    },
+    "cliente_codigo_postal": {
+      "type": "string"
+    },
+    "cliente_ciudad": {
+      "type": "string"
+    },
+    "cliente_provincia": {
+      "type": "string"
+    },
+    "cliente_pais": {
       "type": "string"
     },
     "proveedor_nombre": {
@@ -41,7 +56,22 @@
     "proveedor_email": {
       "type": "string"
     },
+    "proveedor_telefono": {
+      "type": "string"
+    },
     "proveedor_direccion": {
+      "type": "string"
+    },
+    "proveedor_codigo_postal": {
+      "type": "string"
+    },
+    "proveedor_ciudad": {
+      "type": "string"
+    },
+    "proveedor_provincia": {
+      "type": "string"
+    },
+    "proveedor_pais": {
       "type": "string"
     },
     "concepto": {
