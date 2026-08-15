@@ -184,6 +184,11 @@ Deno.serve(async (req) => {
       }
     }
 
+    await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
+      action: 'sync_company',
+      companyId,
+    }).catch((error) => console.warn('[populateFromImport] Contact sync failed:', error?.message || error));
+
     // Bulk create expenses in batches
     for (let i = 0; i < expensesToCreate.length; i += BATCH_SIZE) {
       const batch = expensesToCreate.slice(i, i + BATCH_SIZE);
