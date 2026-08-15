@@ -23,6 +23,13 @@
       ],
       "default": "cliente"
     },
+    "clase_contacto": {
+      "type": "string",
+      "enum": [
+        "empresa",
+        "persona"
+      ]
+    },
     "direccion_fiscal": {
       "type": "string"
     },
