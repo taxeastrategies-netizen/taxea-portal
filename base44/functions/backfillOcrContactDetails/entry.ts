@@ -21,6 +21,7 @@ const parseExtracted = (raw) => {
   try { return JSON.parse(raw); } catch { return {}; }
 };
 const missingIdentity = (value) => !clean(value) || /^(proveedor|cliente|desconocido|sin identificar|varios)$/i.test(clean(value));
+const hasCompleted = (doc) => doc.contactBackfillVersion === VERSION && doc.contactBackfillStatus === 'completed' || (doc.auditTrail || []).some((entry) => clean(entry).includes('"action":"contactos_reocr_historico"') && clean(entry).includes(`"version":"${VERSION}"`) && !clean(entry).includes('"status":"failed"'));
 const mergeIfEmpty = (current, incoming) => clean(current) || clean(incoming);
 
 const CONTACT_SCHEMA = {
@@ -213,7 +214,15 @@ async function processDocument(base44, doc, companyCache) {
     return { id: doc.id, status: 'completed', invoiceUpdated, ...found };
   } catch (error) {
     const message = clean(error?.message || error).slice(0, 500);
+    const auditTrail = [...(doc.auditTrail || []), JSON.stringify({
+      at: now,
+      action: 'contactos_reocr_historico',
+      version: VERSION,
+      status: 'failed',
+      error: message,
+    })].slice(-200);
     await svc.entities.OcrInvoiceDocument.update(doc.id, {
+      auditTrail,
       contactBackfillVersion: VERSION,
       contactBackfillAt: now,
       contactBackfillStatus: 'failed',
@@ -238,7 +247,7 @@ Deno.serve(async (req) => {
   for (let i = 0; i < docs.length; i += 2) {
     const pair = docs.slice(i, i + 2);
     const pairResults = await Promise.all(pair.map(async (doc) => {
-      if (!force && doc.contactBackfillVersion === VERSION && doc.contactBackfillStatus === 'completed') {
+      if (!force && hasCompleted(doc)) {
         return { id: doc.id, status: 'already_completed' };
       }
       return processDocument(base44, doc, companyCache);
