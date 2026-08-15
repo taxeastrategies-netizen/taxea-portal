@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Users, Pencil, Trash2, RefreshCw, Copy } from 'lucide-react';
+import { Plus, Search, Users, Pencil, Trash2, RefreshCw, Copy, Mail, Phone } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,7 @@ export default function Contactos() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (company?.id) load();
+    if (company?.id) syncFromInvoices();
     else if (!loadingCompany) setLoading(false);
   }, [company?.id, loadingCompany]);
 
@@ -39,77 +39,19 @@ export default function Contactos() {
   };
 
   const syncFromInvoices = async () => {
+    if (!company?.id) return;
     setSyncing(true);
-    const [invoices, existing] = await Promise.all([
-      base44.entities.Invoice.filter({ company_id: company.id }),
-      base44.entities.Contact.filter({ company_id: company.id }),
-    ]);
-
-    // Index existing contacts by NIF (primary) and name (fallback)
-    const existingByNif = {};
-    const existingByName = {};
-    for (const c of existing) {
-      if (c.nif_cif) existingByNif[c.nif_cif.replace(/\s/g, '').toUpperCase()] = c;
-      else existingByName[c.nombre?.toLowerCase()] = c;
+    try {
+      await base44.functions.invoke('syncInvoiceContacts', {
+        action: 'sync_company',
+        companyId: company.id,
+      });
+    } catch (error) {
+      console.error('[Contactos] Automatic sync failed:', error);
+    } finally {
+      setSyncing(false);
+      await load();
     }
-
-    const toCreate = [];
-    const toUpdate = []; // { id, data }
-    const seen = new Set(); // keys already processed in this batch
-
-    const upsert = (nombre, nif, email, direccion, tipo) => {
-      if (!nombre) return;
-      const nifKey = nif ? nif.replace(/\s/g, '').toUpperCase() : null;
-      const nameKey = nombre.toLowerCase();
-      const batchKey = nifKey || nameKey;
-      if (seen.has(batchKey)) return;
-      seen.add(batchKey);
-
-      const existing = nifKey ? existingByNif[nifKey] : existingByName[nameKey];
-
-      if (existing) {
-        // Update if we have new data that's missing on the contact
-        const updates = {};
-        if (!existing.nif_cif && nifKey) updates.nif_cif = nif;
-        if (!existing.email && email) updates.email = email;
-        if (!existing.direccion_fiscal && direccion) updates.direccion_fiscal = direccion;
-        if (existing.tipo !== tipo && existing.tipo !== 'ambos') updates.tipo = 'ambos';
-        if (Object.keys(updates).length > 0) toUpdate.push({ id: existing.id, data: updates });
-      } else {
-        toCreate.push({
-          company_id: company.id,
-          nombre,
-          nif_cif: nif || '',
-          email: email || '',
-          direccion_fiscal: direccion || '',
-          tipo,
-          activo: true,
-        });
-        if (nifKey) existingByNif[nifKey] = { nombre };
-        else existingByName[nameKey] = { nombre };
-      }
-    };
-
-    for (const inv of invoices || []) {
-      if (inv.tipo === 'emitida' || !inv.tipo) {
-        upsert(inv.cliente_nombre, inv.cliente_nif, inv.cliente_email, inv.cliente_direccion, 'cliente');
-      }
-      if (inv.tipo === 'recibida') {
-        upsert(inv.proveedor_nombre, inv.proveedor_nif, inv.proveedor_email, inv.proveedor_direccion, 'proveedor');
-      }
-      // Also capture proveedor from emitidas if present (edge case)
-      if (inv.tipo === 'emitida' && inv.proveedor_nombre) {
-        upsert(inv.proveedor_nombre, inv.proveedor_nif, inv.proveedor_email, inv.proveedor_direccion, 'proveedor');
-      }
-    }
-
-    await Promise.all([
-      toCreate.length > 0 ? base44.entities.Contact.bulkCreate(toCreate) : Promise.resolve(),
-      ...toUpdate.map(({ id, data }) => base44.entities.Contact.update(id, data)),
-    ]);
-
-    setSyncing(false);
-    load();
   };
 
   const handleSave = async () => {
@@ -139,11 +81,11 @@ export default function Contactos() {
 
   return (
     <div>
-      <PageHeader title="Contactos" subtitle="Gestiona la información de tus contactos">
+      <PageHeader title="Contactos" subtitle="Agenda automática de clientes y proveedores detectados en facturas y OCR">
         <div className="flex gap-2">
           <Button variant="outline" onClick={syncFromInvoices} disabled={syncing} className="h-9 gap-1.5">
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Sincronizando...' : 'Sync desde facturas'}
+            {syncing ? 'Actualizando...' : 'Actualizar contactos'}
           </Button>
           <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
             <Plus className="w-4 h-4 mr-1.5" /> Nuevo contacto
@@ -172,7 +114,7 @@ export default function Contactos() {
         <div className="bg-card rounded-xl border border-border p-12 text-center">
           <Users className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
           <p className="font-medium text-foreground mb-1">Sin contactos</p>
-          <p className="text-sm text-muted-foreground">Usa "Sync desde facturas" para importar automáticamente o crea uno nuevo.</p>
+          <p className="text-sm text-muted-foreground">Los clientes y proveedores aparecerán aquí al crear o escanear facturas. También puedes añadir uno manualmente.</p>
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -181,7 +123,7 @@ export default function Contactos() {
               <tr className="border-b border-border bg-secondary/30">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">NIF/CIF</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Email</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Contacto</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Ciudad</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Tipo</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acciones</th>
@@ -195,7 +137,13 @@ export default function Contactos() {
                     {c.persona_contacto && <p className="text-xs text-muted-foreground">{c.persona_contacto}</p>}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{c.nif_cif || '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{c.email || '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                    <div className="space-y-1">
+                      {c.email ? <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 hover:text-teal"><Mail className="w-3.5 h-3.5" />{c.email}</a> : null}
+                      {c.telefono ? <a href={`tel:${c.telefono}`} className="flex items-center gap-1.5 hover:text-teal"><Phone className="w-3.5 h-3.5" />{c.telefono}</a> : null}
+                      {!c.email && !c.telefono ? '—' : null}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">{c.ciudad || '—'}</td>
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className={`text-xs px-2 py-0.5 rounded font-medium ${c.tipo === 'cliente' ? 'bg-teal-light text-teal' : c.tipo === 'proveedor' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
