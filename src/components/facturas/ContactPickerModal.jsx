@@ -13,7 +13,7 @@ export default function ContactPickerModal({ open, onOpenChange, companyId, tipo
     if (!open || !companyId) return;
     setSearch('');
     setLoading(true);
-    base44.entities.Contact.filter({ company_id: companyId })
+    base44.entities.Contact.filter({ company_id: companyId }, 'nombre', 5000, 0)
       .then(data => setContacts((data || []).filter(c => c.activo !== false)))
       .finally(() => setLoading(false));
   }, [open, companyId]);
