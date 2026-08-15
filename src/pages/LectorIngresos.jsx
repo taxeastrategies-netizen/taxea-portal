@@ -32,6 +32,13 @@ const mapForm = (r) => ({
   fecha_emision: r?.fecha || '',
   cliente_nombre: r?.cliente_nombre || '',
   cliente_nif: r?.cliente_nif || '',
+  cliente_email: r?.email_cliente || r?.cliente_email || '',
+  cliente_telefono: r?.telefono_cliente || r?.cliente_telefono || '',
+  cliente_direccion: r?.direccion_cliente || r?.cliente_direccion || '',
+  cliente_codigo_postal: r?.codigo_postal_cliente || r?.cliente_codigo_postal || '',
+  cliente_ciudad: r?.ciudad_cliente || r?.cliente_ciudad || '',
+  cliente_provincia: r?.provincia_cliente || r?.cliente_provincia || '',
+  cliente_pais: r?.pais_cliente || r?.cliente_pais || '',
   concepto: r?.concepto || '',
   base_imponible: r?.base_imponible || '',
   tipo_iva: r?.tipo_iva ?? 21,
@@ -74,7 +81,7 @@ REGLAS:
 - Si es factura rectificativa (abono, nota de crédito, importes negativos), marca es_rectificativa=true y extrae importes con signo negativo.
 - Solo extrae retenciones si aparecen EXPLÍCITAMENTE en la factura. No las inventes.
 
-Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (número, negativo si rectificativa),
+Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, email_cliente, telefono_cliente, direccion_cliente, codigo_postal_cliente, ciudad_cliente, provincia_cliente, pais_cliente, concepto, base_imponible (número, negativo si rectificativa),
 tipo_iva (número %), cuota_iva (número, negativo si rectificativa), retencion_irpf (número %, 0 si no aplica),
 retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
 total_factura (número, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
@@ -93,6 +100,9 @@ const OCR_SCHEMA = {
   properties: {
     numero_factura: { type: 'string' }, fecha: { type: 'string' },
     cliente_nombre: { type: 'string' }, cliente_nif: { type: 'string' },
+    email_cliente: { type: 'string' }, telefono_cliente: { type: 'string' },
+    direccion_cliente: { type: 'string' }, codigo_postal_cliente: { type: 'string' },
+    ciudad_cliente: { type: 'string' }, provincia_cliente: { type: 'string' }, pais_cliente: { type: 'string' },
     concepto: { type: 'string' }, base_imponible: { type: 'number' },
     tipo_iva: { type: 'number' }, cuota_iva: { type: 'number' },
     retencion_irpf: { type: 'number' }, retencion_tipo: { type: 'string' }, importe_retencion: { type: 'number' },
@@ -281,6 +291,11 @@ export default function LectorIngresos() {
         lastStatusChangedAt: doneNow,
         auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
       });
+      await base44.functions.invoke('syncInvoiceContacts', {
+        action: 'sync_ocr',
+        docId: doc.id,
+        extractedData: result,
+      }).catch(error => console.error('[OCR] Contact sync failed:', error));
     } catch {
       const failNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
