@@ -33,7 +33,7 @@ export default function Contactos() {
 
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.Contact.filter({ company_id: company.id });
+    const data = await base44.entities.Contact.filter({ company_id: company.id }, 'nombre', 5000, 0);
     setContacts((data || []).filter(c => c.activo !== false));
     setLoading(false);
   };
