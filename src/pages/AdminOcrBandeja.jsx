@@ -53,7 +53,7 @@ const STATUS_FILTERS = [
 
 const OCR_PROMPT_EXPENSE = `Analiza este documento fiscal (factura, ticket o justificante de gasto) y extrae los datos en JSON. Si no encuentras un dato, usa null.
 IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
-Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero, negativo si rectificativa),
+Datos: proveedor (nombre emisor), nif_proveedor, email_proveedor, telefono_proveedor, direccion_proveedor, codigo_postal_proveedor, ciudad_proveedor, provincia_proveedor, pais_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (numero, negativo si rectificativa),
 tipo_impuesto (numero %), cuota_impuesto (numero, negativo si rectificativa), total (numero, negativo si rectificativa),
 retencion_irpf (numero %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, negativo si rectificativa, 0 si no aplica),
 categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
@@ -66,6 +66,9 @@ const OCR_SCHEMA_EXPENSE = {
   type: 'object',
   properties: {
     proveedor: { type: 'string' }, nif_proveedor: { type: 'string' },
+    email_proveedor: { type: 'string' }, telefono_proveedor: { type: 'string' },
+    direccion_proveedor: { type: 'string' }, codigo_postal_proveedor: { type: 'string' },
+    ciudad_proveedor: { type: 'string' }, provincia_proveedor: { type: 'string' }, pais_proveedor: { type: 'string' },
     fecha: { type: 'string' }, numero_factura: { type: 'string' },
     base_imponible: { type: 'number' }, tipo_impuesto: { type: 'number' },
     cuota_impuesto: { type: 'number' }, total: { type: 'number' },
@@ -84,7 +87,7 @@ const OCR_SCHEMA_EXPENSE = {
 
 const OCR_PROMPT_INCOME = `Analiza esta factura emitida y extrae los datos en JSON. Si no encuentras un dato, usa null.
 IMPORTANTE: Si es una factura rectificativa (abono, nota de crédito, o tiene importes negativos), marca es_rectificativa=true y extrae los importes con signo negativo.
-Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, concepto, base_imponible (numero, negativo si rectificativa),
+Datos: numero_factura, fecha (YYYY-MM-DD), cliente_nombre, cliente_nif, email_cliente, telefono_cliente, direccion_cliente, codigo_postal_cliente, ciudad_cliente, provincia_cliente, pais_cliente, concepto, base_imponible (numero, negativo si rectificativa),
 tipo_iva (numero %), cuota_iva (numero, negativo si rectificativa), retencion_irpf (numero %, 0 si no aplica),
 retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, negativo si rectificativa, 0 si no aplica),
 total_factura (numero, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
@@ -96,6 +99,9 @@ const OCR_SCHEMA_INCOME = {
   properties: {
     numero_factura: { type: 'string' }, fecha: { type: 'string' },
     cliente_nombre: { type: 'string' }, cliente_nif: { type: 'string' },
+    email_cliente: { type: 'string' }, telefono_cliente: { type: 'string' },
+    direccion_cliente: { type: 'string' }, codigo_postal_cliente: { type: 'string' },
+    ciudad_cliente: { type: 'string' }, provincia_cliente: { type: 'string' }, pais_cliente: { type: 'string' },
     concepto: { type: 'string' }, base_imponible: { type: 'number' },
     tipo_iva: { type: 'number' }, cuota_iva: { type: 'number' },
     retencion_irpf: { type: 'number' }, retencion_tipo: { type: 'string' }, importe_retencion: { type: 'number' },
@@ -115,6 +121,14 @@ const parseExtracted = (raw) => {
 
 const mapFormGastos = (r) => ({
   proveedor_cliente: r?.proveedor || '',
+  nif_proveedor: r?.nif_proveedor || '',
+  email_proveedor: r?.email_proveedor || r?.proveedor_email || '',
+  telefono_proveedor: r?.telefono_proveedor || r?.proveedor_telefono || '',
+  direccion_proveedor: r?.direccion_proveedor || r?.proveedor_direccion || '',
+  codigo_postal_proveedor: r?.codigo_postal_proveedor || r?.proveedor_codigo_postal || '',
+  ciudad_proveedor: r?.ciudad_proveedor || r?.proveedor_ciudad || '',
+  provincia_proveedor: r?.provincia_proveedor || r?.proveedor_provincia || '',
+  pais_proveedor: r?.pais_proveedor || r?.proveedor_pais || '',
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
   base_imponible: r?.base_imponible || '',
@@ -135,6 +149,13 @@ const mapFormIngresos = (r) => ({
   fecha_emision: r?.fecha || '',
   cliente_nombre: r?.cliente_nombre || '',
   cliente_nif: r?.cliente_nif || '',
+  cliente_email: r?.email_cliente || r?.cliente_email || '',
+  cliente_telefono: r?.telefono_cliente || r?.cliente_telefono || '',
+  cliente_direccion: r?.direccion_cliente || r?.cliente_direccion || '',
+  cliente_codigo_postal: r?.codigo_postal_cliente || r?.cliente_codigo_postal || '',
+  cliente_ciudad: r?.ciudad_cliente || r?.cliente_ciudad || '',
+  cliente_provincia: r?.provincia_cliente || r?.cliente_provincia || '',
+  cliente_pais: r?.pais_cliente || r?.cliente_pais || '',
   concepto: r?.concepto || '',
   base_imponible: r?.base_imponible || '',
   tipo_iva: r?.tipo_iva || 21,
@@ -253,6 +274,11 @@ export default function AdminOcrBandeja() {
         lastStatusChangedAt: doneNow,
         auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
       });
+      await base44.functions.invoke('syncInvoiceContacts', {
+        action: 'sync_ocr',
+        docId: doc.id,
+        extractedData: result,
+      }).catch(error => console.error('[OCR] Contact sync failed:', error));
     } catch {
       const failNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
