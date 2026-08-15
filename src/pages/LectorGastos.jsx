@@ -30,6 +30,13 @@ const parseExtracted = (raw) => {
 const mapForm = (r) => ({
   proveedor_cliente: r?.proveedor || '',
   nif_proveedor: r?.nif_proveedor || '',
+  email_proveedor: r?.email_proveedor || r?.proveedor_email || '',
+  telefono_proveedor: r?.telefono_proveedor || r?.proveedor_telefono || '',
+  direccion_proveedor: r?.direccion_proveedor || r?.proveedor_direccion || '',
+  codigo_postal_proveedor: r?.codigo_postal_proveedor || r?.proveedor_codigo_postal || '',
+  ciudad_proveedor: r?.ciudad_proveedor || r?.proveedor_ciudad || '',
+  provincia_proveedor: r?.provincia_proveedor || r?.proveedor_provincia || '',
+  pais_proveedor: r?.pais_proveedor || r?.proveedor_pais || '',
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
   base_imponible: r?.base_imponible || '',
@@ -65,7 +72,7 @@ REGLAS:
 - Si es factura rectificativa (abono, nota de crédito, importes negativos), marca es_rectificativa=true y extrae importes con signo negativo.
 - Solo extrae retenciones si aparecen EXPLÍCITAMENTE en la factura. No las inventes.
 
-Datos: proveedor (nombre emisor), nif_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número, negativo si rectificativa),
+Datos: proveedor (nombre emisor), nif_proveedor, email_proveedor, telefono_proveedor, direccion_proveedor, codigo_postal_proveedor, ciudad_proveedor, provincia_proveedor, pais_proveedor, fecha (YYYY-MM-DD), numero_factura, base_imponible (número, negativo si rectificativa),
 tipo_impuesto (número %), cuota_impuesto (número, negativo si rectificativa), total (número, negativo si rectificativa),
 retencion_irpf (número %, 0 si no aplica), retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (número, negativo si rectificativa, 0 si no aplica),
 categoria_sugerida (compras/suministros/alquiler/servicios_profesionales/software/transporte/dietas/seguros/otros),
@@ -86,6 +93,9 @@ const OCR_SCHEMA = {
   type: 'object',
   properties: {
     proveedor: { type: 'string' }, nif_proveedor: { type: 'string' },
+    email_proveedor: { type: 'string' }, telefono_proveedor: { type: 'string' },
+    direccion_proveedor: { type: 'string' }, codigo_postal_proveedor: { type: 'string' },
+    ciudad_proveedor: { type: 'string' }, provincia_proveedor: { type: 'string' }, pais_proveedor: { type: 'string' },
     fecha: { type: 'string' }, numero_factura: { type: 'string' },
     base_imponible: { type: 'number' }, tipo_impuesto: { type: 'number' },
     cuota_impuesto: { type: 'number' }, total: { type: 'number' },
@@ -280,6 +290,11 @@ export default function LectorGastos() {
         lastStatusChangedAt: doneNow,
         auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
       });
+      await base44.functions.invoke('syncInvoiceContacts', {
+        action: 'sync_ocr',
+        docId: doc.id,
+        extractedData: result,
+      }).catch(error => console.error('[OCR] Contact sync failed:', error));
     } catch {
       const failNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
