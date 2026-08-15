@@ -170,7 +170,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     const emails = [];
     if (invoice?.cliente_nombre && company?.id) {
       try {
-        const contacts = await base44.entities.Contact.filter({ company_id: company.id }, '-created_date', 100);
+        const contacts = await base44.entities.Contact.filter({ company_id: company.id }, 'nombre', 5000, 0);
         const matches = contacts.filter(c =>
           c.nombre?.toLowerCase().includes(invoice.cliente_nombre.toLowerCase()) ||
           invoice.cliente_nombre.toLowerCase().includes(c.nombre?.toLowerCase() || '')
@@ -290,7 +290,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
 
       if (saveEmail && noEmailWarning && to.length > 0) {
         try {
-          const contacts = await base44.entities.Contact.filter({ company_id: company?.id }, '-created_date', 100);
+          const contacts = await base44.entities.Contact.filter({ company_id: company?.id }, 'nombre', 5000, 0);
           const match = contacts.find(c => c.nombre?.toLowerCase().includes(invoice.cliente_nombre?.toLowerCase() || ''));
           if (match) await base44.entities.Contact.update(match.id, { email: to[0] });
         } catch {}
