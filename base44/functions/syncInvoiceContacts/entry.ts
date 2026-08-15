@@ -14,6 +14,14 @@ const unique = (values) => [...new Set((values || []).map(clean).filter(Boolean)
 const listify = (value) => Array.isArray(value) ? value : (clean(value) ? [value] : []);
 const isPlaceholderName = (value) => /^(proveedor|cliente|desconocido|sin identificar|varios|n\/a|no consta)$/i.test(clean(value));
 
+const inferContactClass = (party, current) => {
+  if (current?.clase_contacto === 'empresa' || current?.clase_contacto === 'persona') return current.clase_contacto;
+  const normalizedTaxId = taxKey(party.nif_cif).replace(/^[A-Z]{2}(?=[A-Z0-9]{8,})/, '');
+  const companyTaxId = /^[ABCDEFGHJNPQRSUVW]/.test(normalizedTaxId);
+  const companyName = /\b(S\.?L\.?U?|S\.?A\.?U?|S\.?C\.?P\.?|C\.?B\.?|COOP(?:ERATIVA)?|ASOCIACI[ÓO]N|FUNDACI[ÓO]N|SOCIEDAD|COMUNIDAD DE BIENES)\b/i.test(clean(party.nombre));
+  return companyTaxId || companyName ? 'empresa' : 'persona';
+};
+
 const parseExtracted = (raw) => {
   if (!raw) return {};
   if (typeof raw === 'object') return raw;
@@ -117,6 +125,7 @@ const contactPayload = (party, current) => {
     provincia: clean(current?.provincia) || clean(party.provincia),
     pais: clean(current?.pais) || clean(party.pais) || 'España',
     tipo,
+    clase_contacto: inferContactClass(party, current),
     activo: true,
     origen_automatico: true,
     fuentes,
