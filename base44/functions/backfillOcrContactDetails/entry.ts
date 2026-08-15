@@ -76,9 +76,12 @@ No inventes datos. No confundas números de factura, cuenta bancaria, IBAN, fech
 function mergeContactFields(doc, extracted, result, company) {
   const expense = doc.documentType === 'expense_invoice';
   const ownTax = normalizeTax(companyTax(company));
+  const ownName = companyLabel(company);
   const resultTax = normalizeTax(result?.nif_cif_dni);
   const returnedOwnCompany = ownTax && resultTax && ownTax === resultTax;
   const current = currentParty(doc, extracted);
+  const currentTaxIsOwn = ownTax && normalizeTax(current.tax) === ownTax;
+  const currentNameIsOwn = ownName && clean(current.name).localeCompare(ownName, undefined, { sensitivity: 'base' }) === 0;
   const emails = returnedOwnCompany ? [] : validEmails(result?.emails);
   const phones = returnedOwnCompany ? [] : validPhones(result?.telefonos);
   const safeName = returnedOwnCompany ? '' : clean(result?.nombre_razon_social);
@@ -90,8 +93,8 @@ function mergeContactFields(doc, extracted, result, company) {
   const country = returnedOwnCompany ? '' : clean(result?.pais);
 
   if (expense) {
-    if (missingIdentity(extracted.proveedor || extracted.proveedor_nombre) && safeName) extracted.proveedor = safeName;
-    if (!clean(extracted.nif_proveedor) && safeTax) extracted.nif_proveedor = safeTax;
+    if ((missingIdentity(extracted.proveedor || extracted.proveedor_nombre) || currentNameIsOwn) && safeName) extracted.proveedor = safeName;
+    if ((!clean(extracted.nif_proveedor) || currentTaxIsOwn) && safeTax) extracted.nif_proveedor = safeTax;
     extracted.emails_proveedor = unique([...listify(extracted.emails_proveedor), ...emails]);
     extracted.telefonos_proveedor = unique([...listify(extracted.telefonos_proveedor), ...phones]);
     extracted.email_proveedor = mergeIfEmpty(extracted.email_proveedor || extracted.proveedor_email, extracted.emails_proveedor[0]);
@@ -102,8 +105,8 @@ function mergeContactFields(doc, extracted, result, company) {
     extracted.provincia_proveedor = mergeIfEmpty(extracted.provincia_proveedor || extracted.proveedor_provincia, province);
     extracted.pais_proveedor = mergeIfEmpty(extracted.pais_proveedor || extracted.proveedor_pais, country);
   } else {
-    if (missingIdentity(extracted.cliente_nombre) && safeName) extracted.cliente_nombre = safeName;
-    if (!clean(extracted.cliente_nif) && safeTax) extracted.cliente_nif = safeTax;
+    if ((missingIdentity(extracted.cliente_nombre) || currentNameIsOwn) && safeName) extracted.cliente_nombre = safeName;
+    if ((!clean(extracted.cliente_nif) || currentTaxIsOwn) && safeTax) extracted.cliente_nif = safeTax;
     extracted.emails_cliente = unique([...listify(extracted.emails_cliente), ...emails]);
     extracted.telefonos_cliente = unique([...listify(extracted.telefonos_cliente), ...phones]);
     extracted.email_cliente = mergeIfEmpty(extracted.email_cliente || extracted.cliente_email, extracted.emails_cliente[0]);
@@ -120,8 +123,8 @@ function mergeContactFields(doc, extracted, result, company) {
     emails: emails.length,
     phones: phones.length,
     address: Boolean(address || postal || city || province || country),
-    nameAdded: missingIdentity(current.name) && Boolean(safeName),
-    taxAdded: !clean(current.tax) && Boolean(safeTax),
+    nameAdded: (missingIdentity(current.name) || currentNameIsOwn) && Boolean(safeName),
+    taxAdded: (!clean(current.tax) || currentTaxIsOwn) && Boolean(safeTax),
   };
 }
 
@@ -283,7 +286,10 @@ Deno.serve(async (req) => {
   const skip = Math.max(0, Number(body.skip) || 0);
   const limit = Math.min(10, Math.max(1, Number(body.limit) || 5));
   const force = body.force === true;
-  const docs = await base44.asServiceRole.entities.OcrInvoiceDocument.list('created_date', limit, skip);
+  const docIds = Array.isArray(body.docIds) ? body.docIds.map(clean).filter(Boolean).slice(0, 20) : [];
+  const docs = docIds.length
+    ? (await Promise.all(docIds.map((id) => base44.asServiceRole.entities.OcrInvoiceDocument.get(id).catch(() => null)))).filter(Boolean)
+    : await base44.asServiceRole.entities.OcrInvoiceDocument.list('created_date', limit, skip);
   const companyCache = new Map();
   const results = [];
 
