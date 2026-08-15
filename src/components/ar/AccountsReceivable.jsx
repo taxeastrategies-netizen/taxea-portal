@@ -33,7 +33,7 @@ export default function AccountsReceivable() {
     if (!companyId) { setLoading(false); return; }
     Promise.all([
       base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Contact.filter({ company_id: companyId }),
+      base44.entities.Contact.filter({ company_id: companyId }, 'nombre', 5000, 0),
     ]).then(([inv, con]) => {
       setInvoices(inv || []);
       setContacts(con || []);
