@@ -160,6 +160,29 @@ async function enrichLinkedInvoice(svc, doc, extracted) {
   return true;
 }
 
+async function repairMislabeledImage(svc, doc) {
+  const response = await fetch(doc.fileStorageUrl);
+  if (!response.ok) throw new Error(`No se pudo descargar el archivo mal etiquetado: HTTP ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let mime = '';
+  let extension = '';
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    mime = 'image/jpeg';
+    extension = 'jpg';
+  } else if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    mime = 'image/png';
+    extension = 'png';
+  } else {
+    throw new Error('El archivo no es un PDF ni una imagen JPEG/PNG reconocible');
+  }
+  const baseName = clean(doc.originalFileName || doc.fileName || doc.id).replace(/\.[^.]+$/, '') || doc.id;
+  const fileName = `${baseName}.${extension}`;
+  const file = new File([bytes], fileName, { type: mime });
+  const uploaded = await svc.integrations.Core.UploadFile({ file });
+  if (!uploaded?.file_url) throw new Error('Base44 no devolvio URL al corregir el archivo');
+  return { url: uploaded.file_url, mime, fileName, size: bytes.length };
+}
+
 async function processDocument(base44, doc, companyCache) {
   const svc = base44.asServiceRole;
   const now = new Date().toISOString();
@@ -180,11 +203,24 @@ async function processDocument(base44, doc, companyCache) {
       companyCache.set(doc.company_id, company || {});
     }
     const extracted = parseExtracted(doc.extractedData);
-    const result = await svc.integrations.Core.InvokeLLM({
-      prompt: buildPrompt(doc, company, extracted),
-      file_urls: [doc.fileStorageUrl],
-      response_json_schema: CONTACT_SCHEMA,
-    });
+    let repairedFile = null;
+    let result;
+    try {
+      result = await svc.integrations.Core.InvokeLLM({
+        prompt: buildPrompt(doc, company, extracted),
+        file_urls: [doc.fileStorageUrl],
+        response_json_schema: CONTACT_SCHEMA,
+      });
+    } catch (initialError) {
+      const invalidDocument = /INVALID_ARGUMENT|no pages/i.test(clean(initialError?.message || initialError));
+      if (!invalidDocument) throw initialError;
+      repairedFile = await repairMislabeledImage(svc, doc);
+      result = await svc.integrations.Core.InvokeLLM({
+        prompt: buildPrompt(doc, company, extracted),
+        file_urls: [repairedFile.url],
+        response_json_schema: CONTACT_SCHEMA,
+      });
+    }
     const found = mergeContactFields(doc, extracted, result || {}, company);
     const auditTrail = [...(doc.auditTrail || []), JSON.stringify({
       at: now,
@@ -193,14 +229,21 @@ async function processDocument(base44, doc, companyCache) {
       fields: found,
     })].slice(-200);
 
-    await svc.entities.OcrInvoiceDocument.update(doc.id, {
+    const docUpdate = {
       extractedData: JSON.stringify(extracted),
       auditTrail,
       contactBackfillVersion: VERSION,
       contactBackfillAt: now,
       contactBackfillStatus: 'completed',
       contactBackfillError: '',
+    };
+    if (repairedFile) Object.assign(docUpdate, {
+      fileStorageUrl: repairedFile.url,
+      fileMimeType: repairedFile.mime,
+      fileName: repairedFile.fileName,
+      fileSize: repairedFile.size,
     });
+    await svc.entities.OcrInvoiceDocument.update(doc.id, docUpdate);
 
     const invoiceUpdated = await enrichLinkedInvoice(svc, doc, extracted);
     const syncResponse = await svc.functions.invoke('syncInvoiceContacts', {
