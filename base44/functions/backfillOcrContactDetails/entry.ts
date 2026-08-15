@@ -244,8 +244,8 @@ Deno.serve(async (req) => {
   const companyCache = new Map();
   const results = [];
 
-  for (let i = 0; i < docs.length; i += 2) {
-    const pair = docs.slice(i, i + 2);
+  for (let i = 0; i < docs.length; i += 5) {
+    const pair = docs.slice(i, i + 5);
     const pairResults = await Promise.all(pair.map(async (doc) => {
       if (!force && hasCompleted(doc)) {
         return { id: doc.id, status: 'already_completed' };
