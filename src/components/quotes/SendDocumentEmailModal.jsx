@@ -110,7 +110,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
   const loadClientEmail = async () => {
     if (!doc?.cliente_nombre || !company?.id) { setNoEmailWarning(true); return; }
     try {
-      const contacts = await base44.entities.Contact.filter({ company_id: company.id }, '-created_date', 50);
+      const contacts = await base44.entities.Contact.filter({ company_id: company.id }, 'nombre', 5000, 0);
       const match = contacts.find(c =>
         c.nombre?.toLowerCase().includes(doc.cliente_nombre.toLowerCase()) ||
         doc.cliente_nombre.toLowerCase().includes(c.nombre?.toLowerCase() || '')
