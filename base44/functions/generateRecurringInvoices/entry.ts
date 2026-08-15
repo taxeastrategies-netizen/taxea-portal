@@ -325,6 +325,10 @@ Deno.serve(async (req) => {
         };
 
         const invoice = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+        await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
+          action: 'sync_invoice',
+          invoiceId: invoice.id,
+        }).catch((error) => console.warn('[generateRecurringInvoices] Contact sync failed:', error?.message || error));
 
         // Create run record
         await base44.asServiceRole.entities.RecurringInvoiceRun.create({
