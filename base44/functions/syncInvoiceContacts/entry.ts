@@ -11,6 +11,7 @@ const emailKey = (value) => clean(value).toLowerCase();
 const phoneKey = (value) => clean(value).replace(/\D/g, '').replace(/^00/, '');
 const nameKey = (value) => clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 const unique = (values) => [...new Set((values || []).map(clean).filter(Boolean))];
+const listify = (value) => Array.isArray(value) ? value : (clean(value) ? [value] : []);
 const isPlaceholderName = (value) => /^(proveedor|cliente|desconocido|sin identificar|varios|n\/a|no consta)$/i.test(clean(value));
 
 const parseExtracted = (raw) => {
@@ -58,8 +59,10 @@ const partyFromOcr = (doc, override) => {
     nombre: expense ? (data.proveedor || data.proveedor_nombre) : data.cliente_nombre,
     razon_social: expense ? (data.proveedor || data.proveedor_nombre) : data.cliente_nombre,
     nif_cif: expense ? data.nif_proveedor : data.cliente_nif,
-    email: expense ? (data.email_proveedor || data.proveedor_email) : (data.email_cliente || data.cliente_email),
-    telefono: expense ? (data.telefono_proveedor || data.proveedor_telefono) : (data.telefono_cliente || data.cliente_telefono),
+    email: expense ? (data.email_proveedor || data.proveedor_email || data.emails_proveedor?.[0]) : (data.email_cliente || data.cliente_email || data.emails_cliente?.[0]),
+    telefono: expense ? (data.telefono_proveedor || data.proveedor_telefono || data.telefonos_proveedor?.[0]) : (data.telefono_cliente || data.cliente_telefono || data.telefonos_cliente?.[0]),
+    emails: expense ? listify(data.emails_proveedor) : listify(data.emails_cliente),
+    telefonos: expense ? listify(data.telefonos_proveedor) : listify(data.telefonos_cliente),
     direccion_fiscal: expense ? (data.direccion_proveedor || data.proveedor_direccion) : (data.direccion_cliente || data.cliente_direccion),
     codigo_postal: expense ? (data.codigo_postal_proveedor || data.proveedor_codigo_postal) : (data.codigo_postal_cliente || data.cliente_codigo_postal),
     ciudad: expense ? (data.ciudad_proveedor || data.proveedor_ciudad) : (data.ciudad_cliente || data.cliente_ciudad),
@@ -93,8 +96,8 @@ const findExisting = (contacts, party) => {
 const contactPayload = (party, current) => {
   const now = new Date().toISOString();
   const tipo = current && current.tipo !== party.tipo && current.tipo !== 'ambos' ? 'ambos' : (current?.tipo || party.tipo);
-  const emails = unique([...(current?.emails || []), current?.email, party.email]);
-  const telefonos = unique([...(current?.telefonos || []), current?.telefono, party.telefono]);
+  const emails = unique([...(current?.emails || []), current?.email, party.email, ...listify(party.emails)]);
+  const telefonos = unique([...(current?.telefonos || []), current?.telefono, party.telefono, ...listify(party.telefonos)]);
   const fuentes = unique([...(current?.fuentes || []), party.source]);
   const facturaIds = unique([...(current?.factura_origen_ids || []), party.invoice_id]);
   const ocrIds = unique([...(current?.ocr_origen_ids || []), party.ocr_document_id]);
@@ -104,8 +107,8 @@ const contactPayload = (party, current) => {
     nombre: clean(current?.nombre) || clean(party.nombre),
     razon_social: clean(current?.razon_social) || clean(party.razon_social) || clean(party.nombre),
     nif_cif: clean(current?.nif_cif) || clean(party.nif_cif),
-    email: clean(current?.email) || clean(party.email),
-    telefono: clean(current?.telefono) || clean(party.telefono),
+    email: clean(current?.email) || clean(party.email) || emails[0] || '',
+    telefono: clean(current?.telefono) || clean(party.telefono) || telefonos[0] || '',
     emails,
     telefonos,
     direccion_fiscal: clean(current?.direccion_fiscal) || clean(party.direccion_fiscal),
