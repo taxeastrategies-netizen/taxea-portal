@@ -45,6 +45,18 @@
     "telefono": {
       "type": "string"
     },
+    "emails": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "telefonos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "persona_contacto": {
       "type": "string"
     },
@@ -61,6 +73,65 @@
     "regimen_fiscal": {
       "type": "string"
     },
+    "origen_automatico": {
+      "type": "boolean",
+      "default": false
+    },
+    "fuentes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "factura_origen_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ocr_origen_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ultima_factura_id": {
+      "type": "string"
+    },
+    "ultimo_documento_ocr_id": {
+      "type": "string"
+    },
+    "primera_deteccion_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ultima_deteccion_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "capturado_por_user_id": {
+      "type": "string"
+    },
+    "capturado_por_email": {
+      "type": "string"
+    },
+    "consentimiento_comercial": {
+      "type": "string",
+      "enum": [
+        "no_solicitado",
+        "concedido",
+        "revocado",
+        "no_aplica"
+      ],
+      "default": "no_solicitado"
+    },
+    "uso_contacto": {
+      "type": "string",
+      "default": "operativo_facturacion"
+    },
+    "merged_into_contact_id": {
+      "type": "string"
+    },
     "activo": {
       "type": "boolean",
       "default": true
@@ -72,16 +143,52 @@
   ],
   "rls": {
     "create": {
-      "data.company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "read": {
-      "data.company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "data.company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "delete": {
-      "data.company_id": "{{user.data.company_id}}"
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     }
   }
 }
