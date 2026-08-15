@@ -88,7 +88,7 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
       const retentionRate = Number.isFinite(parsedRetentionRate) ? parsedRetentionRate : 0;
       const retentionAmount = base * retentionRate / 100;
       const date = new Date(`${invoiceDate}T12:00:00`);
-      await base44.entities.Invoice.create({
+      const createdInvoice = await base44.entities.Invoice.create({
         company_id: company.id,
         numero_factura: cleanNumber,
         fecha_emision: invoiceDate,
@@ -116,6 +116,10 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
         source_document_type: sourceType,
         source_document_id: doc.id,
       });
+      await base44.functions.invoke('syncInvoiceContacts', {
+        action: 'sync_invoice',
+        invoiceId: createdInvoice.id,
+      }).catch(error => console.error('[DocumentWorkspace] Contact sync failed:', error));
       await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
       setShowConvertDialog(false);
       onRefresh?.();
