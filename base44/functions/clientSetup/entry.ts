@@ -23,12 +23,6 @@ Deno.serve(async (req) => {
 
     if (action === 'consume') {
       const now = new Date().toISOString();
-      try {
-        await base44.asServiceRole.users.inviteUser(account.email, 'user');
-      } catch (inviteError) {
-        // La invitación puede fallar si el usuario ya existe; el restablecimiento seguirá siendo válido.
-        console.info('[clientSetup] Usuario existente o invitación no necesaria:', inviteError?.message);
-      }
       await base44.asServiceRole.entities.ClientAccount.update(account.id, {
         setupToken: '',
         setupTokenExpiresAt: now,
