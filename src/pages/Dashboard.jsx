@@ -11,8 +11,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import StatusBadge from '@/components/ui/StatusBadge';
 import EstadoFiscal from '@/components/EstadoFiscal';
 import { calcularHealthScore } from '@/lib/healthScoreCalc';
-import { calculateFinancialKPIs, calculateMonthlyData, activeInvoices } from '@/lib/financialCore';
-import { useFinancialData, triggerFinancialRefresh } from '@/hooks/useFinancialData';
+import { calculateFinancialKPIs, calculateMonthlyData } from '@/lib/financialCore';
+import { useFinancialData } from '@/hooks/useFinancialData';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';

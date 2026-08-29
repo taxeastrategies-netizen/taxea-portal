@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { CheckCircle, Clock, PauseCircle, XCircle, ExternalLink, TrendingUp } from 'lucide-react';
+import { CheckCircle, Clock, PauseCircle, XCircle, ExternalLink } from 'lucide-react';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n || 0);

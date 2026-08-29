@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { Sliders, TrendingDown, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Sliders, AlertTriangle, CheckCircle } from 'lucide-react';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);

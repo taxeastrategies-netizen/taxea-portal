@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, addMonths, subMonths, parseISO, differenceInDays, addMonths as addM } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDay, addMonths, subMonths, parseISO, addMonths as addM } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';

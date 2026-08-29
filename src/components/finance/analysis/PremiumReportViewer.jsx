@@ -7,9 +7,9 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import {
-  ChevronLeft, Shield, FileText, BarChart2, AlertTriangle,
-  CheckCircle2, TrendingUp, TrendingDown, Info, Download,
-  Loader2, Sparkles, RefreshCw, Circle, ChevronRight
+  ChevronLeft, Shield, AlertTriangle,
+  CheckCircle2, Info, Download,
+  Loader2, Sparkles, ChevronRight
 } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

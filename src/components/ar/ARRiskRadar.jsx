@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
-import { AlertTriangle, TrendingDown, Users } from 'lucide-react';
+import { AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function fmt(n) {

@@ -1,6 +1,6 @@
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
-import { History, FileCheck, FileText, Clock, AlertCircle } from 'lucide-react';
+import { History, FileCheck, FileText, Clock } from 'lucide-react';
 
 const RUN_TYPE_LABELS = {
   inventario: 'Inventario',

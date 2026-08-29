@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ChevronLeft, ChevronRight, Loader2, CalendarDays } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 

@@ -5,7 +5,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ShieldCheck, HardDrive, RefreshCw, Play, CheckCircle, AlertTriangle, XCircle, Clock, FolderOpen, Loader2, History, Cloud } from 'lucide-react';
+import { ShieldCheck, HardDrive, Play, CheckCircle, AlertTriangle, XCircle, Clock, FolderOpen, Loader2, History, Cloud } from 'lucide-react';
 import BackupModal from '@/components/backup/BackupModal';
 
 const STATUS_STYLES = {

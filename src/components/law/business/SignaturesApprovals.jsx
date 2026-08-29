@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { PenLine, Clock, CheckCircle2, Plus, Users, AlertTriangle } from 'lucide-react';
+import { PenLine, Clock, CheckCircle2, Plus, Users } from 'lucide-react';
 
 const SIGNATURES = [
   { doc: 'NDA — TechSoft SL', firmantes: ['Ana García (CEO)', 'Pedro López (TechSoft)'], estado: 'pendiente', creado: '2026-05-10', plazo: '2026-05-25' },

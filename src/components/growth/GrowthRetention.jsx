@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TrendingDown, TrendingUp, AlertTriangle, Star, Users, ArrowUp } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DEMO_CLIENTS = [

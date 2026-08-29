@@ -4,9 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { startImpersonation } from '@/lib/impersonation';
 import {
   Users, Plus, Search, AlertTriangle, Shield, Clock, CheckCircle,
-  XCircle, RotateCcw, Archive, Eye, ChevronRight, Building2, User,
-  Lock, Unlock, RefreshCw, Copy, Check, ArrowLeft, Calendar, Euro,
-  FileText, Activity, LogIn
+  XCircle, Eye, Building2, User,
+  Lock, Unlock, RefreshCw, Copy, ArrowLeft, Activity, LogIn
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

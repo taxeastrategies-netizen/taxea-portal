@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, AlertCircle, TrendingDown, DollarSign, Brain, Loader2 } from 'lucide-react';
+import { AlertCircle, Brain, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

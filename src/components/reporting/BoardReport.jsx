@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Users, Brain, RefreshCw, TrendingUp, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
+import { Users, Brain, RefreshCw, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, subMonths, parseISO, isSameMonth } from 'date-fns';
 import { es } from 'date-fns/locale';

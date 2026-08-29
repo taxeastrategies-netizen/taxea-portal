@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, AlertTriangle, FileText, BarChart2, TrendingUp, TrendingDown, Info, CheckCircle2, Loader2, Shield } from 'lucide-react';
+import { ChevronLeft, AlertTriangle, Info, CheckCircle2, Loader2, Shield } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 

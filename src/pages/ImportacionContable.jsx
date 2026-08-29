@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Database, RefreshCw, AlertTriangle, CheckCircle, FileSpreadsheet, Brain, Upload } from 'lucide-react';
+import { Database, RefreshCw, AlertTriangle, FileSpreadsheet, Brain, Upload } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

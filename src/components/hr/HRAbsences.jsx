@@ -3,9 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Calendar, Plus, CheckCircle2, XCircle, Clock, AlertTriangle, X } from 'lucide-react';
-import { format, differenceInDays, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Calendar, Plus, CheckCircle2, XCircle, X } from 'lucide-react';
+import { differenceInDays, parseISO } from 'date-fns';
 
 const STATUS = { pendiente: 'bg-amber-50 text-amber-700 border-amber-200', aprobada: 'bg-emerald-50 text-emerald-700 border-emerald-200', rechazada: 'bg-red-50 text-red-700 border-red-200', cancelada: 'bg-slate-50 text-slate-400 border-slate-200' };
 const TIPO_LABELS = { vacaciones: 'Vacaciones', baja_medica: 'Baja médica', permiso: 'Permiso', cita_medica: 'Cita médica', asunto_propio: 'Asunto propio', maternidad: 'Maternidad', paternidad: 'Paternidad', otro: 'Otro' };

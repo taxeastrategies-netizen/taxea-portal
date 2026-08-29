@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle, X, ArrowRight, Sparkles, AlertCircle, RefreshCw, SplitSquareHorizontal } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { CheckCircle, X, ArrowRight, Sparkles, AlertCircle, SplitSquareHorizontal } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Shield, Plus, Search, FileText, AlertTriangle, Eye, Loader2, Lock } from 'lucide-react';
+import { Shield, Plus, Search, FileText, Eye, Loader2, Lock } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import StatusBadge from '@/components/ui/StatusBadge';
 import AuditCaseForm from '@/components/audit/AuditCaseForm';
 import AuditCaseDetail from '@/components/audit/AuditCaseDetail';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';

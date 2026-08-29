@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { differenceInDays, parseISO, isBefore } from 'date-fns';
-import { Search, CheckCircle, AlertCircle, Clock, Zap, ArrowUp } from 'lucide-react';
+import { differenceInDays, parseISO } from 'date-fns';
+import { Search, CheckCircle, AlertCircle, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 

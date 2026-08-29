@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Users, Plus, Search, X, Mail, Phone, Building2, LayoutGrid, List } from 'lucide-react';
+import { Users, Plus, Search, X, Mail, Building2, LayoutGrid, List } from 'lucide-react';
 
 const STATUS_COLORS = {
   activo: 'bg-emerald-50 text-emerald-700 border-emerald-200',

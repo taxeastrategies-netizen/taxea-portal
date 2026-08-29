@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Briefcase, Plus, Search, X, User, Mail, Star, ChevronRight } from 'lucide-react';
+import { Briefcase, Plus, X, Mail, Star, ChevronRight } from 'lucide-react';
 
 const STAGES = ['aplicado', 'screening', 'entrevista_rrhh', 'entrevista_tecnica', 'oferta', 'contratado', 'descartado'];
 const STAGE_LABELS = { aplicado: 'Aplicado', screening: 'Screening', entrevista_rrhh: 'Entrevista RRHH', entrevista_tecnica: 'Entrevista Técnica', oferta: 'Oferta', contratado: 'Contratado', descartado: 'Descartado' };

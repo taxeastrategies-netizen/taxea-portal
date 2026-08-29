@@ -4,8 +4,8 @@ import { base44 } from '@/api/base44Client';
 import * as XLSX from 'xlsx';
 import {
   RefreshCw, Download, ChevronDown, AlertTriangle, CheckCircle,
-  Clock, XCircle, FileText, Users, BarChart2, Filter, Search,
-  History, ArrowDownToLine, Loader2
+  Clock, XCircle, Users, Search,
+  History, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

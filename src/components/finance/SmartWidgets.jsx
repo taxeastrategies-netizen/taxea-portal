@@ -1,8 +1,7 @@
 import { motion } from 'framer-motion';
-import { Calendar, ArrowUpCircle, ArrowDownCircle, AlertCircle, BarChart3, Link } from 'lucide-react';
+import { Calendar, ArrowUpCircle, ArrowDownCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, parseISO, isAfter } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { parseISO } from 'date-fns';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);

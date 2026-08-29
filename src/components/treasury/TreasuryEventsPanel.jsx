@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, ArrowUpRight, ArrowDownRight, Clock, Zap, CheckCircle, X, Calendar } from 'lucide-react';
+import { Plus, ArrowUpRight, ArrowDownRight, Clock, X, Calendar } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isPast } from 'date-fns';

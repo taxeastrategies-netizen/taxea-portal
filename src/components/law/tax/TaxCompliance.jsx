@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Shield, CheckCircle2, AlertTriangle, XCircle, Plus, RefreshCw, Download } from 'lucide-react';
+import { Shield, CheckCircle2, AlertTriangle, XCircle, Download } from 'lucide-react';
 
 const COMPLIANCE_AREAS = [
   { label: 'IVA / IGIC', score: 92, estado: 'ok', alertas: 0, modelos: ['303', '390', '349', '360'] },

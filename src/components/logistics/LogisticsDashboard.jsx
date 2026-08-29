@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Package, TrendingDown, AlertTriangle, TrendingUp, BarChart2, Plus, Upload, ArrowDown, ArrowUp, FileText, RefreshCw, Loader2, ShoppingCart } from 'lucide-react';
+import { Package, TrendingDown, AlertTriangle, TrendingUp, BarChart2, Plus, Upload, ArrowDown, ArrowUp, RefreshCw, Loader2, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import NoCompanyState from '@/components/ui/NoCompanyState';

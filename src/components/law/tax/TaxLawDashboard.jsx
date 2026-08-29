@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   Calculator, AlertTriangle, FileSearch, Shield, BookOpen, Brain,
-  ChevronRight, TrendingUp, Clock, CheckCircle2, XCircle, Plus,
-  Gavel, Building2, FileText, Calendar, Zap
+  ChevronRight, Clock, CheckCircle2, Plus,
+  Gavel
 } from 'lucide-react';
 
 const MODULES = [

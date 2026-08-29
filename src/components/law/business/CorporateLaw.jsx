@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Building2, Users, BookOpen, FileText, Calendar, Plus, ChevronRight, Sparkles } from 'lucide-react';
+import { Building2, Users, BookOpen, FileText, Plus, ChevronRight, Sparkles } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const TABS = [

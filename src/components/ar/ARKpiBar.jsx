@@ -1,4 +1,4 @@
-import { TrendingUp, AlertTriangle, Clock, BarChart2 } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function fmt(n) {

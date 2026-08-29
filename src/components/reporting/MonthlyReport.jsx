@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Calendar, RefreshCw, FileText, TrendingUp, TrendingDown, Brain } from 'lucide-react';
+import { RefreshCw, FileText, TrendingUp, TrendingDown, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, subMonths, parseISO, isSameMonth } from 'date-fns';
 import { es } from 'date-fns/locale';

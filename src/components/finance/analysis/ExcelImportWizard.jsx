@@ -7,7 +7,7 @@ import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
-import { ChevronRight, ChevronLeft, CheckCircle2, AlertTriangle, FileText, X, Info, Loader2, BarChart2, Pencil, Save } from 'lucide-react';
+import { ChevronRight, ChevronLeft, CheckCircle2, FileText, X, Info, Loader2, Pencil, Save } from 'lucide-react';
 
 const EXCEL_TYPES = {
   excel_balance: { label: 'Balance de sumas y saldos', icon: '📋', desc: 'Activo, pasivo, patrimonio y saldos por cuenta' },

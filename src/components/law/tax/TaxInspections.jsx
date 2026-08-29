@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { FileSearch, AlertTriangle, Clock, CheckCircle2, Plus, Calendar, FileText } from 'lucide-react';
+import { FileSearch, AlertTriangle, CheckCircle2, Plus, Calendar, FileText } from 'lucide-react';
 
 const INSPECCIONES = [
   {

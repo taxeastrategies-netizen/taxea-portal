@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { CheckCircle2, XCircle, Loader2, AlertTriangle, FileText, RotateCcw } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, AlertTriangle, FileText } from 'lucide-react';
 
 const CONFIANZA_CONFIG = {
   alta: { label: 'Alta', color: 'text-green-600 bg-green-50 border-green-200' },

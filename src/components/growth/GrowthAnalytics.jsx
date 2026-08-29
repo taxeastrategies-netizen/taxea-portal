@@ -1,5 +1,4 @@
-import { useOutletContext } from 'react-router-dom';
-import { BarChart2, DollarSign } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 

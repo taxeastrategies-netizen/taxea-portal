@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Clock, TrendingUp, TrendingDown, AlertCircle, Users } from 'lucide-react';
+import { Clock, Users } from 'lucide-react';
 
 const fmt = n => `${(n || 0).toFixed(1)}h`;
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Eye, Unplug, AlertCircle, CheckCircle, Clock, Wifi, WifiOff, Loader2, Settings, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, Eye, AlertCircle, CheckCircle, Clock, Wifi, WifiOff, Loader2, Settings, FileSpreadsheet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import BankDetailPanel from './BankDetailPanel';

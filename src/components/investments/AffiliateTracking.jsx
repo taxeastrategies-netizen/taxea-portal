@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { format, parseISO, subDays, isAfter } from 'date-fns';
+import { format, parseISO, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { TrendingUp, MousePointer, Users, DollarSign } from 'lucide-react';
 

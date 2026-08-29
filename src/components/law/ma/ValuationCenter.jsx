@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { BarChart2, TrendingUp, DollarSign, Calculator } from 'lucide-react';
+import { BarChart2, Calculator } from 'lucide-react';
 
 export default function ValuationCenter() {
   const [ebitda, setEbitda] = useState('');

@@ -4,15 +4,14 @@
  * Principio: no sale de la app, no abre pantalla completa
  */
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import {
   ChevronLeft, Download, Settings2, Sparkles, Loader2,
-  CheckCircle2, RefreshCw, Eye, List, X
+  CheckCircle2, List
 } from 'lucide-react';
 
-import { calcularMetricas, generarAlertas, generarRecomendaciones, SOURCE } from './ReportEngine';
+import { calcularMetricas, generarAlertas, generarRecomendaciones } from './ReportEngine';
 import {
   PagePortada, PageResumen, PageAlcance, PageBalance, PagePyG,
   PageLiquidez, PageEndeudamiento, PageRentabilidad, PageCashflow,

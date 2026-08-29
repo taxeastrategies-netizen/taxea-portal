@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Shield, AlertTriangle, CheckCircle2, Plus, Users, Eye, FileText } from 'lucide-react';
+import { Shield, AlertTriangle, Plus, Users, Eye, FileText } from 'lucide-react';
 
 const AREAS = [
   { label: 'RGPD / Protección de Datos', score: 88, alertas: 1, icon: Eye, color: 'text-blue-600', bg: 'bg-blue-50' },

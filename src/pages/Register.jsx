@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Eye, EyeOff, ArrowRight, Shield, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, CheckCircle2, User } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Shield, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

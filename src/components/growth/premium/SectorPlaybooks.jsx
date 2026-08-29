@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { BookOpen, Brain, Loader2, ChevronDown, ChevronRight, Rocket } from 'lucide-react';
+import { BookOpen, Loader2, ChevronDown, ChevronRight, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

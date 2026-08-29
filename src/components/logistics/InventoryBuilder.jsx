@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Plus, Search, Edit2, Trash2, Package, Loader2, ChevronDown, X, Save } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, Loader2, X, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';

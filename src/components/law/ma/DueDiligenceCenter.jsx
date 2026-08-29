@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { FileSearch, AlertTriangle, CheckCircle2, Circle, Brain, Download, Plus } from 'lucide-react';
+import { FileSearch, AlertTriangle, CheckCircle2, Circle, Brain, Download } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const DD_AREAS = [

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Target, Plus, DollarSign, AlertTriangle, Users, Calendar } from 'lucide-react';
+import { Target, Plus } from 'lucide-react';
 
 const FASES = ['Prospección', 'NDA', 'Term Sheet', 'Due Diligence', 'Negociación', 'Cierre'];
 

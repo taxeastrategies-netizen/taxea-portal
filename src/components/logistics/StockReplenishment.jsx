@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { AlertTriangle, TrendingDown, TrendingUp, Package, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import NoCompanyState from '@/components/ui/NoCompanyState';

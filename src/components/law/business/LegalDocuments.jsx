@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { BookOpen, Search, Download, Plus, FileText, Folder } from 'lucide-react';
+import { BookOpen, Search, Download, Plus, FileText } from 'lucide-react';
 
 const CATS = ['Todas', 'Contratos', 'Plantillas', 'Estatutos', 'Escritos', 'Modelos', 'Formularios', 'Jurisprudencia', 'SOPs'];
 

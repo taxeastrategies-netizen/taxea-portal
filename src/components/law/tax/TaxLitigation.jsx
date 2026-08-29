@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Gavel, Plus, Clock, AlertTriangle, CheckCircle2, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Gavel, Plus, Clock, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 
 const PROCEDIMIENTOS = [
   { id: 1, titulo: 'Recurso alzada IVA T3/2024', organo: 'TEAR Canarias', tipo: 'Recurso alzada', estado: 'activo', cuantia: '€18.400', plazo: '15/06/2026', fase: 'Alegaciones', riesgo: 'medio' },

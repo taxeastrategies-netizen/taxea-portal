@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Settings, RefreshCw, CheckCircle, PauseCircle, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Settings, RefreshCw, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ESTADO_NEXT = { activo: 'pausado', pausado: 'activo', negociacion: 'activo', inactivo: 'activo' };

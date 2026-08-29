@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
 // Tax Law modules
 import TaxLawDashboard from '@/components/law/tax/TaxLawDashboard';

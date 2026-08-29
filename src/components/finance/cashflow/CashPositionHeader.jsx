@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { RefreshCw, Download, Share2, Settings, Wifi } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

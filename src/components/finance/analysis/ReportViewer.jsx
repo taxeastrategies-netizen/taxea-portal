@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, FileText, AlertTriangle, CheckCircle2, Info, Printer } from 'lucide-react';
+import { ChevronLeft, AlertTriangle, CheckCircle2, Info, Printer } from 'lucide-react';
 
 const fmt = n => typeof n === 'number'
   ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)

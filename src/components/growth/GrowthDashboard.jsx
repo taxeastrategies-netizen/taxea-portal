@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
-  TrendingUp, TrendingDown, Users, Target, DollarSign, AlertTriangle,
-  Sparkles, RefreshCw, ArrowUp, ArrowDown, Minus, BarChart2, Zap,
-  Activity, Loader2, Brain, ChevronRight, Eye
+  TrendingUp, Users, Target, DollarSign, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, Minus, BarChart2, Zap,
+  Activity, Loader2, Brain, Eye
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, PieChart, Pie, Legend
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 

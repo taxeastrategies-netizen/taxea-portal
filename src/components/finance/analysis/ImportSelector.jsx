@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, FileText, BarChart2, TrendingUp, BookOpen, Layers, Info } from 'lucide-react';
+import { ChevronLeft, Info } from 'lucide-react';
 
 const IMPORT_TYPES = [
   {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Brain, Search, BookOpen, ExternalLink, Tag, Sparkles, Send, RefreshCw } from 'lucide-react';
+import { Brain, BookOpen, ExternalLink, Send } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const SOURCES = [

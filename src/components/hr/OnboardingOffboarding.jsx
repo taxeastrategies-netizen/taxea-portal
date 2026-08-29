@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { UserPlus, UserMinus, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { UserPlus, UserMinus, CheckCircle2, Circle } from 'lucide-react';
 
 const ONBOARD_STEPS = [
   'Contrato firmado', 'Datos personales', 'Alta Seguridad Social', 'Entrega portátil', 'Accesos sistemas',

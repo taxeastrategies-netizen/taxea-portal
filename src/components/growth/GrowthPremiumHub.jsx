@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
 import { Zap, Cpu, BookOpen, BarChart2, TrendingUp, Flame, MapPin, Library, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

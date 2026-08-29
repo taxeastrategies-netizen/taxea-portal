@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Building2, TrendingUp, AlertTriangle, CheckSquare, Euro, Users } from 'lucide-react';
+import { Building2, AlertTriangle, CheckSquare, Euro, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 

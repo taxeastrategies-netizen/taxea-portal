@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-import { differenceInDays, parseISO, addDays, format } from 'date-fns';
-import { TrendingUp } from 'lucide-react';
+import { differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 function fmt(n) {

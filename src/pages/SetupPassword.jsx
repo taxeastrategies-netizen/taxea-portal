@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Mail, Lock, ArrowRight, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle, Mail, Lock, ArrowRight, AlertTriangle } from 'lucide-react';
 
 function PasswordStrength({ password }) {
   const checks = [

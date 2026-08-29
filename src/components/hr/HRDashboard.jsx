@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Users, Clock, Calendar, TrendingUp, Heart, Wifi, MapPin, Home, Brain } from 'lucide-react';
+import { Users, Clock, Calendar, TrendingUp, Heart, Wifi, Brain } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 

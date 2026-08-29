@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Target, CheckSquare, Star, TrendingUp, Users, BarChart2, Award, Zap } from 'lucide-react';
+import { Target, CheckSquare, Star, BarChart2 } from 'lucide-react';
 
 const TABS = [
   { id: 'objectives', label: 'Objetivos', icon: Target },

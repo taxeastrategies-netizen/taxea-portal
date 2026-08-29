@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { DollarSign, Brain, Loader2, AlertTriangle, CheckCircle2, Shield } from 'lucide-react';
+import { Brain, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

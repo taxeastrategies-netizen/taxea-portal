@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { DollarSign, Upload, Receipt, CheckCircle2, Clock, Plus } from 'lucide-react';
+import { DollarSign, Receipt, CheckCircle2, Clock, Plus } from 'lucide-react';
 
 export default function HRExpenses() {
   return (

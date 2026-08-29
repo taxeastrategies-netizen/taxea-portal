@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Users, Brain, Loader2, ThermometerSun, Star, AlertTriangle } from 'lucide-react';
+import { Brain, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

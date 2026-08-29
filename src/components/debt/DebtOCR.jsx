@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, Loader2, CheckCircle, AlertTriangle, Zap, Download, ArrowRight, X, RefreshCw, Star } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, AlertTriangle, Zap, Download, ArrowRight, RefreshCw, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function fmt(n) {

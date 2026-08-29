@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { CheckCircle, Clock, AlertCircle, XCircle, CreditCard, Building2, User, Star, FileText, TrendingUp, Infinity } from 'lucide-react';
+import { CheckCircle, Clock, AlertCircle, XCircle, CreditCard, Building2, User, FileText, TrendingUp, Infinity } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import OcrUsageCard from '@/components/ocr/OcrUsageCard';

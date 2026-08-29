@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   Briefcase, FileText, Building2, Shield, PenLine, BookOpen, Brain,
-  ChevronRight, AlertTriangle, Clock, CheckCircle2, Calendar,
-  Users, Plus, Zap, Lock
+  ChevronRight, Clock, Calendar, Plus
 } from 'lucide-react';
 
 const MODULES = [

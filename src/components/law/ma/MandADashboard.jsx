@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  TrendingUp, Layers, FileSearch, Lock, BarChart2, FileText,
-  Brain, ChevronRight, AlertTriangle, Clock, CheckCircle2,
-  DollarSign, Users, Plus, Activity, Zap, Target
+  TrendingUp, FileSearch, Lock, BarChart2,
+  Brain, ChevronRight, AlertTriangle,
+  DollarSign, Plus, Target
 } from 'lucide-react';
 
 const MODULES = [

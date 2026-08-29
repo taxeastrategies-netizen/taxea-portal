@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Users, Building2, FileText, AlertTriangle, Plus, Search, Eye } from 'lucide-react';
+import { Building2, AlertTriangle, Plus, Search } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
-import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';

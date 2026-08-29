@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { TrendingUp, Wallet, Lock, Zap } from 'lucide-react';
+import { Wallet, Lock, Zap } from 'lucide-react';
 
 function fmt(n) {
   if (n === null || n === undefined) return '—';

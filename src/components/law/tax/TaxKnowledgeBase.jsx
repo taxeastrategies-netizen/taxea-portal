@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { BookOpen, Search, ExternalLink, Tag, Calendar, ArrowRight } from 'lucide-react';
+import { BookOpen, Search, ExternalLink, Calendar, ArrowRight } from 'lucide-react';
 
 const SOURCES = [
   { id: 'dgt', label: 'DGT Consultas vinculantes', count: '12.400+', color: 'text-amber-600', bg: 'bg-amber-50' },

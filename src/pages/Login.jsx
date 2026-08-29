@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, Sparkles, Ban } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Shield, CheckCircle2, FileText, Brain, Bell, Users, ChevronLeft, Mail, Lock, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link } from 'react-router-dom';
-import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 
 const FEATURES = [
   { icon: FileText, text: 'Documentación 100% privada y segura' },

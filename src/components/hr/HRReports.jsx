@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { cn } from '@/lib/utils';
-import { BarChart2, Users, Clock, TrendingUp, AlertTriangle } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const COLORS = ['#16a34a', '#3b82f6', '#a855f7', '#f59e0b', '#ef4444', '#6366f1', '#64748b'];

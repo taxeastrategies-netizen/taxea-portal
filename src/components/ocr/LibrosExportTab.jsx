@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Download, RefreshCw, Clock, Search, ChevronDown, Loader2, History, Building2, ArrowDownToLine,
+  Download, RefreshCw, Search, ChevronDown, Loader2, History, Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';

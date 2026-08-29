@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { differenceInDays, parseISO, isAfter, isBefore, addDays } from 'date-fns';
+import { differenceInDays, parseISO, isBefore } from 'date-fns';
 import ARKpiBar from './ARKpiBar';
 import ARInvoiceTable from './ARInvoiceTable';
 import ARAgingChart from './ARAgingChart';

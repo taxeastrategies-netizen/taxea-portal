@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  Scale, Calculator, Briefcase, TrendingUp, Brain, FileText,
-  Shield, Gavel, Building2, BookOpen, ChevronRight, Sparkles,
-  AlertTriangle, Clock, CheckCircle2, Circle
+  Scale, Calculator, Briefcase, TrendingUp, Brain, BookOpen, ChevronRight, Sparkles
 } from 'lucide-react';
 
 const SUBDEPTS = [

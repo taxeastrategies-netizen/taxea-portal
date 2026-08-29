@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { getModeloInfo, COLOR_MAP } from './CalendarioAEAT';
+import { getModeloInfo } from './CalendarioAEAT';
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 

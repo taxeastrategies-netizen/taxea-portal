@@ -4,8 +4,8 @@
  */
 import { cn } from '@/lib/utils';
 import { fmtEUR, fmtPct, fmtX, SOURCE } from './ReportEngine';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
-import { AlertTriangle, CheckCircle2, TrendingUp, TrendingDown, Info, Clock } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AlertTriangle, CheckCircle2, Info, Clock } from 'lucide-react';
 
 const TAXEA_LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 

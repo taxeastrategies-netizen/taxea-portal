@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
-  Calculator, Wallet, Heart, AlertTriangle, Clock, FileText,
-  CheckSquare, Calendar, ChevronRight, ArrowRight, RefreshCw,
+  Calculator, Wallet, Heart, AlertTriangle, Clock, FileText, Calendar, ChevronRight, ArrowRight, RefreshCw,
   TrendingUp, Users, Shield, Activity, Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

@@ -7,8 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
 import {
-  ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle,
-  FileText, X, Info, Loader2, Eye, Pencil, Save, Filter, Shield, Plus, Trash2
+  ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, X, Info, Loader2, Eye, Pencil, Save, Filter, Shield, Plus, Trash2
 } from 'lucide-react';
 
 // ─── PGC classifier ───────────────────────────────────────────────────────────

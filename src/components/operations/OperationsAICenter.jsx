@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
-  Brain, Sparkles, Loader2, AlertTriangle, CheckCircle2, TrendingUp, TrendingDown,
-  Zap, Shield, Activity, Target, RefreshCw, ChevronRight, FileText, Cpu,
-  BarChart2, Clock, XCircle, Star, Award, Flame, Eye, Bot
+  Brain, Sparkles, Loader2, AlertTriangle, CheckCircle2, TrendingUp,
+  Zap, Shield, Activity, RefreshCw, XCircle, Award, Flame, Eye, Bot
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

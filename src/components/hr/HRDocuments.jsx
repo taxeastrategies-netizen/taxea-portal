@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { FileText, Upload, Search, Filter, File, CheckCircle2, Clock, AlertTriangle, X, Plus, ExternalLink } from 'lucide-react';
+import { FileText, Upload, Search, File, X, ExternalLink } from 'lucide-react';
 
 const TYPE_LABELS = { contrato: 'Contrato', nomina: 'Nómina', dni: 'DNI', certificado: 'Certificado', convenio: 'Convenio', anexo: 'Anexo', prl: 'PRL', formacion: 'Formación', otro: 'Otro' };
 const SIGN_STATUS = { sin_firma: { label: 'Sin firma', cls: 'bg-slate-50 text-slate-500 border-slate-200' }, pendiente_firma: { label: 'Pendiente firma', cls: 'bg-amber-50 text-amber-700 border-amber-200' }, firmado: { label: 'Firmado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }, rechazado: { label: 'Rechazado', cls: 'bg-red-50 text-red-700 border-red-200' }, expirado: { label: 'Expirado', cls: 'bg-orange-50 text-orange-700 border-orange-200' } };

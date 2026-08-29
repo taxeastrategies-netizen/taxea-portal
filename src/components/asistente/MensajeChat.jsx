@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { ThumbsUp, ThumbsDown, Copy, CheckCircle, UserCircle, ExternalLink, Shield, Globe, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import RiesgoBadge from './RiesgoBadge';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Filter, ArrowUpRight, ArrowDownRight, CheckCircle, AlertCircle, Clock, Sparkles, X } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownRight, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Brain, Send, Sparkles, FileText, Building2, Shield, RefreshCw } from 'lucide-react';
+import { Brain, Send, FileText, Building2, Shield, RefreshCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const QUICK_ACTIONS = [

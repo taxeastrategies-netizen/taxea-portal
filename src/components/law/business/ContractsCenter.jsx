@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { FileText, Plus, Search, Brain, AlertTriangle, Clock, CheckCircle2, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { FileText, Plus, Search, Brain, Clock, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const CONTRACT_TYPES = ['Todos', 'NDA', 'SPA', 'SHA', 'Servicios', 'Alquiler', 'Laboral', 'Distribución', 'Licensing', 'Préstamo', 'Software/SaaS'];

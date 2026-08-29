@@ -3,7 +3,6 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Cpu, Brain, Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 const DEFAULT = {
   objetivo: '', segmento: 'autonomos', sector: 'servicios',

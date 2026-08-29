@@ -3,8 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { Clock, Play, Square, Plus, ChevronRight, Wifi, MapPin } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Clock, Play, Square } from 'lucide-react';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 export default function TimeAttendance() {

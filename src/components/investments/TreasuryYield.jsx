@@ -1,5 +1,4 @@
-import { cn } from '@/lib/utils';
-import { TrendingUp, Clock, Shield } from 'lucide-react';
+import { Clock, Shield } from 'lucide-react';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);

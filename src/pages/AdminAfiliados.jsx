@@ -5,7 +5,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, TrendingUp, CheckCircle2, AlertTriangle, Clock, Euro } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, Euro } from 'lucide-react';
 
 const ESTADO_LABELS = {
   invitacion_enviada: 'Invitación enviada',

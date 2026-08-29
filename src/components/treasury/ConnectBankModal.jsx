@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Shield, CheckCircle, ChevronRight, AlertCircle, FileSpreadsheet, Wifi, Zap, ArrowLeft, ExternalLink, Key, Loader2 } from 'lucide-react';
+import { X, Shield, CheckCircle, ChevronRight, FileSpreadsheet, Wifi, Zap, ArrowLeft, ExternalLink, Key, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 

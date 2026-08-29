@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { differenceInDays, parseISO } from 'date-fns';
-import { Layers, Plus, RefreshCw, TrendingDown, AlertTriangle, BarChart2, Calendar, DollarSign, Sliders, Activity, Bell, Zap } from 'lucide-react';
+import { Layers, Plus, RefreshCw, TrendingDown, BarChart2, Calendar, DollarSign, Sliders, Activity, Bell, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DebtKpiBar from './DebtKpiBar';
 import DebtList from './DebtList';
