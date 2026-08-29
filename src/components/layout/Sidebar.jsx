@@ -466,8 +466,16 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                 return (
                   <Link
                     key={to}
-                    to={isUtilLocked ? '/suscripcion' : to}
-                    onClick={onClose}
+                    to={to}
+                    aria-label={isUtilLocked ? `${label} — requiere suscripción activa` : label}
+                    title={isUtilLocked ? `${label}: requiere suscripción activa` : undefined}
+                    onClick={(event) => {
+                      if (isUtilLocked) {
+                        event.preventDefault();
+                        navigate(`/suscripcion?blocked=${encodeURIComponent(to)}`);
+                      }
+                      onClose();
+                    }}
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
                       isUtilLocked
