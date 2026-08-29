@@ -23,20 +23,25 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
 
-    // Verificar idempotencia
+    // Verificar idempotencia sin bloquear los reintentos de eventos fallidos.
     const existingEvents = await base44.asServiceRole.entities.StripeWebhookEvent.filter({ stripeEventId: event.id });
-    if (existingEvents.length > 0) {
+    const existingEvent = existingEvents?.[0];
+    if (existingEvent?.processed === true && existingEvent?.processingResult === 'success') {
       return Response.json({ received: true, idempotent: true });
     }
 
-    // Guardar evento
-    await base44.asServiceRole.entities.StripeWebhookEvent.create({
+    const webhookRecord = existingEvent || await base44.asServiceRole.entities.StripeWebhookEvent.create({
       stripeEventId: event.id,
       eventType: event.type,
-      processed: true,
-      processedAt: new Date().toISOString(),
-      processingResult: 'received',
+      processed: false,
+      processingResult: 'processing',
     });
+    if (existingEvent) {
+      await base44.asServiceRole.entities.StripeWebhookEvent.update(existingEvent.id, {
+        processed: false,
+        processingResult: 'retrying',
+      });
+    }
 
     const metadata = event.data.object?.metadata || {};
     const portalUserId = metadata.portalUserId;
@@ -59,6 +64,17 @@ Deno.serve(async (req) => {
             actionAt: new Date().toISOString(),
             details: `Checkout completado. Stripe subscription: ${stripeSubId}`,
           });
+        }
+
+        const sessionMeta = session.metadata || {};
+        if (sessionMeta.eventType === 'plan_upgrade' && sessionMeta.upgradeRequestId) {
+          await base44.asServiceRole.entities.PlanUpgradeRequest.update(sessionMeta.upgradeRequestId, {
+            stripePaymentIntentId: session.payment_intent,
+            status: session.payment_status === 'paid' ? 'paid' : 'payment_processing',
+          });
+          if (session.payment_status === 'paid') {
+            await applyPlanUpgrade(base44, stripe, sessionMeta);
+          }
         }
         break;
       }
@@ -157,10 +173,10 @@ Deno.serve(async (req) => {
             });
             await createAdminNotification(base44, userId, subId, 'pago_verificado',
               'Nuevo pago verificado — pendiente de activación',
-              `Primer pago confirmado (${amount}€). Activa la cuenta en: https://app.taxea.co/admin/pagos`);
+              `Primer pago confirmado (${amount}€). Activa la cuenta en: https://taxeaportal.com/admin/clientes-cobros`);
             await sendAdminEmail(base44,
               `Pago confirmado — Activación pendiente`,
-              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nActiva la cuenta desde el panel: https://app.taxea.co/admin/pagos`);
+              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nActiva la cuenta desde el panel: https://taxeaportal.com/admin/clientes-cobros`);
           } else {
             // Renovación
             await base44.asServiceRole.entities.Subscription.update(subId, {
@@ -202,7 +218,7 @@ Deno.serve(async (req) => {
             'Renovación fallida', `El pago de la renovación ha fallado. Motivo: ${invoice.last_finalization_error?.code || 'desconocido'}`);
           await sendAdminEmail(base44,
             `Pago fallido — Renovación`,
-            `El pago de renovación de ${invoice.amount_due / 100}€ ha fallado para el usuario ${userId}.\n\nMotivo: ${invoice.last_finalization_error?.code || 'desconocido'}\n\nRevisa el estado en: https://app.taxea.co/admin/users`);
+            `El pago de renovación de ${invoice.amount_due / 100}€ ha fallado para el usuario ${userId}.\n\nMotivo: ${invoice.last_finalization_error?.code || 'desconocido'}\n\nRevisa el estado en: https://taxeaportal.com/admin/users`);
         }
         break;
       }
@@ -220,23 +236,6 @@ Deno.serve(async (req) => {
             updates.cancelledAt = new Date().toISOString();
           }
           await base44.asServiceRole.entities.Subscription.update(subId, updates);
-        }
-        break;
-      }
-
-      case 'checkout.session.completed': {
-        // Handle plan upgrade checkout (mode: payment)
-        const session2 = event.data.object;
-        const meta2 = session2.metadata || {};
-        if (meta2.eventType === 'plan_upgrade' && meta2.upgradeRequestId) {
-          const piId = session2.payment_intent;
-          await base44.asServiceRole.entities.PlanUpgradeRequest.update(meta2.upgradeRequestId, {
-            stripePaymentIntentId: piId,
-            status: session2.payment_status === 'paid' ? 'paid' : 'payment_processing',
-          });
-          if (session2.payment_status === 'paid') {
-            await applyPlanUpgrade(base44, stripe, meta2);
-          }
         }
         break;
       }
@@ -294,16 +293,13 @@ Deno.serve(async (req) => {
     }
 
     // Actualizar el evento como procesado correctamente
-    const eventRecord = await base44.asServiceRole.entities.StripeWebhookEvent.filter({ stripeEventId: event.id });
-    if (eventRecord.length > 0) {
-      await base44.asServiceRole.entities.StripeWebhookEvent.update(eventRecord[0].id, {
-        processed: true,
-        processedAt: new Date().toISOString(),
-        relatedUserId: portalUserId,
-        relatedSubscriptionId: subscriptionId,
-        processingResult: 'success',
-      });
-    }
+    await base44.asServiceRole.entities.StripeWebhookEvent.update(webhookRecord.id, {
+      processed: true,
+      processedAt: new Date().toISOString(),
+      relatedUserId: portalUserId,
+      relatedSubscriptionId: subscriptionId,
+      processingResult: 'success',
+    });
 
     return Response.json({ received: true });
   } catch (error) {
