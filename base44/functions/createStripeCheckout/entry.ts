@@ -5,6 +5,16 @@ const STRIPE_SECRET = Deno.env.get("STRIPE_SECRET_KEY");
 const APP_ID = Deno.env.get("BASE44_APP_ID");
 const PUBLISHED_URL = "https://taxeaportal.com";
 
+function safePortalUrl(candidate, fallbackPath) {
+  try {
+    const url = new URL(candidate || fallbackPath, PUBLISHED_URL);
+    if (url.origin !== PUBLISHED_URL) return `${PUBLISHED_URL}${fallbackPath}`;
+    return url.toString();
+  } catch {
+    return `${PUBLISHED_URL}${fallbackPath}`;
+  }
+}
+
 // Legacy plan prices kept for existing subscribers
 const LEGACY_PLAN_PRICES = {
   basic_monthly:    "price_1TjegIDqzznToobkpNwexKOi",
@@ -91,9 +101,9 @@ Deno.serve(async (req) => {
 
     if (existingSubs.length > 0) {
       subscription = existingSubs[0];
-      await base44.entities.Subscription.update(subscription.id, subData);
+      await base44.asServiceRole.entities.Subscription.update(subscription.id, subData);
     } else {
-      subscription = await base44.entities.Subscription.create({
+      subscription = await base44.asServiceRole.entities.Subscription.create({
         userId: user.id,
         ...subData,
       });
@@ -117,8 +127,8 @@ Deno.serve(async (req) => {
       mode: 'subscription',
       customer: customerId,
       line_items: [lineItem],
-      success_url: successUrl || `${PUBLISHED_URL}/suscripcion?checkout=success`,
-      cancel_url: cancelUrl || `${PUBLISHED_URL}/suscripcion?checkout=cancelled`,
+      success_url: safePortalUrl(successUrl, '/suscripcion?checkout=success'),
+      cancel_url: safePortalUrl(cancelUrl, '/suscripcion?checkout=cancelled'),
       metadata: {
         base44_app_id: APP_ID,
         portalUserId: user.id,
