@@ -12,6 +12,12 @@ Deno.serve(async (req) => {
   const doc = docs[0];
   if (!doc) return Response.json({ error: 'Document not found' }, { status: 404 });
 
+  const isAdmin = ['admin', 'super_admin'].includes(user.role);
+  const userCompanyId = user.data?.company_id;
+  if (!isAdmin && (!userCompanyId || doc.company_id !== userCompanyId)) {
+    return Response.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   try {
     await base44.asServiceRole.entities.LaborOcrDocument.update(doc.id, { ocr_status: 'procesando' });
 
