@@ -57,51 +57,14 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     }
   }, [isPortalLocked, isOnLockedPath, navigate]);
 
-  // Tracking automático de primer acceso para clientes
+  // El servidor valida la identidad y controla los únicos campos de acceso que pueden cambiar.
   useEffect(() => {
     if (!user?.email || isAdmin || trackedRef.current) return;
     trackedRef.current = true;
 
-    const trackAccess = async () => {
-      try {
-        const accounts = await base44.entities.ClientAccount.filter({ email: user.email });
-        const account = accounts?.[0];
-        if (!account) return;
-
-        const now = new Date().toISOString();
-        const updates = { lastLoginAt: now };
-
-        if (!account.firstAccessCompleted) {
-          updates.firstAccessCompleted = true;
-          updates.passwordChangedByClient = true;
-          updates.lastPasswordChangeAt = now;
-          if (account.accessStatus === 'pendiente_primer_acceso') {
-            updates.accessStatus = 'activa';
-          }
-          await base44.entities.ClientAccessAuditLog.create({
-            clientAccountId: account.id,
-            clientName: account.legalName,
-            actionType: 'primer_acceso',
-            actionBy: user.email,
-            actionAt: now,
-            details: 'Primer acceso completado. Contraseña establecida por el cliente.',
-          });
-        } else {
-          await base44.entities.ClientAccessAuditLog.create({
-            clientAccountId: account.id,
-            clientName: account.legalName,
-            actionType: 'login_correcto',
-            actionBy: user.email,
-            actionAt: now,
-            details: 'Acceso al portal.',
-          });
-        }
-
-        await base44.entities.ClientAccount.update(account.id, updates);
-      } catch {}
-    };
-
-    trackAccess();
+    base44.functions.invoke('trackClientAccess', {}).catch(() => {
+      trackedRef.current = false;
+    });
   }, [user?.email, isAdmin]);
 
   // Routes that are always accessible regardless of subscription
