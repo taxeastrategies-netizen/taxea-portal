@@ -14,6 +14,18 @@ Deno.serve(async (req) => {
     const reservations = await base44.asServiceRole.entities.OcrCreditReservation.filter({ id: reservationId });
     const reservation = reservations?.[0];
     if (!reservation) return Response.json({ error: 'Reserva no encontrada' }, { status: 404 });
+
+    const isAdmin = ['admin', 'super_admin'].includes(user.role);
+    if (!isAdmin) {
+      const ownedAccounts = await base44.asServiceRole.entities.ClientAccount.filter({
+        id: reservation.billingAccountId,
+        email: user.email,
+      });
+      if (!ownedAccounts?.length) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     if (reservation.status !== 'reserved') {
       return Response.json({ status: reservation.status, idempotent: true });
     }
