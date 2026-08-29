@@ -93,8 +93,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
       });
 
       // 2. Enviar email personalizado en español vía backend function
-      const appUrl = window.location.origin;
-      const setupUrl = `${appUrl}/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
+      const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
           email: form.email,
@@ -134,7 +133,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
       email: '', phone: '', activity: '', province: '', country: 'España',
       taxRegime: 'iva', plan: '', monthlyFee: '', paymentStatus: 'al_dia',
       accessStatus: 'pendiente_primer_acceso', internalOwner: '', notes: '',
-      registrationDate: new Date().toISOString().split('T')[0],
+      registrationDate: new Date().toISOString().split('T')[0], forcePasswordChange: true,
     });
     onOpenChange(false);
   };
@@ -291,7 +290,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
             <div className="bg-secondary/50 rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mensaje de bienvenida (opcional)</p>
               <p className="text-xs text-foreground bg-card border border-border rounded-lg p-3 whitespace-pre-line leading-relaxed">
-                {`Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nPortal: https://taxea-flow-portal.base44.app/login`}
+                {`Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nPortal: https://taxeaportal.com/login`}
               </p>
               <Button type="button" variant="outline" size="sm" onClick={copyWelcomeMessage} className="gap-2">
                 {copiedMsg ? <><Check className="w-3.5 h-3.5 text-emerald-600" />Copiado</> : <><Copy className="w-3.5 h-3.5" />Copiar mensaje</>}
@@ -329,8 +328,8 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
               <div>
                 <p className="text-xs text-emerald-700 font-medium mb-1.5">Enlace directo (para reenviar si fuera necesario):</p>
                 <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-3 py-2">
-                  <span className="text-[11px] text-emerald-700 flex-1 break-all">{window.location.origin}/setup-password</span>
-                  <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/setup-password`)} className="text-emerald-600 hover:text-emerald-800 flex-shrink-0">
+                  <span className="text-[11px] text-emerald-700 flex-1 break-all">{`https://taxeaportal.com/setup-password?token=${encodeURIComponent(createdClient.setupToken)}&email=${encodeURIComponent(createdClient.email)}`}</span>
+                  <button type="button" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(`https://taxeaportal.com/setup-password?token=${encodeURIComponent(createdClient.setupToken)}&email=${encodeURIComponent(createdClient.email)}`)} className="text-emerald-600 hover:text-emerald-800 flex-shrink-0">
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                 </div>
