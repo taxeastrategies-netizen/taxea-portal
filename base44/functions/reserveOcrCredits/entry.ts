@@ -28,13 +28,9 @@ Deno.serve(async (req) => {
     if (!idempotencyKey) return Response.json({ error: 'idempotencyKey requerido' }, { status: 400 });
     if (!documentType) return Response.json({ error: 'documentType requerido' }, { status: 400 });
 
-    // Idempotency check
-    const existingReservations = await base44.asServiceRole.entities.OcrCreditReservation.filter({ idempotencyKey });
-    if (existingReservations.length > 0) {
-      const existing = existingReservations[0];
-      if (existing.status === 'reserved' || existing.status === 'consumed') {
-        return Response.json({ reservationId: existing.id, status: existing.status, idempotent: true });
-      }
+    const creditsToReserve = Number(credits);
+    if (!Number.isInteger(creditsToReserve) || creditsToReserve < 1 || creditsToReserve > 200) {
+      return Response.json({ error: 'credits debe ser un entero entre 1 y 200' }, { status: 400 });
     }
 
     // Find billing account
@@ -43,6 +39,19 @@ Deno.serve(async (req) => {
     if (!clientAccount) return Response.json({ error: 'Cuenta de facturación no encontrada' }, { status: 404 });
 
     const billingAccountId = clientAccount.id;
+
+    // La idempotencia se limita a la cuenta actual para no revelar reservas de otros tenants.
+    const existingReservations = await base44.asServiceRole.entities.OcrCreditReservation.filter({
+      idempotencyKey,
+      billingAccountId,
+    });
+    if (existingReservations.length > 0) {
+      const existing = existingReservations[0];
+      if (existing.status === 'reserved' || existing.status === 'consumed') {
+        return Response.json({ reservationId: existing.id, status: existing.status, idempotent: true });
+      }
+    }
+
     const ocrAccessStatus = clientAccount.ocrAccessStatus || 'allowed';
     if (ocrAccessStatus === 'blocked') {
       return Response.json({ error: 'El acceso OCR está bloqueado para esta cuenta', blocked: true }, { status: 403 });
@@ -95,7 +104,7 @@ Deno.serve(async (req) => {
     if (!period.isUnlimited) {
       const totalLimit = period.currentPlanLimit + period.manualCredits;
       const available = totalLimit - period.consumedCredits - period.reservedCredits;
-      if (available < credits) {
+      if (available < creditsToReserve) {
         // Update status to exhausted
         await base44.asServiceRole.entities.OcrQuotaPeriod.update(period.id, { status: 'exhausted' });
         return Response.json({
@@ -116,7 +125,7 @@ Deno.serve(async (req) => {
       documentId: documentId || null,
       batchId: batchId || null,
       idempotencyKey,
-      creditsReserved: credits,
+      creditsReserved: creditsToReserve,
       status: 'reserved',
       reservedAt: new Date().toISOString(),
       expiresAt,
@@ -124,7 +133,7 @@ Deno.serve(async (req) => {
 
     // Increment reserved count
     await base44.asServiceRole.entities.OcrQuotaPeriod.update(period.id, {
-      reservedCredits: (period.reservedCredits || 0) + credits,
+      reservedCredits: (period.reservedCredits || 0) + creditsToReserve,
     });
 
     // Create usage event
@@ -136,11 +145,11 @@ Deno.serve(async (req) => {
       documentType,
       sourceModule: sourceModule || 'unknown',
       idempotencyKey,
-      credits,
+      credits: creditsToReserve,
       status: 'pending',
     });
 
-    console.log(`Reserva OCR creada: ${reservation.id}, usuario ${user.id}, créditos: ${credits}`);
+    console.log(`Reserva OCR creada: ${reservation.id}, usuario ${user.id}, créditos: ${creditsToReserve}`);
     return Response.json({ reservationId: reservation.id, quotaPeriodId: period.id, status: 'reserved' });
   } catch (error) {
     console.error('Error en reserveOcrCredits:', error);
