@@ -136,9 +136,11 @@ export default function AdminClients() {
   const handleResendInvite = async (client) => {
     setActionLoading(true);
     try {
-      const newToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+      if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+        throw new Error('Este navegador no permite generar un enlace de acceso seguro.');
+      }
+      const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+      const newToken = crypto.randomUUID?.() || Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('');
       const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
       const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(newToken)}&email=${encodeURIComponent(client.email)}`;
       await base44.entities.ClientAccount.update(client.id, { setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() });
