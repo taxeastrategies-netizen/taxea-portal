@@ -7,10 +7,11 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    if (!user || user.role !== 'admin') return Response.json({ error: 'No autorizado' }, { status: 403 });
+    if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (!['admin', 'super_admin'].includes(user.role)) return Response.json({ error: 'No autorizado' }, { status: 403 });
 
     const { subscriptionId } = await req.json().catch(() => ({}));
-    const sub = await base44.entities.Subscription.get(subscriptionId);
+    const sub = await base44.asServiceRole.entities.Subscription.get(subscriptionId);
     if (!sub) return Response.json({ error: 'Suscripción no encontrada' }, { status: 404 });
 
     const stripe = new Stripe(STRIPE_SECRET);
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    await base44.entities.Subscription.update(subscriptionId, updates);
+    await base44.asServiceRole.entities.Subscription.update(subscriptionId, updates);
 
     return Response.json({
       synced: true,
