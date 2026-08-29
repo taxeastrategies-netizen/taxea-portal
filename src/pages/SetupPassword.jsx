@@ -46,14 +46,13 @@ export default function SetupPassword() {
     if (!urlToken) return;
     const validate = async () => {
       try {
-        const accounts = await base44.entities.ClientAccount.filter({ setupToken: urlToken });
-        const account = accounts?.[0];
-        if (!account) { setMode('invalid'); setLoading(false); return; }
-        // Check expiry
-        if (account.setupTokenExpiresAt && new Date(account.setupTokenExpiresAt) < new Date()) {
-          setMode('invalid'); setLoading(false); return;
-        }
-        setClientAccount(account);
+        const response = await base44.functions.invoke('clientSetup', {
+          action: 'validate',
+          token: urlToken,
+        });
+        const account = response?.data || response;
+        if (!account?.valid) { setMode('invalid'); setLoading(false); return; }
+        setClientAccount({ email: account.email, legalName: account.legalName });
         setEmail(account.email);
         setMode('token');
       } catch {
@@ -94,18 +93,11 @@ export default function SetupPassword() {
       try { await base44.users.inviteUser(email, 'user'); } catch {}
       // Send password reset (actual link to /reset-password?token=...)
       await base44.auth.resetPasswordRequest(email);
-      // Mark token as used in ClientAccount
-      if (clientAccount) {
-        await base44.entities.ClientAccount.update(clientAccount.id, {
-          setupTokenExpiresAt: new Date().toISOString(), // invalidate token
-        });
-        await base44.entities.ClientAccessAuditLog.create({
-          clientAccountId: clientAccount.id,
-          clientName: clientAccount.legalName,
-          actionType: 'credenciales_generadas',
-          actionBy: email,
-          actionAt: new Date().toISOString(),
-          details: 'Cliente solicitó enlace de establecimiento de contraseña desde /setup-password',
+      // Invalidate the setup token on the server after requesting the reset link.
+      if (clientAccount && urlToken) {
+        await base44.functions.invoke('clientSetup', {
+          action: 'consume',
+          token: urlToken,
         });
       }
       setMode('sent');
