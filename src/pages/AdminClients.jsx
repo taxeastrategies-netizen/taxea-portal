@@ -140,7 +140,7 @@ export default function AdminClients() {
         ? crypto.randomUUID()
         : (Math.random().toString(36).slice(2) + Date.now().toString(36));
       const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-      const setupUrl = `${window.location.origin}/setup-password?token=${newToken}&email=${encodeURIComponent(client.email)}`;
+      const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(newToken)}&email=${encodeURIComponent(client.email)}`;
       await base44.entities.ClientAccount.update(client.id, { setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() });
       await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl, isResend: true });
       await logAction(client.id, client.legalName, 'credenciales_generadas', 'Admin reenvió enlace de acceso al cliente.');
@@ -297,8 +297,8 @@ export default function AdminClients() {
                   <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
                     <p className="text-xs font-semibold text-slate-600">Enlace de acceso activo:</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500 flex-1 break-all">{`${window.location.origin}/setup-password?token=${selectedClient.setupToken}&email=${encodeURIComponent(selectedClient.email)}`}</span>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 flex-shrink-0" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/setup-password?token=${selectedClient.setupToken}&email=${encodeURIComponent(selectedClient.email)}`)}>
+                      <span className="text-[11px] text-slate-500 flex-1 break-all">{`https://taxeaportal.com/setup-password?token=${encodeURIComponent(selectedClient.setupToken)}&email=${encodeURIComponent(selectedClient.email)}`}</span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 flex-shrink-0" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(`https://taxeaportal.com/setup-password?token=${encodeURIComponent(selectedClient.setupToken)}&email=${encodeURIComponent(selectedClient.email)}`)}>
                         <Copy className="w-3.5 h-3.5" />
                       </Button>
                     </div>
