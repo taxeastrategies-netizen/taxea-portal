@@ -40,7 +40,7 @@ function AccessBadge({ status }) {
   );
 }
 
-function KpiCard({ title, value, color, sub }) {
+function KpiCard({ title, value, color, sub = null }) {
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <p className={cn('text-2xl font-bold', color)}>{value}</p>
