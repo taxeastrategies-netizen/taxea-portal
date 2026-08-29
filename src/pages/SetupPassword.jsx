@@ -69,13 +69,8 @@ export default function SetupPassword() {
     setSending(true);
     setError('');
     try {
-      // Only show generic success - don't reveal if email exists
-      // Validate email belongs to a ClientAccount first (silently)
-      const accounts = await base44.entities.ClientAccount.filter({ email: email.trim() });
-      if (accounts?.length > 0) {
-        // User exists - call resetPasswordRequest
-        await base44.auth.resetPasswordRequest(email.trim());
-      }
+      // El endpoint de recuperación mantiene una respuesta genérica para no revelar si el correo existe.
+      await base44.auth.resetPasswordRequest(email.trim());
       // Always show success regardless
       setMode('sent');
     } catch {
@@ -89,17 +84,16 @@ export default function SetupPassword() {
     setSending(true);
     setError('');
     try {
-      // Create user in auth system if needed
-      try { await base44.users.inviteUser(email, 'user'); } catch {}
+      // El backend valida el token, prepara el usuario si es necesario y lo invalida de forma atómica.
+      if (!clientAccount || !urlToken) throw new Error('Enlace no válido');
+      const consumeResponse = await base44.functions.invoke('clientSetup', {
+        action: 'consume',
+        token: urlToken,
+      });
+      const consumeResult = consumeResponse?.data || consumeResponse;
+      if (!consumeResult?.valid) throw new Error('Enlace no válido');
       // Send password reset (actual link to /reset-password?token=...)
       await base44.auth.resetPasswordRequest(email);
-      // Invalidate the setup token on the server after requesting the reset link.
-      if (clientAccount && urlToken) {
-        await base44.functions.invoke('clientSetup', {
-          action: 'consume',
-          token: urlToken,
-        });
-      }
       setMode('sent');
     } catch (e) {
       setError('Ha ocurrido un error. Por favor, inténtalo de nuevo o contacta con Taxea Strategies.');
