@@ -96,7 +96,16 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         inviteEmailSentAt: new Date().toISOString(),
       });
 
-      // 2. Enviar email personalizado en español vía backend function
+      // 2. Crear o invitar al usuario de acceso desde el backend administrativo.
+      try {
+        await base44.functions.invoke('inviteUser', {
+          email: form.email,
+          role: 'user',
+          full_name: form.legalName,
+        });
+      } catch (_inviteError) { /* puede existir previamente */ }
+
+      // 3. Enviar email personalizado en español vía backend function
       const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
