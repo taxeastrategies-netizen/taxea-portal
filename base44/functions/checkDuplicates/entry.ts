@@ -13,6 +13,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'company_id and scope are required' }, { status: 400 });
     }
 
+    const isAdmin = ['admin', 'super_admin'].includes(user.role);
+    const userCompanyId = user.data?.company_id;
+    if (!isAdmin && (!userCompanyId || company_id !== userCompanyId)) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const allowedScopes = new Set(['ocr_expense', 'ocr_income', 'invoices_emitida', 'invoices_recibida']);
+    if (!allowedScopes.has(scope)) {
+      return Response.json({ error: 'scope no válido' }, { status: 400 });
+    }
+
     // scope: 'ocr_expense' | 'ocr_income' | 'invoices_emitida' | 'invoices_recibida'
     const periodType = period_type || 'all'; // 'month' | 'quarter' | 'all'
     const filterYear = year ? parseInt(year) : null;
