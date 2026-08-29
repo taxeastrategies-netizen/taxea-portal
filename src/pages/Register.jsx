@@ -126,27 +126,7 @@ export default function Register() {
       try {
         const me = await base44.auth.me();
         if (me?.id) {
-          await base44.entities.User.update(me.id, {
-            isPortalActive: false,
-            accountAccessStatus: 'locked',
-            adminActivationStatus: 'pending',
-            status: 'pendiente',
-          });
-          await base44.entities.Subscription.create({
-            userId: me.id,
-            planCode: 'sin_suscripcion',
-            plan: 'sin_suscripcion',
-            status: 'pendiente_seleccion',
-            firstPaymentStatus: 'unpaid',
-            requestedAt: new Date().toISOString(),
-          });
-          await base44.entities.UserAuditLog.create({
-            userId: me.id,
-            actionType: 'usuario_registrado',
-            actionBy: me.email,
-            actionAt: new Date().toISOString(),
-            details: 'Usuario registrado. Cuenta bloqueada a la espera de suscripción y activación.',
-          });
+          await base44.functions.invoke('initializeUserAccount', {});
         }
       } catch {}
       window.location.href = '/';
