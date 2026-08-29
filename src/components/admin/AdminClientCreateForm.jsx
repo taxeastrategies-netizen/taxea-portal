@@ -36,12 +36,13 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
     internalOwner: '',
     registrationDate: new Date().toISOString().split('T')[0],
     notes: '',
+    forcePasswordChange: true,
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const copyWelcomeMessage = () => {
-    const msg = `Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nPuedes acceder desde: https://taxea-flow-portal.base44.app/login\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nSi tienes dudas, contacta con tu asesor.`;
+    const msg = `Hola, ya tienes activa tu cuenta en Taxea Portal.\n\nPuedes acceder desde: https://taxeaportal.com/login\n\nRecibirás un email de invitación para establecer tu contraseña y activar el acceso.\n\nSi tienes dudas, contacta con tu asesor.`;
     navigator.clipboard.writeText(msg);
     setCopiedMsg(true);
     setTimeout(() => setCopiedMsg(false), 2000);
@@ -93,7 +94,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
 
       // 2. Enviar email personalizado en español vía backend function
       const appUrl = window.location.origin;
-      const setupUrl = `${appUrl}/setup-password`;
+      const setupUrl = `${appUrl}/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
           email: form.email,
