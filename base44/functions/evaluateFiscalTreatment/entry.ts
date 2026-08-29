@@ -13,6 +13,12 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Faltan parametros: companyId, direction' }, { status: 400 });
     }
 
+    const isAdmin = ['admin', 'super_admin'].includes(user.role);
+    const userCompanyId = user.data?.company_id;
+    if (!isAdmin && (!userCompanyId || companyId !== userCompanyId)) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // 1. Load fiscal profile for company
     const profiles = await base44.asServiceRole.entities.FiscalProfile.filter({ company_id: companyId, active: true });
     const profile = profiles?.[0] || null;
