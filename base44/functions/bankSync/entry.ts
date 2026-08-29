@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
 // ─── CSV Helpers ─────────────────────────────────────────────────────────────
 
@@ -435,6 +435,16 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'bank_account_id y company_id son requeridos' }, { status: 400 });
   }
 
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+  if (!isAdmin && company_id !== user.data?.company_id) {
+    return Response.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const accountRows = await base44.asServiceRole.entities.BankAccount.filter({ id: bank_account_id });
+  const account = accountRows?.[0];
+  if (!account || account.company_id !== company_id) {
+    return Response.json({ error: 'Cuenta bancaria no encontrada' }, { status: 404 });
+  }
+
   // ── Sync API real (Revolut, Wise, Qonto, bancos GoCardless) ─────────────
   if (action === 'api_sync') {
     const { proveedor, access_token, requisition_id } = body;
@@ -490,7 +500,15 @@ Deno.serve(async (req) => {
   if (action === 'create_gocardless_link') {
     const { institution_id, redirect_url } = body;
     if (!institution_id) return Response.json({ error: 'institution_id requerido' }, { status: 400 });
-    const redirectUrl = redirect_url || 'https://app.taxea.es/finance/treasury';
+    let redirectUrl = 'https://taxeaportal.com/finance/treasury';
+    if (redirect_url) {
+      try {
+        const requestedRedirect = new URL(redirect_url);
+        if (requestedRedirect.protocol === 'https:' && requestedRedirect.hostname === 'taxeaportal.com') {
+          redirectUrl = requestedRedirect.toString();
+        }
+      } catch { /* conservar la URL segura */ }
+    }
     const result = await createGoCardlessRequisition(institution_id, redirectUrl, company_id);
     // Guardar requisition_id en la cuenta para futura sincronización
     await base44.entities.BankAccount.update(bank_account_id, {
