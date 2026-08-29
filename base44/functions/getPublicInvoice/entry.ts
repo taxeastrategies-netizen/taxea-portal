@@ -44,17 +44,31 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
-    await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+    const isDownload = body.action === 'download';
+    const publicEventType = isDownload ? 'enlace_publico_descarga' : 'enlace_publico_abierto';
+    const recentEvents = await base44.asServiceRole.entities.InvoiceTimelineEvent.filter({
       invoice_id: invoice.id,
       company_id: invoice.company_id,
-      event_type: body.action === 'download' ? 'enlace_publico_descarga' : 'enlace_publico_abierto',
-      event_label: body.action === 'download' ? 'PDF descargado por destinatario' : 'Factura vista por destinatario',
-      event_detail: body.action === 'download'
-        ? 'El destinatario ha descargado el PDF desde el enlace público.'
-        : 'El destinatario ha abierto el enlace público de la factura.',
-      created_at: new Date().toISOString(),
-      origin: 'cliente',
-    }).catch(() => {});
+      event_type: publicEventType,
+    }, '-created_at', 1).catch(() => []);
+    const lastEventAt = recentEvents?.[0]?.created_at
+      ? new Date(recentEvents[0].created_at).getTime()
+      : 0;
+
+    // Evita que recargas o automatismos llenen el historial con miles de eventos.
+    if (!lastEventAt || Date.now() - lastEventAt > 5 * 60 * 1000) {
+      await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+        invoice_id: invoice.id,
+        company_id: invoice.company_id,
+        event_type: publicEventType,
+        event_label: isDownload ? 'PDF descargado por destinatario' : 'Factura vista por destinatario',
+        event_detail: isDownload
+          ? 'El destinatario ha descargado el PDF desde el enlace público.'
+          : 'El destinatario ha abierto el enlace público de la factura.',
+        created_at: new Date().toISOString(),
+        origin: 'cliente',
+      }).catch(() => {});
+    }
 
     const publicInvoice = pick(invoice, [
       'numero_factura', 'fecha_emision', 'fecha_vencimiento', 'cliente_nombre',
