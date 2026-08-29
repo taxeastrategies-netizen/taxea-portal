@@ -56,9 +56,13 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
     }
 
     setSaving(true);
-    const setupToken = (typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+    if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+      setError('Este navegador no permite generar un enlace de acceso seguro.');
+      setSaving(false);
+      return;
+    }
+    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+    const setupToken = crypto.randomUUID?.() || Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('');
     const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
     try {
       // 1. Crear ClientAccount
