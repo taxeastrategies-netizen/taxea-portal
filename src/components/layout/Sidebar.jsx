@@ -315,7 +315,12 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
               <span className="font-inter font-normal uppercase" style={{ fontSize: 8, color: 'rgba(0,0,0,0.3)', letterSpacing: '0.22em' }}>Business OS</span>
             </div>
           </Link>
-          <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-700 transition-colors">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar menú principal"
+            className="lg:hidden min-w-11 min-h-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -522,7 +527,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
 
         {/* Footer */}
         <div className="px-4 py-3 border-t border-slate-100">
-          <p className="text-slate-300 text-xs text-center">© 2025 Taxea Strategies</p>
+          <p className="text-slate-300 text-xs text-center">© {new Date().getFullYear()} Taxea Strategies</p>
         </div>
       </aside>
     </>
