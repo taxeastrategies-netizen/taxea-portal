@@ -106,7 +106,7 @@ export default function Register() {
     if (password.length < 8) { setError('La contraseña debe tener al menos 8 caracteres.'); return; }
     setLoading(true);
     try {
-      await base44.auth.register({ email, password, full_name: fullName });
+      await base44.auth.register({ email, password });
       setStep('otp');
     } catch (err) {
       setError(err.message || 'Error al crear la cuenta. Comprueba los datos.');
@@ -126,6 +126,7 @@ export default function Register() {
       try {
         const me = await base44.auth.me();
         if (me?.id) {
+          if (fullName.trim()) await base44.auth.updateMe({ full_name: fullName.trim() });
           await base44.functions.invoke('initializeUserAccount', {});
         }
       } catch {}
