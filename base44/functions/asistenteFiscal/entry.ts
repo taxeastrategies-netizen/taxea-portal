@@ -159,7 +159,18 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { pregunta, company_id, historial = [], sesion_id } = await req.json().catch(() => ({}));
-    if (!pregunta || !company_id) return Response.json({ error: 'Faltan parámetros' }, { status: 400 });
+    if (!pregunta || typeof pregunta !== 'string' || !company_id) {
+      return Response.json({ error: 'Faltan parámetros' }, { status: 400 });
+    }
+    if (pregunta.trim().length > 4000 || !Array.isArray(historial) || historial.length > 20) {
+      return Response.json({ error: 'La consulta supera el tamaño permitido' }, { status: 413 });
+    }
+
+    const isAdmin = ['admin', 'super_admin'].includes(user.role);
+    const userCompanyId = user.data?.company_id || user.company_id;
+    if (!isAdmin && (!userCompanyId || company_id !== userCompanyId)) {
+      return Response.json({ error: 'No autorizado para esta empresa' }, { status: 403 });
+    }
 
     const impuesto = detectarImpuesto(pregunta);
     const debeDerivarse = requiereDerivacion(pregunta);
@@ -236,7 +247,92 @@ HISTORIAL RECIENTE: ${JSON.stringify(historial.slice(-3).map(m => ({ rol: m.rol,
 
 Responde ÚNICAMENTE con el JSON definido en tus instrucciones de sistema. Sin texto fuera del JSON.`;
 
-      const aiResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      const now = new Date();
+      const iso = now.toISOString();
+      const minuteKey = iso.slice(0, 16);
+      const dayKey = iso.slice(0, 10);
+      const monthKey = iso.slice(0, 7);
+      const userId = String(user.id);
+      const isPrivileged = ['admin', 'super_admin'].includes(user.role);
+      const parseLimit = (name, fallback) => {
+        const value = Number.parseInt(Deno.env.get(name) || '', 10);
+        return Number.isFinite(value) && value > 0 ? value : fallback;
+      };
+      const limits = isPrivileged
+        ? {
+            minute: parseLimit('AI_ADMIN_CALLS_PER_MINUTE', 20),
+            day: parseLimit('AI_ADMIN_CALLS_PER_DAY', 200),
+            month: parseLimit('AI_ADMIN_CALLS_PER_MONTH', 2000),
+            tokensDay: parseLimit('AI_ADMIN_INPUT_TOKENS_PER_DAY', 500000),
+          }
+        : {
+            minute: parseLimit('AI_USER_CALLS_PER_MINUTE', 4),
+            day: parseLimit('AI_USER_CALLS_PER_DAY', 40),
+            month: parseLimit('AI_USER_CALLS_PER_MONTH', 300),
+            tokensDay: parseLimit('AI_USER_INPUT_TOKENS_PER_DAY', 80000),
+          };
+
+      const [minuteEvents, dayEvents, monthEvents] = await Promise.all([
+        base44.asServiceRole.entities.AIUsageEvent.filter({ userId, minuteKey }),
+        base44.asServiceRole.entities.AIUsageEvent.filter({ userId, dayKey }),
+        base44.asServiceRole.entities.AIUsageEvent.filter({ userId, monthKey }),
+      ]);
+      const billable = (events) => (events || []).filter((event) => event.status !== 'blocked');
+      const estimatedInputTokens = Math.max(1, Math.ceil(promptEnriquecido.length / 4));
+      const tokensUsedToday = billable(dayEvents).reduce(
+        (sum, event) => sum + Number(event.estimatedInputTokens || 0),
+        0,
+      );
+      const limitReached =
+        billable(minuteEvents).length >= limits.minute
+        || billable(dayEvents).length >= limits.day
+        || billable(monthEvents).length >= limits.month
+        || tokensUsedToday + estimatedInputTokens > limits.tokensDay;
+
+      if (limitReached) {
+        await base44.asServiceRole.entities.AIUsageEvent.create({
+          userId,
+          userEmail: user.email || '',
+          companyId: company_id,
+          minuteKey,
+          dayKey,
+          monthKey,
+          requestId: crypto.randomUUID(),
+          operation: 'fiscal_assistant',
+          status: 'blocked',
+          promptChars: promptEnriquecido.length,
+          estimatedInputTokens,
+          internetContext: true,
+          fileCount: 0,
+          errorCode: 'usage_limit',
+          completedAt: new Date().toISOString(),
+        });
+        return Response.json(
+          { error: 'Has alcanzado temporalmente el límite de uso de IA. Inténtalo más tarde.' },
+          { status: 429, headers: { 'Retry-After': '3600' } },
+        );
+      }
+
+      const usageEvent = await base44.asServiceRole.entities.AIUsageEvent.create({
+        userId,
+        userEmail: user.email || '',
+        companyId: company_id,
+        minuteKey,
+        dayKey,
+        monthKey,
+        requestId: crypto.randomUUID(),
+        operation: 'fiscal_assistant',
+        status: 'reserved',
+        model: 'gemini_3_1_pro',
+        promptChars: promptEnriquecido.length,
+        estimatedInputTokens,
+        internetContext: true,
+        fileCount: 0,
+      });
+
+      let aiResponse;
+      try {
+        aiResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: promptEnriquecido,
         add_context_from_internet: true,
         response_json_schema: {
@@ -263,7 +359,23 @@ Responde ÚNICAMENTE con el JSON definido en tus instrucciones de sistema. Sin t
           }
         },
         model: 'gemini_3_1_pro'
-      });
+        });
+        const outputChars = typeof aiResponse === 'string'
+          ? aiResponse.length
+          : JSON.stringify(aiResponse ?? '').length;
+        await base44.asServiceRole.entities.AIUsageEvent.update(usageEvent.id, {
+          status: 'success',
+          estimatedOutputTokens: Math.max(1, Math.ceil(outputChars / 4)),
+          completedAt: new Date().toISOString(),
+        });
+      } catch (aiError) {
+        await base44.asServiceRole.entities.AIUsageEvent.update(usageEvent.id, {
+          status: 'error',
+          errorCode: 'provider_or_internal_error',
+          completedAt: new Date().toISOString(),
+        });
+        throw aiError;
+      }
 
       // Normalizar fuentes: asegurar que las fuentes sean reales y ordenadas
       let fuentes = (aiResponse.fuentes_usadas || []).filter(f => f && f.nombre);
