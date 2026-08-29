@@ -1,13 +1,15 @@
+import { lazy } from 'react';
 import { useParams } from 'react-router-dom';
-import FinanceDashboard from '@/components/finance/FinanceDashboard';
-import CashflowCenter from '@/components/finance/cashflow/CashflowCenter';
-import TreasuryPage from '@/components/treasury/TreasuryPage';
-import AccountsReceivable from '@/components/ar/AccountsReceivable';
-import AccountsPayable from '@/components/ap/AccountsPayable';
-import DebtCenter from '@/components/debt/DebtCenter';
-import InvestmentsCenter from '@/components/investments/InvestmentsCenter';
-import ReportingCenter from '@/components/reporting/ReportingCenter';
-import AnalysisHome from '@/components/finance/analysis/AnalysisHome';
+
+const FinanceDashboard = lazy(() => import('@/components/finance/FinanceDashboard'));
+const CashflowCenter = lazy(() => import('@/components/finance/cashflow/CashflowCenter'));
+const TreasuryPage = lazy(() => import('@/components/treasury/TreasuryPage'));
+const AccountsReceivable = lazy(() => import('@/components/ar/AccountsReceivable'));
+const AccountsPayable = lazy(() => import('@/components/ap/AccountsPayable'));
+const DebtCenter = lazy(() => import('@/components/debt/DebtCenter'));
+const InvestmentsCenter = lazy(() => import('@/components/investments/InvestmentsCenter'));
+const ReportingCenter = lazy(() => import('@/components/reporting/ReportingCenter'));
+const AnalysisHome = lazy(() => import('@/components/finance/analysis/AnalysisHome'));
 
 export default function Finance() {
   const { module } = useParams();
