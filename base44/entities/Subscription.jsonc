@@ -136,9 +136,6 @@
     "create": {
       "$or": [
         {
-          "data.userId": "{{user.id}}"
-        },
-        {
           "user_condition": {
             "role": "admin"
           }
