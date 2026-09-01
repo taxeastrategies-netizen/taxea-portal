@@ -159,6 +159,7 @@
     }
   },
   "required": [
+    "companyId",
     "date",
     "description"
   ],
