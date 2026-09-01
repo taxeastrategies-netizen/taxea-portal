@@ -39,7 +39,7 @@ const fmtDateTime = (d) => {
 const isOverdue = (date) => date && new Date(date) < new Date();
 const daysUntil = (date) => {
   if (!date) return null;
-  return Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24));
+  return Math.ceil((new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 };
 
 // ── Estado de pago ─────────────────────────────────────────────────────────────
