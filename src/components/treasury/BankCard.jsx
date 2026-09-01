@@ -48,30 +48,32 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
     ? Math.round((new Date() - new Date(account.fecha_ultima_sync)) / 60000)
     : null;
 
+  const openBankingProviders = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
+  const canSync = openBankingProviders.includes(account.proveedor) &&
+    account.proveedor_integracion &&
+    account.proveedor_integracion !== 'gocardless';
+
   const handleSync = async (e) => {
     e.stopPropagation();
-    setSyncing(true);
-    // Si tiene proveedor_integracion (GoCardless requisition_id) o API directa, usar api_sync
-    const needsApiSync = ['revolut', 'wise', 'qonto', 'stripe'].includes(account.proveedor) ||
-      (['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'].includes(account.proveedor) && account.proveedor_integracion);
+    if (!canSync) return;
 
-    if (needsApiSync) {
-      await base44.functions.invoke('bankSync', {
+    setSyncing(true);
+    try {
+      const response = await base44.functions.invoke('bankSync', {
         action: 'api_sync',
         bank_account_id: account.id,
         company_id: companyId,
         proveedor: account.proveedor,
-        requisition_id: account.proveedor_integracion || undefined,
+        requisition_id: account.proveedor_integracion,
       });
-    } else {
-      await base44.functions.invoke('bankSync', {
-        action: 'sync_mock',
-        bank_account_id: account.id,
-        company_id: companyId,
-      });
+      const payload = response?.data ?? response;
+      if (!payload?.ok) throw new Error(payload?.error || 'No se pudo sincronizar la cuenta.');
+      onRefresh?.();
+    } catch (error) {
+      alert(error?.message || 'No se pudo sincronizar la cuenta bancaria.');
+    } finally {
+      setSyncing(false);
     }
-    setSyncing(false);
-    onRefresh?.();
   };
 
   return (
@@ -132,8 +134,9 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span className="text-[9px] font-medium">CSV</span>
           </button>
-          <button onClick={handleSync} disabled={syncing}
-            className="flex flex-col items-center justify-center gap-1 py-2 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50">
+          <button onClick={handleSync} disabled={syncing || !canSync}
+            title={canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
+            className="flex flex-col items-center justify-center gap-1 py-2 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
             <span className="text-[9px] font-medium">Sync</span>
           </button>
