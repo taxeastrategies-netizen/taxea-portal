@@ -126,16 +126,15 @@ Deno.serve(async (req) => {
     const action = body.action || 'generate';
     const today = getCanaryToday();
 
-    let user = null;
-    let isManual = false;
-    try {
-      user = await base44.auth.me();
-      if (user) isManual = true;
-    } catch { /* scheduled — no user */ }
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) {
+      return Response.json({ error: 'No autenticado' }, { status: 401 });
+    }
+    const isManual = true;
 
-    // Load active templates
-    const activeCompanyId = user?.data?.company_id;
-    if (isManual && !activeCompanyId) {
+    // Cada ejecución queda limitada a la empresa activa del usuario autenticado.
+    const activeCompanyId = user.data?.company_id;
+    if (!activeCompanyId) {
       return Response.json({ error: 'Selecciona una empresa antes de generar facturas recurrentes.' }, { status: 403 });
     }
     let templates = [];
