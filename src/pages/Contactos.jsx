@@ -219,8 +219,8 @@ export default function Contactos() {
 
     return result.sort((a, b) => {
       if (sortBy === 'za') return text(b.nombre).localeCompare(text(a.nombre), 'es', { sensitivity: 'base' });
-      if (sortBy === 'recent') return new Date(b.created_date || 0) - new Date(a.created_date || 0);
-      if (sortBy === 'activity') return new Date(lastActivity(b) || 0) - new Date(lastActivity(a) || 0);
+      if (sortBy === 'recent') return new Date(b.created_date || 0).getTime() - new Date(a.created_date || 0).getTime();
+      if (sortBy === 'activity') return new Date(lastActivity(b) || 0).getTime() - new Date(lastActivity(a) || 0).getTime();
       return text(a.nombre).localeCompare(text(b.nombre), 'es', { sensitivity: 'base' });
     });
   }, [contacts, search, filterClass, filterTipo, sortBy]);
