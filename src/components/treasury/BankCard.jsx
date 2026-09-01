@@ -45,7 +45,7 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
   const StatusIcon = status.icon;
 
   const syncAgo = account.fecha_ultima_sync
-    ? Math.round((new Date() - new Date(account.fecha_ultima_sync)) / 60000)
+    ? Math.round((Date.now() - new Date(account.fecha_ultima_sync).getTime()) / 60000)
     : null;
 
   const openBankingProviders = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
