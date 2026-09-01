@@ -448,6 +448,23 @@ Deno.serve(async (req) => {
   // ── Sync API real (Revolut, Wise, Qonto, bancos GoCardless) ─────────────
   if (action === 'api_sync') {
     const { proveedor, access_token, requisition_id } = body;
+    const psd2Providers = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
+    const supportedProviders = ['revolut', 'wise', 'qonto', ...psd2Providers];
+
+    // Validar todo antes de crear logs o cambiar el estado de la cuenta.
+    if (!supportedProviders.includes(proveedor)) {
+      return Response.json({ error: 'Proveedor no soportado para sync API' }, { status: 400 });
+    }
+    if (['revolut', 'wise'].includes(proveedor) && !access_token) {
+      const providerName = proveedor === 'revolut' ? 'Revolut' : 'Wise';
+      return Response.json({ error: 'Token de ' + providerName + ' requerido para esta sincronización.' }, { status: 400 });
+    }
+    if (proveedor === 'qonto' && (!String(body.qonto_login || '').trim() || !access_token)) {
+      return Response.json({ error: 'Login y clave de Qonto requeridos para esta sincronización.' }, { status: 400 });
+    }
+    if (psd2Providers.includes(proveedor) && !requisition_id) {
+      return Response.json({ error: 'requisition_id requerido para bancos PSD2' }, { status: 400 });
+    }
 
     let syncLog;
     try {
@@ -462,21 +479,11 @@ Deno.serve(async (req) => {
       let result;
 
       if (proveedor === 'revolut') {
-        if (!access_token) {
-          return Response.json({ error: 'Token de Revolut requerido para esta sincronización.' }, { status: 400 });
-        }
         result = await syncRevolut(access_token, bank_account_id, company_id, base44, startMs);
       } else if (proveedor === 'wise') {
-        if (!access_token) {
-          return Response.json({ error: 'Token de Wise requerido para esta sincronización.' }, { status: 400 });
-        }
         result = await syncWise(access_token, bank_account_id, company_id, base44);
       } else if (proveedor === 'qonto') {
-        const login = String(body.qonto_login || '').trim();
-        if (!login || !access_token) {
-          return Response.json({ error: 'Login y clave de Qonto requeridos para esta sincronización.' }, { status: 400 });
-        }
-        result = await syncQonto(login, access_token, bank_account_id, company_id, base44);
+        result = await syncQonto(String(body.qonto_login).trim(), access_token, bank_account_id, company_id, base44);
       } else if (['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'].includes(proveedor)) {
         const reqId = requisition_id || body.requisition_id;
         if (!reqId) return Response.json({ error: 'requisition_id requerido para bancos PSD2' }, { status: 400 });
@@ -579,9 +586,10 @@ Deno.serve(async (req) => {
   // La simulación histórica queda bloqueada en producción: no crea logs ni altera cuentas.
   if (action === 'sync_mock') {
     return Response.json({
+      ok: false,
       error: 'La sincronización simulada está deshabilitada. Usa una conexión bancaria real o importa un CSV.',
       code: 'mock_sync_disabled',
-    }, { status: 410 });
+    });
   }
 
   // ── Revocar consentimiento ────────────────────────────────────────────────
