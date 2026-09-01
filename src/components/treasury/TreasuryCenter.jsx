@@ -10,7 +10,7 @@ import BankTransactionsTable from './BankTransactionsTable';
 import ReconciliationPanel from './ReconciliationPanel';
 import TreasuryCalendar from './TreasuryCalendar';
 import TreasuryEventsPanel from './TreasuryEventsPanel';
-import ImportDemoTransactions from './ImportDemoTransactions';
+
 
 const TABS = [
   { id: 'bancos',       label: 'Bancos',         icon: Building2 },
@@ -82,9 +82,7 @@ export default function TreasuryCenter({ company }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {accounts.length > 0 && (
-            <ImportDemoTransactions accounts={accounts} companyId={companyId} onImported={loadData} />
-          )}
+
           <button onClick={loadData} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">
             <RefreshCw className="w-3.5 h-3.5" /> Actualizar
           </button>
