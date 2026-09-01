@@ -162,11 +162,13 @@
           "data.company_id": "{{user.data.company_id}}"
         },
         {
-          "data.uploadedByUserId": "{{user.id}}"
+          "user_condition": {
+            "role": "admin"
+          }
         },
         {
           "user_condition": {
-            "role": "admin"
+            "role": "super_admin"
           }
         }
       ]
@@ -183,6 +185,11 @@
           "user_condition": {
             "role": "admin"
           }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
         }
       ]
     },
@@ -192,11 +199,13 @@
           "data.company_id": "{{user.data.company_id}}"
         },
         {
-          "data.uploadedByUserId": "{{user.id}}"
+          "user_condition": {
+            "role": "admin"
+          }
         },
         {
           "user_condition": {
-            "role": "admin"
+            "role": "super_admin"
           }
         }
       ]
@@ -207,11 +216,13 @@
           "data.company_id": "{{user.data.company_id}}"
         },
         {
-          "data.uploadedByUserId": "{{user.id}}"
+          "user_condition": {
+            "role": "admin"
+          }
         },
         {
           "user_condition": {
-            "role": "admin"
+            "role": "super_admin"
           }
         }
       ]
