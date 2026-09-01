@@ -90,7 +90,6 @@ const MODULE_MAP = {
   reputation: GrowthComingSoon,
   referrals: GrowthComingSoon,
   partners: GrowthComingSoon,
-  forecast: GrowthComingSoon,
   goals: GrowthComingSoon,
   automation: GrowthComingSoon,
 };
