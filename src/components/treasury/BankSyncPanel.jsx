@@ -39,15 +39,31 @@ export default function BankSyncPanel({ account, companyId }) {
 
   useEffect(() => { loadLogs(); }, [account.id]);
 
+  const openBankingProviders = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
+  const canSync = openBankingProviders.includes(account.proveedor) &&
+    account.proveedor_integracion &&
+    account.proveedor_integracion !== 'gocardless';
+
   const handleSync = async () => {
+    if (!canSync) return;
+
     setSyncing(true);
-    await base44.functions.invoke('bankSync', {
-      action: 'sync_mock',
-      bank_account_id: account.id,
-      company_id: companyId,
-    });
-    setSyncing(false);
-    loadLogs();
+    try {
+      const response = await base44.functions.invoke('bankSync', {
+        action: 'api_sync',
+        bank_account_id: account.id,
+        company_id: companyId,
+        proveedor: account.proveedor,
+        requisition_id: account.proveedor_integracion,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.ok) throw new Error(payload?.error || 'No se pudo sincronizar la cuenta.');
+      await loadLogs();
+    } catch (error) {
+      alert(error?.message || 'No se pudo sincronizar la cuenta bancaria.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   if (loading) {
@@ -65,8 +81,9 @@ export default function BankSyncPanel({ account, companyId }) {
           <p className="text-sm font-semibold text-foreground">Historial de sincronización</p>
           <p className="text-xs text-slate-400">{account.nombre_banco} · {logs.length} registros</p>
         </div>
-        <button onClick={handleSync} disabled={syncing}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all">
+        <button onClick={handleSync} disabled={syncing || !canSync}
+          title={canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
           {syncing ? 'Sincronizando...' : 'Sync manual'}
         </button>
