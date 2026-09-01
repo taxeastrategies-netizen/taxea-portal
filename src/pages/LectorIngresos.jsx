@@ -114,7 +114,6 @@ const OCR_SCHEMA = {
     impuesto_detectado: { type: 'string' },
     situacion_impuesto: { type: 'string' },
     tipo_operacion: { type: 'string' },
-    pais_cliente: { type: 'string' },
     es_cliente_ue: { type: 'boolean' },
     nif_vies: { type: 'string' },
   }
