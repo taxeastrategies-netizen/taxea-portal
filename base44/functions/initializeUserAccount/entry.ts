@@ -7,7 +7,9 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
     const existing = await base44.asServiceRole.entities.Subscription.filter({ userId: user.id });
-    if (!existing?.length) {
+    const isFirstInitialization = !existing?.length;
+
+    if (isFirstInitialization) {
       await base44.asServiceRole.entities.Subscription.create({
         userId: user.id,
         planCode: 'sin_suscripcion',
@@ -16,14 +18,15 @@ Deno.serve(async (req) => {
         firstPaymentStatus: 'unpaid',
         requestedAt: new Date().toISOString(),
       });
-    }
 
-    await base44.asServiceRole.entities.User.update(user.id, {
-      isPortalActive: false,
-      accountAccessStatus: 'locked',
-      adminActivationStatus: 'pending',
-      status: 'pendiente',
-    });
+      // Solo el alta inicial establece el bloqueo. Una llamada repetida nunca revoca una activación existente.
+      await base44.asServiceRole.entities.User.update(user.id, {
+        isPortalActive: false,
+        accountAccessStatus: 'locked',
+        adminActivationStatus: 'pending',
+        status: 'pendiente',
+      });
+    }
 
     const audit = await base44.asServiceRole.entities.UserAuditLog.filter({
       userId: user.id,
@@ -40,7 +43,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return Response.json({ initialized: true, idempotent: existing?.length > 0 });
+    return Response.json({ initialized: true, idempotent: !isFirstInitialization });
   } catch (error) {
     console.error('[initializeUserAccount] Error:', error);
     return Response.json({ error: 'No se pudo inicializar la cuenta' }, { status: 500 });
