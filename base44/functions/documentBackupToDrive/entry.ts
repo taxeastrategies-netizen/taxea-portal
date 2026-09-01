@@ -210,18 +210,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'status';
 
-    // Auth: manual calls require admin; scheduled calls have no user
-    let user = null;
-    let isManual = false;
-    try {
-      user = await base44.auth.me();
-      if (user) {
-        if (user.role !== 'admin' && user.role !== 'super_admin') {
-          return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
-        }
-        isManual = true;
-      }
-    } catch { /* scheduled — no user */ }
+    // El respaldo contiene documentación sensible: toda ejecución requiere una sesión administradora.
+    const user = await base44.auth.me().catch(() => null);
+    if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (user.role !== 'admin' && user.role !== 'super_admin') {
+      return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
+    }
+    const isManual = true;
 
     // Get Drive connection
     let accessToken;
