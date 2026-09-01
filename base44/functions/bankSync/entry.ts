@@ -462,15 +462,21 @@ Deno.serve(async (req) => {
       let result;
 
       if (proveedor === 'revolut') {
-        const token = access_token || Deno.env.get('REVOLUT_CLIENT_SECRET');
-        result = await syncRevolut(token, bank_account_id, company_id, base44, startMs);
+        if (!access_token) {
+          return Response.json({ error: 'Token de Revolut requerido para esta sincronización.' }, { status: 400 });
+        }
+        result = await syncRevolut(access_token, bank_account_id, company_id, base44, startMs);
       } else if (proveedor === 'wise') {
-        const token = access_token || Deno.env.get('WISE_API_TOKEN');
-        result = await syncWise(token, bank_account_id, company_id, base44);
+        if (!access_token) {
+          return Response.json({ error: 'Token de Wise requerido para esta sincronización.' }, { status: 400 });
+        }
+        result = await syncWise(access_token, bank_account_id, company_id, base44);
       } else if (proveedor === 'qonto') {
-        const login = Deno.env.get('QONTO_LOGIN');
-        const secret = Deno.env.get('QONTO_SECRET_KEY');
-        result = await syncQonto(login, secret, bank_account_id, company_id, base44);
+        const login = String(body.qonto_login || '').trim();
+        if (!login || !access_token) {
+          return Response.json({ error: 'Login y clave de Qonto requeridos para esta sincronización.' }, { status: 400 });
+        }
+        result = await syncQonto(login, access_token, bank_account_id, company_id, base44);
       } else if (['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'].includes(proveedor)) {
         const reqId = requisition_id || body.requisition_id;
         if (!reqId) return Response.json({ error: 'requisition_id requerido para bancos PSD2' }, { status: 400 });
@@ -570,19 +576,12 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, format_detectado: format, movimientos_nuevos: nuevos.length, movimientos_duplicados: duplicados, duracion_ms: duracion });
   }
 
-  // ── Sync mock ────────────────────────────────────────────────────────────
+  // La simulación histórica queda bloqueada en producción: no crea logs ni altera cuentas.
   if (action === 'sync_mock') {
-    const accounts = await base44.asServiceRole.entities.BankAccount.filter({ id: bank_account_id });
-    if (!accounts.length) return Response.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-    await base44.entities.BankAccount.update(bank_account_id, { estado_conexion: 'sincronizando' });
-    await new Promise(r => setTimeout(r, 1200));
-    const syncLog = await base44.entities.BankSyncLog.create({
-      company_id, bank_account_id, tipo: 'manual', estado: 'completado',
-      movimientos_nuevos: 0, saldo_antes: accounts[0].saldo_disponible,
-      saldo_despues: accounts[0].saldo_disponible, duracion_ms: Date.now() - startMs, iniciado_por: user.email,
-    });
-    await base44.entities.BankAccount.update(bank_account_id, { fecha_ultima_sync: new Date().toISOString(), estado_conexion: 'conectado' });
-    return Response.json({ ok: true, sync_log_id: syncLog.id });
+    return Response.json({
+      error: 'La sincronización simulada está deshabilitada. Usa una conexión bancaria real o importa un CSV.',
+      code: 'mock_sync_disabled',
+    }, { status: 410 });
   }
 
   // ── Revocar consentimiento ────────────────────────────────────────────────
