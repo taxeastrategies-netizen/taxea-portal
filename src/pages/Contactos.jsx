@@ -159,8 +159,9 @@ export default function Contactos() {
     setLoading(true);
     setError('');
     try {
-      const data = await base44.entities.Contact.filter({ company_id: company.id }, 'nombre', 5000, 0);
-      setContacts((data || []).filter((contact) => contact.activo !== false && !contact.merged_into_contact_id));
+      const res = await base44.functions.invoke('getCompanyContacts', { companyId: company.id });
+      const data = res?.data?.contacts || [];
+      setContacts(data.filter((contact) => contact.activo !== false && !contact.merged_into_contact_id));
     } catch (loadError) {
       console.error('[Contactos] Load failed:', loadError);
       setError('No se pudieron cargar los contactos. Inténtalo de nuevo.');

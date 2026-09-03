@@ -166,6 +166,15 @@ async function syncParty(svc, contactsByCompany, party) {
   return { created: true, id: created.id };
 }
 
+async function userOwnsCompany(svc, user, companyId) {
+  const companies = await svc.entities.Company.filter({ id: companyId });
+  const company = companies?.[0];
+  if (!company) return false;
+  const email = (user.email || '').toLowerCase();
+  return (company.owner_email || '').toLowerCase() === email
+    || (company.usuarios_autorizados || []).some((value) => (value || '').toLowerCase() === email);
+}
+
 async function listAll(handler, query = null) {
   const rows = [];
   const pageSize = 5000;
@@ -225,7 +234,9 @@ Deno.serve(async (req) => {
     }
 
     const companyId = action === 'backfill_all' ? '' : clean(body.companyId || user.data?.company_id);
-    if (action !== 'backfill_all' && (!companyId || (!isAdmin && companyId !== user.data?.company_id))) {
+    const companyAllowed = isAdmin || companyId === user.data?.company_id
+      || (companyId ? await userOwnsCompany(svc, user, companyId) : false);
+    if (action !== 'backfill_all' && (!companyId || !companyAllowed)) {
       return Response.json({ error: 'Empresa no autorizada' }, { status: 403 });
     }
 
