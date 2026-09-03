@@ -8,10 +8,7 @@ import { X, Send, Paperclip, ChevronDown, Loader2, CheckCircle2, AlertTriangle, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { buildPremiumInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
-import { base44 as b44Client } from '@/api/base44Client';
-
-const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
+import { buildPremiumInvoiceEmail, buildReceivedInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
 
 const TEMPLATES = [
   { id: 'envio_factura',  label: 'Envío de factura' },
@@ -112,7 +109,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   const [previewHtml, setPreviewHtml] = useState('');
   const [gmailConnected, setGmailConnected] = useState(null); // null=checking, true, false
   const [gmailEmail, setGmailEmail] = useState('');
-  const [connectingGmail, setConnectingGmail] = useState(false);
+  const isReceived = invoice?.tipo === 'recibida';
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -134,12 +131,15 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       setGmailEmail(status?.email || '');
     }).catch(() => setGmailConnected(false));
 
-    if (!invoice?.archivo_url) {
+    if (!invoice?.archivo_url && invoice.tipo !== 'recibida') {
       setPreparingPdf(true);
       ensureInvoicePdf(invoice, company, base44).then(result => {
         if (result.ok) { setPdfReady(true); setResolvedPdfUrl(result.pdfUrl); }
         setPreparingPdf(false);
       }).catch(() => setPreparingPdf(false));
+    } else if (invoice.tipo === 'recibida' && !invoice.archivo_url) {
+      setPdfReady(false);
+      setResolvedPdfUrl(null);
     }
   }, [open, invoice?.id]);
 
@@ -149,37 +149,43 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   }, [templateId]);
 
   const initPublicLink = async () => {
-    // Usar public_token existente o generar uno nuevo seguro (no el ID de la factura)
-    let token = invoice.public_token;
-    if (!token) {
-      token = generatePublicToken();
-      try {
-        await base44.entities.Invoice.update(invoice.id, {
-          public_token: token,
-          public_token_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-          public_token_revoked_at: null,
-        });
-      } catch (e) {
-        console.error('Failed to save public_token:', e);
-      }
+    try {
+      const response = await base44.functions.invoke('invoiceOperations', {
+        action: 'create_public_link',
+        invoice_id: invoice.id,
+        company_id: company?.id,
+      });
+      const data = response?.data || response;
+      if (!data?.ok || !data?.token) throw new Error(data?.error || 'No se pudo crear el enlace público.');
+      setPublicLink(`${window.location.origin}/public/invoice/${data.token}`);
+    } catch (e) {
+      setPublicLink('');
+      setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo crear el enlace público.');
     }
-    setPublicLink(`${window.location.origin}/public/invoice/${token}`);
   };
 
   const loadClientEmail = async () => {
     const emails = [];
-    if (invoice?.cliente_nombre && company?.id) {
+    const counterpartyName = invoice?.tipo === 'recibida'
+      ? invoice?.proveedor_nombre || invoice?.cliente_nombre
+      : invoice?.cliente_nombre;
+    const directEmail = invoice?.tipo === 'recibida' ? invoice?.proveedor_email : invoice?.cliente_email;
+    if (directEmail && isValidEmail(directEmail)) {
+      emails.push({ email: directEmail.toLowerCase(), label: invoice?.tipo === 'recibida' ? 'Proveedor' : 'Factura', nombre: counterpartyName });
+    }
+    if (counterpartyName && company?.id) {
       try {
         const contacts = await base44.entities.Contact.filter({ company_id: company.id }, 'nombre', 5000, 0);
+        const normalizedName = counterpartyName.toLowerCase();
         const matches = contacts.filter(c =>
-          c.nombre?.toLowerCase().includes(invoice.cliente_nombre.toLowerCase()) ||
-          invoice.cliente_nombre.toLowerCase().includes(c.nombre?.toLowerCase() || '')
+          c.nombre?.toLowerCase().includes(normalizedName) ||
+          normalizedName.includes(c.nombre?.toLowerCase() || '')
         );
         matches.forEach(c => {
-          if (c.email && !emails.find(e => e.email === c.email))
-            emails.push({ email: c.email, label: 'Principal', nombre: c.nombre });
-          if (c.email_facturacion && !emails.find(e => e.email === c.email_facturacion))
-            emails.push({ email: c.email_facturacion, label: 'Facturación', nombre: c.nombre });
+          if (c.email && isValidEmail(c.email) && !emails.find(e => e.email === c.email.toLowerCase()))
+            emails.push({ email: c.email.toLowerCase(), label: 'Principal', nombre: c.nombre });
+          if (c.email_facturacion && isValidEmail(c.email_facturacion) && !emails.find(e => e.email === c.email_facturacion.toLowerCase()))
+            emails.push({ email: c.email_facturacion.toLowerCase(), label: 'Facturación', nombre: c.nombre });
         });
       } catch {}
     }
@@ -190,7 +196,9 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
 
   const handlePreview = () => {
     const link = publicLink || (invoice?.public_token ? `${window.location.origin}/public/invoice/${invoice.public_token}` : '');
-    const html = buildPremiumInvoiceEmail(invoice, company, link, templateId);
+    const html = isReceived
+      ? buildReceivedInvoiceEmail(invoice, company, link)
+      : buildPremiumInvoiceEmail(invoice, company, link, templateId);
     setPreviewHtml(html);
     setShowPreview(true);
   };
@@ -236,9 +244,16 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setSendingStep('sending');
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
-      const htmlBody = buildPremiumInvoiceEmail(invoice, company, validatedLink, templateId);
+      const htmlBody = isReceived
+        ? buildReceivedInvoiceEmail(invoice, company, validatedLink)
+        : buildPremiumInvoiceEmail(invoice, company, validatedLink, templateId);
 
       const emailRes = await base44.functions.invoke('sendEmail', {
+        invoice_id: invoice.id,
+        company_id: company?.id,
+        public_invoice_url: validatedLink,
+        template_id: templateId,
+        to_was_manual: noEmailWarning,
         to: to,
         cc: cc.length > 0 ? cc : undefined,
         bcc: bcc.length > 0 ? bcc : undefined,
@@ -253,45 +268,13 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       });
       if (!emailRes.data?.ok) throw new Error(emailRes.data?.error || 'Error al enviar');
 
-      // Log de envío con trazabilidad completa
-      await base44.entities.InvoiceEmailLog.create({
-        invoice_id: invoice.id,
-        company_id: company?.id,
-        to: to.join(', '),
-        cc: cc.join(', '),
-        bcc: bcc.join(', '),
-        subject,
-        body: htmlBody,
-        template_id: templateId,
-        attachments: [finalPdfUrl].filter(Boolean),
-        public_invoice_url: validatedLink,
-        pdf_attachment_name: `Factura_${invoice.numero_factura}.pdf`,
-        sent_at: new Date().toISOString(),
-        sent_by: user?.full_name || user?.email || 'Usuario',
-        delivery_status: 'enviada',
-        to_was_manual: noEmailWarning,
-        error_message: null,
-      });
-
-      // Actualizar estado factura solo tras éxito
-      await base44.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
-
-      // Timeline
-      await base44.entities.InvoiceTimelineEvent.create({
-        invoice_id: invoice.id,
-        company_id: company?.id,
-        event_type: 'email_enviado',
-        event_label: 'Email enviado',
-        event_detail: `Enviado a ${to.join(', ')} · PDF adjunto: Factura_${invoice.numero_factura}.pdf · Enlace público validado · Plantilla: ${TEMPLATES.find(t => t.id === templateId)?.label}`,
-        created_at: new Date().toISOString(),
-        created_by: user?.full_name || user?.email || 'Usuario',
-        origin: 'manual',
-      });
+      if (emailRes.data?.warning) setError(emailRes.data.warning);
 
       if (saveEmail && noEmailWarning && to.length > 0) {
         try {
           const contacts = await base44.entities.Contact.filter({ company_id: company?.id }, 'nombre', 5000, 0);
-          const match = contacts.find(c => c.nombre?.toLowerCase().includes(invoice.cliente_nombre?.toLowerCase() || ''));
+          const counterpartyName = invoice.tipo === 'recibida' ? invoice.proveedor_nombre || invoice.cliente_nombre : invoice.cliente_nombre;
+          const match = contacts.find(c => c.nombre?.toLowerCase().includes(counterpartyName?.toLowerCase() || ''));
           if (match) await base44.entities.Contact.update(match.id, { email: to[0] });
         } catch {}
       }
@@ -299,17 +282,13 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
       setSent(true);
       onSent?.();
     } catch (e) {
-      await base44.entities.InvoiceEmailLog.create({
-        invoice_id: invoice.id, company_id: company?.id, to: to.join(', '), subject,
-        sent_at: new Date().toISOString(), sent_by: user?.full_name || user?.email,
-        delivery_status: 'error_envio', error_message: e.message || 'Error desconocido al enviar.',
-      }).catch(() => {});
       const errCode = e?.response?.data?.error || '';
+      const errMessage = e?.response?.data?.message || e?.response?.data?.error || e.message;
       if (errCode === 'gmail_not_connected') {
         setGmailConnected(false);
         setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
       } else {
-        setError('No se ha podido enviar el correo. La factura no se ha marcado como enviada. Revisa la configuración de email o vuelve a intentarlo.');
+        setError(errMessage || 'No se ha podido enviar el correo. La factura no se ha marcado como enviada.');
       }
     }
     setSending(false); setSendingStep('');
@@ -351,28 +330,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                     <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
                     <p className="text-xs text-amber-700 mt-0.5">Conecta tu cuenta Gmail para enviar facturas desde tu propio correo.</p>
                   </div>
-                  <button
-                    onClick={async () => {
-                      setConnectingGmail(true);
-                      const url = await b44Client.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
-                      const popup = window.open(url, '_blank');
-                      const timer = setInterval(() => {
-                        if (!popup || popup.closed) {
-                          clearInterval(timer);
-                          setConnectingGmail(false);
-                          setGmailConnected(null);
-                          base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
-                            const status = res?.data || res;
-                            setGmailConnected(Boolean(status?.connected));
-                            setGmailEmail(status?.email || '');
-                          }).catch(() => {});
-                        }
-                      }, 500);
-                    }}
-                    disabled={connectingGmail}
-                    className="text-xs bg-amber-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-amber-700 flex-shrink-0">
-                    {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
-                  </button>
+                  <span className="text-[10px] text-amber-700 font-medium flex-shrink-0">Configuración corporativa pendiente</span>
                 </div>
               )}
               {gmailConnected === true && (
@@ -447,7 +405,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Plantilla</label>
                 <select value={templateId} onChange={e => setTemplateId(e.target.value)}
                   className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring/30">
-                  {TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  {(isReceived ? TEMPLATES.filter(t => t.id === 'envio_factura') : TEMPLATES).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
               </div>
 
@@ -539,7 +497,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending} className="h-8 text-sm">
                 Cancelar
               </Button>
-              <Button onClick={handleSend} disabled={sending || preparingPdf || to.length === 0}
+              <Button onClick={handleSend} disabled={sending || preparingPdf || to.length === 0 || gmailConnected !== true || !pdfReady || !publicLink}
                 className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 {sending
