@@ -90,6 +90,37 @@
       "type": "string",
       "format": "date"
     },
+    "institution_id": {
+      "type": "string"
+    },
+    "requisition_id": {
+      "type": "string"
+    },
+    "agreement_id": {
+      "type": "string"
+    },
+    "provider_account_id": {
+      "type": "string"
+    },
+    "origen_datos": {
+      "type": "string",
+      "enum": [
+        "open_banking",
+        "csv",
+        "api_direct",
+        "manual"
+      ]
+    },
+    "sync_desde": {
+      "type": "string",
+      "format": "date"
+    },
+    "dias_historico_disponibles": {
+      "type": "number"
+    },
+    "ultimo_error_sync": {
+      "type": "string"
+    },
     "activa": {
       "type": "boolean",
       "default": true
