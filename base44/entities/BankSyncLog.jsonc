@@ -39,6 +39,14 @@
       "type": "number",
       "default": 0
     },
+    "movimientos_actualizados": {
+      "type": "number",
+      "default": 0
+    },
+    "historico_desde": {
+      "type": "string",
+      "format": "date"
+    },
     "saldo_antes": {
       "type": "number"
     },
