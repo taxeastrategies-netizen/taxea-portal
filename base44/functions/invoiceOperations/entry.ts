@@ -20,6 +20,14 @@ const cleanText = (value, max = MAX_TEXT) => String(value || '').trim().slice(0,
 const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 const isPrivateFileUri = (value) => /^private\/[A-Za-z0-9/_\-.]+$/.test(String(value || ''))
   && !String(value).includes('..');
+const isSafeHttpsUrl = (value) => {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:' && !['localhost', '127.0.0.1', '::1'].includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+};
 
 function secureToken() {
   const bytes = new Uint8Array(32);
@@ -141,6 +149,28 @@ Deno.serve(async (req) => {
         return { ...attachment, signed_url: signedResult?.signed_url || '' };
       }));
       return Response.json({ ok: true, attachments: signed });
+    }
+
+    if (action === 'set_primary_pdf') {
+      if (invoice.anulada) return Response.json({ error: 'No se puede adjuntar un PDF a una factura anulada.' }, { status: 409 });
+      if (invoice.archivo_url) return Response.json({ error: 'La factura ya tiene un PDF principal. No se ha sobrescrito.' }, { status: 409 });
+      const fileUrl = cleanText(body.file_url, 1600);
+      const sizeBytes = Math.round(Number(body.size_bytes) || 0);
+      if (!isSafeHttpsUrl(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
+      if (cleanText(body.mime_type, 100).toLowerCase() !== 'application/pdf') return Response.json({ error: 'El documento principal debe ser PDF.' }, { status: 400 });
+      if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El PDF debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      await base44.asServiceRole.entities.Invoice.update(invoice.id, { archivo_url: fileUrl });
+      await recordTimeline(base44, {
+        invoice_id: invoice.id,
+        company_id: companyId,
+        event_type: 'pdf_principal_adjuntado',
+        event_label: 'PDF principal adjuntado',
+        event_detail: cleanText(body.filename, 180) || 'Factura.pdf',
+        created_at: new Date().toISOString(),
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+      return Response.json({ ok: true, file_url: fileUrl });
     }
 
     if (action === 'add_attachment') {
