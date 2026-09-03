@@ -48,7 +48,11 @@ async function refreshInvoicePaymentState(base44, invoice, companyId) {
     ? total
     : asMoney((payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
   const outstanding = asMoney(Math.max(0, total - paid));
-  const estado = outstanding <= MONEY_EPSILON ? 'cobrada' : paid > MONEY_EPSILON ? 'parcial' : 'pendiente';
+  const estado = outstanding <= MONEY_EPSILON
+    ? 'cobrada'
+    : paid > MONEY_EPSILON
+      ? 'parcial'
+      : invoice.estado_cobro === 'vencida' ? 'vencida' : 'pendiente';
   const lastPayment = (payments || [])
     .slice()
     .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')))[0];
@@ -173,7 +177,10 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_reconciliation_candidates') {
-      const expectedType = invoice.tipo === 'recibida' ? 'salida' : 'entrada';
+      const isCreditNote = Number(invoice.total_factura) < 0;
+      const expectedType = invoice.tipo === 'recibida'
+        ? (isCreditNote ? 'entrada' : 'salida')
+        : (isCreditNote ? 'salida' : 'entrada');
       const transactions = await base44.asServiceRole.entities.BankTransaction.filter({
         company_id: companyId,
         tipo: expectedType,
@@ -210,7 +217,10 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Movimiento bancario no encontrado en la empresa activa.' }, { status: 404 });
       }
       if (transaction.es_demo) return Response.json({ error: 'No se puede conciliar un movimiento de demostración.' }, { status: 409 });
-      const expectedType = invoice.tipo === 'recibida' ? 'salida' : 'entrada';
+      const isCreditNote = Number(invoice.total_factura) < 0;
+      const expectedType = invoice.tipo === 'recibida'
+        ? (isCreditNote ? 'entrada' : 'salida')
+        : (isCreditNote ? 'salida' : 'entrada');
       if (transaction.tipo !== expectedType) {
         return Response.json({ error: `Esta factura requiere un movimiento de ${expectedType}.` }, { status: 409 });
       }
@@ -223,6 +233,14 @@ Deno.serve(async (req) => {
         bank_transaction_id: transaction.id,
       }, '-created_at', 1);
       if (previousPayment?.[0]) {
+        // Repara de forma idempotente una operación que hubiera guardado el pago
+        // pero se hubiera interrumpido antes de enlazar el movimiento.
+        await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
+          estado_conciliacion: 'conciliada_manual',
+          confianza_conciliacion: 'alta',
+          entidad_tipo: 'invoice',
+          entidad_id: invoice.id,
+        });
         const state = await refreshInvoicePaymentState(base44, invoice, companyId);
         return Response.json({ ok: true, duplicate: true, payment: previousPayment[0], ...state });
       }
