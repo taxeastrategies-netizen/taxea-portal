@@ -101,6 +101,32 @@
     "notas": {
       "type": "string"
     },
+    "origen_datos": {
+      "type": "string",
+      "enum": [
+        "open_banking",
+        "csv",
+        "api_direct",
+        "manual"
+      ]
+    },
+    "proveedor_transaccion_id": {
+      "type": "string"
+    },
+    "clave_transaccion": {
+      "type": "string"
+    },
+    "estado_proveedor": {
+      "type": "string",
+      "enum": [
+        "booked",
+        "pending"
+      ]
+    },
+    "importado_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "es_demo": {
       "type": "boolean",
       "default": false
