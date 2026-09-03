@@ -41,7 +41,12 @@ async function listPayments(base44, companyId, invoiceId) {
 async function refreshInvoicePaymentState(base44, invoice, companyId) {
   const payments = await listPayments(base44, companyId, invoice.id);
   const total = asMoney(Math.abs(Number(invoice.total_factura) || 0));
-  const paid = asMoney((payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
+  // Conserva facturas históricas marcadas como cobradas/pagadas antes de existir
+  // el nuevo registro detallado de pagos. No se reabre ninguna factura legado.
+  const legacySettled = (payments || []).length === 0 && invoice.estado_cobro === 'cobrada';
+  const paid = legacySettled
+    ? total
+    : asMoney((payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
   const outstanding = asMoney(Math.max(0, total - paid));
   const estado = outstanding <= MONEY_EPSILON ? 'cobrada' : paid > MONEY_EPSILON ? 'parcial' : 'pendiente';
   const lastPayment = (payments || [])
