@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
+const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
 function EmailChip({ email, onRemove }) {
@@ -90,7 +93,62 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
   const [error, setError] = useState('');
   const [noEmailWarning, setNoEmailWarning] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(null);
+  const [gmailEmail, setGmailEmail] = useState('');
+  const [connectingGmail, setConnectingGmail] = useState(false);
 
+  const refreshGmailStatus = async () => {
+    try {
+      const response = await base44.functions.invoke('sendEmail', { action: 'status' });
+      const status = response?.data || response;
+      setGmailConnected(Boolean(status?.connected));
+      setGmailEmail(status?.email || '');
+      return Boolean(status?.connected);
+    } catch {
+      setGmailConnected(false);
+      setGmailEmail('');
+      return false;
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setError('');
+    setConnectingGmail(true);
+    try {
+      const redirectUrl = await base44.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
+      const popup = window.open(redirectUrl, 'taxea_gmail_oauth', 'popup,width=560,height=720');
+      if (!popup) {
+        window.location.assign(redirectUrl);
+        return;
+      }
+      const deadline = Date.now() + 120000;
+      let connected = false;
+      while (Date.now() < deadline) {
+        await sleep(1500);
+        connected = await refreshGmailStatus();
+        if (connected) { try { popup.close(); } catch {} break; }
+        if (popup.closed) break;
+      }
+      if (!connected) connected = await refreshGmailStatus();
+      if (!connected) setError('No se completó la autorización de Gmail. Vuelve a intentarlo y acepta los permisos de envío.');
+    } catch (e) {
+      setError(e?.message || 'No se pudo iniciar la conexión con Gmail.');
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setConnectingGmail(true);
+    try {
+      await base44.connectors.disconnectAppUser(GMAIL_CONNECTOR_ID);
+      setGmailConnected(false);
+      setGmailEmail('');
+    } catch (e) {
+      setError(e?.message || 'No se pudo desconectar Gmail.');
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !doc) return;
@@ -98,10 +156,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
     setSubject(buildSubject(doc, docType, company));
     loadClientEmail();
     setGmailConnected(null);
-    base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
-      const status = res?.data || res;
-      setGmailConnected(Boolean(status?.connected));
-    }).catch(() => setGmailConnected(false));
+    refreshGmailStatus();
   }, [open, doc?.id]);
 
   const loadClientEmail = async () => {
@@ -156,7 +211,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
       onSent?.();
     } catch (e) {
       const errCode = e?.response?.data?.error || '';
-      if (errCode === 'gmail_not_connected') {
+      if (errCode === 'gmail_not_connected' || errCode === 'gmail_authorization_expired') {
         setGmailConnected(false);
         setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
       } else {
@@ -196,13 +251,18 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
                   <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
                   <p className="text-xs text-amber-700 mt-0.5">Conecta tu Gmail para enviar desde tu propio correo.</p>
                 </div>
-                <span className="text-[10px] text-amber-700 font-medium flex-shrink-0">Configuración corporativa pendiente</span>
+                <button type="button" onClick={handleConnectGmail} disabled={connectingGmail}
+                  className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50 flex-shrink-0">
+                  {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
+                </button>
               </div>
             )}
             {gmailConnected === true && (
               <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <p className="text-xs font-semibold text-emerald-800">Email enviado desde tu cuenta Gmail</p>
+                <p className="text-xs font-semibold text-emerald-800 flex-1">Enviarás desde{gmailEmail ? ` ${gmailEmail}` : ' tu Gmail'}</p>
+                <button type="button" onClick={handleDisconnectGmail} disabled={connectingGmail}
+                  className="text-[10px] text-emerald-700 hover:underline disabled:opacity-50">Desconectar</button>
               </div>
             )}
 
