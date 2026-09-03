@@ -14,7 +14,7 @@ export default function MobileBottomNav() {
   const location = useLocation();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border flex items-stretch justify-around safe-area-pb shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
+    <nav className="taxea-future-bottomnav md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border flex items-stretch justify-around safe-area-pb shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
       {TABS.map(({ to, label, icon: Icon, exact }) => {
         const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
         return (
