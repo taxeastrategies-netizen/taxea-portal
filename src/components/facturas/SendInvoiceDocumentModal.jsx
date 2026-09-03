@@ -10,6 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { buildPremiumInvoiceEmail, buildReceivedInvoiceEmail, buildEmailSubject, ensureInvoicePdf } from './invoicePremiumEmail';
 
+const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function getCurrentGmailStatus() {
+  const response = await base44.functions.invoke('sendEmail', { action: 'status' });
+  return response?.data || response;
+}
+
 const TEMPLATES = [
   { id: 'envio_factura',  label: 'Envío de factura' },
   { id: 'recordatorio',   label: 'Recordatorio de vencimiento' },
@@ -102,7 +110,68 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   const [previewHtml, setPreviewHtml] = useState('');
   const [gmailConnected, setGmailConnected] = useState(null); // null=checking, true, false
   const [gmailEmail, setGmailEmail] = useState('');
+  const [connectingGmail, setConnectingGmail] = useState(false);
+  const [sendRequestId, setSendRequestId] = useState('');
   const isReceived = invoice?.tipo === 'recibida';
+
+  const refreshGmailStatus = async () => {
+    try {
+      const status = await getCurrentGmailStatus();
+      setGmailConnected(Boolean(status?.connected));
+      setGmailEmail(status?.email || '');
+      return Boolean(status?.connected);
+    } catch {
+      setGmailConnected(false);
+      setGmailEmail('');
+      return false;
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setError('');
+    setConnectingGmail(true);
+    try {
+      const redirectUrl = await base44.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
+      const popup = window.open(redirectUrl, 'taxea_gmail_oauth', 'popup,width=560,height=720');
+      if (!popup) {
+        window.location.assign(redirectUrl);
+        return;
+      }
+      const deadline = Date.now() + 120000;
+      let connected = false;
+      while (Date.now() < deadline) {
+        await sleep(1500);
+        connected = await refreshGmailStatus();
+        if (connected) {
+          try { popup.close(); } catch {}
+          break;
+        }
+        if (popup.closed) break;
+      }
+      if (!connected) {
+        connected = await refreshGmailStatus();
+      }
+      if (!connected) setError('No se completó la autorización de Gmail. Vuelve a pulsar “Conectar Gmail” y acepta los permisos de envío.');
+    } catch (e) {
+      setError(e?.message || 'No se pudo iniciar la conexión con Gmail.');
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setError('');
+    setConnectingGmail(true);
+    try {
+      await base44.connectors.disconnectAppUser(GMAIL_CONNECTOR_ID);
+      setGmailConnected(false);
+      setGmailEmail('');
+    } catch (e) {
+      setError(e?.message || 'No se pudo desconectar Gmail.');
+    } finally {
+      setConnectingGmail(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !invoice) return;
@@ -115,14 +184,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     initPublicLink();
     setTemplateId('envio_factura');
     setSubject(buildEmailSubject(invoice, company, 'envio_factura'));
-    // Pre-generar PDF en segundo plano al abrir el modal
-    // Verificar conexión Gmail
+    // Pre-generar PDF en segundo plano al abrir el modal y comprobar
+    // la conexión Gmail individual del usuario actual.
     setGmailConnected(null);
-    base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
-      const status = res?.data || res;
-      setGmailConnected(Boolean(status?.connected));
-      setGmailEmail(status?.email || '');
-    }).catch(() => setGmailConnected(false));
+    setSendRequestId(crypto.randomUUID());
+    refreshGmailStatus();
 
     if (!invoice?.archivo_url && invoice.tipo !== 'recibida') {
       setPreparingPdf(true);
@@ -246,6 +312,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
         company_id: company?.id,
         public_invoice_url: validatedLink,
         template_id: templateId,
+        idempotency_key: sendRequestId || crypto.randomUUID(),
         to_was_manual: noEmailWarning,
         to: to,
         cc: cc.length > 0 ? cc : undefined,
@@ -277,9 +344,12 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     } catch (e) {
       const errCode = e?.response?.data?.error || '';
       const errMessage = e?.response?.data?.message || e?.response?.data?.error || e.message;
-      if (errCode === 'gmail_not_connected') {
+      if (errCode === 'gmail_not_connected' || errCode === 'gmail_authorization_expired') {
         setGmailConnected(false);
-        setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
+        setGmailEmail('');
+        setError(errCode === 'gmail_authorization_expired'
+          ? 'La autorización de Gmail ha caducado o fue revocada. Vuelve a conectar tu cuenta.'
+          : 'Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
       } else {
         setError(errMessage || 'No se ha podido enviar el correo. La factura no se ha marcado como enviada.');
       }
@@ -323,13 +393,23 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                     <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
                     <p className="text-xs text-amber-700 mt-0.5">Conecta tu cuenta Gmail para enviar facturas desde tu propio correo.</p>
                   </div>
-                  <span className="text-[10px] text-amber-700 font-medium flex-shrink-0">Configuración corporativa pendiente</span>
+                  <button
+                    type="button"
+                    onClick={handleConnectGmail}
+                    disabled={connectingGmail}
+                    className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-amber-700 disabled:opacity-50 flex-shrink-0">
+                    {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
+                  </button>
                 </div>
               )}
               {gmailConnected === true && (
                 <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <p className="text-xs font-semibold text-emerald-800">Gmail conectado{gmailEmail ? `: ${gmailEmail}` : ''}</p>
+                  <p className="text-xs font-semibold text-emerald-800 flex-1">Enviarás desde{gmailEmail ? ` ${gmailEmail}` : ' tu Gmail'}</p>
+                  <button type="button" onClick={handleDisconnectGmail} disabled={connectingGmail}
+                    className="text-[10px] text-emerald-700 hover:underline disabled:opacity-50">
+                    Desconectar
+                  </button>
                 </div>
               )}
 
@@ -338,6 +418,12 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                 <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
                   <Loader2 className="w-4 h-4 text-blue-600 flex-shrink-0 animate-spin" />
                   <p className="text-xs font-semibold text-blue-800">Preparando PDF adjunto…</p>
+                </div>
+              )}
+              {!preparingPdf && isReceived && !pdfReady && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">Esta factura recibida no tiene PDF original. Súbelo desde “Archivos adjuntos” antes de enviarla.</p>
                 </div>
               )}
               {!preparingPdf && pdfReady && !invoice?.archivo_url && (
@@ -515,7 +601,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <iframe srcDoc={previewHtml} className="w-full" style={{ height: '600px', border: 'none' }} title="Preview email" />
+              <iframe sandbox="" srcDoc={previewHtml} className="w-full" style={{ height: '600px', border: 'none' }} title="Preview email" />
             </div>
           </div>
         </div>
