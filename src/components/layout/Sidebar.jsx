@@ -301,7 +301,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
       )}
 
       <aside className={cn(
-        "fixed top-0 left-0 h-full w-60 z-50 flex flex-col transition-transform duration-300",
+        "taxea-future-sidebar fixed top-0 left-0 h-full w-60 z-50 flex flex-col transition-transform duration-300",
         "bg-white border-r border-slate-100",
         isOpen ? "translate-x-0" : "-translate-x-full",
         "lg:translate-x-0 lg:static lg:z-auto"
