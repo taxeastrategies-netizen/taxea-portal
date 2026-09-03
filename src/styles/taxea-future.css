@@ -1,0 +1,538 @@
+/* Taxea Future OS — visual-only system layer */
+@layer components {
+  .taxea-future-shell {
+    --taxea-oxblood: #9b1c1c;
+    --taxea-oxblood-deep: #5f0f14;
+    --taxea-ink: #171414;
+    --taxea-warm-white: #f7f4f1;
+    --taxea-line: rgba(93, 47, 47, 0.14);
+    background:
+      radial-gradient(circle at 76% -8%, rgba(155, 28, 28, 0.13), transparent 28rem),
+      linear-gradient(135deg, #f6f3f0 0%, #eeebe8 54%, #f8f6f4 100%);
+    letter-spacing: -0.012em;
+  }
+
+  .taxea-future-atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background:
+      linear-gradient(118deg, rgba(17, 14, 15, 0.035), transparent 35%),
+      radial-gradient(circle at 82% 10%, rgba(155, 28, 28, 0.08), transparent 22rem);
+  }
+
+  .taxea-ambient {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(72px);
+    opacity: 0.48;
+    transform: translateZ(0);
+  }
+
+  .taxea-ambient-crimson {
+    width: 28rem;
+    height: 28rem;
+    top: -12rem;
+    right: 2%;
+    background: rgba(155, 28, 28, 0.22);
+    animation: taxea-ambient-drift 18s cubic-bezier(0.19, 1, 0.22, 1) infinite alternate;
+  }
+
+  .taxea-ambient-graphite {
+    width: 22rem;
+    height: 22rem;
+    bottom: -12rem;
+    left: 14%;
+    background: rgba(23, 20, 20, 0.13);
+    animation: taxea-ambient-drift 23s cubic-bezier(0.19, 1, 0.22, 1) infinite alternate-reverse;
+  }
+
+  .taxea-grid-plane {
+    position: absolute;
+    width: 82vw;
+    height: 42vh;
+    right: -14vw;
+    bottom: -24vh;
+    opacity: 0.28;
+    transform: perspective(620px) rotateX(66deg) rotateZ(-9deg);
+    transform-origin: center bottom;
+    background-image:
+      linear-gradient(rgba(155, 28, 28, 0.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(155, 28, 28, 0.16) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to top, #000 18%, transparent 82%);
+  }
+
+  .taxea-data-orb {
+    position: absolute;
+    top: 4.4rem;
+    right: 5.5vw;
+    width: 13rem;
+    height: 13rem;
+    opacity: 0.22;
+    transform-style: preserve-3d;
+    animation: taxea-orb-float 12s cubic-bezier(0.19, 1, 0.22, 1) infinite alternate;
+  }
+
+  .taxea-data-orb__core,
+  .taxea-data-orb__ring {
+    position: absolute;
+    inset: 50%;
+    border-radius: 50%;
+    transform-style: preserve-3d;
+  }
+
+  .taxea-data-orb__core {
+    width: 2.5rem;
+    height: 2.5rem;
+    margin: -1.25rem;
+    background: radial-gradient(circle at 32% 26%, #fff, #d85d61 24%, #9b1c1c 62%, #35070a);
+    box-shadow: 0 0 42px rgba(155, 28, 28, 0.52);
+  }
+
+  .taxea-data-orb__ring {
+    border: 1px solid rgba(155, 28, 28, 0.58);
+  }
+
+  .taxea-data-orb__ring--one {
+    width: 8rem;
+    height: 8rem;
+    margin: -4rem;
+    transform: rotateX(68deg) rotateZ(22deg);
+    animation: taxea-ring-one 14s linear infinite;
+  }
+
+  .taxea-data-orb__ring--two {
+    width: 11rem;
+    height: 11rem;
+    margin: -5.5rem;
+    transform: rotateY(66deg) rotateZ(-16deg);
+    animation: taxea-ring-two 18s linear infinite reverse;
+  }
+
+  .taxea-data-orb__ring--three {
+    width: 13rem;
+    height: 13rem;
+    margin: -6.5rem;
+    border-style: dashed;
+    opacity: 0.55;
+    animation: taxea-ring-flat 24s linear infinite;
+  }
+
+  .taxea-future-main {
+    position: relative;
+    background: linear-gradient(135deg, rgba(250, 248, 246, 0.82), rgba(242, 238, 235, 0.72));
+    scroll-behavior: smooth;
+  }
+
+  .taxea-future-main::before {
+    content: "";
+    position: fixed;
+    inset: 3.5rem 0 0 15rem;
+    pointer-events: none;
+    opacity: 0.22;
+    background-image:
+      linear-gradient(rgba(82, 52, 52, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(82, 52, 52, 0.05) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(140deg, #000, transparent 62%);
+  }
+
+  .taxea-future-sidebar {
+    background:
+      radial-gradient(circle at 45% 0%, rgba(155, 28, 28, 0.34), transparent 15rem),
+      linear-gradient(180deg, rgba(25, 20, 21, 0.985), rgba(12, 10, 11, 0.995)) !important;
+    border-right-color: rgba(255, 255, 255, 0.09) !important;
+    box-shadow: 20px 0 48px rgba(25, 10, 12, 0.13);
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .taxea-future-sidebar::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #c94a4e, transparent);
+    opacity: 0.82;
+  }
+
+  .taxea-future-sidebar .text-slate-800,
+  .taxea-future-sidebar .text-slate-900 {
+    color: #fff !important;
+  }
+
+  .taxea-future-sidebar .text-slate-500,
+  .taxea-future-sidebar .text-slate-600,
+  .taxea-future-sidebar .text-slate-700 {
+    color: rgba(255, 255, 255, 0.72) !important;
+  }
+
+  .taxea-future-sidebar .text-slate-300,
+  .taxea-future-sidebar .text-slate-350,
+  .taxea-future-sidebar .text-slate-400 {
+    color: rgba(255, 255, 255, 0.42) !important;
+  }
+
+  .taxea-future-sidebar .border-slate-100 {
+    border-color: rgba(255, 255, 255, 0.085) !important;
+  }
+
+  .taxea-future-sidebar [style*="rgba(0,0,0"] {
+    color: rgba(255, 255, 255, 0.42) !important;
+  }
+
+  .taxea-future-sidebar nav a,
+  .taxea-future-sidebar nav button {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .taxea-future-sidebar nav a:hover,
+  .taxea-future-sidebar nav button:hover {
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    color: #fff !important;
+  }
+
+  .taxea-future-sidebar nav .text-taxea-red {
+    color: #f07073 !important;
+  }
+
+  .taxea-future-sidebar nav .bg-taxea-red\/8 {
+    background: linear-gradient(90deg, rgba(155, 28, 28, 0.34), rgba(155, 28, 28, 0.08)) !important;
+    box-shadow: inset 2px 0 #d95a5e, 0 8px 24px rgba(0, 0, 0, 0.14);
+  }
+
+  .taxea-future-topbar {
+    background: rgba(250, 248, 246, 0.78) !important;
+    border-bottom-color: rgba(93, 47, 47, 0.12) !important;
+    box-shadow: 0 12px 36px rgba(41, 24, 27, 0.055);
+    backdrop-filter: blur(22px) saturate(145%);
+  }
+
+  .taxea-future-bottomnav {
+    background: rgba(20, 16, 17, 0.94) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 -18px 46px rgba(24, 8, 11, 0.22) !important;
+    backdrop-filter: blur(24px) saturate(140%);
+  }
+
+  .taxea-future-bottomnav a {
+    position: relative;
+    color: rgba(255, 255, 255, 0.52);
+  }
+
+  .taxea-future-bottomnav a.text-primary {
+    color: #f07073;
+  }
+
+  .taxea-future-bottomnav a.text-primary::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 2rem;
+    height: 2px;
+    border-radius: 999px;
+    background: #d34d51;
+    box-shadow: 0 0 16px rgba(211, 77, 81, 0.8);
+  }
+
+  .taxea-future-main .bg-card.rounded-xl,
+  .taxea-future-main .bg-card.rounded-2xl,
+  .taxea-future-main .card-premium {
+    background:
+      linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(249, 246, 243, 0.82)) !important;
+    border-color: rgba(96, 57, 57, 0.13) !important;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.86) inset,
+      0 16px 42px rgba(38, 17, 21, 0.075),
+      0 2px 8px rgba(38, 17, 21, 0.04) !important;
+    backdrop-filter: blur(18px) saturate(130%);
+  }
+
+  .taxea-future-main .bg-card.rounded-xl { border-radius: 1rem; }
+
+  .taxea-future-main .bg-card.rounded-2xl,
+  .taxea-future-main .card-premium { border-radius: 1.25rem; }
+
+  .taxea-future-main .bg-card.border { position: relative; }
+
+  .taxea-future-main .bg-card.border::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(125deg, rgba(255, 255, 255, 0.72), transparent 28%, transparent 68%, rgba(155, 28, 28, 0.035));
+  }
+
+  .taxea-future-shell .bg-taxea-red,
+  .taxea-future-shell .bg-primary {
+    background-image: linear-gradient(135deg, #b52d32, #861318) !important;
+    box-shadow: 0 9px 22px rgba(155, 28, 28, 0.22);
+  }
+
+  .taxea-future-shell input,
+  .taxea-future-shell textarea,
+  .taxea-future-shell select,
+  .taxea-future-shell [role="combobox"] {
+    border-color: rgba(94, 57, 57, 0.16);
+    background-color: rgba(255, 255, 255, 0.74);
+    backdrop-filter: blur(12px);
+  }
+
+  .taxea-future-shell input:focus,
+  .taxea-future-shell textarea:focus,
+  .taxea-future-shell select:focus,
+  .taxea-future-shell [role="combobox"]:focus-visible {
+    border-color: rgba(155, 28, 28, 0.46);
+    box-shadow: 0 0 0 3px rgba(155, 28, 28, 0.1);
+  }
+
+  .taxea-data-table-frame {
+    perspective: 1200px;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(94, 57, 57, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 18px 48px rgba(38, 17, 21, 0.07);
+  }
+
+  .taxea-data-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .taxea-data-table thead {
+    background: linear-gradient(90deg, rgba(28, 23, 24, 0.97), rgba(64, 25, 29, 0.95));
+  }
+
+  .taxea-data-table thead th {
+    height: 2.75rem;
+    color: rgba(255, 255, 255, 0.72);
+    border-color: rgba(255, 255, 255, 0.08);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .taxea-data-table tbody tr {
+    background: rgba(255, 255, 255, 0.58);
+    transition: background-color 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  .taxea-data-table tbody tr:nth-child(even) { background: rgba(248, 244, 241, 0.7); }
+
+  .taxea-data-table tbody tr:hover {
+    background: rgba(155, 28, 28, 0.045);
+    box-shadow: inset 3px 0 #a7262a, inset 0 1px rgba(255, 255, 255, 0.9);
+  }
+
+  .taxea-data-table td { border-color: rgba(94, 57, 57, 0.08); }
+
+  .taxea-future-main .recharts-cartesian-grid line { stroke: rgba(90, 55, 55, 0.1); }
+
+  .taxea-future-main .recharts-surface {
+    overflow: visible;
+    filter: drop-shadow(0 10px 18px rgba(71, 24, 30, 0.06));
+  }
+
+  .taxea-future-main .recharts-tooltip-wrapper {
+    filter: drop-shadow(0 18px 28px rgba(38, 17, 21, 0.12));
+  }
+
+  .taxea-command-center { position: relative; }
+
+  .taxea-command-hero {
+    position: relative;
+    min-height: 9.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    overflow: hidden;
+    padding: 1.5rem 1.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.35rem;
+    color: #fff;
+    background:
+      radial-gradient(circle at 78% 40%, rgba(204, 65, 70, 0.34), transparent 14rem),
+      linear-gradient(112deg, #171314 0%, #2a1719 54%, #641116 100%);
+    box-shadow: 0 26px 60px rgba(38, 8, 13, 0.2);
+    isolation: isolate;
+  }
+
+  .taxea-command-hero::before {
+    content: "";
+    position: absolute;
+    width: 26rem;
+    height: 26rem;
+    right: -10rem;
+    top: -15rem;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 3rem rgba(255, 255, 255, 0.025),
+      0 0 0 7rem rgba(155, 28, 28, 0.055);
+  }
+
+  .taxea-command-kicker {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+    color: rgba(255, 255, 255, 0.52);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .taxea-command-kicker span {
+    width: 1.6rem;
+    height: 1px;
+    background: #d9595d;
+    box-shadow: 0 0 10px rgba(217, 89, 93, 0.7);
+  }
+
+  .taxea-command-hero h1 {
+    color: #fff;
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.55rem, 2.4vw, 2.45rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+
+  .taxea-command-hero p:not(.taxea-command-kicker) { color: rgba(255, 255, 255, 0.58); }
+
+  .taxea-command-hero [role="combobox"] {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .taxea-mini-orbit {
+    position: relative;
+    place-items: center;
+    width: 4.5rem;
+    height: 4.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.17);
+    border-radius: 50%;
+    transform: rotateX(60deg) rotateZ(-18deg);
+    animation: taxea-mini-orbit 9s linear infinite;
+  }
+
+  .taxea-mini-orbit::before,
+  .taxea-mini-orbit::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+  }
+
+  .taxea-mini-orbit::before {
+    inset: 0.65rem;
+    border: 1px dashed rgba(225, 91, 96, 0.55);
+  }
+
+  .taxea-mini-orbit::after {
+    width: 0.65rem;
+    height: 0.65rem;
+    background: #e36a6e;
+    box-shadow: 0 0 18px rgba(227, 106, 110, 0.8);
+    transform: translateX(2.2rem);
+  }
+
+  .taxea-future-main::-webkit-scrollbar,
+  .taxea-future-sidebar nav::-webkit-scrollbar,
+  .taxea-data-table-frame::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .taxea-future-main::-webkit-scrollbar-thumb,
+  .taxea-future-sidebar nav::-webkit-scrollbar-thumb,
+  .taxea-data-table-frame::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(155, 28, 28, 0.34);
+    background-clip: padding-box;
+  }
+}
+
+@media (hover: hover) and (min-width: 1024px) {
+  .taxea-future-main .bg-card.rounded-xl,
+  .taxea-future-main .bg-card.rounded-2xl,
+  .taxea-future-main .card-premium {
+    transition: transform 0.7s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+    transform-style: preserve-3d;
+  }
+
+  .taxea-future-main .bg-card.rounded-xl:hover,
+  .taxea-future-main .bg-card.rounded-2xl:hover,
+  .taxea-future-main .card-premium:hover {
+    transform: perspective(900px) translateY(-3px) rotateX(0.4deg);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.9) inset,
+      0 24px 56px rgba(38, 17, 21, 0.11),
+      0 0 0 1px rgba(155, 28, 28, 0.035) !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .taxea-future-main::before { inset: 3.5rem 0 0; }
+
+  .taxea-data-orb {
+    right: -5rem;
+    opacity: 0.13;
+  }
+}
+
+@media (max-width: 767px) {
+  .taxea-command-hero {
+    min-height: 8.5rem;
+    align-items: flex-end;
+    padding: 1.2rem;
+    border-radius: 1.1rem;
+  }
+
+  .taxea-command-hero h1 { font-size: 1.6rem; }
+  .taxea-command-kicker { font-size: 0.58rem; }
+  .taxea-command-hero .taxea-hero-controls { align-self: flex-start; }
+
+  .taxea-future-main::before,
+  .taxea-grid-plane { opacity: 0.13; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taxea-ambient,
+  .taxea-data-orb,
+  .taxea-data-orb__ring,
+  .taxea-mini-orbit { animation: none !important; }
+
+  .taxea-future-main { scroll-behavior: auto; }
+
+  .taxea-future-main .bg-card.rounded-xl:hover,
+  .taxea-future-main .bg-card.rounded-2xl:hover,
+  .taxea-future-main .card-premium:hover { transform: none !important; }
+}
+
+@keyframes taxea-ambient-drift {
+  from { transform: translate3d(-2rem, -1rem, 0) scale(0.94); }
+  to { transform: translate3d(2rem, 1.5rem, 0) scale(1.08); }
+}
+
+@keyframes taxea-orb-float {
+  from { transform: translate3d(0, -0.5rem, 0) rotateZ(-2deg); }
+  to { transform: translate3d(-1.2rem, 1.2rem, 0) rotateZ(4deg); }
+}
+
+@keyframes taxea-ring-one { to { transform: rotateX(68deg) rotateZ(382deg); } }
+@keyframes taxea-ring-two { to { transform: rotateY(66deg) rotateZ(344deg); } }
+@keyframes taxea-ring-flat { to { transform: rotateZ(360deg); } }
+@keyframes taxea-mini-orbit { to { transform: rotateX(60deg) rotateZ(342deg); } }
+
