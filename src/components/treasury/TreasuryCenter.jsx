@@ -116,7 +116,7 @@ export default function TreasuryCenter({ company }) {
   };
 
   const pendingConciliation = useMemo(() =>
-    transactions.filter(t => t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia').length,
+    transactions.filter(t => t.estado_proveedor !== 'pending' && (t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia')).length,
     [transactions]);
 
   if (!companyId) {
@@ -231,7 +231,7 @@ export default function TreasuryCenter({ company }) {
           {tab === 'conciliacion' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <BankTransactionsTable
-                transactions={transactions.filter(t => ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(t.estado_conciliacion))}
+                transactions={transactions.filter(t => t.estado_proveedor !== 'pending' && ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(t.estado_conciliacion))}
                 accounts={accounts}
                 onConciliar={tx => setReconTx(tx)}
               />
