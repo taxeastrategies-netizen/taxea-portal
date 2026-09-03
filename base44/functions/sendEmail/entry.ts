@@ -73,8 +73,9 @@ async function getConnectedEmail(connection) {
     || connection?.connectionConfig?.emailAddress
     || connection?.connectionConfig?.accountEmail;
   if (configured && EMAIL_RE.test(configured)) return configured;
-  // Fallback sin gmail.metadata: OpenID userinfo solo requiere el scope "email".
-  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+  // Fallback sin gmail.metadata: el endpoint OAuth2 funciona con userinfo.email
+  // aunque el proveedor no haya emitido un flujo OpenID completo.
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
     headers: { Authorization: `Bearer ${connection.accessToken}` },
   }).catch(() => null);
   if (!response?.ok) return '';
@@ -165,7 +166,13 @@ Deno.serve(async (req) => {
     if (body.action === 'status') {
       if (!connection) return Response.json({ ok: true, connected: false, error: 'gmail_not_connected' });
       const email = await getConnectedEmail(connection);
-      return Response.json({ ok: true, connected: Boolean(email), email, scope: 'user' });
+      return Response.json({
+        ok: true,
+        connected: true,
+        email,
+        identity_available: Boolean(email),
+        scope: 'user',
+      });
     }
 
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
