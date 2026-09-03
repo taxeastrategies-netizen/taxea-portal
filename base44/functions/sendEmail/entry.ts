@@ -1,12 +1,13 @@
 /**
- * Envía emails desde el Gmail conectado del usuario.
- * Permite comprobar el estado del conector sin enviar y adjuntar archivos remotos.
+ * Envío transaccional de facturas desde el Gmail corporativo conectado a la app.
+ * La operación está limitada a facturas de la empresa activa y registra el éxito
+ * únicamente después de que Gmail confirme el envío.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
-const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function bytesToBase64(bytes) {
   let binary = '';
@@ -43,23 +44,59 @@ function isSafeRemoteUrl(value) {
   }
 }
 
-async function loadAttachments(input) {
+function normalizeEmails(input, label, required = false) {
+  const values = (Array.isArray(input) ? input : input ? [input] : [])
+    .map(value => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  const unique = [...new Set(values)];
+  if (required && unique.length === 0) throw Object.assign(new Error(`Añade al menos un destinatario en ${label}.`), { status: 400 });
+  if (unique.length > 10) throw Object.assign(new Error(`Demasiados destinatarios en ${label}.`), { status: 400 });
+  const invalid = unique.filter(value => !EMAIL_RE.test(value));
+  if (invalid.length) throw Object.assign(new Error(`Dirección no válida en ${label}: ${invalid.join(', ')}`), { status: 400 });
+  return unique;
+}
+
+async function getGmailConnection(base44) {
+  try {
+    const connection = await base44.asServiceRole.connectors.getConnection('gmail');
+    return connection?.accessToken ? connection : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getConnectedEmail(connection) {
+  const configured = connection?.connectionConfig?.email
+    || connection?.connectionConfig?.emailAddress
+    || connection?.connectionConfig?.accountEmail;
+  if (configured && EMAIL_RE.test(configured)) return configured;
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+    headers: { Authorization: `Bearer ${connection.accessToken}` },
+  }).catch(() => null);
+  if (!response?.ok) return '';
+  const profile = await response.json().catch(() => ({}));
+  return EMAIL_RE.test(profile.emailAddress || '') ? profile.emailAddress : '';
+}
+
+async function loadAttachments(input, allowedUrl) {
   const attachments = Array.isArray(input) ? input : [];
+  if (attachments.length !== 1) throw Object.assign(new Error('La factura debe enviarse con un único PDF adjunto.'), { status: 400 });
   const loaded = [];
   let totalSize = 0;
-
   for (const item of attachments) {
     const url = typeof item === 'string' ? item : item?.url;
-    if (!url || !isSafeRemoteUrl(url)) throw new Error('URL de adjunto no permitida.');
+    if (!url || url !== allowedUrl || !isSafeRemoteUrl(url)) {
+      throw Object.assign(new Error('El adjunto no coincide con el PDF de la factura.'), { status: 400 });
+    }
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`No se pudo descargar el adjunto (${response.status}).`);
+    if (!response.ok) throw new Error(`No se pudo descargar el PDF adjunto (${response.status}).`);
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new Error('Un adjunto supera el límite de 10 MB.');
+    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new Error('El PDF supera el límite de 10 MB.');
     totalSize += bytes.byteLength;
     if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('Los adjuntos superan el límite total de 20 MB.');
     loaded.push({
       name: safeFilename(typeof item === 'string' ? url.split('/').pop() : item.name),
-      mimeType: (typeof item === 'object' && item.mimeType) || response.headers.get('content-type') || 'application/octet-stream',
+      mimeType: 'application/pdf',
       content: bytesToBase64(bytes),
     });
   }
@@ -69,19 +106,13 @@ async function loadAttachments(input) {
 function buildRawMessage({ from, to, cc, bcc, subject, html, attachments }) {
   const headers = [
     `From: ${from}`,
-    `To: ${Array.isArray(to) ? to.join(', ') : to}`,
+    `To: ${to.join(', ')}`,
   ];
-  if (cc?.length) headers.push(`Cc: ${Array.isArray(cc) ? cc.join(', ') : cc}`);
-  if (bcc?.length) headers.push(`Bcc: ${Array.isArray(bcc) ? bcc.join(', ') : bcc}`);
+  if (cc.length) headers.push(`Cc: ${cc.join(', ')}`);
+  if (bcc.length) headers.push(`Bcc: ${bcc.join(', ')}`);
   headers.push(`Subject: ${encodeHeader(subject)}`, 'MIME-Version: 1.0');
-
-  const htmlBase64 = base64Lines(bytesToBase64(new TextEncoder().encode(html)));
-  if (!attachments.length) {
-    headers.push('Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', htmlBase64);
-    return headers.join('\r\n');
-  }
-
   const boundary = `taxea_${crypto.randomUUID()}`;
+  const htmlBase64 = base64Lines(bytesToBase64(new TextEncoder().encode(html)));
   headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`, '');
   const parts = [
     `--${boundary}`,
@@ -90,7 +121,6 @@ function buildRawMessage({ from, to, cc, bcc, subject, html, attachments }) {
     '',
     htmlBase64,
   ];
-
   for (const attachment of attachments) {
     parts.push(
       `--${boundary}`,
@@ -111,91 +141,139 @@ function toBase64Url(raw) {
 }
 
 Deno.serve(async (req) => {
+  let base44;
+  let user;
+  let invoice;
+  let companyId;
+  let body = {};
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    base44 = createClientFromRequest(req);
+    user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await req.json().catch(() => ({}));
-    let connection;
-    try {
-      connection = await base44.asServiceRole.connectors.getCurrentAppUserConnection(GMAIL_CONNECTOR_ID);
-    } catch {
-      connection = null;
-    }
+    body = await req.json().catch(() => ({}));
+    const connection = await getGmailConnection(base44);
 
     if (body.action === 'status') {
-      if (!connection?.accessToken) {
-        return Response.json({ ok: true, connected: false, error: 'gmail_not_connected' });
-      }
-      const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-        headers: { Authorization: `Bearer ${connection.accessToken}` },
-      });
-      const profile = await profileRes.json().catch(() => ({}));
-      return Response.json({
-        ok: profileRes.ok,
-        connected: profileRes.ok,
-        email: profile.emailAddress || '',
-        error: profileRes.ok ? undefined : 'gmail_profile_failed',
-      }, { status: profileRes.ok ? 200 : 502 });
+      if (!connection) return Response.json({ ok: true, connected: false, error: 'gmail_not_connected' });
+      const email = await getConnectedEmail(connection);
+      return Response.json({ ok: true, connected: true, email, scope: 'app' });
     }
 
-    const { to, cc, bcc, subject, html, from_name, attachments: attachmentInput } = body;
-    if (!to || !subject || !html) {
-      return Response.json({ error: 'Faltan campos requeridos: to, subject, html' }, { status: 400 });
+    companyId = user.data?.company_id;
+    if (!companyId || (body.company_id && body.company_id !== companyId)) {
+      return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
     }
-    if (!connection?.accessToken) {
+    invoice = await base44.asServiceRole.entities.Invoice.get(body.invoice_id).catch(() => null);
+    if (!invoice || invoice.company_id !== companyId) {
+      return Response.json({ error: 'Factura no encontrada en la empresa activa.' }, { status: 404 });
+    }
+    if (invoice.anulada) return Response.json({ error: 'No se puede enviar una factura anulada.' }, { status: 409 });
+    if (!connection) {
       return Response.json({
         error: 'gmail_not_connected',
-        message: 'Conecta tu cuenta Gmail para enviar emails desde tu propio correo.',
+        message: 'La cuenta Gmail corporativa de Taxea aún no está conectada.',
       }, { status: 403 });
     }
 
-    const profileRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-      headers: { Authorization: `Bearer ${connection.accessToken}` },
-    });
-    const profile = await profileRes.json().catch(() => ({}));
-    if (!profileRes.ok || !profile.emailAddress) {
-      return Response.json({ error: 'gmail_profile_failed' }, { status: 502 });
+    const to = normalizeEmails(body.to, 'Para', true);
+    const cc = normalizeEmails(body.cc, 'CC');
+    const bcc = normalizeEmails(body.bcc, 'CCO');
+    const subject = String(body.subject || '').trim().slice(0, 240);
+    const html = String(body.html || '');
+    if (!subject || !html || html.length > 250_000) {
+      return Response.json({ error: 'El asunto o el contenido del email no son válidos.' }, { status: 400 });
+    }
+    if (!invoice.archivo_url) return Response.json({ error: 'La factura no tiene un PDF preparado.' }, { status: 409 });
+    if (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`)) {
+      return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
     }
 
-    const toArray = (Array.isArray(to) ? to : [to]).filter(Boolean);
-    const ccArray = (cc ? (Array.isArray(cc) ? cc : [cc]) : []).filter(Boolean);
-    const bccArray = (bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : []).filter(Boolean);
-    const attachments = await loadAttachments(attachmentInput);
-    const fromAddress = from_name ? `"${String(from_name).replace(/[\r\n"]/g, '')}" <${profile.emailAddress}>` : profile.emailAddress;
+    const attachments = await loadAttachments(body.attachments, invoice.archivo_url);
+    const connectedEmail = await getConnectedEmail(connection);
+    if (!connectedEmail) {
+      return Response.json({ error: 'gmail_identity_unavailable', message: 'No se pudo identificar el buzón Gmail conectado.' }, { status: 502 });
+    }
+    const senderName = String(body.from_name || 'Taxea Portal').replace(/[\r\n"]/g, '').slice(0, 100);
     const raw = buildRawMessage({
-      from: fromAddress,
-      to: toArray,
-      cc: ccArray,
-      bcc: bccArray,
+      from: `"${senderName}" <${connectedEmail}>`,
+      to,
+      cc,
+      bcc,
       subject,
       html,
       attachments,
     });
-
-    const gmailRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    const gmailResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: { Authorization: `Bearer ${connection.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ raw: toBase64Url(raw) }),
     });
-    const gmailData = await gmailRes.json().catch(() => ({}));
-    if (!gmailRes.ok) {
-      return Response.json({
-        error: 'gmail_send_failed',
-        message: gmailData.error?.message || 'Gmail send failed',
-      }, { status: 502 });
+    const gmailData = await gmailResponse.json().catch(() => ({}));
+    if (!gmailResponse.ok) {
+      throw Object.assign(new Error(gmailData.error?.message || 'Gmail no ha aceptado el envío.'), { status: 502, code: 'gmail_send_failed' });
+    }
+
+    const now = new Date().toISOString();
+    let trackingWarning = '';
+    try {
+      await base44.asServiceRole.entities.InvoiceEmailLog.create({
+        invoice_id: invoice.id,
+        company_id: companyId,
+        to: to.join(', '),
+        cc: cc.join(', '),
+        bcc: bcc.join(', '),
+        subject,
+        body: html,
+        template_id: String(body.template_id || 'envio_factura').slice(0, 80),
+        attachments: [invoice.archivo_url],
+        public_invoice_url: body.public_invoice_url,
+        pdf_attachment_name: attachments[0].name,
+        sent_at: now,
+        sent_by: user.full_name || user.email || 'Usuario',
+        delivery_status: 'enviada',
+        to_was_manual: Boolean(body.to_was_manual),
+        error_message: null,
+      });
+      await base44.asServiceRole.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
+      await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+        invoice_id: invoice.id,
+        company_id: companyId,
+        event_type: 'email_enviado',
+        event_label: 'Email enviado',
+        event_detail: `Enviado a ${to.join(', ')} · PDF adjunto · Gmail ${connectedEmail}`,
+        created_at: now,
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+    } catch (trackingError) {
+      trackingWarning = 'El correo se envió, pero parte de la trazabilidad no pudo guardarse.';
+      console.error('[sendEmail] tracking after Gmail success:', trackingError);
     }
 
     return Response.json({
       ok: true,
       id: gmailData.id,
+      thread_id: gmailData.threadId,
       via: 'gmail',
-      from: profile.emailAddress,
-      attachmentCount: attachments.length,
+      from: connectedEmail,
+      attachment_count: attachments.length,
+      warning: trackingWarning || undefined,
     });
   } catch (error) {
-    console.error('sendEmail error:', error);
-    return Response.json({ error: error.message || 'Error interno' }, { status: 500 });
+    console.error('[sendEmail]', error);
+    if (base44 && invoice && companyId) {
+      await base44.asServiceRole.entities.InvoiceEmailLog.create({
+        invoice_id: invoice.id,
+        company_id: companyId,
+        to: Array.isArray(body.to) ? body.to.join(', ') : String(body.to || ''),
+        subject: String(body.subject || '').slice(0, 240),
+        sent_at: new Date().toISOString(),
+        sent_by: user?.full_name || user?.email || 'Usuario',
+        delivery_status: 'error_envio',
+        error_message: String(error?.message || 'Error desconocido').slice(0, 500),
+      }).catch(() => {});
+    }
+    return Response.json({ error: error?.code || 'send_failed', message: error?.message || 'Error interno.' }, { status: error?.status || 500 });
   }
 });
+
