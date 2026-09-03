@@ -39,7 +39,8 @@ export default function BankSyncPanel({ account, companyId }) {
 
   useEffect(() => { loadLogs(); }, [account.id]);
 
-  const canSync = account.origen_datos === 'open_banking' && Boolean(account.provider_account_id);
+  const canFinalize = account.origen_datos === 'open_banking' && Boolean(account.requisition_id) && !account.provider_account_id;
+  const canSync = account.origen_datos === 'open_banking' && (Boolean(account.provider_account_id) || canFinalize);
 
   const handleSync = async () => {
     if (!canSync) return;
@@ -47,7 +48,7 @@ export default function BankSyncPanel({ account, companyId }) {
     setSyncing(true);
     try {
       const response = await base44.functions.invoke('openBanking', {
-        action: 'sync',
+        action: canFinalize ? 'finalize' : 'sync',
         bank_account_id: account.id,
         company_id: companyId,
       });
@@ -80,7 +81,7 @@ export default function BankSyncPanel({ account, companyId }) {
           title={canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-          {syncing ? 'Sincronizando...' : 'Sync manual'}
+          {syncing ? 'Sincronizando...' : canFinalize ? 'Finalizar autorización' : 'Sync manual'}
         </button>
       </div>
 
