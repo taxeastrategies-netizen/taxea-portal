@@ -26,13 +26,6 @@ const formatDate = (d) => {
   catch { return d; }
 };
 
-// Generar token público seguro
-const generatePublicToken = () => {
-  const arr = new Uint8Array(32);
-  window.crypto.getRandomValues(arr);
-  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 // ── Chip de email ──────────────────────────────────────────────────────────────
