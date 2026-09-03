@@ -31,6 +31,8 @@ export default function TreasuryCenter({ company }) {
   const [loading, setLoading] = useState(true);
   const [showConnect, setShowConnect] = useState(false);
   const [reconTx, setReconTx] = useState(null);
+  const [syncingBanks, setSyncingBanks] = useState(false);
+  const [bankNotice, setBankNotice] = useState(null);
 
   const companyId = company?.id;
 
@@ -39,7 +41,7 @@ export default function TreasuryCenter({ company }) {
     setLoading(true);
     const [accs, txs, evs, invs, exps, obls] = await Promise.all([
       base44.entities.BankAccount.filter({ company_id: companyId }),
-      base44.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 200),
+      base44.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 5000),
       base44.entities.TreasuryEvent.filter({ company_id: companyId }),
       base44.entities.Invoice.filter({ company_id: companyId }),
       base44.entities.Expense.filter({ company_id: companyId }),
@@ -55,6 +57,63 @@ export default function TreasuryCenter({ company }) {
   };
 
   useEffect(() => { loadData(); }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    const params = new URLSearchParams(window.location.search);
+    const accountId = params.get('bank_account_id');
+    if (params.get('bank_link') !== 'return' || !accountId) return;
+    let active = true;
+    setBankNotice({ type: 'loading', text: 'Finalizando autorización bancaria y descargando movimientos…' });
+    const finalize = async () => {
+      try {
+        const response = await base44.functions.invoke('openBanking', {
+          action: 'finalize', company_id: companyId, bank_account_id: accountId,
+        });
+        const payload = response?.data ?? response;
+        if (!payload?.ok) throw new Error(payload?.error || 'El banco todavía no ha completado la autorización.');
+        if (active) {
+          const count = (payload.accounts || []).reduce((sum, item) => sum + Number(item.created || 0), 0);
+          setBankNotice({ type: 'success', text: `Banco conectado. ${count} movimientos nuevos incorporados sin duplicar los existentes.` });
+          await loadData();
+        }
+      } catch (error) {
+        if (active) setBankNotice({ type: 'error', text: error?.message || 'No se pudo finalizar la conexión bancaria.' });
+      } finally {
+        const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    };
+    finalize();
+    return () => { active = false; };
+  }, [companyId]);
+
+  const syncAllBanks = async () => {
+    const connected = accounts.filter(account => account.estado_conexion === 'conectado' && account.origen_datos === 'open_banking' && account.provider_account_id);
+    if (!connected.length || syncingBanks) {
+      setBankNotice({ type: 'error', text: 'No hay cuentas Open Banking activas para sincronizar.' });
+      return;
+    }
+    setSyncingBanks(true);
+    setBankNotice({ type: 'loading', text: `Sincronizando ${connected.length} ${connected.length === 1 ? 'cuenta' : 'cuentas'}…` });
+    let created = 0;
+    const failures = [];
+    for (const account of connected) {
+      try {
+        const response = await base44.functions.invoke('openBanking', { action: 'sync', company_id: companyId, bank_account_id: account.id });
+        const payload = response?.data ?? response;
+        if (!payload?.ok) throw new Error(payload?.error || 'Error de sincronización');
+        created += Number(payload.created || 0);
+      } catch (error) {
+        failures.push(`${account.nombre_banco}: ${error?.message || 'error'}`);
+      }
+    }
+    await loadData();
+    setSyncingBanks(false);
+    setBankNotice(failures.length
+      ? { type: 'error', text: `${created} movimientos nuevos. ${failures.join(' · ')}` }
+      : { type: 'success', text: `Sincronización completada. ${created} movimientos nuevos; los duplicados se han omitido.` });
+  };
 
   const pendingConciliation = useMemo(() =>
     transactions.filter(t => t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia').length,
@@ -83,8 +142,8 @@ export default function TreasuryCenter({ company }) {
         </div>
         <div className="flex items-center gap-2">
 
-          <button onClick={loadData} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">
-            <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+          <button onClick={syncAllBanks} disabled={syncingBanks} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-all">
+            <RefreshCw className={cn("w-3.5 h-3.5", syncingBanks && 'animate-spin')} /> {syncingBanks ? 'Sincronizando…' : 'Sincronizar bancos'}
           </button>
           <button onClick={() => setShowConnect(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-taxea-red text-white hover:bg-taxea-red/90 transition-all shadow-sm">
@@ -92,6 +151,14 @@ export default function TreasuryCenter({ company }) {
           </button>
         </div>
       </div>
+
+      {bankNotice && (
+        <div className={cn("rounded-xl border px-4 py-3 text-sm",
+          bankNotice.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+          bankNotice.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-blue-50 text-blue-700')}>
+          {bankNotice.text}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit flex-wrap">
