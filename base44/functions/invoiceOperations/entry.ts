@@ -2,10 +2,24 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENTS_PER_INVOICE = 25;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/plain',
+  'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
 
 const asMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const cleanText = (value, max = MAX_TEXT) => String(value || '').trim().slice(0, max);
 const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+const isPrivateFileUri = (value) => /^private\/[A-Za-z0-9/_\-.]+$/.test(String(value || ''))
+  && !String(value).includes('..');
 
 function secureToken() {
   const bytes = new Uint8Array(32);
@@ -112,6 +126,83 @@ Deno.serve(async (req) => {
         });
       }
       return Response.json({ ok: true, token, expires_at: expiresAt, created: !tokenIsUsable });
+    }
+
+    if (action === 'list_attachments') {
+      const attachments = await base44.asServiceRole.entities.InvoiceAttachment.filter({
+        company_id: companyId,
+        invoice_id: invoice.id,
+      }, '-uploaded_at', MAX_ATTACHMENTS_PER_INVOICE);
+      const signed = await Promise.all((attachments || []).map(async attachment => {
+        const signedResult = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
+          file_uri: attachment.file_uri,
+          expires_in: 900,
+        }).catch(() => null);
+        return { ...attachment, signed_url: signedResult?.signed_url || '' };
+      }));
+      return Response.json({ ok: true, attachments: signed });
+    }
+
+    if (action === 'add_attachment') {
+      if (invoice.anulada) return Response.json({ error: 'No se pueden añadir archivos a una factura anulada.' }, { status: 409 });
+      const current = await base44.asServiceRole.entities.InvoiceAttachment.filter({
+        company_id: companyId,
+        invoice_id: invoice.id,
+      }, '-uploaded_at', MAX_ATTACHMENTS_PER_INVOICE + 1);
+      if ((current || []).length >= MAX_ATTACHMENTS_PER_INVOICE) {
+        return Response.json({ error: `La factura ya tiene el máximo de ${MAX_ATTACHMENTS_PER_INVOICE} adjuntos.` }, { status: 409 });
+      }
+      const fileUri = cleanText(body.file_uri, 1000);
+      const filename = cleanText(body.filename, 180).replace(/[\r\n]/g, '');
+      const mimeType = cleanText(body.mime_type, 150).toLowerCase();
+      const sizeBytes = Math.round(Number(body.size_bytes) || 0);
+      if (!isPrivateFileUri(fileUri)) return Response.json({ error: 'La referencia del archivo no es válida.' }, { status: 400 });
+      if (!filename || filename.includes('/') || filename.includes('\\')) return Response.json({ error: 'El nombre del archivo no es válido.' }, { status: 400 });
+      if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) return Response.json({ error: 'Este tipo de archivo no está permitido.' }, { status: 400 });
+      if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El archivo debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      const attachment = await base44.asServiceRole.entities.InvoiceAttachment.create({
+        company_id: companyId,
+        invoice_id: invoice.id,
+        file_uri: fileUri,
+        filename,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: user.full_name || user.email || 'Usuario',
+      });
+      await recordTimeline(base44, {
+        invoice_id: invoice.id,
+        company_id: companyId,
+        event_type: 'archivo_adjuntado',
+        event_label: 'Archivo adjuntado',
+        event_detail: filename,
+        created_at: new Date().toISOString(),
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+      return Response.json({ ok: true, attachment });
+    }
+
+    if (action === 'remove_attachment') {
+      const attachmentId = cleanText(body.attachment_id, 120);
+      const attachment = attachmentId
+        ? await base44.asServiceRole.entities.InvoiceAttachment.get(attachmentId).catch(() => null)
+        : null;
+      if (!attachment || attachment.company_id !== companyId || attachment.invoice_id !== invoice.id) {
+        return Response.json({ error: 'Adjunto no encontrado en esta factura.' }, { status: 404 });
+      }
+      await base44.asServiceRole.entities.InvoiceAttachment.delete(attachment.id);
+      await recordTimeline(base44, {
+        invoice_id: invoice.id,
+        company_id: companyId,
+        event_type: 'archivo_eliminado',
+        event_label: 'Adjunto eliminado',
+        event_detail: cleanText(attachment.filename, 180),
+        created_at: new Date().toISOString(),
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+      return Response.json({ ok: true });
     }
 
     if (action === 'list_payments') {
