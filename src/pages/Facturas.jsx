@@ -146,7 +146,7 @@ export default function Facturas() {
       const d = new Date(i.fecha_emision || i.created_date);
       return d >= qStart && d <= qEnd;
     });
-    const pendientes = tipo.filter(i => i.estado_cobro === 'pendiente' || i.estado_cobro === 'vencida');
+    const pendientes = tipo.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const vencidas = tipo.filter(i => i.estado_cobro === 'vencida');
     return {
       total: tipo.length,
@@ -363,7 +363,7 @@ export default function Facturas() {
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nº Factura</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cliente</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">{filterTipo === 'recibida' ? 'Proveedor' : 'Cliente'}</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Concepto</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Base</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
@@ -385,7 +385,7 @@ export default function Facturas() {
                          {inv.anulada && <span className="ml-1.5 text-[9px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">ANULADA</span>}
                        </td>
                       <td className="px-4 py-3 text-muted-foreground">{inv.fecha_emision}</td>
-                      <td className="px-4 py-3 text-foreground">{inv.cliente_nombre || '—'}</td>
+                      <td className="px-4 py-3 text-foreground">{inv.tipo === 'recibida' ? (inv.proveedor_nombre || inv.cliente_nombre || '—') : (inv.cliente_nombre || '—')}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.concepto || '—'}</td>
                       <td className="px-4 py-3 text-right font-medium">{(inv.base_imponible || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
                       <td className="px-4 py-3 text-right font-semibold text-foreground">{(inv.total_factura || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
@@ -414,7 +414,7 @@ export default function Facturas() {
                             <DropdownMenuContent align="end">
                                <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento definitivo</DropdownMenuItem>
                                <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
-                               <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_cobro', 'cobrada')}>Marcar cobrada</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>{inv.tipo === 'recibida' ? 'Registrar pago' : 'Registrar cobro'}</DropdownMenuItem>
                                {isAdmin && (
                                  <>
                                    <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
