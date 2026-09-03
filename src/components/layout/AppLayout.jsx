@@ -10,6 +10,7 @@ import MobileBottomNav from './MobileBottomNav';
 import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 import { getImpersonation } from '@/lib/impersonation';
 import SubscriptionGate from './SubscriptionGate';
+import FutureBackdrop from './FutureBackdrop';
 
 export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -76,9 +77,10 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background flex-col safe-area-padded">
+    <div className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col safe-area-padded">
+      <FutureBackdrop />
       {impersonation && <ImpersonationBanner impersonation={impersonation} />}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -94,7 +96,7 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
             companyName={company?.nombre_comercial || company?.razon_social}
             isAdmin={isAdmin}
           />
-          <main className="flex-1 overflow-y-auto">
+          <main className="taxea-future-main flex-1 overflow-y-auto">
             {isPortalLocked && !isOnLockedPath ? (
               <div className="flex items-center justify-center min-h-[60vh] p-6">
                 <div className="text-center max-w-md">
