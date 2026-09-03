@@ -7,6 +7,25 @@ import { jsPDF } from 'jspdf';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
 
 const BRAND = [185, 28, 28]; // #b91c1c
+const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
+
+function loadLogo(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight });
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
 
 const fmtEUR = (n) => (typeof n === 'number'
   ? n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -18,17 +37,25 @@ const fmtDate = (d) => {
   catch { return String(d); }
 };
 
-export function exportInvoiceToPdf(invoice, company) {
+export async function exportInvoiceToPdf(invoice, company) {
   const doc = new jsPDF('p', 'mm', 'a4');
   const W = 210;
   const M = 18;
   let y = 24;
 
   // ── Cabecera ──────────────────────────────────────────────────────────────
+  const logo = await loadLogo(company?.logo_url || LOGO);
+  let titleX = M;
+  if (logo) {
+    const logoH = 13;
+    const logoW = Math.min(48, (logo.w / logo.h) * logoH);
+    doc.addImage(logo.dataUrl, 'PNG', M, 11, logoW, logoH);
+    titleX = M + logoW + 6;
+  }
   doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(...BRAND);
-  doc.text('FACTURA', M, y);
+  doc.text('FACTURA', titleX, y);
   doc.setFontSize(11).setTextColor(30, 41, 59);
-  doc.text(String(invoice.numero_factura || '—'), M, y + 7);
+  doc.text(String(invoice.numero_factura || '—'), titleX, y + 7);
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(100, 116, 139);
   doc.text(`Fecha de emisión: ${fmtDate(invoice.fecha_emision)}`, W - M, y, { align: 'right' });
   if (invoice.fecha_vencimiento) {
