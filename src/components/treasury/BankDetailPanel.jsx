@@ -21,10 +21,12 @@ export default function BankDetailPanel({ account, companyId, onClose, onRefresh
   const handleRevoke = async () => {
     if (!window.confirm('¿Estás seguro de que quieres revocar el consentimiento bancario? La cuenta quedará desconectada.')) return;
     setRevoking(true);
-    await base44.functions.invoke('bankSync', {
-      action: 'revoke_consent',
+    const isOpenBanking = account.origen_datos === 'open_banking';
+    await base44.functions.invoke(isOpenBanking ? 'openBanking' : 'bankSync', {
+      action: isOpenBanking ? 'disconnect' : 'revoke_consent',
       bank_account_id: account.id,
       company_id: companyId,
+      reason: 'Revocado manualmente por el usuario',
       motivo: 'Revocado manualmente por el usuario',
     });
     setRevoking(false);
