@@ -29,38 +29,44 @@ function scoreMatch(transaction, candidate) {
   return score;
 }
 
-export default function ReconciliationPanel({ transaction, invoices, expenses, onClose, onReconciled }) {
+export default function ReconciliationPanel({ transaction, invoices, onClose, onReconciled }) {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [error, setError] = useState('');
 
   const candidates = useMemo(() => {
     if (!transaction) return [];
     const isEntrada = transaction.tipo === 'entrada';
     const pool = isEntrada
       ? invoices.filter(inv => inv.tipo === 'emitida' && inv.estado_cobro !== 'cobrada')
-      : [...invoices.filter(inv => inv.tipo === 'recibida'), ...expenses.filter(e => e.estado !== 'contabilizado')];
+      : invoices.filter(inv => inv.tipo === 'recibida' && inv.estado_cobro !== 'cobrada');
     return pool.map(c => {
       const score = scoreMatch(transaction, c);
       const conf = score >= 70 ? 'alta' : score >= 35 ? 'media' : 'baja';
-      return { ...c, _score: score, _conf: conf, _entityType: c.numero_factura ? 'Invoice' : 'Expense' };
+      return { ...c, _score: score, _conf: conf, _entityType: 'Invoice' };
     }).sort((a, b) => b._score - a._score).slice(0, 6);
-  }, [transaction, invoices, expenses]);
+  }, [transaction, invoices]);
 
   const handleConfirm = async () => {
-    if (!selected) return;
+    if (!selected || loading) return;
     setLoading(true);
-    await base44.entities.BankTransaction.update(transaction.id, {
-      estado_conciliacion: 'conciliada_manual',
-      entidad_tipo: selected._entityType,
-      entidad_id: selected.id,
-      confianza_conciliacion: selected._conf,
-    });
-    if (selected._entityType === 'Invoice' && transaction.tipo === 'entrada') {
-      await base44.entities.Invoice.update(selected.id, { estado_cobro: 'cobrada' });
+    setError('');
+    try {
+      const response = await base44.functions.invoke('invoiceOperations', {
+        action: 'reconcile',
+        company_id: transaction.company_id,
+        invoice_id: selected.id,
+        bank_transaction_id: transaction.id,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.ok) throw new Error(payload?.error || 'No se pudo completar la conciliación.');
+      await onReconciled?.();
+      onClose();
+    } catch (caught) {
+      setError(caught?.message || 'No se pudo completar la conciliación.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    onReconciled();
-    onClose();
   };
 
   const handleInternal = async () => {
@@ -118,6 +124,10 @@ export default function ReconciliationPanel({ transaction, invoices, expenses, o
             <p className="text-xs text-slate-400 font-medium">Sugerencias IA ({candidates.length})</p>
             <div className="flex-1 h-px bg-slate-100" />
           </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>
+          )}
 
           {candidates.length === 0 ? (
             <div className="text-center py-8">
