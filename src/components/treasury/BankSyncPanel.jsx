@@ -39,22 +39,17 @@ export default function BankSyncPanel({ account, companyId }) {
 
   useEffect(() => { loadLogs(); }, [account.id]);
 
-  const openBankingProviders = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
-  const canSync = openBankingProviders.includes(account.proveedor) &&
-    account.proveedor_integracion &&
-    account.proveedor_integracion !== 'gocardless';
+  const canSync = account.origen_datos === 'open_banking' && Boolean(account.provider_account_id);
 
   const handleSync = async () => {
     if (!canSync) return;
 
     setSyncing(true);
     try {
-      const response = await base44.functions.invoke('bankSync', {
-        action: 'api_sync',
+      const response = await base44.functions.invoke('openBanking', {
+        action: 'sync',
         bank_account_id: account.id,
         company_id: companyId,
-        proveedor: account.proveedor,
-        requisition_id: account.proveedor_integracion,
       });
       const payload = response?.data ?? response;
       if (!payload?.ok) throw new Error(payload?.error || 'No se pudo sincronizar la cuenta.');
