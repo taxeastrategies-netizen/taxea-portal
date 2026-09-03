@@ -45,6 +45,19 @@
     "sent_by": {
       "type": "string"
     },
+    "sender_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "provider_message_id": {
+      "type": "string"
+    },
+    "provider_thread_id": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
     "delivery_status": {
       "type": "string",
       "enum": [
