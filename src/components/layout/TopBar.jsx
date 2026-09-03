@@ -39,7 +39,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
   };
 
   return (
-    <header className="h-14 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 safe-area-pt">
+    <header className="taxea-future-topbar h-14 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 safe-area-pt">
       <div className="flex items-center gap-3">
         <button
           type="button"
