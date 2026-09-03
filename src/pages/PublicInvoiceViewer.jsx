@@ -24,6 +24,11 @@ function InvoicePublicRender({ invoice, company }) {
   const brandColor = '#b91c1c';
   const LOGO_URL = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
   const lineas = invoice?.lineas || [];
+  const isReceived = invoice?.tipo === 'recibida';
+  const issuerName = isReceived ? (invoice?.proveedor_nombre || invoice?.cliente_nombre || 'Proveedor') : (company?.nombre_comercial || company?.razon_social || 'Emisor');
+  const issuerNif = isReceived ? (invoice?.proveedor_nif || invoice?.cliente_nif) : company?.nif_cif;
+  const recipientName = isReceived ? (company?.nombre_comercial || company?.razon_social || 'Empresa') : (invoice?.cliente_nombre || '—');
+  const recipientNif = isReceived ? company?.nif_cif : invoice?.cliente_nif;
 
   return (
     <div className="p-8 font-sans text-sm text-slate-800" style={{ minHeight: '900px' }}>
@@ -41,7 +46,7 @@ function InvoicePublicRender({ invoice, company }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold mb-1" style={{ color: brandColor }}>FACTURA</div>
+          <div className="text-2xl font-bold mb-1" style={{ color: brandColor }}>{isReceived ? 'FACTURA RECIBIDA' : 'FACTURA'}</div>
           <div className="text-lg font-semibold text-slate-700">{invoice.numero_factura}</div>
           <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
             <p>Fecha: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_emision)}</span></p>
@@ -55,16 +60,16 @@ function InvoicePublicRender({ invoice, company }) {
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Emisor</div>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
-            <p className="font-semibold">{company?.nombre_comercial || company?.razon_social || '—'}</p>
-            {company?.nif_cif && <p>NIF: {company.nif_cif}</p>}
-            {company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
+            <p className="font-semibold">{issuerName}</p>
+            {issuerNif && <p>NIF: {issuerNif}</p>}
+            {!isReceived && company?.direccion_fiscal && <p>{company.direccion_fiscal}</p>}
           </div>
         </div>
         <div>
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Destinatario</div>
           <div className="bg-slate-50 rounded-lg p-3 text-xs text-slate-700 space-y-0.5">
-            <p className="font-semibold">{invoice.cliente_nombre || '—'}</p>
-            {invoice.cliente_nif && <p>NIF/CIF: {invoice.cliente_nif}</p>}
+            <p className="font-semibold">{recipientName}</p>
+            {recipientNif && <p>NIF/CIF: {recipientNif}</p>}
           </div>
         </div>
       </div>
@@ -227,6 +232,7 @@ export default function PublicInvoiceViewer() {
 
   const paymentStatusCfg = {
     pendiente: { label: 'Pendiente de pago', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+    parcial:   { label: 'Pago parcial', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     cobrada:   { label: 'Pagada', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
     vencida:   { label: 'Vencida', color: 'bg-red-100 text-red-700 border-red-200' },
   };
@@ -252,7 +258,7 @@ export default function PublicInvoiceViewer() {
               <div className="h-4 w-px bg-slate-200" />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800 truncate">Factura {invoice.numero_factura}</p>
-                <p className="text-xs text-slate-400 truncate">{invoice.cliente_nombre}</p>
+                <p className="text-xs text-slate-400 truncate">{invoice.tipo === 'recibida' ? (invoice.proveedor_nombre || invoice.cliente_nombre) : invoice.cliente_nombre}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -323,7 +329,7 @@ export default function PublicInvoiceViewer() {
                   <Building2 className="w-3.5 h-3.5" /> Emisor
                 </p>
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">{company?.nombre || company?.razon_social || '—'}</p>
+                  <p className="text-sm font-semibold text-slate-800">{invoice.tipo === 'recibida' ? (invoice.proveedor_nombre || invoice.cliente_nombre || '—') : (company?.nombre_comercial || company?.razon_social || company?.nombre || '—')}</p>
                   {company?.nif && <p className="text-xs text-slate-500 mt-0.5">NIF/CIF: {company.nif}</p>}
                   {company?.direccion_fiscal && <p className="text-xs text-slate-500 mt-0.5">{company.direccion_fiscal}</p>}
                   {company?.email_contacto && <p className="text-xs text-slate-500 mt-0.5">{company.email_contacto}</p>}
@@ -331,11 +337,11 @@ export default function PublicInvoiceViewer() {
               </div>
 
               {/* Receptor */}
-              {invoice.cliente_nombre && (
+              {(invoice.tipo === 'recibida' ? company : invoice.cliente_nombre) && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Destinatario</p>
-                  <p className="text-sm font-semibold text-slate-800">{invoice.cliente_nombre}</p>
-                  {invoice.cliente_nif && <p className="text-xs text-slate-500">NIF/CIF: {invoice.cliente_nif}</p>}
+                  <p className="text-sm font-semibold text-slate-800">{invoice.tipo === 'recibida' ? (company?.nombre_comercial || company?.razon_social || '—') : invoice.cliente_nombre}</p>
+                  {(invoice.tipo === 'recibida' ? company?.nif_cif : invoice.cliente_nif) && <p className="text-xs text-slate-500">NIF/CIF: {invoice.tipo === 'recibida' ? company?.nif_cif : invoice.cliente_nif}</p>}
                 </div>
               )}
 
