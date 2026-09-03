@@ -48,10 +48,7 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
     ? Math.round((Date.now() - new Date(account.fecha_ultima_sync).getTime()) / 60000)
     : null;
 
-  const openBankingProviders = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
-  const canSync = openBankingProviders.includes(account.proveedor) &&
-    account.proveedor_integracion &&
-    account.proveedor_integracion !== 'gocardless';
+  const canSync = account.origen_datos === 'open_banking' && Boolean(account.provider_account_id);
 
   const handleSync = async (e) => {
     e.stopPropagation();
@@ -59,12 +56,10 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
 
     setSyncing(true);
     try {
-      const response = await base44.functions.invoke('bankSync', {
-        action: 'api_sync',
+      const response = await base44.functions.invoke('openBanking', {
+        action: 'sync',
         bank_account_id: account.id,
         company_id: companyId,
-        proveedor: account.proveedor,
-        requisition_id: account.proveedor_integracion,
       });
       const payload = response?.data ?? response;
       if (!payload?.ok) throw new Error(payload?.error || 'No se pudo sincronizar la cuenta.');
@@ -111,6 +106,7 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
             <p className="text-xs text-amber-500 mt-0.5">{fmt(account.saldo_retenido)} retenido</p>
           )}
           <p className="text-xs text-slate-300 mt-0.5">{account.moneda || 'EUR'} · {account.titular || '—'}</p>
+          {account.origen_datos && <p className="text-[10px] text-slate-400 mt-1">Origen: {account.origen_datos === 'open_banking' ? 'Open Banking' : account.origen_datos.toUpperCase()}</p>}
         </div>
 
         {/* Sync info */}
