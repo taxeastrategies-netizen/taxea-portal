@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
       }, '-fecha_operacion', 500);
       const candidates = (transactions || [])
         .filter(tx => !tx.es_demo)
+        .filter(tx => tx.estado_proveedor !== 'pending')
         .filter(tx => !tx.entidad_id || (tx.entidad_tipo === 'invoice' && tx.entidad_id === invoice.id))
         .filter(tx => !['descartada', 'duplicada', 'movimiento_interno'].includes(tx.estado_conciliacion))
         .map(tx => ({
@@ -339,6 +340,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Movimiento bancario no encontrado en la empresa activa.' }, { status: 404 });
       }
       if (transaction.es_demo) return Response.json({ error: 'No se puede conciliar un movimiento de demostración.' }, { status: 409 });
+      if (transaction.estado_proveedor === 'pending') return Response.json({ error: 'El movimiento aún está pendiente en el banco. Espera a que quede contabilizado.' }, { status: 409 });
       const isCreditNote = Number(invoice.total_factura) < 0;
       const expectedType = invoice.tipo === 'recibida'
         ? (isCreditNote ? 'entrada' : 'salida')
