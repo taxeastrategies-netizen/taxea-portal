@@ -164,8 +164,9 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, connected: true, email, scope: 'app' });
     }
 
-    companyId = user.data?.company_id;
-    if (!companyId || (body.company_id && body.company_id !== companyId)) {
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+    companyId = body.company_id || user.data?.company_id;
+    if (!companyId || (!isAdmin && body.company_id && body.company_id !== user.data?.company_id)) {
       return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
     }
     if (body.invoice_id) {
