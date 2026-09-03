@@ -59,10 +59,10 @@ Deno.serve(async (req) => {
       !['cobrada'].includes(i.estado_cobro)
     );
     const cobrosPendientes = emitidas
-      .filter(i => ['pendiente', 'vencida'].includes(i.estado_cobro))
+      .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro))
       .reduce((s, i) => s + (i.total_factura || 0), 0);
     const pagosPendientes = recibidas
-      .filter(i => ['pendiente', 'vencida'].includes(i.estado_cobro))
+      .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro))
       .reduce((s, i) => s + (i.total_factura || 0), 0);
 
     return Response.json({
