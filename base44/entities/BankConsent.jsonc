@@ -64,6 +64,15 @@
     "token_referencia": {
       "type": "string"
     },
+    "requisition_id": {
+      "type": "string"
+    },
+    "agreement_id": {
+      "type": "string"
+    },
+    "institution_id": {
+      "type": "string"
+    },
     "nota_auditoria": {
       "type": "string"
     }
