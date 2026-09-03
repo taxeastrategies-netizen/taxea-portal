@@ -73,12 +73,13 @@ async function getConnectedEmail(connection) {
     || connection?.connectionConfig?.emailAddress
     || connection?.connectionConfig?.accountEmail;
   if (configured && EMAIL_RE.test(configured)) return configured;
-  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+  // Fallback sin gmail.metadata: OpenID userinfo solo requiere el scope "email".
+  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
     headers: { Authorization: `Bearer ${connection.accessToken}` },
   }).catch(() => null);
   if (!response?.ok) return '';
-  const profile = await response.json().catch(() => ({}));
-  return EMAIL_RE.test(profile.emailAddress || '') ? profile.emailAddress : '';
+  const userinfo = await response.json().catch(() => ({}));
+  return EMAIL_RE.test(userinfo.email || '') ? userinfo.email : '';
 }
 
 async function loadAttachments(input, allowedUrl, requireInvoicePdf) {
@@ -208,7 +209,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
     }
 
-    const idempotencyKey = cleanText(body.idempotency_key, 100);
+    const idempotencyKey = String(body.idempotency_key || '').trim().slice(0, 100);
     if (invoice && idempotencyKey) {
       const duplicate = await base44.asServiceRole.entities.InvoiceEmailLog.filter({
         company_id: companyId,
@@ -325,4 +326,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.code || 'send_failed', message: error?.message || 'Error interno.' }, { status: error?.status || 500 });
   }
 });
-
