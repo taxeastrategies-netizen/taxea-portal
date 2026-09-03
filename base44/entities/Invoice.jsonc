@@ -152,10 +152,22 @@
       "type": "string",
       "enum": [
         "pendiente",
+        "parcial",
         "cobrada",
         "vencida"
       ],
       "default": "pendiente"
+    },
+    "importe_pagado": {
+      "type": "number",
+      "default": 0
+    },
+    "importe_pendiente": {
+      "type": "number"
+    },
+    "ultimo_pago_at": {
+      "type": "string",
+      "format": "date-time"
     },
     "estado_contable": {
       "type": "string",
