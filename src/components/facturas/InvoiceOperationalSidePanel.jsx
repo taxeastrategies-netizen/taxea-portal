@@ -18,6 +18,7 @@ import {
   DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { generateInvoiceAccountingEntry } from './invoicePremiumEmail';
+import InvoicePaymentReconciliationModal from './InvoicePaymentReconciliationModal';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fmt = (n) => typeof n === 'number'
@@ -92,12 +93,18 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
   const [timeline, setTimeline] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [actionMode, setActionMode] = useState(null);
+  const [publicToken, setPublicToken] = useState(invoice?.public_token || '');
+  const [publicLinkLoading, setPublicLinkLoading] = useState(false);
+  const [publicLinkError, setPublicLinkError] = useState('');
 
   useEffect(() => {
     if (!invoice?.id) return;
+    setPublicToken(invoice.public_token || '');
+    setPublicLinkError('');
     loadEmailLogs();
     loadTimeline();
-  }, [invoice?.id]);
+  }, [invoice?.id, invoice?.public_token]);
 
   const loadEmailLogs = async () => {
     setLoadingLogs(true);
@@ -115,23 +122,46 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
     } catch { setTimeline([]); }
   };
 
-  const copyPortalLink = () => {
-    const link = invoice.public_token
-      ? `${window.location.origin}/public/invoice/${invoice.public_token}`
-      : `${window.location.origin}/public/invoice/${invoice.id}`;
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    // Registrar evento
-    base44.entities.InvoiceTimelineEvent.create({
-      invoice_id: invoice.id,
-      company_id: company?.id,
-      event_type: 'link_copiado',
-      event_label: 'Enlace al portal copiado',
-      event_detail: 'Enlace seguro copiado al portapapeles',
-      created_at: new Date().toISOString(),
-      origin: 'manual',
-    }).catch(() => {});
+  const ensurePublicLink = async () => {
+    if (publicToken) return `${window.location.origin}/public/invoice/${publicToken}`;
+    setPublicLinkLoading(true);
+    setPublicLinkError('');
+    try {
+      const response = await base44.functions.invoke('invoiceOperations', {
+        action: 'create_public_link',
+        invoice_id: invoice.id,
+        company_id: company?.id,
+      });
+      const data = response?.data || response;
+      if (!data?.ok || !data?.token) throw new Error(data?.error || 'No se pudo crear el enlace.');
+      setPublicToken(data.token);
+      await onRefresh?.();
+      return `${window.location.origin}/public/invoice/${data.token}`;
+    } catch (error) {
+      const message = error?.response?.data?.error || error?.response?.data?.message || error.message || 'No se pudo crear el enlace.';
+      setPublicLinkError(message);
+      throw error;
+    } finally {
+      setPublicLinkLoading(false);
+    }
+  };
+
+  const copyPortalLink = async () => {
+    try {
+      const link = await ensurePublicLink();
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      base44.entities.InvoiceTimelineEvent.create({
+        invoice_id: invoice.id,
+        company_id: company?.id,
+        event_type: 'link_copiado',
+        event_label: 'Enlace al portal copiado',
+        event_detail: 'Enlace seguro copiado al portapapeles',
+        created_at: new Date().toISOString(),
+        origin: 'manual',
+      }).catch(() => {});
+    } catch {}
   };
 
   const days = daysUntil(invoice?.fecha_vencimiento);
@@ -265,7 +295,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                 {invoice.estado_cobro !== 'cobrada' && (
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Pendiente</span>
-                    <span className="text-sm font-bold text-foreground">{fmt(invoice.total_factura)}</span>
+                    <span className="text-sm font-bold text-foreground">{fmt(invoice.importe_pendiente ?? invoice.total_factura)}</span>
                   </div>
                 )}
                 {invoice.metodo_pago && (
@@ -282,10 +312,12 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                 )}
               </div>
               <div className="flex gap-2">
-                <button className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium">
-                  + Añadir pago
+                <button onClick={() => setActionMode('payment')} disabled={invoice.anulada}
+                  className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                  {invoice.tipo === 'recibida' ? '+ Añadir pago' : '+ Añadir cobro'}
                 </button>
-                <button className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium">
+                <button onClick={() => setActionMode('reconcile')} disabled={invoice.anulada}
+                  className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed">
                   Conciliar
                 </button>
               </div>
@@ -419,7 +451,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             {/* Enlace público sin login */}
             <Section title="Enlace público de factura" icon={Link} defaultOpen={false}>
               <div className="space-y-2">
-                {invoice.public_token ? (
+                {publicToken ? (
                   <>
                     <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
@@ -428,7 +460,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                     <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-lg">
                       <ExternalLink className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                       <span className="text-[10px] text-muted-foreground font-mono flex-1 truncate">
-                        {`${window.location.origin}/public/invoice/${invoice.public_token}`}
+                        {`${window.location.origin}/public/invoice/${publicToken}`}
                       </span>
                     </div>
                     <div className="flex gap-2">
@@ -437,7 +469,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                           copied ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-border hover:bg-secondary text-foreground')}>
                         <Copy className="w-3 h-3" /> {copied ? 'Copiado' : 'Copiar enlace'}
                       </button>
-                      <a href={`${window.location.origin}/public/invoice/${invoice.public_token}`} target="_blank" rel="noreferrer"
+                      <a href={`${window.location.origin}/public/invoice/${publicToken}`} target="_blank" rel="noreferrer"
                         className="flex-1 text-xs font-medium rounded-lg py-1.5 border border-border hover:bg-secondary text-foreground flex items-center justify-center gap-1">
                         <ExternalLink className="w-3 h-3" /> Ver
                       </a>
@@ -452,7 +484,11 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                 ) : (
                   <div className="text-center py-3">
                     <p className="text-xs text-muted-foreground mb-2">Aún no se ha generado un enlace público para esta factura.</p>
-                    <p className="text-[10px] text-muted-foreground">Se generará automáticamente al enviar la factura por email.</p>
+                    <button onClick={copyPortalLink} disabled={publicLinkLoading || invoice.anulada}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-medium disabled:opacity-40">
+                      {publicLinkLoading ? 'Generando…' : 'Generar y copiar enlace'}
+                    </button>
+                    {publicLinkError && <p className="text-[10px] text-red-600 mt-2">{publicLinkError}</p>}
                   </div>
                 )}
               </div>
@@ -567,6 +603,18 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
           </div>
         )}
       </div>
+
+      <InvoicePaymentReconciliationModal
+        open={Boolean(actionMode)}
+        mode={actionMode}
+        invoice={invoice}
+        company={company}
+        onOpenChange={open => { if (!open) setActionMode(null); }}
+        onChanged={async () => {
+          await onRefresh?.();
+          await loadTimeline();
+        }}
+      />
     </div>
   );
 }
