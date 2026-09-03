@@ -8,9 +8,6 @@ import { X, Send, ChevronDown, Loader2, CheckCircle2, AlertTriangle, Mail } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { base44 as b44Client } from '@/api/base44Client';
-
-const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -93,7 +90,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
   const [error, setError] = useState('');
   const [noEmailWarning, setNoEmailWarning] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(null);
-  const [connectingGmail, setConnectingGmail] = useState(false);
+
 
   useEffect(() => {
     if (!open || !doc) return;
@@ -137,6 +134,9 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
     try {
       const senderName = user?.full_name || company?.nombre || 'Taxea Portal';
       const emailRes = await base44.functions.invoke('sendEmail', {
+        document_id: doc.id,
+        document_type: docType,
+        company_id: company?.id,
         to: to,
         cc: cc.length > 0 ? cc : undefined,
         from_name: senderName,
@@ -160,7 +160,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
         setGmailConnected(false);
         setError('Conecta tu cuenta Gmail para poder enviar emails desde tu propio correo.');
       } else {
-        setError('No se pudo enviar el email. Inténtalo de nuevo.');
+        setError(e?.response?.data?.message || e?.response?.data?.error || e.message || 'No se pudo enviar el email. Inténtalo de nuevo.');
       }
     }
     setSending(false);
@@ -196,26 +196,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
                   <p className="text-xs font-semibold text-amber-800">Gmail no conectado</p>
                   <p className="text-xs text-amber-700 mt-0.5">Conecta tu Gmail para enviar desde tu propio correo.</p>
                 </div>
-                <button
-                  onClick={async () => {
-                    setConnectingGmail(true);
-                    const url = await b44Client.connectors.connectAppUser(GMAIL_CONNECTOR_ID);
-                    const popup = window.open(url, '_blank');
-                    const timer = setInterval(() => {
-                      if (!popup || popup.closed) {
-                        clearInterval(timer);
-                        setConnectingGmail(false);
-                        base44.functions.invoke('sendEmail', { action: 'status' }).then(res => {
-                          const status = res?.data || res;
-                          setGmailConnected(Boolean(status?.connected));
-                        }).catch(() => {});
-                      }
-                    }, 500);
-                  }}
-                  disabled={connectingGmail}
-                  className="text-xs bg-amber-600 text-white px-3 py-1 rounded-lg font-medium hover:bg-amber-700 flex-shrink-0">
-                  {connectingGmail ? 'Conectando…' : 'Conectar Gmail'}
-                </button>
+                <span className="text-[10px] text-amber-700 font-medium flex-shrink-0">Configuración corporativa pendiente</span>
               </div>
             )}
             {gmailConnected === true && (
@@ -267,7 +248,7 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
         {!sent && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-border flex-shrink-0 bg-secondary/30">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending} className="h-8 text-sm">Cancelar</Button>
-            <Button onClick={handleSend} disabled={sending || to.length === 0} className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
+            <Button onClick={handleSend} disabled={sending || to.length === 0 || gmailConnected !== true} className="bg-primary hover:bg-primary/90 h-8 text-sm gap-2">
               {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               {sending ? 'Enviando…' : 'Enviar'}
             </Button>
