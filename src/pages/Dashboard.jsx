@@ -211,24 +211,28 @@ export default function Dashboard() {
   const now = new Date();
 
   return (
-    <div className="animate-fade-in space-y-5">
+    <div className="taxea-command-center animate-fade-in space-y-5">
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-jakarta font-bold text-foreground">
+      <div className="taxea-command-hero">
+        <div className="relative z-10 min-w-0">
+          <p className="taxea-command-kicker"><span />Taxea Business OS</p>
+          <h1>
             {isAdmin ? (company?.razon_social || 'Dashboard') : `Hola, ${user?.full_name?.split(' ')[0] || 'Cliente'}`}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-2 text-sm">
             {isAdmin
               ? now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
               : company?.razon_social}
           </p>
         </div>
-        <Select value={selectedYear} onValueChange={setSelectedYear}>
-          <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
-        </Select>
+        <div className="taxea-hero-controls relative z-10 flex items-center gap-4">
+          <div className="taxea-mini-orbit hidden sm:grid" aria-hidden="true" />
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="w-24 h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Alertas urgentes */}
