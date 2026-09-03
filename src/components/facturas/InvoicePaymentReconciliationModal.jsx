@@ -30,6 +30,10 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
   const [idempotencyKey, setIdempotencyKey] = useState('');
 
   const isReconciliation = mode === 'reconcile';
+  const isCreditNote = Number(invoice?.total_factura) < 0;
+  const expectedDirection = invoice?.tipo === 'recibida'
+    ? (isCreditNote ? 'entradas' : 'salidas')
+    : (isCreditNote ? 'salidas' : 'entradas');
   const counterparty = invoice?.tipo === 'recibida'
     ? invoice?.proveedor_nombre || invoice?.cliente_nombre || 'Proveedor'
     : invoice?.cliente_nombre || 'Cliente';
@@ -154,7 +158,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
             <div className="space-y-3">
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <Building2 className="w-4 h-4 text-blue-600 mt-0.5" />
-                <p className="text-xs text-blue-800">Solo se muestran movimientos reales de la empresa activa y del sentido correcto: {invoice?.tipo === 'recibida' ? 'salidas' : 'entradas'}.</p>
+                <p className="text-xs text-blue-800">Solo se muestran movimientos reales de la empresa activa y del sentido correcto: {expectedDirection}.</p>
               </div>
               {candidates.length === 0 ? (
                 <div className="text-center py-8 border border-dashed border-border rounded-xl">
