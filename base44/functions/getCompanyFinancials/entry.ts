@@ -60,10 +60,10 @@ Deno.serve(async (req) => {
     );
     const cobrosPendientes = emitidas
       .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro))
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .reduce((s, i) => s + (i.importe_pendiente ?? i.total_factura ?? 0), 0);
     const pagosPendientes = recibidas
       .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro))
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .reduce((s, i) => s + (i.importe_pendiente ?? i.total_factura ?? 0), 0);
 
     return Response.json({
       invoices: invs,
