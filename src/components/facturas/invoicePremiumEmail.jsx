@@ -6,6 +6,22 @@
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 const BRAND_COLOR = '#b91c1c'; // taxea-red — usar solo como acento, nunca como fondo masivo
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#039;',
+}[char]));
+
+const safeWebUrl = (value) => {
+  try {
+    const url = new URL(String(value || ''));
+    return ['https:', 'http:'].includes(url.protocol) ? escapeHtml(url.toString()) : '#';
+  } catch {
+    return '#';
+  }
+};
 const fmt = (n) =>
   typeof n === 'number' ? n.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : '—';
 
@@ -32,27 +48,29 @@ const maskIban = (iban) => {
  * @param {string} templateId - ID de la plantilla
  */
 export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateId = 'envio_factura') {
-  const issuerName = company?.nombre || company?.razon_social || 'Taxea Portal';
-  const issuerNif = company?.nif || company?.cif || '';
-  const issuerAddress = company?.direccion_fiscal || company?.direccion || '';
-  const issuerEmail = company?.email_contacto || company?.email || '';
-  const issuerPhone = company?.telefono || '';
+  const issuerName = escapeHtml(company?.nombre || company?.razon_social || 'Taxea Portal');
+  const issuerNif = escapeHtml(company?.nif || company?.cif || '');
+  const issuerAddress = escapeHtml(company?.direccion_fiscal || company?.direccion || '');
+  const issuerEmail = escapeHtml(company?.email_contacto || company?.email || '');
+  const issuerPhone = escapeHtml(company?.telefono || '');
   const issuerIban = company?.iban || invoice?.iban_cobro || '';
 
-  const customerName = invoice?.cliente_nombre || '—';
-  const customerNif = invoice?.cliente_nif || '';
+  const customerName = escapeHtml(invoice?.cliente_nombre || '—');
+  const customerNif = escapeHtml(invoice?.cliente_nif || '');
 
-  const invNumber = invoice?.numero_factura || '—';
-  const invDate = fmtDate(invoice?.fecha_emision);
-  const invDue = invoice?.fecha_vencimiento ? fmtDate(invoice.fecha_vencimiento) : null;
+  const rawInvNumber = invoice?.numero_factura || '—';
+  const invNumber = escapeHtml(rawInvNumber);
+  const invDate = escapeHtml(fmtDate(invoice?.fecha_emision));
+  const invDue = invoice?.fecha_vencimiento ? escapeHtml(fmtDate(invoice.fecha_vencimiento)) : null;
   const invBase = fmt(invoice?.base_imponible);
   const invIva = fmt(invoice?.cuota_iva);
   const invIvaPct = invoice?.tipo_iva ?? 21;
   const invRetention = invoice?.retencion_irpf > 0 ? fmt(withholdingAmount(invoice)) : null;
   const invTotal = fmt(invoice?.total_factura);
-  const invConcept = invoice?.concepto || '';
-  const paymentMethod = invoice?.metodo_pago || 'Transferencia bancaria';
-  const pdfName = `Factura_${invNumber.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+  const invConcept = escapeHtml(invoice?.concepto || '');
+  const paymentMethod = escapeHtml(invoice?.metodo_pago || 'Transferencia bancaria');
+  const pdfName = escapeHtml(`Factura_${String(rawInvNumber).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+  const publicHref = safeWebUrl(publicLink);
 
   const isReminder = templateId === 'recordatorio';
   const isOverdue = templateId === 'vencida';
@@ -202,7 +220,7 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
       <div class="payment-box">
         <div class="pm-label">Datos para realizar el pago</div>
         ${paymentMethod ? `<div class="pm-row"><span>Método:</span>${paymentMethod}</div>` : ''}
-        ${issuerIban ? `<div class="pm-row"><span>IBAN:</span>${maskIban(issuerIban)}</div>` : ''}
+        ${issuerIban ? `<div class="pm-row"><span>IBAN:</span>${escapeHtml(maskIban(issuerIban))}</div>` : ''}
         ${issuerName ? `<div class="pm-row"><span>Titular:</span>${issuerName}</div>` : ''}
         <div class="pm-row" style="margin-top:8px;font-size:12px;color:#64748b;">Por favor, indica el número de factura <strong>${invNumber}</strong> como referencia de tu transferencia.</div>
       </div>` : ''}
@@ -211,8 +229,8 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
 
       <!-- CTA: botón de acento, único elemento con color fuerte -->
       <div class="cta-block">
-        <a href="${publicLink}" class="btn-primary">Ver factura online →</a>
-        <div class="btn-fallback">Si el botón no funciona, accede desde: <a href="${publicLink}" style="color:#64748b">${publicLink}</a></div>
+        <a href="${publicHref}" class="btn-primary">Ver factura online →</a>
+        <div class="btn-fallback">Si el botón no funciona, accede desde: <a href="${publicHref}" style="color:#64748b">${publicHref}</a></div>
       </div>
       <div class="attach-note">📎 El PDF de la factura <strong>${pdfName}</strong> va adjunto a este correo.</div>
 
