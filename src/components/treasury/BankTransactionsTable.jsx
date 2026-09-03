@@ -102,6 +102,10 @@ export default function BankTransactionsTable({ transactions, accounts, onConcil
                   <td className="px-4 py-3 max-w-[220px]">
                     <p className="text-slate-700 font-medium truncate">{t.concepto || '—'}</p>
                     {t.nombre_contraparte && <p className="text-slate-400 text-[10px] truncate">{t.nombre_contraparte}</p>}
+                    <p className="text-[9px] text-slate-300 mt-0.5">
+                      {t.origen_datos === 'open_banking' ? 'Open Banking' : t.origen_datos === 'csv' ? 'CSV' : 'Histórico'}
+                      {t.estado_proveedor === 'pending' ? ' · Pendiente en banco' : ''}
+                    </p>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     {t.categoria_ia ? (
@@ -123,7 +127,7 @@ export default function BankTransactionsTable({ transactions, accounts, onConcil
                     <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", conc.bg, conc.color)}>{conc.label}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {(t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia') && (
+                    {t.estado_proveedor !== 'pending' && (t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia') && (
                       <button onClick={() => onConciliar(t)}
                         className="text-[10px] px-2.5 py-1 rounded-lg border border-taxea-red/30 text-taxea-red hover:bg-taxea-red/5 transition-all opacity-0 group-hover:opacity-100">
                         Conciliar
