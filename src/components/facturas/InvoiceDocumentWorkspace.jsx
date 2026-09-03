@@ -16,6 +16,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import InvoiceOperationalSidePanel from './InvoiceOperationalSidePanel';
+import { exportInvoiceToPdf } from './invoicePdfExport';
 
 // ── Estado visual de factura ───────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -100,7 +101,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             title="Imprimir">
             <Printer className="w-3.5 h-3.5" />
           </button>
-          {hasPdf && (
+          {hasPdf ? (
             <a
               href={invoice.archivo_url}
               download={`Factura_${invoice.numero_factura}.pdf`}
@@ -108,6 +109,13 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
               title="Descargar PDF">
               <Download className="w-3.5 h-3.5" />
             </a>
+          ) : !isRecibida && (
+            <button
+              onClick={() => exportInvoiceToPdf(invoice, company)}
+              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="Descargar PDF">
+              <Download className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -422,11 +430,15 @@ export default function InvoiceDocumentWorkspace({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-sm w-44">
-              {invoice.archivo_url && (
+              {invoice.archivo_url ? (
                 <DropdownMenuItem asChild>
                   <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
                     <Download className="w-3.5 h-3.5" /> Descargar PDF
                   </a>
+                </DropdownMenuItem>
+              ) : !isRecibida && (
+                <DropdownMenuItem onClick={() => exportInvoiceToPdf(invoice, company)}>
+                  <Download className="w-3.5 h-3.5 mr-2" /> Descargar PDF
                 </DropdownMenuItem>
               )}
               {publicUrl && !isRecibida && (

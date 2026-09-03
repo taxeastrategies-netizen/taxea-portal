@@ -16,6 +16,7 @@ import InvoiceDocumentWorkspace from '@/components/facturas/InvoiceDocumentWorks
 import SendInvoiceDocumentModal from '@/components/facturas/SendInvoiceDocumentModal';
 import RecurringSection from '@/components/facturas/RecurringSection';
 import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
+import { exportInvoiceToPdf } from '@/components/facturas/invoicePdfExport';
 import { triggerFinancialRefresh } from '@/hooks/useFinancialData';
 
 export default function Facturas() {
@@ -424,6 +425,11 @@ export default function Facturas() {
                                    <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
                                      <Download className="w-3.5 h-3.5" /> Descargar archivo
                                    </a>
+                                 </DropdownMenuItem>
+                               )}
+                               {!inv.archivo_url && inv.tipo === 'emitida' && (
+                                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(inv, company)}>
+                                   <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
                                  </DropdownMenuItem>
                                )}
                                {!inv.anulada && (
