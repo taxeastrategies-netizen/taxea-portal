@@ -78,9 +78,14 @@ async function getConnectedEmail(connection) {
   return EMAIL_RE.test(profile.emailAddress || '') ? profile.emailAddress : '';
 }
 
-async function loadAttachments(input, allowedUrl) {
+async function loadAttachments(input, allowedUrl, requireInvoicePdf) {
   const attachments = Array.isArray(input) ? input : [];
-  if (attachments.length !== 1) throw Object.assign(new Error('La factura debe enviarse con un único PDF adjunto.'), { status: 400 });
+  if (requireInvoicePdf && attachments.length !== 1) {
+    throw Object.assign(new Error('La factura debe enviarse con un único PDF adjunto.'), { status: 400 });
+  }
+  if (!requireInvoicePdf && attachments.length > 0) {
+    throw Object.assign(new Error('Este tipo de documento no admite adjuntos en este flujo.'), { status: 400 });
+  }
   const loaded = [];
   let totalSize = 0;
   for (const item of attachments) {
@@ -163,11 +168,22 @@ Deno.serve(async (req) => {
     if (!companyId || (body.company_id && body.company_id !== companyId)) {
       return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
     }
-    invoice = await base44.asServiceRole.entities.Invoice.get(body.invoice_id).catch(() => null);
-    if (!invoice || invoice.company_id !== companyId) {
-      return Response.json({ error: 'Factura no encontrada en la empresa activa.' }, { status: 404 });
+    if (body.invoice_id) {
+      invoice = await base44.asServiceRole.entities.Invoice.get(body.invoice_id).catch(() => null);
+      if (!invoice || invoice.company_id !== companyId) {
+        return Response.json({ error: 'Factura no encontrada en la empresa activa.' }, { status: 404 });
+      }
+      if (invoice.anulada) return Response.json({ error: 'No se puede enviar una factura anulada.' }, { status: 409 });
+    } else {
+      const entityName = body.document_type === 'quote' ? 'Quote' : body.document_type === 'proforma' ? 'Proforma' : '';
+      if (!entityName || !body.document_id) {
+        return Response.json({ error: 'El documento de origen no es válido.' }, { status: 400 });
+      }
+      const document = await base44.asServiceRole.entities[entityName].get(body.document_id).catch(() => null);
+      if (!document || document.company_id !== companyId) {
+        return Response.json({ error: 'Documento no encontrado en la empresa activa.' }, { status: 404 });
+      }
     }
-    if (invoice.anulada) return Response.json({ error: 'No se puede enviar una factura anulada.' }, { status: 409 });
     if (!connection) {
       return Response.json({
         error: 'gmail_not_connected',
@@ -183,12 +199,12 @@ Deno.serve(async (req) => {
     if (!subject || !html || html.length > 250_000) {
       return Response.json({ error: 'El asunto o el contenido del email no son válidos.' }, { status: 400 });
     }
-    if (!invoice.archivo_url) return Response.json({ error: 'La factura no tiene un PDF preparado.' }, { status: 409 });
-    if (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`)) {
+    if (invoice && !invoice.archivo_url) return Response.json({ error: 'La factura no tiene un PDF preparado.' }, { status: 409 });
+    if (invoice && (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`))) {
       return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
     }
 
-    const attachments = await loadAttachments(body.attachments, invoice.archivo_url);
+    const attachments = await loadAttachments(body.attachments, invoice?.archivo_url, Boolean(invoice));
     const connectedEmail = await getConnectedEmail(connection);
     if (!connectedEmail) {
       return Response.json({ error: 'gmail_identity_unavailable', message: 'No se pudo identificar el buzón Gmail conectado.' }, { status: 502 });
@@ -216,7 +232,7 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     let trackingWarning = '';
     try {
-      await base44.asServiceRole.entities.InvoiceEmailLog.create({
+      if (invoice) await base44.asServiceRole.entities.InvoiceEmailLog.create({
         invoice_id: invoice.id,
         company_id: companyId,
         to: to.join(', '),
@@ -227,15 +243,15 @@ Deno.serve(async (req) => {
         template_id: String(body.template_id || 'envio_factura').slice(0, 80),
         attachments: [invoice.archivo_url],
         public_invoice_url: body.public_invoice_url,
-        pdf_attachment_name: attachments[0].name,
+        pdf_attachment_name: attachments[0]?.name || '',
         sent_at: now,
         sent_by: user.full_name || user.email || 'Usuario',
         delivery_status: 'enviada',
         to_was_manual: Boolean(body.to_was_manual),
         error_message: null,
       });
-      await base44.asServiceRole.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
-      await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+      if (invoice) await base44.asServiceRole.entities.Invoice.update(invoice.id, { estado_envio: 'enviada' });
+      if (invoice) await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
         invoice_id: invoice.id,
         company_id: companyId,
         event_type: 'email_enviado',
