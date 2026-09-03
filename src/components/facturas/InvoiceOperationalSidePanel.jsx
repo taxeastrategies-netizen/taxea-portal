@@ -166,7 +166,10 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
 
   const days = daysUntil(invoice?.fecha_vencimiento);
   const overdue = isOverdue(invoice?.fecha_vencimiento) && invoice?.estado_cobro !== 'cobrada';
-  const ps = PAYMENT_STATUS[invoice?.estado_cobro] || PAYMENT_STATUS.pendiente;
+  const basePaymentStatus = PAYMENT_STATUS[invoice?.estado_cobro] || PAYMENT_STATUS.pendiente;
+  const ps = invoice?.tipo === 'recibida' && invoice?.estado_cobro === 'cobrada'
+    ? { ...basePaymentStatus, label: 'Pagada' }
+    : basePaymentStatus;
   const lastEmail = emailLogs[0];
 
   if (!invoice) return null;
@@ -221,7 +224,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
         <div className="px-4 pb-3">
           <div className="text-2xl font-bold text-foreground">{fmt(invoice.total_factura)}</div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {invoice.cliente_nombre || 'Sin cliente'} · {fmtDate(invoice.fecha_emision)}
+            {invoice.tipo === 'recibida' ? (invoice.proveedor_nombre || invoice.cliente_nombre || 'Sin proveedor') : (invoice.cliente_nombre || 'Sin cliente')} · {fmtDate(invoice.fecha_emision)}
           </div>
           {overdue && (
             <div className="flex items-center gap-1.5 mt-1.5 text-xs text-red-600 font-medium">
@@ -266,8 +269,8 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             {/* Datos generales */}
             <Section title="Información" icon={FileText}>
               <InfoRow label="Nº Factura" value={invoice.numero_factura} valueClass="font-mono font-semibold text-foreground" />
-              <InfoRow label="Cliente" value={invoice.cliente_nombre} />
-              <InfoRow label="NIF / CIF" value={invoice.cliente_nif} />
+              <InfoRow label={invoice.tipo === 'recibida' ? 'Proveedor' : 'Cliente'} value={invoice.tipo === 'recibida' ? (invoice.proveedor_nombre || invoice.cliente_nombre) : invoice.cliente_nombre} />
+              <InfoRow label="NIF / CIF" value={invoice.tipo === 'recibida' ? (invoice.proveedor_nif || invoice.cliente_nif) : invoice.cliente_nif} />
               <InfoRow label="Emisión" value={fmtDate(invoice.fecha_emision)} />
               <InfoRow label="Vencimiento" value={fmtDate(invoice.fecha_vencimiento)} valueClass={overdue ? 'text-red-600 font-semibold' : 'text-foreground font-medium'} />
               <InfoRow label="Concepto" value={invoice.concepto} />
