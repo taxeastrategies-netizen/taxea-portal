@@ -259,10 +259,25 @@ Deno.serve(async (req) => {
     });
     const gmailData = await gmailResponse.json().catch(() => ({}));
     if (!gmailResponse.ok) {
-      const authorizationExpired = gmailResponse.status === 401 || gmailResponse.status === 403;
-      throw Object.assign(new Error(gmailData.error?.message || 'Gmail no ha aceptado el envío.'), {
-        status: authorizationExpired ? 403 : 502,
-        code: authorizationExpired ? 'gmail_authorization_expired' : 'gmail_send_failed',
+      const gmailMessage = gmailData.error?.message || 'Gmail no ha aceptado el envío.';
+      const gmailReasons = Array.isArray(gmailData.error?.errors)
+        ? gmailData.error.errors.map(item => item?.reason).filter(Boolean)
+        : [];
+      const apiDisabled = gmailReasons.includes('accessNotConfigured')
+        || /Gmail API has not been used|Gmail API.*disabled/i.test(gmailMessage);
+      const authorizationExpired = gmailResponse.status === 401
+        || gmailReasons.some(reason => ['authError', 'invalidCredentials'].includes(reason))
+        || (gmailResponse.status === 403 && (
+          gmailReasons.includes('insufficientPermissions')
+          || /insufficient authentication scopes/i.test(gmailMessage)
+        ));
+      throw Object.assign(new Error(gmailMessage), {
+        status: authorizationExpired ? 403 : apiDisabled ? 503 : 502,
+        code: authorizationExpired
+          ? 'gmail_authorization_expired'
+          : apiDisabled
+            ? 'gmail_api_not_enabled'
+            : 'gmail_send_failed',
       });
     }
 
