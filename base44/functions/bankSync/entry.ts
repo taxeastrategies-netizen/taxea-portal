@@ -104,6 +104,8 @@ function normalizeRow(row, headers, format, bank_account_id, company_id) {
     iban_contraparte: iban_contraparte || null,
     estado_conciliacion: 'sin_conciliar',
     moneda: 'EUR',
+    origen_datos: 'csv',
+    importado_at: new Date().toISOString(),
   };
 }
 
