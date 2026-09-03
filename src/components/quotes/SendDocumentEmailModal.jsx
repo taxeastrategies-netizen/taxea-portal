@@ -13,6 +13,13 @@ const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#039;',
+}[char]));
 
 function EmailChip({ email, onRemove }) {
   return (
@@ -55,9 +62,10 @@ const buildSubject = (doc, docType, company) => {
 
 const buildEmailBody = (doc, docType, company) => {
   const label = docType === 'quote' ? 'presupuesto' : 'proforma';
-  const num = docType === 'quote' ? doc?.numero_presupuesto : doc?.numero_proforma;
+  const rawNum = docType === 'quote' ? doc?.numero_presupuesto : doc?.numero_proforma;
+  const num = escapeHtml(rawNum || '—');
   const total = doc?.total ? doc.total.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : '—';
-  const emisor = company?.nombre || 'Empresa';
+  const emisor = escapeHtml(company?.nombre || 'Empresa');
   const brandColor = '#b91c1c';
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"/></head><body style="margin:0;padding:0;background:#f8f8f8;font-family:'Segoe UI',Arial,sans-serif;">
