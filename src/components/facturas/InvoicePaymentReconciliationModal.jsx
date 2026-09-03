@@ -95,10 +95,17 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         idempotency_key: idempotencyKey,
       });
       if (!data?.ok) throw new Error(data?.error || 'No se pudo registrar el pago.');
-      setOutstanding(Number(data.outstanding) || 0);
+      const nextOutstanding = Number(data.outstanding) || 0;
+      setOutstanding(nextOutstanding);
       setPaid(Number(data.paid) || 0);
       setPayments(data.payments || []);
       setSuccess(invoice.tipo === 'recibida' ? 'Pago registrado correctamente.' : 'Cobro registrado correctamente.');
+      if (nextOutstanding > 0.01) {
+        setAmount(String(nextOutstanding));
+        setReference('');
+        setNotes('');
+        setIdempotencyKey(crypto.randomUUID());
+      }
       await onChanged?.();
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo registrar el pago.');
