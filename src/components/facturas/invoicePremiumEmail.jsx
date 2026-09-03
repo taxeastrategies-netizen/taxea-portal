@@ -247,6 +247,11 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
  * Devuelve { pdfUrl, fileName, ok, error }
  */
 export async function ensureInvoicePdf(invoice, company, base44Client) {
+  // Las facturas recibidas deben conservar el documento original del proveedor.
+  if (invoice?.tipo === 'recibida' && !invoice?.archivo_url) {
+    return { ok: false, error: 'La factura recibida no tiene un PDF original adjunto.' };
+  }
+
   // 1. Si ya existe PDF, reutilizarlo
   if (invoice?.archivo_url) {
     return {
@@ -432,9 +437,34 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
 /**
  * Genera el asunto del email según plantilla
  */
+export function buildReceivedInvoiceEmail(invoice, company, publicLink) {
+  const escapeHtml = value => String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  const supplier = escapeHtml(invoice?.proveedor_nombre || invoice?.cliente_nombre || 'Proveedor');
+  const number = escapeHtml(invoice?.numero_factura || '—');
+  const companyName = escapeHtml(company?.nombre_comercial || company?.razon_social || company?.nombre || 'la empresa');
+  const amount = Number(invoice?.total_factura || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const safeLink = escapeHtml(publicLink);
+  return `<!doctype html><html lang="es"><body style="margin:0;background:#f1f5f9;font-family:Arial,sans-serif;color:#0f172a">
+    <div style="max-width:600px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-top:3px solid #b91c1c;border-radius:12px;overflow:hidden">
+      <div style="padding:28px 32px;border-bottom:1px solid #e2e8f0"><div style="font-size:12px;color:#b91c1c;font-weight:700;text-transform:uppercase">Taxea Strategies</div><h1 style="font-size:20px;margin:8px 0 0">Factura recibida ${number}</h1></div>
+      <div style="padding:28px 32px"><p style="line-height:1.7;color:#475569">Se adjunta la factura recibida <strong>${number}</strong> del proveedor <strong>${supplier}</strong>, registrada para <strong>${companyName}</strong>.</p>
+        <div style="margin:22px 0;padding:16px 20px;background:#f8fafc;border-left:3px solid #b91c1c;border-radius:8px"><div style="font-size:11px;color:#64748b;text-transform:uppercase">Importe total</div><div style="font-size:28px;font-weight:700;color:#b91c1c">${amount} €</div></div>
+        <div style="text-align:center;margin:24px 0"><a href="${safeLink}" style="display:inline-block;background:#b91c1c;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700">Ver documento online</a></div>
+        <p style="font-size:12px;color:#64748b;text-align:center">El PDF original del proveedor se incluye como adjunto.</p>
+      </div>
+      <div style="padding:18px 32px;background:#f8fafc;color:#94a3b8;font-size:11px">Gestionado con Taxea Strategies</div>
+    </div></body></html>`;
+}
+
 export function buildEmailSubject(invoice, company, templateId) {
-  const issuerName = company?.nombre || 'Taxea';
+  const issuerName = company?.nombre_comercial || company?.razon_social || company?.nombre || 'Taxea';
   const invNumber = invoice?.numero_factura || '';
+  if (invoice?.tipo === 'recibida') {
+    const supplier = invoice?.proveedor_nombre || invoice?.cliente_nombre || 'Proveedor';
+    return `Factura recibida ${invNumber} · ${supplier}`;
+  }
   const total = invoice?.total_factura != null
     ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €'
     : '';
