@@ -1,10 +1,11 @@
 /**
- * Envío transaccional de facturas desde el Gmail corporativo conectado a la app.
+ * Envío transaccional de facturas desde el Gmail conectado por cada usuario.
  * La operación está limitada a facturas de la empresa activa y registra el éxito
  * únicamente después de que Gmail confirme el envío.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
+const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,7 +59,9 @@ function normalizeEmails(input, label, required = false) {
 
 async function getGmailConnection(base44) {
   try {
-    const connection = await base44.asServiceRole.connectors.getConnection('gmail');
+    // El cliente se crea desde la petición autenticada: Base44 resuelve aquí
+    // la conexión OAuth del usuario actual, nunca un buzón global compartido.
+    const connection = await base44.asServiceRole.connectors.getCurrentAppUserConnection(GMAIL_CONNECTOR_ID);
     return connection?.accessToken ? connection : null;
   } catch {
     return null;
@@ -161,7 +164,7 @@ Deno.serve(async (req) => {
     if (body.action === 'status') {
       if (!connection) return Response.json({ ok: true, connected: false, error: 'gmail_not_connected' });
       const email = await getConnectedEmail(connection);
-      return Response.json({ ok: true, connected: true, email, scope: 'app' });
+      return Response.json({ ok: true, connected: Boolean(email), email, scope: 'user' });
     }
 
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
@@ -188,7 +191,7 @@ Deno.serve(async (req) => {
     if (!connection) {
       return Response.json({
         error: 'gmail_not_connected',
-        message: 'La cuenta Gmail corporativa de Taxea aún no está conectada.',
+        message: 'Conecta tu cuenta Gmail para enviar desde tu propio correo.',
       }, { status: 403 });
     }
 
@@ -203,6 +206,27 @@ Deno.serve(async (req) => {
     if (invoice && !invoice.archivo_url) return Response.json({ error: 'La factura no tiene un PDF preparado.' }, { status: 409 });
     if (invoice && (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`))) {
       return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
+    }
+
+    const idempotencyKey = cleanText(body.idempotency_key, 100);
+    if (invoice && idempotencyKey) {
+      const duplicate = await base44.asServiceRole.entities.InvoiceEmailLog.filter({
+        company_id: companyId,
+        invoice_id: invoice.id,
+        idempotency_key: idempotencyKey,
+        delivery_status: 'enviada',
+      }, '-sent_at', 1);
+      if (duplicate?.[0]) {
+        return Response.json({
+          ok: true,
+          duplicate: true,
+          id: duplicate[0].provider_message_id || '',
+          thread_id: duplicate[0].provider_thread_id || '',
+          via: 'gmail',
+          from: duplicate[0].sender_email || '',
+          attachment_count: duplicate[0].attachments?.length || 0,
+        });
+      }
     }
 
     const attachments = await loadAttachments(body.attachments, invoice?.archivo_url, Boolean(invoice));
@@ -227,7 +251,11 @@ Deno.serve(async (req) => {
     });
     const gmailData = await gmailResponse.json().catch(() => ({}));
     if (!gmailResponse.ok) {
-      throw Object.assign(new Error(gmailData.error?.message || 'Gmail no ha aceptado el envío.'), { status: 502, code: 'gmail_send_failed' });
+      const authorizationExpired = gmailResponse.status === 401 || gmailResponse.status === 403;
+      throw Object.assign(new Error(gmailData.error?.message || 'Gmail no ha aceptado el envío.'), {
+        status: authorizationExpired ? 403 : 502,
+        code: authorizationExpired ? 'gmail_authorization_expired' : 'gmail_send_failed',
+      });
     }
 
     const now = new Date().toISOString();
@@ -247,6 +275,10 @@ Deno.serve(async (req) => {
         pdf_attachment_name: attachments[0]?.name || '',
         sent_at: now,
         sent_by: user.full_name || user.email || 'Usuario',
+        sender_email: connectedEmail,
+        provider_message_id: gmailData.id || '',
+        provider_thread_id: gmailData.threadId || '',
+        idempotency_key: idempotencyKey || '',
         delivery_status: 'enviada',
         to_was_manual: Boolean(body.to_was_manual),
         error_message: null,
