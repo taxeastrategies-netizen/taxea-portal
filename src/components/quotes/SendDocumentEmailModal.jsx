@@ -129,12 +129,15 @@ export default function SendDocumentEmailModal({ open, onOpenChange, doc, docTyp
         return;
       }
       const deadline = Date.now() + 120000;
+      let popupClosedAt = 0;
       let connected = false;
       while (Date.now() < deadline) {
         await sleep(1500);
         connected = await refreshGmailStatus();
         if (connected) { try { popup.close(); } catch {} break; }
-        if (popup.closed) break;
+        if (popup.closed && !popupClosedAt) popupClosedAt = Date.now();
+        // El callback puede cerrar la ventana antes de que Base44 persista el token.
+        if (popupClosedAt && Date.now() - popupClosedAt >= 30000) break;
       }
       if (!connected) connected = await refreshGmailStatus();
       if (!connected) setError('No se completó la autorización de Gmail. Vuelve a intentarlo y acepta los permisos de envío.');
