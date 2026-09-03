@@ -2,7 +2,7 @@
  * InvoiceOperationalSidePanel — Panel lateral operativo de factura
  * Pestañas: General, Mensajes, Historial
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
@@ -10,9 +10,10 @@ import {
   X, Send, Copy, Link, MoreVertical, ChevronRight,
   FileText, CreditCard, Clock, Mail, Tag, Paperclip,
   BookOpen, ExternalLink, CheckCircle2, AlertTriangle, RefreshCw, Download,
-  Eye, RotateCcw, MessageSquare, History
+  Eye, RotateCcw, MessageSquare, History, Upload, Loader2, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger
@@ -38,6 +39,25 @@ const fmtDateTime = (d) => {
 };
 
 const isOverdue = (date) => date && new Date(date) < new Date();
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'text/plain', 'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+const MIME_BY_EXTENSION = {
+  pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+  txt: 'text/plain', csv: 'text/csv',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+const attachmentMime = file => file.type || MIME_BY_EXTENSION[file.name.split('.').pop()?.toLowerCase()] || '';
+const fmtBytes = value => {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 const daysUntil = (date) => {
   if (!date) return null;
   return Math.ceil((new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -86,6 +106,29 @@ function InfoRow({ label, value, valueClass = '' }) {
   );
 }
 
+function MessagePreviewDialog({ message, onClose }) {
+  return (
+    <Dialog open={Boolean(message)} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden max-h-[88vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">Mensaje enviado</h2>
+          <p className="text-xs text-muted-foreground mt-1">{message?.subject || 'Sin asunto'}</p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Para: {message?.to || '—'}{message?.sender_email ? ` · Desde: ${message.sender_email}` : ''}
+          </p>
+        </div>
+        <iframe
+          sandbox=""
+          srcDoc={message?.body || '<p>Sin contenido disponible.</p>'}
+          className="w-full bg-white flex-1"
+          style={{ minHeight: '560px', border: 'none' }}
+          title="Contenido del mensaje enviado"
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Panel principal ────────────────────────────────────────────────────────────
 export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onRefresh, company }) {
   const [tab, setTab] = useState('general');
@@ -97,6 +140,12 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
   const [publicToken, setPublicToken] = useState(invoice?.public_token || '');
   const [publicLinkLoading, setPublicLinkLoading] = useState(false);
   const [publicLinkError, setPublicLinkError] = useState('');
+  const [attachments, setAttachments] = useState([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const attachmentInputRef = useRef(null);
 
   useEffect(() => {
     if (!invoice?.id) return;
@@ -104,6 +153,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
     setPublicLinkError('');
     loadEmailLogs();
     loadTimeline();
+    loadAttachments();
   }, [invoice?.id, invoice?.public_token]);
 
   const loadEmailLogs = async () => {
@@ -120,6 +170,88 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
       const events = await base44.entities.InvoiceTimelineEvent.filter({ invoice_id: invoice.id }, '-created_at', 50);
       setTimeline(events || []);
     } catch { setTimeline([]); }
+  };
+
+  const invokeInvoiceOperation = async payload => {
+    const response = await base44.functions.invoke('invoiceOperations', {
+      invoice_id: invoice.id,
+      company_id: company?.id,
+      ...payload,
+    });
+    return response?.data || response;
+  };
+
+  const loadAttachments = async () => {
+    if (!invoice?.id) return;
+    setLoadingAttachments(true);
+    try {
+      const data = await invokeInvoiceOperation({ action: 'list_attachments' });
+      setAttachments(data?.attachments || []);
+    } catch {
+      setAttachments([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const handleAttachmentFiles = async fileList => {
+    const files = Array.from(fileList || []).slice(0, 5);
+    if (!files.length) return;
+    setAttachmentError('');
+    setUploadingAttachment(true);
+    let needsPrimaryPdf = invoice.tipo === 'recibida' && !invoice.archivo_url;
+    try {
+      for (const file of files) {
+        const mimeType = attachmentMime(file);
+        if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) {
+          throw new Error(`El archivo “${file.name}” no tiene un formato permitido.`);
+        }
+        if (file.size <= 0 || file.size > MAX_ATTACHMENT_BYTES) {
+          throw new Error(`El archivo “${file.name}” debe ocupar menos de 10 MB.`);
+        }
+        if (needsPrimaryPdf && mimeType === 'application/pdf') {
+          const upload = await base44.integrations.Core.UploadFile({ file });
+          const data = await invokeInvoiceOperation({
+            action: 'set_primary_pdf',
+            file_url: upload.file_url,
+            filename: file.name,
+            mime_type: mimeType,
+            size_bytes: file.size,
+          });
+          if (!data?.ok) throw new Error(data?.error || 'No se pudo guardar el PDF principal.');
+          needsPrimaryPdf = false;
+        } else {
+          const upload = await base44.integrations.Core.UploadPrivateFile({ file });
+          const data = await invokeInvoiceOperation({
+            action: 'add_attachment',
+            file_uri: upload.file_uri,
+            filename: file.name,
+            mime_type: mimeType,
+            size_bytes: file.size,
+          });
+          if (!data?.ok) throw new Error(data?.error || 'No se pudo guardar el adjunto.');
+        }
+      }
+      await onRefresh?.();
+      await Promise.all([loadAttachments(), loadTimeline()]);
+    } catch (error) {
+      setAttachmentError(error?.response?.data?.error || error?.response?.data?.message || error.message || 'No se pudo adjuntar el archivo.');
+    } finally {
+      setUploadingAttachment(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  };
+
+  const removeAttachment = async attachment => {
+    if (!window.confirm(`¿Quitar “${attachment.filename}” de esta factura?`)) return;
+    setAttachmentError('');
+    try {
+      const data = await invokeInvoiceOperation({ action: 'remove_attachment', attachment_id: attachment.id });
+      if (!data?.ok) throw new Error(data?.error || 'No se pudo quitar el adjunto.');
+      await Promise.all([loadAttachments(), loadTimeline()]);
+    } catch (error) {
+      setAttachmentError(error?.response?.data?.error || error?.response?.data?.message || error.message || 'No se pudo quitar el adjunto.');
+    }
   };
 
   const ensurePublicLink = async () => {
@@ -382,18 +514,64 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
               {invoice.archivo_url ? (
                 <div className="flex items-center gap-2 p-2 bg-secondary/50 rounded-lg mb-2">
                   <FileText className="w-4 h-4 text-primary flex-shrink-0" />
-                  <span className="text-xs flex-1 truncate text-foreground font-medium">PDF Factura</span>
-                  <a href={invoice.archivo_url} target="_blank" rel="noreferrer"
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs truncate text-foreground font-medium">PDF principal de la factura</p>
+                    <p className="text-[10px] text-muted-foreground">Documento usado en el envío</p>
+                  </div>
+                  <a href={invoice.archivo_url} target="_blank" rel="noreferrer" title="Descargar PDF principal"
                     className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
                     <Download className="w-3.5 h-3.5" />
                   </a>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground mb-2">Sin PDF generado.</p>
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
+                  {invoice.tipo === 'recibida'
+                    ? 'Sin PDF original. El primer PDF que subas se guardará como documento principal sin sobrescribir datos existentes.'
+                    : 'Sin PDF generado. Se creará automáticamente al enviar la factura.'}
+                </div>
               )}
-              <div className="border-2 border-dashed border-border rounded-lg p-3 text-center hover:bg-secondary/30 cursor-pointer transition-colors">
-                <p className="text-xs text-muted-foreground">Haz clic o arrastra un archivo</p>
-              </div>
+
+              {loadingAttachments ? (
+                <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-primary" /></div>
+              ) : attachments.length > 0 && (
+                <div className="space-y-1.5 mb-2">
+                  {attachments.map(attachment => (
+                    <div key={attachment.id} className="flex items-center gap-2 p-2 border border-border rounded-lg">
+                      <Paperclip className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{attachment.filename}</p>
+                        <p className="text-[10px] text-muted-foreground">{fmtBytes(attachment.size_bytes)} · {attachment.uploaded_by || 'Usuario'}</p>
+                      </div>
+                      {attachment.signed_url && (
+                        <a href={attachment.signed_url} target="_blank" rel="noreferrer" title="Descargar adjunto"
+                          className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
+                          <Download className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      <button type="button" onClick={() => removeAttachment(attachment)} title="Quitar adjunto"
+                        className="p-1 hover:bg-red-50 rounded text-muted-foreground hover:text-red-600">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input ref={attachmentInputRef} type="file" multiple className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.docx,.xlsx"
+                onChange={event => handleAttachmentFiles(event.target.files)} />
+              <button type="button"
+                onClick={() => attachmentInputRef.current?.click()}
+                onDragOver={event => event.preventDefault()}
+                onDrop={event => { event.preventDefault(); handleAttachmentFiles(event.dataTransfer.files); }}
+                disabled={uploadingAttachment || invoice.anulada}
+                className="w-full border-2 border-dashed border-border rounded-lg p-3 text-center hover:bg-secondary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {uploadingAttachment
+                  ? <span className="text-xs text-primary flex items-center justify-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Subiendo archivo…</span>
+                  : <span className="text-xs text-muted-foreground flex items-center justify-center gap-2"><Upload className="w-3.5 h-3.5" /> Haz clic o arrastra archivos</span>}
+              </button>
+              <p className="text-[10px] text-muted-foreground mt-1.5">PDF, imágenes, Word, Excel, CSV o TXT · máximo 10 MB por archivo.</p>
+              {attachmentError && <p className="text-[10px] text-red-600 mt-2">{attachmentError}</p>}
             </Section>
 
             {/* Asiento contable — generado automáticamente */}
@@ -556,7 +734,8 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                           <RotateCcw className="w-3 h-3" /> Reenviar
                         </button>
                         {log.body && (
-                          <button className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+                          <button type="button" onClick={() => setSelectedMessage(log)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
                             <Eye className="w-3 h-3" /> Ver mensaje
                           </button>
                         )}
@@ -606,6 +785,8 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
           </div>
         )}
       </div>
+
+      <MessagePreviewDialog message={selectedMessage} onClose={() => setSelectedMessage(null)} />
 
       <InvoicePaymentReconciliationModal
         open={Boolean(actionMode)}
