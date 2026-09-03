@@ -14,11 +14,12 @@ function secureToken() {
 }
 
 async function getOwnedInvoice(base44, user, invoiceId, requestedCompanyId) {
-  const companyId = user.data?.company_id;
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+  const companyId = requestedCompanyId || user.data?.company_id;
   if (!companyId) {
     throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
   }
-  if (requestedCompanyId && requestedCompanyId !== companyId) {
+  if (!isAdmin && requestedCompanyId && requestedCompanyId !== user.data?.company_id) {
     throw Object.assign(new Error('La empresa indicada no coincide con la empresa activa.'), { status: 403 });
   }
   if (!invoiceId) throw Object.assign(new Error('invoice_id es obligatorio.'), { status: 400 });
