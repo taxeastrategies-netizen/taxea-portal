@@ -24,6 +24,7 @@ const STATUS_CFG = {
   emitida:              { label: 'Emitida',               color: 'bg-blue-100 text-blue-700 border-blue-200' },
   enviada:              { label: 'Enviada',               color: 'bg-violet-100 text-violet-700 border-violet-200' },
   pendiente:            { label: 'Pendiente de pago',     color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  parcial:              { label: 'Pago parcial',          color: 'bg-blue-100 text-blue-700 border-blue-200' },
   cobrada:              { label: 'Cobrada',               color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   vencida:              { label: 'Vencida',               color: 'bg-red-100 text-red-700 border-red-200' },
   contabilizada:        { label: 'Contabilizada',         color: 'bg-teal-100 text-teal-700 border-teal-200' },
@@ -479,15 +480,13 @@ export default function InvoiceDocumentWorkspace({
             </div>
           )}
 
-          {/* Botón principal Enviar — solo para facturas emitidas */}
-          {!isRecibida && (
-            <Button
-              onClick={() => onSend?.(invoice)}
-              className="bg-primary hover:bg-primary/90 h-9 text-sm gap-2">
-              <Send className="w-3.5 h-3.5" />
-              <span>Enviar</span>
-            </Button>
-          )}
+          {/* Envío disponible para facturas emitidas y recibidas. */}
+          <Button
+            onClick={() => onSend?.(invoice)}
+            className="bg-primary hover:bg-primary/90 h-9 text-sm gap-2">
+            <Send className="w-3.5 h-3.5" />
+            <span>Enviar</span>
+          </Button>
         </div>
       </div>
 
