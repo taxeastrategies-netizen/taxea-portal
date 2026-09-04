@@ -23,7 +23,7 @@ function credentials() {
 
 function providerConfigured() {
   const { applicationId, privateKey } = credentials();
-  return Boolean(applicationId && privateKey.includes('PRIVATE KEY'));
+  return Boolean(applicationId && privateKey);
 }
 
 function publicError(error: unknown) {
