@@ -9,6 +9,10 @@ function unwrap(response) {
   return response?.data ?? response;
 }
 
+function errorMessage(error, fallback) {
+  return error?.response?.data?.error || error?.data?.error || error?.message || fallback;
+}
+
 export default function ConnectBankModal({ companyId, onClose, onConnected }) {
   const [mode, setMode] = useState('bank');
   const [institutions, setInstitutions] = useState([]);
@@ -39,7 +43,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         if (!result?.ok) throw new Error(result?.error || 'No se pudo cargar el catálogo de bancos.');
         if (active) setInstitutions(result.institutions || []);
       } catch (caught) {
-        if (active) setError(caught?.message || 'No se pudo consultar el servicio Open Banking.');
+        if (active) setError(errorMessage(caught, 'No se pudo consultar el servicio Open Banking.'));
       } finally {
         if (active) setLoading(false);
       }
@@ -47,6 +51,11 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
     load();
     return () => { active = false; };
   }, [companyId]);
+
+  const sandboxCatalog = useMemo(() =>
+    institutions.some(item => /mock aspsp/i.test(item.name || '')),
+    [institutions]
+  );
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -69,7 +78,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
       if (!result?.ok || !result?.link) throw new Error(result?.error || 'No se pudo iniciar la autorización bancaria.');
       window.location.assign(result.link);
     } catch (caught) {
-      setError(caught?.message || 'No se pudo iniciar la autorización bancaria.');
+      setError(errorMessage(caught, 'No se pudo iniciar la autorización bancaria.'));
       setSubmitting(false);
     }
   };
@@ -96,7 +105,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
       });
       onConnected?.(account);
     } catch (caught) {
-      setError(caught?.message || 'No se pudo añadir la cuenta manual.');
+      setError(errorMessage(caught, 'No se pudo añadir la cuenta manual.'));
       setSubmitting(false);
     }
   };
@@ -150,6 +159,12 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
                     <button type="button" onClick={() => setPsuType('personal')}
                       className={`rounded-xl border px-3 py-2 text-xs font-medium ${psuType === 'personal' ? 'border-taxea-red/40 bg-taxea-red/5 text-taxea-red' : 'border-slate-200 text-slate-500'}`}>Cuenta particular</button>
                   </div>
+                  {sandboxCatalog && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+                      <p className="text-xs leading-5 text-amber-800"><span className="font-semibold">Catálogo de pruebas.</span> Enable Banking limita los bancos disponibles en Sandbox. Al usar una aplicación Production, Taxea mostrará automáticamente todas las entidades AIS que el proveedor habilite para España y el contrato contratado.</p>
+                    </div>
+                  )}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar banco en España…"
