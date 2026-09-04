@@ -3,15 +3,14 @@
   "entry": "entry.ts",
   "automations": [
     {
-      "name": "Sincronización bancaria automática",
-      "description": "Actualiza por lotes las cuentas Open Banking activas sin exceder la frecuencia prudente de consulta por cuenta.",
+      "name": "Sincronización bancaria Open Banking",
+      "description": "Actualiza por lotes saldos y movimientos de las cuentas PSD2 activas, respetando la frecuencia prudente por cuenta.",
       "type": "scheduled",
       "schedule_mode": "recurring",
-      "schedule_type": "cron",
-      "cron_expression": "17 * * * *",
-      "function_args": {
-        "action": "scheduled_sync_all"
-      },
+      "schedule_type": "simple",
+      "repeat_unit": "hours",
+      "repeat_interval": 1,
+      "start_time": "09:00",
       "ends_type": "never",
       "is_active": true
     }
