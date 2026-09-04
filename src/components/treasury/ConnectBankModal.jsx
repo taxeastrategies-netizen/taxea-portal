@@ -70,8 +70,8 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
     let authWindow = null;
     try {
       authWindow = window.open('about:blank', 'taxea_open_banking');
-      if (!authWindow && window.top !== window.self) {
-        throw new Error('El navegador ha bloqueado la ventana bancaria. Abre taxeaportal.com directamente o permite ventanas emergentes.');
+      if (!authWindow) {
+        throw new Error('El navegador ha bloqueado la ventana bancaria. Permite las ventanas emergentes para taxeaportal.com y vuelve a intentarlo. Taxea no abandonará tu sesión actual.');
       }
       const result = unwrap(await base44.functions.invoke('openBanking', {
         action: 'create_link',
@@ -81,13 +81,12 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         psu_type: psuType,
       }));
       if (!result?.ok || !result?.link) throw new Error(result?.error || 'No se pudo iniciar la autorización bancaria.');
-      if (authWindow && !authWindow.closed) {
-        authWindow.opener = null;
-        authWindow.location.replace(result.link);
-        onClose?.();
-      } else {
-        window.location.assign(result.link);
+      if (authWindow.closed) {
+        throw new Error('La ventana bancaria se cerró antes de iniciar la autorización. Permite las ventanas emergentes y vuelve a intentarlo.');
       }
+      authWindow.opener = null;
+      authWindow.location.replace(result.link);
+      onClose?.();
     } catch (caught) {
       if (authWindow && !authWindow.closed) authWindow.close();
       setError(errorMessage(caught, 'No se pudo iniciar la autorización bancaria.'));
