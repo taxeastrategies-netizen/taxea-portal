@@ -20,7 +20,7 @@ export default function FinanceDashboard() {
   const { company } = ctx;
 
   const companyId = company?.id;
-  const { invoices, expenses, loading: finLoading, lastSync } = useFinancialData(companyId);
+  const { invoices, expenses, bankTransactions, treasury, loading: finLoading, lastSync } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
@@ -57,10 +57,13 @@ export default function FinanceDashboard() {
     // EBITDA = resultado neto real (sin amortizaciones inventadas)
     const ebitda = beneficio;
 
-    // Cash (sum of cobradas invoices, excluyendo anuladas)
-    const cashDisponible = activeInvoices(invoices)
+    // El saldo disponible procede de las cuentas bancarias conectadas.
+    // Solo se usa el antiguo cálculo por facturas si aún no existe conexión bancaria.
+    const invoiceCashFallback = activeInvoices(invoices)
       .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
       .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const cashDisponible = treasury.connectedAccounts > 0 ? treasury.availableCash : invoiceCashFallback;
+    const cashSource = treasury.connectedAccounts > 0 ? 'bank' : 'invoices';
 
     const cobrosPendientes = finKPIs.cobrosPendientes;
     const pagosPendientes = finKPIs.pagosPendientes;
@@ -139,6 +142,11 @@ export default function FinanceDashboard() {
     });
     const sparkCash = sparkMonths.map(m => {
       try {
+        if (treasury.connectedAccounts > 0) {
+          return (bankTransactions || [])
+            .filter(t => t.estado_proveedor !== 'pending' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
+            .reduce((sum, t) => sum + (t.tipo === 'entrada' ? Number(t.importe || 0) : -Number(t.importe || 0)), 0);
+        }
         return activeInvoices(invoices)
           .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) }))
           .reduce((s, i) => s + (i.total_factura || 0), 0);
@@ -149,12 +157,12 @@ export default function FinanceDashboard() {
 
     return {
       totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
-      cashDisponible, cobrosPendientes, pagosPendientes,
+      cashDisponible, cashSource, bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
       burnRate, runway, dso, dpo, workingCapital,
       upcoming, vencidas, ingresosDelta,
       filteredInvoices, filteredExpenses, sparkData,
     };
-  }, [invoices, expenses, obligations, period]);
+  }, [invoices, expenses, bankTransactions, treasury, obligations, period]);
 
   return (
     <motion.div
@@ -177,7 +185,7 @@ export default function FinanceDashboard() {
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <div className="xl:col-span-2">
-              <CashflowChart invoices={invoices} expenses={expenses} period={period} />
+              <CashflowChart invoices={invoices} expenses={expenses} bankTransactions={bankTransactions} period={period} />
             </div>
             <div className="flex flex-col gap-5">
               <ForecastPanel financials={financials} />
