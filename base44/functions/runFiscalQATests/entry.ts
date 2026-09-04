@@ -5,6 +5,9 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!['admin', 'super_admin'].includes(user.role)) {
+      return Response.json({ error: 'Acceso restringido a administradores' }, { status: 403 });
+    }
 
     // QA test suite: 25 cases from the masterprompt
     // Each case simulates an OCR scenario and validates the fiscal engine response
