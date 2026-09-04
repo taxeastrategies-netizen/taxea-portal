@@ -10,6 +10,7 @@ import ARForecast from './ARForecast';
 import ARRiskRadar from './ARRiskRadar';
 import { TrendingDown, Users, BarChart2, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 const TABS = [
   { id: 'facturas',  label: 'Facturas pendientes', icon: Calendar },
@@ -25,19 +26,16 @@ export default function AccountsReceivable() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('facturas');
-  const [invoices, setInvoices] = useState([]);
+  const { invoices, treasury, loading: financialLoading, refresh } = useFinancialData(companyId);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const pageLoading = loading || financialLoading;
 
   useEffect(() => {
     if (!companyId) { setLoading(false); return; }
-    Promise.all([
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Contact.filter({ company_id: companyId }, 'nombre', 5000, 0),
-    ]).then(([inv, con]) => {
-      setInvoices(inv || []);
-      setContacts(con || []);
-    }).finally(() => setLoading(false));
+    base44.entities.Contact.filter({ company_id: companyId }, 'nombre', 5000, 0)
+      .then(con => setContacts(con || []))
+      .finally(() => setLoading(false));
   }, [companyId]);
 
   const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida'), [invoices]);
@@ -89,7 +87,10 @@ export default function AccountsReceivable() {
           <h2 className="text-xl font-jakarta font-bold text-foreground">Accounts Receivable</h2>
           <p className="text-sm text-slate-400 mt-0.5">Control de cobros, clientes y riesgo financiero</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+            <BarChart2 className="w-3 h-3" /> {treasury.connectedAccounts} bancos · {treasury.unreconciledTransactions} movimientos por conciliar
+          </span>
           <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
             <Users className="w-3 h-3" /> {contacts.filter(c => c.tipo !== 'proveedor').length} clientes activos
           </span>
@@ -97,7 +98,7 @@ export default function AccountsReceivable() {
       </div>
 
       {/* KPIs */}
-      {!loading && <ARKpiBar kpis={kpis} />}
+      {!pageLoading && <ARKpiBar kpis={kpis} />}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit flex-wrap">
@@ -113,13 +114,13 @@ export default function AccountsReceivable() {
         })}
       </div>
 
-      {loading ? (
+      {pageLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>
-          {tab === 'facturas' && <ARInvoiceTable invoices={emitidas} contacts={contacts} onRefresh={() => {}} />}
+          {tab === 'facturas' && <ARInvoiceTable invoices={emitidas} contacts={contacts} onRefresh={refresh} />}
           {tab === 'aging' && <ARAgingChart invoices={emitidas} contacts={contacts} />}
           {tab === 'riesgo' && <ARRiskRadar invoices={emitidas} contacts={contacts} />}
           {tab === 'forecast' && <ARForecast invoices={emitidas} />}
