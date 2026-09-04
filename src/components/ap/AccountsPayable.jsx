@@ -10,6 +10,7 @@ import APForecast from './APForecast';
 import APCalendar from './APCalendar';
 import { Wallet, BarChart2, TrendingDown, CalendarDays, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 const TABS = [
   { id: 'facturas',   label: 'Facturas pendientes', icon: Wallet },
@@ -25,22 +26,18 @@ export default function AccountsPayable() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('facturas');
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, treasury, loading: financialLoading, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const pageLoading = loading || financialLoading;
 
   useEffect(() => {
     if (!companyId) { setLoading(false); return; }
     Promise.all([
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
       base44.entities.TaxObligation.filter({ company_id: companyId }),
       base44.entities.Contact.filter({ company_id: companyId }, 'nombre', 5000, 0),
-    ]).then(([inv, exp, obl, con]) => {
-      setInvoices(inv || []);
-      setExpenses(exp || []);
+    ]).then(([obl, con]) => {
       setObligations(obl || []);
       setContacts(con || []);
     }).finally(() => setLoading(false));
@@ -95,7 +92,10 @@ export default function AccountsPayable() {
           <h2 className="text-xl font-jakarta font-bold text-foreground">Accounts Payable</h2>
           <p className="text-sm text-slate-400 mt-0.5">Control de pagos, proveedores y liquidez</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+            <BarChart2 className="w-3 h-3" /> {treasury.connectedAccounts} bancos · {treasury.unreconciledTransactions} movimientos por conciliar
+          </span>
           {kpis.total_vencido > 0 && (
             <span className="px-3 py-1.5 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-700 flex items-center gap-1.5">
               <AlertTriangle className="w-3 h-3" /> {kpis.count_vencidas} vencidas
@@ -108,7 +108,7 @@ export default function AccountsPayable() {
       </div>
 
       {/* KPIs */}
-      {!loading && <APKpiBar kpis={kpis} />}
+      {!pageLoading && <APKpiBar kpis={kpis} />}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit flex-wrap">
@@ -124,13 +124,13 @@ export default function AccountsPayable() {
         })}
       </div>
 
-      {loading ? (
+      {pageLoading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
         <>
-          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} onRefresh={() => {}} />}
+          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} onRefresh={refresh} />}
           {tab === 'aging' && <APAgingChart invoices={recibidas} />}
           {tab === 'forecast' && <APForecast invoices={recibidas} expenses={expenses} obligations={obligations} />}
           {tab === 'calendario' && <APCalendar invoices={recibidas} expenses={expenses} obligations={obligations} />}
