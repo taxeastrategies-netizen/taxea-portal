@@ -144,6 +144,12 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
                 </div>
               ) : (
                 <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setPsuType('business')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-medium ${psuType === 'business' ? 'border-taxea-red/40 bg-taxea-red/5 text-taxea-red' : 'border-slate-200 text-slate-500'}`}>Cuenta de empresa</button>
+                    <button type="button" onClick={() => setPsuType('personal')}
+                      className={`rounded-xl border px-3 py-2 text-xs font-medium ${psuType === 'personal' ? 'border-taxea-red/40 bg-taxea-red/5 text-taxea-red' : 'border-slate-200 text-slate-500'}`}>Cuenta particular</button>
+                  </div>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Buscar banco en España…"
