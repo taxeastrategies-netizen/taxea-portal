@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import { subDays, isAfter, parseISO } from 'date-fns';
+import { useFinancialData } from '@/hooks/useFinancialData';
 
 import CashPositionHeader from './CashPositionHeader';
 import CashKpiGrid from './CashKpiGrid';
@@ -18,28 +19,20 @@ export default function CashflowCenter() {
   const { company } = ctx;
   const companyId = company?.id;
 
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, bankTransactions, treasury, loading: financialLoading, lastSync, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [lastSync, setLastSync] = useState(new Date());
+  const [supportLoading, setSupportLoading] = useState(true);
+  const loading = financialLoading || supportLoading;
 
-  const load = () => {
-    if (!companyId) { setLoading(false); return; }
-    setLoading(true);
-    Promise.all([
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
-      base44.entities.TaxObligation.filter({ company_id: companyId }),
-    ]).then(([inv, exp, obl]) => {
-      setInvoices(inv || []);
-      setExpenses(exp || []);
-      setObligations(obl || []);
-      setLastSync(new Date());
-    }).finally(() => setLoading(false));
+  const loadObligations = () => {
+    if (!companyId) { setSupportLoading(false); return; }
+    setSupportLoading(true);
+    base44.entities.TaxObligation.filter({ company_id: companyId })
+      .then(obl => setObligations(obl || []))
+      .finally(() => setSupportLoading(false));
   };
 
-  useEffect(() => { load(); }, [companyId]);
+  useEffect(() => { loadObligations(); }, [companyId]);
 
   const financials = useMemo(() => {
     const now = new Date();
@@ -53,9 +46,19 @@ export default function CashflowCenter() {
       try { return isAfter(parseISO(e.fecha), cutoff); } catch { return false; }
     });
 
-    const totalIngresos = filteredInvoices
+    const filteredBankTransactions = (bankTransactions || []).filter(transaction => {
+      try {
+        return transaction.estado_proveedor !== 'pending'
+          && transaction.categoria_ia !== 'transferencia_interna'
+          && isAfter(parseISO(transaction.fecha_operacion), cutoff);
+      } catch { return false; }
+    });
+    const invoiceIngresos = filteredInvoices
       .filter(i => i.tipo === 'emitida')
       .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const totalIngresos = treasury.connectedAccounts > 0
+      ? filteredBankTransactions.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
+      : invoiceIngresos;
 
     const gastoFact = filteredInvoices
       .filter(i => i.tipo === 'recibida')
@@ -63,15 +66,18 @@ export default function CashflowCenter() {
     const gastoExp = filteredExpenses
       .filter(e => e.tipo === 'gasto')
       .reduce((s, e) => s + (e.total || 0), 0);
-    const gastoTotal = gastoFact + gastoExp;
+    const gastoTotal = treasury.connectedAccounts > 0
+      ? filteredBankTransactions.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
+      : gastoFact + gastoExp;
 
     const beneficio = totalIngresos - gastoTotal;
     const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
-    const ebitda = beneficio + gastoTotal * 0.05;
+    const ebitda = beneficio;
 
-    const cashDisponible = invoices
-      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const cashDisponible = treasury.connectedAccounts > 0
+      ? treasury.availableCash
+      : invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
+        .reduce((s, i) => s + (i.total_factura || 0), 0);
 
     const cobrosPendientes = invoices
       .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'pendiente')
@@ -105,11 +111,11 @@ export default function CashflowCenter() {
 
     return {
       totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
-      cashDisponible, cobrosPendientes, pagosPendientes,
+      cashDisponible, cashSource: treasury.connectedAccounts > 0 ? 'bank' : 'invoices', bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
       burnRate, runway, dso, workingCapital, vencidas, ingresosDelta,
       filteredInvoices, filteredExpenses,
     };
-  }, [invoices, expenses, obligations]);
+  }, [invoices, expenses, bankTransactions, treasury]);
 
   if (loading) {
     return (
@@ -134,7 +140,7 @@ export default function CashflowCenter() {
         company={company}
         lastSync={lastSync}
         loading={loading}
-        onRefresh={load}
+        onRefresh={() => { refresh(); loadObligations(); }}
       />
 
       {/* KPI Grid */}
