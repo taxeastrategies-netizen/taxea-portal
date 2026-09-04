@@ -72,21 +72,27 @@ export default function TreasuryCenter({ company }) {
   const loadData = async () => {
     if (!companyId) return;
     setLoading(true);
-    const [accs, txs, evs, invs, exps, obls] = await Promise.all([
-      base44.entities.BankAccount.filter({ company_id: companyId }),
-      base44.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 5000),
-      base44.entities.TreasuryEvent.filter({ company_id: companyId }),
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
-      base44.entities.TaxObligation.filter({ company_id: companyId }),
-    ]);
-    setAccounts(accs);
-    setTransactions(txs);
-    setEvents(evs);
-    setInvoices(invs);
-    setExpenses(exps);
-    setObligations(obls);
-    setLoading(false);
+    try {
+      const [bankResponse, evs, invs, exps, obls] = await Promise.all([
+        base44.functions.invoke('openBanking', { action: 'treasury_snapshot', company_id: companyId }),
+        base44.entities.TreasuryEvent.filter({ company_id: companyId }),
+        base44.entities.Invoice.filter({ company_id: companyId }),
+        base44.entities.Expense.filter({ company_id: companyId }),
+        base44.entities.TaxObligation.filter({ company_id: companyId }),
+      ]);
+      const bankData = bankResponse?.data ?? bankResponse;
+      if (!bankData?.ok) throw new Error(bankData?.error || 'No se pudieron cargar los datos bancarios.');
+      setAccounts(bankData.accounts || []);
+      setTransactions(bankData.transactions || []);
+      setEvents(evs || []);
+      setInvoices(invs || []);
+      setExpenses(exps || []);
+      setObligations(obls || []);
+    } catch (error) {
+      setBankNotice({ type: 'error', text: readableBankError(error, 'No se pudieron cargar los datos de tesorería.') });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadData(); }, [companyId]);
