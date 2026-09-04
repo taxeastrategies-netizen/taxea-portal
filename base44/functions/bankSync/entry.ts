@@ -312,16 +312,7 @@ async function syncQonto(login, secretKey, bank_account_id, company_id, base44) 
 
 // ─── API: GoCardless/Nordigen (BBVA, Santander, CaixaBank via Open Banking) ──
 async function getGoCardlessToken() {
-  const clientId = Deno.env.get('NORDIC_API_CLIENT_ID');
-  const clientSecret = Deno.env.get('NORDIC_API_SECRET');
-  const res = await fetch('https://bankaccountdata.gocardless.com/api/v2/token/new/', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret_id: clientId, secret_key: clientSecret }),
-  });
-  if (!res.ok) throw new Error(`GoCardless token error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  return data.access;
+  throw new Error('La integración bancaria antigua está retirada. Vuelve a conectar la cuenta mediante Open Banking.');
 }
 
 async function syncGoCardless(requisitionId, bank_account_id, company_id, base44) {
@@ -451,7 +442,16 @@ Deno.serve(async (req) => {
   if (action === 'api_sync') {
     const { proveedor, access_token, requisition_id } = body;
     const psd2Providers = ['bbva', 'santander', 'caixabank', 'sabadell', 'bankinter', 'ing'];
-    const supportedProviders = ['revolut', 'wise', 'qonto', ...psd2Providers];
+    const supportedProviders = ['revolut', 'wise', 'qonto'];
+
+    // Las conexiones PSD2 antiguas no deben crear logs ni cambiar estados.
+    // Se conservan todos sus registros y el usuario puede reconectarlas con Open Banking.
+    if (psd2Providers.includes(proveedor)) {
+      return Response.json({
+        error: 'Esta conexión bancaria usa el proveedor antiguo. Vuelve a conectar la cuenta mediante Open Banking.',
+        code: 'legacy_open_banking_retired',
+      }, { status: 409 });
+    }
 
     // Validar todo antes de crear logs o cambiar el estado de la cuenta.
     if (!supportedProviders.includes(proveedor)) {
