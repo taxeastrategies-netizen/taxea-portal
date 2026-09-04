@@ -397,6 +397,8 @@ async function startAuthorization(base44: any, token: string, user: any, company
     institution_id: clean(institution.name, 300),
     requisition_id: clean(authorization.authorization_id, 200),
     agreement_id: state,
+    authorization_id: clean(authorization.authorization_id, 200),
+    oauth_state: state,
     fecha_consentimiento_expira: isoDate(expiry),
     ultimo_error_sync: null,
     activa: true,
@@ -563,11 +565,46 @@ Deno.serve(async (request) => {
       if (placeholder.proveedor_integracion !== 'enable_banking') {
         return Response.json({ error: 'Esta autorización pertenece al proveedor anterior. Vuelve a conectar el banco.' }, { status: 409 });
       }
-      const expectedState = clean(placeholder.agreement_id, 200);
+      const expectedState = clean(placeholder.oauth_state || placeholder.agreement_id, 200);
       if (!code) return Response.json({ error: 'Falta el código devuelto por el banco. Reintenta la conexión.' }, { status: 409 });
       if (expectedState && returnedState !== expectedState) return Response.json({ error: 'La respuesta bancaria no supera la validación de seguridad.' }, { status: 403 });
-      const authorizationId = clean(placeholder.requisition_id, 200);
-      const session = await providerRequest('/sessions', token, { method: 'POST', body: JSON.stringify({ code }) });
+      const authorizationId = clean(placeholder.authorization_id || placeholder.requisition_id, 200);
+      const finalizedResponse = async (waitAttempts = 1) => {
+        let current = placeholder;
+        for (let attempt = 0; attempt < waitAttempts; attempt += 1) {
+          if (attempt > 0) {
+            await sleep(250);
+            current = await base44.asServiceRole.entities.BankAccount.get(placeholder.id).catch(() => current);
+          }
+          const savedState = clean(current.oauth_state, 200);
+          const completedSessionId = clean(current.session_id || (current.provider_account_id ? current.requisition_id : ''), 200);
+          if (savedState && savedState === returnedState && current.provider_account_id && completedSessionId) {
+            let linked = await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, session_id: completedSessionId }, '-created_date', 50);
+            if (!linked?.length) linked = await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, requisition_id: completedSessionId }, '-created_date', 50);
+            return {
+              ok: true,
+              replayed: true,
+              session_status: current.estado_conexion === 'conectado' ? 'AUTHORIZED' : 'PROCESSING',
+              accounts: (linked?.length ? linked : [current]).map((item: any) => ({
+                id: item.id, created: 0, updated: 0, duplicates: 0, balance: Number(item.saldo_disponible || 0),
+              })),
+            };
+          }
+        }
+        return null;
+      };
+      const alreadyFinalized = await finalizedResponse();
+      if (alreadyFinalized) return Response.json(alreadyFinalized);
+      let session;
+      try {
+        session = await providerRequest('/sessions', token, { method: 'POST', body: JSON.stringify({ code }) });
+      } catch (error) {
+        if (/WRONG_SESSION_STATUS|Wrong session status/i.test(publicError(error))) {
+          const replay = await finalizedResponse(20);
+          if (replay) return Response.json(replay);
+        }
+        throw error;
+      }
       const providerAccounts = Array.isArray(session?.accounts) ? session.accounts : [];
       if (!providerAccounts.length) return Response.json({ error: 'El banco no devolvió ninguna cuenta autorizada.' }, { status: 409 });
       const sessionId = clean(session.session_id, 200);
@@ -598,6 +635,9 @@ Deno.serve(async (request) => {
             proveedor_integracion: 'enable_banking',
             requisition_id: sessionId,
             agreement_id: sessionId,
+            authorization_id: authorizationId,
+            session_id: sessionId,
+            oauth_state: returnedState,
             institution_id: clean(session?.aspsp?.name, 300) || placeholder.institution_id,
             provider_account_id: providerAccountId,
             origen_datos: 'open_banking',
@@ -616,11 +656,14 @@ Deno.serve(async (request) => {
           proveedor_integracion: 'enable_banking',
           requisition_id: sessionId,
           agreement_id: sessionId,
+          authorization_id: authorizationId,
+          session_id: sessionId,
+          oauth_state: returnedState,
           provider_account_id: providerAccountId,
           fecha_consentimiento_expira: isoDate(expires),
           activa: true,
         });
-        account = { ...account, provider_account_id: providerAccountId, requisition_id: sessionId, agreement_id: sessionId, proveedor_integracion: 'enable_banking' };
+        account = { ...account, provider_account_id: providerAccountId, requisition_id: sessionId, agreement_id: sessionId, authorization_id: authorizationId, session_id: sessionId, oauth_state: returnedState, proveedor_integracion: 'enable_banking' };
         const result = await syncWithLog(base44, token, account, user, account.sync_desde);
         accounts.push({ id: account.id, ...result });
         if (index < providerAccounts.length - 1) await sleep(250);
@@ -650,7 +693,7 @@ Deno.serve(async (request) => {
 
     if (action === 'disconnect') {
       const account = await ownedAccount(base44, companyId, body.bank_account_id);
-      const sessionId = account.proveedor_integracion === 'enable_banking' ? clean(account.requisition_id, 200) : '';
+      const sessionId = account.proveedor_integracion === 'enable_banking' ? clean(account.session_id || account.requisition_id, 200) : '';
       if (sessionId) {
         await providerRequest(`/sessions/${encodeURIComponent(sessionId)}`, token, { method: 'DELETE' }).catch(error => console.warn('[openBanking] remote revoke failed:', publicError(error)));
       }
