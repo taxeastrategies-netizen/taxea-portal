@@ -39,6 +39,8 @@ export default function CashflowChart({ invoices, expenses, bankTransactions = [
       const bankInMonth = bankTransactions.filter(transaction => {
         try {
           return transaction.estado_proveedor !== 'pending'
+            && transaction.categoria_ia !== 'transferencia_interna'
+            && transaction.estado_conciliacion !== 'movimiento_interno'
             && isWithinInterval(parseISO(transaction.fecha_operacion), interval);
         } catch { return false; }
       });
