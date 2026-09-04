@@ -227,12 +227,29 @@ async function normalizeTransaction(transaction: any, companyId: string, bankAcc
   };
 }
 
+function sameProviderMovement(left: any, right: any) {
+  return left.fecha_operacion === right.fecha_operacion
+    && Number(left.importe) === Number(right.importe)
+    && left.tipo === right.tipo
+    && clean(left.moneda, 8) === clean(right.moneda, 8)
+    && clean(left.concepto, 500) === clean(right.concepto, 500);
+}
+
 async function upsertTransactions(base44: any, account: any, rows: any[]) {
-  const existing = await base44.asServiceRole.entities.BankTransaction.filter(
-    { company_id: account.company_id, bank_account_id: account.id }, '-fecha_operacion', MAX_LIST,
+  const companyTransactions = await base44.asServiceRole.entities.BankTransaction.filter(
+    { company_id: account.company_id }, '-fecha_operacion', MAX_LIST,
   );
-  const byKey = new Map((existing || []).filter((item: any) => item.clave_transaccion).map((item: any) => [item.clave_transaccion, item]));
-  const byReference = new Map((existing || []).filter((item: any) => item.referencia).map((item: any) => [String(item.referencia), item]));
+  const existing = (companyTransactions || []).filter((item: any) => item.bank_account_id === account.id);
+  const byKey = new Map(existing.filter((item: any) => item.clave_transaccion).map((item: any) => [item.clave_transaccion, item]));
+  const byReference = new Map(existing.filter((item: any) => item.referencia).map((item: any) => [String(item.referencia), item]));
+  const companyByProviderId = new Map<string, any[]>();
+  for (const item of companyTransactions || []) {
+    const providerId = clean(item.proveedor_transaccion_id || item.referencia, 300);
+    if (!providerId) continue;
+    const matches = companyByProviderId.get(providerId) || [];
+    matches.push(item);
+    companyByProviderId.set(providerId, matches);
+  }
   const additions = [];
   let updated = 0;
   let duplicates = 0;
@@ -263,8 +280,16 @@ async function upsertTransactions(base44: any, account: any, rows: any[]) {
       }
       continue;
     }
+    const providerMatches = row.proveedor_transaccion_id ? (companyByProviderId.get(row.proveedor_transaccion_id) || []) : [];
+    if (providerMatches.some((item: any) => sameProviderMovement(item, row))) {
+      duplicates += 1;
+      continue;
+    }
     additions.push(row);
     byKey.set(row.clave_transaccion, row);
+    if (row.proveedor_transaccion_id) {
+      companyByProviderId.set(row.proveedor_transaccion_id, [...providerMatches, row]);
+    }
   }
   if (additions.length) await base44.asServiceRole.entities.BankTransaction.bulkCreate(additions);
   return { created: additions.length, updated, duplicates };
