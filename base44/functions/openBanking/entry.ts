@@ -682,16 +682,28 @@ Deno.serve(async (request) => {
       if (!providerAccounts.length) return Response.json({ error: 'El banco no devolvió ninguna cuenta autorizada.' }, { status: 409 });
       const sessionId = clean(session.session_id, 200);
       const expires = new Date(session?.access?.valid_until || Date.now() + REQUESTED_ACCESS_DAYS * 86400000);
+      const existingCompanyAccounts = await base44.asServiceRole.entities.BankAccount.filter({
+        company_id: companyId, proveedor_integracion: 'enable_banking',
+      }, '-created_date', MAX_LIST);
+      const placeholderWasFresh = !clean(placeholder.provider_account_id, 200);
+      const usedAccountIds = new Set<string>();
       const accounts = [];
       for (let index = 0; index < providerAccounts.length; index += 1) {
         const providerItem = providerAccounts[index];
         const providerAccountId = clean(providerItem.uid, 200);
         const iban = accountIban(providerItem);
-        let account = index === 0 ? placeholder : null;
+        const providerCurrency = clean(providerItem.currency, 8).toUpperCase() || 'EUR';
+        let account = (existingCompanyAccounts || []).find((item: any) =>
+          !usedAccountIds.has(item.id) && clean(item.provider_account_id, 200) === providerAccountId,
+        ) || null;
         if (!account && iban) {
-          const matches = await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, iban }, '-created_date', 10);
-          account = (matches || []).find((item: any) => item.id !== placeholder.id) || null;
+          account = (existingCompanyAccounts || []).find((item: any) =>
+            !usedAccountIds.has(item.id)
+            && clean(item.iban, 80) === iban
+            && clean(item.moneda, 8).toUpperCase() === providerCurrency,
+          ) || null;
         }
+        if (!account && index === 0 && !usedAccountIds.has(placeholder.id)) account = placeholder;
         if (!account) {
           account = await base44.asServiceRole.entities.BankAccount.create({
             company_id: companyId,
@@ -701,7 +713,7 @@ Deno.serve(async (request) => {
             iban,
             ultimos_4: iban.slice(-4),
             titular: clean(providerItem.name, 300),
-            moneda: clean(providerItem.currency, 8) || 'EUR',
+            moneda: providerCurrency,
             saldo_disponible: 0,
             saldo_contable: 0,
             estado_conexion: 'pendiente',
@@ -724,7 +736,7 @@ Deno.serve(async (request) => {
           iban: iban || account.iban || '',
           ultimos_4: iban.slice(-4) || account.ultimos_4 || '',
           titular: clean(providerItem.name, 300) || account.titular || '',
-          moneda: clean(providerItem.currency, 8) || account.moneda || 'EUR',
+          moneda: providerCurrency,
           estado_conexion: 'pendiente',
           proveedor_integracion: 'enable_banking',
           requisition_id: sessionId,
@@ -736,10 +748,19 @@ Deno.serve(async (request) => {
           fecha_consentimiento_expira: isoDate(expires),
           activa: true,
         });
+        usedAccountIds.add(account.id);
+        if (!(existingCompanyAccounts || []).some((item: any) => item.id === account.id)) existingCompanyAccounts.push(account);
         account = { ...account, provider_account_id: providerAccountId, requisition_id: sessionId, agreement_id: sessionId, authorization_id: authorizationId, session_id: sessionId, oauth_state: returnedState, proveedor_integracion: 'enable_banking' };
         const result = await syncWithLog(base44, token, account, user, account.sync_desde);
         accounts.push({ id: account.id, ...result });
         if (index < providerAccounts.length - 1) await sleep(250);
+      }
+      if (placeholderWasFresh && !usedAccountIds.has(placeholder.id)) {
+        await base44.asServiceRole.entities.BankAccount.update(placeholder.id, {
+          estado_conexion: 'desconectado',
+          activa: false,
+          notas: `${clean(placeholder.notas, 1200)}${placeholder.notas ? '\n' : ''}Registro provisional sustituido por una cuenta bancaria ya existente durante la autorización.`,
+        });
       }
       const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, requisition_id: authorizationId }, '-created_date', 20);
       for (const consent of consents || []) {
