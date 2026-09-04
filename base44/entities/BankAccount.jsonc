@@ -99,6 +99,15 @@
     "agreement_id": {
       "type": "string"
     },
+    "authorization_id": {
+      "type": "string"
+    },
+    "session_id": {
+      "type": "string"
+    },
+    "oauth_state": {
+      "type": "string"
+    },
     "provider_account_id": {
       "type": "string"
     },
