@@ -11,6 +11,7 @@ const SCHEDULED_SYNC_MIN_AGE_MS = 8 * 60 * 60 * 1000;
 const MAX_SCHEDULED_ACCOUNTS = 25;
 
 const clean = (value: unknown, max = 500) => String(value ?? '').trim().slice(0, max);
+const asMoney = (value: number) => Math.round(value * 100) / 100;
 const isoDate = (date = new Date()) => date.toISOString().slice(0, 10);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -535,17 +536,21 @@ Deno.serve(async (request) => {
       const connected = activeAccounts.filter((account: any) => account.estado_conexion === 'conectado');
       const euroAccounts = connected.filter((account: any) => clean(account.moneda, 8).toUpperCase() === 'EUR');
       const reconciliationStates = new Set(['conciliada_auto', 'conciliada_manual']);
+      const resolvedStates = new Set(['conciliada_auto', 'conciliada_manual', 'descartada', 'movimiento_interno']);
+      const cashMovements = booked.filter((transaction: any) =>
+        transaction.categoria_ia !== 'transferencia_interna' && transaction.estado_conciliacion !== 'movimiento_interno',
+      );
       return Response.json({
         ok: true,
         accounts: safeAccounts,
         transactions: visibleTransactions,
         summary: {
           connected_accounts: connected.length,
-          available_cash_eur: euroAccounts.reduce((sum: number, account: any) => sum + Number(account.saldo_disponible || 0), 0),
+          available_cash_eur: asMoney(euroAccounts.reduce((sum: number, account: any) => sum + Number(account.saldo_disponible || 0), 0)),
           reconciled_transactions: booked.filter((transaction: any) => reconciliationStates.has(transaction.estado_conciliacion)).length,
-          unreconciled_transactions: booked.filter((transaction: any) => !reconciliationStates.has(transaction.estado_conciliacion)).length,
-          inflows: booked.filter((transaction: any) => transaction.tipo === 'entrada').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0),
-          outflows: booked.filter((transaction: any) => transaction.tipo === 'salida').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0),
+          unreconciled_transactions: booked.filter((transaction: any) => !resolvedStates.has(transaction.estado_conciliacion)).length,
+          inflows: asMoney(cashMovements.filter((transaction: any) => transaction.tipo === 'entrada').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0)),
+          outflows: asMoney(cashMovements.filter((transaction: any) => transaction.tipo === 'salida').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0)),
           last_sync: connected.map((account: any) => account.fecha_ultima_sync).filter(Boolean).sort().at(-1) || null,
         },
       });
