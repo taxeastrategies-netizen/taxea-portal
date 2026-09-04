@@ -318,6 +318,8 @@ Deno.serve(async (request) => {
         country: DEFAULT_COUNTRY,
         requested_history_days: REQUESTED_HISTORY_DAYS,
         requested_access_days: REQUESTED_ACCESS_DAYS,
+        automatic_sync_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000,
+        credential_names: ['GOCARDLESS_SECRET_ID', 'GOCARDLESS_SECRET_KEY'],
       });
     }
 
@@ -333,11 +335,11 @@ Deno.serve(async (request) => {
         'fecha_ultima_sync',
         MAX_LIST,
       );
-      const eligible = (allAccounts || [])
+      const eligibleAccounts = (allAccounts || [])
         .filter((account: any) => account.provider_account_id)
         .filter((account: any) => ['conectado', 'error'].includes(account.estado_conexion))
-        .filter((account: any) => syncAgeMs(account) >= SCHEDULED_SYNC_MIN_AGE_MS)
-        .slice(0, MAX_SCHEDULED_ACCOUNTS);
+        .filter((account: any) => syncAgeMs(account) >= SCHEDULED_SYNC_MIN_AGE_MS);
+      const eligible = eligibleAccounts.slice(0, MAX_SCHEDULED_ACCOUNTS);
       const summary = { processed: 0, created: 0, updated: 0, failed: 0 };
       for (const account of eligible) {
         try {
@@ -354,7 +356,7 @@ Deno.serve(async (request) => {
       return Response.json({
         ok: true,
         ...summary,
-        eligible_remaining: Math.max(0, (allAccounts?.length || 0) - eligible.length),
+        eligible_remaining: Math.max(0, eligibleAccounts.length - eligible.length),
         min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000,
       });
     }
@@ -463,6 +465,74 @@ Deno.serve(async (request) => {
         await base44.asServiceRole.entities.BankAccount.update(account.id, { estado_conexion: 'error', ultimo_error_sync: publicError(error) }).catch(() => null);
         throw error;
       }
+    }
+
+    if (action === 'renew') {
+      const account = await ownedAccount(base44, companyId, body.bank_account_id);
+      const institutionId = clean(account.institution_id, 200);
+      if (!institutionId) {
+        return Response.json({ error: 'Esta cuenta no conserva el identificador del banco. Vuelve a conectarla desde el catálogo.' }, { status: 409 });
+      }
+      const institution = await providerRequest(`/institutions/${encodeURIComponent(institutionId)}/`, token);
+      const transactionDays = Math.max(1, Number(institution.transaction_total_days) || 90);
+      const accessDays = Math.max(1, Number(institution.max_access_valid_for_days) || REQUESTED_ACCESS_DAYS);
+      const historicalDays = Math.min(REQUESTED_HISTORY_DAYS, transactionDays);
+      const validDays = Math.min(REQUESTED_ACCESS_DAYS, accessDays);
+      const agreement = await providerRequest('/agreements/enduser/', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          institution_id: institutionId,
+          max_historical_days: historicalDays,
+          access_valid_for_days: validDays,
+          access_scope: ['balances', 'details', 'transactions'],
+        }),
+      });
+      const redirect = safeRedirect(body.redirect_url);
+      redirect.searchParams.set('bank_link', 'return');
+      redirect.searchParams.set('bank_account_id', account.id);
+      const requisition = await providerRequest('/requisitions/', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          redirect: redirect.toString(),
+          institution_id: institutionId,
+          reference: `taxea_renew_${companyId}_${account.id}_${Date.now()}`.slice(0, 120),
+          agreement: agreement.id,
+          user_language: 'ES',
+        }),
+      });
+      const expires = new Date(Date.now() + validDays * 86400000);
+      await base44.asServiceRole.entities.BankAccount.update(account.id, {
+        estado_conexion: 'pendiente',
+        requisition_id: requisition.id,
+        agreement_id: agreement.id,
+        proveedor_integracion: requisition.id,
+        fecha_consentimiento_expira: isoDate(expires),
+        ultimo_error_sync: null,
+        activa: true,
+      });
+      await base44.asServiceRole.entities.BankConsent.create({
+        company_id: companyId,
+        bank_account_id: account.id,
+        proveedor: 'gocardless_bank_account_data',
+        tipo_conexion: 'psd2',
+        estado: 'pendiente',
+        permisos: ['saldos', 'datos de cuenta', 'movimientos'],
+        fecha_consentimiento: new Date().toISOString(),
+        fecha_expiracion: isoDate(expires),
+        token_referencia: requisition.id,
+        requisition_id: requisition.id,
+        agreement_id: agreement.id,
+        institution_id: institutionId,
+        nota_auditoria: `Renovación PSD2 iniciada por ${user.email}.`,
+      });
+      return Response.json({
+        ok: true,
+        link: requisition.link,
+        bank_account_id: account.id,
+        requisition_id: requisition.id,
+        history_days: historicalDays,
+        renewal: true,
+      });
     }
 
     if (action === 'finalize') {
