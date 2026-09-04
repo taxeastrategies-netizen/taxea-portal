@@ -78,19 +78,19 @@ function KpiCard({ title, value, subtitle, icon: KpiIcon, color, bgColor, glowCo
 }
 
 export default function KpiRow({ financials }) {
-  const { totalIngresos, gastoTotal, beneficio, ebitda, cashDisponible, burnRate, runway, ingresosDelta, sparkData: sd } = financials;
+  const { totalIngresos, gastoTotal, beneficio, ebitda, cashDisponible, cashSource, bankConnected, bankUnreconciled, burnRate, runway, ingresosDelta, sparkData: sd } = financials;
 
   const kpis = [
     {
       title: 'Cash Disponible',
       value: fmt(cashDisponible),
-      subtitle: 'Facturas cobradas',
+      subtitle: cashSource === 'bank' ? ${bankConnected} cuentas conectadas : 'Sin banco conectado: estimación por facturas',
       icon: Wallet,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-500',
       glowColor: 'emerald-500',
       delta: null,
-      deltaLabel: 'Balance cobros confirmados',
+      deltaLabel: cashSource === 'bank' ? ${bankUnreconciled} movimientos por conciliar : 'Conecta Tesorería para saldo real',
       sparkData: sd?.cash || null,
       delay: 0,
     },
