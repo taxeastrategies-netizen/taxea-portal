@@ -15,8 +15,8 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function providerCredentials() {
   return {
-    secretId: Deno.env.get('GOCARDLESS_SECRET_ID') || Deno.env.get('NORDIC_API_CLIENT_ID'),
-    secretKey: Deno.env.get('GOCARDLESS_SECRET_KEY') || Deno.env.get('NORDIC_API_SECRET'),
+    secretId: Deno.env.get('GOCARDLESS_SECRET_ID'),
+    secretKey: Deno.env.get('GOCARDLESS_SECRET_KEY'),
   };
 }
 
