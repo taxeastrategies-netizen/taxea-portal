@@ -69,21 +69,30 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     }
   };
 
-  const handleInternal = async () => {
+  const classifyTransaction = async (status) => {
+    if (loading) return;
     setLoading(true);
-    await base44.entities.BankTransaction.update(transaction.id, { estado_conciliacion: 'movimiento_interno', categoria_ia: 'transferencia_interna' });
-    setLoading(false);
-    onReconciled();
-    onClose();
+    setError('');
+    try {
+      const response = await base44.functions.invoke('openBanking', {
+        action: 'classify_transaction',
+        company_id: transaction.company_id,
+        bank_transaction_id: transaction.id,
+        status,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.ok) throw new Error(payload?.error || 'No se pudo clasificar el movimiento.');
+      await onReconciled?.();
+      onClose();
+    } catch (caught) {
+      setError(caught?.response?.data?.error || caught?.message || 'No se pudo clasificar el movimiento.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDiscard = async () => {
-    setLoading(true);
-    await base44.entities.BankTransaction.update(transaction.id, { estado_conciliacion: 'descartada' });
-    setLoading(false);
-    onReconciled();
-    onClose();
-  };
+  const handleInternal = () => classifyTransaction('movimiento_interno');
+  const handleDiscard = () => classifyTransaction('descartada');
 
   if (!transaction) return null;
 
