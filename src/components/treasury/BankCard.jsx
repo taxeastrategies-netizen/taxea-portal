@@ -48,8 +48,10 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
     ? Math.round((Date.now() - new Date(account.fecha_ultima_sync).getTime()) / 60000)
     : null;
 
-  const canFinalize = account.origen_datos === 'open_banking' && Boolean(account.requisition_id) && !account.provider_account_id;
-  const canSync = account.origen_datos === 'open_banking' && (Boolean(account.provider_account_id) || canFinalize);
+  const isOpenBanking = account.origen_datos === 'open_banking';
+  const needsRenewal = isOpenBanking && account.estado_conexion === 'requiere_renovacion' && Boolean(account.institution_id);
+  const canFinalize = isOpenBanking && Boolean(account.requisition_id) && (!account.provider_account_id || account.estado_conexion === 'pendiente');
+  const canSync = isOpenBanking && (Boolean(account.provider_account_id) || canFinalize || needsRenewal);
 
   const handleSync = async (e) => {
     e.stopPropagation();
@@ -57,13 +59,20 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
 
     setSyncing(true);
     try {
+      const action = needsRenewal ? 'renew' : canFinalize ? 'finalize' : 'sync';
       const response = await base44.functions.invoke('openBanking', {
-        action: canFinalize ? 'finalize' : 'sync',
+        action,
         bank_account_id: account.id,
         company_id: companyId,
+        redirect_url: `${window.location.origin}/finance/treasury`,
       });
       const payload = response?.data ?? response;
       if (!payload?.ok) throw new Error(payload?.error || 'No se pudo sincronizar la cuenta.');
+      if (action === 'renew') {
+        if (!payload.link) throw new Error('El proveedor no devolvió el enlace de renovación.');
+        window.location.assign(payload.link);
+        return;
+      }
       onRefresh?.();
     } catch (error) {
       alert(error?.message || 'No se pudo sincronizar la cuenta bancaria.');
@@ -132,10 +141,10 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
             <span className="text-[9px] font-medium">CSV</span>
           </button>
           <button onClick={handleSync} disabled={syncing || !canSync}
-            title={canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
+            title={needsRenewal ? 'Renovar consentimiento bancario' : canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
             className="flex flex-col items-center justify-center gap-1 py-2 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-            <span className="text-[9px] font-medium">{canFinalize ? 'Finalizar' : 'Sync'}</span>
+            <span className="text-[9px] font-medium">{needsRenewal ? 'Renovar' : canFinalize ? 'Finalizar' : 'Sync'}</span>
           </button>
           <button onClick={() => setShowDetail(true)}
             className="flex flex-col items-center justify-center gap-1 py-2 text-slate-500 hover:text-foreground bg-slate-50 hover:bg-slate-100 rounded-xl transition-all">
