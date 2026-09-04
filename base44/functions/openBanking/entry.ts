@@ -7,7 +7,7 @@ const REQUESTED_HISTORY_DAYS = 365;
 const REQUESTED_ACCESS_DAYS = 90;
 const MANUAL_SYNC_COOLDOWN_MS = 15 * 60 * 1000;
 const SCHEDULED_SYNC_MIN_AGE_MS = 8 * 60 * 60 * 1000;
-const MAX_SCHEDULED_ACCOUNTS = 25;
+const MAX_SCHEDULED_ACCOUNTS = 25; // Processed hourly in bounded batches by function.jsonc.
 
 const clean = (value: unknown, max = 500) => String(value ?? '').trim().slice(0, max);
 const isoDate = (date = new Date()) => date.toISOString().slice(0, 10);
