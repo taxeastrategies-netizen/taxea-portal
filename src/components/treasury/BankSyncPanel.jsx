@@ -40,16 +40,18 @@ export default function BankSyncPanel({ account, companyId }) {
   useEffect(() => { loadLogs(); }, [account.id]);
 
   const isOpenBanking = account.origen_datos === 'open_banking';
+  const isEnableBanking = account.proveedor_integracion === 'enable_banking';
   const needsRenewal = isOpenBanking && account.estado_conexion === 'requiere_renovacion' && Boolean(account.institution_id);
-  const canFinalize = isOpenBanking && Boolean(account.requisition_id) && (!account.provider_account_id || account.estado_conexion === 'pendiente');
-  const canSync = isOpenBanking && (Boolean(account.provider_account_id) || canFinalize || needsRenewal);
+  const retryAuthorization = isEnableBanking && account.estado_conexion === 'pendiente' && Boolean(account.institution_id);
+  const canFinalize = isOpenBanking && !isEnableBanking && Boolean(account.requisition_id) && (!account.provider_account_id || account.estado_conexion === 'pendiente');
+  const canSync = isOpenBanking && (Boolean(account.provider_account_id) || canFinalize || needsRenewal || retryAuthorization);
 
   const handleSync = async () => {
     if (!canSync) return;
 
     setSyncing(true);
     try {
-      const action = needsRenewal ? 'renew' : canFinalize ? 'finalize' : 'sync';
+      const action = needsRenewal || retryAuthorization ? 'renew' : canFinalize ? 'finalize' : 'sync';
       const response = await base44.functions.invoke('openBanking', {
         action,
         bank_account_id: account.id,
@@ -87,10 +89,10 @@ export default function BankSyncPanel({ account, companyId }) {
           <p className="text-xs text-slate-400">{account.nombre_banco} · {logs.length} registros</p>
         </div>
         <button onClick={handleSync} disabled={syncing || !canSync}
-          title={needsRenewal ? 'Renovar consentimiento bancario' : canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
+          title={retryAuthorization ? 'Reintentar autorización bancaria' : needsRenewal ? 'Renovar consentimiento bancario' : canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
           <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-          {syncing ? 'Sincronizando...' : needsRenewal ? 'Renovar acceso bancario' : canFinalize ? 'Finalizar autorización' : 'Sync manual'}
+          {syncing ? 'Sincronizando...' : retryAuthorization ? 'Reintentar autorización' : needsRenewal ? 'Renovar acceso bancario' : canFinalize ? 'Finalizar autorización' : 'Sync manual'}
         </button>
       </div>
 
