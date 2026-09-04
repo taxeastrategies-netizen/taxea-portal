@@ -26,7 +26,7 @@ export default function AccountsPayable() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('facturas');
-  const { invoices, expenses, treasury, loading: financialLoading, refresh } = useFinancialData(companyId);
+  const { invoices, expenses, treasury, loading: financialLoading } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export default function AccountsPayable() {
         </div>
       ) : (
         <>
-          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} onRefresh={refresh} />}
+          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} />}
           {tab === 'aging' && <APAgingChart invoices={recibidas} />}
           {tab === 'forecast' && <APForecast invoices={recibidas} expenses={expenses} obligations={obligations} />}
           {tab === 'calendario' && <APCalendar invoices={recibidas} expenses={expenses} obligations={obligations} />}
