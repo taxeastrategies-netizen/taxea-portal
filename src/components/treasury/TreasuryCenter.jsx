@@ -62,13 +62,15 @@ export default function TreasuryCenter({ company }) {
     if (!companyId) return;
     const params = new URLSearchParams(window.location.search);
     const accountId = params.get('bank_account_id');
+    const code = params.get('code');
+    const state = params.get('state');
     if (params.get('bank_link') !== 'return' || !accountId) return;
     let active = true;
     setBankNotice({ type: 'loading', text: 'Finalizando autorización bancaria y descargando movimientos…' });
     const finalize = async () => {
       try {
         const response = await base44.functions.invoke('openBanking', {
-          action: 'finalize', company_id: companyId, bank_account_id: accountId,
+          action: 'finalize', company_id: companyId, bank_account_id: accountId, code, state,
         });
         const payload = response?.data ?? response;
         if (!payload?.ok) throw new Error(payload?.error || 'El banco todavía no ha completado la autorización.');
