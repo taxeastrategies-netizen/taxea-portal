@@ -49,9 +49,11 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
     : null;
 
   const isOpenBanking = account.origen_datos === 'open_banking';
+  const isEnableBanking = account.proveedor_integracion === 'enable_banking';
   const needsRenewal = isOpenBanking && account.estado_conexion === 'requiere_renovacion' && Boolean(account.institution_id);
-  const canFinalize = isOpenBanking && Boolean(account.requisition_id) && (!account.provider_account_id || account.estado_conexion === 'pendiente');
-  const canSync = isOpenBanking && (Boolean(account.provider_account_id) || canFinalize || needsRenewal);
+  const retryAuthorization = isEnableBanking && account.estado_conexion === 'pendiente' && Boolean(account.institution_id);
+  const canFinalize = isOpenBanking && !isEnableBanking && Boolean(account.requisition_id) && (!account.provider_account_id || account.estado_conexion === 'pendiente');
+  const canSync = isOpenBanking && (Boolean(account.provider_account_id) || canFinalize || needsRenewal || retryAuthorization);
 
   const handleSync = async (e) => {
     e.stopPropagation();
@@ -59,7 +61,7 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
 
     setSyncing(true);
     try {
-      const action = needsRenewal ? 'renew' : canFinalize ? 'finalize' : 'sync';
+      const action = needsRenewal || retryAuthorization ? 'renew' : canFinalize ? 'finalize' : 'sync';
       const response = await base44.functions.invoke('openBanking', {
         action,
         bank_account_id: account.id,
@@ -141,10 +143,10 @@ export default function BankCard({ account, companyId, onViewMovements, onDiscon
             <span className="text-[9px] font-medium">CSV</span>
           </button>
           <button onClick={handleSync} disabled={syncing || !canSync}
-            title={needsRenewal ? 'Renovar consentimiento bancario' : canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
+            title={retryAuthorization ? 'Reintentar autorización bancaria' : needsRenewal ? 'Renovar consentimiento bancario' : canSync ? 'Sincronizar cuenta' : 'Para actualizar esta cuenta, reconecta el proveedor o importa un CSV.'}
             className="flex flex-col items-center justify-center gap-1 py-2 text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed">
             <RefreshCw className={cn("w-3.5 h-3.5", syncing && "animate-spin")} />
-            <span className="text-[9px] font-medium">{needsRenewal ? 'Renovar' : canFinalize ? 'Finalizar' : 'Sync'}</span>
+            <span className="text-[9px] font-medium">{retryAuthorization ? 'Reintentar' : needsRenewal ? 'Renovar' : canFinalize ? 'Finalizar' : 'Sync'}</span>
           </button>
           <button onClick={() => setShowDetail(true)}
             className="flex flex-col items-center justify-center gap-1 py-2 text-slate-500 hover:text-foreground bg-slate-50 hover:bg-slate-100 rounded-xl transition-all">
