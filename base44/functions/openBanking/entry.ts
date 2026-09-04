@@ -1,79 +1,74 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 
-const API_ROOT = 'https://bankaccountdata.gocardless.com/api/v2';
+const API_ROOT = 'https://api.enablebanking.com';
 const DEFAULT_COUNTRY = 'ES';
-const MAX_LIST = 5000;
 const REQUESTED_HISTORY_DAYS = 365;
 const REQUESTED_ACCESS_DAYS = 90;
+const MAX_LIST = 5000;
+const MAX_TRANSACTION_PAGES = 20;
 const MANUAL_SYNC_COOLDOWN_MS = 15 * 60 * 1000;
 const SCHEDULED_SYNC_MIN_AGE_MS = 8 * 60 * 60 * 1000;
-const MAX_SCHEDULED_ACCOUNTS = 25; // Processed hourly in bounded batches by function.jsonc.
+const MAX_SCHEDULED_ACCOUNTS = 25;
 
 const clean = (value: unknown, max = 500) => String(value ?? '').trim().slice(0, max);
 const isoDate = (date = new Date()) => date.toISOString().slice(0, 10);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-function providerCredentials() {
+function credentials() {
   return {
-    secretId: Deno.env.get('GOCARDLESS_SECRET_ID'),
-    secretKey: Deno.env.get('GOCARDLESS_SECRET_KEY'),
+    applicationId: clean(Deno.env.get('ENABLE_BANKING_APPLICATION_ID'), 200),
+    privateKey: String(Deno.env.get('ENABLE_BANKING_PRIVATE_KEY') || '').replace(/\\n/g, '\n').trim(),
   };
 }
 
 function providerConfigured() {
-  const { secretId, secretKey } = providerCredentials();
-  return Boolean(secretId && secretKey);
+  const { applicationId, privateKey } = credentials();
+  return Boolean(applicationId && privateKey.includes('PRIVATE KEY'));
 }
 
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || 'Error interno');
-  return message.replace(/secret_[a-z0-9_-]+/gi, '[credencial]').slice(0, 700);
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [credencial]')
+    .replace(/-----BEGIN[\s\S]*?PRIVATE KEY-----/gi, '[clave privada]')
+    .slice(0, 700);
 }
 
-function providerSlug(institutionId: string) {
-  const value = institutionId.toUpperCase();
-  if (value.includes('REVOLUT')) return 'revolut';
-  if (value.includes('WISE')) return 'wise';
-  if (value.includes('QONTO')) return 'qonto';
-  if (value.includes('BBVA')) return 'bbva';
-  if (value.includes('SANTANDER') || value.includes('BSCH')) return 'santander';
-  if (value.includes('CAIXA')) return 'caixabank';
-  if (value.includes('SABADELL') || value.includes('BSAB')) return 'sabadell';
-  if (value.includes('BANKINTER') || value.includes('BKBK')) return 'bankinter';
-  if (value.startsWith('ING_') || value.includes('INGD')) return 'ing';
-  return 'otro';
+function base64Url(input: Uint8Array | string) {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-function safeRedirect(raw: unknown) {
-  const fallback = new URL('https://taxeaportal.com/finance/treasury');
-  try {
-    const parsed = new URL(clean(raw, 1000));
-    if (parsed.protocol === 'https:' && ['taxeaportal.com', 'www.taxeaportal.com'].includes(parsed.hostname)) {
-      return parsed;
-    }
-  } catch { /* use production fallback */ }
-  return fallback;
+function pemBytes(pem: string) {
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+  const binary = atob(body);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
 }
 
-async function sha256(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-async function getToken() {
-  const { secretId, secretKey } = providerCredentials();
-  if (!secretId || !secretKey) {
-    throw Object.assign(new Error('Open Banking aún no está configurado. Faltan las credenciales del proveedor en Base44.'), { status: 503, code: 'provider_not_configured' });
+async function providerToken() {
+  const { applicationId, privateKey } = credentials();
+  if (!applicationId || !privateKey) {
+    throw Object.assign(new Error('Open Banking aún no está activado. Faltan las credenciales de Enable Banking en Base44.'), { status: 503, code: 'provider_not_configured' });
   }
-  const response = await fetch(`${API_ROOT}/token/new/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret_id: secretId, secret_key: secretKey }),
-  });
-  if (!response.ok) throw Object.assign(new Error(`El proveedor bancario rechazó la autenticación (${response.status}).`), { status: 502 });
-  const payload = await response.json();
-  return payload.access;
+  try {
+    const key = await crypto.subtle.importKey(
+      'pkcs8',
+      pemBytes(privateKey),
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const now = Math.floor(Date.now() / 1000);
+    const header = base64Url(JSON.stringify({ typ: 'JWT', alg: 'RS256', kid: applicationId }));
+    const payload = base64Url(JSON.stringify({ iss: 'enablebanking.com', aud: 'api.enablebanking.com', iat: now, exp: now + 3600 }));
+    const signingInput = `${header}.${payload}`;
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
+    return `${signingInput}.${base64Url(new Uint8Array(signature))}`;
+  } catch {
+    throw Object.assign(new Error('La clave privada de Enable Banking no tiene un formato PKCS#8 válido.'), { status: 503, code: 'invalid_provider_key' });
+  }
 }
 
 async function providerRequest(path: string, token: string, options: RequestInit = {}) {
@@ -81,16 +76,49 @@ async function providerRequest(path: string, token: string, options: RequestInit
     ...options,
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(options.headers || {}),
     },
   });
   if (!response.ok) {
     const detail = clean(await response.text().catch(() => ''), 500);
-    throw Object.assign(new Error(`Open Banking respondió ${response.status}${detail ? `: ${detail}` : ''}`), { status: response.status === 429 ? 429 : 502 });
+    const error = Object.assign(new Error(`Enable Banking respondió ${response.status}${detail ? `: ${detail}` : ''}`), {
+      status: response.status === 429 ? 429 : 502,
+      providerStatus: response.status,
+    });
+    throw error;
   }
   if (response.status === 204) return null;
   return await response.json();
+}
+
+function providerSlug(name: string) {
+  const value = name.toUpperCase();
+  if (value.includes('REVOLUT')) return 'revolut';
+  if (value.includes('WISE')) return 'wise';
+  if (value.includes('QONTO')) return 'qonto';
+  if (value.includes('BBVA')) return 'bbva';
+  if (value.includes('SANTANDER') || value.includes('BSCH')) return 'santander';
+  if (value.includes('CAIXA')) return 'caixabank';
+  if (value.includes('SABADELL')) return 'sabadell';
+  if (value.includes('BANKINTER')) return 'bankinter';
+  if (/^ING\b/.test(value)) return 'ing';
+  return 'otro';
+}
+
+function safeRedirect(raw: unknown) {
+  const fallback = new URL('https://taxeaportal.com/finance/treasury');
+  try {
+    const parsed = new URL(clean(raw, 1000));
+    if (parsed.protocol === 'https:' && ['taxeaportal.com', 'www.taxeaportal.com'].includes(parsed.hostname)) return parsed;
+  } catch { /* production fallback */ }
+  return fallback;
+}
+
+async function sha256(value: string) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 async function assertCompany(base44: any, user: any, requestedCompanyId: unknown) {
@@ -113,21 +141,27 @@ async function ownedAccount(base44: any, companyId: string, accountId: unknown) 
   return account;
 }
 
-function availableBalance(balances: any[]) {
-  const ordered = ['interimAvailable', 'expected', 'closingBooked', 'interimBooked', 'openingBooked'];
-  for (const type of ordered) {
-    const match = (balances || []).find(item => item.balanceType === type);
-    if (match?.balanceAmount?.amount !== undefined) return Number(match.balanceAmount.amount) || 0;
-  }
-  return Number(balances?.[0]?.balanceAmount?.amount) || 0;
+function accountIban(details: any) {
+  return clean(details?.account_id?.iban, 80);
+}
+
+function balanceValues(balances: any[]) {
+  const availableOrder = ['CLAV', 'ITAV', 'FWAV', 'XPCD', 'CLBD', 'ITBD', 'OPBD'];
+  const bookedOrder = ['CLBD', 'ITBD', 'OPBD', 'CLAV', 'ITAV'];
+  const find = (order: string[]) => {
+    for (const type of order) {
+      const match = (balances || []).find(item => item.balance_type === type);
+      if (match?.balance_amount?.amount !== undefined) return Number(match.balance_amount.amount) || 0;
+    }
+    return Number(balances?.[0]?.balance_amount?.amount) || 0;
+  };
+  return { available: find(availableOrder), booked: find(bookedOrder) };
 }
 
 function transactionDescription(transaction: any) {
-  const structured = transaction.remittanceInformationStructured;
   return clean(
-    transaction.remittanceInformationUnstructured ||
-    (Array.isArray(transaction.remittanceInformationUnstructuredArray) ? transaction.remittanceInformationUnstructuredArray.join(' · ') : '') ||
-    structured || transaction.additionalInformation || transaction.creditorName || transaction.debtorName || 'Movimiento bancario',
+    (Array.isArray(transaction.remittance_information) ? transaction.remittance_information.join(' · ') : transaction.remittance_information) ||
+    transaction.note || transaction.bank_transaction_code?.description || transaction.creditor?.name || transaction.debtor?.name || 'Movimiento bancario',
     500,
   );
 }
@@ -143,51 +177,52 @@ function categorize(concept: string, type: string) {
   return type === 'entrada' ? 'ingreso' : 'gasto';
 }
 
-async function normalizeTransaction(transaction: any, status: 'booked' | 'pending', companyId: string, bankAccountId: string, providerAccountId: string) {
-  const rawAmount = Number(transaction.transactionAmount?.amount || 0);
-  const type = rawAmount >= 0 ? 'entrada' : 'salida';
+async function normalizeTransaction(transaction: any, companyId: string, bankAccountId: string, providerAccountId: string) {
+  const amountValue = Number(transaction.transaction_amount?.amount || 0);
+  const indicator = clean(transaction.credit_debit_indicator, 10).toUpperCase();
+  const signedAmount = indicator === 'DBIT' ? -Math.abs(amountValue) : indicator === 'CRDT' ? Math.abs(amountValue) : amountValue;
+  const type = signedAmount >= 0 ? 'entrada' : 'salida';
   const concept = transactionDescription(transaction);
-  const providerId = clean(transaction.transactionId || transaction.internalTransactionId || transaction.entryReference || transaction.endToEndId, 300);
-  const operationDate = clean(transaction.bookingDate || transaction.valueDate || transaction.bookingDateTime || transaction.valueDateTime, 30).slice(0, 10) || isoDate();
-  const currency = clean(transaction.transactionAmount?.currency, 8) || 'EUR';
-  const fallbackIdentity = [providerAccountId, operationDate, rawAmount.toFixed(2), currency, concept, transaction.creditorName, transaction.debtorName].join('|');
+  const providerId = clean(transaction.transaction_id || transaction.entry_reference || transaction.reference_number, 300);
+  const operationDate = clean(transaction.booking_date || transaction.transaction_date || transaction.value_date, 30).slice(0, 10) || isoDate();
+  const currency = clean(transaction.transaction_amount?.currency, 8) || 'EUR';
+  const fallbackIdentity = [providerAccountId, operationDate, signedAmount.toFixed(2), currency, concept, transaction.creditor?.name, transaction.debtor?.name].join('|');
   const transactionKey = await sha256(`${providerAccountId}|${providerId || fallbackIdentity}`);
+  const booked = clean(transaction.status, 10).toUpperCase() === 'BOOK';
   return {
     company_id: companyId,
     bank_account_id: bankAccountId,
     fecha_operacion: operationDate,
-    fecha_valor: clean(transaction.valueDate || transaction.bookingDate, 30).slice(0, 10) || operationDate,
+    fecha_valor: clean(transaction.value_date || transaction.booking_date, 30).slice(0, 10) || operationDate,
     concepto: concept,
-    importe: Math.abs(rawAmount),
+    importe: Math.abs(signedAmount),
     tipo: type,
     moneda: currency,
-    referencia: providerId || clean(transaction.endToEndId || transaction.bankTransactionCode, 300),
-    nombre_contraparte: clean(type === 'salida' ? transaction.creditorName : transaction.debtorName, 300) || null,
-    iban_contraparte: clean(type === 'salida' ? transaction.creditorAccount?.iban : transaction.debtorAccount?.iban, 80) || null,
+    referencia: providerId || null,
+    nombre_contraparte: clean(type === 'salida' ? transaction.creditor?.name : transaction.debtor?.name, 300) || null,
+    iban_contraparte: clean(type === 'salida' ? transaction.creditor_account?.iban : transaction.debtor_account?.iban, 80) || null,
     estado_conciliacion: 'sin_conciliar',
     categoria_ia: categorize(concept, type),
     es_demo: false,
     origen_datos: 'open_banking',
     proveedor_transaccion_id: providerId || null,
     clave_transaccion: transactionKey,
-    estado_proveedor: status,
+    estado_proveedor: booked ? 'booked' : 'pending',
     importado_at: new Date().toISOString(),
   };
 }
 
 async function upsertTransactions(base44: any, account: any, rows: any[]) {
   const existing = await base44.asServiceRole.entities.BankTransaction.filter(
-    { company_id: account.company_id, bank_account_id: account.id },
-    '-fecha_operacion',
-    MAX_LIST,
+    { company_id: account.company_id, bank_account_id: account.id }, '-fecha_operacion', MAX_LIST,
   );
   const byKey = new Map((existing || []).filter((item: any) => item.clave_transaccion).map((item: any) => [item.clave_transaccion, item]));
-  const byLegacyRef = new Map((existing || []).filter((item: any) => item.referencia).map((item: any) => [String(item.referencia), item]));
+  const byReference = new Map((existing || []).filter((item: any) => item.referencia).map((item: any) => [String(item.referencia), item]));
   const additions = [];
   let updated = 0;
   let duplicates = 0;
   for (const row of rows) {
-    const found = byKey.get(row.clave_transaccion) || (row.proveedor_transaccion_id ? byLegacyRef.get(row.proveedor_transaccion_id) : null);
+    const found = byKey.get(row.clave_transaccion) || (row.proveedor_transaccion_id ? byReference.get(row.proveedor_transaccion_id) : null);
     if (found) {
       duplicates += 1;
       const changed = found.estado_proveedor !== row.estado_proveedor || found.concepto !== row.concepto || Number(found.importe) !== Number(row.importe);
@@ -220,39 +255,66 @@ async function upsertTransactions(base44: any, account: any, rows: any[]) {
   return { created: additions.length, updated, duplicates };
 }
 
+async function fetchTransactions(token: string, providerAccountId: string, requestedFrom: string) {
+  let from = requestedFrom;
+  const to = isoDate();
+  const load = async () => {
+    const rows: any[] = [];
+    let continuation = '';
+    for (let page = 0; page < MAX_TRANSACTION_PAGES; page += 1) {
+      const query = new URLSearchParams({ date_from: from, date_to: to });
+      if (continuation) query.set('continuation_key', continuation);
+      const result = await providerRequest(`/accounts/${encodeURIComponent(providerAccountId)}/transactions?${query}`, token);
+      rows.push(...(result?.transactions || []));
+      continuation = clean(result?.continuation_key, 1000);
+      if (!continuation) break;
+    }
+    return rows;
+  };
+  try {
+    return { rows: await load(), from };
+  } catch (error: any) {
+    if (![400, 422].includes(Number(error?.providerStatus))) throw error;
+    const fallback = new Date(Date.now() - 90 * 86400000);
+    from = isoDate(fallback);
+    return { rows: await load(), from };
+  }
+}
+
 async function syncProviderAccount(base44: any, token: string, account: any, requestedFrom?: string) {
+  if (account.proveedor_integracion !== 'enable_banking') {
+    throw Object.assign(new Error('Esta cuenta pertenece a una conexión histórica. Debe reconectarse con el proveedor Open Banking actual.'), { status: 409 });
+  }
   const providerAccountId = clean(account.provider_account_id, 200);
-  if (!providerAccountId) throw Object.assign(new Error('La cuenta aún no está vinculada al proveedor bancario.'), { status: 409 });
-  const from = clean(requestedFrom, 10) || account.sync_desde || `${new Date().getUTCFullYear()}-01-01`;
-  const [detailsData, balanceData, transactionData] = await Promise.all([
-    providerRequest(`/accounts/${providerAccountId}/details/`, token),
-    providerRequest(`/accounts/${providerAccountId}/balances/`, token),
-    providerRequest(`/accounts/${providerAccountId}/transactions/?date_from=${encodeURIComponent(from)}&date_to=${isoDate()}`, token),
+  if (!providerAccountId) throw Object.assign(new Error('La cuenta todavía no está autorizada por el banco.'), { status: 409 });
+  const requested = clean(requestedFrom, 10) || account.sync_desde || `${new Date().getUTCFullYear()}-01-01`;
+  const [details, balanceData, transactionData] = await Promise.all([
+    providerRequest(`/accounts/${encodeURIComponent(providerAccountId)}/details`, token),
+    providerRequest(`/accounts/${encodeURIComponent(providerAccountId)}/balances`, token),
+    fetchTransactions(token, providerAccountId, requested),
   ]);
-  const details = detailsData?.account || {};
-  const balance = availableBalance(balanceData?.balances || []);
-  const booked = transactionData?.transactions?.booked || [];
-  const pending = transactionData?.transactions?.pending || [];
-  const normalized = await Promise.all([
-    ...booked.map((item: any) => normalizeTransaction(item, 'booked', account.company_id, account.id, providerAccountId)),
-    ...pending.map((item: any) => normalizeTransaction(item, 'pending', account.company_id, account.id, providerAccountId)),
-  ]);
+  const balances = balanceValues(balanceData?.balances || []);
+  const normalized = await Promise.all((transactionData.rows || []).map((item: any) => normalizeTransaction(item, account.company_id, account.id, providerAccountId)));
   const result = await upsertTransactions(base44, account, normalized);
+  const iban = accountIban(details) || account.iban || '';
+  const booked = normalized.filter(item => item.estado_proveedor === 'booked').length;
+  const pending = normalized.length - booked;
   await base44.asServiceRole.entities.BankAccount.update(account.id, {
-    nombre_banco: account.nombre_banco || details.name || 'Cuenta bancaria',
-    iban: clean(details.iban, 80) || account.iban || '',
-    ultimos_4: clean(details.iban, 80).slice(-4) || account.ultimos_4 || '',
-    titular: clean(details.ownerName || details.name, 300) || account.titular || '',
-    moneda: clean(details.currency, 8) || account.moneda || 'EUR',
-    saldo_disponible: balance,
-    saldo_contable: balance,
+    nombre_banco: account.nombre_banco || clean(details?.account_servicer?.name, 300) || 'Cuenta bancaria',
+    iban,
+    ultimos_4: iban.slice(-4) || account.ultimos_4 || '',
+    titular: clean(details?.name, 300) || account.titular || '',
+    moneda: clean(details?.currency, 8) || account.moneda || 'EUR',
+    saldo_disponible: balances.available,
+    saldo_contable: balances.booked,
     estado_conexion: 'conectado',
     fecha_ultima_sync: new Date().toISOString(),
     ultimo_error_sync: null,
-    sync_desde: from,
+    sync_desde: transactionData.from,
+    dias_historico_disponibles: Math.max(1, Math.ceil((Date.now() - Date.parse(transactionData.from)) / 86400000)),
     origen_datos: 'open_banking',
   });
-  return { ...result, balance, booked: booked.length, pending: pending.length, from };
+  return { ...result, balance: balances.available, booked, pending, from: transactionData.from };
 }
 
 function syncAgeMs(account: any) {
@@ -266,7 +328,7 @@ async function createLog(base44: any, account: any, user: any, logType: 'psd2' |
     bank_account_id: account.id,
     tipo: logType,
     estado: 'en_proceso',
-    proveedor_api: 'gocardless_bank_account_data',
+    proveedor_api: 'enable_banking',
     fecha_inicio_sync: isoDate(),
     iniciado_por: user.email,
   });
@@ -295,11 +357,73 @@ async function syncWithLog(base44: any, token: string, account: any, user: any, 
       estado: 'error', error_detalle: detail, fecha_fin_sync: isoDate(), duracion_ms: Date.now() - started,
     }).catch(() => null);
     await base44.asServiceRole.entities.BankAccount.update(account.id, {
-      estado_conexion: /expired|consent|requisition|access/i.test(detail) ? 'requiere_renovacion' : 'error',
+      estado_conexion: /expired|revoked|closed|consent|session/i.test(detail) ? 'requiere_renovacion' : 'error',
       ultimo_error_sync: detail,
     }).catch(() => null);
     throw error;
   }
+}
+
+function consentExpiry(institution: any) {
+  const providerSeconds = Math.max(3600, Number(institution?.maximum_consent_validity) || REQUESTED_ACCESS_DAYS * 86400);
+  const seconds = Math.min(REQUESTED_ACCESS_DAYS * 86400, providerSeconds);
+  return new Date(Date.now() + seconds * 1000);
+}
+
+async function startAuthorization(base44: any, token: string, user: any, companyId: string, institution: any, account: any, body: any, renewal = false) {
+  const expiry = consentExpiry(institution);
+  const state = crypto.randomUUID();
+  const redirect = safeRedirect(body.redirect_url);
+  redirect.searchParams.set('bank_link', 'return');
+  redirect.searchParams.set('bank_account_id', account.id);
+  const requestedType = clean(body.psu_type, 20).toLowerCase();
+  const supportedTypes = Array.isArray(institution?.psu_types) ? institution.psu_types : [];
+  const psuType = ['business', 'personal'].includes(requestedType) && (!supportedTypes.length || supportedTypes.includes(requestedType))
+    ? requestedType
+    : supportedTypes.includes('business') ? 'business' : 'personal';
+  const authorization = await providerRequest('/auth', token, {
+    method: 'POST',
+    body: JSON.stringify({
+      access: { valid_until: expiry.toISOString(), balances: true, transactions: true },
+      aspsp: { name: institution.name, country: institution.country || DEFAULT_COUNTRY },
+      state,
+      redirect_url: redirect.toString(),
+      psu_type: psuType,
+    }),
+  });
+  await base44.asServiceRole.entities.BankAccount.update(account.id, {
+    estado_conexion: 'pendiente',
+    proveedor_integracion: 'enable_banking',
+    institution_id: clean(institution.name, 300),
+    requisition_id: clean(authorization.authorization_id, 200),
+    agreement_id: state,
+    fecha_consentimiento_expira: isoDate(expiry),
+    ultimo_error_sync: null,
+    activa: true,
+  });
+  await base44.asServiceRole.entities.BankConsent.create({
+    company_id: companyId,
+    bank_account_id: account.id,
+    proveedor: 'enable_banking',
+    tipo_conexion: 'psd2',
+    estado: 'pendiente',
+    permisos: ['saldos', 'datos de cuenta', 'movimientos'],
+    fecha_consentimiento: new Date().toISOString(),
+    fecha_expiracion: isoDate(expiry),
+    token_referencia: clean(authorization.authorization_id, 200),
+    requisition_id: clean(authorization.authorization_id, 200),
+    agreement_id: state,
+    institution_id: clean(institution.name, 300),
+    nota_auditoria: `${renewal ? 'Renovación' : 'Consentimiento'} PSD2 iniciado por ${user.email}.`,
+  });
+  return Response.json({
+    ok: true,
+    link: authorization.url,
+    bank_account_id: account.id,
+    authorization_id: authorization.authorization_id,
+    history_days: REQUESTED_HISTORY_DAYS,
+    renewal,
+  });
 }
 
 Deno.serve(async (request) => {
@@ -314,29 +438,24 @@ Deno.serve(async (request) => {
       return Response.json({
         ok: true,
         configured: providerConfigured(),
-        provider: 'GoCardless Bank Account Data',
+        provider: 'Enable Banking',
         country: DEFAULT_COUNTRY,
         requested_history_days: REQUESTED_HISTORY_DAYS,
         requested_access_days: REQUESTED_ACCESS_DAYS,
         automatic_sync_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000,
-        credential_names: ['GOCARDLESS_SECRET_ID', 'GOCARDLESS_SECRET_KEY'],
+        credential_names: ['ENABLE_BANKING_APPLICATION_ID', 'ENABLE_BANKING_PRIVATE_KEY'],
+        production_requires_contract: true,
       });
     }
 
     if (action === 'scheduled_sync_all') {
       const isAdmin = user.role === 'admin' || user.role === 'super_admin';
       if (!isAdmin) return Response.json({ error: 'Solo una automatización administrativa puede ejecutar la sincronización global.' }, { status: 403 });
-      if (!providerConfigured()) {
-        return Response.json({ ok: true, skipped: true, reason: 'provider_not_configured', processed: 0 });
-      }
-      const token = await getToken();
-      const allAccounts = await base44.asServiceRole.entities.BankAccount.filter(
-        { origen_datos: 'open_banking', activa: true },
-        'fecha_ultima_sync',
-        MAX_LIST,
-      );
+      if (!providerConfigured()) return Response.json({ ok: true, skipped: true, reason: 'provider_not_configured', processed: 0 });
+      const token = await providerToken();
+      const allAccounts = await base44.asServiceRole.entities.BankAccount.filter({ origen_datos: 'open_banking', activa: true }, 'fecha_ultima_sync', MAX_LIST);
       const eligibleAccounts = (allAccounts || [])
-        .filter((account: any) => account.provider_account_id)
+        .filter((account: any) => account.proveedor_integracion === 'enable_banking' && account.provider_account_id)
         .filter((account: any) => ['conectado', 'error'].includes(account.estado_conexion))
         .filter((account: any) => syncAgeMs(account) >= SCHEDULED_SYNC_MIN_AGE_MS);
       const eligible = eligibleAccounts.slice(0, MAX_SCHEDULED_ACCOUNTS);
@@ -353,114 +472,55 @@ Deno.serve(async (request) => {
         }
         await sleep(350);
       }
-      return Response.json({
-        ok: true,
-        ...summary,
-        eligible_remaining: Math.max(0, eligibleAccounts.length - eligible.length),
-        min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000,
-      });
+      return Response.json({ ok: true, ...summary, eligible_remaining: Math.max(0, eligibleAccounts.length - eligible.length), min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000 });
     }
 
     const companyId = await assertCompany(base44, user, body.company_id);
-    const token = await getToken();
+    const token = await providerToken();
 
     if (action === 'institutions') {
       const country = /^[A-Z]{2}$/.test(clean(body.country, 2).toUpperCase()) ? clean(body.country, 2).toUpperCase() : DEFAULT_COUNTRY;
-      const institutions = await providerRequest(`/institutions/?country=${country}`, token);
-      return Response.json({
-        ok: true,
-        institutions: (institutions || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          bic: item.bic || '',
-          logo: item.logo || '',
-          transaction_total_days: Number(item.transaction_total_days) || null,
-          max_access_valid_for_days: Number(item.max_access_valid_for_days) || null,
-        })).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es')),
-      });
+      const result = await providerRequest(`/aspsps?country=${country}&service=AIS`, token);
+      const institutions = (result?.aspsps || []).map((item: any) => ({
+        id: `${item.country || country}:${item.name}`,
+        name: item.name,
+        country: item.country || country,
+        bic: item.bic || '',
+        logo: item.logo || item.group?.logo || '',
+        transaction_total_days: null,
+        max_access_valid_for_days: Math.max(1, Math.floor((Number(item.maximum_consent_validity) || REQUESTED_ACCESS_DAYS * 86400) / 86400)),
+        psu_types: item.psu_types || [],
+        beta: Boolean(item.beta),
+      })).sort((a: any, b: any) => a.name.localeCompare(b.name, 'es'));
+      return Response.json({ ok: true, institutions });
     }
 
     if (action === 'create_link') {
-      const institutionId = clean(body.institution_id, 200);
+      const institutionId = clean(body.institution_id, 500);
       if (!institutionId) return Response.json({ error: 'Selecciona un banco.' }, { status: 400 });
-      const institution = await providerRequest(`/institutions/${encodeURIComponent(institutionId)}/`, token);
-      const transactionDays = Math.max(1, Number(institution.transaction_total_days) || 90);
-      const accessDays = Math.max(1, Number(institution.max_access_valid_for_days) || REQUESTED_ACCESS_DAYS);
-      const historicalDays = Math.min(REQUESTED_HISTORY_DAYS, transactionDays);
-      const validDays = Math.min(REQUESTED_ACCESS_DAYS, accessDays);
-      const startOfYear = `${new Date().getUTCFullYear()}-01-01`;
-      const earliestAvailable = new Date(Date.now() - transactionDays * 86400000);
-      const syncFrom = new Date(startOfYear) > earliestAvailable ? startOfYear : isoDate(earliestAvailable);
-      const provider = providerSlug(institutionId);
+      const [country, ...nameParts] = institutionId.split(':');
+      const bankName = nameParts.join(':');
+      const result = await providerRequest(`/aspsps?country=${encodeURIComponent(country || DEFAULT_COUNTRY)}&service=AIS`, token);
+      const institution = (result?.aspsps || []).find((item: any) => item.name === bankName && item.country === country);
+      if (!institution) return Response.json({ error: 'El banco seleccionado ya no figura disponible en el proveedor.' }, { status: 409 });
       const account = await base44.asServiceRole.entities.BankAccount.create({
         company_id: companyId,
         nombre_banco: clean(institution.name, 300) || 'Banco',
-        tipo_banco: 'tradicional',
-        proveedor: provider,
+        tipo_banco: providerSlug(institution.name) === 'revolut' ? 'neobanco' : 'tradicional',
+        proveedor: providerSlug(institution.name),
         moneda: 'EUR',
         saldo_disponible: 0,
         saldo_contable: 0,
         estado_conexion: 'pendiente',
-        proveedor_integracion: 'gocardless_bank_account_data',
-        institution_id: institutionId,
+        proveedor_integracion: 'enable_banking',
+        institution_id: clean(institution.name, 300),
         origen_datos: 'open_banking',
-        sync_desde: syncFrom,
-        dias_historico_disponibles: transactionDays,
+        sync_desde: `${new Date().getUTCFullYear()}-01-01`,
+        dias_historico_disponibles: REQUESTED_HISTORY_DAYS,
         permisos_concedidos: ['saldos', 'datos de cuenta', 'movimientos'],
       });
       try {
-        const agreement = await providerRequest('/agreements/enduser/', token, {
-          method: 'POST',
-          body: JSON.stringify({
-            institution_id: institutionId,
-            max_historical_days: historicalDays,
-            access_valid_for_days: validDays,
-            access_scope: ['balances', 'details', 'transactions'],
-          }),
-        });
-        const redirect = safeRedirect(body.redirect_url);
-        redirect.searchParams.set('bank_link', 'return');
-        redirect.searchParams.set('bank_account_id', account.id);
-        const requisition = await providerRequest('/requisitions/', token, {
-          method: 'POST',
-          body: JSON.stringify({
-            redirect: redirect.toString(),
-            institution_id: institutionId,
-            reference: `taxea_${companyId}_${account.id}`.slice(0, 120),
-            agreement: agreement.id,
-            user_language: 'ES',
-          }),
-        });
-        const expires = new Date(Date.now() + validDays * 86400000);
-        await base44.asServiceRole.entities.BankAccount.update(account.id, {
-          requisition_id: requisition.id,
-          agreement_id: agreement.id,
-          proveedor_integracion: requisition.id,
-          fecha_consentimiento_expira: isoDate(expires),
-        });
-        await base44.asServiceRole.entities.BankConsent.create({
-          company_id: companyId,
-          bank_account_id: account.id,
-          proveedor: 'gocardless_bank_account_data',
-          tipo_conexion: 'psd2',
-          estado: 'pendiente',
-          permisos: ['saldos', 'datos de cuenta', 'movimientos'],
-          fecha_consentimiento: new Date().toISOString(),
-          fecha_expiracion: isoDate(expires),
-          token_referencia: requisition.id,
-          requisition_id: requisition.id,
-          agreement_id: agreement.id,
-          institution_id: institutionId,
-          nota_auditoria: `Consentimiento PSD2 iniciado por ${user.email}.`,
-        });
-        return Response.json({
-          ok: true,
-          link: requisition.link,
-          bank_account_id: account.id,
-          requisition_id: requisition.id,
-          history_days: historicalDays,
-          full_current_year_expected: transactionDays >= Math.ceil((Date.now() - Date.UTC(new Date().getUTCFullYear(), 0, 1)) / 86400000),
-        });
+        return await startAuthorization(base44, token, user, companyId, institution, account, body, false);
       } catch (error) {
         await base44.asServiceRole.entities.BankAccount.update(account.id, { estado_conexion: 'error', ultimo_error_sync: publicError(error) }).catch(() => null);
         throw error;
@@ -469,140 +529,100 @@ Deno.serve(async (request) => {
 
     if (action === 'renew') {
       const account = await ownedAccount(base44, companyId, body.bank_account_id);
-      const institutionId = clean(account.institution_id, 200);
-      if (!institutionId) {
-        return Response.json({ error: 'Esta cuenta no conserva el identificador del banco. Vuelve a conectarla desde el catálogo.' }, { status: 409 });
-      }
-      const institution = await providerRequest(`/institutions/${encodeURIComponent(institutionId)}/`, token);
-      const transactionDays = Math.max(1, Number(institution.transaction_total_days) || 90);
-      const accessDays = Math.max(1, Number(institution.max_access_valid_for_days) || REQUESTED_ACCESS_DAYS);
-      const historicalDays = Math.min(REQUESTED_HISTORY_DAYS, transactionDays);
-      const validDays = Math.min(REQUESTED_ACCESS_DAYS, accessDays);
-      const agreement = await providerRequest('/agreements/enduser/', token, {
-        method: 'POST',
-        body: JSON.stringify({
-          institution_id: institutionId,
-          max_historical_days: historicalDays,
-          access_valid_for_days: validDays,
-          access_scope: ['balances', 'details', 'transactions'],
-        }),
-      });
-      const redirect = safeRedirect(body.redirect_url);
-      redirect.searchParams.set('bank_link', 'return');
-      redirect.searchParams.set('bank_account_id', account.id);
-      const requisition = await providerRequest('/requisitions/', token, {
-        method: 'POST',
-        body: JSON.stringify({
-          redirect: redirect.toString(),
-          institution_id: institutionId,
-          reference: `taxea_renew_${companyId}_${account.id}_${Date.now()}`.slice(0, 120),
-          agreement: agreement.id,
-          user_language: 'ES',
-        }),
-      });
-      const expires = new Date(Date.now() + validDays * 86400000);
-      await base44.asServiceRole.entities.BankAccount.update(account.id, {
-        estado_conexion: 'pendiente',
-        requisition_id: requisition.id,
-        agreement_id: agreement.id,
-        proveedor_integracion: requisition.id,
-        fecha_consentimiento_expira: isoDate(expires),
-        ultimo_error_sync: null,
-        activa: true,
-      });
-      await base44.asServiceRole.entities.BankConsent.create({
-        company_id: companyId,
-        bank_account_id: account.id,
-        proveedor: 'gocardless_bank_account_data',
-        tipo_conexion: 'psd2',
-        estado: 'pendiente',
-        permisos: ['saldos', 'datos de cuenta', 'movimientos'],
-        fecha_consentimiento: new Date().toISOString(),
-        fecha_expiracion: isoDate(expires),
-        token_referencia: requisition.id,
-        requisition_id: requisition.id,
-        agreement_id: agreement.id,
-        institution_id: institutionId,
-        nota_auditoria: `Renovación PSD2 iniciada por ${user.email}.`,
-      });
-      return Response.json({
-        ok: true,
-        link: requisition.link,
-        bank_account_id: account.id,
-        requisition_id: requisition.id,
-        history_days: historicalDays,
-        renewal: true,
-      });
+      const bankName = clean(account.institution_id || account.nombre_banco, 300);
+      const result = await providerRequest(`/aspsps?country=${DEFAULT_COUNTRY}&service=AIS`, token);
+      const institution = (result?.aspsps || []).find((item: any) => item.name === bankName);
+      if (!institution) return Response.json({ error: 'El banco ya no figura disponible. Inicia una conexión nueva desde el catálogo.' }, { status: 409 });
+      return await startAuthorization(base44, token, user, companyId, institution, account, body, true);
     }
 
     if (action === 'finalize') {
       const placeholder = await ownedAccount(base44, companyId, body.bank_account_id);
-      const requisitionId = clean(placeholder.requisition_id || placeholder.proveedor_integracion, 200);
-      if (!requisitionId || requisitionId === 'gocardless_bank_account_data') {
-        return Response.json({ error: 'La autorización bancaria no tiene una referencia válida.' }, { status: 409 });
+      if (placeholder.proveedor_integracion !== 'enable_banking') {
+        return Response.json({ error: 'Esta autorización pertenece al proveedor anterior. Vuelve a conectar el banco.' }, { status: 409 });
       }
-      const requisition = await providerRequest(`/requisitions/${encodeURIComponent(requisitionId)}/`, token);
-      if (requisition.status !== 'LN') {
-        const terminal = ['RJ', 'EX', 'SU'].includes(requisition.status);
-        await base44.asServiceRole.entities.BankAccount.update(placeholder.id, {
-          estado_conexion: terminal ? 'requiere_renovacion' : 'pendiente',
-          ultimo_error_sync: `Estado de autorización: ${requisition.status}`,
-        });
-        return Response.json({ ok: false, pending: !terminal, status: requisition.status, error: terminal ? 'La autorización fue rechazada, suspendida o ha expirado.' : 'El banco todavía no ha completado la autorización.' }, { status: terminal ? 409 : 202 });
-      }
-      const providerAccountIds = Array.isArray(requisition.accounts) ? requisition.accounts : [];
-      if (!providerAccountIds.length) return Response.json({ error: 'El banco no devolvió ninguna cuenta autorizada.' }, { status: 409 });
+      const code = clean(body.code, 2000);
+      const returnedState = clean(body.state, 200);
+      const expectedState = clean(placeholder.agreement_id, 200);
+      if (!code) return Response.json({ error: 'Falta el código devuelto por el banco. Reintenta la conexión.' }, { status: 409 });
+      if (expectedState && returnedState !== expectedState) return Response.json({ error: 'La respuesta bancaria no supera la validación de seguridad.' }, { status: 403 });
+      const authorizationId = clean(placeholder.requisition_id, 200);
+      const session = await providerRequest('/sessions', token, { method: 'POST', body: JSON.stringify({ code }) });
+      const providerAccounts = Array.isArray(session?.accounts) ? session.accounts : [];
+      if (!providerAccounts.length) return Response.json({ error: 'El banco no devolvió ninguna cuenta autorizada.' }, { status: 409 });
+      const sessionId = clean(session.session_id, 200);
+      const expires = new Date(session?.access?.valid_until || Date.now() + REQUESTED_ACCESS_DAYS * 86400000);
       const accounts = [];
-      for (let index = 0; index < providerAccountIds.length; index += 1) {
-        const providerAccountId = clean(providerAccountIds[index], 200);
+      for (let index = 0; index < providerAccounts.length; index += 1) {
+        const providerItem = providerAccounts[index];
+        const providerAccountId = clean(providerItem.uid, 200);
+        const iban = accountIban(providerItem);
         let account = index === 0 ? placeholder : null;
+        if (!account && iban) {
+          const matches = await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, iban }, '-created_date', 10);
+          account = (matches || []).find((item: any) => item.id !== placeholder.id) || null;
+        }
         if (!account) {
-          const matches = await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, provider_account_id: providerAccountId }, '-created_date', 1);
-          account = matches?.[0] || await base44.asServiceRole.entities.BankAccount.create({
+          account = await base44.asServiceRole.entities.BankAccount.create({
             company_id: companyId,
-            nombre_banco: placeholder.nombre_banco,
+            nombre_banco: clean(session?.aspsp?.name, 300) || placeholder.nombre_banco,
             tipo_banco: placeholder.tipo_banco || 'tradicional',
             proveedor: placeholder.proveedor || 'otro',
-            moneda: 'EUR',
+            iban,
+            ultimos_4: iban.slice(-4),
+            titular: clean(providerItem.name, 300),
+            moneda: clean(providerItem.currency, 8) || 'EUR',
             saldo_disponible: 0,
             saldo_contable: 0,
             estado_conexion: 'pendiente',
-            proveedor_integracion: requisitionId,
-            requisition_id: requisitionId,
-            agreement_id: placeholder.agreement_id,
-            institution_id: placeholder.institution_id,
+            proveedor_integracion: 'enable_banking',
+            requisition_id: sessionId,
+            agreement_id: sessionId,
+            institution_id: clean(session?.aspsp?.name, 300) || placeholder.institution_id,
             provider_account_id: providerAccountId,
             origen_datos: 'open_banking',
             sync_desde: placeholder.sync_desde,
-            fecha_consentimiento_expira: placeholder.fecha_consentimiento_expira,
+            fecha_consentimiento_expira: isoDate(expires),
             permisos_concedidos: placeholder.permisos_concedidos || ['saldos', 'datos de cuenta', 'movimientos'],
           });
         }
-        await base44.asServiceRole.entities.BankAccount.update(account.id, { provider_account_id: providerAccountId, requisition_id: requisitionId, proveedor_integracion: requisitionId });
-        account = { ...account, provider_account_id: providerAccountId, requisition_id: requisitionId, proveedor_integracion: requisitionId };
+        await base44.asServiceRole.entities.BankAccount.update(account.id, {
+          nombre_banco: clean(session?.aspsp?.name, 300) || account.nombre_banco,
+          iban: iban || account.iban || '',
+          ultimos_4: iban.slice(-4) || account.ultimos_4 || '',
+          titular: clean(providerItem.name, 300) || account.titular || '',
+          moneda: clean(providerItem.currency, 8) || account.moneda || 'EUR',
+          estado_conexion: 'pendiente',
+          proveedor_integracion: 'enable_banking',
+          requisition_id: sessionId,
+          agreement_id: sessionId,
+          provider_account_id: providerAccountId,
+          fecha_consentimiento_expira: isoDate(expires),
+          activa: true,
+        });
+        account = { ...account, provider_account_id: providerAccountId, requisition_id: sessionId, agreement_id: sessionId, proveedor_integracion: 'enable_banking' };
         const result = await syncWithLog(base44, token, account, user, account.sync_desde);
         accounts.push({ id: account.id, ...result });
-        if (index < providerAccountIds.length - 1) await sleep(250);
+        if (index < providerAccounts.length - 1) await sleep(250);
       }
-      const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, requisition_id: requisitionId }, '-created_date', 20);
+      const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, requisition_id: authorizationId }, '-created_date', 20);
       for (const consent of consents || []) {
-        await base44.asServiceRole.entities.BankConsent.update(consent.id, { estado: 'activo', nota_auditoria: `Consentimiento PSD2 activo. Autorizado por ${user.email}.` });
+        await base44.asServiceRole.entities.BankConsent.update(consent.id, {
+          estado: 'activo',
+          token_referencia: sessionId,
+          agreement_id: sessionId,
+          fecha_expiracion: isoDate(expires),
+          nota_auditoria: `Consentimiento PSD2 activo. Autorizado por ${user.email}.`,
+        });
       }
-      return Response.json({ ok: true, accounts, requisition_status: requisition.status });
+      return Response.json({ ok: true, accounts, session_status: 'AUTHORIZED' });
     }
 
     if (action === 'sync') {
       const account = await ownedAccount(base44, companyId, body.bank_account_id);
       const ageMs = syncAgeMs(account);
       if (!body.force && ageMs < MANUAL_SYNC_COOLDOWN_MS) {
-        return Response.json({
-          ok: true,
-          skipped: true,
-          reason: 'recently_synced',
-          created: 0,
-          updated: 0,
-          next_sync_at: new Date(Date.now() + (MANUAL_SYNC_COOLDOWN_MS - ageMs)).toISOString(),
-        });
+        return Response.json({ ok: true, skipped: true, reason: 'recently_synced', created: 0, updated: 0, next_sync_at: new Date(Date.now() + (MANUAL_SYNC_COOLDOWN_MS - ageMs)).toISOString() });
       }
       const result = await syncWithLog(base44, token, account, user, account.sync_desde || `${new Date().getUTCFullYear()}-01-01`);
       return Response.json({ ok: true, ...result });
@@ -610,19 +630,17 @@ Deno.serve(async (request) => {
 
     if (action === 'disconnect') {
       const account = await ownedAccount(base44, companyId, body.bank_account_id);
-      const requisitionId = clean(account.requisition_id || account.proveedor_integracion, 200);
-      if (requisitionId && requisitionId !== 'gocardless_bank_account_data') {
-        await providerRequest(`/requisitions/${encodeURIComponent(requisitionId)}/`, token, { method: 'DELETE' }).catch(error => {
-          console.warn('[openBanking] remote revoke failed:', publicError(error));
-        });
+      const sessionId = account.proveedor_integracion === 'enable_banking' ? clean(account.requisition_id, 200) : '';
+      if (sessionId) {
+        await providerRequest(`/sessions/${encodeURIComponent(sessionId)}`, token, { method: 'DELETE' }).catch(error => console.warn('[openBanking] remote revoke failed:', publicError(error)));
       }
-      const linked = requisitionId
-        ? await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, requisition_id: requisitionId }, '-created_date', 50)
+      const linked = sessionId
+        ? await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, requisition_id: sessionId }, '-created_date', 50)
         : [account];
       for (const linkedAccount of linked || [account]) {
         await base44.asServiceRole.entities.BankAccount.update(linkedAccount.id, { estado_conexion: 'desconectado', activa: false });
       }
-      const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, requisition_id: requisitionId }, '-created_date', 100);
+      const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, bank_account_id: account.id }, '-created_date', 100);
       for (const consent of consents || []) {
         await base44.asServiceRole.entities.BankConsent.update(consent.id, {
           estado: 'revocado',
