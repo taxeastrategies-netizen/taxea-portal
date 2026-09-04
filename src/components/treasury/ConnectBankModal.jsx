@@ -18,6 +18,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [configured, setConfigured] = useState(false);
+  const [psuType, setPsuType] = useState('business');
   const [error, setError] = useState('');
   const [csvForm, setCsvForm] = useState({ nombre_banco: '', iban: '', titular: '', saldo: '' });
 
@@ -31,7 +32,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         if (!active) return;
         setConfigured(Boolean(status?.configured));
         if (!status?.configured) {
-          setError('La conexión bancaria real está preparada, pero falta activar las credenciales del proveedor Open Banking en Base44.');
+          setError('La conexión bancaria está preparada, pero falta registrar la aplicación de Enable Banking en Base44.');
           return;
         }
         const result = unwrap(await base44.functions.invoke('openBanking', { action: 'institutions', company_id: companyId, country: 'ES' }));
