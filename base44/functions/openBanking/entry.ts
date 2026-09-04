@@ -640,7 +640,9 @@ Deno.serve(async (request) => {
       for (const linkedAccount of linked || [account]) {
         await base44.asServiceRole.entities.BankAccount.update(linkedAccount.id, { estado_conexion: 'desconectado', activa: false });
       }
-      const consents = await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, bank_account_id: account.id }, '-created_date', 100);
+      const consents = sessionId
+        ? await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, agreement_id: sessionId }, '-created_date', 100)
+        : await base44.asServiceRole.entities.BankConsent.filter({ company_id: companyId, bank_account_id: account.id }, '-created_date', 100);
       for (const consent of consents || []) {
         await base44.asServiceRole.entities.BankConsent.update(consent.id, {
           estado: 'revocado',
