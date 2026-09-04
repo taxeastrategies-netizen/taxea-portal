@@ -1,0 +1,20 @@
+{
+  "name": "openBanking",
+  "entry": "entry.ts",
+  "automations": [
+    {
+      "name": "Sincronización bancaria automática",
+      "description": "Actualiza por lotes las cuentas Open Banking activas sin exceder la frecuencia prudente de consulta por cuenta.",
+      "type": "scheduled",
+      "schedule_mode": "recurring",
+      "schedule_type": "cron",
+      "cron_expression": "17 * * * *",
+      "function_args": {
+        "action": "scheduled_sync_all"
+      },
+      "ends_type": "never",
+      "is_active": true
+    }
+  ]
+}
+
