@@ -67,7 +67,12 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
     if (!selected || !accepted || submitting) return;
     setSubmitting(true);
     setError('');
+    let authWindow = null;
     try {
+      authWindow = window.open('about:blank', 'taxea_open_banking');
+      if (!authWindow && window.top !== window.self) {
+        throw new Error('El navegador ha bloqueado la ventana bancaria. Abre taxeaportal.com directamente o permite ventanas emergentes.');
+      }
       const result = unwrap(await base44.functions.invoke('openBanking', {
         action: 'create_link',
         company_id: companyId,
@@ -76,8 +81,15 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         psu_type: psuType,
       }));
       if (!result?.ok || !result?.link) throw new Error(result?.error || 'No se pudo iniciar la autorización bancaria.');
-      window.location.assign(result.link);
+      if (authWindow && !authWindow.closed) {
+        authWindow.opener = null;
+        authWindow.location.replace(result.link);
+        onClose?.();
+      } else {
+        window.location.assign(result.link);
+      }
     } catch (caught) {
+      if (authWindow && !authWindow.closed) authWindow.close();
       setError(errorMessage(caught, 'No se pudo iniciar la autorización bancaria.'));
       setSubmitting(false);
     }
@@ -117,7 +129,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <div>
             <p className="text-sm font-semibold text-foreground">Conectar una cuenta bancaria</p>
-            <p className="mt-0.5 text-xs text-slate-400">Acceso de solo lectura mediante Open Banking PSD2</p>
+            <p className="mt-0.5 text-xs text-slate-400">Acceso de solo lectura mediante Open Banking PSD2 · la autorización se abre en una pestaña segura</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-slate-100"><X className="h-4 w-4 text-slate-400" /></button>
         </div>
