@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { Search, CheckCircle, AlertCircle, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { base44 } from '@/api/base44Client';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n || 0);
@@ -32,10 +31,9 @@ const PRIORITY_CFG = {
   diferible:  { label: 'Diferible',  badge: 'bg-blue-50 text-blue-600 border-blue-200' },
 };
 
-export default function APInvoiceTable({ invoices, expenses, contacts, onRefresh }) {
+export default function APInvoiceTable({ invoices, expenses, contacts }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('pendiente');
-  const [markingPaid, setMarkingPaid] = useState(null);
 
   // Calcular prioridad automática
   const getPriority = (inv) => {
@@ -64,12 +62,6 @@ export default function APInvoiceTable({ invoices, expenses, contacts, onRefresh
     });
   }, [invoices, filterStatus, search]);
 
-  const handleMarkPaid = async (inv) => {
-    setMarkingPaid(inv.id);
-    await base44.entities.Invoice.update(inv.id, { estado_cobro: 'cobrada' });
-    setMarkingPaid(null);
-    onRefresh();
-  };
 
   return (
     <div className="space-y-4">
@@ -142,13 +134,11 @@ export default function APInvoiceTable({ invoices, expenses, contacts, onRefresh
                       <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-lg border", prioCfg.badge)}>{prioCfg.label}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleMarkPaid(inv)} disabled={markingPaid === inv.id}
-                        title="Marcar como pagada"
-                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all disabled:opacity-40">
-                        {markingPaid === inv.id
-                          ? <div className="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                          : <CheckCircle className="w-3 h-3" />}
-                      </button>
+                      <a href="/finance/treasury"
+                        title="Conciliar pago en Tesorería"
+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
+                        <CheckCircle className="w-3 h-3" />
+                      </a>
                     </td>
                   </tr>
                 );
