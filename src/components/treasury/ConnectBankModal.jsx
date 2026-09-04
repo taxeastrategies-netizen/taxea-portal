@@ -64,6 +64,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
         company_id: companyId,
         institution_id: selected.id,
         redirect_url: `${window.location.origin}/finance/treasury`,
+        psu_type: psuType,
       }));
       if (!result?.ok || !result?.link) throw new Error(result?.error || 'No se pudo iniciar la autorización bancaria.');
       window.location.assign(result.link);
