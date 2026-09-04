@@ -111,7 +111,9 @@ function safeRedirect(raw: unknown) {
   const fallback = new URL('https://taxeaportal.com/finance/treasury');
   try {
     const parsed = new URL(clean(raw, 1000));
-    if (parsed.protocol === 'https:' && ['taxeaportal.com', 'www.taxeaportal.com'].includes(parsed.hostname)) return parsed;
+    parsed.search = '';
+    parsed.hash = '';
+    if (parsed.toString() === fallback.toString()) return parsed;
   } catch { /* production fallback */ }
   return fallback;
 }
@@ -374,8 +376,6 @@ async function startAuthorization(base44: any, token: string, user: any, company
   const expiry = consentExpiry(institution);
   const state = crypto.randomUUID();
   const redirect = safeRedirect(body.redirect_url);
-  redirect.searchParams.set('bank_link', 'return');
-  redirect.searchParams.set('bank_account_id', account.id);
   const requestedType = clean(body.psu_type, 20).toLowerCase();
   const supportedTypes = Array.isArray(institution?.psu_types) ? institution.psu_types : [];
   const psuType = ['business', 'personal'].includes(requestedType) && (!supportedTypes.length || supportedTypes.includes(requestedType))
@@ -503,22 +503,31 @@ Deno.serve(async (request) => {
       const result = await providerRequest(`/aspsps?country=${encodeURIComponent(country || DEFAULT_COUNTRY)}&service=AIS`, token);
       const institution = (result?.aspsps || []).find((item: any) => item.name === bankName && item.country === country);
       if (!institution) return Response.json({ error: 'El banco seleccionado ya no figura disponible en el proveedor.' }, { status: 409 });
-      const account = await base44.asServiceRole.entities.BankAccount.create({
+      const institutionName = clean(institution.name, 300);
+      const previousAttempts = await base44.asServiceRole.entities.BankAccount.filter({
         company_id: companyId,
-        nombre_banco: clean(institution.name, 300) || 'Banco',
-        tipo_banco: providerSlug(institution.name) === 'revolut' ? 'neobanco' : 'tradicional',
-        proveedor: providerSlug(institution.name),
-        moneda: 'EUR',
-        saldo_disponible: 0,
-        saldo_contable: 0,
-        estado_conexion: 'pendiente',
         proveedor_integracion: 'enable_banking',
-        institution_id: clean(institution.name, 300),
-        origen_datos: 'open_banking',
-        sync_desde: `${new Date().getUTCFullYear()}-01-01`,
-        dias_historico_disponibles: REQUESTED_HISTORY_DAYS,
-        permisos_concedidos: ['saldos', 'datos de cuenta', 'movimientos'],
-      });
+        institution_id: institutionName,
+      }, '-created_date', 20);
+      let account = (previousAttempts || []).find((item: any) => item.estado_conexion === 'error' && !item.provider_account_id);
+      if (!account) {
+        account = await base44.asServiceRole.entities.BankAccount.create({
+          company_id: companyId,
+          nombre_banco: institutionName || 'Banco',
+          tipo_banco: providerSlug(institution.name) === 'revolut' ? 'neobanco' : 'tradicional',
+          proveedor: providerSlug(institution.name),
+          moneda: 'EUR',
+          saldo_disponible: 0,
+          saldo_contable: 0,
+          estado_conexion: 'pendiente',
+          proveedor_integracion: 'enable_banking',
+          institution_id: institutionName,
+          origen_datos: 'open_banking',
+          sync_desde: `${new Date().getUTCFullYear()}-01-01`,
+          dias_historico_disponibles: REQUESTED_HISTORY_DAYS,
+          permisos_concedidos: ['saldos', 'datos de cuenta', 'movimientos'],
+        });
+      }
       try {
         return await startAuthorization(base44, token, user, companyId, institution, account, body, false);
       } catch (error) {
@@ -537,12 +546,23 @@ Deno.serve(async (request) => {
     }
 
     if (action === 'finalize') {
-      const placeholder = await ownedAccount(base44, companyId, body.bank_account_id);
+      const code = clean(body.code, 2000);
+      const returnedState = clean(body.state, 200);
+      let placeholder = body.bank_account_id
+        ? await ownedAccount(base44, companyId, body.bank_account_id)
+        : null;
+      if (!placeholder && returnedState) {
+        const matches = await base44.asServiceRole.entities.BankAccount.filter({
+          company_id: companyId, agreement_id: returnedState, proveedor_integracion: 'enable_banking',
+        }, '-created_date', 10);
+        placeholder = (matches || [])[0] || null;
+      }
+      if (!placeholder) {
+        return Response.json({ error: 'No se encontró la autorización bancaria pendiente. Reintenta la conexión.' }, { status: 404 });
+      }
       if (placeholder.proveedor_integracion !== 'enable_banking') {
         return Response.json({ error: 'Esta autorización pertenece al proveedor anterior. Vuelve a conectar el banco.' }, { status: 409 });
       }
-      const code = clean(body.code, 2000);
-      const returnedState = clean(body.state, 200);
       const expectedState = clean(placeholder.agreement_id, 200);
       if (!code) return Response.json({ error: 'Falta el código devuelto por el banco. Reintenta la conexión.' }, { status: 409 });
       if (expectedState && returnedState !== expectedState) return Response.json({ error: 'La respuesta bancaria no supera la validación de seguridad.' }, { status: 403 });
