@@ -123,12 +123,25 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function normalizedEmail(value: unknown) {
+  return clean(value, 320).toLowerCase();
+}
+
 async function assertCompany(base44: any, user: any, requestedCompanyId: unknown) {
-  const companyId = clean(requestedCompanyId, 120) || clean(user.data?.company_id, 120);
+  const profileCompanyId = clean(user.data?.company_id, 120);
+  const companyId = clean(requestedCompanyId, 120) || profileCompanyId;
   const isAdmin = user.role === 'admin' || user.role === 'super_admin';
   if (!companyId) throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
-  if (!isAdmin && companyId !== user.data?.company_id) {
-    throw Object.assign(new Error('La empresa indicada no coincide con el perfil activo.'), { status: 403 });
+  if (isAdmin || companyId === profileCompanyId) return companyId;
+
+  const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
+  const userEmail = normalizedEmail(user.email);
+  const ownerEmail = normalizedEmail(company?.owner_email);
+  const authorizedEmails = Array.isArray(company?.usuarios_autorizados)
+    ? company.usuarios_autorizados.map(normalizedEmail)
+    : [];
+  if (!company || !userEmail || (ownerEmail !== userEmail && !authorizedEmails.includes(userEmail))) {
+    throw Object.assign(new Error('No tienes acceso a la empresa indicada.'), { status: 403 });
   }
   return companyId;
 }
@@ -478,6 +491,19 @@ Deno.serve(async (request) => {
     }
 
     const companyId = await assertCompany(base44, user, body.company_id);
+
+    if (action === 'treasury_snapshot') {
+      const [accounts, transactions] = await Promise.all([
+        base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', MAX_LIST),
+        base44.asServiceRole.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', MAX_LIST),
+      ]);
+      const safeAccounts = (accounts || []).map((account: any) => {
+        const { authorization_id: _authorizationId, oauth_state: _oauthState, session_id: _sessionId, ...safe } = account;
+        return safe;
+      });
+      return Response.json({ ok: true, accounts: safeAccounts, transactions: transactions || [] });
+    }
+
     const token = await providerToken();
 
     if (action === 'institutions') {
