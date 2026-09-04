@@ -12,6 +12,39 @@ import TreasuryCalendar from './TreasuryCalendar';
 import TreasuryEventsPanel from './TreasuryEventsPanel';
 
 
+const BANK_EVENT_CHANNEL = 'taxea-open-banking';
+const BANK_EVENT_STORAGE_KEY = 'taxea_open_banking_event';
+const finalizationRequests = new Map();
+
+function readableBankError(error, fallback) {
+  return error?.response?.data?.error || error?.data?.error || error?.message || fallback;
+}
+
+function finalizeAuthorizationOnce(key, payload) {
+  if (!finalizationRequests.has(key)) {
+    const request = base44.functions.invoke('openBanking', payload);
+    finalizationRequests.set(key, request);
+    window.setTimeout(() => {
+      if (finalizationRequests.get(key) === request) finalizationRequests.delete(key);
+    }, 120000);
+  }
+  return finalizationRequests.get(key);
+}
+
+function publishBankEvent(event) {
+  const message = { ...event, emitted_at: Date.now() };
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel(BANK_EVENT_CHANNEL);
+      channel.postMessage(message);
+      channel.close();
+    }
+  } catch { /* localStorage remains as fallback */ }
+  try {
+    window.localStorage.setItem(BANK_EVENT_STORAGE_KEY, JSON.stringify(message));
+  } catch { /* the callback page still shows its own result */ }
+}
+
 const TABS = [
   { id: 'bancos',       label: 'Bancos',         icon: Building2 },
   { id: 'movimientos',  label: 'Movimientos',     icon: LayoutGrid },
@@ -60,27 +93,64 @@ export default function TreasuryCenter({ company }) {
 
   useEffect(() => {
     if (!companyId) return;
+    const handleMessage = async (message) => {
+      if (!message || message.company_id !== companyId) return;
+      if (message.type === 'connected') {
+        setBankNotice({ type: 'success', text: message.text || 'Banco conectado y datos actualizados.' });
+        await loadData();
+      } else if (message.type === 'error') {
+        setBankNotice({ type: 'error', text: message.text || 'No se pudo completar la conexión bancaria.' });
+      }
+    };
+    let channel = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel(BANK_EVENT_CHANNEL);
+        channel.onmessage = event => handleMessage(event.data);
+      }
+    } catch { channel = null; }
+    const onStorage = event => {
+      if (event.key !== BANK_EVENT_STORAGE_KEY || !event.newValue) return;
+      try { handleMessage(JSON.parse(event.newValue)); } catch { /* ignore malformed local event */ }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      channel?.close();
+    };
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
     const params = new URLSearchParams(window.location.search);
     const accountId = params.get('bank_account_id');
     const code = params.get('code');
     const state = params.get('state');
     if (!code || !state) return;
     let active = true;
+    const requestKey = `${companyId}:${state}:${code}`;
     setBankNotice({ type: 'loading', text: 'Finalizando autorización bancaria y descargando movimientos…' });
     const finalize = async () => {
       try {
-        const response = await base44.functions.invoke('openBanking', {
+        const response = await finalizeAuthorizationOnce(requestKey, {
           action: 'finalize', company_id: companyId, ...(accountId ? { bank_account_id: accountId } : {}), code, state,
         });
         const payload = response?.data ?? response;
         if (!payload?.ok) throw new Error(payload?.error || 'El banco todavía no ha completado la autorización.');
+        const count = (payload.accounts || []).reduce((sum, item) => sum + Number(item.created || 0), 0);
+        const text = payload.session_status === 'PROCESSING'
+          ? 'Autorización recibida. Taxea está terminando de sincronizar la cuenta.'
+          : `Banco conectado. ${count} movimientos nuevos incorporados sin duplicar los existentes.`;
+        publishBankEvent({ type: 'connected', company_id: companyId, text });
         if (active) {
-          const count = (payload.accounts || []).reduce((sum, item) => sum + Number(item.created || 0), 0);
-          setBankNotice({ type: 'success', text: `Banco conectado. ${count} movimientos nuevos incorporados sin duplicar los existentes.` });
+          setBankNotice({ type: 'success', text });
           await loadData();
         }
+        if (window.name === 'taxea_open_banking') window.setTimeout(() => window.close(), 1200);
       } catch (error) {
-        if (active) setBankNotice({ type: 'error', text: error?.message || 'No se pudo finalizar la conexión bancaria.' });
+        const text = readableBankError(error, 'No se pudo finalizar la conexión bancaria.');
+        publishBankEvent({ type: 'error', company_id: companyId, text });
+        if (active) setBankNotice({ type: 'error', text });
       } finally {
         const cleanUrl = `${window.location.pathname}${window.location.hash || ''}`;
         window.history.replaceState({}, '', cleanUrl);
