@@ -29,18 +29,27 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function CashflowChart({ invoices, expenses }) {
+export default function CashflowChart({ invoices, expenses, bankTransactions = [] }) {
+  const hasBankData = bankTransactions.some(transaction => transaction.estado_proveedor !== 'pending');
   const data = useMemo(() => {
     const months = Array.from({ length: 7 }, (_, i) => subMonths(new Date(), 6 - i));
     return months.map(month => {
       const interval = { start: startOfMonth(month), end: endOfMonth(month) };
 
-      const ingresos = invoices
-        .filter(i => {
-          try { return i.tipo === 'emitida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
-          catch { return false; }
-        })
-        .reduce((s, i) => s + (i.total_factura || 0), 0);
+      const bankInMonth = bankTransactions.filter(transaction => {
+        try {
+          return transaction.estado_proveedor !== 'pending'
+            && isWithinInterval(parseISO(transaction.fecha_operacion), interval);
+        } catch { return false; }
+      });
+      const ingresos = hasBankData
+        ? bankInMonth.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
+        : invoices
+          .filter(i => {
+            try { return i.tipo === 'emitida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
+            catch { return false; }
+          })
+          .reduce((s, i) => s + (i.total_factura || 0), 0);
 
       const gastos = expenses
         .filter(e => {
@@ -56,7 +65,9 @@ export default function CashflowChart({ invoices, expenses }) {
         })
         .reduce((s, i) => s + (i.total_factura || 0), 0);
 
-      const totalGastos = gastos + gastosFacturas;
+      const totalGastos = hasBankData
+        ? bankInMonth.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
+        : gastos + gastosFacturas;
       const neto = ingresos - totalGastos;
 
       return {
@@ -66,9 +77,7 @@ export default function CashflowChart({ invoices, expenses }) {
         Neto: Math.round(neto),
       };
     });
-  }, [invoices, expenses]);
-
-  const maxVal = Math.max(...data.map(d => Math.max(d.Ingresos, d.Gastos)), 1000);
+  }, [invoices, expenses, bankTransactions, hasBankData]);
 
   return (
     <div className="bg-card border border-border rounded-2xl p-5 h-full">
@@ -79,7 +88,7 @@ export default function CashflowChart({ invoices, expenses }) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-foreground">Cashflow — Últimos 7 meses</h3>
-            <p className="text-xs text-muted-foreground">Ingresos, gastos y resultado neto</p>
+            <p className="text-xs text-muted-foreground">{hasBankData ? 'Movimientos bancarios contabilizados' : 'Estimación por facturas y gastos'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
