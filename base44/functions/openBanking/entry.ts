@@ -157,6 +157,16 @@ async function ownedAccount(base44: any, companyId: string, accountId: unknown) 
   return account;
 }
 
+async function ownedTransaction(base44: any, companyId: string, transactionId: unknown) {
+  const id = clean(transactionId, 120);
+  if (!id) throw Object.assign(new Error('bank_transaction_id es obligatorio.'), { status: 400 });
+  const transaction = await base44.asServiceRole.entities.BankTransaction.get(id).catch(() => null);
+  if (!transaction || transaction.company_id !== companyId) {
+    throw Object.assign(new Error('Movimiento bancario no encontrado en la empresa activa.'), { status: 404 });
+  }
+  return transaction;
+}
+
 function accountIban(details: any) {
   return clean(details?.account_id?.iban, 80);
 }
@@ -517,6 +527,26 @@ Deno.serve(async (request) => {
     }
 
     const companyId = await assertCompany(base44, user, body.company_id);
+
+    if (action === 'classify_transaction') {
+      const transaction = await ownedTransaction(base44, companyId, body.bank_transaction_id);
+      if (transaction.estado_conciliacion === 'duplicada') {
+        return Response.json({ error: 'Un movimiento duplicado no puede reclasificarse.' }, { status: 409 });
+      }
+      if (transaction.entidad_id) {
+        return Response.json({ error: 'El movimiento ya está conciliado con un documento.' }, { status: 409 });
+      }
+      const status = clean(body.status, 40);
+      if (!['movimiento_interno', 'descartada'].includes(status)) {
+        return Response.json({ error: 'Clasificación bancaria no válida.' }, { status: 400 });
+      }
+      await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
+        estado_conciliacion: status,
+        ...(status === 'movimiento_interno' ? { categoria_ia: 'transferencia_interna' } : {}),
+        notas: `${clean(transaction.notas, 1500)}${transaction.notas ? '\n' : ''}${status === 'movimiento_interno' ? 'Marcado como movimiento interno' : 'Descartado de conciliación'} por ${user.email}.`,
+      });
+      return Response.json({ ok: true, transaction_id: transaction.id, status });
+    }
 
     if (action === 'treasury_snapshot') {
       const [accounts, transactions] = await Promise.all([
