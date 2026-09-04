@@ -522,11 +522,33 @@ Deno.serve(async (request) => {
         base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', MAX_LIST),
         base44.asServiceRole.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', MAX_LIST),
       ]);
-      const safeAccounts = (accounts || []).map((account: any) => {
+      const activeAccounts = (accounts || []).filter((account: any) => account.activa !== false);
+      const activeAccountIds = new Set(activeAccounts.map((account: any) => account.id));
+      const visibleTransactions = (transactions || []).filter((transaction: any) =>
+        transaction.estado_conciliacion !== 'duplicada' && activeAccountIds.has(transaction.bank_account_id),
+      );
+      const safeAccounts = activeAccounts.map((account: any) => {
         const { authorization_id: _authorizationId, oauth_state: _oauthState, session_id: _sessionId, ...safe } = account;
         return safe;
       });
-      return Response.json({ ok: true, accounts: safeAccounts, transactions: transactions || [] });
+      const booked = visibleTransactions.filter((transaction: any) => transaction.estado_proveedor !== 'pending');
+      const connected = activeAccounts.filter((account: any) => account.estado_conexion === 'conectado');
+      const euroAccounts = connected.filter((account: any) => clean(account.moneda, 8).toUpperCase() === 'EUR');
+      const reconciliationStates = new Set(['conciliada_auto', 'conciliada_manual']);
+      return Response.json({
+        ok: true,
+        accounts: safeAccounts,
+        transactions: visibleTransactions,
+        summary: {
+          connected_accounts: connected.length,
+          available_cash_eur: euroAccounts.reduce((sum: number, account: any) => sum + Number(account.saldo_disponible || 0), 0),
+          reconciled_transactions: booked.filter((transaction: any) => reconciliationStates.has(transaction.estado_conciliacion)).length,
+          unreconciled_transactions: booked.filter((transaction: any) => !reconciliationStates.has(transaction.estado_conciliacion)).length,
+          inflows: booked.filter((transaction: any) => transaction.tipo === 'entrada').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0),
+          outflows: booked.filter((transaction: any) => transaction.tipo === 'salida').reduce((sum: number, transaction: any) => sum + Number(transaction.importe || 0), 0),
+          last_sync: connected.map((account: any) => account.fecha_ultima_sync).filter(Boolean).sort().at(-1) || null,
+        },
+      });
     }
 
     const token = await providerToken();
