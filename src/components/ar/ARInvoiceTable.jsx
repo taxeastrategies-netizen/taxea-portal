@@ -31,7 +31,7 @@ const RISK_CFG = {
   baja:  { label: 'Baja',  dot: 'bg-red-500' },
 };
 
-export default function ARInvoiceTable({ invoices, contacts, onRefresh }) {
+export default function ARInvoiceTable({ invoices, contacts }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('todas');
   const [sending, setSending] = useState(null);
@@ -60,10 +60,6 @@ export default function ARInvoiceTable({ invoices, contacts, onRefresh }) {
     setSending(null);
   };
 
-  const handleMarkPaid = async (inv) => {
-    await base44.entities.Invoice.update(inv.id, { estado_cobro: 'cobrada' });
-    onRefresh();
-  };
 
   return (
     <div className="space-y-4">
@@ -153,11 +149,11 @@ export default function ARInvoiceTable({ invoices, contacts, onRefresh }) {
                           className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all disabled:opacity-40">
                           {sending === inv.id ? <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin" /> : <Send className="w-3 h-3" />}
                         </button>
-                        <button onClick={() => handleMarkPaid(inv)}
-                          title="Marcar como cobrada"
+                        <a href="/finance/treasury"
+                          title="Conciliar cobro en Tesorería"
                           className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
                           <CheckCircle className="w-3 h-3" />
-                        </button>
+                        </a>
                       </div>
                     </td>
                   </tr>
