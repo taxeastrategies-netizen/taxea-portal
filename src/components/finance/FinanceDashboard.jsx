@@ -144,7 +144,7 @@ export default function FinanceDashboard() {
       try {
         if (treasury.connectedAccounts > 0) {
           return (bankTransactions || [])
-            .filter(t => t.estado_proveedor !== 'pending' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
+            .filter(t => t.estado_proveedor !== 'pending' && t.categoria_ia !== 'transferencia_interna' && t.estado_conciliacion !== 'movimiento_interno' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
             .reduce((sum, t) => sum + (t.tipo === 'entrada' ? Number(t.importe || 0) : -Number(t.importe || 0)), 0);
         }
         return activeInvoices(invoices)
