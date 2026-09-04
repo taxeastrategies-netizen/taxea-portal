@@ -5,13 +5,24 @@ const DEFAULT_COUNTRY = 'ES';
 const MAX_LIST = 5000;
 const REQUESTED_HISTORY_DAYS = 365;
 const REQUESTED_ACCESS_DAYS = 90;
+const MANUAL_SYNC_COOLDOWN_MS = 15 * 60 * 1000;
+const SCHEDULED_SYNC_MIN_AGE_MS = 8 * 60 * 60 * 1000;
+const MAX_SCHEDULED_ACCOUNTS = 25;
 
 const clean = (value: unknown, max = 500) => String(value ?? '').trim().slice(0, max);
 const isoDate = (date = new Date()) => date.toISOString().slice(0, 10);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+function providerCredentials() {
+  return {
+    secretId: Deno.env.get('GOCARDLESS_SECRET_ID') || Deno.env.get('NORDIC_API_CLIENT_ID'),
+    secretKey: Deno.env.get('GOCARDLESS_SECRET_KEY') || Deno.env.get('NORDIC_API_SECRET'),
+  };
+}
+
 function providerConfigured() {
-  return Boolean(Deno.env.get('NORDIC_API_CLIENT_ID') && Deno.env.get('NORDIC_API_SECRET'));
+  const { secretId, secretKey } = providerCredentials();
+  return Boolean(secretId && secretKey);
 }
 
 function publicError(error: unknown) {
@@ -21,6 +32,9 @@ function publicError(error: unknown) {
 
 function providerSlug(institutionId: string) {
   const value = institutionId.toUpperCase();
+  if (value.includes('REVOLUT')) return 'revolut';
+  if (value.includes('WISE')) return 'wise';
+  if (value.includes('QONTO')) return 'qonto';
   if (value.includes('BBVA')) return 'bbva';
   if (value.includes('SANTANDER') || value.includes('BSCH')) return 'santander';
   if (value.includes('CAIXA')) return 'caixabank';
@@ -48,8 +62,7 @@ async function sha256(value: string) {
 }
 
 async function getToken() {
-  const secretId = Deno.env.get('NORDIC_API_CLIENT_ID');
-  const secretKey = Deno.env.get('NORDIC_API_SECRET');
+  const { secretId, secretKey } = providerCredentials();
   if (!secretId || !secretKey) {
     throw Object.assign(new Error('Open Banking aún no está configurado. Faltan las credenciales del proveedor en Base44.'), { status: 503, code: 'provider_not_configured' });
   }
@@ -242,11 +255,16 @@ async function syncProviderAccount(base44: any, token: string, account: any, req
   return { ...result, balance, booked: booked.length, pending: pending.length, from };
 }
 
-async function createLog(base44: any, account: any, user: any) {
+function syncAgeMs(account: any) {
+  const timestamp = Date.parse(account.fecha_ultima_sync || '');
+  return Number.isFinite(timestamp) ? Date.now() - timestamp : Number.POSITIVE_INFINITY;
+}
+
+async function createLog(base44: any, account: any, user: any, logType: 'psd2' | 'auto' = 'psd2') {
   return await base44.asServiceRole.entities.BankSyncLog.create({
     company_id: account.company_id,
     bank_account_id: account.id,
-    tipo: 'psd2',
+    tipo: logType,
     estado: 'en_proceso',
     proveedor_api: 'gocardless_bank_account_data',
     fecha_inicio_sync: isoDate(),
@@ -254,9 +272,9 @@ async function createLog(base44: any, account: any, user: any) {
   });
 }
 
-async function syncWithLog(base44: any, token: string, account: any, user: any, from?: string) {
+async function syncWithLog(base44: any, token: string, account: any, user: any, from?: string, logType: 'psd2' | 'auto' = 'psd2') {
   const started = Date.now();
-  const log = await createLog(base44, account, user);
+  const log = await createLog(base44, account, user, logType);
   await base44.asServiceRole.entities.BankAccount.update(account.id, { estado_conexion: 'sincronizando' });
   try {
     const result = await syncProviderAccount(base44, token, account, from);
@@ -300,6 +318,44 @@ Deno.serve(async (request) => {
         country: DEFAULT_COUNTRY,
         requested_history_days: REQUESTED_HISTORY_DAYS,
         requested_access_days: REQUESTED_ACCESS_DAYS,
+      });
+    }
+
+    if (action === 'scheduled_sync_all') {
+      const isAdmin = user.role === 'admin' || user.role === 'super_admin';
+      if (!isAdmin) return Response.json({ error: 'Solo una automatización administrativa puede ejecutar la sincronización global.' }, { status: 403 });
+      if (!providerConfigured()) {
+        return Response.json({ ok: true, skipped: true, reason: 'provider_not_configured', processed: 0 });
+      }
+      const token = await getToken();
+      const allAccounts = await base44.asServiceRole.entities.BankAccount.filter(
+        { origen_datos: 'open_banking', activa: true },
+        'fecha_ultima_sync',
+        MAX_LIST,
+      );
+      const eligible = (allAccounts || [])
+        .filter((account: any) => account.provider_account_id)
+        .filter((account: any) => ['conectado', 'error'].includes(account.estado_conexion))
+        .filter((account: any) => syncAgeMs(account) >= SCHEDULED_SYNC_MIN_AGE_MS)
+        .slice(0, MAX_SCHEDULED_ACCOUNTS);
+      const summary = { processed: 0, created: 0, updated: 0, failed: 0 };
+      for (const account of eligible) {
+        try {
+          const result = await syncWithLog(base44, token, account, user, account.sync_desde, 'auto');
+          summary.processed += 1;
+          summary.created += Number(result.created || 0);
+          summary.updated += Number(result.updated || 0);
+        } catch {
+          summary.processed += 1;
+          summary.failed += 1;
+        }
+        await sleep(350);
+      }
+      return Response.json({
+        ok: true,
+        ...summary,
+        eligible_remaining: Math.max(0, (allAccounts?.length || 0) - eligible.length),
+        min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000,
       });
     }
 
@@ -467,6 +523,17 @@ Deno.serve(async (request) => {
 
     if (action === 'sync') {
       const account = await ownedAccount(base44, companyId, body.bank_account_id);
+      const ageMs = syncAgeMs(account);
+      if (!body.force && ageMs < MANUAL_SYNC_COOLDOWN_MS) {
+        return Response.json({
+          ok: true,
+          skipped: true,
+          reason: 'recently_synced',
+          created: 0,
+          updated: 0,
+          next_sync_at: new Date(Date.now() + (MANUAL_SYNC_COOLDOWN_MS - ageMs)).toISOString(),
+        });
+      }
       const result = await syncWithLog(base44, token, account, user, account.sync_desde || `${new Date().getUTCFullYear()}-01-01`);
       return Response.json({ ok: true, ...result });
     }
