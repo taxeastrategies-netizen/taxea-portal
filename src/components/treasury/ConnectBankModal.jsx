@@ -162,7 +162,7 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
                         {institution.logo ? <img src={institution.logo} alt="" className="h-9 w-9 rounded-lg object-contain" /> : <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100"><Building2 className="h-4 w-4 text-slate-500" /></div>}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">{institution.name}</p>
-                          <p className="text-[10px] text-slate-400">{institution.transaction_total_days ? `Hasta ${institution.transaction_total_days} días de histórico según el banco` : 'Histórico sujeto a disponibilidad del banco'}</p>
+                          <p className="text-[10px] text-slate-400">Histórico sujeto a disponibilidad del banco{institution.max_access_valid_for_days ? ` · acceso hasta ${institution.max_access_valid_for_days} días` : ''}{institution.beta ? ' · conexión en beta' : ''}</p>
                         </div>
                         {selected?.id === institution.id && <CheckCircle className="h-4 w-4 text-taxea-red" />}
                       </button>
