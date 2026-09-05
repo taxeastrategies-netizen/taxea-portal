@@ -52,7 +52,7 @@ export default function ARRiskRadar({ invoices, contacts }) {
     const alerts = [];
     clientRisks.forEach(c => {
       if (c.concentracion > 30) alerts.push({ type: 'concentracion', msg: `${c.name} representa el ${c.concentracion}% de tus ingresos totales.`, level: 'warning' });
-      if (c.maxRetraso > 90) alerts.push({ type: 'retraso', msg: `${c.name} acumula ${c.maxRetraso} días de retraso. Riesgo de impago elevado.`, level: 'danger' });
+      if (c.maxRetraso > 90) alerts.push({ type: 'retraso', msg: `${c.name} acumula ${c.maxRetraso} días de retraso. Requiere revisión prioritaria.`, level: 'danger' });
       else if (c.maxRetraso > 45) alerts.push({ type: 'retraso', msg: `${c.name} lleva ${c.maxRetraso} días sin pagar. Envía recordatorio urgente.`, level: 'warning' });
     });
 
@@ -89,8 +89,8 @@ export default function ARRiskRadar({ invoices, contacts }) {
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-foreground">Customer Risk Score</p>
-            <p className="text-xs text-slate-400 mt-0.5">Análisis de riesgo por cliente · Exposición total: {fmt(totalExposure)}</p>
+            <p className="text-sm font-semibold text-foreground">Indicador operativo de riesgo</p>
+            <p className="text-xs text-slate-400 mt-0.5">Heurística por retraso y concentración, no rating crediticio · Exposición total: {fmt(totalExposure)}</p>
           </div>
           <Users className="w-4 h-4 text-slate-300" />
         </div>
