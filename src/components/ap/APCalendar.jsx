@@ -3,6 +3,7 @@ import { parseISO, startOfMonth, endOfMonth, eachDayOfInterval, format, isSameDa
 import { es } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -14,7 +15,7 @@ export default function APCalendar({ invoices, expenses, obligations }) {
   const events = useMemo(() => {
     const evs = [];
     invoices.filter(i => i.estado_cobro !== 'cobrada' && i.fecha_vencimiento).forEach(i => {
-      evs.push({ date: i.fecha_vencimiento, label: i.cliente_nombre || i.numero_factura, amount: i.total_factura || 0, type: 'factura' });
+      evs.push({ date: i.fecha_vencimiento, label: i.proveedor_nombre || i.cliente_nombre || i.numero_factura, amount: getOutstandingAmount(i), type: 'factura' });
     });
     obligations.filter(o => o.estado !== 'presentada' && o.fecha_limite).forEach(o => {
       evs.push({ date: o.fecha_limite, label: o.modelo || 'Obligación fiscal', amount: o.importe || 0, type: 'fiscal' });
