@@ -93,32 +93,29 @@ export default function FacturasPendientes() {
     setSyncMessage('Analizando facturas...');
     try {
       let offset = 0;
-      let ready = 0;
       let issues = 0;
       let done = false;
+      const readyInvoiceIds = [];
       while (!done) {
-        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: false, offset, batchSize: 500 });
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: false, offset, batchSize: 5000 });
         const data = response?.data || response;
-        ready += data.result?.ready || 0;
+        readyInvoiceIds.push(...(data.result?.readyInvoiceIds || []));
         issues += data.result?.issues?.length || 0;
         offset = data.nextOffset || 0;
         done = Boolean(data.done);
       }
-      if (!ready) { setSyncMessage(issues ? `${issues} facturas requieren completar datos.` : 'Todas las facturas ya tienen asiento.'); return; }
-      if (!window.confirm(`Se crearán ${ready} asientos contables confirmados. ${issues ? `${issues} facturas quedarán pendientes por datos incompletos. ` : ''}La operación es idempotente y no duplica facturas ya enlazadas. ¿Continuar?`)) { setSyncMessage('Sin cambios.'); return; }
-      offset = 0;
+      if (!readyInvoiceIds.length) { setSyncMessage(issues ? `${issues} facturas requieren completar datos o revisión contable.` : 'Todas las facturas ya tienen asiento.'); return; }
+      if (!window.confirm(`Se crearán ${readyInvoiceIds.length} asientos contables confirmados. ${issues ? `${issues} facturas quedarán pendientes de revisión. ` : ''}La operación es idempotente y no duplica facturas ya enlazadas. ¿Continuar?`)) { setSyncMessage('Sin cambios.'); return; }
       let posted = 0;
       let failures = 0;
-      done = false;
-      while (!done) {
-        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: true, offset, batchSize: 3 });
+      for (let index = 0; index < readyInvoiceIds.length; index += 3) {
+        const invoiceIds = readyInvoiceIds.slice(index, index + 3);
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, invoiceIds, apply: true, offset: 0, batchSize: 3 });
         const data = response?.data || response;
         posted += data.result?.posted || 0;
         failures += data.result?.issues?.length || 0;
-        offset = data.nextOffset || 0;
-        done = Boolean(data.done);
-        setSyncMessage(`Contabilizando... ${Math.min(offset, data.total || offset)}/${data.total || offset}`);
-        if (!done) await new Promise(resolve => window.setTimeout(resolve, 1500));
+        setSyncMessage(`Contabilizando... ${Math.min(index + invoiceIds.length, readyInvoiceIds.length)}/${readyInvoiceIds.length}`);
+        if (index + invoiceIds.length < readyInvoiceIds.length) await new Promise(resolve => window.setTimeout(resolve, 1500));
       }
       setSyncMessage(`${posted} asientos creados${failures ? ` · ${failures} facturas requieren revisión` : ''}.`);
       qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
