@@ -33,6 +33,53 @@ Deno.serve(async (req) => {
     }
     const svc = base44.asServiceRole;
 
+    if (action === 'sync_invoices') {
+      const apply = body.apply === true;
+      const offset = Math.max(0, Number(body.offset) || 0);
+      const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 20)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
+      const [invoices, entries] = await Promise.all([
+        svc.entities.Invoice.filter({ company_id: companyId }, 'created_date', 5000),
+        svc.entities.JournalEntry.filter({ companyId }, 'created_date', 5000),
+      ]);
+      const active = (invoices || []).filter(invoice => !invoice.anulada);
+      const entryById = new Map((entries || []).map(entry => [entry.id, entry]));
+      const postingByKey = new Map((entries || []).filter(entry => entry.postingKey).map(entry => [entry.postingKey, entry]));
+      const page = active.slice(offset, offset + batchSize);
+      const result = { scanned: 0, alreadyLinked: 0, ready: 0, posted: 0, repairedLinks: 0, issues: [] };
+      for (const invoice of page) {
+        result.scanned += 1;
+        const linked = invoice.linked_journal_entry_id ? entryById.get(invoice.linked_journal_entry_id) : null;
+        if (linked && linked.status !== 'anulado') { result.alreadyLinked += 1; continue; }
+        const postingKey = `invoice:${invoice.id}:${SCHEMA_VERSION}`;
+        const duplicate = postingByKey.get(postingKey);
+        if (duplicate && duplicate.status !== 'anulado') {
+          result.repairedLinks += 1;
+          if (apply) await svc.entities.Invoice.update(invoice.id, { linked_journal_entry_id: duplicate.id, estado_contable: duplicate.status === 'confirmado' ? 'contabilizada' : 'asiento_propuesto' });
+          continue;
+        }
+        const party = invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre;
+        const valid = /^\d{4}-\d{2}-\d{2}$/.test(String(invoice.fecha_emision || ''))
+          && ['emitida', 'recibida'].includes(invoice.tipo)
+          && Number.isFinite(Number(invoice.total_factura))
+          && String(party || '').trim();
+        if (!valid) {
+          result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: !party ? 'tercero_sin_identificar' : 'datos_contables_incompletos' });
+          continue;
+        }
+        result.ready += 1;
+        if (apply) {
+          try {
+            const posting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
+            if (!posting.alreadyPosted) result.posted += 1;
+          } catch (error) {
+            result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: error.message || 'error_contabilizacion' });
+          }
+        }
+      }
+      const nextOffset = offset + page.length;
+      return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: active.length, offset, nextOffset, done: nextOffset >= active.length, result, schemaVersion: SCHEMA_VERSION });
+    }
+
     if (action === 'quality' || action === 'reports' || action === 'journal' || action === 'ledger') {
       const data = await accountingData(svc, companyId);
       if (action === 'quality') {
