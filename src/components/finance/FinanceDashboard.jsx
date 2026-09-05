@@ -72,33 +72,18 @@ export default function FinanceDashboard() {
     const burnRate = gastoTotal / (periodDays / 30);
     const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
 
-    // DSO — días reales desde emisión hasta cobro/vencimiento
-    const invoicesEmitidas = activeInvoices(invoices).filter(i => i.tipo === 'emitida');
-    const dso = invoicesEmitidas.length > 0
-      ? invoicesEmitidas.reduce((s, i) => {
-          try {
-            const emision = parseISO(i.fecha_emision);
-            if (i.estado_cobro === 'cobrada' && i.fecha_vencimiento) {
-              return s + Math.max(0, Math.round((parseISO(i.fecha_vencimiento) - emision) / 86400000));
-            }
-            return s + Math.max(0, Math.round((now - emision) / 86400000));
-          } catch { return s; }
-        }, 0) / invoicesEmitidas.length
-      : 0;
-
-    // DPO — días reales desde emisión hasta pago/vencimiento
-    const invoicesRecibidas = activeInvoices(invoices).filter(i => i.tipo === 'recibida');
-    const dpo = invoicesRecibidas.length > 0
-      ? invoicesRecibidas.reduce((s, i) => {
-          try {
-            const emision = parseISO(i.fecha_emision);
-            if (i.estado_cobro === 'cobrada' && i.fecha_vencimiento) {
-              return s + Math.max(0, Math.round((parseISO(i.fecha_vencimiento) - emision) / 86400000));
-            }
-            return s + Math.max(0, Math.round((now - emision) / 86400000));
-          } catch { return s; }
-        }, 0) / invoicesRecibidas.length
-      : 0;
+    // DSO/DPO: solo periodos de cobro/pago observados, nunca vencimientos estimados.
+    const measuredDays = (type) => activeInvoices(invoices)
+      .filter(i => i.tipo === type && i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
+      .map(i => {
+        try { return Math.max(0, Math.round((parseISO(i.ultimo_pago_at) - parseISO(i.fecha_emision)) / 86400000)); }
+        catch { return null; }
+      })
+      .filter(value => value !== null);
+    const dsoDays = measuredDays('emitida');
+    const dpoDays = measuredDays('recibida');
+    const dso = dsoDays.length ? dsoDays.reduce((sum, value) => sum + value, 0) / dsoDays.length : 0;
+    const dpo = dpoDays.length ? dpoDays.reduce((sum, value) => sum + value, 0) / dpoDays.length : 0;
 
     const workingCapital = cobrosPendientes - pagosPendientes;
 
@@ -144,7 +129,7 @@ export default function FinanceDashboard() {
       try {
         if (treasury.connectedAccounts > 0) {
           return (bankTransactions || [])
-            .filter(t => t.estado_proveedor !== 'pending' && t.categoria_ia !== 'transferencia_interna' && t.estado_conciliacion !== 'movimiento_interno' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
+            .filter(t => t.moneda === 'EUR' && t.estado_proveedor !== 'pending' && t.categoria_ia !== 'transferencia_interna' && t.estado_conciliacion !== 'movimiento_interno' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
             .reduce((sum, t) => sum + (t.tipo === 'entrada' ? Number(t.importe || 0) : -Number(t.importe || 0)), 0);
         }
         return activeInvoices(invoices)
