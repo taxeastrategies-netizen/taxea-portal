@@ -62,6 +62,7 @@ export default function BalancePyG({ companyId }) {
     return [...new Set([...values, Number(year)])].sort((a, b) => b - a);
   }, [report?.years, year]);
 
+  if (!companyId) return <div className="rounded-xl border border-border bg-card p-12 text-center text-sm text-muted-foreground">Selecciona una empresa para calcular sus estados contables.</div>;
   if (query.isLoading) return <div className="p-12 text-center text-sm text-muted-foreground">Calculando estados contables desde el diario...</div>;
   if (query.isError || !report) return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
