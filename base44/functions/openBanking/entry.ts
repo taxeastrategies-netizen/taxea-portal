@@ -368,6 +368,217 @@ async function syncProviderAccount(base44: any, token: string, account: any, req
   return { ...result, balance: balances.available, booked, pending, from: transactionData.from };
 }
 
+const RECONCILIATION_STOP_WORDS = new Set([
+  'sl', 'slu', 'sa', 'sau', 'sc', 'scp', 'sociedad', 'limitada', 'anonima',
+  'grupo', 'servicios', 'service', 'services', 'the', 'de', 'del', 'la', 'las', 'los', 'y',
+]);
+
+function normalizeForReconciliation(value: unknown) {
+  return clean(value, 1200)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function tokensForReconciliation(value: unknown) {
+  return clean(value, 1200)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/)
+    .filter(token => token.length >= 4 && !RECONCILIATION_STOP_WORDS.has(token));
+}
+
+function reconciliationDayGap(from: unknown, to: unknown) {
+  const value = Math.round((Date.parse(clean(to, 30)) - Date.parse(clean(from, 30))) / 86400000);
+  return Number.isFinite(value) ? value : null;
+}
+
+function expectedTransactionType(invoice: any) {
+  const creditNote = Number(invoice.total_factura || 0) < 0;
+  return invoice.tipo === 'recibida'
+    ? (creditNote ? 'entrada' : 'salida')
+    : (creditNote ? 'salida' : 'entrada');
+}
+
+function invoiceCounterparty(invoice: any) {
+  return invoice.tipo === 'recibida'
+    ? { name: invoice.proveedor_nombre || invoice.cliente_nombre, taxId: invoice.proveedor_nif || invoice.cliente_nif }
+    : { name: invoice.cliente_nombre || invoice.proveedor_nombre, taxId: invoice.cliente_nif || invoice.proveedor_nif };
+}
+
+function reconciliationSignal(invoice: any, transaction: any, contact: any) {
+  const bankText = `${transaction.nombre_contraparte || ''} ${transaction.concepto || ''} ${transaction.referencia || ''} ${transaction.iban_contraparte || ''}`;
+  const compactBankText = normalizeForReconciliation(bankText);
+  const party = invoiceCounterparty(invoice);
+  const invoiceNumber = normalizeForReconciliation(invoice.numero_factura);
+  const taxIds = [party.taxId, contact?.nif_cif].map(normalizeForReconciliation).filter(value => value.length >= 8);
+  const names = [party.name, contact?.razon_social, contact?.nombre].map(value => clean(value, 300)).filter(Boolean);
+  const bankTokens = new Set(tokensForReconciliation(bankText));
+  const matchedTokens = [...new Set(names.flatMap(tokensForReconciliation).filter(token => bankTokens.has(token)))];
+  const numberMatch = invoiceNumber.length >= 4 && compactBankText.includes(invoiceNumber);
+  const taxIdMatch = taxIds.some(value => compactBankText.includes(value));
+  const fullNameMatch = names.some(value => {
+    const normalized = normalizeForReconciliation(value);
+    return normalized.length >= 6 && compactBankText.includes(normalized);
+  });
+  const distinctiveTokenMatch = matchedTokens.some(token => token.length >= 8);
+  const partyMatch = fullNameMatch || distinctiveTokenMatch || matchedTokens.length >= 2;
+  const score = numberMatch ? 140 : taxIdMatch ? 130 : fullNameMatch ? 110 : distinctiveTokenMatch ? 90 : matchedTokens.length >= 2 ? 80 : 0;
+  return {
+    strong: numberMatch || taxIdMatch || partyMatch,
+    score,
+    reason: numberMatch ? 'número de factura' : taxIdMatch ? 'NIF' : fullNameMatch ? 'nombre completo' : distinctiveTokenMatch ? 'nombre distintivo' : matchedTokens.length >= 2 ? 'nombre de contraparte' : '',
+  };
+}
+
+async function autoReconcileCompany(base44: any, companyId: string, actor: string) {
+  const [accounts, transactions, invoices, payments, contacts] = await Promise.all([
+    base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', MAX_LIST),
+    base44.asServiceRole.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', MAX_LIST),
+    base44.asServiceRole.entities.Invoice.filter({ company_id: companyId }, '-fecha_emision', MAX_LIST),
+    base44.asServiceRole.entities.InvoicePayment.filter({ company_id: companyId }, '-payment_date', MAX_LIST),
+    base44.asServiceRole.entities.Contact.filter({ company_id: companyId }, '-created_date', MAX_LIST),
+  ]);
+  const activeAccountIds = new Set((accounts || []).filter((account: any) => account.activa !== false).map((account: any) => account.id));
+  const paymentsByInvoice = new Map<string, number>();
+  for (const payment of payments || []) {
+    paymentsByInvoice.set(payment.invoice_id, asMoney((paymentsByInvoice.get(payment.invoice_id) || 0) + Math.abs(Number(payment.amount || 0))));
+  }
+  const contactsByTaxId = new Map<string, any>();
+  const contactsByName = new Map<string, any>();
+  for (const contact of contacts || []) {
+    const taxId = normalizeForReconciliation(contact.nif_cif);
+    const names = [contact.razon_social, contact.nombre].map(normalizeForReconciliation).filter(Boolean);
+    if (taxId) contactsByTaxId.set(taxId, contact);
+    for (const name of names) if (name.length >= 6) contactsByName.set(name, contact);
+  }
+  const contactForInvoice = (invoice: any) => {
+    const party = invoiceCounterparty(invoice);
+    const taxId = normalizeForReconciliation(party.taxId);
+    const name = normalizeForReconciliation(party.name);
+    return (taxId && contactsByTaxId.get(taxId)) || (name && contactsByName.get(name)) || null;
+  };
+  const eligibleInvoices = (invoices || []).filter((invoice: any) => {
+    if (invoice.anulada || invoice.estado_cobro === 'cobrada') return false;
+    const total = Math.abs(Number(invoice.total_factura || 0));
+    invoice.__outstanding = asMoney(Math.max(0, total - (paymentsByInvoice.get(invoice.id) || 0)));
+    return invoice.__outstanding > 0.01;
+  });
+  const availableTransactions = (transactions || []).filter((transaction: any) =>
+    activeAccountIds.has(transaction.bank_account_id)
+    && transaction.estado_proveedor !== 'pending'
+    && !transaction.es_demo
+    && !transaction.entidad_id
+    && !['duplicada', 'descartada', 'movimiento_interno'].includes(transaction.estado_conciliacion),
+  );
+  const candidates: any[] = [];
+  for (const invoice of eligibleInvoices) {
+    const currency = clean(invoice.moneda || 'EUR', 8).toUpperCase();
+    const contact = contactForInvoice(invoice);
+    for (const transaction of availableTransactions) {
+      if (transaction.tipo !== expectedTransactionType(invoice)) continue;
+      if (clean(transaction.moneda || 'EUR', 8).toUpperCase() !== currency) continue;
+      if (Math.abs(Number(transaction.importe || 0) - invoice.__outstanding) > 0.01) continue;
+      const gap = reconciliationDayGap(invoice.fecha_emision || invoice.fecha_operacion, transaction.fecha_operacion);
+      if (gap === null || gap < -3 || gap > 90) continue;
+      const signal = reconciliationSignal(invoice, transaction, contact);
+      if (!signal.strong || signal.score < 80) continue;
+      candidates.push({ invoice, transaction, contact, gap, signal, score: signal.score + Math.max(0, 30 - Math.abs(gap)) });
+    }
+  }
+  const byInvoice = new Map<string, any[]>();
+  const byTransaction = new Map<string, any[]>();
+  for (const candidate of candidates) {
+    byInvoice.set(candidate.invoice.id, [...(byInvoice.get(candidate.invoice.id) || []), candidate]);
+    byTransaction.set(candidate.transaction.id, [...(byTransaction.get(candidate.transaction.id) || []), candidate]);
+  }
+  const sorted = (rows: any[]) => rows.slice().sort((left, right) => right.score - left.score || Math.abs(left.gap) - Math.abs(right.gap));
+  const safeMatches = candidates.filter(candidate => {
+    const invoiceMatches = sorted(byInvoice.get(candidate.invoice.id) || []);
+    const transactionMatches = sorted(byTransaction.get(candidate.transaction.id) || []);
+    const invoiceUnique = invoiceMatches[0]?.transaction.id === candidate.transaction.id
+      && (!invoiceMatches[1] || invoiceMatches[0].score - invoiceMatches[1].score >= 25);
+    const transactionUnique = transactionMatches[0]?.invoice.id === candidate.invoice.id
+      && (!transactionMatches[1] || transactionMatches[0].score - transactionMatches[1].score >= 25);
+    return invoiceUnique && transactionUnique;
+  });
+  let reconciled = 0;
+  let amount = 0;
+  let issued = 0;
+  let received = 0;
+  for (const match of safeMatches) {
+    const previousPayment = await base44.asServiceRole.entities.InvoicePayment.filter({
+      company_id: companyId,
+      invoice_id: match.invoice.id,
+      bank_transaction_id: match.transaction.id,
+    }, '-created_at', 1);
+    if (previousPayment?.[0]) continue;
+    const currentTransaction = await base44.asServiceRole.entities.BankTransaction.get(match.transaction.id).catch(() => null);
+    const currentInvoice = await base44.asServiceRole.entities.Invoice.get(match.invoice.id).catch(() => null);
+    if (!currentTransaction || currentTransaction.entidad_id || !currentInvoice || currentInvoice.anulada || currentInvoice.estado_cobro === 'cobrada') continue;
+    const currentPayments = await base44.asServiceRole.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: currentInvoice.id }, '-payment_date', MAX_LIST);
+    const alreadyPaid = asMoney((currentPayments || []).reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount || 0)), 0));
+    const currentOutstanding = asMoney(Math.max(0, Math.abs(Number(currentInvoice.total_factura || 0)) - alreadyPaid));
+    const paymentAmount = asMoney(Math.abs(Number(currentTransaction.importe || 0)));
+    if (currentOutstanding <= 0.01 || Math.abs(currentOutstanding - paymentAmount) > 0.01) continue;
+    const now = new Date().toISOString();
+    const currency = clean(currentTransaction.moneda || currentInvoice.moneda || 'EUR', 8).toUpperCase();
+    const note = `Conciliación automática de alta confianza: importe, sentido, moneda, fecha y ${match.signal.reason}.`;
+    await base44.asServiceRole.entities.InvoicePayment.create({
+      company_id: companyId,
+      invoice_id: currentInvoice.id,
+      amount: paymentAmount,
+      currency,
+      payment_date: currentTransaction.fecha_operacion,
+      method: 'transferencia',
+      reference: clean(currentTransaction.referencia || currentTransaction.concepto, 160),
+      notes: note,
+      origin: 'bank_reconciliation',
+      bank_transaction_id: currentTransaction.id,
+      idempotency_key: `bank:${currentTransaction.id}`,
+      created_at: now,
+      created_by: actor,
+    });
+    await base44.asServiceRole.entities.BankTransaction.update(currentTransaction.id, {
+      estado_conciliacion: 'conciliada_auto',
+      confianza_conciliacion: 'alta',
+      entidad_tipo: 'invoice',
+      entidad_id: currentInvoice.id,
+      contacto_id: match.contact?.id || currentTransaction.contacto_id || null,
+      notas: clean(`${currentTransaction.notas ? `${currentTransaction.notas}\n` : ''}${note} Factura ${currentInvoice.numero_factura}.`, 2000),
+    });
+    const paid = asMoney(alreadyPaid + paymentAmount);
+    const outstanding = asMoney(Math.max(0, Math.abs(Number(currentInvoice.total_factura || 0)) - paid));
+    await base44.asServiceRole.entities.Invoice.update(currentInvoice.id, {
+      estado_cobro: outstanding <= 0.01 ? 'cobrada' : 'parcial',
+      importe_pagado: paid,
+      importe_pendiente: outstanding,
+      ultimo_pago_at: now,
+    });
+    await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+      invoice_id: currentInvoice.id,
+      company_id: companyId,
+      event_type: 'conciliacion_bancaria',
+      event_label: 'Factura conciliada automáticamente',
+      event_detail: `${paymentAmount.toFixed(2)} ${currency} · ${clean(currentTransaction.concepto, 120)} · ${match.signal.reason}`,
+      created_at: now,
+      created_by: actor,
+      origin: 'automatizacion',
+    }).catch(error => console.warn('[openBanking] reconciliation timeline skipped:', publicError(error)));
+    reconciled += 1;
+    amount = asMoney(amount + paymentAmount);
+    if (currentInvoice.tipo === 'recibida') received += 1;
+    else issued += 1;
+  }
+  return {
+    reconciled,
+    amount,
+    issued,
+    received,
+    remaining_invoices: Math.max(0, eligibleInvoices.length - reconciled),
+    reviewed_invoices: eligibleInvoices.length,
+    criteria_version: 'exact-v2-party-evidence',
+  };
+}
+
 function syncAgeMs(account: any) {
   const timestamp = Date.parse(account.fecha_ultima_sync || '');
   return Number.isFinite(timestamp) ? Date.now() - timestamp : Number.POSITIVE_INFINITY;
@@ -523,7 +734,11 @@ Deno.serve(async (request) => {
         }
         await sleep(350);
       }
-      return Response.json({ ok: true, ...summary, eligible_remaining: Math.max(0, eligibleAccounts.length - eligible.length), min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000 });
+      const reconciliations = [];
+      for (const companyId of [...new Set(eligible.map((account: any) => account.company_id))]) {
+        reconciliations.push({ company_id: companyId, ...(await autoReconcileCompany(base44, companyId, 'Conciliación automática Taxea')) });
+      }
+      return Response.json({ ok: true, ...summary, reconciliations, eligible_remaining: Math.max(0, eligibleAccounts.length - eligible.length), min_account_age_hours: SCHEDULED_SYNC_MIN_AGE_MS / 3600000 });
     }
 
     const companyId = await assertCompany(base44, user, body.company_id);
@@ -584,6 +799,11 @@ Deno.serve(async (request) => {
           last_sync: connected.map((account: any) => account.fecha_ultima_sync).filter(Boolean).sort().at(-1) || null,
         },
       });
+    }
+
+    if (action === 'auto_reconcile') {
+      const result = await autoReconcileCompany(base44, companyId, user.full_name || user.email || 'Usuario');
+      return Response.json({ ok: true, ...result });
     }
 
     const token = await providerToken();
@@ -807,7 +1027,8 @@ Deno.serve(async (request) => {
           nota_auditoria: `Consentimiento PSD2 activo. Autorizado por ${user.email}.`,
         });
       }
-      return Response.json({ ok: true, accounts, session_status: 'AUTHORIZED' });
+      const autoReconciliation = await autoReconcileCompany(base44, companyId, user.full_name || user.email || 'Usuario');
+      return Response.json({ ok: true, accounts, session_status: 'AUTHORIZED', auto_reconciliation: autoReconciliation });
     }
 
     if (action === 'sync') {
@@ -817,7 +1038,8 @@ Deno.serve(async (request) => {
         return Response.json({ ok: true, skipped: true, reason: 'recently_synced', created: 0, updated: 0, next_sync_at: new Date(Date.now() + (MANUAL_SYNC_COOLDOWN_MS - ageMs)).toISOString() });
       }
       const result = await syncWithLog(base44, token, account, user, account.sync_desde || `${new Date().getUTCFullYear()}-01-01`);
-      return Response.json({ ok: true, ...result });
+      const autoReconciliation = await autoReconcileCompany(base44, companyId, user.full_name || user.email || 'Usuario');
+      return Response.json({ ok: true, ...result, auto_reconciliation: autoReconciliation });
     }
 
     if (action === 'disconnect') {
