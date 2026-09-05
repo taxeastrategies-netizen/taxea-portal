@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -10,7 +11,7 @@ export default function ARForecast({ invoices }) {
   const now = new Date();
 
   const { forecast7, forecast30, forecastQ, pendingByProb } = useMemo(() => {
-    const pending = invoices.filter(i => i.estado_cobro === 'pendiente' && i.fecha_vencimiento);
+    const pending = invoices.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro) && i.fecha_vencimiento);
 
     const getProbability = (inv) => {
       const dias = differenceInDays(now, parseISO(inv.fecha_vencimiento));
@@ -26,17 +27,17 @@ export default function ARForecast({ invoices }) {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
         return d >= -7 && d <= 7;
       })
-      .reduce((s, i) => s + (i.total_factura || 0) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
 
     const forecast30 = withProb
       .filter(i => {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
         return d >= -30 && d <= 30;
       })
-      .reduce((s, i) => s + (i.total_factura || 0) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
 
     const forecastQ = withProb.reduce(
-      (s, i) => s + (i.total_factura || 0) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0
+      (s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0
     );
 
     const pendingByProb = {
@@ -45,7 +46,7 @@ export default function ARForecast({ invoices }) {
       baja:  { items: withProb.filter(i => i.prob === 'baja'),  total: 0 },
     };
     Object.keys(pendingByProb).forEach(k => {
-      pendingByProb[k].total = pendingByProb[k].items.reduce((s, i) => s + (i.total_factura || 0), 0);
+      pendingByProb[k].total = pendingByProb[k].items.reduce((s, i) => s + getOutstandingAmount(i), 0);
     });
 
     return { forecast7, forecast30, forecastQ, pendingByProb };
@@ -114,7 +115,7 @@ export default function ARForecast({ invoices }) {
         </div>
         <div className="divide-y divide-slate-50">
           {invoices
-            .filter(i => i.estado_cobro === 'pendiente' && i.fecha_vencimiento)
+            .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro) && i.fecha_vencimiento)
             .filter(i => differenceInDays(parseISO(i.fecha_vencimiento), now) >= -5 && differenceInDays(parseISO(i.fecha_vencimiento), now) <= 30)
             .sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento))
             .slice(0, 8)
@@ -128,7 +129,7 @@ export default function ARForecast({ invoices }) {
                     <p className="text-[10px] text-slate-400 font-mono">{inv.numero_factura}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-foreground">{fmt(inv.total_factura)}</p>
+                    <p className="text-sm font-bold text-foreground">{fmt(getOutstandingAmount(inv))}</p>
                     <p className={cn("text-[10px] font-medium", isOverdue ? "text-red-500" : d <= 7 ? "text-amber-500" : "text-slate-400")}>
                       {isOverdue ? `Vencida hace ${Math.abs(d)}d` : d === 0 ? 'Vence hoy' : `Vence en ${d}d`}
                     </p>
@@ -136,7 +137,7 @@ export default function ARForecast({ invoices }) {
                 </div>
               );
             })}
-          {invoices.filter(i => i.estado_cobro === 'pendiente' && i.fecha_vencimiento &&
+          {invoices.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro) && i.fecha_vencimiento &&
             differenceInDays(parseISO(i.fecha_vencimiento), now) >= -5 &&
             differenceInDays(parseISO(i.fecha_vencimiento), now) <= 30).length === 0 && (
             <p className="text-xs text-slate-400 text-center py-8">No hay vencimientos en los próximos 30 días.</p>
