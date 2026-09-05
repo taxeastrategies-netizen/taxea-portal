@@ -28,7 +28,7 @@ export default function AsientosManualesTab({ companyId, user }) {
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounting-accounts-manuales', companyId],
-    queryFn: () => base44.entities.AccountingAccount.filter({ companyId }, 'code', 1000),
+    queryFn: () => base44.entities.AccountingAccount.filter({ companyId }, 'code', 5000),
     enabled: Boolean(companyId),
   });
 
