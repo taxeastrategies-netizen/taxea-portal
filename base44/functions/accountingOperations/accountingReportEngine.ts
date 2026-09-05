@@ -76,13 +76,17 @@ export async function accountingData(svc, companyId) {
 
 export function accountingQuality(data) {
   const activeInvoices = data.invoices.filter(invoice => !invoice.anulada);
-  const entryById = new Map(data.entries.map(entry => [entry.id, entry]));
+  const entryByKey = new Map();
+  for (const entry of data.entries) {
+    entryByKey.set(entry.id, entry);
+    if (entry.importKey) entryByKey.set(entry.importKey, entry);
+  }
   const healthyInvoice = activeInvoices.filter(invoice => {
-    const entry = entryById.get(invoice.linked_journal_entry_id);
+    const entry = entryByKey.get(invoice.linked_journal_entry_id);
     if (!entry || entry.status === 'anulado') return false;
     return entryIntegrity(entry, data.linesByEntry.get(entry.id) || []).balanced;
   });
-  const brokenInvoiceLinks = activeInvoices.filter(invoice => invoice.linked_journal_entry_id && !entryById.has(invoice.linked_journal_entry_id));
+  const brokenInvoiceLinks = activeInvoices.filter(invoice => invoice.linked_journal_entry_id && !entryByKey.has(invoice.linked_journal_entry_id));
   const integrity = data.entries.map(entry => ({ entry, ...entryIntegrity(entry, data.linesByEntry.get(entry.id) || []) }));
   return {
     entries: data.entries.length,
@@ -97,7 +101,7 @@ export function accountingQuality(data) {
     pendingInvoicePostings: Math.max(0, activeInvoices.length - healthyInvoice.length),
     brokenInvoiceLinks: brokenInvoiceLinks.length,
     payments: data.payments.length,
-    paymentsWithEntry: data.payments.filter(payment => payment.journal_entry_id && entryById.has(payment.journal_entry_id)).length,
+    paymentsWithEntry: data.payments.filter(payment => payment.journal_entry_id && entryByKey.has(payment.journal_entry_id)).length,
   };
 }
 
