@@ -192,6 +192,18 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           action: 'sync_invoice',
           invoiceId: createdInvoice.id,
         }).catch(error => console.error('[InvoiceForm] Contact sync failed:', error));
+        await base44.functions.invoke('accountingOperations', {
+          action: 'post_invoice',
+          companyId: company.id,
+          invoiceId: createdInvoice.id,
+          status: 'confirmado',
+        }).catch(async error => {
+          console.error('[InvoiceForm] Accounting posting failed:', error);
+          await base44.entities.Invoice.update(createdInvoice.id, {
+            estado_contable: 'requiere_correccion',
+            accounting_review_status: 'requiere_correccion',
+          }).catch(() => {});
+        });
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
