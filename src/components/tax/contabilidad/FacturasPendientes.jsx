@@ -256,6 +256,9 @@ export default function FacturasPendientes() {
                       {inv.anulada && inv.motivo_anulacion && (
                         <p className="text-[10px] text-muted-foreground mt-0.5 max-w-32 truncate" title={inv.motivo_anulacion}>{inv.motivo_anulacion}</p>
                       )}
+                      {inv.accounting_migration_hold && (
+                        <p className="text-[10px] text-orange-700 mt-0.5 max-w-40 truncate" title={inv.accounting_migration_hold_reason}>Revisión contable obligatoria</p>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1 flex-wrap">
