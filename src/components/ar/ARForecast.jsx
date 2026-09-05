@@ -25,19 +25,19 @@ export default function ARForecast({ invoices }) {
     const forecast7 = withProb
       .filter(i => {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
-        return d >= -7 && d <= 7;
+        return d >= 0 && d <= 7;
       })
-      .reduce((s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const forecast30 = withProb
       .filter(i => {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
-        return d >= -30 && d <= 30;
+        return d >= 0 && d <= 30;
       })
-      .reduce((s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const forecastQ = withProb.reduce(
-      (s, i) => s + getOutstandingAmount(i) * (i.prob === 'alta' ? 0.9 : i.prob === 'media' ? 0.6 : 0.3), 0
+      (s, i) => s + getOutstandingAmount(i), 0
     );
 
     const pendingByProb = {
@@ -53,9 +53,9 @@ export default function ARForecast({ invoices }) {
   }, [invoices]);
 
   const PROB_CFG = {
-    alta:  { label: 'Alta probabilidad',  badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-400', factor: '×0.9' },
-    media: { label: 'Media probabilidad', badge: 'bg-amber-50 text-amber-700 border-amber-200',       bar: 'bg-amber-400',   factor: '×0.6' },
-    baja:  { label: 'Baja probabilidad',  badge: 'bg-red-50 text-red-700 border-red-200',             bar: 'bg-red-400',     factor: '×0.3' },
+    alta:  { label: 'En plazo',             badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-400', factor: 'Vencimiento futuro' },
+    media: { label: 'Vencida 0-30 días',  badge: 'bg-amber-50 text-amber-700 border-amber-200',       bar: 'bg-amber-400',   factor: 'Revisión recomendada' },
+    baja:  { label: 'Vencida +30 días',   badge: 'bg-red-50 text-red-700 border-red-200',             bar: 'bg-red-400',     factor: 'Revisión prioritaria' },
   };
 
   const total = pendingByProb.alta.total + pendingByProb.media.total + pendingByProb.baja.total;
@@ -65,9 +65,9 @@ export default function ARForecast({ invoices }) {
       {/* Forecast resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Cash esperado 7 días', value: fmt(forecast7), sub: 'Probabilidad ajustada', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'Cash esperado 30 días', value: fmt(forecast30), sub: 'Vencimientos próximos', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-          { label: 'Cash esperado trimestre', value: fmt(forecastQ), sub: 'Total cartera pendiente', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100' },
+          { label: 'Vencimientos próximos 7 días', value: fmt(forecast7), sub: 'Importe pendiente documentado', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+          { label: 'Vencimientos próximos 30 días', value: fmt(forecast30), sub: 'Vencimientos próximos', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+          { label: 'Cartera total pendiente', value: fmt(forecastQ), sub: 'Importe documental sin ponderación', color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100' },
         ].map((c, i) => (
           <div key={i} className={cn("bg-white border rounded-2xl p-4 shadow-sm", c.border)}>
             <p className="text-[11px] text-slate-400 mb-1">{c.label}</p>
@@ -79,7 +79,7 @@ export default function ARForecast({ invoices }) {
 
       {/* Por probabilidad */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-        <p className="text-sm font-semibold text-foreground">Cartera por probabilidad de cobro</p>
+        <p className="text-sm font-semibold text-foreground">Cartera por situación de vencimiento</p>
         {total === 0 ? (
           <p className="text-xs text-slate-400 text-center py-4">Sin facturas pendientes</p>
         ) : (
@@ -111,7 +111,7 @@ export default function ARForecast({ invoices }) {
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100">
           <p className="text-sm font-semibold text-foreground">Próximos vencimientos</p>
-          <p className="text-xs text-slate-400 mt-0.5">Facturas con mayor probabilidad de cobro en los próximos 30 días</p>
+          <p className="text-xs text-slate-400 mt-0.5">Importes pendientes con vencimiento cercano o reciente</p>
         </div>
         <div className="divide-y divide-slate-50">
           {invoices
