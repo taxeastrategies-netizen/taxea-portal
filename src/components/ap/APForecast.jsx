@@ -13,16 +13,16 @@ export default function APForecast({ invoices, expenses, obligations }) {
 
   const { forecast7, forecast30, forecastQ, byWeek, alerts } = useMemo(() => {
     const pending = invoices.filter(i => i.estado_cobro !== 'cobrada' && i.fecha_vencimiento);
-    const pendingObl = obligations.filter(o => o.estado !== 'presentada' && o.fecha_limite);
+    const pendingObl = obligations.filter(o => !['finalizado', 'presentada', 'presentado', 'pagado', 'domiciliado'].includes(o.estado) && o.fecha_limite);
 
     const forecast7 = pending.filter(i => {
       const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
-      return d >= -3 && d <= 7;
+      return d >= 0 && d <= 7;
     }).reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const forecast30 = pending.filter(i => {
       const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
-      return d >= -7 && d <= 30;
+      return d >= 0 && d <= 30;
     }).reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const forecastQ = pending.reduce((s, i) => s + getOutstandingAmount(i), 0);
