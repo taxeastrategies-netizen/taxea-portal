@@ -41,7 +41,7 @@ export default function AccountsReceivable() {
       .finally(() => setLoading(false));
   }, [companyId]);
 
-  const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida'), [invoices]);
+  const emitidas = useMemo(() => invoices.filter(i => i.tipo === 'emitida' && !i.anulada), [invoices]);
 
   const kpis = useMemo(() => {
     const now = new Date();
