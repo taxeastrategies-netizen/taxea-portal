@@ -30,7 +30,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function CashflowChart({ invoices, expenses, bankTransactions = [] }) {
-  const hasBankData = bankTransactions.some(transaction => transaction.estado_proveedor !== 'pending');
+  const hasBankData = bankTransactions.some(transaction => transaction.moneda === 'EUR' && transaction.estado_proveedor !== 'pending');
   const data = useMemo(() => {
     const months = Array.from({ length: 7 }, (_, i) => subMonths(new Date(), 6 - i));
     return months.map(month => {
@@ -38,7 +38,8 @@ export default function CashflowChart({ invoices, expenses, bankTransactions = [
 
       const bankInMonth = bankTransactions.filter(transaction => {
         try {
-          return transaction.estado_proveedor !== 'pending'
+          return transaction.moneda === 'EUR'
+            && transaction.estado_proveedor !== 'pending'
             && transaction.categoria_ia !== 'transferencia_interna'
             && transaction.estado_conciliacion !== 'movimiento_interno'
             && isWithinInterval(parseISO(transaction.fecha_operacion), interval);
