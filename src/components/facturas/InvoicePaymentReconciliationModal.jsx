@@ -49,17 +49,29 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
 
   useEffect(() => {
     if (!open || !invoice?.id) return;
+    setLoading(false);
+    setSaving(false);
     setError('');
     setSuccess('');
+    setOutstanding(0);
+    setPaid(0);
+    setPayments([]);
+    setCandidates([]);
+    setBankAccountingAccounts([]);
     setSelectedTransaction('');
     setSelectedBankLedgerId('');
+    setAmount('');
     setPaymentDate(today());
     setMethod('transferencia');
     setReference('');
     setNotes('');
     setIdempotencyKey(crypto.randomUUID());
+    if (mode === 'reconcile' && invoice?.anulada) {
+      setError('Esta factura está anulada y no puede conciliarse.');
+      return;
+    }
     loadData();
-  }, [open, mode, invoice?.id]);
+  }, [open, mode, invoice?.id, invoice?.anulada]);
 
   const invoke = async payload => {
     const response = await base44.functions.invoke('invoiceOperations', {
@@ -114,7 +126,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         setNotes('');
         setIdempotencyKey(crypto.randomUUID());
       }
-      await onChanged?.();
+      Promise.resolve().then(() => onChanged?.()).catch(() => {});
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo registrar el pago.');
     }
@@ -123,6 +135,10 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
 
   const handleReconcile = async () => {
     setError('');
+    if (invoice?.anulada) {
+      setError('Esta factura está anulada y no puede conciliarse.');
+      return;
+    }
     if (!selectedTransaction) {
       setError('Selecciona primero un movimiento bancario compatible.');
       return;
@@ -152,7 +168,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setSuccess(`Movimiento conciliado con la factura${data.journal_entry?.entryNumber ? ` · asiento ${data.journal_entry.entryNumber}` : ''}.`);
       setCandidates(current => current.filter(candidate => candidate.id !== selectedTransaction));
       setSelectedTransaction('');
-      await onChanged?.();
+      Promise.resolve().then(() => onChanged?.()).catch(() => {});
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo conciliar el movimiento.');
     }
@@ -313,7 +329,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-secondary/30">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
           {isReconciliation ? (
-            <Button onClick={handleReconcile} disabled={saving || loading}>
+            <Button onClick={handleReconcile} disabled={saving || loading || invoice?.anulada}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Conciliar movimiento
             </Button>
           ) : (
