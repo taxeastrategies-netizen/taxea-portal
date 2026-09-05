@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -24,17 +25,17 @@ export default function APAgingChart({ invoices }) {
         const d = Math.max(0, differenceInDays(now, parseISO(i.fecha_vencimiento)));
         return d >= b.min && d < b.max;
       });
-      return { ...b, items, total: items.reduce((s, i) => s + (i.total_factura || 0), 0), count: items.length };
+      return { ...b, items, total: items.reduce((s, i) => s + getOutstandingAmount(i), 0), count: items.length };
     });
 
     const supplierMap = {};
     pending.forEach(i => {
-      const k = i.cliente_nombre || 'Sin proveedor';
-      if (!supplierMap[k]) supplierMap[k] = { name: k, nif: i.cliente_nif, '0_30': 0, '30_60': 0, '60_90': 0, '90p': 0, total: 0 };
+      const k = i.proveedor_nombre || i.cliente_nombre || 'Sin proveedor';
+      if (!supplierMap[k]) supplierMap[k] = { name: k, nif: i.proveedor_nif || i.cliente_nif, '0_30': 0, '30_60': 0, '60_90': 0, '90p': 0, total: 0 };
       const d = Math.max(0, differenceInDays(now, parseISO(i.fecha_vencimiento)));
       const bk = d < 30 ? '0_30' : d < 60 ? '30_60' : d < 90 ? '60_90' : '90p';
-      supplierMap[k][bk] += i.total_factura || 0;
-      supplierMap[k].total += i.total_factura || 0;
+      supplierMap[k][bk] += getOutstandingAmount(i);
+      supplierMap[k].total += getOutstandingAmount(i);
     });
 
     const bySupplier = Object.values(supplierMap).sort((a, b) => b.total - a.total).slice(0, 12);
