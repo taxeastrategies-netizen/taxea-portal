@@ -1,6 +1,6 @@
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
-async function fetchAll(entity, query = {}, sort = 'created_date', max = 30000) {
+export async function fetchAll(entity, query = {}, sort = 'created_date', max = 30000) {
   const rows = [];
   const pageSize = 5000;
   for (let skip = 0; skip < max; skip += pageSize) {
