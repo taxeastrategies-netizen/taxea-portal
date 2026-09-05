@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { subDays, isAfter, parseISO } from 'date-fns';
+import { subDays, isAfter, parseISO, differenceInDays } from 'date-fns';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 import CashPositionHeader from './CashPositionHeader';
 import CashKpiGrid from './CashKpiGrid';
@@ -48,8 +49,10 @@ export default function CashflowCenter() {
 
     const filteredBankTransactions = (bankTransactions || []).filter(transaction => {
       try {
-        return transaction.estado_proveedor !== 'pending'
+        return transaction.moneda === 'EUR'
+          && transaction.estado_proveedor !== 'pending'
           && transaction.categoria_ia !== 'transferencia_interna'
+          && transaction.estado_conciliacion !== 'movimiento_interno'
           && isAfter(parseISO(transaction.fecha_operacion), cutoff);
       } catch { return false; }
     });
@@ -79,34 +82,56 @@ export default function CashflowCenter() {
       : invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
         .reduce((s, i) => s + (i.total_factura || 0), 0);
 
+    const pendingStates = ['pendiente', 'parcial', 'vencida'];
     const cobrosPendientes = invoices
-      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'pendiente')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .filter(i => i.tipo === 'emitida' && pendingStates.includes(i.estado_cobro))
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const pagosPendientes = invoices
-      .filter(i => i.tipo === 'recibida' && i.estado_cobro === 'pendiente')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .filter(i => i.tipo === 'recibida' && pendingStates.includes(i.estado_cobro))
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const burnRate = gastoTotal / 1 || 0; // monthly
     const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
 
-    const invoicesEmitidas = invoices.filter(i => i.tipo === 'emitida');
-    const dso = invoicesEmitidas.length > 0
-      ? invoicesEmitidas.reduce((s, i) => s + (i.estado_cobro === 'cobrada' ? 25 : 55), 0) / invoicesEmitidas.length
+    const observedCollections = invoices
+      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
+      .map(i => {
+        try { return Math.max(0, differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision))); }
+        catch { return null; }
+      })
+      .filter(value => value !== null);
+    const dso = observedCollections.length
+      ? observedCollections.reduce((sum, value) => sum + value, 0) / observedCollections.length
       : 0;
 
     const workingCapital = cobrosPendientes - pagosPendientes;
 
     const vencidas = invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'vencida');
 
-    const prevIngresos = invoices
-      .filter(i => {
-        try {
-          const d = parseISO(i.fecha_emision);
-          return i.tipo === 'emitida' && isAfter(d, prevCutoff) && !isAfter(d, cutoff);
-        } catch { return false; }
-      })
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const prevIngresos = treasury.connectedAccounts > 0
+      ? (bankTransactions || [])
+        .filter(transaction => {
+          try {
+            const d = parseISO(transaction.fecha_operacion);
+            return transaction.moneda === 'EUR'
+              && transaction.tipo === 'entrada'
+              && transaction.estado_proveedor !== 'pending'
+              && transaction.categoria_ia !== 'transferencia_interna'
+              && transaction.estado_conciliacion !== 'movimiento_interno'
+              && isAfter(d, prevCutoff)
+              && !isAfter(d, cutoff);
+          } catch { return false; }
+        })
+        .reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
+      : invoices
+        .filter(i => {
+          try {
+            const d = parseISO(i.fecha_emision);
+            return i.tipo === 'emitida' && isAfter(d, prevCutoff) && !isAfter(d, cutoff);
+          } catch { return false; }
+        })
+        .reduce((s, i) => s + (i.total_factura || 0), 0);
     const ingresosDelta = prevIngresos > 0 ? ((totalIngresos - prevIngresos) / prevIngresos) * 100 : 0;
 
     return {
