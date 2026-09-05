@@ -18,6 +18,12 @@ const ALLOWED_ATTACHMENT_TYPES = new Set([
 
 const asMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const cleanText = (value, max = MAX_TEXT) => String(value || '').trim().slice(0, max);
+const businessError = (message, status = 409, details = {}) => Response.json({
+  ok: false,
+  error: message,
+  error_status: status,
+  ...details,
+});
 const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 const isPrivateFileUri = (value) => /^private\/[A-Za-z0-9/_\-.]+$/.test(String(value || ''))
   && !String(value).includes('..');
@@ -131,6 +137,7 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
 }
 
 Deno.serve(async (req) => {
+  let currentAction = '';
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -138,6 +145,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = cleanText(body.action, 80);
+    currentAction = action;
     const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
 
     if (action === 'create_public_link') {
@@ -334,6 +342,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list_reconciliation_candidates') {
+      if (invoice.anulada) {
+        return businessError('Esta factura está anulada y no puede conciliarse.', 409);
+      }
       const isCreditNote = Number(invoice.total_factura) < 0;
       const expectedType = invoice.tipo === 'recibida'
         ? (isCreditNote ? 'entrada' : 'salida')
@@ -378,37 +389,37 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'reconcile') {
-      if (invoice.anulada) return Response.json({ error: 'No se puede conciliar una factura anulada.' }, { status: 409 });
+      if (invoice.anulada) return businessError('Esta factura está anulada y no puede conciliarse.', 409);
       const transactionId = cleanText(body.bank_transaction_id, 120);
       if (!transactionId) return Response.json({ error: 'Selecciona un movimiento bancario.' }, { status: 400 });
       const transaction = await base44.asServiceRole.entities.BankTransaction.get(transactionId).catch(() => null);
       if (!transaction || transaction.company_id !== companyId) {
         return Response.json({ error: 'Movimiento bancario no encontrado en la empresa activa.' }, { status: 404 });
       }
-      if (transaction.es_demo) return Response.json({ error: 'No se puede conciliar un movimiento de demostración.' }, { status: 409 });
-      if (transaction.estado_proveedor === 'pending') return Response.json({ error: 'El movimiento aún está pendiente en el banco. Espera a que quede contabilizado.' }, { status: 409 });
+      if (transaction.es_demo) return businessError('No se puede conciliar un movimiento de demostración.', 409);
+      if (transaction.estado_proveedor === 'pending') return businessError('El movimiento aún está pendiente en el banco. Espera a que quede contabilizado.', 409);
       const isCreditNote = Number(invoice.total_factura) < 0;
       const expectedType = invoice.tipo === 'recibida'
         ? (isCreditNote ? 'entrada' : 'salida')
         : (isCreditNote ? 'salida' : 'entrada');
       if (transaction.tipo !== expectedType) {
-        return Response.json({ error: `Esta factura requiere un movimiento de ${expectedType}.` }, { status: 409 });
+        return businessError(`Esta factura requiere un movimiento de ${expectedType}.`, 409);
       }
       if (transaction.entidad_id && !(transaction.entidad_tipo === 'invoice' && transaction.entidad_id === invoice.id)) {
-        return Response.json({ error: 'El movimiento ya está conciliado con otro documento.' }, { status: 409 });
+        return businessError('El movimiento ya está conciliado con otro documento.', 409);
       }
       const bankLedgerId = cleanText(body.bank_accounting_account_id, 120);
       if (!bankLedgerId) return Response.json({ error: 'Selecciona la cuenta contable del banco.' }, { status: 400 });
       const bankLedger = await base44.asServiceRole.entities.AccountingAccount.get(bankLedgerId).catch(() => null);
       if (!bankLedger || bankLedger.companyId !== companyId || bankLedger.status === 'inactiva' || bankLedger.type !== 'banco' || !/^57[23]\d{5}$/.test(bankLedger.code || '')) {
-        return Response.json({ error: 'La cuenta contable bancaria no es válida para esta empresa.' }, { status: 409 });
+        return businessError('La cuenta contable bancaria no es válida para esta empresa.', 409);
       }
       if ((transaction.moneda || invoice.moneda || 'EUR').toUpperCase() !== 'EUR' && /euros?/i.test(bankLedger.name || '')) {
-        return Response.json({ error: 'Selecciona una subcuenta bancaria específica para la divisa del movimiento.' }, { status: 409 });
+        return businessError('Selecciona una subcuenta bancaria específica para la divisa del movimiento.', 409);
       }
       const sourceBankAccount = await base44.asServiceRole.entities.BankAccount.get(transaction.bank_account_id).catch(() => null);
       if (!sourceBankAccount || sourceBankAccount.company_id !== companyId) {
-        return Response.json({ error: 'La cuenta bancaria de origen no pertenece a la empresa activa.' }, { status: 409 });
+        return businessError('La cuenta bancaria de origen no pertenece a la empresa activa.', 409);
       }
       const previousPayment = await base44.asServiceRole.entities.InvoicePayment.filter({
         company_id: companyId,
@@ -442,11 +453,12 @@ Deno.serve(async (req) => {
       }
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
       const amount = asMoney(Math.abs(Number(transaction.importe) || 0));
-      if (amount <= 0) return Response.json({ error: 'El movimiento no tiene un importe válido.' }, { status: 409 });
+      if (amount <= 0) return businessError('El movimiento no tiene un importe válido.', 409);
       if (amount - current.outstanding > MONEY_EPSILON) {
-        return Response.json({
-          error: `El movimiento (${amount.toFixed(2)} EUR) supera el pendiente (${current.outstanding.toFixed(2)} EUR). No se concilia automáticamente.`,
-        }, { status: 409 });
+        return businessError(
+          `El movimiento (${amount.toFixed(2)} EUR) supera el pendiente (${current.outstanding.toFixed(2)} EUR). No se concilia automáticamente.`,
+          409,
+        );
       }
       const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
         base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
@@ -498,7 +510,11 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Acción no soportada.' }, { status: 400 });
   } catch (error) {
     console.error('[invoiceOperations]', error);
-    return Response.json({ error: error?.message || 'Error interno.' }, { status: error?.status || 500 });
+    const status = Number(error?.status) || 500;
+    if (currentAction === 'reconcile' || currentAction === 'list_reconciliation_candidates') {
+      return businessError(error?.message || 'No se pudo completar la conciliación.', status);
+    }
+    return Response.json({ error: error?.message || 'Error interno.' }, { status });
   }
 });
 
