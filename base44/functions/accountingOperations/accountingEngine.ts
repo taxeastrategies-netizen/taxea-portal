@@ -385,6 +385,9 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
         counterpartyAccountId: item.counterpartyAccountId || '',
         counterpartyAccountCode: item.counterpartyAccountCode || '',
         documentId: payload.documentId || '',
+        bankTransactionId: item.bankTransactionId || '',
+        isReconciled: Boolean(item.isReconciled),
+        reconciledAt: item.reconciledAt || null,
         entryStatus: status,
         entryDate: date,
         ejercicio: year,
@@ -406,6 +409,57 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
     });
     throw error;
   }
+}
+
+export async function postBankReconciliation(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
+  const amount = money(Math.abs(Number(transaction.importe) || 0));
+  if (amount <= 0) throw new Error('El movimiento bancario no tiene un importe válido.');
+  if (!bankAccount?.id || bankAccount.companyId !== companyId || bankAccount.status === 'inactiva') {
+    throw new Error('La cuenta contable bancaria no pertenece a la empresa o está inactiva.');
+  }
+  if (!counterpartyAccount?.id || counterpartyAccount.companyId !== companyId || counterpartyAccount.status === 'inactiva') {
+    throw new Error('La cuenta de contrapartida no pertenece a la empresa o está inactiva.');
+  }
+  if (bankAccount.id === counterpartyAccount.id) throw new Error('Banco y contrapartida no pueden ser la misma cuenta.');
+  const postingKey = `bank:${transaction.id}:${SCHEMA_VERSION}`;
+  const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
+  if (duplicate?.[0]) {
+    const lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: duplicate[0].id }, 'lineNumber', 20);
+    if (options.documentId && duplicate[0].documentId && duplicate[0].documentId !== options.documentId) {
+      throw new Error('El movimiento ya tiene un asiento vinculado a otro documento.');
+    }
+    if (!(lines || []).some(item => item.accountId === counterpartyAccount.id)) {
+      throw new Error('El asiento bancario existente utiliza otra contrapartida.');
+    }
+    return { alreadyPosted: true, entry: duplicate[0], lines };
+  }
+  const now = new Date().toISOString();
+  const description = clean(options.description || transaction.concepto || 'Conciliación bancaria');
+  const incoming = transaction.tipo === 'entrada';
+  const line = (account, debit, credit, sourceLineType) => ({
+    accountId: account.id,
+    accountCode: account.code,
+    accountName: account.name,
+    description,
+    debit: money(debit),
+    credit: money(credit),
+    bankTransactionId: transaction.id,
+    isReconciled: true,
+    reconciledAt: now,
+    sourceLineType,
+  });
+  return await createJournalEntry(svc, companyId, {
+    date: transaction.fecha_operacion,
+    description,
+    type: incoming ? 'cobro' : 'pago',
+    source: 'conciliacion',
+    documentId: options.documentId || transaction.id,
+    postingKey,
+    status: options.status || 'confirmado',
+    lines: incoming
+      ? [line(bankAccount, amount, 0, 'banco'), line(counterpartyAccount, 0, amount, options.counterpartyLineType || 'ajuste')]
+      : [line(counterpartyAccount, amount, 0, options.counterpartyLineType || 'ajuste'), line(bankAccount, 0, amount, 'banco')],
+  }, userEmail);
 }
 
 export async function postInvoice(svc, companyId, invoice, userEmail, options = {}) {
