@@ -127,9 +127,13 @@ export default function BankTransactionsTable({ transactions, accounts, onConcil
                     <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", conc.bg, conc.color)}>{conc.label}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {t.estado_proveedor !== 'pending' && (t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia') && (
-                      <button onClick={() => onConciliar(t)}
-                        className="text-[10px] px-2.5 py-1 rounded-lg border border-taxea-red/30 text-taxea-red hover:bg-taxea-red/5 transition-all opacity-0 group-hover:opacity-100">
+                    {t.estado_proveedor !== 'pending' && ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(t.estado_conciliacion) && (
+                      <button
+                        type="button"
+                        aria-label={`Conciliar movimiento ${t.concepto || t.id}`}
+                        onClick={() => onConciliar(t)}
+                        className="text-[10px] px-2.5 py-1 rounded-lg border border-taxea-red/30 text-taxea-red hover:bg-taxea-red/5 transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100"
+                      >
                         Conciliar
                       </button>
                     )}
