@@ -110,9 +110,17 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
   };
 
   const handleInvoiceConfirm = async () => {
-    if (!selected || !selectedBankLedgerId || loading) return;
-    setLoading(true);
     setError('');
+    if (loading) return;
+    if (!selected) {
+      setError('Selecciona primero la factura que quieres asociar al movimiento.');
+      return;
+    }
+    if (!selectedBankLedgerId) {
+      setError('Selecciona la cuenta contable del banco (572/573).');
+      return;
+    }
+    setLoading(true);
     try {
       const response = await base44.functions.invoke('invoiceOperations', {
         action: 'reconcile',
@@ -132,9 +140,17 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
   };
 
   const handleAccountConfirm = async () => {
-    if (!selectedAccountId || !selectedBankLedgerId || loading) return;
-    setLoading(true);
     setError('');
+    if (loading) return;
+    if (!selectedAccountId) {
+      setError('Selecciona primero la cuenta contable de contrapartida.');
+      return;
+    }
+    if (!selectedBankLedgerId) {
+      setError('Selecciona la cuenta contable del banco (572/573).');
+      return;
+    }
+    setLoading(true);
     try {
       const response = await base44.functions.invoke('openBanking', {
         action: 'reconcile_accounting_account',
@@ -204,17 +220,26 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
           </div>
 
           <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
-            <button onClick={() => setMode('invoice')} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'invoice' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
+            <button type="button" onClick={() => {
+              setError('');
+              setMode('invoice');
+            }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'invoice' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
               <FileText className="w-3.5 h-3.5" /> Asociar factura
             </button>
-            <button onClick={() => setMode('account')} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'account' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
+            <button type="button" onClick={() => {
+              setError('');
+              setMode('account');
+            }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'account' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
               <BookOpen className="w-3.5 h-3.5" /> Asociar cuenta contable
             </button>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Cuenta contable del banco</label>
-            <select value={selectedBankLedgerId} onChange={event => setSelectedBankLedgerId(event.target.value)}
+            <select value={selectedBankLedgerId} onChange={event => {
+              setError('');
+              setSelectedBankLedgerId(event.target.value);
+            }}
               disabled={loadingAccounts}
               className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-sm">
               <option value="">Seleccionar subcuenta bancaria…</option>
@@ -223,7 +248,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
             {currency !== 'EUR' && <p className="text-[11px] text-amber-700 mt-1">La divisa es {currency}; utiliza una subcuenta bancaria específica para esa divisa.</p>}
           </div>
 
-          {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+          {error && <div aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
           {mode === 'invoice' ? (
             <div className="space-y-3">
@@ -248,7 +273,10 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
                   : candidate.cliente_nombre;
                 return (
                   <motion.button key={candidate.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}
-                    onClick={() => setSelected(active ? null : candidate)}
+                    onClick={() => {
+                      setError('');
+                      setSelected(active ? null : candidate);
+                    }}
                     className={cn('w-full text-left p-4 rounded-xl border transition-all', active ? 'border-taxea-red/40 bg-taxea-red/5 ring-2 ring-taxea-red/20' : 'border-slate-200 hover:bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -281,7 +309,10 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
                 {filteredAccounts.map(account => {
                   const active = selectedAccountId === account.id;
                   return (
-                    <button key={account.id} onClick={() => setSelectedAccountId(active ? '' : account.id)}
+                    <button key={account.id} type="button" onClick={() => {
+                      setError('');
+                      setSelectedAccountId(active ? '' : account.id);
+                    }}
                       className={cn('w-full flex items-center justify-between gap-3 px-4 py-3 text-left', active ? 'bg-taxea-red/5' : 'hover:bg-slate-50')}>
                       <div className="min-w-0">
                         <p className="text-xs font-mono font-semibold text-foreground">{account.code}</p>
@@ -314,7 +345,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
         </div>
 
         <div className="flex flex-wrap gap-2 px-6 py-4 border-t border-slate-100 flex-shrink-0">
-          <button disabled={loading || !selectedBankLedgerId || (mode === 'invoice' ? !selected : !selectedAccountId)}
+          <button type="button" disabled={loading || loadingAccounts}
             onClick={mode === 'invoice' ? handleInvoiceConfirm : handleAccountConfirm}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-taxea-red text-white disabled:opacity-40 hover:bg-taxea-red/90 transition-all">
             {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
