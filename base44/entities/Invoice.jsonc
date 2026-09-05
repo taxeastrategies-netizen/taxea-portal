@@ -307,6 +307,13 @@
     "accounting_schema_version": {
       "type": "string"
     },
+    "accounting_migration_hold": {
+      "type": "boolean",
+      "default": false
+    },
+    "accounting_migration_hold_reason": {
+      "type": "string"
+    },
     "accounting_review_status": {
       "type": "string",
       "enum": [
