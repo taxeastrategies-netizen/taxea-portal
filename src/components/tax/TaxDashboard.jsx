@@ -7,20 +7,20 @@ import {
   FileText, Calendar, AlertTriangle, CheckCircle2, Clock,
   Zap, ScanLine, ScanText, BookOpen, Plus, ChevronRight,
   Activity, BarChart3, Brain, Sparkles, CircleDollarSign,
-  Receipt, AlertCircle
+  Receipt, AlertCircle, Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import GastosPorCategoria from './GastosPorCategoria';
-import { calculateFinancialKPIs } from '@/lib/financialCore';
+import { calculateFinancialKPIs, getOutstandingAmount } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
 
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 export default function TaxDashboard({ onNavigate }) {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id);
+  const { invoices, expenses, bankTransactions, treasury, loading: finLoading } = useFinancialData(company?.id);
   const [obligations, setObligations] = useState([]);
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +94,7 @@ export default function TaxDashboard({ onNavigate }) {
     });
     const monthKPIs = calculateFinancialKPIs(monthInvs, monthExps);
 
-    const factPendientes = monthKPIs.emitidas.filter(i => i.estado_cobro === 'pendiente');
+    const factPendientes = monthKPIs.emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const oblPendientes = obligations.filter(o => !['finalizado','presentado','pagado','domiciliado'].includes(o.estado));
     const proxObl = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) > new Date())
       .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))[0];
@@ -111,7 +111,7 @@ export default function TaxDashboard({ onNavigate }) {
       irpfIngresos: monthKPIs.retencionIngresos,
       irpfGastos: monthKPIs.retencionGastos,
       factPendientes: factPendientes.length,
-      factPendientesImporte: factPendientes.reduce((s, i) => s + (i.total_factura || 0), 0),
+      factPendientesImporte: factPendientes.reduce((s, i) => s + getOutstandingAmount(i), 0),
       factVencidas: monthKPIs.facturasVencidas,
       oblPendientes: oblPendientes.length,
       proxObl,
@@ -120,12 +120,27 @@ export default function TaxDashboard({ onNavigate }) {
     };
   }, [invoices, expenses, obligations, quotes, currentYear, currentMonth]);
 
-  // Cashflow chart data (last 6 months) - Usa total_factura consistente con el resto
+  // Cashflow bancario real cuando hay cuentas conectadas; estimación documental solo como respaldo.
   const cashflowData = useMemo(() => {
+    const hasBankData = treasury.connectedAccounts > 0;
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(currentYear, currentMonth - 5 + i, 1);
       const m = d.getMonth();
       const y = d.getFullYear();
+      if (hasBankData) {
+        const movements = (bankTransactions || []).filter(transaction => {
+          const fd = new Date(transaction.fecha_operacion);
+          return transaction.moneda === 'EUR'
+            && transaction.estado_proveedor !== 'pending'
+            && transaction.categoria_ia !== 'transferencia_interna'
+            && transaction.estado_conciliacion !== 'movimiento_interno'
+            && fd.getMonth() === m
+            && fd.getFullYear() === y;
+        });
+        const ing = movements.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0);
+        const gas = movements.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0);
+        return { mes: MONTHS_ES[m], ingresos: Math.round(ing), gastos: Math.round(gas), beneficio: Math.round(ing - gas) };
+      }
       const monthInvs = invoices.filter(inv => {
         const fd = new Date(inv.fecha_emision || inv.created_date);
         return fd.getMonth() === m && fd.getFullYear() === y && !inv.anulada;
@@ -134,17 +149,17 @@ export default function TaxDashboard({ onNavigate }) {
         const fd = new Date(e.fecha || e.created_date);
         return fd.getMonth() === m && fd.getFullYear() === y && !e.anulada;
       });
-      const ing = monthInvs.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-      const gas = monthExps.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0)
-        + monthInvs.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.total_factura || 0), 0);
+      const ing = monthInvs.filter(i => i.tipo === 'emitida').reduce((sum, invoice) => sum + Number(invoice.total_factura || 0), 0);
+      const gas = monthExps.filter(e => e.tipo === 'gasto').reduce((sum, expense) => sum + Number(expense.total || 0), 0)
+        + monthInvs.filter(i => i.tipo === 'recibida').reduce((sum, invoice) => sum + Number(invoice.total_factura || 0), 0);
       return { mes: MONTHS_ES[m], ingresos: Math.round(ing), gastos: Math.round(gas), beneficio: Math.round(ing - gas) };
     });
-  }, [invoices, expenses, currentYear, currentMonth]);
+  }, [invoices, expenses, bankTransactions, treasury.connectedAccounts, currentYear, currentMonth]);
 
   // Recent activity
   const recentActivity = useMemo(() => {
     const items = [
-      ...invoices.slice(0, 20).map(i => ({ tipo: 'factura', label: `Factura ${i.numero_factura || ''}`, sub: `${i.cliente_nombre || '—'} · ${i.total_factura?.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, date: new Date(i.created_date), color: 'text-blue-500', bg: 'bg-blue-50', icon: FileText })),
+      ...invoices.slice(0, 20).map(i => ({ tipo: 'factura', label: `Factura ${i.numero_factura || ''}`, sub: `${i.tipo === 'recibida' ? (i.proveedor_nombre || i.cliente_nombre || '—') : (i.cliente_nombre || i.proveedor_nombre || '—')} · ${i.total_factura?.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, date: new Date(i.created_date), color: 'text-blue-500', bg: 'bg-blue-50', icon: FileText })),
       ...expenses.slice(0, 10).map(e => ({ tipo: 'gasto', label: e.concepto || 'Gasto', sub: `${e.proveedor_cliente || '—'} · ${e.total?.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, date: new Date(e.created_date), color: 'text-red-500', bg: 'bg-red-50', icon: TrendingDown })),
       ...obligations.slice(0, 5).map(o => ({ tipo: 'obligacion', label: o.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' '), sub: `${o.periodo || ''} · ${o.estado}`, date: new Date(o.created_date), color: 'text-amber-500', bg: 'bg-amber-50', icon: Calendar })),
     ];
@@ -194,6 +209,21 @@ export default function TaxDashboard({ onNavigate }) {
           </Button>
         </div>
       )}
+
+      <a href="/finance/treasury" className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 hover:border-blue-300 transition-colors">
+        <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+          <Wallet className="w-4 h-4 text-blue-700" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-blue-900">Fuente financiera: {treasury.connectedAccounts > 0 ? 'banca sincronizada' : 'documentos contables'}</p>
+          <p className="text-xs text-blue-800 mt-0.5">
+            {treasury.connectedAccounts > 0
+              ? `${treasury.connectedAccounts} cuentas conectadas · ${fmt(treasury.availableCash)} € disponibles · ${treasury.unreconciledTransactions} movimientos pendientes de revisar`
+              : 'Conecta una cuenta para incorporar saldos, movimientos y conciliación al análisis financiero.'}
+          </p>
+        </div>
+        <span className="text-xs font-semibold text-blue-700">Abrir Tesorería</span>
+      </a>
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -298,11 +328,11 @@ export default function TaxDashboard({ onNavigate }) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-jakarta font-semibold text-foreground">Cashflow — Últimos 6 meses</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Ingresos vs Gastos vs Beneficio</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{treasury.connectedAccounts > 0 ? 'Entradas y salidas bancarias reales en EUR' : 'Estimación por facturas y gastos'}</p>
             </div>
-            <button onClick={() => onNavigate('libros')} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
-              Libros <ChevronRight className="w-3 h-3" />
-            </button>
+            <a href={treasury.connectedAccounts > 0 ? '/finance/treasury' : '/tax-accounting/libros'} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
+              {treasury.connectedAccounts > 0 ? 'Tesorería' : 'Libros'} <ChevronRight className="w-3 h-3" />
+            </a>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={cashflowData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
