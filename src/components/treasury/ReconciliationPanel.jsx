@@ -82,8 +82,8 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     if (!transaction) return [];
     const incoming = transaction.tipo === 'entrada';
     const pool = incoming
-      ? invoices.filter(invoice => invoice.tipo === 'emitida' && invoice.estado_cobro !== 'cobrada')
-      : invoices.filter(invoice => invoice.tipo === 'recibida' && invoice.estado_cobro !== 'cobrada');
+      ? invoices.filter(invoice => invoice.tipo === 'emitida' && !invoice.anulada && invoice.estado_cobro !== 'cobrada')
+      : invoices.filter(invoice => invoice.tipo === 'recibida' && !invoice.anulada && invoice.estado_cobro !== 'cobrada');
     return pool.map(candidate => {
       const score = scoreMatch(transaction, candidate);
       const confidence = score >= 70 ? 'alta' : score >= 35 ? 'media' : 'baja';
@@ -104,9 +104,9 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
   const amount = Math.abs(transaction?.importe || 0);
   const currency = transaction?.moneda || 'EUR';
 
-  const finish = async () => {
-    await onReconciled?.();
+  const finish = () => {
     onClose();
+    Promise.resolve().then(() => onReconciled?.()).catch(() => {});
   };
 
   const handleInvoiceConfirm = async () => {
