@@ -188,7 +188,7 @@ export function buildJournal(data, { year, status = 'all', type = 'all', search 
 
 export function buildLedger(data, { year, scope = 'confirmed', accountCode = '' } = {}) {
   const report = buildReports(data, { year, scope });
-  if (!accountCode) return { year: report.year, scope, accounts: report.accounts };
+  if (!accountCode) return { year: report.year, years: report.years, scope, accounts: report.accounts };
   const eligibleStatuses = scope === 'provisional' ? new Set(['confirmado', 'pendiente_revision']) : new Set(['confirmado']);
   const entryById = new Map(data.entries.map(entry => [entry.id, entry]));
   const movements = [];
@@ -204,6 +204,6 @@ export function buildLedger(data, { year, scope = 'confirmed', accountCode = '' 
   }
   movements.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.entryNumber).localeCompare(String(b.entryNumber)));
   let runningBalance = 0;
-  return { year: report.year, scope, accounts: report.accounts, accountCode, movements: movements.map(m => ({ ...m, runningBalance: runningBalance = round2(runningBalance + m.debit - m.credit) })) };
+  return { year: report.year, years: report.years, scope, accounts: report.accounts, accountCode, movements: movements.map(m => ({ ...m, runningBalance: runningBalance = round2(runningBalance + m.debit - m.credit) })) };
 }
 
