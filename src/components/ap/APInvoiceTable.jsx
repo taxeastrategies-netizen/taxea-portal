@@ -136,12 +136,12 @@ export default function APInvoiceTable({ invoices, expenses, contacts, onReconci
                     </td>
                     <td className="px-4 py-3">
                       <button
-+                        type="button"
-+                        onClick={() => onReconcile?.(inv)}
-+                        title="Conciliar pago con movimiento bancario"
-+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
-+                        <CheckCircle className="w-3 h-3" />
-+                      </button>
+                        type="button"
+                        onClick={() => onReconcile?.(inv)}
+                        title="Conciliar pago con movimiento bancario"
+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
+                        <CheckCircle className="w-3 h-3" />
+                      </button>
                     </td>
                   </tr>
                 );
