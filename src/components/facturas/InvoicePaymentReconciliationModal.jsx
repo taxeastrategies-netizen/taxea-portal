@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
-const fmt = value => (Number(value) || 0).toLocaleString('es-ES', {
+const fmt = (value, currency = 'EUR') => new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: currency || 'EUR',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-}) + ' €';
+}).format(Number(value) || 0);
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -21,6 +23,8 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
   const [paid, setPaid] = useState(0);
   const [payments, setPayments] = useState([]);
   const [candidates, setCandidates] = useState([]);
+  const [bankAccountingAccounts, setBankAccountingAccounts] = useState([]);
+  const [selectedBankLedgerId, setSelectedBankLedgerId] = useState('');
   const [selectedTransaction, setSelectedTransaction] = useState('');
   const [amount, setAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(today());
@@ -48,6 +52,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
     setError('');
     setSuccess('');
     setSelectedTransaction('');
+    setSelectedBankLedgerId('');
     setPaymentDate(today());
     setMethod('transferencia');
     setReference('');
@@ -74,6 +79,9 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setPaid(Number(data.paid) || 0);
       setPayments(data.payments || []);
       setCandidates(data.candidates || []);
+      const bankLedgers = data.accounting_bank_accounts || [];
+      setBankAccountingAccounts(bankLedgers);
+      if (bankLedgers.length === 1) setSelectedBankLedgerId(bankLedgers[0].id);
       setAmount(String(Number(data.outstanding) || 0));
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo cargar la información.');
@@ -118,11 +126,15 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
     setError('');
     setSaving(true);
     try {
-      const data = await invoke({ action: 'reconcile', bank_transaction_id: selectedTransaction });
+      const data = await invoke({
+        action: 'reconcile',
+        bank_transaction_id: selectedTransaction,
+        bank_accounting_account_id: selectedBankLedgerId,
+      });
       if (!data?.ok) throw new Error(data?.error || 'No se pudo conciliar el movimiento.');
       setOutstanding(Number(data.outstanding) || 0);
       setPaid(Number(data.paid) || 0);
-      setSuccess('Movimiento conciliado con la factura.');
+      setSuccess(`Movimiento conciliado con la factura${data.journal_entry?.entryNumber ? ` · asiento ${data.journal_entry.entryNumber}` : ''}.`);
       setCandidates(current => current.filter(candidate => candidate.id !== selectedTransaction));
       setSelectedTransaction('');
       await onChanged?.();
@@ -165,7 +177,23 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
             <div className="space-y-3">
               <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <Building2 className="w-4 h-4 text-blue-600 mt-0.5" />
-                <p className="text-xs text-blue-800">Solo se muestran movimientos reales de la empresa activa y del sentido correcto: {expectedDirection}.</p>
+                <p className="text-xs text-blue-800">Se muestran todos los movimientos bancarios pendientes. Para esta factura debes elegir uno de {expectedDirection}; los del sentido contrario permanecen visibles, pero no pueden seleccionarse.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Cuenta contable del banco *</label>
+                <select
+                  value={selectedBankLedgerId}
+                  onChange={e => setSelectedBankLedgerId(e.target.value)}
+                  className="w-full h-10 px-3 border border-input rounded-md bg-background text-sm"
+                >
+                  <option value="">Seleccionar cuenta 572/573…</option>
+                  {bankAccountingAccounts.map(account => (
+                    <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
+                  ))}
+                </select>
+                {bankAccountingAccounts.length === 0 && (
+                  <p className="text-[11px] text-amber-700 mt-1">No existe una cuenta bancaria activa 572/573 en el plan contable de la empresa.</p>
+                )}
               </div>
               {candidates.length === 0 ? (
                 <div className="text-center py-8 border border-dashed border-border rounded-xl">
@@ -175,28 +203,38 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                 </div>
               ) : candidates.map(candidate => {
                 const active = candidate.id === selectedTransaction;
-                const exact = Math.abs(Number(candidate.importe) - outstanding) <= 0.01;
+                const compatible = candidate.direction_compatible !== false;
+                const exact = Math.abs(Math.abs(Number(candidate.importe)) - outstanding) <= 0.01;
                 return (
-                  <button key={candidate.id} onClick={() => setSelectedTransaction(candidate.id)}
-                    className={`w-full text-left border rounded-xl p-3 transition-colors ${active ? 'border-primary bg-primary/5 ring-2 ring-primary/10' : 'border-border hover:bg-secondary/40'}`}>
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    disabled={!compatible}
+                    onClick={() => {
+                      setSelectedTransaction(candidate.id);
+                      if (candidate.bank_accounting_account_id) setSelectedBankLedgerId(candidate.bank_accounting_account_id);
+                    }}
+                    className={`w-full text-left border rounded-xl p-3 transition-colors ${active ? 'border-primary bg-primary/5 ring-2 ring-primary/10' : compatible ? 'border-border hover:bg-secondary/40' : 'border-border bg-slate-50 opacity-55 cursor-not-allowed'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold truncate">{candidate.concepto || 'Movimiento bancario'}</p>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
                           <CalendarDays className="w-3 h-3" /> {candidate.fecha_operacion}
                           {candidate.nombre_contraparte ? ` · ${candidate.nombre_contraparte}` : ''}
+                          {candidate.bank_name ? ` · ${candidate.bank_name}` : ''}
                         </p>
                         {candidate.referencia && <p className="text-[10px] text-muted-foreground mt-1 truncate">Ref. {candidate.referencia}</p>}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold">{fmt(candidate.importe)}</p>
-                        {exact && <span className="text-[10px] text-emerald-600 font-semibold">Importe exacto</span>}
+                        <p className="text-sm font-bold">{fmt(Math.abs(candidate.importe), candidate.currency)}</p>
+                        {exact && compatible && <span className="text-[10px] text-emerald-600 font-semibold">Importe exacto</span>}
+                        {!compatible && <span className="text-[10px] text-slate-500 font-semibold">Sentido contrario</span>}
                       </div>
                     </div>
                   </button>
                 );
               })}
-              {selected && Number(selected.importe) > outstanding + 0.01 && (
+              {selected && Math.abs(Number(selected.importe)) > outstanding + 0.01 && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
                   <p className="text-xs text-amber-800">Este movimiento supera el importe pendiente. Por seguridad no se conciliará hasta poder dividir movimientos desde Finanzas.</p>
@@ -256,7 +294,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-secondary/30">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
           {isReconciliation ? (
-            <Button onClick={handleReconcile} disabled={saving || !selectedTransaction || (selected && Number(selected.importe) > outstanding + 0.01)}>
+            <Button onClick={handleReconcile} disabled={saving || !selectedTransaction || !selectedBankLedgerId || selected?.direction_compatible === false || (selected && Math.abs(Number(selected.importe)) > outstanding + 0.01)}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Conciliar movimiento
             </Button>
           ) : (
