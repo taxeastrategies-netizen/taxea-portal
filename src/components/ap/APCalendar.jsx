@@ -17,7 +17,7 @@ export default function APCalendar({ invoices, expenses, obligations }) {
     invoices.filter(i => i.estado_cobro !== 'cobrada' && i.fecha_vencimiento).forEach(i => {
       evs.push({ date: i.fecha_vencimiento, label: i.proveedor_nombre || i.cliente_nombre || i.numero_factura, amount: getOutstandingAmount(i), type: 'factura' });
     });
-    obligations.filter(o => o.estado !== 'presentada' && o.fecha_limite).forEach(o => {
+    obligations.filter(o => !['finalizado', 'presentada', 'presentado', 'pagado', 'domiciliado'].includes(o.estado) && o.fecha_limite).forEach(o => {
       evs.push({ date: o.fecha_limite, label: o.modelo || 'Obligación fiscal', amount: o.importe || 0, type: 'fiscal' });
     });
     return evs;
