@@ -1,6 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { postBankReconciliation } from '../accountingOperations/accountingEngine.ts';
-import { postBankReconciliation } from '../accountingOperations/accountingEngine.ts';
 
 const API_ROOT = 'https://api.enablebanking.com';
 const DEFAULT_COUNTRY = 'ES';
@@ -763,89 +762,6 @@ Deno.serve(async (request) => {
         notas: `${clean(transaction.notas, 1500)}${transaction.notas ? '\n' : ''}${status === 'movimiento_interno' ? 'Marcado como movimiento interno' : 'Descartado de conciliación'} por ${user.email}.`,
       });
       return Response.json({ ok: true, transaction_id: transaction.id, status });
-    }
-
-    if (action === 'accounting_options') {
-      const transaction = await ownedTransaction(base44, companyId, body.bank_transaction_id);
-      const [accountingAccounts, bankAccounts] = await Promise.all([
-        base44.asServiceRole.entities.AccountingAccount.filter({ companyId }, 'code', MAX_LIST),
-        base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', MAX_LIST),
-      ]);
-      const sourceBank = (bankAccounts || []).find((account: any) => account.id === transaction.bank_account_id);
-      const accounts = (accountingAccounts || [])
-        .filter((account: any) => account.status !== 'inactiva' && /^\d{8}$/.test(account.code || '') && /^[1-7]/.test(account.code || ''))
-        .map((account: any) => ({ id: account.id, code: account.code, name: account.name, type: account.type }));
-      const bankLedgerAccounts = accounts.filter((account: any) => account.type === 'banco' && /^57[23]\d{5}$/.test(account.code));
-      const recommended = sourceBank?.accounting_account_id
-        || (clean(transaction.moneda || 'EUR', 8).toUpperCase() === 'EUR' && bankLedgerAccounts.length === 1 ? bankLedgerAccounts[0].id : '');
-      return Response.json({
-        ok: true,
-        accounts,
-        bank_accounts: bankLedgerAccounts,
-        recommended_bank_account_id: recommended,
-        transaction_currency: clean(transaction.moneda || 'EUR', 8).toUpperCase(),
-      });
-    }
-
-    if (action === 'reconcile_accounting_account') {
-      const transaction = await ownedTransaction(base44, companyId, body.bank_transaction_id);
-      if (transaction.es_demo) return Response.json({ error: 'No se puede contabilizar un movimiento de demostración.' }, { status: 409 });
-      if (transaction.estado_proveedor === 'pending') return Response.json({ error: 'El movimiento aún está pendiente en el banco.' }, { status: 409 });
-      if (transaction.entidad_id) return Response.json({ error: 'El movimiento ya está conciliado.' }, { status: 409 });
-      if (!['sin_conciliar', 'sugerida_ia', 'revisar'].includes(transaction.estado_conciliacion)) {
-        return Response.json({ error: 'El movimiento no está disponible para conciliación.' }, { status: 409 });
-      }
-      const accountId = clean(body.accounting_account_id, 120);
-      const bankLedgerId = clean(body.bank_accounting_account_id, 120);
-      const [counterpartyAccount, bankLedger, sourceBankAccount] = await Promise.all([
-        base44.asServiceRole.entities.AccountingAccount.get(accountId).catch(() => null),
-        base44.asServiceRole.entities.AccountingAccount.get(bankLedgerId).catch(() => null),
-        base44.asServiceRole.entities.BankAccount.get(transaction.bank_account_id).catch(() => null),
-      ]);
-      if (!counterpartyAccount || counterpartyAccount.companyId !== companyId || counterpartyAccount.status === 'inactiva') {
-        return Response.json({ error: 'La cuenta de contrapartida no es válida para esta empresa.' }, { status: 409 });
-      }
-      if (!bankLedger || bankLedger.companyId !== companyId || bankLedger.status === 'inactiva' || bankLedger.type !== 'banco' || !/^57[23]\d{5}$/.test(bankLedger.code || '')) {
-        return Response.json({ error: 'La cuenta contable bancaria no es válida.' }, { status: 409 });
-      }
-      if (!sourceBankAccount || sourceBankAccount.company_id !== companyId) {
-        return Response.json({ error: 'La cuenta bancaria de origen no pertenece a la empresa.' }, { status: 409 });
-      }
-      if (clean(transaction.moneda || 'EUR', 8).toUpperCase() !== 'EUR' && /euros?/i.test(bankLedger.name || '')) {
-        return Response.json({ error: 'Selecciona una subcuenta bancaria específica para la divisa del movimiento.' }, { status: 409 });
-      }
-      const posting = await postBankReconciliation(
-        base44.asServiceRole,
-        companyId,
-        transaction,
-        bankLedger,
-        counterpartyAccount,
-        user.email,
-        {
-          documentId: transaction.id,
-          description: clean(body.description, 500) || clean(transaction.concepto, 500) || 'Conciliación bancaria',
-          counterpartyLineType: counterpartyAccount.type === 'ingreso' ? 'ingreso' : counterpartyAccount.type === 'gasto' ? 'gasto' : 'ajuste',
-          status: 'confirmado',
-        },
-      );
-      const now = new Date().toISOString();
-      await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, {
-        accounting_account_id: bankLedger.id,
-        accounting_account_code: bankLedger.code,
-      });
-      await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
-        estado_conciliacion: 'conciliada_manual',
-        confianza_conciliacion: 'alta',
-        entidad_tipo: 'accounting_account',
-        entidad_id: counterpartyAccount.id,
-        journal_entry_id: posting.entry.id,
-        accounting_account_id: counterpartyAccount.id,
-        accounting_account_code: counterpartyAccount.code,
-        reconciled_at: now,
-        reconciled_by: user.email,
-        notas: `${clean(transaction.notas, 1400)}${transaction.notas ? '\n' : ''}Conciliado con ${counterpartyAccount.code} ${counterpartyAccount.name} por ${user.email}.`,
-      });
-      return Response.json({ ok: true, transaction_id: transaction.id, journal_entry: posting.entry, account: { id: counterpartyAccount.id, code: counterpartyAccount.code, name: counterpartyAccount.name } });
     }
 
     if (action === 'accounting_options') {
