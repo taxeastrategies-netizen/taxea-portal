@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { postBankReconciliation, postInvoice } from './accountingEngine.ts';
+import { buildInvoicePosting, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION } from './accountingEngine.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -134,6 +134,38 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
     accounting_account_code: bankLedger.code,
   });
   return { posting, bankPosting, counterpartyAccount };
+}
+
+async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
+  const svc = base44.asServiceRole;
+  const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
+  const proposal = await buildInvoicePosting(svc, companyId, invoice);
+  await seedOperationalPgc(svc, companyId);
+  const ledgerCode = method === 'efectivo' ? '57000000' : '57200000';
+  const ledgerMatches = await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 1);
+  const ledger = ledgerMatches?.[0];
+  const counterparty = proposal.counterparty?.account;
+  if (!ledger || !counterparty) throw Object.assign(new Error('No se pudieron resolver las cuentas de tesorería y tercero.'), { status: 409 });
+  const postingKey = `payment:${invoice.id}:${idempotencyKey}:${SCHEMA_VERSION}`;
+  const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
+  if (duplicate?.[0]) return { invoicePosting, paymentPosting: { alreadyPosted: true, entry: duplicate[0] } };
+  const isCreditNote = Number(invoice.total_factura) < 0;
+  const incoming = (invoice.tipo === 'emitida' && !isCreditNote) || (invoice.tipo === 'recibida' && isCreditNote);
+  const description = `${incoming ? 'Cobro' : 'Pago'} factura ${invoice.numero_factura || ''}`.trim();
+  const line = (account, debit, credit, sourceLineType) => ({ accountId: account.id, accountCode: account.code, accountName: account.name, description, debit, credit, sourceLineType });
+  const paymentPosting = await createJournalEntry(svc, companyId, {
+    date: paymentDate,
+    description,
+    type: incoming ? 'cobro' : 'pago',
+    source: 'manual',
+    documentId: invoice.id,
+    postingKey,
+    status: 'confirmado',
+    lines: incoming
+      ? [line(ledger, amount, 0, 'banco'), line(counterparty, 0, amount, 'tercero')]
+      : [line(counterparty, amount, 0, 'tercero'), line(ledger, 0, amount, 'banco')],
+  }, user.email);
+  return { invoicePosting, paymentPosting };
 }
 
 Deno.serve(async (req) => {
@@ -294,14 +326,18 @@ Deno.serve(async (req) => {
       const idempotencyKey = cleanText(body.idempotency_key, 100);
       if (!idempotencyKey) return Response.json({ error: 'Falta la clave de seguridad de la operación.' }, { status: 400 });
 
+      const allowedMethods = ['transferencia', 'tarjeta', 'efectivo', 'domiciliacion', 'otro'];
+      const method = allowedMethods.includes(body.method) ? body.method : 'transferencia';
       const duplicate = await base44.asServiceRole.entities.InvoicePayment.filter({
         company_id: companyId,
         invoice_id: invoice.id,
         idempotency_key: idempotencyKey,
       }, '-created_at', 1);
       if (duplicate?.[0]) {
+        const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, Number(duplicate[0].amount), duplicate[0].payment_date, duplicate[0].method || method, idempotencyKey, user);
+        if (!duplicate[0].journal_entry_id) await base44.asServiceRole.entities.InvoicePayment.update(duplicate[0].id, { journal_entry_id: accounting.paymentPosting.entry.id });
         const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-        return Response.json({ ok: true, duplicate: true, payment: duplicate[0], ...state });
+        return Response.json({ ok: true, duplicate: true, payment: { ...duplicate[0], journal_entry_id: accounting.paymentPosting.entry.id }, journal_entry: accounting.paymentPosting.entry, ...state });
       }
 
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
@@ -311,8 +347,7 @@ Deno.serve(async (req) => {
           outstanding: current.outstanding,
         }, { status: 409 });
       }
-      const allowedMethods = ['transferencia', 'tarjeta', 'efectivo', 'domiciliacion', 'otro'];
-      const method = allowedMethods.includes(body.method) ? body.method : 'transferencia';
+      const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user);
       const payment = await base44.asServiceRole.entities.InvoicePayment.create({
         company_id: companyId,
         invoice_id: invoice.id,
@@ -323,6 +358,7 @@ Deno.serve(async (req) => {
         reference: cleanText(body.reference, 160),
         notes: cleanText(body.notes),
         origin: 'manual',
+        journal_entry_id: accounting.paymentPosting.entry.id,
         idempotency_key: idempotencyKey,
         created_at: new Date().toISOString(),
         created_by: user.full_name || user.email || 'Usuario',
@@ -338,7 +374,7 @@ Deno.serve(async (req) => {
         created_by: user.full_name || user.email || 'Usuario',
         origin: 'manual',
       });
-      return Response.json({ ok: true, payment, ...state });
+      return Response.json({ ok: true, payment, journal_entry: accounting.paymentPosting.entry, invoice_posting: accounting.invoicePosting.entry, ...state });
     }
 
     if (action === 'list_reconciliation_candidates') {
