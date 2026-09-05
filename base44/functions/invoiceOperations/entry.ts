@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { postBankReconciliation, postInvoice } from '../accountingOperations/accountingEngine.ts';
+import { postBankReconciliation, postInvoice } from './accountingEngine.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
