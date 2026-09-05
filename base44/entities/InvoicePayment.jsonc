@@ -47,6 +47,9 @@
     "bank_transaction_id": {
       "type": "string"
     },
+    "journal_entry_id": {
+      "type": "string"
+    },
     "idempotency_key": {
       "type": "string"
     },
