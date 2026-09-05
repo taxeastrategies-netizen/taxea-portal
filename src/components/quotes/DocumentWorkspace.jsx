@@ -120,6 +120,18 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
         action: 'sync_invoice',
         invoiceId: createdInvoice.id,
       }).catch(error => console.error('[DocumentWorkspace] Contact sync failed:', error));
+      await base44.functions.invoke('accountingOperations', {
+        action: 'post_invoice',
+        companyId: company.id,
+        invoiceId: createdInvoice.id,
+        status: 'confirmado',
+      }).catch(async error => {
+        console.error('[DocumentWorkspace] Accounting posting failed:', error);
+        await base44.entities.Invoice.update(createdInvoice.id, {
+          estado_contable: 'requiere_correccion',
+          accounting_review_status: 'requiere_correccion',
+        }).catch(() => {});
+      });
       await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
       setShowConvertDialog(false);
       onRefresh?.();
