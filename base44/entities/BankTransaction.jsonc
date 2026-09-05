@@ -89,6 +89,22 @@
     "entidad_id": {
       "type": "string"
     },
+    "journal_entry_id": {
+      "type": "string"
+    },
+    "accounting_account_id": {
+      "type": "string"
+    },
+    "accounting_account_code": {
+      "type": "string"
+    },
+    "reconciled_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reconciled_by": {
+      "type": "string"
+    },
     "contacto_id": {
       "type": "string"
     },
