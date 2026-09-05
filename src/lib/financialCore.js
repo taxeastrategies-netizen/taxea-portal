@@ -33,6 +33,17 @@ export function activeExpenses(expenses) {
   return (expenses || []).filter(e => !e.anulada);
 }
 
+/**
+ * Importe realmente pendiente de una factura, respetando pagos parciales.
+ */
+export function getOutstandingAmount(invoice) {
+  const total = Math.abs(Number(invoice?.total_factura || 0));
+  if (invoice?.importe_pendiente !== null && invoice?.importe_pendiente !== undefined) {
+    return roundMoney(Math.max(0, Number(invoice.importe_pendiente) || 0));
+  }
+  return roundMoney(Math.max(0, total - Math.abs(Number(invoice?.importe_pagado || 0))));
+}
+
 // ── Filtrado por periodo ────────────────────────────────────────────────────
 
 /**
@@ -122,14 +133,20 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   const margen = totalIngresos > 0 ? (resultado / totalIngresos) * 100 : 0;
   
   // ── Cobros pendientes (facturas emitidas no cobradas) ──
-  const facturasPendientesCobro = emitidas.filter(i => 
-    ['pendiente', 'vencida'].includes(i.estado_cobro)
+  const facturasPendientesCobro = emitidas.filter(i =>
+    ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro)
   );
-  const cobrosPendientes = facturasPendientesCobro.reduce((s, i) => s + (i.total_factura || 0), 0);
-  
-  // ── Facturas cobradas ──
+  const cobrosPendientes = facturasPendientesCobro.reduce((s, i) => s + getOutstandingAmount(i), 0);
+
+  // ── Cobros reales, incluyendo abonos parciales ──
   const facturasCobradas = emitidas.filter(i => i.estado_cobro === 'cobrada');
-  const totalCobrado = facturasCobradas.reduce((s, i) => s + (i.total_factura || 0), 0);
+  const totalCobrado = emitidas.reduce((s, i) => {
+    const total = Math.abs(Number(i.total_factura || 0));
+    const paid = i.importe_pagado !== null && i.importe_pagado !== undefined
+      ? Math.abs(Number(i.importe_pagado) || 0)
+      : (i.estado_cobro === 'cobrada' ? total : 0);
+    return s + Math.min(total, paid);
+  }, 0);
   
   // ── Facturas vencidas ──
   const now = new Date();
@@ -140,10 +157,10 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   );
   
   // ── Pagos pendientes (facturas recibidas no pagadas) ──
-  const facturasPendientesPago = recibidas.filter(i => 
-    ['pendiente', 'vencida'].includes(i.estado_cobro)
+  const facturasPendientesPago = recibidas.filter(i =>
+    ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro)
   );
-  const pagosPendientes = facturasPendientesPago.reduce((s, i) => s + (i.total_factura || 0), 0);
+  const pagosPendientes = facturasPendientesPago.reduce((s, i) => s + getOutstandingAmount(i), 0);
   
   // ── Estados contables ──
   const facturasPendientesContabilizar = periodInvs.filter(i => i.estado_contable === 'pendiente');
