@@ -105,14 +105,14 @@ export default function AsientosManualesTab({ companyId, user }) {
                         <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full', cfg.color)}>{cfg.label}</span>
                       </td>
                       <td className="px-2 py-2.5">
-                        {entry.status !== 'anulado' && (
+                        {entry.status !== 'anulado' && !entry.reversalEntryId && (
                           <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-600"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const reason = prompt('Motivo de anulación del asiento:');
+                              const reason = prompt(entry.status === 'confirmado' ? 'Motivo de reversión del asiento:' : 'Motivo de anulación del asiento:');
                               if (reason?.trim()) annulEntry.mutate({ entry, reason: reason.trim() });
                             }}
-                            title="Anular asiento conservando su trazabilidad">
+                            title={entry.status === 'confirmado' ? 'Revertir asiento con contraasiento trazable' : 'Anular borrador conservando su trazabilidad'}>
                             <Ban className="w-3 h-3" />
                           </Button>
                         )}
