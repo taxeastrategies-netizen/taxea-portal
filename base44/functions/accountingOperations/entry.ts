@@ -8,6 +8,13 @@ import {
   postInvoice,
   seedOperationalPgc,
 } from './accountingEngine.ts';
+import {
+  accountingData,
+  accountingQuality,
+  buildJournal,
+  buildLedger,
+  buildReports,
+} from './accountingReportEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -25,6 +32,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = base44.asServiceRole;
+
+    if (action === 'quality' || action === 'reports' || action === 'journal' || action === 'ledger') {
+      const data = await accountingData(svc, companyId);
+      if (action === 'quality') {
+        return Response.json({ success: true, quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
+      }
+      if (action === 'reports') {
+        return Response.json({ success: true, report: buildReports(data, { year: body.year, scope: body.scope }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
+      }
+      if (action === 'journal') {
+        return Response.json({ success: true, journal: buildJournal(data, { year: body.year, status: body.status, type: body.type, search: body.search, page: body.page, pageSize: body.pageSize }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
+      }
+      return Response.json({ success: true, ledger: buildLedger(data, { year: body.year, scope: body.scope, accountCode: body.accountCode }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
+    }
 
     if (action === 'seed_pgc') {
       const result = await seedOperationalPgc(svc, companyId);
@@ -101,7 +122,10 @@ Deno.serve(async (req) => {
       if (!entry || entry.companyId !== companyId) {
         return Response.json({ error: 'Asiento no encontrado en la empresa seleccionada.' }, { status: 404 });
       }
-      const lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id });
+      let lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+      if ((!lines || !lines.length) && entry.importKey) {
+        lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5000);
+      }
       if (action === 'confirm') {
         if (!lines?.length) return Response.json({ error: 'El asiento no tiene líneas.' }, { status: 409 });
         const bad = lines.find(line => !isCanonical8(line.accountCode));
