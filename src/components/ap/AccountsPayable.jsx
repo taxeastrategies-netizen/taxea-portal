@@ -47,7 +47,7 @@ export default function AccountsPayable() {
   }, [companyId]);
 
   // Facturas recibidas pendientes de pago
-  const recibidas = useMemo(() => invoices.filter(i => i.tipo === 'recibida'), [invoices]);
+  const recibidas = useMemo(() => invoices.filter(i => i.tipo === 'recibida' && !i.anulada), [invoices]);
 
   const kpis = useMemo(() => {
     const now = new Date();
