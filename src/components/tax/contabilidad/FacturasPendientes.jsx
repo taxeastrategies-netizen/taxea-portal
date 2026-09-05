@@ -312,7 +312,7 @@ export default function FacturasPendientes() {
             </DialogHeader>
             {anularTarget.linked_journal_entry_id && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-xs text-amber-800">
-                ⚠️ Esta factura tiene un asiento contable vinculado. Al anularla, el asiento también quedará marcado como <strong>anulado</strong>.
+                Esta factura tiene un asiento contable vinculado. Al anularla se generará un contraasiento confirmado para conservar la trazabilidad y neutralizar su efecto contable.
               </div>
             )}
             <div className="space-y-2">
