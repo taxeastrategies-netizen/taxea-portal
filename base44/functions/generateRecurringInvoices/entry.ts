@@ -328,6 +328,18 @@ Deno.serve(async (req) => {
           action: 'sync_invoice',
           invoiceId: invoice.id,
         }).catch((error) => console.warn('[generateRecurringInvoices] Contact sync failed:', error?.message || error));
+        await base44.asServiceRole.functions.invoke('accountingOperations', {
+          action: 'post_invoice',
+          companyId: tmpl.ownerAccountId,
+          invoiceId: invoice.id,
+          status: 'confirmado',
+        }).catch(async error => {
+          console.warn('[generateRecurringInvoices] Accounting posting failed:', error?.message || error);
+          await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+            estado_contable: 'requiere_correccion',
+            accounting_review_status: 'requiere_correccion',
+          }).catch(() => {});
+        });
 
         // Create run record
         await base44.asServiceRole.entities.RecurringInvoiceRun.create({
