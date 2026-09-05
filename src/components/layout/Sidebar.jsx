@@ -60,10 +60,10 @@ const DEPT_GROUPS = [
         basePath: '/finance',
         modules: [
           { id: 'dashboard', label: 'Panel Finanzas', icon: LayoutDashboard, path: '/finance/dashboard' },
-          { id: 'cashflow', label: 'Centro de Tesorería', icon: TrendingUp, path: '/finance/cashflow' },
           { id: 'treasury', label: 'Tesorería', icon: Wallet, path: '/finance/treasury' },
-          { id: 'ar', label: 'Cuentas a Cobrar', icon: FileCheck, path: '/finance/ar' },
-          { id: 'ap', label: 'Cuentas a Pagar', icon: Receipt, path: '/finance/ap' },
+          { id: 'ar', label: 'Cuentas a cobrar', icon: FileCheck, path: '/finance/ar' },
+          { id: 'ap', label: 'Cuentas a pagar', icon: Receipt, path: '/finance/ap' },
+          { id: 'cashflow', label: 'Centro de Tesorería', icon: TrendingUp, path: '/finance/cashflow' },
           { id: 'debt', label: 'Deuda y Financiación', icon: TrendingDown, path: '/finance/debt' },
           { id: 'investments', label: 'Inversiones', icon: BarChart2, path: '/finance/investments', adminOnly: true },
           { id: 'reporting', label: 'Centro de Informes', icon: FileText, path: '/finance/reporting' },
