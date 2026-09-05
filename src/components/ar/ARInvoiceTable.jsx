@@ -38,7 +38,7 @@ export default function ARInvoiceTable({ invoices, contacts, onReconcile }) {
   const [sending, setSending] = useState(null);
 
   const filtered = useMemo(() => {
-    let list = invoices.filter(i => i.estado_cobro !== 'cobrada');
+    let list = invoices.filter(i => !i.anulada && i.estado_cobro !== 'cobrada');
     if (filterStatus !== 'todas') list = list.filter(i => getStatus(i) === filterStatus);
     if (search) list = list.filter(i =>
       (i.numero_factura || '').toLowerCase().includes(search.toLowerCase()) ||
