@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -25,7 +26,7 @@ export default function ARAgingChart({ invoices, contacts }) {
         const dias = Math.max(0, d);
         return dias >= b.min && dias < b.max;
       });
-      return { ...b, items, total: items.reduce((s, i) => s + (i.total_factura || 0), 0), count: items.length };
+      return { ...b, items, total: items.reduce((s, i) => s + getOutstandingAmount(i), 0), count: items.length };
     });
 
     // Por cliente
@@ -35,8 +36,8 @@ export default function ARAgingChart({ invoices, contacts }) {
       if (!clientMap[k]) clientMap[k] = { name: k, nif: i.cliente_nif, '0_30': 0, '30_60': 0, '60_90': 0, '90p': 0, total: 0 };
       const d = Math.max(0, differenceInDays(now, parseISO(i.fecha_vencimiento)));
       const bk = d < 30 ? '0_30' : d < 60 ? '30_60' : d < 90 ? '60_90' : '90p';
-      clientMap[k][bk] += i.total_factura || 0;
-      clientMap[k].total += i.total_factura || 0;
+      clientMap[k][bk] += getOutstandingAmount(i);
+      clientMap[k].total += getOutstandingAmount(i);
     });
 
     const byClient = Object.values(clientMap).sort((a, b) => b.total - a.total).slice(0, 12);
@@ -134,7 +135,7 @@ export default function ARAgingChart({ invoices, contacts }) {
           <div>
             <p className="text-xs font-semibold text-red-700">Alerta IA — Aging crítico</p>
             <p className="text-xs text-red-600 mt-0.5">
-              Tienes {fmt(buckets[3].total)} en facturas con más de 90 días de retraso. La probabilidad de cobro cae por debajo del 40% a partir de los 90 días. Considera iniciar proceso de reclamación formal.
+              Tienes {fmt(buckets[3].total)} en facturas con más de 90 días de retraso. Revisa estas facturas y decide si procede iniciar una reclamación formal; Taxea no asigna probabilidades sin evidencia histórica suficiente.
             </p>
           </div>
         </div>
