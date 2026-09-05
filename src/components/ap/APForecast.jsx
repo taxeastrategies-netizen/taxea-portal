@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -17,14 +18,14 @@ export default function APForecast({ invoices, expenses, obligations }) {
     const forecast7 = pending.filter(i => {
       const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
       return d >= -3 && d <= 7;
-    }).reduce((s, i) => s + (i.total_factura || 0), 0);
+    }).reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     const forecast30 = pending.filter(i => {
       const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
       return d >= -7 && d <= 30;
-    }).reduce((s, i) => s + (i.total_factura || 0), 0);
+    }).reduce((s, i) => s + getOutstandingAmount(i), 0);
 
-    const forecastQ = pending.reduce((s, i) => s + (i.total_factura || 0), 0);
+    const forecastQ = pending.reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     // Por semana próximas 8 semanas
     const byWeek = Array.from({ length: 8 }, (_, w) => {
@@ -33,7 +34,7 @@ export default function APForecast({ invoices, expenses, obligations }) {
       const total = pending.filter(i => {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
         return d >= weekStart && d < weekEnd;
-      }).reduce((s, i) => s + (i.total_factura || 0), 0);
+      }).reduce((s, i) => s + getOutstandingAmount(i), 0);
       const oblTotal = pendingObl.filter(o => {
         const d = differenceInDays(parseISO(o.fecha_limite), now);
         return d >= weekStart && d < weekEnd;
