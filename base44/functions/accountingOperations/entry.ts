@@ -122,6 +122,90 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: active.length, offset, nextOffset, done: nextOffset >= active.length, result, schemaVersion: SCHEMA_VERSION });
     }
 
+    if (action === 'sync_payments') {
+      const apply = body.apply === true;
+      const offset = Math.max(0, Number(body.offset) || 0);
+      const batchSize = apply ? Math.min(10, Math.max(1, Number(body.batchSize) || 3)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
+      const [payments, invoices, transactions, bankAccounts, entries, accounts] = await Promise.all([
+        fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
+      ]);
+      const invoiceById = new Map(invoices.map(invoice => [invoice.id, invoice]));
+      const transactionById = new Map(transactions.map(transaction => [transaction.id, transaction]));
+      const bankById = new Map(bankAccounts.map(account => [account.id, account]));
+      const accountById = new Map(accounts.map(account => [account.id, account]));
+      const accountByCode = new Map(accounts.map(account => [account.code, account]));
+      const entryByKey = new Map();
+      for (const entry of entries) { entryByKey.set(entry.id, entry); if (entry.importKey) entryByKey.set(entry.importKey, entry); }
+      const page = payments.slice(offset, offset + batchSize);
+      const result = { scanned: 0, alreadyLinked: 0, ready: 0, posted: 0, repairedLinks: 0, issues: [] };
+      for (const payment of page) {
+        result.scanned += 1;
+        const linked = payment.journal_entry_id ? entryByKey.get(payment.journal_entry_id) : null;
+        if (linked && linked.status !== 'anulado') { result.alreadyLinked += 1; continue; }
+        const invoice = invoiceById.get(payment.invoice_id);
+        const transaction = transactionById.get(payment.bank_transaction_id);
+        const physicalBank = transaction ? bankById.get(transaction.bank_account_id) : null;
+        if (!invoice || invoice.anulada || !transaction || !physicalBank) {
+          result.issues.push({ paymentId: payment.id, invoiceId: payment.invoice_id, reason: !invoice ? 'factura_no_encontrada' : invoice.anulada ? 'factura_anulada' : !transaction ? 'movimiento_bancario_no_encontrado' : 'cuenta_bancaria_no_encontrada' });
+          continue;
+        }
+        const invoiceEntry = entryByKey.get(invoice.linked_journal_entry_id);
+        if (!invoiceEntry || invoiceEntry.status === 'anulado') {
+          result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: 'factura_sin_asiento_valido' });
+          continue;
+        }
+        let counterparty = accountById.get(invoice.counterparty_account_id) || accountByCode.get(invoice.counterparty_account_code);
+        if (!counterparty) {
+          const invoiceLines = await resolveEntryLines(svc, companyId, invoiceEntry);
+          const partyLine = invoiceLines.find(line => /^(400|410|430)/.test(String(line.accountCode || line.subcuenta || '')));
+          const code = partyLine ? canonical8(partyLine.accountCode || partyLine.subcuenta) : '';
+          counterparty = code ? accountByCode.get(code) : null;
+        }
+        if (!counterparty) {
+          result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: 'subcuenta_tercero_no_encontrada' });
+          continue;
+        }
+        const invoiceTotal = Number(invoice.total_factura || 0);
+        const expectedIncoming = (invoice.tipo === 'emitida' && invoiceTotal >= 0) || (invoice.tipo === 'recibida' && invoiceTotal < 0);
+        if ((transaction.tipo === 'entrada') !== expectedIncoming) {
+          result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: 'sentido_bancario_incompatible_con_factura' });
+          continue;
+        }
+        if (money(Math.abs(transaction.importe)) !== money(Math.abs(payment.amount))) {
+          result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: 'importe_pago_movimiento_no_coincide' });
+          continue;
+        }
+        result.ready += 1;
+        if (apply) {
+          try {
+            const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, physicalBank);
+            const posting = await postBankReconciliation(svc, companyId, transaction, bankPostingAccount, counterparty, user.email, {
+              documentId: invoice.id,
+              description: `${invoice.tipo === 'emitida' ? 'Cobro' : 'Pago'} factura ${invoice.numero_factura || ''}`.trim(),
+              counterpartyLineType: 'tercero',
+              status: 'confirmado',
+            });
+            await svc.entities.InvoicePayment.update(payment.id, { journal_entry_id: posting.entry.id });
+            await svc.entities.BankTransaction.update(transaction.id, {
+              journal_entry_id: posting.entry.id,
+              accounting_account_id: bankPostingAccount.id,
+              accounting_account_code: bankPostingAccount.code,
+            });
+            if (posting.alreadyPosted) result.repairedLinks += 1; else result.posted += 1;
+          } catch (error) {
+            result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: error.message || 'error_contabilizacion_pago' });
+          }
+        }
+      }
+      const nextOffset = offset + page.length;
+      return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: payments.length, offset, nextOffset, done: nextOffset >= payments.length, result, schemaVersion: SCHEMA_VERSION });
+    }
+
     if (action === 'quality' || action === 'reports' || action === 'journal' || action === 'ledger') {
       const data = await accountingData(svc, companyId);
       if (action === 'quality') {
