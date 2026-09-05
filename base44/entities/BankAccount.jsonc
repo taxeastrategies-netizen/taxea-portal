@@ -138,6 +138,12 @@
       "type": "boolean",
       "default": false
     },
+    "accounting_account_id": {
+      "type": "string"
+    },
+    "accounting_account_code": {
+      "type": "string"
+    },
     "notas": {
       "type": "string"
     }
