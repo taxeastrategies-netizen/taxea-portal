@@ -228,7 +228,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const nonDeductibleTax = invoice.tipo === 'recibida'
     ? money(invoice.non_deductible_tax_amount != null ? invoice.non_deductible_tax_amount : tax - deductibleTax)
     : 0;
-  const withholding = money(invoice.importe_retencion || (base * Number(invoice.retencion_irpf || 0) / 100));
+  const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
   const total = money(invoice.total_factura || base + tax - withholding);
   if (!invoice.es_rectificativa && base <= 0) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
