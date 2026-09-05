@@ -175,6 +175,8 @@ export default function TreasuryCenter({ company }) {
     setSyncingBanks(true);
     setBankNotice({ type: 'loading', text: `Sincronizando ${connected.length} ${connected.length === 1 ? 'cuenta' : 'cuentas'}…` });
     let created = 0;
+    let reconciled = 0;
+    let reconciledAmount = 0;
     const failures = [];
     for (const account of connected) {
       try {
@@ -182,15 +184,20 @@ export default function TreasuryCenter({ company }) {
         const payload = response?.data ?? response;
         if (!payload?.ok) throw new Error(payload?.error || 'Error de sincronización');
         created += Number(payload.created || 0);
+        reconciled += Number(payload.auto_reconciliation?.reconciled || 0);
+        reconciledAmount += Number(payload.auto_reconciliation?.amount || 0);
       } catch (error) {
         failures.push(`${account.nombre_banco}: ${error?.message || 'error'}`);
       }
     }
     await loadData();
     setSyncingBanks(false);
+    const reconciliationText = reconciled > 0
+      ? ` ${reconciled} facturas conciliadas automáticamente por ${reconciledAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}.`
+      : ' No se encontraron nuevas coincidencias seguras para conciliar.';
     setBankNotice(failures.length
       ? { type: 'error', text: `${created} movimientos nuevos. ${failures.join(' · ')}` }
-      : { type: 'success', text: `Sincronización completada. ${created} movimientos nuevos; los duplicados se han omitido.` });
+      : { type: 'success', text: `Sincronización completada. ${created} movimientos nuevos; los ya existentes se han omitido.${reconciliationText}` });
   };
 
   const pendingConciliation = useMemo(() =>
@@ -282,7 +289,6 @@ export default function TreasuryCenter({ company }) {
                     {accounts.map((acc, i) => (
                       <BankCard key={acc.id} account={acc} companyId={companyId} delay={i * 0.06}
                         onViewMovements={() => setTab('movimientos')}
-                        onDisconnect={async (a) => { await base44.entities.BankAccount.update(a.id, { estado_conexion: 'desconectado' }); loadData(); }}
                         onRefresh={loadData}
                       />
                     ))}
