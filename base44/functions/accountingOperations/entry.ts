@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
       ]);
-      const active = (invoices || []).filter(invoice => !invoice.anulada);
+      const active = (invoices || []).filter(invoice => !invoice.anulada && (!body.invoiceType || invoice.tipo === body.invoiceType));
       const entryById = new Map();
       for (const entry of entries || []) {
         entryById.set(entry.id, entry);
@@ -92,6 +92,10 @@ Deno.serve(async (req) => {
         result.scanned += 1;
         const linked = invoice.linked_journal_entry_id ? entryById.get(invoice.linked_journal_entry_id) : null;
         if (linked && linked.status !== 'anulado') { result.alreadyLinked += 1; continue; }
+        if (invoice.accounting_migration_hold) {
+          result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: invoice.accounting_migration_hold_reason || 'revision_contable_obligatoria' });
+          continue;
+        }
         const postingKey = `invoice:${invoice.id}:${SCHEMA_VERSION}`;
         const duplicate = postingByKey.get(postingKey);
         if (duplicate && duplicate.status !== 'anulado') {
@@ -100,12 +104,15 @@ Deno.serve(async (req) => {
           continue;
         }
         const party = invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre;
+        const totalExpected = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) - Number(invoice.importe_retencion || 0));
+        const totalMatches = Math.abs(totalExpected - money(invoice.total_factura)) <= 0.02;
         const valid = /^\d{4}-\d{2}-\d{2}$/.test(String(invoice.fecha_emision || ''))
           && ['emitida', 'recibida'].includes(invoice.tipo)
           && Number.isFinite(Number(invoice.total_factura))
+          && totalMatches
           && String(party || '').trim();
         if (!valid) {
-          result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: !party ? 'tercero_sin_identificar' : 'datos_contables_incompletos' });
+          result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: !party ? 'tercero_sin_identificar' : !totalMatches ? 'importe_total_no_cuadra_con_base_e_impuestos' : 'datos_contables_incompletos' });
           continue;
         }
         result.ready += 1;
