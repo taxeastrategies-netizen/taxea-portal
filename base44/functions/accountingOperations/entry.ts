@@ -74,12 +74,13 @@ Deno.serve(async (req) => {
     if (action === 'sync_invoices') {
       const apply = body.apply === true;
       const offset = Math.max(0, Number(body.offset) || 0);
-      const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 20)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
+      const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 3)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
       const [invoices, entries] = await Promise.all([
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
       ]);
-      const active = (invoices || []).filter(invoice => !invoice.anulada && (!body.invoiceType || invoice.tipo === body.invoiceType));
+      const requestedInvoiceIds = Array.isArray(body.invoiceIds) ? new Set(body.invoiceIds.map(String)) : null;
+      const active = (invoices || []).filter(invoice => !invoice.anulada && (!body.invoiceType || invoice.tipo === body.invoiceType) && (!requestedInvoiceIds || requestedInvoiceIds.has(invoice.id)));
       const entryById = new Map();
       for (const entry of entries || []) {
         entryById.set(entry.id, entry);
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
       }
       const postingByKey = new Map((entries || []).filter(entry => entry.postingKey).map(entry => [entry.postingKey, entry]));
       const page = active.slice(offset, offset + batchSize);
-      const result = { scanned: 0, alreadyLinked: 0, ready: 0, posted: 0, repairedLinks: 0, issues: [] };
+      const result = { scanned: 0, alreadyLinked: 0, ready: 0, readyInvoiceIds: [], posted: 0, repairedLinks: 0, issues: [] };
       for (const invoice of page) {
         result.scanned += 1;
         const linked = invoice.linked_journal_entry_id ? entryById.get(invoice.linked_journal_entry_id) : null;
@@ -116,6 +117,7 @@ Deno.serve(async (req) => {
           continue;
         }
         result.ready += 1;
+        result.readyInvoiceIds.push(invoice.id);
         if (apply) {
           try {
             const posting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
