@@ -69,7 +69,7 @@ export default function IngresosGastos() {
         id: inv.id,
         tipo: inv.tipo === 'emitida' ? 'ingreso' : 'gasto',
         fecha: inv.fecha_emision,
-        proveedor_cliente: inv.cliente_nombre,
+        proveedor_cliente: inv.tipo === 'recibida' ? (inv.proveedor_nombre || inv.cliente_nombre) : (inv.cliente_nombre || inv.proveedor_nombre),
         concepto: inv.concepto,
         base_imponible: inv.base_imponible,
         tipo_impuesto: inv.tipo_iva,
