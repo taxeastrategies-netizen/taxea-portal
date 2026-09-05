@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban } from 'lucide-react';
+import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AsientoProposalModal from './AsientoProposalModal';
 
@@ -31,6 +31,8 @@ export default function FacturasPendientes() {
   const [showAnuladas, setShowAnuladas] = useState(false);
   const [anularTarget, setAnularTarget] = useState(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [syncingAccounting, setSyncingAccounting] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices-contabilidad', company?.id],
@@ -85,6 +87,49 @@ export default function FacturasPendientes() {
   const openModal = (inv) => { setSelectedInvoice(inv); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setSelectedInvoice(null); };
 
+  const syncAccounting = async () => {
+    if (!company?.id || syncingAccounting) return;
+    setSyncingAccounting(true);
+    setSyncMessage('Analizando facturas...');
+    try {
+      let offset = 0;
+      let ready = 0;
+      let issues = 0;
+      let done = false;
+      while (!done) {
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: false, offset, batchSize: 500 });
+        const data = response?.data || response;
+        ready += data.result?.ready || 0;
+        issues += data.result?.issues?.length || 0;
+        offset = data.nextOffset || 0;
+        done = Boolean(data.done);
+      }
+      if (!ready) { setSyncMessage(issues ? `${issues} facturas requieren completar datos.` : 'Todas las facturas ya tienen asiento.'); return; }
+      if (!window.confirm(`Se crearán ${ready} asientos contables confirmados. ${issues ? `${issues} facturas quedarán pendientes por datos incompletos. ` : ''}La operación es idempotente y no duplica facturas ya enlazadas. ¿Continuar?`)) { setSyncMessage('Sin cambios.'); return; }
+      offset = 0;
+      let posted = 0;
+      let failures = 0;
+      done = false;
+      while (!done) {
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: true, offset, batchSize: 20 });
+        const data = response?.data || response;
+        posted += data.result?.posted || 0;
+        failures += data.result?.issues?.length || 0;
+        offset = data.nextOffset || 0;
+        done = Boolean(data.done);
+        setSyncMessage(`Contabilizando... ${Math.min(offset, data.total || offset)}/${data.total || offset}`);
+      }
+      setSyncMessage(`${posted} asientos creados${failures ? ` · ${failures} facturas requieren revisión` : ''}.`);
+      qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
+      qc.invalidateQueries({ queryKey: ['journal-v2'] });
+      qc.invalidateQueries({ queryKey: ['accounting-reports-v2'] });
+    } catch (error) {
+      setSyncMessage(error?.response?.data?.error || error?.message || 'No se pudo completar la sincronización contable.');
+    } finally {
+      setSyncingAccounting(false);
+    }
+  };
+
   if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando facturas...</div>;
 
   return (
@@ -101,6 +146,14 @@ export default function FacturasPendientes() {
             <p className="text-xs mt-0.5">{k.label}</p>
           </div>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3">
+        <div className="mr-auto"><p className="text-sm font-semibold">Cobertura contable de facturas</p><p className="text-xs text-muted-foreground">Crea únicamente los asientos que faltan y deja aparte documentos incompletos.</p></div>
+        {syncMessage && <span className="text-xs text-muted-foreground">{syncMessage}</span>}
+        <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={syncAccounting} disabled={syncingAccounting}>
+          <RefreshCw className={`w-3.5 h-3.5 ${syncingAccounting ? 'animate-spin' : ''}`} />{syncingAccounting ? 'Sincronizando' : 'Completar asientos'}
+        </Button>
       </div>
 
       {/* Toggle activas / anuladas */}
