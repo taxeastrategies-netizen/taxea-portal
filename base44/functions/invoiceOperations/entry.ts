@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { postBankReconciliation, postInvoice } from '../accountingOperations/accountingEngine.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -93,6 +94,40 @@ async function recordTimeline(base44, data) {
   await base44.asServiceRole.entities.InvoiceTimelineEvent.create(data).catch(error => {
     console.warn('[invoiceOperations] timeline skipped:', error?.message || error);
   });
+}
+
+async function prepareInvoiceBankAccounting(base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user) {
+  const posting = await postInvoice(base44.asServiceRole, companyId, invoice, user.email, { status: 'confirmado' });
+  const postedInvoice = await base44.asServiceRole.entities.Invoice.get(invoice.id);
+  let counterpartyAccount = postedInvoice.counterparty_account_id
+    ? await base44.asServiceRole.entities.AccountingAccount.get(postedInvoice.counterparty_account_id).catch(() => null)
+    : null;
+  if (!counterpartyAccount && postedInvoice.counterparty_account_code) {
+    const matches = await base44.asServiceRole.entities.AccountingAccount.filter({ companyId, code: postedInvoice.counterparty_account_code }, '-created_date', 1);
+    counterpartyAccount = matches?.[0] || null;
+  }
+  if (!counterpartyAccount || counterpartyAccount.companyId !== companyId) {
+    throw Object.assign(new Error('No se pudo identificar la cuenta contable del cliente o proveedor.'), { status: 409 });
+  }
+  const bankPosting = await postBankReconciliation(
+    base44.asServiceRole,
+    companyId,
+    transaction,
+    bankLedger,
+    counterpartyAccount,
+    user.email,
+    {
+      documentId: invoice.id,
+      description: `${invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${invoice.numero_factura}`,
+      counterpartyLineType: 'tercero',
+      status: 'confirmado',
+    },
+  );
+  await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, {
+    accounting_account_id: bankLedger.id,
+    accounting_account_code: bankLedger.code,
+  });
+  return { posting, bankPosting, counterpartyAccount };
 }
 
 Deno.serve(async (req) => {
@@ -303,32 +338,43 @@ Deno.serve(async (req) => {
       const expectedType = invoice.tipo === 'recibida'
         ? (isCreditNote ? 'entrada' : 'salida')
         : (isCreditNote ? 'salida' : 'entrada');
-      const transactions = await base44.asServiceRole.entities.BankTransaction.filter({
-        company_id: companyId,
-        tipo: expectedType,
-      }, '-fecha_operacion', 500);
-      const candidates = (transactions || [])
-        .filter(tx => !tx.es_demo)
-        .filter(tx => tx.estado_proveedor !== 'pending')
-        .filter(tx => !tx.entidad_id || (tx.entidad_tipo === 'invoice' && tx.entidad_id === invoice.id))
-        .filter(tx => !['descartada', 'duplicada', 'movimiento_interno'].includes(tx.estado_conciliacion))
-        .map(tx => ({
-          id: tx.id,
-          fecha_operacion: tx.fecha_operacion,
-          concepto: tx.concepto,
-          importe: Math.abs(Number(tx.importe) || 0),
-          tipo: tx.tipo,
-          nombre_contraparte: tx.nombre_contraparte,
-          referencia: tx.referencia,
-          estado_conciliacion: tx.estado_conciliacion,
-          already_linked: tx.entidad_id === invoice.id,
-        }))
-        .sort((a, b) => {
-          const target = Math.abs(Number(invoice.total_factura) || 0);
-          return Math.abs(a.importe - target) - Math.abs(b.importe - target);
-        });
       const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-      return Response.json({ ok: true, candidates, ...state });
+      const [transactions, accountingAccounts, bankAccounts] = await Promise.all([
+        base44.asServiceRole.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 5000),
+        base44.asServiceRole.entities.AccountingAccount.filter({ companyId }, 'code', 5000),
+        base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', 5000),
+      ]);
+      const bankById = new Map((bankAccounts || []).map(account => [account.id, account]));
+      const ledgerBankAccounts = (accountingAccounts || [])
+        .filter(account => account.status !== 'inactiva' && account.type === 'banco' && /^57[23]\d{5}$/.test(account.code || ''))
+        .map(account => ({ id: account.id, code: account.code, name: account.name }));
+      const candidates = (transactions || [])
+        .filter(tx => !tx.es_demo && tx.estado_proveedor !== 'pending')
+        .filter(tx => !tx.entidad_id && ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(tx.estado_conciliacion))
+        .map(tx => {
+          const sourceAccount = bankById.get(tx.bank_account_id);
+          return {
+            id: tx.id,
+            bank_account_id: tx.bank_account_id,
+            bank_account_name: sourceAccount?.nombre_banco || 'Cuenta bancaria',
+            bank_accounting_account_id: sourceAccount?.accounting_account_id || '',
+            fecha_operacion: tx.fecha_operacion,
+            concepto: tx.concepto,
+            importe: Math.abs(Number(tx.importe) || 0),
+            moneda: tx.moneda || 'EUR',
+            tipo: tx.tipo,
+            direction_compatible: tx.tipo === expectedType,
+            nombre_contraparte: tx.nombre_contraparte,
+            referencia: tx.referencia,
+            estado_conciliacion: tx.estado_conciliacion,
+          };
+        })
+        .sort((a, b) => {
+          if (a.direction_compatible !== b.direction_compatible) return a.direction_compatible ? -1 : 1;
+          const amountDiff = Math.abs(a.importe - state.outstanding) - Math.abs(b.importe - state.outstanding);
+          return amountDiff || String(b.fecha_operacion || '').localeCompare(String(a.fecha_operacion || ''));
+        });
+      return Response.json({ ok: true, candidates, accounting_bank_accounts: ledgerBankAccounts, expected_type: expectedType, ...state });
     }
 
     if (action === 'reconcile') {
@@ -351,12 +397,28 @@ Deno.serve(async (req) => {
       if (transaction.entidad_id && !(transaction.entidad_tipo === 'invoice' && transaction.entidad_id === invoice.id)) {
         return Response.json({ error: 'El movimiento ya está conciliado con otro documento.' }, { status: 409 });
       }
+      const bankLedgerId = cleanText(body.bank_accounting_account_id, 120);
+      if (!bankLedgerId) return Response.json({ error: 'Selecciona la cuenta contable del banco.' }, { status: 400 });
+      const bankLedger = await base44.asServiceRole.entities.AccountingAccount.get(bankLedgerId).catch(() => null);
+      if (!bankLedger || bankLedger.companyId !== companyId || bankLedger.status === 'inactiva' || bankLedger.type !== 'banco' || !/^57[23]\d{5}$/.test(bankLedger.code || '')) {
+        return Response.json({ error: 'La cuenta contable bancaria no es válida para esta empresa.' }, { status: 409 });
+      }
+      if ((transaction.moneda || invoice.moneda || 'EUR').toUpperCase() !== 'EUR' && /euros?/i.test(bankLedger.name || '')) {
+        return Response.json({ error: 'Selecciona una subcuenta bancaria específica para la divisa del movimiento.' }, { status: 409 });
+      }
+      const sourceBankAccount = await base44.asServiceRole.entities.BankAccount.get(transaction.bank_account_id).catch(() => null);
+      if (!sourceBankAccount || sourceBankAccount.company_id !== companyId) {
+        return Response.json({ error: 'La cuenta bancaria de origen no pertenece a la empresa activa.' }, { status: 409 });
+      }
       const previousPayment = await base44.asServiceRole.entities.InvoicePayment.filter({
         company_id: companyId,
         invoice_id: invoice.id,
         bank_transaction_id: transaction.id,
       }, '-created_at', 1);
       if (previousPayment?.[0]) {
+        const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
+          base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
+        );
         // Repara de forma idempotente una operación que hubiera guardado el pago
         // pero se hubiera interrumpido antes de enlazar el movimiento.
         await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
@@ -365,8 +427,18 @@ Deno.serve(async (req) => {
           entidad_tipo: 'invoice',
           entidad_id: invoice.id,
         });
+        if (!previousPayment[0].journal_entry_id) {
+          await base44.asServiceRole.entities.InvoicePayment.update(previousPayment[0].id, { journal_entry_id: bankPosting.entry.id });
+        }
+        await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
+          journal_entry_id: bankPosting.entry.id,
+          accounting_account_id: counterpartyAccount.id,
+          accounting_account_code: counterpartyAccount.code,
+          reconciled_at: new Date().toISOString(),
+          reconciled_by: user.email,
+        });
         const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-        return Response.json({ ok: true, duplicate: true, payment: previousPayment[0], ...state });
+        return Response.json({ ok: true, duplicate: true, payment: previousPayment[0], journal_entry: bankPosting.entry, invoice_posting: posting.entry, ...state });
       }
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
       const amount = asMoney(Math.abs(Number(transaction.importe) || 0));
@@ -376,6 +448,9 @@ Deno.serve(async (req) => {
           error: `El movimiento (${amount.toFixed(2)} EUR) supera el pendiente (${current.outstanding.toFixed(2)} EUR). No se concilia automáticamente.`,
         }, { status: 409 });
       }
+      const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
+        base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
+      );
       const now = new Date().toISOString();
       const payment = await base44.asServiceRole.entities.InvoicePayment.create({
         company_id: companyId,
@@ -388,6 +463,7 @@ Deno.serve(async (req) => {
         notes: 'Registrado mediante conciliación bancaria manual.',
         origin: 'bank_reconciliation',
         bank_transaction_id: transaction.id,
+        journal_entry_id: bankPosting.entry.id,
         idempotency_key: `bank:${transaction.id}`,
         created_at: now,
         created_by: user.full_name || user.email || 'Usuario',
@@ -397,6 +473,11 @@ Deno.serve(async (req) => {
         confianza_conciliacion: 'alta',
         entidad_tipo: 'invoice',
         entidad_id: invoice.id,
+        journal_entry_id: bankPosting.entry.id,
+        accounting_account_id: counterpartyAccount.id,
+        accounting_account_code: counterpartyAccount.code,
+        reconciled_at: now,
+        reconciled_by: user.email,
         contacto_id: transaction.contacto_id || null,
         notas: cleanText(`${transaction.notas ? `${transaction.notas}\n` : ''}Conciliado con factura ${invoice.numero_factura}.`, MAX_TEXT),
       });
@@ -411,7 +492,7 @@ Deno.serve(async (req) => {
         created_by: user.full_name || user.email || 'Usuario',
         origin: 'manual',
       });
-      return Response.json({ ok: true, payment, transaction_id: transaction.id, ...state });
+      return Response.json({ ok: true, payment, transaction_id: transaction.id, journal_entry: bankPosting.entry, invoice_posting: posting.entry, ...state });
     }
 
     return Response.json({ error: 'Acción no soportada.' }, { status: 400 });
