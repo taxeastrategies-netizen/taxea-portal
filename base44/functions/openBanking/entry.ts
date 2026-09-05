@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
-import { postBankReconciliation } from '../accountingOperations/accountingEngine.ts';
+import { postBankReconciliation } from './accountingEngine.ts';
 
 const API_ROOT = 'https://api.enablebanking.com';
 const DEFAULT_COUNTRY = 'ES';
