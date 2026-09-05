@@ -92,7 +92,7 @@ const CATEGORY_ACCOUNT = {
   otros: '62900000',
 };
 
-async function ensureAccount(svc, companyId, codeInput, name, type = 'otro', extra = {}) {
+export async function ensureAccount(svc, companyId, codeInput, name, type = 'otro', extra = {}) {
   const code = canonical8(codeInput);
   const existing = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
   if (existing?.[0]) return existing[0];
