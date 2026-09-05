@@ -3,6 +3,7 @@ import { differenceInDays, parseISO } from 'date-fns';
 import { Search, Send, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n || 0);
@@ -55,7 +56,7 @@ export default function ARInvoiceTable({ invoices, contacts }) {
     await base44.integrations.Core.SendEmail({
       to: inv.cliente_email || '',
       subject: `Recordatorio de pago — Factura ${inv.numero_factura}`,
-      body: `Estimado ${inv.cliente_nombre},\n\nLe recordamos que la factura ${inv.numero_factura} por importe de ${fmt(inv.total_factura)} se encuentra pendiente de pago.\n\nFecha de vencimiento: ${inv.fecha_vencimiento || 'N/D'}\n\nSi ya ha realizado el pago, por favor ignore este mensaje.\n\nGracias por su confianza.\n\nEquipo Taxea`,
+      body: `Estimado ${inv.cliente_nombre},\n\nLe recordamos que la factura ${inv.numero_factura} por importe de ${fmt(getOutstandingAmount(inv))} se encuentra pendiente de pago.\n\nFecha de vencimiento: ${inv.fecha_vencimiento || 'N/D'}\n\nSi ya ha realizado el pago, por favor ignore este mensaje.\n\nGracias por su confianza.\n\nEquipo Taxea`,
     }).catch(() => {});
     setSending(null);
   };
@@ -129,7 +130,7 @@ export default function ARInvoiceTable({ invoices, contacts }) {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm font-semibold text-foreground">{fmt(inv.total_factura)}</span>
+                      <span className="text-sm font-semibold text-foreground">{fmt(getOutstandingAmount(inv))}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border", cfg.color)}>
