@@ -12,6 +12,7 @@ import { Wallet, BarChart2, TrendingDown, CalendarDays, Clock, AlertTriangle } f
 import { cn } from '@/lib/utils';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { getOutstandingAmount } from '@/lib/financialCore';
+import InvoicePaymentReconciliationModal from '@/components/facturas/InvoicePaymentReconciliationModal';
 
 const TABS = [
   { id: 'facturas',   label: 'Facturas pendientes', icon: Wallet },
@@ -27,7 +28,8 @@ export default function AccountsPayable() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('facturas');
-  const { invoices, expenses, treasury, loading: financialLoading } = useFinancialData(companyId);
+  const [invoiceToReconcile, setInvoiceToReconcile] = useState(null);
+  const { invoices, expenses, treasury, loading: financialLoading, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -134,13 +136,22 @@ export default function AccountsPayable() {
         </div>
       ) : (
         <>
-          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} />}
+          {tab === 'facturas' && <APInvoiceTable invoices={recibidas} expenses={expenses} contacts={contacts} onReconcile={setInvoiceToReconcile} />}
           {tab === 'aging' && <APAgingChart invoices={recibidas} />}
           {tab === 'forecast' && <APForecast invoices={recibidas} expenses={expenses} obligations={obligations} />}
           {tab === 'calendario' && <APCalendar invoices={recibidas} expenses={expenses} obligations={obligations} />}
           {tab === 'dpo' && <APDPOPanel invoices={recibidas} dpo={kpis.dpo} />}
         </>
       )}
+
+      <InvoicePaymentReconciliationModal
+        open={Boolean(invoiceToReconcile)}
+        mode="reconcile"
+        invoice={invoiceToReconcile}
+        company={company}
+        onOpenChange={nextOpen => { if (!nextOpen) setInvoiceToReconcile(null); }}
+        onChanged={refresh}
+      />
     </motion.div>
   );
 }
