@@ -11,6 +11,7 @@ import ARRiskRadar from './ARRiskRadar';
 import { TrendingDown, Users, BarChart2, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 const TABS = [
   { id: 'facturas',  label: 'Facturas pendientes', icon: Calendar },
@@ -42,14 +43,14 @@ export default function AccountsReceivable() {
 
   const kpis = useMemo(() => {
     const now = new Date();
-    const pendientes = emitidas.filter(i => i.estado_cobro === 'pendiente');
+    const pendientes = emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const vencidas = emitidas.filter(i => {
       if (i.estado_cobro === 'cobrada') return false;
       if (!i.fecha_vencimiento) return false;
       return isBefore(parseISO(i.fecha_vencimiento), now);
     });
-    const total_pendiente = pendientes.reduce((s, i) => s + (i.total_factura || 0), 0);
-    const total_vencido = vencidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+    const total_pendiente = pendientes.reduce((s, i) => s + getOutstandingAmount(i), 0);
+    const total_vencido = vencidas.reduce((s, i) => s + getOutstandingAmount(i), 0);
     const total_riesgo = emitidas
       .filter(i => i.estado_cobro !== 'cobrada')
       .filter(i => {
@@ -57,16 +58,18 @@ export default function AccountsReceivable() {
         const dias = differenceInDays(now, parseISO(i.fecha_vencimiento));
         return dias > 30;
       })
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
-    const cobradas30 = emitidas.filter(i => i.estado_cobro === 'cobrada').slice(0, 20);
-    const dso = cobradas30.length > 0
-      ? cobradas30.reduce((s, i) => {
-          if (!i.fecha_emision || !i.fecha_vencimiento) return s + 30;
-          const d = differenceInDays(parseISO(i.fecha_vencimiento), parseISO(i.fecha_emision));
-          return s + Math.max(0, d);
-        }, 0) / cobradas30.length
-      : 45;
+    const observedCollections = emitidas
+      .filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
+      .map(i => {
+        try { return Math.max(0, differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision))); }
+        catch { return null; }
+      })
+      .filter(value => value !== null);
+    const dso = observedCollections.length
+      ? observedCollections.reduce((sum, value) => sum + value, 0) / observedCollections.length
+      : 0;
 
     return { total_pendiente, total_vencido, total_riesgo, dso: Math.round(dso), count_pendientes: pendientes.length, count_vencidas: vencidas.length };
   }, [emitidas]);
@@ -132,17 +135,16 @@ export default function AccountsReceivable() {
 }
 
 function ARDSOPanel({ invoices, dso }) {
-  const benchmark = 35;
-  const status = dso <= 30 ? 'good' : dso <= 50 ? 'medium' : 'bad';
-  const statusColor = status === 'good' ? 'text-emerald-600' : status === 'medium' ? 'text-amber-500' : 'text-red-600';
-  const statusBg = status === 'good' ? 'bg-emerald-50 border-emerald-200' : status === 'medium' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
+  const observedCount = invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at).length;
+  const statusColor = observedCount > 0 ? 'text-blue-600' : 'text-slate-400';
+  const statusBg = observedCount > 0 ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200';
 
   const byMonth = useMemo(() => {
     const map = {};
-    invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision).forEach(i => {
-      const m = i.fecha_emision.substring(0, 7);
+    invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at).forEach(i => {
+      const m = i.ultimo_pago_at.substring(0, 7);
       if (!map[m]) map[m] = { total: 0, count: 0 };
-      const d = i.fecha_vencimiento ? differenceInDays(parseISO(i.fecha_vencimiento), parseISO(i.fecha_emision)) : 30;
+      const d = differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision));
       map[m].total += Math.max(0, d);
       map[m].count++;
     });
@@ -154,20 +156,18 @@ function ARDSOPanel({ invoices, dso }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className={cn("bg-white border rounded-2xl p-5 shadow-sm", statusBg)}>
           <p className="text-xs text-slate-400 mb-1">DSO Actual</p>
-          <p className={cn("text-4xl font-jakarta font-bold", statusColor)}>{dso} <span className="text-lg font-normal text-slate-400">días</span></p>
+          <p className={cn("text-4xl font-jakarta font-bold", statusColor)}>{observedCount > 0 ? dso : '—'} {observedCount > 0 && <span className="text-lg font-normal text-slate-400">días</span>}</p>
           <p className="text-xs text-slate-400 mt-1">Days Sales Outstanding</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs text-slate-400 mb-1">Benchmark sector</p>
-          <p className="text-4xl font-jakarta font-bold text-slate-700">{benchmark} <span className="text-lg font-normal text-slate-400">días</span></p>
-          <p className="text-xs text-slate-400 mt-1">Media Pymes España</p>
+          <p className="text-xs text-slate-400 mb-1">Cobros observados</p>
+          <p className="text-4xl font-jakarta font-bold text-slate-700">{observedCount}</p>
+          <p className="text-xs text-slate-400 mt-1">Con fecha real de cobro</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs text-slate-400 mb-1">Diferencia vs benchmark</p>
-          <p className={cn("text-4xl font-jakarta font-bold", dso > benchmark ? "text-red-500" : "text-emerald-600")}>
-            {dso > benchmark ? '+' : ''}{dso - benchmark} <span className="text-lg font-normal text-slate-400">días</span>
-          </p>
-          <p className="text-xs text-slate-400 mt-1">{dso > benchmark ? 'Por encima del sector' : 'Por debajo del sector'}</p>
+          <p className="text-xs text-slate-400 mb-1">Método</p>
+          <p className="text-lg font-jakarta font-bold text-slate-700">Dato conciliado</p>
+          <p className="text-xs text-slate-400 mt-1">Emisión → último cobro registrado</p>
         </div>
       </div>
 
@@ -199,14 +199,11 @@ function ARDSOPanel({ invoices, dso }) {
           <span className="text-sm">🤖</span>
         </div>
         <div>
-          <p className="text-xs font-semibold text-blue-800 mb-0.5">Análisis IA — DSO</p>
+          <p className="text-xs font-semibold text-blue-800 mb-0.5">Calidad del dato DSO</p>
           <p className="text-xs text-blue-700">
-            {dso <= 30
-              ? `Tu DSO de ${dso} días es excelente. Cobras antes que la media del sector. Mantén esta política de cobros.`
-              : dso <= 50
-              ? `Tu DSO de ${dso} días está dentro de la media. Considera activar recordatorios automáticos para reducirlo a menos de 35 días.`
-              : `Tu DSO de ${dso} días es elevado. Cada día de retraso bloquea capital. Activa recordatorios automáticos y revisa los clientes con +60 días de retraso.`
-            }
+            {observedCount > 0
+              ? `Calculado con ${observedCount} cobros que tienen fecha real registrada. No se usan vencimientos ni referencias sectoriales inventadas.`
+              : 'Todavía no hay cobros con fecha real suficiente para calcular el DSO.'}
           </p>
         </div>
       </div>
