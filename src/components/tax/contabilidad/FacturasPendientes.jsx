@@ -111,13 +111,14 @@ export default function FacturasPendientes() {
       let failures = 0;
       done = false;
       while (!done) {
-        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: true, offset, batchSize: 20 });
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, apply: true, offset, batchSize: 3 });
         const data = response?.data || response;
         posted += data.result?.posted || 0;
         failures += data.result?.issues?.length || 0;
         offset = data.nextOffset || 0;
         done = Boolean(data.done);
         setSyncMessage(`Contabilizando... ${Math.min(offset, data.total || offset)}/${data.total || offset}`);
+        if (!done) await new Promise(resolve => window.setTimeout(resolve, 1500));
       }
       setSyncMessage(`${posted} asientos creados${failures ? ` · ${failures} facturas requieren revisión` : ''}.`);
       qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
