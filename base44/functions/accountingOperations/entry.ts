@@ -4,7 +4,9 @@ import {
   buildInvoicePosting,
   canonical8,
   createJournalEntry,
+  ensureAccount,
   isCanonical8,
+  postBankReconciliation,
   postInvoice,
   seedOperationalPgc,
 } from './accountingEngine.ts';
@@ -14,9 +16,45 @@ import {
   buildJournal,
   buildLedger,
   buildReports,
+  fetchAll,
 } from './accountingReportEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+async function resolveEntryLines(svc, companyId, entry) {
+  let lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+  if ((!lines || !lines.length) && entry.importKey) {
+    lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5000);
+  }
+  return lines || [];
+}
+
+async function ensureBankPostingAccount(svc, companyId, bankAccount) {
+  if (!bankAccount || bankAccount.company_id !== companyId) throw new Error('La cuenta bancaria no pertenece a la empresa.');
+  if (bankAccount.accounting_account_id) {
+    const linked = await svc.entities.AccountingAccount.get(bankAccount.accounting_account_id).catch(() => null);
+    if (linked && linked.companyId === companyId && linked.status !== 'inactiva') return linked;
+  }
+  if (bankAccount.accounting_account_code) {
+    const linked = await svc.entities.AccountingAccount.filter({ companyId, code: bankAccount.accounting_account_code }, '-created_date', 1);
+    if (linked?.[0]) {
+      await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: linked[0].id });
+      return linked[0];
+    }
+  }
+  const accounts = await fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000);
+  const used = new Set(accounts.map(account => String(account.code || '')));
+  let code = '';
+  for (let sequence = 1; sequence <= 9999; sequence += 1) {
+    const candidate = `5720${String(sequence).padStart(4, '0')}`;
+    if (!used.has(candidate)) { code = candidate; break; }
+  }
+  if (!code) throw new Error('No quedan subcuentas bancarias disponibles en el grupo 5720.');
+  const suffix = bankAccount.ultimos_4 ? ` · ${bankAccount.ultimos_4}` : '';
+  const account = await ensureAccount(svc, companyId, code, `${bankAccount.nombre_banco || 'Banco'}${suffix}`, 'banco');
+  await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: account.id, accounting_account_code: account.code });
+  return account;
+}
 
 Deno.serve(async (req) => {
   try {
@@ -38,11 +76,15 @@ Deno.serve(async (req) => {
       const offset = Math.max(0, Number(body.offset) || 0);
       const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 20)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
       const [invoices, entries] = await Promise.all([
-        svc.entities.Invoice.filter({ company_id: companyId }, 'created_date', 5000),
-        svc.entities.JournalEntry.filter({ companyId }, 'created_date', 5000),
+        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
       ]);
       const active = (invoices || []).filter(invoice => !invoice.anulada);
-      const entryById = new Map((entries || []).map(entry => [entry.id, entry]));
+      const entryById = new Map();
+      for (const entry of entries || []) {
+        entryById.set(entry.id, entry);
+        if (entry.importKey) entryById.set(entry.importKey, entry);
+      }
       const postingByKey = new Map((entries || []).filter(entry => entry.postingKey).map(entry => [entry.postingKey, entry]));
       const page = active.slice(offset, offset + batchSize);
       const result = { scanned: 0, alreadyLinked: 0, ready: 0, posted: 0, repairedLinks: 0, issues: [] };
