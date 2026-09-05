@@ -11,6 +11,7 @@ import APCalendar from './APCalendar';
 import { Wallet, BarChart2, TrendingDown, CalendarDays, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 const TABS = [
   { id: 'facturas',   label: 'Facturas pendientes', icon: Wallet },
@@ -48,30 +49,33 @@ export default function AccountsPayable() {
 
   const kpis = useMemo(() => {
     const now = new Date();
-    const pendientes = recibidas.filter(i => i.estado_cobro === 'pendiente');
+    const pendientes = recibidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const vencidas = recibidas.filter(i => {
       if (i.estado_cobro === 'cobrada') return false;
       if (!i.fecha_vencimiento) return false;
       return isBefore(parseISO(i.fecha_vencimiento), now);
     });
-    const total_pendiente = pendientes.reduce((s, i) => s + (i.total_factura || 0), 0);
-    const total_vencido = vencidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+    const total_pendiente = pendientes.reduce((s, i) => s + getOutstandingAmount(i), 0);
+    const total_vencido = vencidas.reduce((s, i) => s + getOutstandingAmount(i), 0);
     const proximos7 = recibidas
-      .filter(i => i.estado_cobro === 'pendiente' && i.fecha_vencimiento)
+      .filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro) && i.fecha_vencimiento)
       .filter(i => {
         const d = differenceInDays(parseISO(i.fecha_vencimiento), now);
         return d >= 0 && d <= 7;
       })
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
+      .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
-    // DPO
-    const pagadas = recibidas.filter(i => i.estado_cobro === 'cobrada').slice(0, 20);
-    const dpo = pagadas.length > 0
-      ? pagadas.reduce((s, i) => {
-          if (!i.fecha_emision || !i.fecha_vencimiento) return s + 30;
-          return s + Math.max(0, differenceInDays(parseISO(i.fecha_vencimiento), parseISO(i.fecha_emision)));
-        }, 0) / pagadas.length
-      : 45;
+    // DPO observado: emisión → fecha real del último pago.
+    const observedPayments = recibidas
+      .filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
+      .map(i => {
+        try { return Math.max(0, differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision))); }
+        catch { return null; }
+      })
+      .filter(value => value !== null);
+    const dpo = observedPayments.length
+      ? observedPayments.reduce((sum, value) => sum + value, 0) / observedPayments.length
+      : 0;
 
     return { total_pendiente, total_vencido, proximos7, dpo: Math.round(dpo), count_pendientes: pendientes.length, count_vencidas: vencidas.length };
   }, [recibidas]);
@@ -142,15 +146,15 @@ export default function AccountsPayable() {
 }
 
 function APDPOPanel({ invoices, dpo }) {
-  const benchmark = 30;
-  const statusColor = dpo >= 45 ? 'text-emerald-600' : dpo >= 25 ? 'text-amber-600' : 'text-red-600';
+  const observedCount = invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at).length;
+  const statusColor = observedCount > 0 ? 'text-blue-600' : 'text-slate-400';
 
   const byMonth = useMemo(() => {
     const map = {};
-    invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision).forEach(i => {
-      const m = i.fecha_emision.substring(0, 7);
+    invoices.filter(i => i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at).forEach(i => {
+      const m = i.ultimo_pago_at.substring(0, 7);
       if (!map[m]) map[m] = { total: 0, count: 0 };
-      const d = i.fecha_vencimiento ? differenceInDays(parseISO(i.fecha_vencimiento), parseISO(i.fecha_emision)) : 30;
+      const d = differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision));
       map[m].total += Math.max(0, d);
       map[m].count++;
     });
@@ -162,20 +166,18 @@ function APDPOPanel({ invoices, dpo }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <p className="text-xs text-slate-400 mb-1">DPO Actual</p>
-          <p className={cn("text-4xl font-jakarta font-bold", statusColor)}>{dpo} <span className="text-lg font-normal text-slate-400">días</span></p>
+          <p className={cn("text-4xl font-jakarta font-bold", statusColor)}>{observedCount > 0 ? dpo : '—'} {observedCount > 0 && <span className="text-lg font-normal text-slate-400">días</span>}</p>
           <p className="text-xs text-slate-400 mt-1">Days Payable Outstanding</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs text-slate-400 mb-1">Benchmark sector</p>
-          <p className="text-4xl font-jakarta font-bold text-slate-700">{benchmark} <span className="text-lg font-normal text-slate-400">días</span></p>
-          <p className="text-xs text-slate-400 mt-1">Media Pymes España</p>
+          <p className="text-xs text-slate-400 mb-1">Pagos observados</p>
+          <p className="text-4xl font-jakarta font-bold text-slate-700">{observedCount}</p>
+          <p className="text-xs text-slate-400 mt-1">Con fecha real de pago</p>
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs text-slate-400 mb-1">Diferencia vs benchmark</p>
-          <p className={cn("text-4xl font-jakarta font-bold", dpo >= benchmark ? "text-emerald-600" : "text-amber-600")}>
-            {dpo >= benchmark ? '+' : ''}{dpo - benchmark} <span className="text-lg font-normal text-slate-400">días</span>
-          </p>
-          <p className="text-xs text-slate-400 mt-1">{dpo >= benchmark ? 'Mayor margen que el sector' : 'Paga antes que el sector'}</p>
+          <p className="text-xs text-slate-400 mb-1">Método</p>
+          <p className="text-lg font-jakarta font-bold text-slate-700">Dato conciliado</p>
+          <p className="text-xs text-slate-400 mt-1">Emisión → último pago registrado</p>
         </div>
       </div>
 
@@ -203,14 +205,11 @@ function APDPOPanel({ invoices, dpo }) {
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-3">
         <span className="text-lg flex-shrink-0">🤖</span>
         <div>
-          <p className="text-xs font-semibold text-blue-800 mb-0.5">Análisis IA — DPO</p>
+          <p className="text-xs font-semibold text-blue-800 mb-0.5">Calidad del dato DPO</p>
           <p className="text-xs text-blue-700">
-            {dpo >= 45
-              ? `Tu DPO de ${dpo} días es favorable. Estás usando bien el crédito de proveedores para gestionar tu liquidez.`
-              : dpo >= 25
-              ? `Tu DPO de ${dpo} días está dentro de la media. Puedes negociar plazos más largos con tus principales proveedores para mejorar tu cashflow.`
-              : `Tu DPO de ${dpo} días es bajo. Estás pagando antes de lo necesario. Renegocia plazos de pago para liberar capital de trabajo.`
-            }
+            {observedCount > 0
+              ? `Calculado con ${observedCount} pagos que tienen fecha real registrada. No se usan vencimientos ni referencias sectoriales inventadas.`
+              : 'Todavía no hay pagos con fecha real suficiente para calcular el DPO.'}
           </p>
         </div>
       </div>
