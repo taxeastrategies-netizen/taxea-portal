@@ -32,7 +32,7 @@ const PRIORITY_CFG = {
   diferible:  { label: 'Diferible',  badge: 'bg-blue-50 text-blue-600 border-blue-200' },
 };
 
-export default function APInvoiceTable({ invoices, expenses, contacts }) {
+export default function APInvoiceTable({ invoices, expenses, contacts, onReconcile }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('pendiente');
 
@@ -135,11 +135,13 @@ export default function APInvoiceTable({ invoices, expenses, contacts }) {
                       <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-lg border", prioCfg.badge)}>{prioCfg.label}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <a href="/finance/treasury"
-                        title="Conciliar pago en Tesorería"
-                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
-                        <CheckCircle className="w-3 h-3" />
-                      </a>
+                      <button
++                        type="button"
++                        onClick={() => onReconcile?.(inv)}
++                        title="Conciliar pago con movimiento bancario"
++                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-all">
++                        <CheckCircle className="w-3 h-3" />
++                      </button>
                     </td>
                   </tr>
                 );
