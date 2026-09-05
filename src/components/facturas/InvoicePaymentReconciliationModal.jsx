@@ -122,8 +122,23 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
   };
 
   const handleReconcile = async () => {
-    if (!selectedTransaction) return;
     setError('');
+    if (!selectedTransaction) {
+      setError('Selecciona primero un movimiento bancario compatible.');
+      return;
+    }
+    if (!selectedBankLedgerId) {
+      setError('Selecciona la cuenta contable del banco (572/573).');
+      return;
+    }
+    if (selected?.direction_compatible === false) {
+      setError('El movimiento seleccionado tiene el sentido contrario al de esta factura.');
+      return;
+    }
+    if (selected && Math.abs(Number(selected.importe)) > outstanding + 0.01) {
+      setError('El movimiento supera el importe pendiente. Debe dividirse antes desde Tesorería.');
+      return;
+    }
     setSaving(true);
     try {
       const data = await invoke({
@@ -183,7 +198,10 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Cuenta contable del banco *</label>
                 <select
                   value={selectedBankLedgerId}
-                  onChange={e => setSelectedBankLedgerId(e.target.value)}
+                  onChange={e => {
+                    setError('');
+                    setSelectedBankLedgerId(e.target.value);
+                  }}
                   className="w-full h-10 px-3 border border-input rounded-md bg-background text-sm"
                 >
                   <option value="">Seleccionar cuenta 572/573…</option>
@@ -211,6 +229,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                     type="button"
                     disabled={!compatible}
                     onClick={() => {
+                      setError('');
                       setSelectedTransaction(candidate.id);
                       if (candidate.bank_accounting_account_id) setSelectedBankLedgerId(candidate.bank_accounting_account_id);
                     }}
@@ -221,12 +240,12 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                         <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
                           <CalendarDays className="w-3 h-3" /> {candidate.fecha_operacion}
                           {candidate.nombre_contraparte ? ` · ${candidate.nombre_contraparte}` : ''}
-                          {candidate.bank_name ? ` · ${candidate.bank_name}` : ''}
+                          {candidate.bank_account_name ? ` · ${candidate.bank_account_name}` : ''}
                         </p>
                         {candidate.referencia && <p className="text-[10px] text-muted-foreground mt-1 truncate">Ref. {candidate.referencia}</p>}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold">{fmt(Math.abs(candidate.importe), candidate.currency)}</p>
+                        <p className="text-sm font-bold">{fmt(Math.abs(candidate.importe), candidate.moneda)}</p>
                         {exact && compatible && <span className="text-[10px] text-emerald-600 font-semibold">Importe exacto</span>}
                         {!compatible && <span className="text-[10px] text-slate-500 font-semibold">Sentido contrario</span>}
                       </div>
@@ -288,13 +307,13 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
           )}
 
           {success && <div className="mt-4 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 text-xs"><CheckCircle2 className="w-4 h-4" /> {success}</div>}
-          {error && <div className="mt-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs"><AlertTriangle className="w-4 h-4 mt-0.5" /> {error}</div>}
+          {error && <div aria-live="polite" className="mt-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs"><AlertTriangle className="w-4 h-4 mt-0.5" /> {error}</div>}
         </div>
 
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-secondary/30">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
           {isReconciliation ? (
-            <Button onClick={handleReconcile} disabled={saving || !selectedTransaction || !selectedBankLedgerId || selected?.direction_compatible === false || (selected && Math.abs(Number(selected.importe)) > outstanding + 0.01)}>
+            <Button onClick={handleReconcile} disabled={saving || loading}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Conciliar movimiento
             </Button>
           ) : (
