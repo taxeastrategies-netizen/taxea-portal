@@ -20,11 +20,13 @@ function accountKind(account = {}, code = '') {
   if (type === 'ingreso' || code.startsWith('7')) return 'income';
   if (type === 'gasto' || code.startsWith('6')) return 'expense';
   if (type === 'patrimonio') return 'equity';
+  if (/^(400|401|403|404|405|406|410|411|419|438|465|475|476|477)/.test(code)) return 'liability';
+  if (/^(430|431|432|433|434|435|436|437|440|441|449|460|464|470|471|472|473|474)/.test(code)) return 'asset';
   if (['pasivo', 'proveedor', 'impuesto'].includes(type)) return 'liability';
   if (['activo', 'cliente', 'banco'].includes(type)) return 'asset';
   if (code.startsWith('1')) return 'equity';
   if (/^[23]/.test(code)) return 'asset';
-  if (code.startsWith('4')) return /^(40|41|47)/.test(code) ? 'liability' : 'asset';
+  if (code.startsWith('4')) return /^(40|41|438|465|475|476|477)/.test(code) ? 'liability' : 'asset';
   if (code.startsWith('5')) return /^(50|51|52|55)/.test(code) ? 'liability' : 'asset';
   return 'unclassified';
 }
