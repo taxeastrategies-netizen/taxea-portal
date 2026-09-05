@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { Search, CheckCircle, AlertCircle, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(n || 0);
@@ -51,7 +52,7 @@ export default function APInvoiceTable({ invoices, expenses, contacts }) {
     if (filterStatus !== 'todas') list = list.filter(i => getStatus(i) === filterStatus);
     if (search) list = list.filter(i =>
       (i.numero_factura || '').toLowerCase().includes(search.toLowerCase()) ||
-      (i.cliente_nombre || '').toLowerCase().includes(search.toLowerCase())
+      (i.proveedor_nombre || i.cliente_nombre || '').toLowerCase().includes(search.toLowerCase())
     );
     return list.sort((a, b) => {
       const order = { urgente: 0, vencida: 1, pendiente: 2 };
@@ -112,8 +113,8 @@ export default function APInvoiceTable({ invoices, expenses, contacts }) {
                       <span className="text-xs font-mono font-semibold text-foreground">{inv.numero_factura || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs font-medium text-foreground">{inv.cliente_nombre || '—'}</p>
-                      <p className="text-[10px] text-slate-400">{inv.cliente_nif || ''}</p>
+                      <p className="text-xs font-medium text-foreground">{inv.proveedor_nombre || inv.cliente_nombre || '—'}</p>
+                      <p className="text-[10px] text-slate-400">{inv.proveedor_nif || inv.cliente_nif || ''}</p>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">{inv.fecha_emision || '—'}</td>
                     <td className="px-4 py-3">
@@ -123,7 +124,7 @@ export default function APInvoiceTable({ invoices, expenses, contacts }) {
                       {diasRetraso > 0 && <p className="text-[10px] text-red-500 font-medium">+{diasRetraso}d vencida</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm font-semibold text-foreground">{fmt(inv.total_factura)}</span>
+                      <span className="text-sm font-semibold text-foreground">{fmt(getOutstandingAmount(inv))}</span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border", cfg.color)}>
