@@ -23,6 +23,7 @@ export default function MayoresTab({ companyId }) {
     staleTime: 30_000,
   });
   const accounts = query.data?.accounts || [];
+  const years = query.data?.years?.length ? query.data.years : [new Date().getFullYear()];
   const selected = accounts.find(account => account.code === selectedCode);
   const movements = query.data?.movements || [];
   const filtered = useMemo(() => accounts.filter(account => !search || account.code.includes(search) || account.name.toLowerCase().includes(search.toLowerCase())), [accounts, search]);
@@ -35,7 +36,7 @@ export default function MayoresTab({ companyId }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <div><h2 className="font-jakarta font-bold">Libro mayor</h2><p className="text-xs text-muted-foreground">Movimientos y saldo acumulado por subcuenta.</p></div>
-        <Select value={year} onValueChange={value => { setYear(value); setSelectedCode(''); }}><SelectTrigger className="ml-auto h-8 w-28 text-xs"><SelectValue /></SelectTrigger><SelectContent>{[new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2, new Date().getFullYear() - 3].map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent></Select>
+        <Select value={year} onValueChange={value => { setYear(value); setSelectedCode(''); }}><SelectTrigger className="ml-auto h-8 w-28 text-xs"><SelectValue /></SelectTrigger><SelectContent>{years.map(value => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent></Select>
         <Select value={scope} onValueChange={value => { setScope(value); setSelectedCode(''); }}><SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="confirmed">Solo confirmados</SelectItem><SelectItem value="provisional">Confirmados + revisión</SelectItem></SelectContent></Select>
       </div>
       {scope === 'provisional' && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Vista provisional: incluye asientos pendientes de validación contable.</div>}
