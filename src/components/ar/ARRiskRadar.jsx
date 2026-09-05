@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { AlertTriangle, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -13,7 +14,7 @@ export default function ARRiskRadar({ invoices, contacts }) {
   const { clientRisks, alerts, totalExposure } = useMemo(() => {
     const pending = invoices.filter(i => i.estado_cobro !== 'cobrada');
     const totalIngresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const totalExposure = pending.reduce((s, i) => s + (i.total_factura || 0), 0);
+    const totalExposure = pending.reduce((s, i) => s + getOutstandingAmount(i), 0);
 
     // Agrupar por cliente
     const clientMap = {};
@@ -22,7 +23,7 @@ export default function ARRiskRadar({ invoices, contacts }) {
       if (!clientMap[k]) clientMap[k] = { name: k, nif: inv.cliente_nif, facturas: [], pendiente: 0, cobrado: 0, maxRetraso: 0, retrasos: 0 };
       clientMap[k].facturas.push(inv);
       if (inv.estado_cobro !== 'cobrada') {
-        clientMap[k].pendiente += inv.total_factura || 0;
+        clientMap[k].pendiente += getOutstandingAmount(inv);
         if (inv.fecha_vencimiento) {
           const d = differenceInDays(now, parseISO(inv.fecha_vencimiento));
           if (d > 0) { clientMap[k].retrasos++; clientMap[k].maxRetraso = Math.max(clientMap[k].maxRetraso, d); }
