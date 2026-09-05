@@ -344,6 +344,56 @@ Deno.serve(async (req) => {
       const reason = String(body.reason || '').trim();
       if (!reason) return Response.json({ error: 'El motivo de anulación es obligatorio.' }, { status: 400 });
       const now = new Date().toISOString();
+      if (entry.status === 'confirmado') {
+        if (entry.reversalEntryId) {
+          const existingReversal = await svc.entities.JournalEntry.get(entry.reversalEntryId).catch(() => null);
+          if (existingReversal) return Response.json({ success: true, alreadyReversed: true, reversalEntryId: existingReversal.id });
+        }
+        if (!lines?.length) return Response.json({ error: 'El asiento confirmado no tiene líneas para crear su reversión.' }, { status: 409 });
+        const postingKey = `reversal:${entry.id}:${SCHEMA_VERSION}`;
+        const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
+        let reversal = duplicate?.[0];
+        if (!reversal) {
+          const reversedLines = lines.map(line => ({
+            accountCode: canonical8(line.accountCode || line.subcuenta),
+            accountName: line.accountName || '',
+            description: `Reversión: ${line.description || entry.description || reason}`,
+            debit: money(line.credit || line.haberE),
+            credit: money(line.debit || line.debeE),
+            taxCode: line.taxCode || '',
+            counterpartyAccountId: line.counterpartyAccountId || '',
+            counterpartyAccountCode: line.counterpartyAccountCode || '',
+            sourceLineType: line.sourceLineType || 'ajuste',
+          }));
+          const created = await createJournalEntry(svc, companyId, {
+            date: body.date || now.slice(0, 10),
+            description: `Reversión ${entry.entryNumber || ''}: ${reason}`.trim(),
+            type: 'ajuste',
+            source: 'sistema',
+            documentId: entry.documentId || '',
+            postingKey,
+            status: 'confirmado',
+            lines: reversedLines,
+          }, user.email);
+          reversal = created.entry;
+        }
+        await svc.entities.JournalEntry.update(entry.id, {
+          reversalEntryId: reversal.id,
+          annulledAt: now,
+          annulledBy: user.email,
+          annulmentReason: reason,
+          validationStatus: 'REVERTIDO',
+        });
+        if (entry.documentId) {
+          const invoice = await svc.entities.Invoice.get(entry.documentId).catch(() => null);
+          if (invoice && invoice.company_id === companyId && invoice.linked_journal_entry_id === entry.id) {
+            await svc.entities.Invoice.update(invoice.id, { estado_contable: 'requiere_correccion', accounting_review_status: 'asiento_anulado' });
+          }
+        }
+        return Response.json({ success: true, reversalEntryId: reversal.id });
+      }
+
+      if (entry.status === 'anulado') return Response.json({ success: true, alreadyAnnulled: true });
       await svc.entities.JournalEntry.update(entry.id, {
         status: 'anulado',
         annulledAt: now,
@@ -352,19 +402,7 @@ Deno.serve(async (req) => {
         validationStatus: 'ANULADO',
       });
       for (const line of lines || []) {
-        await svc.entities.JournalEntryLine.update(line.id, {
-          entryStatus: 'anulado',
-          validationStatus: 'ANULADO',
-        });
-      }
-      if (entry.documentId) {
-        const invoice = await svc.entities.Invoice.get(entry.documentId).catch(() => null);
-        if (invoice && invoice.company_id === companyId && invoice.linked_journal_entry_id === entry.id) {
-          await svc.entities.Invoice.update(invoice.id, {
-            estado_contable: 'requiere_correccion',
-            accounting_review_status: 'asiento_anulado',
-          });
-        }
+        await svc.entities.JournalEntryLine.update(line.id, { entryStatus: 'anulado', validationStatus: 'ANULADO' });
       }
       return Response.json({ success: true });
     }
