@@ -406,6 +406,8 @@ Deno.serve(async (req) => {
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
         fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
       ]);
+      const requestedPaymentIds = Array.isArray(body.paymentIds) ? new Set(body.paymentIds.map(String)) : null;
+      const activePayments = requestedPaymentIds ? payments.filter(payment => requestedPaymentIds.has(payment.id)) : payments;
       const invoiceById = new Map(invoices.map(invoice => [invoice.id, invoice]));
       const transactionById = new Map(transactions.map(transaction => [transaction.id, transaction]));
       const bankById = new Map(bankAccounts.map(account => [account.id, account]));
