@@ -130,6 +130,19 @@ function buildDuplicateAudit(invoices, entries) {
     'alta',
     invoiceSets,
   );
+  const strongSignatureInvoices = duplicateGroups(
+    activeInvoices,
+    (invoice) => {
+      const number = normalizeAuditText(invoice.numero_factura).replace(/\s/g, '');
+      return number && invoice.fecha_emision
+        ? `${invoice.tipo}|${number}|${invoice.fecha_emision}|${money(invoice.total_factura).toFixed(2)}`
+        : '';
+    },
+    invoiceSummary,
+    'Mismo tipo, número, fecha e importe de factura',
+    'alta',
+    invoiceSets,
+  );
   const possibleInvoices = duplicateGroups(
     activeInvoices,
     (invoice) => {
