@@ -233,7 +233,7 @@ function buildDuplicateAudit(invoices, entries) {
 }
 
 async function postPendingBankBatch(svc, companyId, transactions, bankById, entries, userEmail) {
-  const result = { posted: 0, issues: [] };
+  const result = { posted: 0, alreadyPosted: 0, repairedLinks: 0, issues: [] };
   if (!transactions.length) return result;
 
   const pendingAccount = await ensureAccount(
@@ -259,10 +259,48 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
     }
   }
 
-  const postable = transactions
+  const candidates = transactions
     .filter(item => bankPostingById.has(item.bank_account_id))
     .sort((a, b) => String(a.fecha_operacion || '').localeCompare(String(b.fecha_operacion || ''))
       || String(a.id).localeCompare(String(b.id)));
+  if (!candidates.length) return result;
+
+  const duplicateChecks = await Promise.all(candidates.map(transaction =>
+    svc.entities.JournalEntry.filter(
+      { companyId, postingKey: 'bank:' + transaction.id + ':' + SCHEMA_VERSION },
+      '-created_date',
+      1,
+    )
+  ));
+  const postable = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const transaction = candidates[index];
+    const existing = duplicateChecks[index]?.find(entry => entry.status !== 'anulado') || null;
+    if (!existing) {
+      postable.push(transaction);
+      continue;
+    }
+    const existingLines = await resolveEntryLines(svc, companyId, existing);
+    if (!(existingLines || []).some(line => line.accountId === pendingAccount.id || line.accountCode === '55500000')) {
+      result.issues.push({
+        transactionId: transaction.id,
+        reason: 'El movimiento ya tiene un asiento bancario con otra contrapartida.',
+      });
+      continue;
+    }
+    const bankAccount = bankPostingById.get(transaction.bank_account_id);
+    await svc.entities.BankTransaction.update(transaction.id, {
+      journal_entry_id: existing.id,
+      accounting_account_id: bankAccount.id,
+      accounting_account_code: bankAccount.code,
+      entidad_tipo: 'accounting_account',
+      entidad_id: pendingAccount.id,
+      estado_conciliacion: 'revisar',
+      confianza_conciliacion: 'baja',
+    });
+    result.alreadyPosted += 1;
+    result.repairedLinks += 1;
+  }
   if (!postable.length) return result;
 
   const nextSequenceByYear = new Map();
@@ -979,6 +1017,8 @@ Deno.serve(async (req) => {
             user.email,
           );
           result.posted += batch.posted;
+          result.alreadyPosted += batch.alreadyPosted;
+          result.repairedLinks += batch.repairedLinks;
           result.issues.push(...batch.issues);
         } catch (error) {
           result.issues.push({ reason: error.message || 'error_lote_contabilizacion_555' });
