@@ -467,6 +467,7 @@ async function loadBankReconciliationOverview(svc, companyId) {
   const accountById = new Map((accounts || []).map(account => [account.id, account]));
   const accountByCode = new Map((accounts || []).map(account => [account.code, account]));
   const bankById = new Map(activeBanks.map(account => [account.id, account]));
+  const transactionById = new Map((transactions || []).map(transaction => [transaction.id, transaction]));
   const pendingAccount = accountByCode.get('55500000') || null;
   const activeEntryIds = new Set(activeEntries.flatMap(entry => [entry.id, entry.importKey].filter(Boolean)));
   const incidents = [];
@@ -650,6 +651,51 @@ async function loadBankReconciliationOverview(svc, companyId) {
       .filter(item => item.journalEntryId && item.entryStatus !== 'anulado')
     : [];
 
+  const bank555Entries = pendingAccount
+    ? activeEntries
+      .filter(entry => String(entry.postingKey || '').startsWith('bank:'))
+      .map((entry) => {
+        const entryLines = linesByEntry.get(entry.id) || linesByEntry.get(entry.importKey) || [];
+        if (!entryLines.some(line =>
+          line.accountId === pendingAccount.id || line.accountCode === '55500000'
+        )) return null;
+        const transaction = transactionById.get(entry.documentId) || null;
+        const bank = transaction ? bankById.get(transaction.bank_account_id) : null;
+        const isPending = Boolean(
+          transaction
+          && transaction.entidad_tipo === 'accounting_account'
+          && transaction.entidad_id === pendingAccount.id
+          && transaction.estado_conciliacion === 'revisar'
+        );
+        return {
+          id: transaction?.id || entry.id,
+          date: transaction?.fecha_operacion || entry.date || '',
+          concept: transaction?.concepto || transaction?.referencia || entry.description || 'Movimiento bancario',
+          counterparty: transaction?.nombre_contraparte || '',
+          amount: money(transaction?.importe ?? entry.totalDebit ?? 0),
+          direction: transaction?.tipo || '',
+          currency: transaction?.moneda || 'EUR',
+          bankName: bank?.nombre_banco || 'Banco',
+          bankLast4: bank?.ultimos_4 || '',
+          journalEntryId: entry.id,
+          entryNumber: entry.entryNumber || '',
+          entryStatus: entry.status || '',
+          isPending,
+          reconciliationStatus: transaction?.estado_conciliacion || '',
+          targetAccountId: transaction?.entidad_id || '',
+          lines: entryLines.map(line => ({
+            accountCode: line.accountCode || '',
+            accountName: line.accountName || '',
+            debit: money(line.debit),
+            credit: money(line.credit),
+          })),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(b.date).localeCompare(String(a.date))
+        || String(b.entryNumber).localeCompare(String(a.entryNumber)))
+    : [];
+
   const selectableAccounts = (accounts || [])
     .filter(account =>
       account.status !== 'inactiva'
@@ -671,11 +717,13 @@ async function loadBankReconciliationOverview(svc, companyId) {
       banks: banks.length,
       balancedBanks: banks.filter(item => item.balanced).length,
       pending555: pending555.length,
+      bank555Entries: bank555Entries.length,
       incidents: incidents.length,
     },
     banks,
     pending555,
-    incidents: incidents.slice(0, 500),
+    bank555Entries,
+    incidents,
     selectableAccounts,
   };
 }
