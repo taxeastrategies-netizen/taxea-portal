@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
-  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2
+  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FacturasPendientes from './FacturasPendientes';
@@ -27,6 +27,7 @@ const TABS = [
   { id: 'recibidas', label: 'Registro recibidas', icon: ArrowDownCircle },
   { id: 'iva', label: 'IVA / IGIC', icon: Receipt },
   { id: 'mayores', label: 'Mayores', icon: TrendingUp },
+  { id: 'conciliacion', label: 'Conciliación', icon: Landmark },
   { id: 'balance', label: 'Balance y PyG', icon: BarChart2 },
   { id: 'config', label: 'Config. contable', icon: Settings2 },
 ];
@@ -46,8 +47,6 @@ export default function ContabilidadModule() {
 
   return (
     <div className="space-y-0">
-      <AccountingControlCenter companyId={companyId} />
-
       {/* Tabs nav */}
       <div className="bg-card border border-border rounded-xl overflow-hidden mb-4">
         <div className="flex overflow-x-auto">
@@ -82,6 +81,7 @@ export default function ContabilidadModule() {
         {activeTab === 'recibidas' && <LibroRegistroRecibidas />}
         {activeTab === 'iva' && <IVAResumen />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
+        {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
         {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
         {activeTab === 'config' && <ConfigContable companyId={companyId} user={user} />}
       </div>
