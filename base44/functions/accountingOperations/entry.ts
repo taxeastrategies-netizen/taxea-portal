@@ -385,6 +385,409 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
   }
 }
 
+const excludedBankStates = new Set(['duplicada', 'descartada', 'movimiento_interno']);
+
+const usableBankTransaction = (transaction) =>
+  transaction.estado_proveedor !== 'pending'
+  && !transaction.es_demo
+  && !excludedBankStates.has(transaction.estado_conciliacion);
+
+const validBankTransaction = (transaction) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.fecha_operacion || ''))
+  && ['entrada', 'salida'].includes(transaction.tipo)
+  && Number.isFinite(Number(transaction.importe))
+  && money(Math.abs(transaction.importe)) > 0;
+
+async function loadBankReconciliationOverview(svc, companyId) {
+  const [bankAccounts, transactions, accounts, entries, lines] = await Promise.all([
+    fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, '-fecha_operacion', 30000),
+    fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+  ]);
+  const activeBanks = (bankAccounts || []).filter(account => account.activa !== false);
+  const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
+  const confirmedEntries = activeEntries.filter(entry => entry.status === 'confirmado');
+  const entryById = new Map();
+  for (const entry of entries || []) {
+    entryById.set(entry.id, entry);
+    if (entry.importKey) entryById.set(entry.importKey, entry);
+  }
+  const linesByEntry = new Map();
+  for (const line of lines || []) {
+    linesByEntry.set(line.journalEntryId, [...(linesByEntry.get(line.journalEntryId) || []), line]);
+  }
+  const confirmedLines = (lines || []).filter(line => {
+    const header = entryById.get(line.journalEntryId);
+    return header && header.status === 'confirmado';
+  });
+  const accountById = new Map((accounts || []).map(account => [account.id, account]));
+  const accountByCode = new Map((accounts || []).map(account => [account.code, account]));
+  const bankById = new Map(activeBanks.map(account => [account.id, account]));
+  const pendingAccount = accountByCode.get('55500000') || null;
+  const activeEntryIds = new Set(activeEntries.flatMap(entry => [entry.id, entry.importKey].filter(Boolean)));
+  const incidents = [];
+
+  const entryPostingGroups = new Map();
+  for (const entry of activeEntries) {
+    if (!entry.postingKey) continue;
+    entryPostingGroups.set(entry.postingKey, [...(entryPostingGroups.get(entry.postingKey) || []), entry]);
+  }
+  for (const [postingKey, group] of entryPostingGroups.entries()) {
+    if (group.length > 1) {
+      incidents.push({
+        type: 'duplicate_journal_posting',
+        severity: 'alta',
+        title: 'Clave contable bancaria duplicada',
+        detail: postingKey,
+        count: group.length,
+      });
+    }
+  }
+
+  const transactionIdentityGroups = new Map();
+  for (const transaction of transactions || []) {
+    const identity = transaction.clave_transaccion
+      || (transaction.proveedor_transaccion_id
+        ? transaction.bank_account_id + '|' + transaction.proveedor_transaccion_id
+        : '');
+    if (!identity) continue;
+    transactionIdentityGroups.set(identity, [...(transactionIdentityGroups.get(identity) || []), transaction]);
+  }
+  for (const [identity, group] of transactionIdentityGroups.entries()) {
+    if (group.length > 1 && group.some(item => item.estado_conciliacion !== 'duplicada')) {
+      incidents.push({
+        type: 'duplicate_bank_transaction',
+        severity: 'alta',
+        title: 'Movimiento bancario potencialmente duplicado',
+        detail: identity,
+        count: group.length,
+      });
+    }
+  }
+
+  const usableTransactions = (transactions || []).filter(usableBankTransaction);
+  for (const transaction of usableTransactions) {
+    if (!validBankTransaction(transaction)) {
+      incidents.push({
+        type: 'incomplete_bank_transaction',
+        severity: 'media',
+        title: 'Movimiento incompleto',
+        detail: transaction.concepto || transaction.referencia || transaction.id,
+        transactionId: transaction.id,
+        bankAccountId: transaction.bank_account_id,
+      });
+    } else if (
+      ['conciliada_auto', 'conciliada_manual'].includes(transaction.estado_conciliacion)
+      && (!transaction.journal_entry_id || !activeEntryIds.has(transaction.journal_entry_id))
+    ) {
+      incidents.push({
+        type: 'reconciled_without_entry',
+        severity: 'alta',
+        title: 'Movimiento conciliado sin asiento activo',
+        detail: transaction.concepto || transaction.referencia || transaction.id,
+        transactionId: transaction.id,
+        bankAccountId: transaction.bank_account_id,
+      });
+    }
+  }
+
+  const banks = activeBanks.map((bankAccount) => {
+    const postingAccount = (bankAccount.accounting_account_id && accountById.get(bankAccount.accounting_account_id))
+      || (bankAccount.accounting_account_code && accountByCode.get(bankAccount.accounting_account_code))
+      || null;
+    const ledgerBalance = postingAccount
+      ? money(confirmedLines
+        .filter(line => line.accountId === postingAccount.id || line.accountCode === postingAccount.code)
+        .reduce((sum, line) => sum + money(line.debit) - money(line.credit), 0))
+      : 0;
+    const bankBalance = Number.isFinite(Number(bankAccount.saldo_contable))
+      ? money(bankAccount.saldo_contable)
+      : money(bankAccount.saldo_disponible);
+    const difference = money(bankBalance - ledgerBalance);
+    const accountTransactions = usableTransactions.filter(item => item.bank_account_id === bankAccount.id);
+    const pendingTransactions = accountTransactions.filter(item =>
+      !item.journal_entry_id || !activeEntryIds.has(item.journal_entry_id)
+    );
+    const historyStart = accountTransactions
+      .map(item => item.fecha_operacion)
+      .filter(Boolean)
+      .sort()[0] || bankAccount.sync_desde || '';
+    const openingPostingKey = 'bank-opening:' + bankAccount.id + ':' + SCHEMA_VERSION;
+    const openingEntry = activeEntries.find(entry => entry.postingKey === openingPostingKey) || null;
+    const balanced = Math.abs(difference) <= 0.01 && pendingTransactions.length === 0;
+    if (!balanced) {
+      incidents.push({
+        type: 'bank_ledger_difference',
+        severity: Math.abs(difference) > 0.01 ? 'alta' : 'media',
+        title: 'Saldo bancario y cuenta 572 no coinciden',
+        detail: (bankAccount.nombre_banco || 'Banco') + ' · diferencia ' + difference.toFixed(2) + ' EUR',
+        bankAccountId: bankAccount.id,
+        difference,
+      });
+    }
+    return {
+      id: bankAccount.id,
+      name: bankAccount.nombre_banco || 'Banco',
+      last4: bankAccount.ultimos_4 || '',
+      currency: bankAccount.moneda || 'EUR',
+      connectionStatus: bankAccount.estado_conexion || '',
+      lastSyncAt: bankAccount.fecha_ultima_sync || '',
+      historyStart,
+      accountingAccountId: postingAccount?.id || '',
+      accountingAccountCode: postingAccount?.code || bankAccount.accounting_account_code || '',
+      bankBalance,
+      ledgerBalance,
+      difference,
+      pendingTransactions: pendingTransactions.length,
+      balanced,
+      openingEntryId: openingEntry?.id || '',
+      canRegularizeOpening: Boolean(
+        postingAccount
+        && (bankAccount.moneda || 'EUR') === 'EUR'
+        && pendingTransactions.length === 0
+        && Math.abs(difference) > 0.01
+        && !openingEntry
+      ),
+    };
+  });
+
+  const pending555 = pendingAccount
+    ? usableTransactions
+      .filter(transaction =>
+        transaction.company_id === companyId
+        && transaction.entidad_tipo === 'accounting_account'
+        && transaction.entidad_id === pendingAccount.id
+        && transaction.estado_conciliacion === 'revisar'
+      )
+      .map((transaction) => {
+        const entry = entryById.get(transaction.journal_entry_id) || null;
+        const entryLines = entry
+          ? (linesByEntry.get(entry.id) || linesByEntry.get(entry.importKey) || [])
+          : [];
+        const bank = bankById.get(transaction.bank_account_id);
+        return {
+          id: transaction.id,
+          date: transaction.fecha_operacion || '',
+          concept: transaction.concepto || transaction.referencia || 'Movimiento bancario',
+          counterparty: transaction.nombre_contraparte || '',
+          amount: money(transaction.importe),
+          direction: transaction.tipo,
+          currency: transaction.moneda || 'EUR',
+          bankName: bank?.nombre_banco || 'Banco',
+          bankLast4: bank?.ultimos_4 || '',
+          journalEntryId: entry?.id || '',
+          entryNumber: entry?.entryNumber || '',
+          entryStatus: entry?.status || '',
+          lines: entryLines.map(line => ({
+            accountCode: line.accountCode || '',
+            accountName: line.accountName || '',
+            debit: money(line.debit),
+            credit: money(line.credit),
+          })),
+        };
+      })
+      .filter(item => item.journalEntryId && item.entryStatus !== 'anulado')
+    : [];
+
+  const selectableAccounts = (accounts || [])
+    .filter(account =>
+      account.status !== 'inactiva'
+      && account.code !== '55500000'
+      && account.type !== 'banco'
+      && isCanonical8(account.code)
+    )
+    .map(account => ({
+      id: account.id,
+      code: account.code,
+      name: account.name,
+      type: account.type || 'otro',
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    counts: {
+      banks: banks.length,
+      balancedBanks: banks.filter(item => item.balanced).length,
+      pending555: pending555.length,
+      incidents: incidents.length,
+    },
+    banks,
+    pending555,
+    incidents: incidents.slice(0, 500),
+    selectableAccounts,
+  };
+}
+
+async function reclassifyPendingBankTransaction(svc, companyId, transactionId, targetAccountId, userEmail) {
+  const transaction = await svc.entities.BankTransaction.get(transactionId).catch(() => null);
+  if (!transaction || transaction.company_id !== companyId) {
+    throw new Error('El movimiento no pertenece a la empresa activa.');
+  }
+  const targetAccount = await svc.entities.AccountingAccount.get(targetAccountId).catch(() => null);
+  if (!targetAccount || targetAccount.companyId !== companyId || targetAccount.status === 'inactiva') {
+    throw new Error('La cuenta de contrapartida no pertenece a la empresa o está inactiva.');
+  }
+  if (targetAccount.code === '55500000' || targetAccount.type === 'banco') {
+    throw new Error('Selecciona una cuenta de contrapartida distinta de 555 y de la cuenta bancaria.');
+  }
+  const pendingRows = await svc.entities.AccountingAccount.filter({ companyId, code: '55500000' }, '-created_date', 1);
+  const pendingAccount = pendingRows?.[0];
+  if (!pendingAccount || transaction.entidad_id !== pendingAccount.id || transaction.estado_conciliacion !== 'revisar') {
+    throw new Error('El movimiento ya no está pendiente en la cuenta 555.');
+  }
+  const bankEntry = transaction.journal_entry_id
+    ? await svc.entities.JournalEntry.get(transaction.journal_entry_id).catch(() => null)
+    : null;
+  if (!bankEntry || bankEntry.companyId !== companyId || bankEntry.status !== 'confirmado') {
+    throw new Error('El asiento bancario original no existe o no está confirmado.');
+  }
+  const bankLines = await resolveEntryLines(svc, companyId, bankEntry);
+  if (!(bankLines || []).some(line => line.accountId === pendingAccount.id || line.accountCode === '55500000')) {
+    throw new Error('El asiento bancario original no contiene la cuenta 555.');
+  }
+
+  const postingKey = 'bank-reclass:' + transaction.id + ':' + SCHEMA_VERSION;
+  const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
+  let reclassification = duplicate?.find(entry => entry.status !== 'anulado') || null;
+  if (reclassification) {
+    const duplicateLines = await resolveEntryLines(svc, companyId, reclassification);
+    if (!(duplicateLines || []).some(line => line.accountId === targetAccount.id)) {
+      throw new Error('El movimiento ya fue reclasificado a otra cuenta. Debe corregirse mediante contraasiento.');
+    }
+  } else {
+    const amount = money(Math.abs(transaction.importe));
+    const description = 'Reclasificación de 555 · ' + (transaction.concepto || transaction.referencia || transaction.id);
+    const now = new Date().toISOString();
+    const line = (account, debit, credit, sourceLineType) => ({
+      accountId: account.id,
+      accountCode: account.code,
+      accountName: account.name,
+      description,
+      debit: money(debit),
+      credit: money(credit),
+      bankTransactionId: transaction.id,
+      isReconciled: true,
+      reconciledAt: now,
+      sourceLineType,
+    });
+    const created = await createJournalEntry(svc, companyId, {
+      date: transaction.fecha_operacion,
+      description,
+      type: 'ajuste',
+      source: 'conciliacion',
+      documentId: transaction.id,
+      postingKey,
+      status: 'confirmado',
+      lines: transaction.tipo === 'entrada'
+        ? [line(pendingAccount, amount, 0, 'ajuste'), line(targetAccount, 0, amount, 'ajuste')]
+        : [line(targetAccount, amount, 0, 'ajuste'), line(pendingAccount, 0, amount, 'ajuste')],
+    }, userEmail);
+    reclassification = created.entry;
+  }
+
+  const note = 'Reclasificación manual de 555 a ' + targetAccount.code + ' mediante asiento ' + reclassification.entryNumber + '.';
+  await svc.entities.BankTransaction.update(transaction.id, {
+    entidad_tipo: 'accounting_account',
+    entidad_id: targetAccount.id,
+    estado_conciliacion: 'conciliada_manual',
+    confianza_conciliacion: 'alta',
+    reconciled_at: new Date().toISOString(),
+    reconciled_by: userEmail || '',
+    notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
+  });
+  return { alreadyPosted: Boolean(duplicate?.length), entry: reclassification, targetAccount };
+}
+
+async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEmail) {
+  const bankAccount = await svc.entities.BankAccount.get(bankAccountId).catch(() => null);
+  if (!bankAccount || bankAccount.company_id !== companyId || bankAccount.activa === false) {
+    throw new Error('La cuenta bancaria no pertenece a la empresa activa.');
+  }
+  if ((bankAccount.moneda || 'EUR') !== 'EUR') {
+    throw new Error('La regularización automática de apertura solo está disponible para cuentas en EUR.');
+  }
+  const [transactions, entries, lines] = await Promise.all([
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 30000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+  ]);
+  const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
+  const pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'activo');
+  const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
+  const activeEntryIds = new Set(activeEntries.flatMap(entry => [entry.id, entry.importKey].filter(Boolean)));
+  const pendingTransactions = (transactions || []).filter(transaction =>
+    usableBankTransaction(transaction)
+    && (!transaction.journal_entry_id || !activeEntryIds.has(transaction.journal_entry_id))
+  );
+  if (pendingTransactions.length) {
+    throw new Error('Hay movimientos bancarios sin asiento. Contabilízalos o corrige sus incidencias antes de regularizar la apertura.');
+  }
+  const confirmedEntryIds = new Set(
+    activeEntries
+      .filter(entry => entry.status === 'confirmado')
+      .flatMap(entry => [entry.id, entry.importKey].filter(Boolean))
+  );
+  const ledgerBalance = money((lines || [])
+    .filter(line =>
+      confirmedEntryIds.has(line.journalEntryId)
+      && (line.accountId === bankPostingAccount.id || line.accountCode === bankPostingAccount.code)
+    )
+    .reduce((sum, line) => sum + money(line.debit) - money(line.credit), 0));
+  const bankBalance = Number.isFinite(Number(bankAccount.saldo_contable))
+    ? money(bankAccount.saldo_contable)
+    : money(bankAccount.saldo_disponible);
+  const difference = money(bankBalance - ledgerBalance);
+  if (Math.abs(difference) <= 0.01) {
+    return { alreadyBalanced: true, bankBalance, ledgerBalance, difference: 0 };
+  }
+  const postingKey = 'bank-opening:' + bankAccount.id + ':' + SCHEMA_VERSION;
+  const duplicate = activeEntries.find(entry => entry.postingKey === postingKey);
+  if (duplicate) {
+    throw new Error('Ya existe una regularización de apertura para esta cuenta. La diferencia actual requiere revisión contable.');
+  }
+  const firstDate = (transactions || [])
+    .map(item => item.fecha_operacion)
+    .filter(Boolean)
+    .sort()[0] || bankAccount.sync_desde || new Date().toISOString().slice(0, 10);
+  const openingDate = new Date(firstDate + 'T12:00:00Z');
+  openingDate.setUTCDate(openingDate.getUTCDate() - 1);
+  const date = openingDate.toISOString().slice(0, 10);
+  const amount = money(Math.abs(difference));
+  const description = 'Saldo inicial inferido de ' + (bankAccount.nombre_banco || 'cuenta bancaria') + ' a ' + firstDate;
+  const line = (account, debit, credit) => ({
+    accountId: account.id,
+    accountCode: account.code,
+    accountName: account.name,
+    description,
+    debit: money(debit),
+    credit: money(credit),
+    sourceLineType: 'ajuste',
+  });
+  const created = await createJournalEntry(svc, companyId, {
+    date,
+    description,
+    type: 'apertura',
+    source: 'banco',
+    documentId: bankAccount.id,
+    postingKey,
+    status: 'confirmado',
+    lines: difference > 0
+      ? [line(bankPostingAccount, amount, 0), line(pendingAccount, 0, amount)]
+      : [line(pendingAccount, amount, 0), line(bankPostingAccount, 0, amount)],
+  }, userEmail);
+  return {
+    alreadyBalanced: false,
+    entry: created.entry,
+    bankBalance,
+    ledgerBalanceBefore: ledgerBalance,
+    ledgerBalanceAfter: bankBalance,
+    differenceApplied: difference,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -399,6 +802,62 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = base44.asServiceRole;
+
+    if (action === 'bank_reconciliation_overview') {
+      return Response.json({
+        success: true,
+        overview: await loadBankReconciliationOverview(svc, companyId),
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+
+    if (action === 'reclassify_pending_bank') {
+      if (body.apply !== true) {
+        return Response.json({ success: true, mode: 'dry_run', transactionId: body.transactionId || '', targetAccountId: body.targetAccountId || '' });
+      }
+      if (!body.transactionId || !body.targetAccountId) {
+        return Response.json({ error: 'Selecciona un movimiento y una cuenta contable.' }, { status: 400 });
+      }
+      const result = await reclassifyPendingBankTransaction(
+        svc,
+        companyId,
+        String(body.transactionId),
+        String(body.targetAccountId),
+        user.email,
+      );
+      return Response.json({
+        success: true,
+        mode: 'apply',
+        result: {
+          alreadyPosted: result.alreadyPosted,
+          entryId: result.entry.id,
+          entryNumber: result.entry.entryNumber,
+          targetAccountCode: result.targetAccount.code,
+        },
+        overview: await loadBankReconciliationOverview(svc, companyId),
+      });
+    }
+
+    if (action === 'create_bank_opening_adjustment') {
+      if (body.apply !== true) {
+        return Response.json({ success: true, mode: 'dry_run', bankAccountId: body.bankAccountId || '' });
+      }
+      if (!body.bankAccountId) {
+        return Response.json({ error: 'Selecciona una cuenta bancaria.' }, { status: 400 });
+      }
+      const result = await createBankOpeningAdjustment(
+        svc,
+        companyId,
+        String(body.bankAccountId),
+        user.email,
+      );
+      return Response.json({
+        success: true,
+        mode: 'apply',
+        result,
+        overview: await loadBankReconciliationOverview(svc, companyId),
+      });
+    }
 
     if (action === 'duplicate_audit') {
       const [invoices, entries] = await Promise.all([
