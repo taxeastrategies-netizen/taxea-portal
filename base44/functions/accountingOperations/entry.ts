@@ -406,7 +406,12 @@ async function loadBankReconciliationOverview(svc, companyId) {
     fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
     fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
   ]);
-  const activeBanks = (bankAccounts || []).filter(account => account.activa !== false);
+  const activeBanks = (bankAccounts || []).filter(account =>
+    account.activa !== false
+    && account.estado_conexion === 'conectado'
+    && account.origen_datos === 'open_banking'
+    && account.provider_account_id
+  );
   const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
   const confirmedEntries = activeEntries.filter(entry => entry.status === 'confirmado');
   const entryById = new Map();
@@ -516,7 +521,16 @@ async function loadBankReconciliationOverview(svc, companyId) {
       .sort()[0] || bankAccount.sync_desde || '';
     const openingPostingKey = 'bank-opening:' + bankAccount.id + ':' + SCHEMA_VERSION;
     const openingEntry = activeEntries.find(entry => entry.postingKey === openingPostingKey) || null;
-    const balanced = Math.abs(difference) <= 0.01 && pendingTransactions.length === 0;
+    const balanced = Boolean(postingAccount) && Math.abs(difference) <= 0.01 && pendingTransactions.length === 0;
+    if (!postingAccount) {
+      incidents.push({
+        type: 'bank_account_not_mapped',
+        severity: 'alta',
+        title: 'Cuenta bancaria sin subcuenta 572',
+        detail: bankAccount.nombre_banco || 'Banco',
+        bankAccountId: bankAccount.id,
+      });
+    }
     if (!balanced) {
       incidents.push({
         type: 'bank_ledger_difference',
