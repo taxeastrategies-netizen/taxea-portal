@@ -478,7 +478,7 @@ Deno.serve(async (req) => {
         }
       }
       const nextOffset = offset + page.length;
-      return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: payments.length, offset, nextOffset, done: nextOffset >= payments.length, result, schemaVersion: SCHEMA_VERSION });
+      return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: activePayments.length, offset, nextOffset, done: nextOffset >= activePayments.length, result, schemaVersion: SCHEMA_VERSION });
     }
 
     if (action === 'quality' || action === 'reports' || action === 'journal' || action === 'ledger') {
