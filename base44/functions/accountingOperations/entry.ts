@@ -415,8 +415,8 @@ Deno.serve(async (req) => {
       const accountByCode = new Map(accounts.map(account => [account.code, account]));
       const entryByKey = new Map();
       for (const entry of entries) { entryByKey.set(entry.id, entry); if (entry.importKey) entryByKey.set(entry.importKey, entry); }
-      const page = payments.slice(offset, offset + batchSize);
-      const result = { scanned: 0, alreadyLinked: 0, ready: 0, posted: 0, repairedLinks: 0, issues: [] };
+      const page = activePayments.slice(offset, offset + batchSize);
+      const result = { scanned: 0, alreadyLinked: 0, ready: 0, readyPaymentIds: [], posted: 0, repairedLinks: 0, issues: [] };
       for (const payment of page) {
         result.scanned += 1;
         const linked = payment.journal_entry_id ? entryByKey.get(payment.journal_entry_id) : null;
