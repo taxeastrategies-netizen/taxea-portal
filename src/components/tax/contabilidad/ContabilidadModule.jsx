@@ -16,6 +16,7 @@ import IVAResumen from './IVAResumen';
 import MayoresTab from './MayoresTab';
 import BalancePyG from './BalancePyG';
 import ConfigContable from './ConfigContable';
+import AccountingControlCenter from './AccountingControlCenter';
 
 const TABS = [
   { id: 'facturas', label: 'Facturas pendientes', icon: FileText },
