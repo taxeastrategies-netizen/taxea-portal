@@ -232,6 +232,159 @@ function buildDuplicateAudit(invoices, entries) {
   };
 }
 
+async function postPendingBankBatch(svc, companyId, transactions, bankById, entries, userEmail) {
+  const result = { posted: 0, issues: [] };
+  if (!transactions.length) return result;
+
+  const pendingAccount = await ensureAccount(
+    svc,
+    companyId,
+    '55500000',
+    'Partidas pendientes de aplicación',
+    'activo',
+  );
+  const bankPostingById = new Map();
+  for (const bankAccountId of [...new Set(transactions.map(item => item.bank_account_id))]) {
+    const physicalBank = bankById.get(bankAccountId);
+    try {
+      bankPostingById.set(
+        bankAccountId,
+        await ensureBankPostingAccount(svc, companyId, physicalBank),
+      );
+    } catch (error) {
+      result.issues.push({
+        bankAccountId,
+        reason: error.message || 'cuenta_bancaria_contable_no_disponible',
+      });
+    }
+  }
+
+  const postable = transactions
+    .filter(item => bankPostingById.has(item.bank_account_id))
+    .sort((a, b) => String(a.fecha_operacion || '').localeCompare(String(b.fecha_operacion || ''))
+      || String(a.id).localeCompare(String(b.id)));
+  if (!postable.length) return result;
+
+  const nextSequenceByYear = new Map();
+  for (const transaction of postable) {
+    const year = new Date(transaction.fecha_operacion).getFullYear();
+    if (nextSequenceByYear.has(year)) continue;
+    const maximum = (entries || [])
+      .filter(entry => entry.ejercicio === year && entry.status !== 'anulado')
+      .reduce((current, entry) => {
+        const match = String(entry.entryNumber || '').match(/(\d+)$/);
+        return Math.max(current, match ? Number(match[1]) : 0);
+      }, 0);
+    nextSequenceByYear.set(year, maximum + 1);
+  }
+
+  const now = new Date().toISOString();
+  const entryPayloads = postable.map((transaction) => {
+    const year = new Date(transaction.fecha_operacion).getFullYear();
+    const sequence = nextSequenceByYear.get(year);
+    nextSequenceByYear.set(year, sequence + 1);
+    const amount = money(Math.abs(transaction.importe));
+    const concept = transaction.concepto || transaction.referencia || transaction.id;
+    return {
+      companyId,
+      entryNumber: String(year) + '-' + String(sequence).padStart(6, '0'),
+      date: transaction.fecha_operacion,
+      ejercicio: year,
+      type: transaction.tipo === 'entrada' ? 'cobro' : 'pago',
+      description: 'Movimiento bancario pendiente de aplicar · ' + concept,
+      documentId: transaction.id,
+      ocrDocumentId: '',
+      source: 'conciliacion',
+      status: 'confirmado',
+      totalDebit: amount,
+      totalCredit: amount,
+      isBalanced: true,
+      confirmedAt: now,
+      confirmedBy: userEmail || '',
+      validationStatus: 'CONFIRMADO',
+      postingKey: 'bank:' + transaction.id + ':' + SCHEMA_VERSION,
+      accountingSchemaVersion: SCHEMA_VERSION,
+    };
+  });
+
+  const createdEntries = await svc.entities.JournalEntry.bulkCreate(entryPayloads);
+  try {
+    const createdByKey = new Map((createdEntries || []).map(entry => [entry.postingKey, entry]));
+    const linePayloads = [];
+    const transactionUpdates = [];
+    const note = 'Clasificación contable provisional automática en 55500000. Pendiente de aplicar a factura o cuenta definitiva.';
+
+    for (const transaction of postable) {
+      const postingKey = 'bank:' + transaction.id + ':' + SCHEMA_VERSION;
+      const entry = createdByKey.get(postingKey);
+      if (!entry) throw new Error('No se pudo recuperar el asiento bancario recién creado.');
+      const bankAccount = bankPostingById.get(transaction.bank_account_id);
+      const amount = money(Math.abs(transaction.importe));
+      const description = entry.description;
+      const year = entry.ejercicio;
+      const line = (account, debit, credit, sourceLineType, lineNumber) => ({
+        journalEntryId: entry.id,
+        companyId,
+        lineNumber,
+        accountId: account.id,
+        accountCode: account.code,
+        accountName: account.name,
+        description,
+        debit: money(debit),
+        credit: money(credit),
+        taxCode: '',
+        counterpartyAccountId: '',
+        counterpartyAccountCode: '',
+        documentId: transaction.id,
+        bankTransactionId: transaction.id,
+        isReconciled: false,
+        reconciledAt: null,
+        entryStatus: 'confirmado',
+        entryDate: transaction.fecha_operacion,
+        ejercicio: year,
+        subcuenta: account.code,
+        cuenta4: account.code.slice(0, 4),
+        cuenta3: account.code.slice(0, 3),
+        grupo: account.code.slice(0, 1),
+        sourceLineType,
+        validationStatus: 'CONFIRMADO',
+        accountingSchemaVersion: SCHEMA_VERSION,
+      });
+      if (transaction.tipo === 'entrada') {
+        linePayloads.push(line(bankAccount, amount, 0, 'banco', 1));
+        linePayloads.push(line(pendingAccount, 0, amount, 'ajuste', 2));
+      } else {
+        linePayloads.push(line(pendingAccount, amount, 0, 'ajuste', 1));
+        linePayloads.push(line(bankAccount, 0, amount, 'banco', 2));
+      }
+      transactionUpdates.push({
+        id: transaction.id,
+        journal_entry_id: entry.id,
+        accounting_account_id: bankAccount.id,
+        accounting_account_code: bankAccount.code,
+        entidad_tipo: 'accounting_account',
+        entidad_id: pendingAccount.id,
+        estado_conciliacion: 'revisar',
+        confianza_conciliacion: 'baja',
+        notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
+      });
+    }
+
+    await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
+    await svc.entities.BankTransaction.bulkUpdate(transactionUpdates);
+    result.posted = transactionUpdates.length;
+    return result;
+  } catch (error) {
+    await svc.entities.JournalEntry.bulkUpdate((createdEntries || []).map(entry => ({
+      id: entry.id,
+      status: 'pendiente_revision',
+      validationStatus: 'ERROR_CREACION_LINEAS',
+      notes: 'Error creando lote bancario: ' + (error.message || 'error desconocido'),
+    }))).catch(() => null);
+    throw error;
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
