@@ -297,7 +297,7 @@ export default function AccountingControlCenter({ companyId }) {
         unmatchedDryRun.ids,
         'transactionIds',
         { bankAccountIds: syncedBankIds },
-        8
+        15
       );
 
       const issueCount = invoiceDryRun.issues.length + invoicePosting.issues.length
