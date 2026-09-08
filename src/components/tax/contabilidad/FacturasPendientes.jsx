@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FileText, Search, Eye, CheckCircle, XCircle, AlertCircle, Clock, ArrowUpCircle, ArrowDownCircle, Ban, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AsientoProposalModal from './AsientoProposalModal';
+import DataPagination from '@/components/ui/DataPagination';
 
 const ESTADO_CFG = {
   pendiente:           { label: 'Pendiente', color: 'bg-slate-100 text-slate-600', icon: Clock },
@@ -33,8 +34,9 @@ export default function FacturasPendientes() {
   const [motivoAnulacion, setMotivoAnulacion] = useState('');
   const [syncingAccounting, setSyncingAccounting] = useState(false);
   const [syncMessage, setSyncMessage] = useState('');
+  const [page, setPage] = useState(1);
 
-  const { data: invoices = [], isLoading } = useQuery({
+  const { data: invoices = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['invoices-contabilidad', company?.id],
     queryFn: async () => {
       const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
@@ -42,6 +44,8 @@ export default function FacturasPendientes() {
       return finData?.invoices || [];
     },
     enabled: !!company?.id,
+    retry: 1,
+    staleTime: 30000,
   });
 
   const markRechazada = useMutation({
@@ -79,6 +83,14 @@ export default function FacturasPendientes() {
       inv.concepto?.toLowerCase().includes(search.toLowerCase());
     return matchTipo && matchEstado && matchSearch;
   });
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleInvoices = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterTipo, filterEstado, showAnuladas, company?.id]);
 
   const pendientes = activas.filter(i => i.estado_contable === 'pendiente' || i.estado_contable === 'asiento_propuesto').length;
   const contabilizadas = activas.filter(i => i.estado_contable === 'contabilizada').length;
@@ -128,7 +140,14 @@ export default function FacturasPendientes() {
     }
   };
 
-  if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando facturas...</div>;
+  if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando facturas…</div>;
+  if (isError) return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+      <p className="font-medium text-red-700">No se pudo abrir la contabilidad</p>
+      <p className="mt-1 text-sm text-red-600">{error?.response?.data?.error || error?.message || 'Error al cargar las facturas.'}</p>
+      <Button className="mt-4" variant="outline" onClick={() => refetch()}>Reintentar</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -204,6 +223,7 @@ export default function FacturasPendientes() {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-muted/40 border-b border-border">
               <tr>
@@ -219,7 +239,7 @@ export default function FacturasPendientes() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map(inv => {
+              {visibleInvoices.map(inv => {
                 const cfg = ESTADO_CFG[inv.estado_contable] || ESTADO_CFG.pendiente;
                 const Icon = cfg.icon;
                 const esEmitida = inv.tipo === 'emitida';
@@ -289,6 +309,8 @@ export default function FacturasPendientes() {
               })}
             </tbody>
           </table>
+          </div>
+          <DataPagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
         </div>
       )}
 
