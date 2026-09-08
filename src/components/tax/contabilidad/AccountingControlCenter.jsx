@@ -55,7 +55,7 @@ async function collectReady(companyId, action, idField, extra = {}, batchSize = 
   return { ids: [...new Set(ids)], issues };
 }
 
-async function applyBatches(companyId, action, ids, field, extra = {}, batchSize = 5) {
+async function applyBatches(companyId, action, ids, field, extra = {}, batchSize = 5, onProgress) {
   const totals = { posted: 0, repairedLinks: 0, alreadyPosted: 0, issues: [] };
   for (let index = 0; index < ids.length; index += batchSize) {
     const response = await invoke('accountingOperations', {
@@ -70,6 +70,7 @@ async function applyBatches(companyId, action, ids, field, extra = {}, batchSize
     totals.repairedLinks += Number(response.result?.repairedLinks || 0);
     totals.alreadyPosted += Number(response.result?.alreadyPosted || 0);
     totals.issues.push(...(response.result?.issues || []));
+    onProgress?.(Math.min(index + batchSize, ids.length), ids.length);
   }
   return totals;
 }
@@ -191,6 +192,7 @@ export default function AccountingControlCenter({ companyId }) {
   const [error, setError] = useState('');
   const [steps, setSteps] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [progress, setProgress] = useState('');
   const [auditView, setAuditView] = useState('invoices');
   const [auditPage, setAuditPage] = useState(1);
   const busy = auditLoading || bankLoading;
@@ -228,6 +230,7 @@ export default function AccountingControlCenter({ companyId }) {
     setError('');
     setSummary(null);
     setSteps([]);
+    setProgress('');
     const addStep = (text) => setSteps(current => [...current, text]);
     try {
       addStep('Analizando duplicados antes de contabilizar…');
@@ -277,11 +280,27 @@ export default function AccountingControlCenter({ companyId }) {
       addStep('Preparando asientos de facturas válidas no duplicadas…');
       const invoiceDryRun = await collectReady(companyId, 'sync_invoices', 'readyInvoiceIds');
       const safeInvoiceIds = invoiceDryRun.ids.filter(id => !duplicateInvoiceIds.has(id));
-      const invoicePosting = await applyBatches(companyId, 'sync_invoices', safeInvoiceIds, 'invoiceIds', {}, 8);
+      const invoicePosting = await applyBatches(
+        companyId,
+        'sync_invoices',
+        safeInvoiceIds,
+        'invoiceIds',
+        {},
+        8,
+        (completed, total) => setProgress(`Facturas: ${completed} de ${total}`)
+      );
 
       addStep('Contabilizando cobros y pagos conciliados…');
       const paymentDryRun = await collectReady(companyId, 'sync_payments', 'readyPaymentIds', {}, 500);
-      const paymentPosting = await applyBatches(companyId, 'sync_payments', paymentDryRun.ids, 'paymentIds', {}, 5);
+      const paymentPosting = await applyBatches(
+        companyId,
+        'sync_payments',
+        paymentDryRun.ids,
+        'paymentIds',
+        {},
+        5,
+        (completed, total) => setProgress(`Cobros y pagos: ${completed} de ${total}`)
+      );
 
       addStep('Clasificando en 55500000 los movimientos pendientes de aplicar…');
       const unmatchedDryRun = await collectReady(
@@ -297,7 +316,8 @@ export default function AccountingControlCenter({ companyId }) {
         unmatchedDryRun.ids,
         'transactionIds',
         { bankAccountIds: syncedBankIds },
-        15
+        15,
+        (completed, total) => setProgress(`Movimientos a 55500000: ${completed} de ${total}`)
       );
 
       const issueCount = invoiceDryRun.issues.length + invoicePosting.issues.length
@@ -316,6 +336,7 @@ export default function AccountingControlCenter({ companyId }) {
         bankErrors,
         completedAt: new Date().toISOString(),
       });
+      setProgress('Completado');
       addStep('Proceso completado con trazabilidad contable.');
       window.dispatchEvent(new Event('financials:refresh'));
     } catch (requestError) {
@@ -384,6 +405,7 @@ export default function AccountingControlCenter({ companyId }) {
                 </div>
               ))}
             </div>
+            {progress && <p className="mt-2 text-[11px] font-semibold text-blue-900">{progress}</p>}
           </div>
         )}
 
