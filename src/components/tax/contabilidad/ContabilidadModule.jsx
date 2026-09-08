@@ -46,6 +46,8 @@ export default function ContabilidadModule() {
 
   return (
     <div className="space-y-0">
+      <AccountingControlCenter companyId={companyId} />
+
       {/* Tabs nav */}
       <div className="bg-card border border-border rounded-xl overflow-hidden mb-4">
         <div className="flex overflow-x-auto">
