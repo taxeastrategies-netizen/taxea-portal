@@ -451,7 +451,6 @@ async function loadBankReconciliationOverview(svc, companyId) {
     && account.provider_account_id
   );
   const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
-  const confirmedEntries = activeEntries.filter(entry => entry.status === 'confirmado');
   const entryById = new Map();
   for (const entry of entries || []) {
     entryById.set(entry.id, entry);
@@ -513,11 +512,18 @@ async function loadBankReconciliationOverview(svc, companyId) {
   const usableTransactions = (transactions || []).filter(usableBankTransaction);
   for (const transaction of usableTransactions) {
     if (!validBankTransaction(transaction)) {
+      const problems = [
+        !/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.fecha_operacion || '')) ? 'fecha no válida' : '',
+        !['entrada', 'salida'].includes(transaction.tipo) ? 'sentido no válido' : '',
+        !Number.isFinite(Number(transaction.importe)) ? 'importe no numérico' : '',
+        money(Math.abs(transaction.importe)) <= 0 ? 'importe cero' : '',
+      ].filter(Boolean);
       incidents.push({
         type: 'incomplete_bank_transaction',
         severity: 'media',
-        title: 'Movimiento incompleto',
-        detail: transaction.concepto || transaction.referencia || transaction.id,
+        title: 'Movimiento no contabilizable',
+        detail: (transaction.concepto || transaction.referencia || transaction.id)
+          + ' · revisar: ' + problems.join(', '),
         transactionId: transaction.id,
         bankAccountId: transaction.bank_account_id,
       });
@@ -551,7 +557,8 @@ async function loadBankReconciliationOverview(svc, companyId) {
     const difference = money(bankBalance - ledgerBalance);
     const accountTransactions = usableTransactions.filter(item => item.bank_account_id === bankAccount.id);
     const pendingTransactions = accountTransactions.filter(item =>
-      !item.journal_entry_id || !activeEntryIds.has(item.journal_entry_id)
+      validBankTransaction(item)
+      && (!item.journal_entry_id || !activeEntryIds.has(item.journal_entry_id))
     );
     const historyStart = accountTransactions
       .map(item => item.fecha_operacion)
@@ -772,6 +779,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   const activeEntryIds = new Set(activeEntries.flatMap(entry => [entry.id, entry.importKey].filter(Boolean)));
   const pendingTransactions = (transactions || []).filter(transaction =>
     usableBankTransaction(transaction)
+    && validBankTransaction(transaction)
     && (!transaction.journal_entry_id || !activeEntryIds.has(transaction.journal_entry_id))
   );
   if (pendingTransactions.length) {
