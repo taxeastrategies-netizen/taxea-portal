@@ -56,6 +56,169 @@ async function ensureBankPostingAccount(svc, companyId, bankAccount) {
   return account;
 }
 
+const normalizeAuditText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, ' ')
+  .trim()
+  .replace(/\s+/g, ' ');
+
+const normalizeAuditTaxId = (value) => normalizeAuditText(value).replace(/\s/g, '');
+const invoiceParty = (invoice) => invoice.tipo === 'emitida'
+  ? { name: invoice.cliente_nombre || '', taxId: invoice.cliente_nif || '' }
+  : { name: invoice.proveedor_nombre || '', taxId: invoice.proveedor_nif || '' };
+const invoiceSummary = (invoice) => {
+  const party = invoiceParty(invoice);
+  return {
+    id: invoice.id,
+    type: invoice.tipo || '',
+    number: invoice.numero_factura || '',
+    date: invoice.fecha_emision || '',
+    party: party.name,
+    taxId: party.taxId,
+    total: money(invoice.total_factura),
+    status: invoice.estado_contable || '',
+    linkedEntryId: invoice.linked_journal_entry_id || '',
+  };
+};
+const entrySummary = (entry) => ({
+  id: entry.id,
+  entryNumber: entry.entryNumber || '',
+  date: entry.date || '',
+  type: entry.type || '',
+  source: entry.source || '',
+  description: entry.description || '',
+  documentId: entry.documentId || '',
+  postingKey: entry.postingKey || '',
+  total: money(entry.totalDebit),
+  status: entry.status || '',
+});
+
+function duplicateGroups(rows, keyFor, summarize, reason, confidence, excludedSets = new Set()) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = keyFor(row);
+    if (!key) continue;
+    grouped.set(key, [...(grouped.get(key) || []), row]);
+  }
+  const result = [];
+  for (const [key, group] of grouped.entries()) {
+    if (group.length < 2) continue;
+    const idSet = group.map(item => item.id).sort().join('|');
+    if (excludedSets.has(idSet)) continue;
+    excludedSets.add(idSet);
+    result.push({ key, reason, confidence, items: group.map(summarize) });
+  }
+  return result;
+}
+
+function buildDuplicateAudit(invoices, entries) {
+  const activeInvoices = (invoices || []).filter(invoice => !invoice.anulada);
+  const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
+  const invoiceSets = new Set();
+  const strongInvoices = duplicateGroups(
+    activeInvoices,
+    (invoice) => {
+      const party = invoiceParty(invoice);
+      const number = normalizeAuditText(invoice.numero_factura).replace(/\s/g, '');
+      const identity = normalizeAuditTaxId(party.taxId) || normalizeAuditText(party.name);
+      return number && identity ? `${invoice.tipo}|${identity}|${number}` : '';
+    },
+    invoiceSummary,
+    'Mismo tipo, tercero y número de factura',
+    'alta',
+    invoiceSets,
+  );
+  const possibleInvoices = duplicateGroups(
+    activeInvoices,
+    (invoice) => {
+      const party = invoiceParty(invoice);
+      const identity = normalizeAuditTaxId(party.taxId) || normalizeAuditText(party.name);
+      const concept = normalizeAuditText(invoice.concepto);
+      return invoice.fecha_emision && identity
+        ? `${invoice.tipo}|${invoice.fecha_emision}|${money(invoice.total_factura).toFixed(2)}|${identity}|${concept}`
+        : '';
+    },
+    invoiceSummary,
+    'Mismo tipo, fecha, importe, tercero y concepto',
+    'media',
+    invoiceSets,
+  );
+
+  const entrySets = new Set();
+  const postingKeyEntries = duplicateGroups(
+    activeEntries,
+    entry => entry.postingKey ? `posting:${entry.postingKey}` : '',
+    entrySummary,
+    'Clave contable idempotente repetida',
+    'alta',
+    entrySets,
+  );
+  const documentEntries = duplicateGroups(
+    activeEntries,
+    entry => entry.documentId && ['factura_emitida', 'factura_recibida', 'OCR', 'conciliacion'].includes(entry.source)
+      ? `documento:${entry.source}:${entry.documentId}`
+      : '',
+    entrySummary,
+    'Más de un asiento activo para el mismo documento origen',
+    'alta',
+    entrySets,
+  );
+  const possibleEntries = duplicateGroups(
+    activeEntries,
+    entry => entry.date && Number(entry.totalDebit || 0) > 0
+      ? `firma:${entry.date}|${entry.type}|${money(entry.totalDebit).toFixed(2)}|${normalizeAuditText(entry.description)}`
+      : '',
+    entrySummary,
+    'Misma fecha, tipo, importe y descripción',
+    'media',
+    entrySets,
+  );
+
+  const entryById = new Map();
+  for (const entry of entries || []) {
+    entryById.set(entry.id, entry);
+    if (entry.importKey) entryById.set(entry.importKey, entry);
+  }
+  const activeEntriesByDocument = new Map();
+  for (const entry of activeEntries) {
+    if (!entry.documentId) continue;
+    activeEntriesByDocument.set(entry.documentId, [...(activeEntriesByDocument.get(entry.documentId) || []), entry]);
+  }
+  const invoiceEntryConflicts = [];
+  for (const invoice of activeInvoices) {
+    const linked = invoice.linked_journal_entry_id ? entryById.get(invoice.linked_journal_entry_id) : null;
+    const documentMatches = activeEntriesByDocument.get(invoice.id) || [];
+    if (invoice.linked_journal_entry_id && (!linked || linked.status === 'anulado' || linked.companyId !== invoice.company_id)) {
+      invoiceEntryConflicts.push({ invoice: invoiceSummary(invoice), reason: 'La factura apunta a un asiento inexistente, anulado o de otra empresa.' });
+    } else if (linked && linked.documentId && linked.documentId !== invoice.id) {
+      invoiceEntryConflicts.push({ invoice: invoiceSummary(invoice), reason: 'La factura apunta a un asiento asociado a otro documento.' });
+    } else if (documentMatches.length > 1) {
+      invoiceEntryConflicts.push({ invoice: invoiceSummary(invoice), reason: 'La factura tiene más de un asiento activo.', entries: documentMatches.map(entrySummary) });
+    }
+  }
+  const invoiceDuplicateGroups = [...strongInvoices, ...possibleInvoices];
+  const journalDuplicateGroups = [...postingKeyEntries, ...documentEntries, ...possibleEntries];
+  const duplicateInvoiceIds = [...new Set(invoiceDuplicateGroups.flatMap(group => group.items.map(item => item.id)))];
+  return {
+    generatedAt: new Date().toISOString(),
+    counts: {
+      invoicesScanned: activeInvoices.length,
+      entriesScanned: activeEntries.length,
+      invoiceGroups: invoiceDuplicateGroups.length,
+      journalGroups: journalDuplicateGroups.length,
+      invoiceEntryConflicts: invoiceEntryConflicts.length,
+      highConfidenceInvoiceGroups: invoiceDuplicateGroups.filter(group => group.confidence === 'alta').length,
+      highConfidenceJournalGroups: journalDuplicateGroups.filter(group => group.confidence === 'alta').length,
+    },
+    duplicateInvoiceIds,
+    invoiceDuplicateGroups,
+    journalDuplicateGroups,
+    invoiceEntryConflicts,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
