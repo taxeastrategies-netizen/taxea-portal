@@ -77,7 +77,7 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
 
   const pendingRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const rows = overview?.pending555 || [];
+    const rows = overview?.bank555Entries || overview?.pending555 || [];
     if (!query) return rows;
     return rows.filter(item => [item.concept, item.counterparty, item.bankName, item.bankLast4, item.entryNumber]
       .some(value => String(value || '').toLowerCase().includes(query)));
@@ -185,7 +185,7 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
           {[
-            ['pending', `Asientos 555 (${overview?.counts?.pending555 || 0})`],
+            ['pending', `Asientos 555 (${overview?.counts?.bank555Entries || overview?.counts?.pending555 || 0})`],
             ['incidents', `Incidencias (${overview?.counts?.incidents || 0})`],
             ['balances', 'Saldo banco / 572'],
           ].map(([id, label]) => (
@@ -218,6 +218,12 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
                           <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase', incoming ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700')}>
                             {incoming ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}{incoming ? 'Entrada' : 'Salida'}
                           </span>
+                          <span className={cn(
+                            'rounded-full px-2 py-1 text-[10px] font-bold uppercase',
+                            transaction.isPending ? 'bg-amber-100 text-amber-700' : 'bg-cyan-100 text-cyan-700'
+                          )}>
+                            {transaction.isPending ? 'Pendiente en 555' : 'Reclasificado'}
+                          </span>
                           <span className="text-xs text-slate-500">{transaction.date || 'Sin fecha'}</span>
                           <span className="text-xs text-slate-500">{transaction.bankName}{transaction.bankLast4 ? ` · ${transaction.bankLast4}` : ''}</span>
                         </div>
@@ -239,19 +245,27 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
                         ))}
                       </div>
                     </details>
-                    <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto]">
-                      <select value={selectedAccounts[transaction.id] || ''}
-                        onChange={(event) => setSelectedAccounts(current => ({ ...current, [transaction.id]: event.target.value }))}
-                        className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
-                        <option value="">Seleccionar cuenta contable definitiva…</option>
-                        {(overview.selectableAccounts || []).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                      </select>
-                      <button type="button" onClick={() => reclassify(transaction)} disabled={Boolean(workingId) || !selectedAccounts[transaction.id]}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-40">
-                        {workingId === transaction.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Reclasificar 555
-                      </button>
-                    </div>
-                    <p className="mt-2 text-[11px] text-slate-400">El asiento bancario se conserva. La reclasificación queda trazada y el movimiento no puede aplicarse dos veces.</p>
+                    {transaction.isPending ? (
+                      <>
+                        <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto]">
+                          <select value={selectedAccounts[transaction.id] || ''}
+                            onChange={(event) => setSelectedAccounts(current => ({ ...current, [transaction.id]: event.target.value }))}
+                            className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                            <option value="">Seleccionar cuenta contable definitiva…</option>
+                            {(overview.selectableAccounts || []).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
+                          </select>
+                          <button type="button" onClick={() => reclassify(transaction)} disabled={Boolean(workingId) || !selectedAccounts[transaction.id]}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-40">
+                            {workingId === transaction.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Reclasificar 555
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[11px] text-slate-400">El asiento bancario se conserva. La reclasificación queda trazada y el movimiento no puede aplicarse dos veces.</p>
+                      </>
+                    ) : (
+                      <p className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-700">
+                        Este movimiento ya salió de la 555. Para modificarlo de nuevo debe revisarse en el diario y corregirse mediante contraasiento.
+                      </p>
+                    )}
                   </article>
                 );
               })}
