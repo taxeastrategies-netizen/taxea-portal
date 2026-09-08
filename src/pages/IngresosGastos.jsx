@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { calculateFinancialKPIs } from '@/lib/financialCore';
 import { useFinancialData, triggerFinancialRefresh } from '@/hooks/useFinancialData';
+import DataPagination from '@/components/ui/DataPagination';
 
 const CATEGORIAS = [
   { value: 'ventas_servicios', label: 'Ventas / Servicios' },
@@ -47,7 +48,7 @@ export default function IngresosGastos() {
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
-  const { invoices, expenses, loading: finLoading } = useFinancialData(company?.id, { year: filterAnio });
+  const { invoices, expenses, loading: finLoading, error: finError } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -55,6 +56,11 @@ export default function IngresosGastos() {
   const [formError, setFormError] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterTipo, filterTrimestre, filterCategoria, filterAnio, company?.id]);
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
@@ -217,8 +223,10 @@ export default function IngresosGastos() {
     return matchSearch && matchTipo && matchTrimestre && matchCat;
   }), [items, search, filterTipo, filterTrimestre, filterCategoria]);
 
-  const ingresos = useMemo(() => filtered.filter(i => i.tipo === 'ingreso'), [filtered]);
-  const gastos = useMemo(() => filtered.filter(i => i.tipo === 'gasto'), [filtered]);
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleItems = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // KPIs unificados (excluyen anuladas, mismas reglas que todos los dashboards)
   const finKPIs = calculateFinancialKPIs(invoices, expenses, { year: filterAnio, quarter: filterTrimestre });
@@ -230,9 +238,15 @@ export default function IngresosGastos() {
   const margen = totalIngresos > 0 ? ((totalIngresos - totalGastos) / totalIngresos * 100).toFixed(1) : '0.0';
 
   if ((loadingCompany && finLoading) || finLoading) return (
-    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
+    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /><p className="mt-3 text-sm text-muted-foreground">Cargando ingresos y gastos…</p></div>
   );
   if (!company && !loadingCompany) return <NoCompanyState pageName="Ingresos y Gastos" />;
+  if (finError) return (
+    <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+      <p className="font-medium text-red-700">No se pudieron cargar los ingresos y gastos</p>
+      <p className="mt-1 text-sm text-red-600">{finError}</p>
+    </div>
+  );
 
   return (
     <div>
@@ -331,6 +345,7 @@ export default function IngresosGastos() {
             <p className="text-muted-foreground font-medium">Sin registros</p>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -359,7 +374,7 @@ export default function IngresosGastos() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map(item => (
+                {visibleItems.map(item => (
                  <tr key={item.id} className={`hover:bg-secondary/30 transition-colors ${selected.has(item.id) ? 'bg-primary/5' : ''}`}>
                     <td className="px-4 py-3 w-8">
                       <button onClick={() => setSelected(s => { const n = new Set(s); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; })} className="text-muted-foreground hover:text-foreground">
@@ -423,6 +438,8 @@ export default function IngresosGastos() {
               </tfoot>
             </table>
           </div>
+          <DataPagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
+          </>
         )}
       </div>
 
