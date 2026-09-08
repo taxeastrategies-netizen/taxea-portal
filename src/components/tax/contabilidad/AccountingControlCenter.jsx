@@ -316,7 +316,7 @@ export default function AccountingControlCenter({ companyId }) {
         unmatchedDryRun.ids,
         'transactionIds',
         { bankAccountIds: syncedBankIds },
-        15,
+        100,
         (completed, total) => setProgress(`Movimientos a 55500000: ${completed} de ${total}`)
       );
 
@@ -353,9 +353,9 @@ export default function AccountingControlCenter({ companyId }) {
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-xl border border-white/15 bg-white/10 p-2.5"><ShieldCheck className="h-5 w-5 text-cyan-300" /></div>
             <div>
-              <h2 className="font-jakarta text-base font-bold">Control contable automático</h2>
+              <h2 className="font-jakarta text-base font-bold">Conciliación contable bancaria</h2>
               <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-300">
-                Detecta duplicidades sin borrar datos y ejecuta el circuito banco → factura → asiento. Las partidas sin correspondencia pasan provisionalmente a 55500000 para revisión.
+                Sincroniza bancos, cruza movimientos con facturas y crea en lote los asientos bancarios. Las partidas sin correspondencia pasan provisionalmente a 55500000 para revisión.
               </p>
             </div>
           </div>
