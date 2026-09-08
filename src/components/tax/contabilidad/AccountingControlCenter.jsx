@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import BankReconciliationWorkspace from './BankReconciliationWorkspace';
 
 const PAGE_SIZE = 10;
 const euro = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -212,6 +213,7 @@ export default function AccountingControlCenter({ companyId }) {
       const response = await invoke('accountingOperations', { action: 'duplicate_audit', companyId });
       setAudit(response.audit);
       setAuditPage(1);
+      window.dispatchEvent(new Event('financials:refresh'));
     } catch (requestError) {
       setError(readableError(requestError, 'No se pudo completar el análisis de duplicados.'));
     } finally {
@@ -431,6 +433,8 @@ export default function AccountingControlCenter({ companyId }) {
             {summary.bankErrors.length > 0 && <p className="mt-2 text-xs text-red-700">Cuentas no actualizadas: {summary.bankErrors.join(' · ')}</p>}
           </div>
         )}
+
+        <BankReconciliationWorkspace companyId={companyId} refreshToken={summary?.completedAt || ''} />
 
         {audit && (
           <>
