@@ -47,6 +47,7 @@ const ACCOUNT_DEFS = {
   '47770000': ['Hacienda Pública, IGIC repercutido', 'impuesto'],
   '52000000': ['Deudas a corto plazo con entidades de crédito', 'pasivo'],
   '55100000': ['Cuenta corriente con socios y administradores', 'otro'],
+  '55500000': ['Partidas pendientes de aplicación', 'activo'],
   '57000000': ['Caja, euros', 'banco'],
   '57200000': ['Bancos e instituciones de crédito c/c vista, euros', 'banco'],
   '60000000': ['Compras de mercaderías', 'gasto'],
