@@ -377,7 +377,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
   } catch (error) {
     await svc.entities.JournalEntry.bulkUpdate((createdEntries || []).map(entry => ({
       id: entry.id,
-      status: 'pendiente_revision',
+      status: 'anulado',
       validationStatus: 'ERROR_CREACION_LINEAS',
       notes: 'Error creando lote bancario: ' + (error.message || 'error desconocido'),
     }))).catch(() => null);
@@ -415,18 +415,25 @@ Deno.serve(async (req) => {
     if (action === 'post_unmatched_bank') {
       const apply = body.apply === true;
       const offset = Math.max(0, Number(body.offset) || 0);
-      const batchSize = apply ? Math.min(20, Math.max(1, Number(body.batchSize) || 5)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
-      const requestedIds = Array.isArray(body.transactionIds) ? new Set(body.transactionIds.map(String)) : null;
+      const batchSize = apply ? Math.min(100, Math.max(1, Number(body.batchSize) || 100)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
+      const requestedIdList = Array.isArray(body.transactionIds)
+        ? [...new Set(body.transactionIds.map(String))].slice(0, 100)
+        : null;
+      const requestedIds = requestedIdList ? new Set(requestedIdList) : null;
       const requestedBankIds = Array.isArray(body.bankAccountIds) ? new Set(body.bankAccountIds.map(String)) : null;
       const [transactions, bankAccounts, entries] = await Promise.all([
-        fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
+        requestedIdList
+          ? Promise.all(requestedIdList.map(id => svc.entities.BankTransaction.get(id).catch(() => null)))
+            .then(rows => rows.filter(Boolean))
+          : fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
         fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
       ]);
       const bankById = new Map((bankAccounts || []).filter(account => account.activa !== false).map(account => [account.id, account]));
       const postingByKey = new Map((entries || []).filter(entry => entry.postingKey && entry.status !== 'anulado').map(entry => [entry.postingKey, entry]));
       const eligible = (transactions || []).filter(transaction =>
-        bankById.has(transaction.bank_account_id)
+        transaction.company_id === companyId
+        && bankById.has(transaction.bank_account_id)
         && (!requestedBankIds || requestedBankIds.has(transaction.bank_account_id))
         && (!requestedIds || requestedIds.has(transaction.id))
         && transaction.estado_proveedor !== 'pending'
@@ -460,6 +467,7 @@ Deno.serve(async (req) => {
         result.ready += 1;
         result.readyTransactionIds.push(transaction.id);
         if (!apply) continue;
+        if (apply) continue;
         try {
           if (!pendingAccount) pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'activo');
           const physicalBank = bankById.get(transaction.bank_account_id);
@@ -484,6 +492,23 @@ Deno.serve(async (req) => {
           if (posting.alreadyPosted) result.alreadyPosted += 1; else result.posted += 1;
         } catch (error) {
           result.issues.push({ transactionId: transaction.id, reason: error.message || 'error_contabilizacion_555' });
+        }
+      }
+      if (apply && result.readyTransactionIds.length) {
+        const readyIds = new Set(result.readyTransactionIds);
+        try {
+          const batch = await postPendingBankBatch(
+            svc,
+            companyId,
+            page.filter(transaction => readyIds.has(transaction.id)),
+            bankById,
+            entries,
+            user.email,
+          );
+          result.posted += batch.posted;
+          result.issues.push(...batch.issues);
+        } catch (error) {
+          result.issues.push({ reason: error.message || 'error_lote_contabilizacion_555' });
         }
       }
       const nextOffset = offset + page.length;
