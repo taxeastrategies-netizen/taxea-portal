@@ -97,14 +97,22 @@ export function useFinancialData(companyId, options = {}) {
   useEffect(() => {
     if (!companyId || !autoRefresh) return;
     const unsubscribers = [];
+    let refreshTimer = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => fetch(), 300);
+    };
     const entities = includeTreasury ? ['Invoice', 'Expense', 'BankAccount', 'BankTransaction'] : ['Invoice', 'Expense'];
     for (const entity of entities) {
       try {
-        const unsubscribe = base44.entities[entity].subscribe(() => fetch());
+        const unsubscribe = base44.entities[entity].subscribe(scheduleRefresh);
         if (unsubscribe) unsubscribers.push(unsubscribe);
       } catch {}
     }
-    return () => { unsubscribers.forEach(unsubscribe => unsubscribe()); };
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      unsubscribers.forEach(unsubscribe => unsubscribe());
+    };
   }, [companyId, fetch, autoRefresh, includeTreasury]);
 
   useEffect(() => {
