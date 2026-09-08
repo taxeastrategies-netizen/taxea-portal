@@ -455,6 +455,7 @@ Deno.serve(async (req) => {
           continue;
         }
         result.ready += 1;
+        result.readyPaymentIds.push(payment.id);
         if (apply) {
           try {
             const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, physicalBank);
