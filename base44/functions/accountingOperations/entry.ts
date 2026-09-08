@@ -961,8 +961,40 @@ Deno.serve(async (req) => {
         const existing = postingByKey.get(postingKey);
         if (existing) {
           result.alreadyPosted += 1;
-          if (apply && transaction.journal_entry_id !== existing.id) {
-            await svc.entities.BankTransaction.update(transaction.id, { journal_entry_id: existing.id });
+          if (apply) {
+            if (!pendingAccount) {
+              pendingAccount = await ensureAccount(
+                svc,
+                companyId,
+                '55500000',
+                'Partidas pendientes de aplicación',
+                'activo',
+              );
+            }
+            const existingLines = await resolveEntryLines(svc, companyId, existing);
+            if (!(existingLines || []).some(line =>
+              line.accountId === pendingAccount.id || line.accountCode === '55500000'
+            )) {
+              result.issues.push({
+                transactionId: transaction.id,
+                reason: 'El asiento bancario existente no contiene la cuenta 55500000.',
+              });
+              continue;
+            }
+            const bankPostingAccount = await ensureBankPostingAccount(
+              svc,
+              companyId,
+              bankById.get(transaction.bank_account_id),
+            );
+            await svc.entities.BankTransaction.update(transaction.id, {
+              journal_entry_id: existing.id,
+              accounting_account_id: bankPostingAccount.id,
+              accounting_account_code: bankPostingAccount.code,
+              entidad_tipo: 'accounting_account',
+              entidad_id: pendingAccount.id,
+              estado_conciliacion: 'revisar',
+              confianza_conciliacion: 'baja',
+            });
             result.repairedLinks += 1;
           }
           continue;
