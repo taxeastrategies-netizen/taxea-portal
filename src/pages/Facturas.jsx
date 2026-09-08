@@ -18,6 +18,7 @@ import RecurringSection from '@/components/facturas/RecurringSection';
 import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
 import { exportInvoiceToPdf } from '@/components/facturas/invoicePdfExport';
 import { triggerFinancialRefresh } from '@/hooks/useFinancialData';
+import DataPagination from '@/components/ui/DataPagination';
 
 export default function Facturas() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
@@ -28,6 +29,8 @@ export default function Facturas() {
   const [filterAnio, setFilterAnio] = useState('all');
   const [filterTipo, setFilterTipo] = useState('emitida');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [viewing, setViewing] = useState(null);
   // workspaceInvoice: factura abierta en la vista completa de documento (URL-driven)
@@ -47,6 +50,10 @@ export default function Facturas() {
     else if (!loadingCompany) setLoading(false);
   }, [company?.id, loadingCompany]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterEstado, filterTrimestre, filterAnio, filterTipo, showAnuladas, showRecurringView]);
+
   const fetchInvoices = async () => {
     const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
     const finData = res?.data || res;
@@ -55,8 +62,15 @@ export default function Facturas() {
 
   const loadInvoices = async () => {
     setLoading(true);
-    setInvoices(await fetchInvoices());
-    setLoading(false);
+    setLoadError('');
+    try {
+      setInvoices(await fetchInvoices());
+    } catch (error) {
+      console.error('[Facturas] Error cargando facturas:', error);
+      setLoadError(error?.response?.data?.error || error?.message || 'No se pudieron cargar las facturas.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAnular = async (inv) => {
@@ -166,12 +180,17 @@ export default function Facturas() {
     const matchSearch = !search ||
       i.numero_factura?.toLowerCase().includes(search.toLowerCase()) ||
       i.cliente_nombre?.toLowerCase().includes(search.toLowerCase()) ||
+      i.proveedor_nombre?.toLowerCase().includes(search.toLowerCase()) ||
       i.concepto?.toLowerCase().includes(search.toLowerCase());
     const matchEstado = filterEstado === 'all' || i.estado_contable === filterEstado;
     const matchTrimestre = filterTrimestre === 'all' || i.trimestre === filterTrimestre;
     const matchAnio = filterAnio === 'all' || (i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()) === parseInt(filterAnio);
     return matchSearch && matchEstado && matchTrimestre && matchAnio && i.tipo === filterTipo;
   });
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const visibleInvoices = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   if (loadingCompany && loading) return (
     <div className="p-12 text-center">
@@ -346,6 +365,14 @@ export default function Facturas() {
           {loading ? (
             <div className="p-12 text-center">
               <div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="mt-3 text-sm text-muted-foreground">Cargando facturas…</p>
+            </div>
+          ) : loadError ? (
+            <div className="p-10 text-center">
+              <AlertCircle className="w-9 h-9 text-red-500 mx-auto mb-3" />
+              <p className="font-medium text-foreground">No se pudieron cargar las facturas</p>
+              <p className="text-sm text-muted-foreground mt-1 mb-4">{loadError}</p>
+              <Button variant="outline" onClick={loadInvoices}>Reintentar</Button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center">
@@ -354,6 +381,7 @@ export default function Facturas() {
               <p className="text-sm text-muted-foreground mt-1">Crea tu primera factura o sube un PDF</p>
             </div>
           ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -373,7 +401,7 @@ export default function Facturas() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filtered.map(inv => (
+                  {visibleInvoices.map(inv => (
                     <tr key={inv.id}
                       onClick={() => handleOpenWorkspace(inv)}
                       className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-red-50/50' : ''}`}>
@@ -447,6 +475,8 @@ export default function Facturas() {
                 </tbody>
               </table>
             </div>
+            <DataPagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
+          </>
           )}
         </div>
         )}
