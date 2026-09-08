@@ -48,7 +48,7 @@ export default function IngresosGastos() {
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
-  const { invoices, expenses, loading: finLoading, error: finError } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
+  const { invoices, expenses, loading: finLoading, error: finError, refresh } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -245,6 +245,7 @@ export default function IngresosGastos() {
     <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
       <p className="font-medium text-red-700">No se pudieron cargar los ingresos y gastos</p>
       <p className="mt-1 text-sm text-red-600">{finError}</p>
+      <Button className="mt-4" variant="outline" onClick={refresh}>Reintentar</Button>
     </div>
   );
 
