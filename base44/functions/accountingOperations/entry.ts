@@ -211,7 +211,7 @@ function buildDuplicateAudit(invoices, entries) {
       invoiceEntryConflicts.push({ invoice: invoiceSummary(invoice), reason: 'La factura tiene más de un asiento activo.', entries: documentMatches.map(entrySummary) });
     }
   }
-  const invoiceDuplicateGroups = [...strongInvoices, ...possibleInvoices];
+  const invoiceDuplicateGroups = [...strongInvoices, ...strongSignatureInvoices, ...possibleInvoices];
   const journalDuplicateGroups = [...postingKeyEntries, ...documentEntries, ...possibleEntries];
   const duplicateInvoiceIds = [...new Set(invoiceDuplicateGroups.flatMap(group => group.items.map(item => item.id)))];
   return {
