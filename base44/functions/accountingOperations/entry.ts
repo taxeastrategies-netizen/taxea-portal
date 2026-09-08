@@ -234,6 +234,106 @@ Deno.serve(async (req) => {
     }
     const svc = base44.asServiceRole;
 
+    if (action === 'duplicate_audit') {
+      const [invoices, entries] = await Promise.all([
+        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+      ]);
+      return Response.json({
+        success: true,
+        audit: buildDuplicateAudit(invoices, entries),
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+
+    if (action === 'post_unmatched_bank') {
+      const apply = body.apply === true;
+      const offset = Math.max(0, Number(body.offset) || 0);
+      const batchSize = apply ? Math.min(20, Math.max(1, Number(body.batchSize) || 5)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
+      const requestedIds = Array.isArray(body.transactionIds) ? new Set(body.transactionIds.map(String)) : null;
+      const requestedBankIds = Array.isArray(body.bankAccountIds) ? new Set(body.bankAccountIds.map(String)) : null;
+      const [transactions, bankAccounts, entries] = await Promise.all([
+        fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
+        fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+      ]);
+      const bankById = new Map((bankAccounts || []).filter(account => account.activa !== false).map(account => [account.id, account]));
+      const postingByKey = new Map((entries || []).filter(entry => entry.postingKey && entry.status !== 'anulado').map(entry => [entry.postingKey, entry]));
+      const eligible = (transactions || []).filter(transaction =>
+        bankById.has(transaction.bank_account_id)
+        && (!requestedBankIds || requestedBankIds.has(transaction.bank_account_id))
+        && (!requestedIds || requestedIds.has(transaction.id))
+        && transaction.estado_proveedor !== 'pending'
+        && !transaction.es_demo
+        && !transaction.entidad_id
+        && !['duplicada', 'descartada', 'movimiento_interno', 'conciliada_auto', 'conciliada_manual'].includes(transaction.estado_conciliacion)
+      );
+      const page = eligible.slice(offset, offset + batchSize);
+      const result = { scanned: 0, ready: 0, readyTransactionIds: [], posted: 0, alreadyPosted: 0, repairedLinks: 0, issues: [] };
+      let pendingAccount = null;
+      for (const transaction of page) {
+        result.scanned += 1;
+        const postingKey = `bank:${transaction.id}:${SCHEMA_VERSION}`;
+        const existing = postingByKey.get(postingKey);
+        if (existing) {
+          result.alreadyPosted += 1;
+          if (apply && transaction.journal_entry_id !== existing.id) {
+            await svc.entities.BankTransaction.update(transaction.id, { journal_entry_id: existing.id });
+            result.repairedLinks += 1;
+          }
+          continue;
+        }
+        const valid = /^\d{4}-\d{2}-\d{2}$/.test(String(transaction.fecha_operacion || ''))
+          && ['entrada', 'salida'].includes(transaction.tipo)
+          && Number.isFinite(Number(transaction.importe))
+          && money(Math.abs(transaction.importe)) > 0;
+        if (!valid) {
+          result.issues.push({ transactionId: transaction.id, reason: 'movimiento_bancario_incompleto' });
+          continue;
+        }
+        result.ready += 1;
+        result.readyTransactionIds.push(transaction.id);
+        if (!apply) continue;
+        try {
+          if (!pendingAccount) pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'activo');
+          const physicalBank = bankById.get(transaction.bank_account_id);
+          const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, physicalBank);
+          const posting = await postBankReconciliation(svc, companyId, transaction, bankPostingAccount, pendingAccount, user.email, {
+            documentId: transaction.id,
+            description: `Movimiento bancario pendiente de aplicar · ${transaction.concepto || transaction.referencia || transaction.id}`,
+            counterpartyLineType: 'ajuste',
+            status: 'confirmado',
+          });
+          const note = 'Clasificación contable provisional automática en 55500000. Pendiente de aplicar a factura o cuenta definitiva.';
+          await svc.entities.BankTransaction.update(transaction.id, {
+            journal_entry_id: posting.entry.id,
+            accounting_account_id: bankPostingAccount.id,
+            accounting_account_code: bankPostingAccount.code,
+            entidad_tipo: 'accounting_account',
+            entidad_id: pendingAccount.id,
+            estado_conciliacion: 'revisar',
+            confianza_conciliacion: 'baja',
+            notas: `${transaction.notas ? `${transaction.notas}\n` : ''}${note}`.slice(0, 2000),
+          });
+          if (posting.alreadyPosted) result.alreadyPosted += 1; else result.posted += 1;
+        } catch (error) {
+          result.issues.push({ transactionId: transaction.id, reason: error.message || 'error_contabilizacion_555' });
+        }
+      }
+      const nextOffset = offset + page.length;
+      return Response.json({
+        success: true,
+        mode: apply ? 'apply' : 'dry_run',
+        total: eligible.length,
+        offset,
+        nextOffset,
+        done: nextOffset >= eligible.length,
+        result,
+        pendingAccountCode: '55500000',
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+
     if (action === 'sync_invoices') {
       const apply = body.apply === true;
       const offset = Math.max(0, Number(body.offset) || 0);
