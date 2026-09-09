@@ -104,10 +104,10 @@ export default function BalancePyG({ companyId }) {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           ['Asientos incluidos', report.includedEntries],
-          ['Facturas con asiento sano', `${quality.healthyInvoicePostings}/${quality.activeInvoices}`],
-          ['Pendientes de contabilizar', quality.pendingInvoicePostings],
-          ['Asientos en revisión', quality.reviewEntries],
-          ['Pagos con asiento', `${quality.paymentsWithEntry}/${quality.payments}`],
+          ['Cuentas con movimiento', report.accounts.length],
+          ['Asientos excluidos', report.excludedEntries],
+          ['Asientos en revisión', report.pendingEntriesInYear],
+          ['Modelo', 'PGC interno'],
         ].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-3"><p className="text-[11px] text-muted-foreground">{label}</p><p className="font-mono text-lg font-bold mt-1">{value}</p></div>)}
       </div>
 
