@@ -411,8 +411,14 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
 }
 
-export async function postBankReconciliation(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
-  const amount = money(Math.abs(Number(transaction.importe) || 0));
+export async function postBankReconciliation(s(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
+  const originalAmount = money(Math.abs(Number(transaction.importe) || 0));
+  const currency = clean(options.currency || transaction.moneda || bankAccount.currency || bankAccount.moneda || 'EUR').toUpperCase();
+  const fxRate = Number(options.fxRate || transaction.exchange_rate || transaction.tipo_cambio || 1);
+  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate === 1)) {
+    throw new Error(`El movimiento esta en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarlo.`);
+  }
+  const amount = currency === 'EUR' ? originalAmount : money(originalAmount * fxRate);
   if (amount <= 0) throw new Error('El movimiento bancario no tiene un importe válido.');
   if (!bankAccount?.id || bankAccount.companyId !== companyId || bankAccount.status === 'inactiva') {
     throw new Error('La cuenta contable bancaria no pertenece a la empresa o está inactiva.');
@@ -443,6 +449,10 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     description,
     debit: money(debit),
     credit: money(credit),
+    originalDebit: currency === 'EUR' ? null : money(debit ? originalAmount : 0),
+    originalCredit: currency === 'EUR' ? null : money(credit ? originalAmount : 0),
+    currency,
+    fxRate,
     bankTransactionId: transaction.id,
     isReconciled: true,
     reconciledAt: now,
@@ -456,6 +466,9 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     documentId: options.documentId || transaction.id,
     postingKey,
     status: options.status || 'confirmado',
+    currency,
+    fxRate,
+    originalAmount: currency === 'EUR' ? null : originalAmount,
     lines: incoming
       ? [line(bankAccount, amount, 0, 'banco'), line(counterpartyAccount, 0, amount, options.counterpartyLineType || 'ajuste')]
       : [line(counterpartyAccount, amount, 0, options.counterpartyLineType || 'ajuste'), line(bankAccount, 0, amount, 'banco')],
