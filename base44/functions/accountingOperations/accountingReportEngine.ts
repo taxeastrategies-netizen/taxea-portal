@@ -1,14 +1,14 @@
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 export async function fetchAll(entity, query = {}, sort = 'created_date', max = 30000) {
-  const rows = [];
+  const rowsById = new Map();
   const pageSize = 5000;
   for (let skip = 0; skip < max; skip += pageSize) {
     const page = await entity.filter(query, sort, pageSize, skip);
-    rows.push(...(page || []));
+    for (const row of page || []) rowsById.set(row.id || `${skip}:${rowsById.size}`, row);
     if (!page || page.length < pageSize) break;
   }
-  return rows;
+  return [...rowsById.values()];
 }
 
 function yearOf(entry) {
@@ -17,6 +17,7 @@ function yearOf(entry) {
 
 function accountKind(account = {}, code = '') {
   const type = account.type || '';
+  if (code.startsWith('555') || account.presentationRole === 'pasivo_corriente_otras_deudas') return 'liability';
   if (type === 'ingreso' || code.startsWith('7')) return 'income';
   if (type === 'gasto' || code.startsWith('6')) return 'expense';
   if (type === 'patrimonio') return 'equity';
@@ -138,7 +139,16 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
     const debit = round2(account.debit);
     const credit = round2(account.credit);
     const balance = round2(debit - credit);
-    return { ...account, debit, credit, balance, kind: accountKind(account, account.code) };
+    const baseKind = accountKind(account, account.code);
+    const bankOverdraft = baseKind === 'asset' && (account.type === 'banco' || account.code.startsWith('57')) && balance < 0;
+    return {
+      ...account,
+      debit,
+      credit,
+      balance,
+      kind: bankOverdraft ? 'liability' : baseKind,
+      presentationAdjustment: bankOverdraft ? 'descubierto_bancario_a_pasivo_corriente' : '',
+    };
   }).sort((a, b) => a.code.localeCompare(b.code));
   const income = accounts.filter(a => a.kind === 'income').map(a => ({ ...a, amount: round2(a.credit - a.debit) }));
   const expenses = accounts.filter(a => a.kind === 'expense').map(a => ({ ...a, amount: round2(a.debit - a.credit) }));
