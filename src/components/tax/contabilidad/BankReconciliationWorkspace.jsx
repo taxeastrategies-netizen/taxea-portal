@@ -149,6 +149,34 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
 
   if (!companyId) return <EmptyState>Selecciona una empresa para revisar la conciliación bancaria.</EmptyState>;
 
+  const saveExchangeRate = async (incident) => {
+    const values = fxValues[incident.transactionId] || {};
+    const exchangeRate = Number(values.rate);
+    const exchangeRateDate = values.date || incident.date || new Date().toISOString().slice(0, 10);
+    const exchangeRateSource = String(values.source || '').trim();
+    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0 || exchangeRate === 1) return setError('Indica un tipo de cambio a EUR valido y distinto de 1.');
+    if (exchangeRateSource.length < 3) return setError('Indica una fuente verificable para el tipo de cambio.');
+    if (!window.confirm('Se guardara el tipo de cambio. Si ya existe un asiento confirmado, Taxea generara un ajuste trazado sin modificar el asiento original.')) return;
+    setWorkingId(`fx-${incident.transactionId}`);
+    setError('');
+    setMessage('');
+    try {
+      const response = await invoke({
+        action: 'save_bank_exchange_rate', companyId, apply: true,
+        transactionId: incident.transactionId, exchangeRate, exchangeRateDate, exchangeRateSource,
+      });
+      setOverview(response.overview);
+      setMessage(response.result?.correction
+        ? `Tipo de cambio guardado y asiento corrector ${response.result.correction.entryNumber} creado.`
+        : 'Tipo de cambio guardado. El movimiento ya puede contabilizarse en EUR.');
+      window.dispatchEvent(new Event('financials:refresh'));
+    } catch (requestError) {
+      setError(readableError(requestError, 'No se pudo guardar el tipo de cambio.'));
+    } finally {
+      setWorkingId('');
+    }
+  };
+
   return (
     <div className="mt-4 space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
