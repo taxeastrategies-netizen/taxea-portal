@@ -37,6 +37,19 @@
       "type": "string",
       "default": "EUR"
     },
+    "exchange_rate": {
+      "type": "number"
+    },
+    "exchange_rate_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "exchange_rate_source": {
+      "type": "string"
+    },
+    "exchange_rate_reviewed_by": {
+      "type": "string"
+    },
     "referencia": {
       "type": "string"
     },
