@@ -527,32 +527,27 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
   );
 }
 
-function ActivateAccountModal({ targetUser, subscription, currentUser, onClose, onActivated }) {
+function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }) {
   const [activating, setActivating] = useState(false);
   const [note, setNote] = useState('');
+  const [activationError, setActivationError] = useState('');
 
   const handleActivate = async () => {
+    setActivationError('');
     setActivating(true);
-    await base44.entities.User.update(targetUser.id, {
-      isPortalActive: true,
-      accountAccessStatus: 'active',
-      adminActivationStatus: 'approved',
-      activatedAt: new Date().toISOString(),
-      activatedBy: currentUser?.id,
-      status: 'activo',
-    });
-    if (subscription?.id) {
-      await base44.entities.Subscription.update(subscription.id, { status: 'activa' });
+    try {
+      const response = await base44.functions.invoke('activateUnlimitedUser', {
+        userId: targetUser.id,
+        note,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.success) throw new Error(payload?.error || 'No se pudo activar la cuenta.');
+      onActivated();
+    } catch (error) {
+      setActivationError(error?.response?.data?.error || error.message || 'No se pudo activar la cuenta.');
+    } finally {
+      setActivating(false);
     }
-    await base44.entities.UserAuditLog.create({
-      userId: targetUser.id,
-      actionType: 'suscripcion_activada',
-      actionBy: currentUser?.email || 'admin',
-      actionAt: new Date().toISOString(),
-      details: `Cuenta activada por administrador. Plan: ${subscription?.planCode || subscription?.plan || '—'}${note ? `. Nota: ${note}` : ''}`,
-    });
-    setActivating(false);
-    onActivated();
   };
 
   return (
@@ -581,6 +576,11 @@ function ActivateAccountModal({ targetUser, subscription, currentUser, onClose, 
             placeholder="Nota interna sobre la activación..."
             className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
         </div>
+        {activationError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {activationError}
+          </div>
+        )}
       </div>
       <div className="flex justify-end gap-3 pt-2 border-t border-border">
         <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -827,7 +827,7 @@ export default function GestionUsuarios() {
       {deletingUser && <DeleteUserModal targetUser={deletingUser} currentUser={user} onClose={closeModals} onDeleted={handleSaved} />}
       {changingRoleUser && <ChangeRoleModal targetUser={changingRoleUser} currentUser={user} onClose={closeModals} onChanged={handleSaved} />}
       {managingSubUser && <ManageSubscriptionModal targetUser={managingSubUser} subscription={getSubForUser(managingSubUser.id)} currentUser={user} onClose={closeModals} onSaved={handleSaved} />}
-      {activatingUser && <ActivateAccountModal targetUser={activatingUser} subscription={getSubForUser(activatingUser.id)} currentUser={user} onClose={closeModals} onActivated={handleSaved} />}
+      {activatingUser && <ActivateAccountModal targetUser={activatingUser} subscription={getSubForUser(activatingUser.id)} onClose={closeModals} onActivated={handleSaved} />}
     </div>
   );
 }
