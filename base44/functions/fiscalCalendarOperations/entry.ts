@@ -65,7 +65,7 @@ function dayNextMonth(year: number, month: number, day: number) { return shiftWe
 
 function item(code: string, fiscalYear: number, period: string, filing: Date, domicile: Date | null, extra: any = {}) {
   const meta = MODEL_META[code] || [`Modelo ${code}`, extra.authority || 'Otro', 'otro'];
-  const official = filing.getUTCFullYear() <= VERIFIED_CALENDAR_YEAR || extra.officialOverride === true;
+  const official = filing.getUTCFullYear() === VERIFIED_CALENDAR_YEAR || extra.officialOverride === true;
   const filingIso = iso(filing);
   const domicileIso = domicile ? iso(domicile) : '';
   return {
@@ -116,7 +116,7 @@ function generateSchedule(model: any, fiscalYear: number) {
   if (code === '202') return [
     item(code, fiscalYear, 'P1', shiftWeekend(atUtc(fiscalYear, 4, 20)), shiftWeekend(atUtc(fiscalYear, 4, 15))),
     item(code, fiscalYear, 'P2', shiftWeekend(atUtc(fiscalYear, 10, 20)), shiftWeekend(atUtc(fiscalYear, 10, 15))),
-    item(code, fiscalYear, 'P3', shiftWeekend(atUtc(fiscalYear, 12, 20)), shiftWeekend(atUtc(fiscalYear, 12, 15))),
+    item(code, fiscalYear, 'P3', shiftWeekend(atUtc(fiscalYear, 12, 20)), fiscalYear === 2026 ? atUtc(2026, 12, 16) : shiftWeekend(atUtc(fiscalYear, 12, 15))),
   ];
   if (code === '200') { const due = shiftWeekend(atUtc(fiscalYear + 1, 7, 25)); return [item(code, fiscalYear, 'ANUAL', due, shiftWeekend(minusDays(due, 5)), { notes: 'Entidad con periodo impositivo coincidente con el ano natural; otros cierres requieren calculo especifico.' })]; }
   if (['180', '190', '193', '296'].includes(code)) return [item(code, fiscalYear, 'ANUAL', shiftWeekend(atUtc(fiscalYear + 1, 1, 31)), null)];
