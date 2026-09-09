@@ -47,7 +47,7 @@ const ACCOUNT_DEFS = {
   '47770000': ['Hacienda Pública, IGIC repercutido', 'impuesto'],
   '52000000': ['Deudas a corto plazo con entidades de crédito', 'pasivo'],
   '55100000': ['Cuenta corriente con socios y administradores', 'otro'],
-  '55500000': ['Partidas pendientes de aplicación', 'activo'],
+  '55500000': ['Partidas pendientes de aplicación', 'pasivo'],
   '57000000': ['Caja, euros', 'banco'],
   '57200000': ['Bancos e instituciones de crédito c/c vista, euros', 'banco'],
   '60000000': ['Compras de mercaderías', 'gasto'],
@@ -96,7 +96,19 @@ const CATEGORY_ACCOUNT = {
 export async function ensureAccount(svc, companyId, codeInput, name, type = 'otro', extra = {}) {
   const code = canonical8(codeInput);
   const existing = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
-  if (existing?.[0]) return existing[0];
+  if (existing?.[0]) {
+    const current = existing[0];
+    if (code === '55500000' && (current.type !== 'pasivo' || current.presentationRole !== 'pasivo_corriente_otras_deudas')) {
+      return await svc.entities.AccountingAccount.update(current.id, {
+        type: 'pasivo',
+        presentationRole: 'pasivo_corriente_otras_deudas',
+        normalSide: 'haber',
+        maturity: 'corriente',
+        description: current.description || 'Cobros recibidos cuya causa no puede identificarse temporalmente. Requiere aplicación posterior.',
+      });
+    }
+    return current;
+  }
   const def = ACCOUNT_DEFS[code] || [name || `Cuenta ${code}`, type];
   return await svc.entities.AccountingAccount.create({
     companyId,
