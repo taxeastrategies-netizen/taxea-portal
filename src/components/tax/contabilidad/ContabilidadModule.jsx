@@ -36,7 +36,7 @@ const TABS = [
 ];
 
 export default function ContabilidadModule() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, fiscalProfile } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('facturas');
   const companyId = company?.id;
 
@@ -51,6 +51,7 @@ export default function ContabilidadModule() {
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0',
@@ -73,9 +74,9 @@ export default function ContabilidadModule() {
         {activeTab === 'diario' && <LibroDiario companyId={companyId} user={user} />}
         {activeTab === 'manuales' && <AsientosManualesTab companyId={companyId} user={user} />}
         {activeTab === 'cuentas' && <CuadrosCuentas companyId={companyId} user={user} />}
-        {activeTab === 'emitidas' && <LibroRegistroEmitidas />}
-        {activeTab === 'recibidas' && <LibroRegistroRecibidas />}
-        {activeTab === 'iva' && <IVAResumen />}
+        {activeTab === 'emitidas' && <LibroRegistroEmitidas companyId={companyId} />}
+        {activeTab === 'recibidas' && <LibroRegistroRecibidas companyId={companyId} fiscalProfile={fiscalProfile} />}
+        {activeTab === 'iva' && <IVAResumen companyId={companyId} />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
         {activeTab === 'activos' && <ActivosContables companyId={companyId} />}
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
