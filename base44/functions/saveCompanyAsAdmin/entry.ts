@@ -41,7 +41,19 @@ Deno.serve(async (req) => {
       saved = await base44.asServiceRole.entities.Company.create(payload);
     }
 
-    return Response.json({ success: true, company: saved });
+    // Vincular todos los accesos con el mismo email a la empresa canónica.
+    // Es idempotente y repara usuarios antiguos creados antes de company_id.
+    const users = await base44.asServiceRole.entities.User.list('-created_date', 500);
+    const matchingUsers = (users || []).filter(item =>
+      String(item.email || '').trim().toLowerCase() === String(clientEmail).trim().toLowerCase()
+    );
+    for (const matchingUser of matchingUsers) {
+      if (matchingUser.data?.company_id !== saved.id && matchingUser.company_id !== saved.id) {
+        await base44.asServiceRole.entities.User.update(matchingUser.id, { company_id: saved.id });
+      }
+    }
+
+    return Response.json({ success: true, company: saved, linkedUsers: matchingUsers.length });
   } catch (error) {
     console.error('Error en saveCompanyAsAdmin:', error);
     return Response.json({ error: error.message || 'Error interno' }, { status: 500 });
