@@ -57,7 +57,40 @@
     },
     "accountingSchemaVersion": {
       "type": "string",
-      "default": "pgc8-v1"
+      "default": "pgc8-v2"
+    },
+    "accountingModel": {
+      "type": "string",
+      "enum": [
+        "interno_simplificado",
+        "pyme",
+        "abreviado",
+        "normal"
+      ],
+      "default": "interno_simplificado"
+    },
+    "baseCurrency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "unmatchedIncomingAccount": {
+      "type": "string",
+      "default": "55500000"
+    },
+    "unmatchedOutgoingMode": {
+      "type": "string",
+      "enum": [
+        "revision",
+        "cuenta_configurada"
+      ],
+      "default": "revision"
+    },
+    "unmatchedOutgoingAccount": {
+      "type": "string"
+    },
+    "autoSeedAccounts": {
+      "type": "boolean",
+      "default": false
     }
   },
   "required": [
@@ -65,7 +98,9 @@
   ],
   "rls": {
     "create": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
@@ -80,10 +115,14 @@
       ]
     },
     "update": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
