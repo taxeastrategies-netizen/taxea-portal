@@ -110,7 +110,7 @@ async function buildAccountingConfigurationDiagnostics(svc, companyId, configura
   const [accounts, banks, invoices, periods] = await Promise.all([
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-    fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 10000),
+    fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 100000),
     listFiscalYears(svc, companyId),
   ]);
   const activeAccounts = accounts.filter(item => item.status !== 'inactiva');
@@ -613,10 +613,10 @@ const validBankTransaction = (transaction) =>
 async function loadBankReconciliationOverview(svc, companyId) {
   const [bankAccounts, transactions, accounts, entries, lines] = await Promise.all([
     fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, '-fecha_operacion', 30000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, '-fecha_operacion', 100000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
-    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 100000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 100000),
   ]);
   const activeBanks = (bankAccounts || []).filter(account =>
     account.activa !== false
@@ -988,9 +988,9 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
     throw new Error('La cuenta bancaria no pertenece a la empresa activa.');
   }
   const [transactions, entries, lines] = await Promise.all([
-    fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 30000),
-    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 100000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 100000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 100000),
   ]);
   const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
   const pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'pasivo');
@@ -1071,10 +1071,10 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
 async function consolidateDuplicateBankLedgers(svc, companyId, apply, userEmail, postingDate) {
   const [banks, transactions, accounts, entries, lines] = await Promise.all([
     fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 100000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
-    fetchAll(svc.entities.JournalEntry, { companyId }, 'date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, 'date', 100000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 100000),
   ]);
   const accountById = new Map(accounts.map(item => [item.id, item]));
   const bankById = new Map(banks.map(item => [item.id, item]));
@@ -1326,8 +1326,8 @@ Deno.serve(async (req) => {
 
     if (action === 'tax_summary') {
       const [invoices, taxLines, company] = await Promise.all([
-        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 10000),
-        fetchAll(svc.entities.InvoiceTaxLine, { companyId }, 'operationDate', 30000),
+        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 100000),
+        fetchAll(svc.entities.InvoiceTaxLine, { companyId }, 'operationDate', 100000),
         svc.entities.Company.get(companyId).catch(() => null),
       ]);
       const activeInvoices = invoices.filter(invoice => invoice.estado_contable === 'contabilizada' && !invoice.anulada);
@@ -1428,7 +1428,7 @@ Deno.serve(async (req) => {
     if (action === 'assets_overview') {
       const [assets, schedule] = await Promise.all([
         fetchAll(svc.entities.AccountingAsset, { companyId }, 'inServiceDate', 10000),
-        fetchAll(svc.entities.AmortizationScheduleLine, { companyId }, 'postingDate', 30000),
+        fetchAll(svc.entities.AmortizationScheduleLine, { companyId }, 'postingDate', 100000),
       ]);
       const totals = {
         cost: money(assets.filter(item => item.status !== 'disposed').reduce((sum, item) => sum + Number(item.cost || 0), 0)),
@@ -1737,7 +1737,7 @@ Deno.serve(async (req) => {
     if (action === 'duplicate_audit') {
       const [invoices, entries, accounts] = await Promise.all([
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
-        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 100000),
         fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
       ]);
       return Response.json({
@@ -1760,9 +1760,9 @@ Deno.serve(async (req) => {
         requestedIdList
           ? Promise.all(requestedIdList.map(id => svc.entities.BankTransaction.get(id).catch(() => null)))
             .then(rows => rows.filter(Boolean))
-          : fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
+          : fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 100000),
         fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 100000),
       ]);
       const bankById = new Map((bankAccounts || []).filter(account => account.activa !== false).map(account => [account.id, account]));
       const postingByKey = new Map((entries || []).filter(entry => entry.postingKey && entry.status !== 'anulado').map(entry => [entry.postingKey, entry]));
@@ -1910,7 +1910,7 @@ Deno.serve(async (req) => {
       const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 3)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
       const [invoices, entries] = await Promise.all([
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
-        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 100000),
       ]);
       const requestedInvoiceIds = Array.isArray(body.invoiceIds) ? new Set(body.invoiceIds.map(String)) : null;
       const active = (invoices || []).filter(invoice => !invoice.anulada && (!body.invoiceType || invoice.tipo === body.invoiceType) && (!requestedInvoiceIds || requestedInvoiceIds.has(invoice.id)));
@@ -1971,9 +1971,9 @@ Deno.serve(async (req) => {
       const [payments, invoices, transactions, bankAccounts, entries, accounts] = await Promise.all([
         fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
-        fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'created_date', 100000),
         fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 100000),
         fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
       ]);
       const requestedPaymentIds = Array.isArray(body.paymentIds) ? new Set(body.paymentIds.map(String)) : null;
