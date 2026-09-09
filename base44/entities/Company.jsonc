@@ -24,6 +24,8 @@
       "type": "string",
       "enum": [
         "autonomo",
+        "profesional",
+        "empresario_individual",
         "sociedad_limitada",
         "sociedad_anonima",
         "comunidad_bienes",
