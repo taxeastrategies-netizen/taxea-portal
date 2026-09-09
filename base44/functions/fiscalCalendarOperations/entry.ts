@@ -326,8 +326,24 @@ Deno.serve(async (req) => {
       const savedDoc = await svc.entities.Document.update(doc.id, documentPayload);
       let obligation = data.obligations.find((row: any) => normalizeCode(row.modelo_codigo || row.modelo) === code && Number(row.anio || row.fiscal_year) === year && normalizePeriod(row.periodo || row.trimestre) === period);
       const generated = generateSchedule({ codigo: code, periodicidad: body.frequency || 'segun_modelo' }, year).find((row: any) => row.period === period);
-      if (!obligation && generated) {
-        obligation = await svc.entities.TaxObligation.create({ company_id: companyId, modelo: generated.modelKey, modelo_codigo: code, administracion: generated.authority, periodo: period, anio: year, fecha_limite: generated.filingDeadline, fecha_limite_presentacion: generated.filingDeadline, fecha_limite_domiciliacion: generated.domicileDeadline || undefined, fecha_limite_interna: generated.internalDeadline, estado: 'pendiente_documentacion', resultado: 'pendiente', importe: 0, calendar_key: generated.key, source: 'documento_fiscal', calendar_rule_version: RULESET, calendar_confidence: generated.deadlineStatus === 'verificado' ? 'oficial_verificado' : 'provisional', deadline_status: generated.deadlineStatus, document_ids: [doc.id], last_synced_at: new Date().toISOString(), last_synced_by: user.email });
+      if (!obligation) {
+        const meta = MODEL_META[code];
+        const modelKey = generated?.modelKey || (meta[1] === 'ATC' ? `modelo_${code}_igic` : `modelo_${code}`);
+        obligation = await svc.entities.TaxObligation.create({
+          company_id: companyId, modelo: modelKey, modelo_codigo: code, administracion: generated?.authority || meta[1],
+          periodo: period, anio: year,
+          fecha_limite: generated?.filingDeadline || undefined,
+          fecha_limite_presentacion: generated?.filingDeadline || undefined,
+          fecha_limite_domiciliacion: generated?.domicileDeadline || undefined,
+          fecha_limite_interna: generated?.internalDeadline || undefined,
+          estado: 'pendiente_documentacion', resultado: 'pendiente', importe: 0,
+          calendar_key: generated?.key || `${code}:${year}:${period}`, source: 'documento_fiscal',
+          calendar_rule_version: RULESET,
+          calendar_confidence: generated ? (generated.deadlineStatus === 'verificado' ? 'oficial_verificado' : 'provisional') : 'criterio_asesor',
+          deadline_status: generated?.deadlineStatus || 'revisar', document_ids: [doc.id],
+          comentarios_asesor: generated ? '' : 'Documento fiscal vinculado a un modelo cuyo plazo depende del supuesto. El asesor debe confirmar la fecha.',
+          last_synced_at: new Date().toISOString(), last_synced_by: user.email,
+        });
       } else if (obligation) {
         const ids = [...new Set([...(obligation.document_ids || []), doc.id])];
         const update: any = { document_ids: ids, last_synced_at: new Date().toISOString(), last_synced_by: user.email };
