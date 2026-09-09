@@ -191,8 +191,7 @@
   "required": [
     "company_id",
     "modelo",
-    "periodo",
-    "fecha_limite"
+    "periodo"
   ],
   "rls": {
     "create": {
