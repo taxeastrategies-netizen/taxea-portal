@@ -17,7 +17,7 @@ const STATUS_CFG = {
 };
 function StatusBadge({ status }) { const cfg = STATUS_CFG[status] || STATUS_CFG.borrador; const Icon = cfg.icon; return <span className={cn('inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', cfg.color)}><Icon className="w-2.5 h-2.5" />{cfg.label}</span>; }
 
-export default function LibroDiario({ companyId, user }) {
+export default function LibroDiario({ companyId, user, initialSource = 'all' }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
@@ -27,9 +27,9 @@ export default function LibroDiario({ companyId, user }) {
   const [expanded, setExpanded] = useState('');
   const [showNewEntry, setShowNewEntry] = useState(false);
   const query = useQuery({
-    queryKey: ['journal-v2', companyId, year, status, type, search, page],
+    queryKey: ['journal-v2', companyId, year, status, type, initialSource, search, page],
     queryFn: async () => {
-      const response = await base44.functions.invoke('accountingOperations', { action: 'journal', companyId, year, status, type, search, page, pageSize: 100 });
+      const response = await base44.functions.invoke('accountingOperations', { action: 'journal', companyId, year, status, type, source: initialSource, search, page, pageSize: 100 });
       return response?.data || response;
     },
     enabled: Boolean(companyId), staleTime: 15_000,
