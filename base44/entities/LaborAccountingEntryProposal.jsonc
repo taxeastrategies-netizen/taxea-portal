@@ -100,6 +100,19 @@
     "exported_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "journal_entry_id": {
+      "type": "string"
+    },
+    "accounted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "accounted_by": {
+      "type": "string"
+    },
+    "posting_key": {
+      "type": "string"
     }
   },
   "required": [
