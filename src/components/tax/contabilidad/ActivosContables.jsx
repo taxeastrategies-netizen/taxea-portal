@@ -43,13 +43,13 @@ export default function ActivosContables({ companyId }) {
   });
 
   const run = useMutation({
-    mutationFn: async (payload) => {
+    mutationFn: async (payload = {}) => {
       const response = await base44.functions.invoke('accountingOperations', { companyId, ...payload });
       if (response.data?.error) throw new Error(response.data.error);
       return response.data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounting-assets', companyId] }),
-    onError: (error) => toast.error(error.response?.data?.error || error.message || 'No se pudo completar la operación.'),
+    onError: (error) => toast.error(error.message || 'No se pudo completar la operación.'),
   });
 
   const assets = query.data?.assets || [];
