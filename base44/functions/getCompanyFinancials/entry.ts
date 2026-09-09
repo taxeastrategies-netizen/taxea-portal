@@ -1,4 +1,24 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+
+async function fetchAll(entity, query = {}, sort = '-created_date', max = 100000) {
+  const rows = new Map();
+  const pageSize = 5000;
+  const descending = String(sort).startsWith('-');
+  const cursorField = String(sort).replace(/^-/, '');
+  let cursor;
+  while (rows.size < max) {
+    const cursorQuery = cursor === undefined ? query : { ...query, [cursorField]: { [descending ? '$lte' : '$gte']: cursor } };
+    const page = await entity.filter(cursorQuery, sort, Math.min(pageSize, max - rows.size), 0);
+    if (!page?.length) break;
+    const before = rows.size;
+    for (const row of page) rows.set(row.id || `${cursorField}:${row[cursorField]}:${rows.size}`, row);
+    const next = page[page.length - 1]?.[cursorField];
+    if (page.length < pageSize || next == null || (Object.is(next, cursor) && rows.size === before)) break;
+    cursor = next;
+  }
+  if (rows.size >= max) throw new Error(`El volumen supera el limite de seguridad de ${max} registros. Acota el ejercicio.`);
+  return [...rows.values()];
+}
 
 Deno.serve(async (req) => {
   try {
@@ -24,8 +44,8 @@ Deno.serve(async (req) => {
 
     // Fetch with service role to bypass RLS issues with stale user tokens
     const [invoices, expenses] = await Promise.all([
-      base44.asServiceRole.entities.Invoice.filter(filter, '-fecha_emision', 5000),
-      base44.asServiceRole.entities.Expense.filter(filter, '-fecha', 5000),
+      fetchAll(base44.asServiceRole.entities.Invoice, filter, '-fecha_emision'),
+      fetchAll(base44.asServiceRole.entities.Expense, filter, '-fecha'),
     ]);
 
     const invs = invoices || [];
