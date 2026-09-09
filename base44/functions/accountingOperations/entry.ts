@@ -202,7 +202,7 @@ function duplicateGroups(rows, keyFor, summarize, reason, confidence, excludedSe
   return result;
 }
 
-function buildDuplicateAudit(invoices, entries) {
+function buildDuplicateAudit(invoices, entries, accounts = []) {
   const activeInvoices = (invoices || []).filter(invoice => !invoice.anulada);
   const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
   const invoiceSets = new Set();
@@ -305,14 +305,23 @@ function buildDuplicateAudit(invoices, entries) {
   }
   const invoiceDuplicateGroups = [...strongInvoices, ...strongSignatureInvoices, ...possibleInvoices];
   const journalDuplicateGroups = [...postingKeyEntries, ...documentEntries, ...possibleEntries];
+  const accountDuplicateGroups = duplicateGroups(
+    (accounts || []).filter(account => account.status !== 'inactiva' && isCanonical8(account.code)),
+    account => account.code,
+    account => ({ id: account.id, code: account.code, name: account.name || '', type: account.type || '', status: account.status || 'activa' }),
+    'La misma subcuenta está activa más de una vez',
+    'alta',
+  );
   const duplicateInvoiceIds = [...new Set(invoiceDuplicateGroups.flatMap(group => group.items.map(item => item.id)))];
   return {
     generatedAt: new Date().toISOString(),
     counts: {
       invoicesScanned: activeInvoices.length,
       entriesScanned: activeEntries.length,
+      accountsScanned: (accounts || []).length,
       invoiceGroups: invoiceDuplicateGroups.length,
       journalGroups: journalDuplicateGroups.length,
+      accountGroups: accountDuplicateGroups.length,
       invoiceEntryConflicts: invoiceEntryConflicts.length,
       highConfidenceInvoiceGroups: invoiceDuplicateGroups.filter(group => group.confidence === 'alta').length,
       highConfidenceJournalGroups: journalDuplicateGroups.filter(group => group.confidence === 'alta').length,
@@ -320,6 +329,7 @@ function buildDuplicateAudit(invoices, entries) {
     duplicateInvoiceIds,
     invoiceDuplicateGroups,
     journalDuplicateGroups,
+    accountDuplicateGroups,
     invoiceEntryConflicts,
   };
 }
@@ -1725,13 +1735,14 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'duplicate_audit') {
-      const [invoices, entries] = await Promise.all([
+      const [invoices, entries, accounts] = await Promise.all([
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 30000),
+        fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
       ]);
       return Response.json({
         success: true,
-        audit: buildDuplicateAudit(invoices, entries),
+        audit: buildDuplicateAudit(invoices, entries, accounts),
         schemaVersion: SCHEMA_VERSION,
       });
     }
