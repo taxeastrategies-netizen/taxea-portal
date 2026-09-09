@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,8 +25,7 @@ const CAT_LABEL = {
   gastos_financieros: 'Gastos financieros', seguros: 'Seguros', otros: 'Otros',
 };
 
-export default function LibroRegistroRecibidas() {
-  const { company, fiscalProfile } = useOutletContext() || {};
+export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
 
@@ -37,15 +35,26 @@ export default function LibroRegistroRecibidas() {
     && fiscalProfile?.mainTerritory === 'canarias'
     && fiscalProfile?.activities?.some(a => a.indirectTaxRegime === 'comerciante_minorista_igic' || a.deductionRight === 'sin_derecho');
 
-  const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-recibidas', company?.id],
+  const query = useQuery({
+    queryKey: ['invoices-recibidas', companyId],
     queryFn: async () => {
-      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: companyId });
       const finData = res?.data || res;
       return (finData?.invoices || []).filter(i => i.tipo === 'recibida' && i.estado_contable === 'contabilizada' && !i.anulada);
     },
-    enabled: !!company?.id,
+    enabled: Boolean(companyId),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
+  const invoices = query.data || [];
+  const isLoading = query.isLoading;
+
+  useEffect(() => {
+    const refresh = () => query.refetch();
+    window.addEventListener('financials:refresh', refresh);
+    return () => window.removeEventListener('financials:refresh', refresh);
+  }, [query.refetch]);
 
   const anios = [...new Set(invoices.map(i => i.anio).filter(Boolean))].sort((a, b) => b - a);
 
