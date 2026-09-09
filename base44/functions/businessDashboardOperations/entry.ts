@@ -100,21 +100,22 @@ function financeSnapshot(invoices: any[], year: number) {
 
 function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
   const active = accounts.filter((account) => account.activa !== false);
-  const connected = active.filter((account) => ['conectada', 'connected', 'activa', 'active'].includes(clean(account.estado_conexion).toLowerCase()));
+  const connected = active.filter((account) => ['conectado', 'conectada', 'connected', 'activa', 'active', 'sincronizando'].includes(clean(account.estado_conexion).toLowerCase()));
   const accountIds = new Set(active.map((account) => account.id));
   const visible = transactions.filter((tx) => {
     const accountId = clean(tx.bank_account_id || tx.cuenta_bancaria_id || tx.account_id);
-    const duplicate = tx.es_duplicado || tx.duplicado || ['duplicado', 'duplicate'].includes(clean(tx.estado_proveedor).toLowerCase());
+    const reconciliationState = clean(tx.estado_conciliacion).toLowerCase();
+    const duplicate = tx.es_duplicado || tx.duplicado || tx.es_demo === true || ['duplicada', 'duplicado', 'duplicate'].includes(reconciliationState) || ['duplicado', 'duplicate'].includes(clean(tx.estado_proveedor).toLowerCase());
     const booked = !tx.estado_proveedor || ['booked', 'contabilizado', 'confirmado'].includes(clean(tx.estado_proveedor).toLowerCase());
     return (!accountId || accountIds.has(accountId)) && !duplicate && booked;
   });
   const yearRows = visible.filter((tx) => yearOf(tx, ['fecha_operacion', 'fecha_valor', 'fecha']) === year);
-  const resolved = new Set(['conciliado', 'reconciliada', 'auto', 'manual', 'ignored', 'ignorado']);
+  const resolved = new Set(['conciliado', 'reconciliada', 'conciliada_auto', 'conciliada_manual', 'descartada', 'movimiento_interno', 'auto', 'manual', 'ignored', 'ignorado']);
   const reconciled = yearRows.filter((tx) => resolved.has(clean(tx.estado_conciliacion).toLowerCase())).length;
   const unresolved = Math.max(0, yearRows.length - reconciled);
   const latestSync = active.map((account) => dateOf(account, ['fecha_ultima_sync', 'last_sync_at', 'updated_date'])).filter(Boolean).sort().at(-1) || '';
   const staleHours = latestSync ? (Date.now() - new Date(latestSync).getTime()) / 3600000 : null;
-  const issues = active.filter((account) => ['error', 'requiere_renovacion', 'expired', 'desconectada'].includes(clean(account.estado_conexion).toLowerCase())).length;
+  const issues = active.filter((account) => ['error', 'requiere_renovacion', 'expired', 'desconectada', 'desconectado'].includes(clean(account.estado_conexion).toLowerCase())).length;
   return {
     accounts: active.length,
     connectedAccounts: connected.length,
@@ -139,8 +140,8 @@ function peopleSnapshot(employees: any[], absences: any[], documents: any[], lab
   const currentAbsences = absences.filter((absence) => ['aprobada', 'aprobado'].includes(clean(absence.estado).toLowerCase()) && (!absence.fecha_inicio || absence.fecha_inicio <= today) && (!absence.fecha_fin || absence.fecha_fin >= today));
   const pendingSignature = documents.filter((doc) => ['pendiente_firma', 'sin_firma'].includes(clean(doc.estado_firma).toLowerCase())).length;
   const expiredDocuments = documents.filter((doc) => clean(doc.estado_firma).toLowerCase() === 'expirado' || (doc.fecha_expiracion && doc.fecha_expiracion < today && doc.estado_firma !== 'firmado')).length;
-  const reviewStates = new Set(['requiere_revision', 'procesado_con_advertencias', 'error', 'no_reconocido', 'duplicado_probable', 'revision_manual']);
-  const laborReview = laborDocs.filter((doc) => reviewStates.has(clean(doc.ocr_status || doc.validation_status).toLowerCase())).length;
+  const reviewStates = new Set(['pendiente', 'procesando', 'requiere_revision', 'procesado_con_advertencias', 'error', 'no_reconocido', 'duplicado_probable', 'revision_manual', 'rechazado']);
+  const laborReview = laborDocs.filter((doc) => reviewStates.has(clean(doc.ocr_status).toLowerCase()) || reviewStates.has(clean(doc.validation_status).toLowerCase())).length;
   const payrollWarnings = [...payrolls, ...socialSecurity].reduce((sum, row) => sum + (Array.isArray(row.validation_warnings) ? row.validation_warnings.length : 0), 0);
   return {
     employees: employees.length,
@@ -168,7 +169,7 @@ function activityFeed({ invoices, expenses, transactions, entries, laborDocs, do
   expenses.slice(-30).forEach((row: any) => push({ id: `expense:${row.id}`, type: 'expense', date: dateOf(row, ['fecha', 'created_date']), title: row.concepto || 'Ingreso o gasto', detail: row.proveedor_cliente || '', amount: money(row.total), route: '/tax-accounting/ingresos-gastos' }));
   transactions.slice(-40).forEach((row: any) => push({ id: `bank:${row.id}`, type: 'bank', date: dateOf(row, ['fecha_operacion', 'fecha_valor', 'created_date']), title: row.concepto || row.descripcion || 'Movimiento bancario', detail: row.contraparte || row.nombre_contraparte || '', amount: money(row.importe), route: '/finance/cashflow' }));
   entries.slice(-40).forEach((row: any) => push({ id: `entry:${row.id}`, type: 'entry', date: dateOf(row, ['date', 'updated_date']), title: row.entryNumber ? `Asiento ${row.entryNumber}` : 'Asiento contable', detail: row.description || '', amount: money(row.totalDebit), route: '/tax-accounting/contabilidad' }));
-  laborDocs.slice(-20).forEach((row: any) => push({ id: `labor:${row.id}`, type: 'labor', date: dateOf(row, ['updated_date', 'created_date']), title: row.file_name || row.nombre_archivo || 'Documento laboral', detail: clean(row.ocr_status || row.validation_status), route: '/people/documents' }));
+  laborDocs.slice(-20).forEach((row: any) => push({ id: `labor:${row.id}`, type: 'labor', date: dateOf(row, ['updated_date', 'created_date']), title: row.original_file_name || row.file_name || row.nombre_archivo || 'Documento laboral', detail: clean(row.ocr_status || row.validation_status), route: '/people/documents' }));
   documents.slice(-20).forEach((row: any) => push({ id: `document:${row.id}`, type: 'document', date: dateOf(row, ['updated_date', 'created_date']), title: row.nombre || 'Documento', detail: row.estado || row.carpeta || '', route: '/documentos' }));
   return events.sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 10);
 }
