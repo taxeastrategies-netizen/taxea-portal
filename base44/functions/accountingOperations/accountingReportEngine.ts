@@ -77,7 +77,11 @@ export async function accountingData(svc, companyId, options = {}) {
   ]);
   const resolved = resolveModel(entries, lines);
   const accountByCode = new Map(accounts.map(account => [account.code, account]));
-  return { entries, lines, accounts, invoices, payments, accountByCode, businessDataIncluded: Boolean(options.includeBusinessData), ...resolved };
+  const yearHeaders = selectedYear
+    ? await svc.entities.JournalEntry.filter({ companyId }, '-date', 5000, 0, ['ejercicio', 'date'])
+    : entries;
+  const availableYears = [...new Set((yearHeaders || []).map(yearOf).filter(Boolean))].sort((a, b) => b - a);
+  return { entries, lines, accounts, invoices, payments, accountByCode, availableYears, businessDataIncluded: Boolean(options.includeBusinessData), ...resolved };
 }
 
 export function accountingQuality(data) {
@@ -171,7 +175,7 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
   const trialCredit = round2(accounts.reduce((s, a) => s + a.credit, 0));
   return {
     year: selectedYear, scope,
-    years: [...new Set(data.entries.map(yearOf).filter(Boolean))].sort((a, b) => b - a),
+    years: data.availableYears || [...new Set(data.entries.map(yearOf).filter(Boolean))].sort((a, b) => b - a),
     includedEntries: validEntries.length,
     excludedEntries: excluded.length,
     excluded: excluded.slice(0, 50),
@@ -197,7 +201,7 @@ export function buildJournal(data, { year, status = 'all', type = 'all', search 
     total: rows.length,
     page: safePage,
     pageSize: safeSize,
-    years: [...new Set(data.entries.map(yearOf).filter(Boolean))].sort((a, b) => b - a),
+    years: data.availableYears || [...new Set(data.entries.map(yearOf).filter(Boolean))].sort((a, b) => b - a),
     entries: rows.slice((safePage - 1) * safeSize, safePage * safeSize).map(entry => {
       const resolvedLines = data.linesByEntry.get(entry.id) || [];
       const integrity = entryIntegrity(entry, resolvedLines);
