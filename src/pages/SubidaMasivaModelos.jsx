@@ -167,19 +167,21 @@ export default function SubidaMasivaModelos() {
     };
     const doc = await base44.entities.Document.create(docData);
 
-    // 2. Buscar/actualizar obligación (NO duplicar)
+    // 2. Vincular con el calendario fiscal y actualizar la obligación sin inventar el vencimiento
     let oblig = null;
-    if (ex.modelo && ex.periodo) {
-      const obligaciones = await base44.entities.TaxObligation.filter({ 
-        company_id: empresa.id, 
-        modelo: ex.modelo,
-        periodo: ex.periodo
+    if (ex.modelo && periodo) {
+      const linkResponse = await base44.functions.invoke('fiscalCalendarOperations', {
+        action: 'link_document',
+        companyId: empresa.id,
+        documentId: doc.id,
+        modelCode: String(ex.modelo).replace(/^modelo_/, '').replace(/_igic$/, '').replace(/\D/g, ''),
+        period: periodo,
+        year: parseInt(ex.ejercicio) || now.getFullYear(),
+        documentKind: 'justificante_presentacion',
       });
-      oblig = obligaciones[0];
-      
+      oblig = linkResponse.data?.obligation || null;
       if (oblig) {
-        // Actualizar existente
-        await base44.entities.TaxObligation.update(oblig.id, {
+        oblig = await base44.entities.TaxObligation.update(oblig.id, {
           estado: 'presentado',
           justificante_url: doc.archivo_url,
           comentarios_asesor: [
@@ -189,21 +191,6 @@ export default function SubidaMasivaModelos() {
             ex.nrc ? `NRC: ${ex.nrc}` : ''
           ].filter(Boolean).join(' | '),
           importe: ex.importe || oblig.importe,
-        });
-      } else {
-        // Crear nueva
-        oblig = await base44.entities.TaxObligation.create({
-          company_id: empresa.id,
-          modelo: ex.modelo,
-          periodo: ex.periodo,
-          anio: parseInt(ex.ejercicio) || now.getFullYear(),
-          trimestre: ex.trimestre,
-          fecha_limite: now.toISOString().split('T')[0],
-          estado: 'presentado',
-          resultado: 'pendiente',
-          justificante_url: doc.archivo_url,
-          comentarios_asesor: `Presentado por Taxea el ${now.toLocaleDateString('es-ES')}${ex.csv ? ` — CSV: ${ex.csv}` : ''}${ex.nrc ? ` — NRC: ${ex.nrc}` : ''}`,
-          importe: ex.importe,
         });
       }
     }
