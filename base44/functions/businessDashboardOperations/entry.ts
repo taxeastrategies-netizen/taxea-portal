@@ -100,7 +100,7 @@ function financeSnapshot(invoices: any[], year: number) {
 
 function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
   const active = accounts.filter((account) => account.activa !== false);
-  const connected = active.filter((account) => ['conectado', 'conectada', 'connected', 'activa', 'active', 'sincronizando'].includes(clean(account.estado_conexion).toLowerCase()));
+  const connected = active.filter((account) => ['conectado', 'conectada', 'connected', 'activa', 'active'].includes(clean(account.estado_conexion).toLowerCase()));
   const accountIds = new Set(active.map((account) => account.id));
   const visible = transactions.filter((tx) => {
     const accountId = clean(tx.bank_account_id || tx.cuenta_bancaria_id || tx.account_id);
