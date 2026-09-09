@@ -497,6 +497,20 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
 }
 
+async function requireHealthyPosting(svc, companyId, entry, context) {
+  if (!entry || entry.companyId !== companyId || entry.status === 'anulado') return null;
+  let lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+  if ((!lines || !lines.length) && entry.importKey) {
+    lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5000);
+  }
+  const debit = money((lines || []).reduce((sum, item) => sum + Number(item.debit || item.debeE || 0), 0));
+  const credit = money((lines || []).reduce((sum, item) => sum + Number(item.credit || item.haberE || 0), 0));
+  if ((lines || []).length < 2 || Math.abs(debit - credit) > 0.01) {
+    throw new Error(`${context}: existe un asiento previo incompleto o descuadrado. Revísalo antes de reintentar para evitar duplicados.`);
+  }
+  return lines;
+}
+
 export async function postBankReconciliation(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
   const amount = money(Math.abs(Number(transaction.importe) || 0));
   if (amount <= 0) throw new Error('El movimiento bancario no tiene un importe válido.');
@@ -510,7 +524,7 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
   const postingKey = `bank:${transaction.id}:${SCHEMA_VERSION}`;
   const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
   if (duplicate?.[0]) {
-    const lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: duplicate[0].id }, 'lineNumber', 20);
+    const lines = await requireHealthyPosting(svc, companyId, duplicate[0], 'Conciliación bancaria');
     if (options.documentId && duplicate[0].documentId && duplicate[0].documentId !== options.documentId) {
       throw new Error('El movimiento ya tiene un asiento vinculado a otro documento.');
     }
@@ -553,12 +567,14 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   if (invoice.linked_journal_entry_id) {
     const linked = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id).catch(() => null);
     if (linked && linked.companyId === companyId && linked.status !== 'anulado') {
+      await requireHealthyPosting(svc, companyId, linked, 'Contabilización de factura');
       return { alreadyPosted: true, entry: linked };
     }
   }
   const postingKey = `invoice:${invoice.id}:${SCHEMA_VERSION}`;
   const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
   if (duplicate?.[0]) {
+    await requireHealthyPosting(svc, companyId, duplicate[0], 'Contabilización de factura');
     await svc.entities.Invoice.update(invoice.id, {
       linked_journal_entry_id: duplicate[0].id,
       estado_contable: duplicate[0].status === 'confirmado' ? 'contabilizada' : 'asiento_propuesto',
