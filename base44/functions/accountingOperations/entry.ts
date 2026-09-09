@@ -1057,6 +1057,154 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, configuration });
     }
 
+    if (action === 'assets_overview') {
+      const [assets, schedule] = await Promise.all([
+        fetchAll(svc.entities.AccountingAsset, { companyId }, 'inServiceDate', 10000),
+        fetchAll(svc.entities.AmortizationScheduleLine, { companyId }, 'postingDate', 30000),
+      ]);
+      const totals = {
+        cost: money(assets.filter(item => item.status !== 'disposed').reduce((sum, item) => sum + Number(item.cost || 0), 0)),
+        postedDepreciation: money(schedule.filter(item => item.status === 'posted').reduce((sum, item) => sum + Number(item.amount || 0), 0)),
+        pendingDepreciation: money(schedule.filter(item => item.status === 'pending').reduce((sum, item) => sum + Number(item.amount || 0), 0)),
+      };
+      return Response.json({ success: true, assets, schedule, totals });
+    }
+
+    if (action === 'save_asset') {
+      const name = String(body.name || '').trim();
+      const acquisitionDate = String(body.acquisitionDate || '');
+      const inServiceDate = String(body.inServiceDate || '');
+      const cost = money(body.cost);
+      const residualValue = money(body.residualValue);
+      const usefulLifeMonths = Number(body.usefulLifeMonths);
+      const codes = {
+        assetAccountCode: String(body.assetAccountCode || ''),
+        accumulatedDepreciationAccountCode: String(body.accumulatedDepreciationAccountCode || ''),
+        expenseAccountCode: String(body.expenseAccountCode || ''),
+      };
+      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(acquisitionDate) || !/^\d{4}-\d{2}-\d{2}$/.test(inServiceDate)) {
+        return Response.json({ error: 'Nombre, fecha de compra y fecha de puesta en servicio son obligatorios.' }, { status: 400 });
+      }
+      if (cost <= 0 || residualValue < 0 || residualValue >= cost || !Number.isInteger(usefulLifeMonths) || usefulLifeMonths < 1 || usefulLifeMonths > 1200) {
+        return Response.json({ error: 'Revisa coste, valor residual y vida útil mensual.' }, { status: 400 });
+      }
+      for (const [field, rawCode] of Object.entries(codes)) {
+        if (!isCanonical8(rawCode)) return Response.json({ error: 'La cuenta de ' + field + ' debe tener 8 dígitos.' }, { status: 400 });
+        const found = await svc.entities.AccountingAccount.filter({ companyId, code: rawCode }, '-created_date', 1);
+        if (!found?.[0] || found[0].status === 'inactiva') {
+          return Response.json({ error: 'La cuenta ' + rawCode + ' no existe o está inactiva.' }, { status: 409 });
+        }
+      }
+      const payload = {
+        companyId,
+        name,
+        description: String(body.description || ''),
+        acquisitionDate,
+        inServiceDate,
+        cost,
+        residualValue,
+        usefulLifeMonths,
+        method: 'lineal',
+        currency: 'EUR',
+        status: body.status || 'active',
+        sourceInvoiceId: String(body.sourceInvoiceId || ''),
+        ...codes,
+        updatedBy: user.email,
+        accountingSchemaVersion: SCHEMA_VERSION,
+      };
+      let asset;
+      if (body.assetId) {
+        const current = await svc.entities.AccountingAsset.get(String(body.assetId)).catch(() => null);
+        if (!current || current.companyId !== companyId) return Response.json({ error: 'Activo no encontrado.' }, { status: 404 });
+        const existingSchedule = await svc.entities.AmortizationScheduleLine.filter({ companyId, assetId: current.id }, 'postingDate', 1);
+        if (existingSchedule?.length) {
+          return Response.json({ error: 'No se puede cambiar la base del activo después de generar su cuadro. Revisa recrea el cuadro only? no. Crea un ajuste contable documentado.' }, { status: 409 });
+        }
+        asset = await svc.entities.AccountingAsset.update(current.id, payload);
+      } else {
+        asset = await svc.entities.AccountingAsset.create({ ...payload, createdBy: user.email });
+      }
+      return Response.json({ success: true, asset });
+    }
+
+    if (action === 'generate_amortization_schedule') {
+      const asset = await svc.entities.AccountingAsset.get(String(body.assetId || '')).catch(() => null);
+      if (!asset || asset.companyId !== companyId) return Response.json({ error: 'Activo no encontrado.' }, { status: 404 });
+      if (asset.status === 'disposed') return Response.json({ error: 'El activo está dado de baja.' }, { status: 409 });
+      const existing = await svc.entities.AmortizationScheduleLine.filter({ companyId, assetId: asset.id }, 'postingDate', 5000);
+      if (existing?.length) return Response.json({ success: true, alreadyGenerated: true, schedule: existing });
+      const depreciable = money(Number(asset.cost) - Number(asset.residualValue || 0));
+      const months = Number(asset.usefulLifeMonths);
+      if (depreciable <= 0 || !Number.isInteger(months) || months < 1) {
+        return Response.json({ error: 'La base amortizable o la vida útil no son válidas.' }, { status: 409 });
+      }
+      const start = new Date(asset.inServiceDate + 'T12:00:00Z');
+      const regularAmount = money(depreciable / months);
+      let accumulated = 0;
+      const payloads = [];
+      for (let index = 0; index < months; index += 1) {
+        const year = start.getUTCFullYear();
+        const month = start.getUTCMonth() + index;
+        const postingDate = new Date(Date.UTC(year, month + 1, 0)).toISOString().slice(0, 10);
+        const amount = index === months - 1 ? money(depreciable - accumulated) : regularAmount;
+        accumulated = money(accumulated + amount);
+        payloads.push({
+          companyId,
+          assetId: asset.id,
+          period: postingDate.slice(0, 7),
+          postingDate,
+          amount,
+          accumulatedAmount: accumulated,
+          netBookValue: money(Number(asset.cost) - accumulated),
+          status: 'pending',
+          postingKey: 'amortization:' + asset.id + ':' + postingDate + ':' + SCHEMA_VERSION,
+          accountingSchemaVersion: SCHEMA_VERSION,
+        });
+      }
+      const schedule = await svc.entities.AmortizationScheduleLine.bulkCreate(payloads);
+      return Response.json({ success: true, alreadyGenerated: false, schedule });
+    }
+
+    if (action === 'post_amortization') {
+      const scheduleLine = await svc.entities.AmortizationScheduleLine.get(String(body.scheduleLineId || '')).catch(() => null);
+      if (!scheduleLine || scheduleLine.companyId !== companyId) return Response.json({ error: 'Cuota de amortización no encontrada.' }, { status: 404 });
+      const asset = await svc.entities.AccountingAsset.get(scheduleLine.assetId).catch(() => null);
+      if (!asset || asset.companyId !== companyId) return Response.json({ error: 'Activo no encontrado.' }, { status: 404 });
+      if (scheduleLine.status === 'posted' && scheduleLine.journalEntryId) {
+        const linked = await svc.entities.JournalEntry.get(scheduleLine.journalEntryId).catch(() => null);
+        if (linked && linked.status !== 'anulado') return Response.json({ success: true, alreadyPosted: true, line: scheduleLine, entry: linked });
+      }
+      await assertAccountingDateOpen(svc, companyId, scheduleLine.postingDate);
+      const accountCodes = [asset.expenseAccountCode, asset.accumulatedDepreciationAccountCode];
+      const resolved = [];
+      for (const code of accountCodes) {
+        const rows = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
+        if (!rows?.[0] || rows[0].status === 'inactiva') return Response.json({ error: 'La cuenta ' + code + ' no existe o está inactiva.' }, { status: 409 });
+        resolved.push(rows[0]);
+      }
+      const amount = money(scheduleLine.amount);
+      const posting = await createJournalEntry(svc, companyId, {
+        date: scheduleLine.postingDate,
+        description: 'Amortización mensual · ' + asset.name,
+        type: 'amortizacion',
+        source: 'sistema',
+        sourceEvent: 'asset_monthly_depreciation',
+        documentId: asset.id,
+        postingKey: scheduleLine.postingKey || ('amortization:' + asset.id + ':' + scheduleLine.postingDate + ':' + SCHEMA_VERSION),
+        status: 'confirmado',
+        lines: [
+          { accountId: resolved[0].id, accountCode: resolved[0].code, accountName: resolved[0].name, description: asset.name, debit: amount, credit: 0, sourceLineType: 'amortizacion' },
+          { accountId: resolved[1].id, accountCode: resolved[1].code, accountName: resolved[1].name, description: asset.name, debit: 0, credit: amount, sourceLineType: 'amortizacion' },
+        ],
+      }, user.email);
+      const updated = await svc.entities.AmortizationScheduleLine.update(scheduleLine.id, {
+        status: 'posted',
+        journalEntryId: posting.entry.id,
+      });
+      const pending = await svc.entities.AmortizationScheduleLine.filter({ companyId, assetId: asset.id, status: 'pending' }, 'postingDate', 1);
+      if (!pending?.length) await svc.entities.AccountingAsset.update(asset.id, { status: 'fully_depreciated', updatedBy: user.email });
+      return Response.json({ success: true, alreadyPosted: posting.alreadyPosted, line: updated, entry: posting.entry });
+    }
     if (action === 'validate_payroll_proposal' || action === 'post_payroll_proposal') {
       const proposalId = String(body.proposalId || '');
       if (!proposalId) return Response.json({ error: 'Falta la propuesta contable de nómina.' }, { status: 400 });
