@@ -318,6 +318,31 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
                     </div>
                     <p className="mt-1 break-words text-xs leading-relaxed text-slate-600">{incident.detail}</p>
                     <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400">{incident.type}</p>
+                    {incident.type === 'missing_exchange_rate' && (
+                      <div className="mt-3 grid gap-2 rounded-xl border border-red-200 bg-white/80 p-3 sm:grid-cols-[120px_150px_1fr_auto]">
+                        <label className="text-[11px] font-medium text-slate-600">Cambio a EUR
+                          <input type="number" step="0.00000001" placeholder="0,00000000"
+                            value={fxValues[incident.transactionId]?.rate || ''}
+                            onChange={event => setFxValues(current => ({ ...current, [incident.transactionId]: { ...current[incident.transactionId], rate: event.target.value } }))}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+                        </label>
+                        <label className="text-[11px] font-medium text-slate-600">Fecha
+                          <input type="date" value={fxValues[incident.transactionId]?.date || incident.date || ''}
+                            onChange={event => setFxValues(current => ({ ...current, [incident.transactionId]: { ...current[incident.transactionId], date: event.target.value } }))}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+                        </label>
+                        <label className="text-[11px] font-medium text-slate-600">Fuente verificable
+                          <input placeholder="BCE o extracto bancario"
+                            value={fxValues[incident.transactionId]?.source || ''}
+                            onChange={event => setFxValues(current => ({ ...current, [incident.transactionId]: { ...current[incident.transactionId], source: event.target.value } }))}
+                            className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+                        </label>
+                        <button type="button" onClick={() => saveExchangeRate(incident)}
+                          disabled={Boolean(workingId)} className="self-end rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                          {workingId === `fx-${incident.transactionId}` ? 'Guardando...' : 'Validar cambio'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </article>
