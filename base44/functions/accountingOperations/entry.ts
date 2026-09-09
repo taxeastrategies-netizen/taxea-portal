@@ -1433,6 +1433,7 @@ Deno.serve(async (req) => {
       }
       const start = new Date(asset.inServiceDate + 'T12:00:00Z');
       const regularAmount = money(annualRate > 0 ? (depreciable * annualRate / 1200) : (depreciable / configuredMonths));
+      if (regularAmount <= 0) return Response.json({ error: 'La cuota mensual calculada es inferior a un céntimo. Revisa el porcentaje o la base amortizable.' }, { status: 409 });
       const months = annualRate > 0 ? Math.min(1200, Math.ceil(depreciable / regularAmount)) : configuredMonths;
       let accumulated = 0;
       const payloads = [];
