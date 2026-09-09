@@ -18,7 +18,10 @@ export function useCompanyContext(user) {
 
     const imp = isAdminRole(user.role) ? getImpersonation() : null;
     // Cache key incluye el estado de impersonación para evitar devolver caché sin impersonar
-    const cacheKey = imp?.clientEmail ? `${user.email}::imp:${imp.clientEmail}` : user.email;
+    const assignedCompanyId = user.data?.company_id || '';
+    const cacheKey = imp?.clientEmail
+      ? `${user.email}::imp:${imp.clientEmail}`
+      : `${user.email}::company:${assignedCompanyId || 'unassigned'}`;
     if (companyCache.has(cacheKey)) {
       setCompany(companyCache.get(cacheKey));
       setLoading(false);
@@ -48,7 +51,19 @@ export function useCompanyContext(user) {
         }
         setLoading(false);
       } else {
-        // Cliente: buscar empresa propia
+        // Cliente: la asignación explícita es la fuente de verdad multiempresa.
+        // Evita que un usuario autorizado o migrado quede sin contexto aunque no sea owner_email.
+        if (assignedCompanyId) {
+          const assigned = await base44.entities.Company.get(assignedCompanyId).catch(() => null);
+          if (assigned && assigned.activa !== false) {
+            companyCache.set(cacheKey, assigned);
+            setCompany(assigned);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Compatibilidad con usuarios antiguos todavía no migrados a company_id.
         const own = await base44.entities.Company.filter({ owner_email: user.email }, '-created_date', 1);
         if (own?.length > 0) {
           const c = own[0];
@@ -74,7 +89,7 @@ export function useCompanyContext(user) {
     } catch {
       setLoading(false);
     }
-  }, [user?.email, user?.role]);
+  }, [user?.email, user?.role, user?.data?.company_id]);
 
   useEffect(() => {
     loadCompany();
@@ -84,7 +99,9 @@ export function useCompanyContext(user) {
     // Limpiar tanto la caché normal como la de impersonación
     const imp = isAdminRole(user?.role) ? getImpersonation() : null;
     if (user?.email) {
-      companyCache.delete(user.email);
+      for (const key of companyCache.keys()) {
+        if (key === user.email || key.startsWith(`${user.email}::`)) companyCache.delete(key);
+      }
       if (imp?.clientEmail) companyCache.delete(`${user.email}::imp:${imp.clientEmail}`);
     }
     // Small delay to allow the DB write to propagate
