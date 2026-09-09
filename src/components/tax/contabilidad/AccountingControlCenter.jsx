@@ -77,6 +77,15 @@ async function applyBatches(companyId, action, ids, field, extra = {}, batchSize
 }
 
 function ResultItem({ item, kind }) {
+  if (kind === 'accounts') {
+    return (
+      <div className="grid gap-1 rounded-lg bg-white/70 px-3 py-2 text-xs sm:grid-cols-[100px_1fr_130px]">
+        <span className="font-semibold text-slate-700">{item.code || 'Sin código'}</span>
+        <span className="truncate text-slate-600">{item.name || 'Sin nombre'}</span>
+        <span className="text-slate-500 sm:text-right">{item.type || 'Sin tipo'}</span>
+      </div>
+    );
+  }
   if (kind === 'invoices') {
     return (
       <div className="grid gap-1 rounded-lg bg-white/70 px-3 py-2 text-xs sm:grid-cols-[100px_1fr_130px_110px]">
@@ -101,6 +110,7 @@ function AuditResults({ audit, view, onViewChange, page, onPageChange }) {
   const collections = {
     invoices: audit?.invoiceDuplicateGroups || [],
     entries: audit?.journalDuplicateGroups || [],
+    accounts: audit?.accountDuplicateGroups || [],
     conflicts: audit?.invoiceEntryConflicts || [],
   };
   const rows = collections[view] || [];
@@ -110,6 +120,7 @@ function AuditResults({ audit, view, onViewChange, page, onPageChange }) {
   const labels = [
     ['invoices', `Facturas (${collections.invoices.length})`],
     ['entries', `Asientos (${collections.entries.length})`],
+    ['accounts', `Subcuentas (${collections.accounts.length})`],
     ['conflicts', `Enlaces (${collections.conflicts.length})`],
   ];
 
@@ -121,6 +132,7 @@ function AuditResults({ audit, view, onViewChange, page, onPageChange }) {
           ['Asientos revisados', audit.counts?.entriesScanned || 0],
           ['Grupos de facturas', audit.counts?.invoiceGroups || 0],
           ['Grupos de asientos', audit.counts?.journalGroups || 0],
+          ['Subcuentas duplicadas', audit.counts?.accountGroups || 0],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border border-white bg-white px-3 py-2 shadow-sm">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
@@ -202,6 +214,7 @@ export default function AccountingControlCenter({ companyId }) {
     if (!audit) return 0;
     return Number(audit.counts?.invoiceGroups || 0)
       + Number(audit.counts?.journalGroups || 0)
+      + Number(audit.counts?.accountGroups || 0)
       + Number(audit.counts?.invoiceEntryConflicts || 0);
   }, [audit]);
 
