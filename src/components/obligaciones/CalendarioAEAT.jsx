@@ -1,50 +1,58 @@
-// Calendario general AEAT con fechas clave del año fiscal español
 export const MODELOS_AEAT = [
-  { value: 'modelo_303', label: 'Modelo 303', desc: 'IVA Trimestral', frecuencia: 'trimestral', color: 'blue', icon: '📊' },
-  { value: 'modelo_390', label: 'Modelo 390', desc: 'Resumen Anual IVA', frecuencia: 'anual', color: 'blue', icon: '📋' },
-  { value: 'modelo_130', label: 'Modelo 130', desc: 'IRPF Trimestral (autónomos)', frecuencia: 'trimestral', color: 'green', icon: '💼' },
-  { value: 'modelo_111', label: 'Modelo 111', desc: 'Retenciones IRPF Trimestral', frecuencia: 'trimestral', color: 'green', icon: '💰' },
-  { value: 'modelo_115', label: 'Modelo 115', desc: 'Retenciones Alquiler', frecuencia: 'trimestral', color: 'green', icon: '🏠' },
-  { value: 'modelo_190', label: 'Modelo 190', desc: 'Resumen Anual Retenciones', frecuencia: 'anual', color: 'green', icon: '📑' },
-  { value: 'modelo_180', label: 'Modelo 180', desc: 'Resumen Anual Retenciones Alquiler', frecuencia: 'anual', color: 'green', icon: '🏢' },
-  { value: 'modelo_347', label: 'Modelo 347', desc: 'Operaciones con Terceros', frecuencia: 'anual', color: 'purple', icon: '🤝' },
-  { value: 'modelo_349', label: 'Modelo 349', desc: 'Operaciones Intracomunitarias', frecuencia: 'trimestral', color: 'purple', icon: '🌍' },
-  { value: 'modelo_202', label: 'Modelo 202', desc: 'Pago Fraccionado IS', frecuencia: 'trimestral', color: 'orange', icon: '🏛️' },
-  { value: 'modelo_200', label: 'Modelo 200', desc: 'Impuesto de Sociedades', frecuencia: 'anual', color: 'orange', icon: '🏦' },
-  { value: 'modelo_420_igic', label: 'Modelo 420', desc: 'IGIC Trimestral (Canarias)', frecuencia: 'trimestral', color: 'teal', icon: '🌴' },
-  { value: 'modelo_425_igic', label: 'Modelo 425', desc: 'Resumen Anual IGIC', frecuencia: 'anual', color: 'teal', icon: '🌴' },
-  { value: 'renta', label: 'Renta (IRPF)', desc: 'Declaración de la Renta', frecuencia: 'anual', color: 'red', icon: '👤' },
-  { value: 'cuentas_anuales', label: 'Cuentas Anuales', desc: 'Depósito en Registro Mercantil', frecuencia: 'anual', color: 'gray', icon: '📚' },
-];
+  ['036', 'Declaración censal', 'AEAT', 'según supuesto'], ['037', 'Declaración censal simplificada', 'AEAT', 'según supuesto'],
+  ['111', 'Retenciones de trabajo y profesionales', 'AEAT', 'trimestral/mensual'], ['115', 'Retenciones por alquileres urbanos', 'AEAT', 'trimestral/mensual'],
+  ['123', 'Retenciones de capital mobiliario', 'AEAT', 'trimestral/mensual'], ['130', 'Pago fraccionado IRPF — estimación directa', 'AEAT', 'trimestral'],
+  ['131', 'Pago fraccionado IRPF — estimación objetiva', 'AEAT', 'trimestral'], ['180', 'Resumen anual de alquileres', 'AEAT', 'anual'],
+  ['190', 'Resumen anual de retenciones', 'AEAT', 'anual'], ['193', 'Resumen anual de capital mobiliario', 'AEAT', 'anual'],
+  ['200', 'Impuesto sobre Sociedades', 'AEAT', 'anual'], ['202', 'Pagos fraccionados de Sociedades', 'AEAT', 'abril/octubre/diciembre'],
+  ['210', 'IRNR sin establecimiento permanente', 'AEAT', 'según renta y resultado'], ['216', 'Retenciones de no residentes', 'AEAT', 'trimestral/mensual'],
+  ['296', 'Resumen anual de retenciones de no residentes', 'AEAT', 'anual'], ['303', 'Autoliquidación IVA', 'AEAT', 'trimestral/mensual'],
+  ['309', 'Autoliquidación IVA no periódica', 'AEAT', 'ocasional'], ['322', 'IVA grupo de entidades — individual', 'AEAT', 'mensual'],
+  ['347', 'Operaciones con terceras personas', 'AEAT', 'anual'], ['349', 'Operaciones intracomunitarias', 'AEAT', 'mensual/trimestral'],
+  ['353', 'IVA grupo de entidades — agregado', 'AEAT', 'mensual'], ['368', 'IVA servicios electrónicos — régimen anterior', 'AEAT', 'según supuesto'],
+  ['369', 'IVA ventanilla única OSS/IOSS', 'AEAT', 'mensual/trimestral'], ['390', 'Resumen anual IVA', 'AEAT', 'anual'],
+  ['400', 'Declaración censal IGIC', 'ATC', 'según supuesto'], ['412', 'Autoliquidación ocasional IGIC', 'ATC', 'ocasional'],
+  ['414', 'Devolución IGIC a no establecidos', 'ATC', 'según supuesto'], ['415', 'Operaciones con terceras personas', 'ATC', 'anual'],
+  ['416', 'Operaciones exentas vinculadas al REF', 'ATC', 'anual'], ['417', 'Autoliquidación IGIC SII', 'ATC', 'mensual'],
+  ['418', 'IGIC grupo de entidades — individual', 'ATC', 'mensual'], ['419', 'IGIC grupo de entidades — agregado', 'ATC', 'mensual'],
+  ['420', 'Autoliquidación IGIC — régimen general', 'ATC', 'trimestral'], ['421', 'Autoliquidación IGIC — régimen simplificado', 'ATC', 'trimestral'],
+  ['422', 'Reintegro de compensaciones REAGP', 'ATC', 'según supuesto'], ['424', 'Comerciante minorista IGIC', 'ATC', 'según supuesto'],
+  ['425', 'Resumen anual IGIC', 'ATC', 'anual'],
+].map(([code, desc, authority, frequency]) => ({
+  code,
+  value: authority === 'ATC' ? `modelo_${code}_igic` : `modelo_${code}`,
+  label: `Modelo ${code}`,
+  desc,
+  authority,
+  frequency,
+}));
 
-// Fechas límite AEAT por trimestre
-export const VENCIMIENTOS_TRIMESTRALES = {
-  T1: { label: '1T (Ene–Mar)', limite: '20 de abril' },
-  T2: { label: '2T (Abr–Jun)', limite: '20 de julio' },
-  T3: { label: '3T (Jul–Sep)', limite: '20 de octubre' },
-  T4: { label: '4T (Oct–Dic)', limite: '30 de enero' },
-};
+export function getModeloInfo(value) {
+  const code = String(value || '').replace(/^modelo_/, '').replace(/_igic$/, '').replace(/\D/g, '');
+  return MODELOS_AEAT.find(model => model.code === code) || {
+    code,
+    value: value || '',
+    label: code ? `Modelo ${code}` : 'Obligación fiscal',
+    desc: 'Obligación informada por el asesor',
+    authority: 'Otro',
+    frequency: 'según supuesto',
+  };
+}
 
-export const VENCIMIENTOS_ANUALES = [
-  { modelo: 'modelo_390', limite: '30 de enero', desc: 'Resumen anual IVA' },
-  { modelo: 'modelo_190', limite: '31 de enero', desc: 'Resumen anual retenciones' },
-  { modelo: 'modelo_180', limite: '31 de enero', desc: 'Resumen anual alquiler' },
-  { modelo: 'modelo_347', limite: '28 de febrero', desc: 'Operaciones con terceros' },
-  { modelo: 'modelo_200', limite: '25 de julio', desc: 'Impuesto de Sociedades' },
-  { modelo: 'renta', limite: '30 de junio', desc: 'Declaración de la Renta' },
-  { modelo: 'cuentas_anuales', limite: '30 de julio', desc: 'Depósito cuentas anuales' },
+export const FISCAL_DOCUMENT_KINDS = [
+  { value: 'borrador_modelo', label: 'Borrador del modelo' },
+  { value: 'modelo_presentado', label: 'Modelo presentado' },
+  { value: 'justificante_presentacion', label: 'Justificante de presentación' },
+  { value: 'carta_pago', label: 'Carta de pago / NRC' },
+  { value: 'notificacion', label: 'Notificación tributaria' },
+  { value: 'requerimiento', label: 'Requerimiento' },
+  { value: 'respuesta_requerimiento', label: 'Respuesta a requerimiento' },
+  { value: 'otro', label: 'Otro documento fiscal' },
 ];
 
 export const COLOR_MAP = {
-  blue: 'bg-blue-50 text-blue-700 border-blue-200',
-  green: 'bg-green-50 text-green-700 border-green-200',
-  purple: 'bg-purple-50 text-purple-700 border-purple-200',
-  orange: 'bg-orange-50 text-orange-700 border-orange-200',
-  teal: 'bg-teal-light text-teal border-teal/20',
-  red: 'bg-red-50 text-red-700 border-red-200',
-  gray: 'bg-secondary text-muted-foreground border-border',
+  AEAT: 'bg-blue-50 text-blue-700 border-blue-200',
+  ATC: 'bg-amber-50 text-amber-700 border-amber-200',
+  Otro: 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
-export function getModeloInfo(value) {
-  return MODELOS_AEAT.find(m => m.value === value) || { label: value, desc: '', color: 'gray', icon: '📄' };
-}
