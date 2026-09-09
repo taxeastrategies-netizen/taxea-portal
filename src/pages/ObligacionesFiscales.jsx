@@ -1,278 +1,268 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
-import { Plus, Calendar, LayoutList, Clock, Globe } from 'lucide-react';
+import NoCompanyState from '@/components/ui/NoCompanyState';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreVertical } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Clock3, FileCheck2, LayoutList, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { MODELOS_AEAT, getModeloInfo } from '@/components/obligaciones/CalendarioAEAT';
+import { MODELOS_AEAT } from '@/components/obligaciones/CalendarioAEAT';
 import KPIsObligaciones from '@/components/obligaciones/KPIsObligaciones';
 import VistaTimeline from '@/components/obligaciones/VistaTimeline';
 import ProximosVencimientos from '@/components/obligaciones/ProximosVencimientos';
 import CalendarioGeneral from '@/components/obligaciones/CalendarioGeneral';
 
 const TABS = [
-  { id: 'proximos', label: 'Próximos vencimientos', icon: Clock },
-  { id: 'lista', label: 'Mis obligaciones', icon: LayoutList },
-  { id: 'timeline', label: 'Timeline anual', icon: Calendar },
-  { id: 'aeat', label: 'Calendario AEAT', icon: Globe },
+  { id: 'proximos', label: 'Próximos vencimientos', icon: Clock3 },
+  { id: 'obligaciones', label: 'Mis obligaciones', icon: LayoutList },
+  { id: 'calendario', label: 'Calendario individual', icon: CalendarDays },
+  { id: 'timeline', label: 'Timeline anual', icon: ShieldCheck },
+  { id: 'documentos', label: 'Documentos fiscales', icon: FileCheck2 },
 ];
-
-const EMPTY = {
-  modelo: 'modelo_303', periodo: '', fecha_limite: '',
-  estado: 'pendiente_documentacion', resultado: 'pendiente',
-  importe: '', comentarios_asesor: '', anio: new Date().getFullYear(), trimestre: ''
+const CLOSED = new Set(['presentado', 'pagado', 'finalizado', 'no_aplica']);
+const EMPTY_FORM = {
+  modelCode: '303', period: 'T1', fiscalYear: new Date().getFullYear(), filingDeadline: '',
+  domicileDeadline: '', internalDeadline: '', state: 'pendiente_documentacion', result: 'pendiente',
+  amount: '', comments: '', deadlineStatus: 'revisar',
 };
-
-const ESTADO_COLOR = {
-  pendiente_documentacion: 'bg-secondary text-muted-foreground border-border',
-  en_preparacion: 'bg-blue-50 text-blue-700 border-blue-200',
-  presentado: 'bg-green-100 text-green-800 border-green-300',
-  domiciliado: 'bg-green-50 text-green-700 border-green-200',
-  pagado: 'bg-green-100 text-green-800 border-green-300',
-  finalizado: 'bg-green-100 text-green-800 border-green-300',
-};
-
-const ESTADO_LABELS = {
-  pendiente_documentacion: 'Pdte. documentación',
-  en_preparacion: 'En preparación',
-  presentado: 'Presentado',
-  domiciliado: 'Domiciliado',
-  pagado: 'Pagado',
-  finalizado: 'Finalizado',
-};
+const STATE_OPTIONS = [
+  ['pendiente_documentacion', 'Pendiente de documentación'], ['en_preparacion', 'En preparación'],
+  ['pendiente_revision', 'Pendiente de revisión'], ['revisado', 'Revisado'],
+  ['listo_presentar', 'Listo para presentar'], ['presentado', 'Presentado'],
+  ['domiciliado', 'Domiciliado'], ['pagado', 'Pagado'], ['finalizado', 'Finalizado'],
+  ['rechazado', 'Rechazado'], ['no_aplica', 'No aplica'],
+];
+const stateLabel = value => STATE_OPTIONS.find(([key]) => key === value)?.[1] || value || 'Pendiente';
+const fmt = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('es-ES') : 'Según supuesto';
 
 export default function ObligacionesFiscales() {
-  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const [obligations, setObligations] = useState([]);
+  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
+  const companyId = company?.id;
+  const currentYear = new Date().getFullYear();
+  const [fiscalYear, setFiscalYear] = useState(currentYear);
+  const [bundle, setBundle] = useState({ items: [], documents: [], unlinkedDocuments: [], models: [], sources: [] });
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState('proximos');
-  const [filterEstado, setFilterEstado] = useState('all');
+  const [filterState, setFilterState] = useState('all');
+  const [filterAuthority, setFilterAuthority] = useState('all');
+  const [selected, setSelected] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const synced = useRef(new Set());
+  const role = String(user?.role || user?.data?.role || '').toLowerCase();
+  const canManage = Boolean(isAdmin || ['admin', 'super_admin', 'advisor', 'asesor'].includes(role));
+
+  const load = async ({ synchronize = false, quiet = false } = {}) => {
+    if (!companyId) return;
+    if (!quiet) setLoading(true);
+    try {
+      if (synchronize) {
+        setSyncing(true);
+        const syncResponse = await base44.functions.invoke('fiscalCalendarOperations', { action: 'synchronize', companyId, fiscalYear });
+        const sync = syncResponse.data;
+        if (!quiet && sync?.success) toast.success(`Calendario sincronizado: ${sync.created} nuevas y ${sync.updated} actualizadas.`);
+      }
+      const response = await base44.functions.invoke('fiscalCalendarOperations', { action: 'bundle', companyId, fiscalYear });
+      setBundle(response.data || { items: [], documents: [], unlinkedDocuments: [], models: [], sources: [] });
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error?.message || 'No se pudo cargar el calendario fiscal.');
+    } finally {
+      setLoading(false);
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
-    if (company?.id) load();
-    else if (!loadingCompany) setLoading(false);
-  }, [company?.id, loadingCompany]);
+    if (!companyId) {
+      if (!loadingCompany) setLoading(false);
+      return;
+    }
+    const key = `${companyId}:${fiscalYear}`;
+    const shouldSync = fiscalYear === currentYear && !synced.current.has(key);
+    if (shouldSync) synced.current.add(key);
+    load({ synchronize: shouldSync, quiet: true });
+  }, [companyId, fiscalYear, loadingCompany]);
 
-  const load = async () => {
-    setLoading(true);
-    const data = await base44.entities.TaxObligation.filter({ company_id: company.id });
-    setObligations(data || []);
-    setLoading(false);
+  useEffect(() => {
+    if (!companyId) return undefined;
+    let timer;
+    const refresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => load({ quiet: true }), 500);
+    };
+    const unsubs = ['TaxModel', 'TaxObligation', 'TaxPeriod', 'TaxFiling', 'Document'].map(name => {
+      try { return base44.entities[name].subscribe(refresh); } catch { return null; }
+    }).filter(Boolean);
+    return () => { clearTimeout(timer); unsubs.forEach(unsub => unsub?.()); };
+  }, [companyId, fiscalYear]);
+
+  const filtered = useMemo(() => bundle.items.filter(item =>
+    (filterState === 'all' || item.state === filterState) &&
+    (filterAuthority === 'all' || item.authority === filterAuthority)
+  ), [bundle.items, filterState, filterAuthority]);
+
+  const openCreate = () => {
+    setSelected(null);
+    setForm({ ...EMPTY_FORM, fiscalYear });
+    setShowForm(true);
   };
-
-  const handleSave = async () => {
+  const openItem = item => {
+    setSelected(item);
+    setForm({
+      modelCode: item.code, period: item.period, fiscalYear: item.fiscalYear,
+      filingDeadline: item.filingDeadline || '', domicileDeadline: item.domicileDeadline || '',
+      internalDeadline: item.internalDeadline || '', state: item.state || 'pendiente_documentacion',
+      result: item.result || 'pendiente', amount: item.amount || '', comments: item.comments || '',
+      deadlineStatus: item.deadlineStatus || 'revisar',
+    });
+    setShowForm(true);
+  };
+  const save = async () => {
+    if (!canManage) return;
+    if (!form.modelCode || !form.period || !form.filingDeadline) {
+      toast.error('Modelo, período y fecha máxima de presentación son obligatorios.');
+      return;
+    }
     setSaving(true);
-    const payload = { ...form, company_id: company.id, importe: parseFloat(form.importe) || 0 };
-    if (editing) await base44.entities.TaxObligation.update(editing.id, payload);
-    else await base44.entities.TaxObligation.create(payload);
-    setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();
+    try {
+      const action = selected?.obligation?.id ? 'save_obligation' : 'create_obligation';
+      await base44.functions.invoke('fiscalCalendarOperations', {
+        action, companyId, fiscalYear: Number(form.fiscalYear),
+        obligationId: selected?.obligation?.id,
+        modelCode: form.modelCode, period: form.period,
+        fecha_limite_presentacion: form.filingDeadline,
+        fecha_limite_domiciliacion: form.domicileDeadline || null,
+        fecha_limite_interna: form.internalDeadline || null,
+        estado: form.state, resultado: form.result,
+        importe: Number(form.amount || 0), comentarios_asesor: form.comments,
+        deadline_status: form.deadlineStatus,
+      });
+      toast.success(selected ? 'Obligación actualizada.' : 'Obligación incorporada al calendario.');
+      setShowForm(false);
+      await load({ quiet: true });
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error?.message || 'No se pudo guardar la obligación.');
+    } finally { setSaving(false); }
   };
 
-  const handleCambiarEstado = async (id, estado) => {
-    await base44.entities.TaxObligation.update(id, { estado });
-    load();
-  };
-
-  const filtered = obligations.filter(o => filterEstado === 'all' || o.estado === filterEstado);
-
-  if (loadingCompany && loading) return (
-    <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
-  );
-  if (!company && !loadingCompany) return <NoCompanyState pageName="Obligaciones Fiscales" />;
+  if (loadingCompany && loading) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
+  if (!company && !loadingCompany) return <NoCompanyState pageName="Calendario y obligaciones" />;
 
   return (
     <div>
-      <PageHeader title="Obligaciones Fiscales" subtitle="Calendario tributario y seguimiento de modelos">
-        {isAdmin && (
-          <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
-            <Plus className="w-4 h-4 mr-1.5" /> Nueva obligación
+      <PageHeader title="Calendario y obligaciones" subtitle="Calendario fiscal individual, vencimientos, domiciliaciones y justificantes">
+        <div className="flex items-center gap-2">
+          <Select value={String(fiscalYear)} onValueChange={value => setFiscalYear(Number(value))}>
+            <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(year => <SelectItem key={year} value={String(year)}>{year}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button variant="outline" onClick={() => load({ synchronize: true })} disabled={syncing}>
+            <RefreshCw className={cn('w-4 h-4 mr-2', syncing && 'animate-spin')} />Sincronizar
           </Button>
-        )}
+          {canManage && <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" />Nueva obligación</Button>}
+        </div>
       </PageHeader>
 
-      <KPIsObligaciones obligations={obligations} />
+      {bundle.profile && bundle.profile.profileStatus !== 'validado_asesor' && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />
+          <div><p className="text-sm font-semibold text-amber-900">Perfil fiscal pendiente de validación</p><p className="text-xs text-amber-800 mt-0.5">El calendario refleja lo informado, pero el asesor debe confirmar territorio, actividades, regímenes y obligaciones antes de tomarlo como definitivo.</p></div>
+        </div>
+      )}
+      {!bundle.profile && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
+          <div><p className="text-sm font-semibold text-red-900">Falta el perfil fiscal</p><p className="text-xs text-red-800 mt-0.5">No es seguro proponer obligaciones automáticamente hasta completar el Perfil fiscal de Contabilidad.</p></div>
+        </div>
+      )}
 
-      {/* Tabs */}
+      <KPIsObligaciones obligations={bundle.items} profile={bundle.profile} />
+
       <div className="flex gap-1 flex-wrap mb-5 bg-secondary/40 border border-border rounded-xl p-1">
-        {TABS.map(t => {
-          const Icon = t.icon;
-          return (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                activeTab === t.id ? 'bg-card text-foreground shadow-card' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60')}>
-              <Icon className="w-4 h-4" />{t.label}
-            </button>
-          );
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+          return <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors', activeTab === tab.id ? 'bg-card text-foreground shadow-card' : 'text-muted-foreground hover:bg-secondary/60')}><Icon className="w-4 h-4" />{tab.label}</button>;
         })}
       </div>
 
       {loading ? (
-        <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin mx-auto" /></div>
+        <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>
       ) : (
         <>
-          {activeTab === 'proximos' && (
-            <div className="bg-card border border-border rounded-xl shadow-card p-5">
-              <ProximosVencimientos obligations={obligations} onCambiarEstado={isAdmin ? handleCambiarEstado : null} />
-            </div>
-          )}
-
-          {activeTab === 'lista' && (
+          {activeTab === 'proximos' && <div className="bg-card border border-border rounded-xl p-5"><ProximosVencimientos obligations={bundle.items} onEdit={openItem} /></div>}
+          {activeTab === 'calendario' && <CalendarioGeneral obligations={filtered} fiscalYear={fiscalYear} verifiedCalendarYear={bundle.verifiedCalendarYear} sources={bundle.sources} onEdit={openItem} />}
+          {activeTab === 'timeline' && <VistaTimeline obligations={filtered} onEdit={openItem} />}
+          {activeTab === 'obligaciones' && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Select value={filterEstado} onValueChange={setFilterEstado}>
-                  <SelectTrigger className="w-56 h-9 text-sm"><SelectValue placeholder="Filtrar por estado" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    <SelectItem value="pendiente_documentacion">Pdte. documentación</SelectItem>
-                    <SelectItem value="en_preparacion">En preparación</SelectItem>
-                    <SelectItem value="presentado">Presentado</SelectItem>
-                    <SelectItem value="finalizado">Finalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="text-xs text-muted-foreground">{filtered.length} obligaciones</span>
+              <div className="flex flex-wrap gap-2">
+                <Select value={filterState} onValueChange={setFilterState}><SelectTrigger className="w-56 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos los estados</SelectItem>{STATE_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select>
+                <Select value={filterAuthority} onValueChange={setFilterAuthority}><SelectTrigger className="w-44 h-9"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">AEAT y ATC</SelectItem><SelectItem value="AEAT">AEAT</SelectItem><SelectItem value="ATC">ATC</SelectItem><SelectItem value="Otro">Otra</SelectItem></SelectContent></Select>
+                <span className="self-center text-xs text-muted-foreground">{filtered.length} vencimientos</span>
               </div>
-              {filtered.length === 0 ? (
-                <div className="bg-card rounded-xl border border-border p-12 text-center">
-                  <Calendar className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="font-medium text-foreground">Sin obligaciones</p>
-                  <p className="text-sm text-muted-foreground mt-1">Tu asesor irá añadiendo tus obligaciones fiscales</p>
-                </div>
-              ) : filtered.map(obl => {
-                const info = getModeloInfo(obl.modelo);
-                const now = new Date();
-                const isVencida = obl.fecha_limite && new Date(obl.fecha_limite) < now && !['finalizado','presentado','pagado','domiciliado'].includes(obl.estado);
-                const isProxima = !isVencida && obl.fecha_limite && (new Date(obl.fecha_limite) - now) / 86400000 <= 15 && !['finalizado','presentado','pagado','domiciliado'].includes(obl.estado);
-                return (
-                  <div key={obl.id} className={cn('bg-card rounded-xl border shadow-card p-5 flex items-start justify-between gap-4',
-                    isVencida ? 'border-red-200 bg-red-50/30' : isProxima ? 'border-amber-200 bg-amber-50/30' : 'border-border')}>
-                    <div className="flex items-start gap-4 flex-1">
-                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg',
-                        isVencida ? 'bg-red-100' : isProxima ? 'bg-amber-100' : 'bg-teal-light')}>
-                        {info.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-jakarta font-semibold text-foreground">{info.label}</p>
-                        <p className="text-xs text-muted-foreground">{info.desc}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
-                          <span className="text-sm text-muted-foreground">Período: {obl.periodo || '—'}</span>
-                          {obl.fecha_limite && <span className={cn('text-sm font-medium', isVencida ? 'text-red-600' : isProxima ? 'text-amber-600' : 'text-muted-foreground')}>
-                            Límite: {new Date(obl.fecha_limite).toLocaleDateString('es-ES')}
-                          </span>}
-                          {obl.importe > 0 && <span className="text-sm font-medium text-foreground">{obl.importe.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>}
-                        </div>
-                        {obl.comentarios_asesor && (
-                          <div className="mt-2 bg-teal/5 border border-teal/15 rounded-lg px-3 py-2">
-                            <p className="text-xs text-muted-foreground font-medium mb-0.5">Nota del asesor</p>
-                            <p className="text-sm text-foreground">{obl.comentarios_asesor}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={cn('text-xs px-2 py-0.5 rounded border font-medium', ESTADO_COLOR[obl.estado] || 'bg-secondary text-muted-foreground border-border')}>
-                        {ESTADO_LABELS[obl.estado] || obl.estado}
-                      </span>
-                      {isAdmin && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground"><MoreVertical className="w-4 h-4" /></button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setEditing(obl); setForm({ ...obl }); setShowForm(true); }}>Editar</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCambiarEstado(obl.id, 'en_preparacion')}>En preparación</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCambiarEstado(obl.id, 'presentado')}>Marcar presentado</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCambiarEstado(obl.id, 'finalizado')}>Marcar finalizado</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
+              {filtered.map(item => (
+                <button key={item.key} onClick={() => openItem(item)} className="w-full text-left rounded-xl border border-border bg-card p-4 hover:border-primary/30">
+                  <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center text-xs font-bold', item.authority === 'ATC' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}>{item.code}</div>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-semibold">Modelo {item.code} · {item.name}</p><p className="text-xs text-muted-foreground">{item.period} {item.fiscalYear} · {item.authority} · {stateLabel(item.state)}</p></div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-5 text-xs">
+                      <div><p className="text-muted-foreground">Domiciliación</p><p className="font-medium">{fmt(item.domicileDeadline)}</p></div>
+                      <div><p className="text-muted-foreground">Presentación</p><p className="font-medium">{fmt(item.filingDeadline)}</p></div>
+                      <div><p className="text-muted-foreground">Documentos</p><p className="font-medium">{item.documents?.length || 0}</p></div>
                     </div>
                   </div>
-                );
-              })}
+                </button>
+              ))}
+              {filtered.length === 0 && <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">No hay obligaciones que coincidan con los filtros.</div>}
             </div>
           )}
-
-          {activeTab === 'timeline' && <VistaTimeline obligations={obligations} />}
-
-          {activeTab === 'aeat' && <CalendarioGeneral obligacionesActivas={obligations} />}
+          {activeTab === 'documentos' && (
+            <div className="space-y-4">
+              {bundle.unlinkedDocuments?.length > 0 && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>{bundle.unlinkedDocuments.length} documento(s) fiscal(es) sin vincular.</strong> El asesor debe indicar modelo, ejercicio y período para evitar asociaciones incorrectas.</div>}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="divide-y divide-border">
+                  {bundle.documents.map(doc => (
+                    <div key={doc.id} className="p-4 flex flex-col md:flex-row md:items-center gap-3">
+                      <FileCheck2 className="w-5 h-5 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate">{doc.nombre}</p><p className="text-xs text-muted-foreground">{doc.detected?.code ? `Modelo ${doc.detected.code}` : 'Sin modelo'} · {doc.detected?.period || 'Sin período'} · {doc.detected?.fiscalYear || 'Sin ejercicio'} · {doc.fiscal_document_kind || 'Documento fiscal'}</p></div>
+                      <span className="text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-1">{doc.estado || 'pendiente'}</span>
+                      {doc.archivo_url && <a href={doc.archivo_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Abrir documento</a>}
+                    </div>
+                  ))}
+                  {bundle.documents.length === 0 && <div className="p-12 text-center text-sm text-muted-foreground">Todavía no hay documentos fiscales en este perfil.</div>}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
-      {/* Formulario */}
-      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); } }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? 'Editar obligación' : 'Nueva obligación fiscal'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            <div className="col-span-2 space-y-1.5">
-              <Label>Modelo *</Label>
-              <Select value={form.modelo} onValueChange={v => setForm(f => ({ ...f, modelo: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MODELOS_AEAT.map(m => <SelectItem key={m.value} value={m.value}>{m.icon} {m.label} — {m.desc}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Período *</Label>
-              <Input value={form.periodo} onChange={e => setForm(f => ({ ...f, periodo: e.target.value }))} placeholder="Ej: 1T 2025..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Fecha límite *</Label>
-              <Input type="date" value={form.fecha_limite} onChange={e => setForm(f => ({ ...f, fecha_limite: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Select value={form.estado} onValueChange={v => setForm(f => ({ ...f, estado: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ESTADO_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Resultado</Label>
-              <Select value={form.resultado} onValueChange={v => setForm(f => ({ ...f, resultado: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="a_pagar">A pagar</SelectItem>
-                  <SelectItem value="a_devolver">A devolver</SelectItem>
-                  <SelectItem value="cero">Cero</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Importe (€)</Label>
-              <Input type="number" step="0.01" value={form.importe} onChange={e => setForm(f => ({ ...f, importe: e.target.value }))} placeholder="0.00" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Año</Label>
-              <Input type="number" value={form.anio} onChange={e => setForm(f => ({ ...f, anio: parseInt(e.target.value) }))} />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>Comentarios del asesor</Label>
-              <Textarea value={form.comentarios_asesor || ''} onChange={e => setForm(f => ({ ...f, comentarios_asesor: e.target.value }))} placeholder="Notas o instrucciones para el cliente..." rows={3} />
-            </div>
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{selected ? `Modelo ${selected.code} · ${selected.period} ${selected.fiscalYear}` : 'Nueva obligación fiscal'}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div className="space-y-1.5"><Label>Modelo</Label><Select value={form.modelCode} onValueChange={value => setForm(prev => ({ ...prev, modelCode: value }))} disabled={Boolean(selected)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="max-h-72">{MODELOS_AEAT.map(model => <SelectItem key={model.code} value={model.code}>{model.label} · {model.authority}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Período</Label><Input value={form.period} onChange={event => setForm(prev => ({ ...prev, period: event.target.value }))} disabled={Boolean(selected)} placeholder="T1, M01, ANUAL…" /></div>
+            <div className="space-y-1.5"><Label>Fecha máxima de domiciliación</Label><Input type="date" value={form.domicileDeadline || ''} onChange={event => setForm(prev => ({ ...prev, domicileDeadline: event.target.value }))} disabled={!canManage} /></div>
+            <div className="space-y-1.5"><Label>Fecha máxima de presentación</Label><Input type="date" value={form.filingDeadline || ''} onChange={event => setForm(prev => ({ ...prev, filingDeadline: event.target.value }))} disabled={!canManage} /></div>
+            <div className="space-y-1.5"><Label>Fecha interna del despacho</Label><Input type="date" value={form.internalDeadline || ''} onChange={event => setForm(prev => ({ ...prev, internalDeadline: event.target.value }))} disabled={!canManage} /></div>
+            <div className="space-y-1.5"><Label>Estado</Label><Select value={form.state} onValueChange={value => setForm(prev => ({ ...prev, state: value }))} disabled={!canManage}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{STATE_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Resultado</Label><Select value={form.result} onValueChange={value => setForm(prev => ({ ...prev, result: value }))} disabled={!canManage}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pendiente">Pendiente</SelectItem><SelectItem value="a_pagar">A pagar</SelectItem><SelectItem value="a_devolver">A devolver</SelectItem><SelectItem value="a_compensar">A compensar</SelectItem><SelectItem value="cero">Cero</SelectItem><SelectItem value="informativo">Informativo</SelectItem></SelectContent></Select></div>
+            <div className="space-y-1.5"><Label>Importe</Label><Input type="number" step="0.01" value={form.amount} onChange={event => setForm(prev => ({ ...prev, amount: event.target.value }))} disabled={!canManage} /></div>
+            <div className="md:col-span-2 space-y-1.5"><Label>Comentarios del asesor</Label><Textarea value={form.comments} onChange={event => setForm(prev => ({ ...prev, comments: event.target.value }))} disabled={!canManage} rows={3} /></div>
           </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">{saving ? 'Guardando...' : 'Guardar'}</Button>
-          </div>
+          {selected?.documents?.length > 0 && <div className="mt-4 rounded-xl border border-border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Documentos vinculados</p>{selected.documents.map(doc => <a key={doc.id} href={doc.archivo_url} target="_blank" rel="noreferrer" className="block text-sm text-primary hover:underline py-1">{doc.nombre}</a>)}</div>}
+          <div className="flex justify-end gap-2 mt-5"><Button variant="outline" onClick={() => setShowForm(false)}>Cerrar</Button>{canManage && <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>}</div>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
