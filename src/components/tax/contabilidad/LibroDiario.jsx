@@ -91,7 +91,7 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
       </div>)}</div>}
     </div>
     {journal && journal.total > journal.pageSize && <div className="flex items-center justify-between text-xs text-muted-foreground"><span>{journal.total} asientos · página {journal.page}</span><div className="flex gap-1"><Button size="sm" variant="outline" className="h-8" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft className="w-3.5 h-3.5" /></Button><Button size="sm" variant="outline" className="h-8" disabled={page * journal.pageSize >= journal.total} onClick={() => setPage(value => value + 1)}><ChevronRight className="w-3.5 h-3.5" /></Button></div></div>}
-    {showNewEntry && <JournalEntryForm open accounts={accountsQuery.data || []} companyId={companyId} user={user} onClose={() => setShowNewEntry(false)} onSaved={refresh} />}
+    {showNewEntry && <JournalEntryForm open accounts={accountsQuery.data || []} companyId={companyId} onClose={() => setShowNewEntry(false)} onSaved={refresh} />}
   </div>;
 }
 
