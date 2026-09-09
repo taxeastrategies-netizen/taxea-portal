@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Boxes, CalendarClock, CheckCircle2, Loader2, Plus } from 'lucide-react';
+import AeatAmortizationGuide from './AeatAmortizationGuide';
 
 const money = (value) => Number(value || 0).toLocaleString('es-ES', {
   minimumFractionDigits: 2,
@@ -18,6 +19,12 @@ const initialForm = {
   cost: '',
   residualValue: '0',
   usefulLifeMonths: '60',
+  depreciationRate: '20',
+  fiscalTable: 'manual',
+  fiscalCategoryCode: '',
+  fiscalCategoryLabel: '',
+  fiscalMaxRate: '',
+  fiscalMaxYears: '',
   assetAccountCode: '21700000',
   accumulatedDepreciationAccountCode: '28170000',
   expenseAccountCode: '68100000',
@@ -43,13 +50,13 @@ export default function ActivosContables({ companyId }) {
   });
 
   const run = useMutation({
-    mutationFn: async (payload = {}) => {
+    mutationFn: async (payload) => {
       const response = await base44.functions.invoke('accountingOperations', { companyId, ...payload });
       if (response.data?.error) throw new Error(response.data.error);
       return response.data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounting-assets', companyId] }),
-    onError: (error) => toast.error(error.message || 'No se pudo completar la operación.'),
+    onError: (error) => toast.error(error.response?.data?.error || error.message || 'No se pudo completar la operación.'),
   });
 
   const assets = query.data?.assets || [];
@@ -64,6 +71,31 @@ export default function ActivosContables({ companyId }) {
     setForm(initialForm);
     setShowForm(false);
     toast.success('Activo guardado. El cuadro se genera solo cuando lo confirmes.');
+  };
+
+  const setRate = (value) => {
+    const rate = Number(value);
+    setForm({
+      ...form,
+      depreciationRate: value,
+      usefulLifeMonths: rate > 0 ? String(Math.ceil(1200 / rate)) : form.usefulLifeMonths,
+    });
+  };
+
+  const applyFiscalGuide = (row) => {
+    const rate = Number(row.rate);
+    setForm({
+      ...form,
+      depreciationRate: String(rate),
+      usefulLifeMonths: String(Math.ceil(1200 / rate)),
+      fiscalTable: row.table === 'eds' ? 'irpf_eds' : row.table,
+      fiscalCategoryCode: row.code,
+      fiscalCategoryLabel: row.label,
+      fiscalMaxRate: String(rate),
+      fiscalMaxYears: String(row.years),
+    });
+    setShowForm(true);
+    toast.success(`Referencia fiscal aplicada: ${rate}% anual.`);
   };
 
   if (!companyId) return <div className="rounded-xl border p-6 text-sm text-muted-foreground">Selecciona una empresa.</div>;
@@ -91,7 +123,7 @@ export default function ActivosContables({ companyId }) {
             <h3 className="flex items-center gap-2 font-semibold"><Boxes className="h-4 w-4" /> Inmovilizado y amortizaciones</h3>
             <p className="mt-1 text-xs text-muted-foreground">Cuadro lineal mensual. Cada cuota usa el motor contable, respeta bloqueos y no puede contabilizarse dos veces.</p>
           </div>
-          <Button onClick={() => setShowForm((value) => !value)}><Plus className="mr-2 h-4 w-4" /> Nuevo activo</Button>
+          <Button type="button" onClick={() => setShowForm((value) => !value)}><Plus className="mr-2 h-4 w-4" /> Nuevo activo</Button>
         </div>
 
         {showForm && (
@@ -100,12 +132,13 @@ export default function ActivosContables({ companyId }) {
             <label className="text-xs font-medium">Coste<Input className="mt-1" type="number" step="0.01" value={form.cost} onChange={(event) => setForm({ ...form, cost: event.target.value })} /></label>
             <label className="text-xs font-medium">Fecha de compra<Input className="mt-1" type="date" value={form.acquisitionDate} onChange={(event) => setForm({ ...form, acquisitionDate: event.target.value })} /></label>
             <label className="text-xs font-medium">Puesta en servicio<Input className="mt-1" type="date" value={form.inServiceDate} onChange={(event) => setForm({ ...form, inServiceDate: event.target.value })} /></label>
-            <label className="text-xs font-medium">Vida útil (meses)<Input className="mt-1" type="number" min="1" value={form.usefulLifeMonths} onChange={(event) => setForm({ ...form, usefulLifeMonths: event.target.value })} /></label>
+            <label className="text-xs font-medium">Amortización anual (%)<Input className="mt-1" type="number" min="0.01" max="100" step="0.01" value={form.depreciationRate} onChange={(event) => setRate(event.target.value)} /></label>
+            <label className="text-xs font-medium">Vida útil resultante (meses)<Input className="mt-1" type="number" min="1" max="1200" value={form.usefulLifeMonths} onChange={(event) => setForm({ ...form, usefulLifeMonths: event.target.value, depreciationRate: String(Number(event.target.value) > 0 ? Number((1200 / Number(event.target.value)).toFixed(4)) : '') })} /></label>
             <label className="text-xs font-medium">Valor residual<Input className="mt-1" type="number" step="0.01" value={form.residualValue} onChange={(event) => setForm({ ...form, residualValue: event.target.value })} /></label>
             <label className="text-xs font-medium">Cuenta del activo<Input className="mt-1 font-mono" value={form.assetAccountCode} onChange={(event) => setForm({ ...form, assetAccountCode: event.target.value })} /></label>
             <label className="text-xs font-medium">Amortización acumulada<Input className="mt-1 font-mono" value={form.accumulatedDepreciationAccountCode} onChange={(event) => setForm({ ...form, accumulatedDepreciationAccountCode: event.target.value })} /></label>
             <label className="text-xs font-medium">Gasto de amortización<Input className="mt-1 font-mono" value={form.expenseAccountCode} onChange={(event) => setForm({ ...form, expenseAccountCode: event.target.value })} /></label>
-            <div className="flex items-end"><Button className="w-full" onClick={save} disabled={run.isPending}>{run.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Guardar activo</Button></div>
+            <div className="flex items-end"><Button type="button" className="w-full" onClick={save} disabled={run.isPending}>{run.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Guardar activo</Button></div>
           </div>
         )}
       </div>
@@ -120,7 +153,8 @@ export default function ActivosContables({ companyId }) {
               return (
                 <button key={asset.id} className={`w-full rounded-lg border p-3 text-left ${selectedAssetId === asset.id ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setSelectedAssetId(asset.id)}>
                   <div className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{asset.name}</span><span className="text-xs text-muted-foreground">{asset.status}</span></div>
-                  <p className="mt-1 text-xs text-muted-foreground">{money(asset.cost)} € · {asset.usefulLifeMonths} meses · {assetLines.length} cuotas</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{money(asset.cost)} € · {Number(asset.depreciationRate || (1200 / Number(asset.usefulLifeMonths || 1))).toLocaleString('es-ES', { maximumFractionDigits: 4 })}% anual · {asset.usefulLifeMonths} meses · {assetLines.length} cuotas</p>
+                  {asset.fiscalCategoryLabel && <p className="mt-1 text-[11px] text-muted-foreground">Guía fiscal: {asset.fiscalCategoryLabel}</p>}
                 </button>
               );
             })}
@@ -149,6 +183,7 @@ export default function ActivosContables({ companyId }) {
           </div>
         </div>
       </div>
+      <AeatAmortizationGuide onSelect={applyFiscalGuide} />
     </div>
   );
 }
