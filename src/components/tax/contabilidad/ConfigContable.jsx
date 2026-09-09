@@ -10,6 +10,7 @@ const CATEGORIAS_GASTO = [
   { value: 'compras', label: 'Compras de mercancía' },
   { value: 'suministros', label: 'Suministros' },
   { value: 'alquiler', label: 'Alquiler de local/oficina' },
+  { value: 'publicidad', label: 'Publicidad' },
   { value: 'publicidad_marketing', label: 'Publicidad y marketing' },
   { value: 'servicios_profesionales', label: 'Servicios profesionales' },
   { value: 'software', label: 'Software / SaaS' },
@@ -25,6 +26,7 @@ const DEFAULT_MAPPINGS = [
   { categoria: 'compras', tipo: 'gasto', cuenta: '60000000', nombre: 'Compras de mercancías' },
   { categoria: 'suministros', tipo: 'gasto', cuenta: '62800000', nombre: 'Suministros' },
   { categoria: 'alquiler', tipo: 'gasto', cuenta: '62100000', nombre: 'Arrendamientos y cánones' },
+  { categoria: 'publicidad', tipo: 'gasto', cuenta: '62700000', nombre: 'Publicidad, propaganda y relaciones públicas' },
   { categoria: 'publicidad_marketing', tipo: 'gasto', cuenta: '62700000', nombre: 'Publicidad, propaganda y relaciones públicas' },
   { categoria: 'servicios_profesionales', tipo: 'gasto', cuenta: '62300000', nombre: 'Servicios de profesionales independientes' },
   { categoria: 'software', tipo: 'gasto', cuenta: '62910000', nombre: 'Software y servicios digitales' },
@@ -32,6 +34,7 @@ const DEFAULT_MAPPINGS = [
   { categoria: 'dietas', tipo: 'gasto', cuenta: '62920000', nombre: 'Dietas y manutención' },
   { categoria: 'gastos_financieros', tipo: 'gasto', cuenta: '66900000', nombre: 'Otros gastos financieros' },
   { categoria: 'seguros', tipo: 'gasto', cuenta: '62500000', nombre: 'Primas de seguros' },
+  { categoria: 'otros', tipo: 'gasto', cuenta: '62900000', nombre: 'Otros servicios' },
 ];
 
 export default function ConfigContable({ companyId }) {
