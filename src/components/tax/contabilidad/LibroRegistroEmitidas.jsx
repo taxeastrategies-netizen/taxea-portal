@@ -27,7 +27,7 @@ export default function LibroRegistroEmitidas() {
   const { company } = useOutletContext() || {};
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
-  const [filterEstado, setFilterEstado] = useState('todos');
+  const [filterEstado, setFilterEstado] = useState('contabilizada');
 
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['invoices-emitidas', company?.id],
@@ -48,7 +48,7 @@ export default function LibroRegistroEmitidas() {
       inv.numero_factura?.toLowerCase().includes(search.toLowerCase()) ||
       inv.cliente_nombre?.toLowerCase().includes(search.toLowerCase()) ||
       inv.cliente_nif?.toLowerCase().includes(search.toLowerCase());
-    return matchAnio && matchEstado && matchSearch;
+    return !inv.anulada && matchAnio && matchEstado && matchSearch;
   });
 
   const totales = filtered.reduce((acc, inv) => ({
