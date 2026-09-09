@@ -241,7 +241,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
     companyId,
     '55500000',
     'Partidas pendientes de aplicación',
-    'activo',
+    'pasivo',
   );
   const bankPostingById = new Map();
   for (const bankAccountId of [...new Set(transactions.map(item => item.bank_account_id))]) {
@@ -822,7 +822,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
     fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
   ]);
   const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
-  const pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'activo');
+  const pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'pasivo');
   const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
   const activeEntryIds = new Set(activeEntries.flatMap(entry => [entry.id, entry.importKey].filter(Boolean)));
   const pendingTransactions = (transactions || []).filter(transaction =>
@@ -863,6 +863,9 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   const openingDate = new Date(firstDate + 'T12:00:00Z');
   openingDate.setUTCDate(openingDate.getUTCDate() - 1);
   const date = openingDate.toISOString().slice(0, 10);
+  if (difference < 0) {
+    throw new Error('La diferencia exigiría cargar la cuenta 555. Elige una cuenta de contrapartida y registra un ajuste revisado.');
+  }
   const amount = money(Math.abs(difference));
   const description = 'Saldo inicial inferido de ' + (bankAccount.nombre_banco || 'cuenta bancaria') + ' a ' + firstDate;
   const line = (account, debit, credit) => ({
@@ -1063,12 +1066,20 @@ Deno.serve(async (req) => {
           result.issues.push({ transactionId: transaction.id, reason: 'movimiento_bancario_incompleto' });
           continue;
         }
+        if (transaction.tipo === 'salida') {
+          result.issues.push({
+            transactionId: transaction.id,
+            reason: 'salida_pendiente_de_cuenta_contable',
+            message: 'Las salidas sin documento no se contabilizan en 555. Selecciona una cuenta de contrapartida.',
+          });
+          continue;
+        }
         result.ready += 1;
         result.readyTransactionIds.push(transaction.id);
         if (!apply) continue;
         if (apply) continue;
         try {
-          if (!pendingAccount) pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'activo');
+          if (!pendingAccount) pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'pasivo');
           const physicalBank = bankById.get(transaction.bank_account_id);
           const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, physicalBank);
           const posting = await postBankReconciliation(svc, companyId, transaction, bankPostingAccount, pendingAccount, user.email, {
