@@ -158,6 +158,12 @@ export default function SubidaMasivaModelos() {
       estado: 'aprobado',
       etiquetas: [ex.modelo, 'presentado', 'taxea'].filter(Boolean),
       subido_por: user?.email,
+      fiscal_model_code: String(ex.modelo || '').replace(/^modelo_/, '').replace(/_igic$/, '').replace(/\D/g, ''),
+      fiscal_period: periodo,
+      fiscal_year: parseInt(ex.ejercicio) || now.getFullYear(),
+      fiscal_document_kind: 'justificante_presentacion',
+      administracion: carpeta === 'fiscal_modelos_atc' ? 'ATC' : 'AEAT',
+      fiscal_link_status:: 'detectado',
     };
     const doc = await base44.entities.Document.create(docData);
 
