@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowDownCircle, Search, Eye, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import InvoiceFiscalReview from './InvoiceFiscalReview';
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
 
@@ -133,8 +134,8 @@ export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">NIF/CIF</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Concepto</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Base</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">IGIC %</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IGIC</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">IVA/IGIC %</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA/IGIC</th>
                 {isComercianteMinorista && (
                   <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Gasto total</th>
                 )}
@@ -142,6 +143,7 @@ export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Categoría</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Estado</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Doc.</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fiscal</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -174,6 +176,7 @@ export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
                       </a>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
+                  <td className="px-3 py-2"><InvoiceFiscalReview companyId={companyId} invoice={inv} /></td>
                 </tr>
               ))}
             </tbody>
@@ -187,7 +190,7 @@ export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
                   <td className="px-3 py-2 text-right font-mono font-bold text-amber-700">{fmt(totales.gastoTotal)}</td>
                 )}
                 <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.total)}</td>
-                <td colSpan={3} />
+                <td colSpan={4} />
               </tr>
             </tfoot>
           </table>
