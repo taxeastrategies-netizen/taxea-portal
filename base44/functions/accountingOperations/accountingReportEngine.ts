@@ -32,6 +32,49 @@ function accountKind(account = {}, code = '') {
   return 'unclassified';
 }
 
+function presentationSection(account, kind) {
+  const code = String(account.code || '');
+  if (kind === 'income') {
+    if (/^76/.test(code)) return { key: 'ingresos_financieros', label: 'Ingresos financieros' };
+    if (/^77/.test(code)) return { key: 'otros_ingresos', label: 'Otros ingresos' };
+    return { key: 'ingresos_explotacion', label: 'Ingresos de explotación' };
+  }
+  if (kind === 'expense') {
+    if (/^66/.test(code)) return { key: 'gastos_financieros', label: 'Gastos financieros' };
+    if (/^67/.test(code)) return { key: 'otros_gastos', label: 'Otros gastos' };
+    return { key: 'gastos_explotacion', label: 'Gastos de explotación' };
+  }
+  if (kind === 'equity') return { key: 'patrimonio_neto', label: 'Patrimonio neto' };
+  if (kind === 'liability') {
+    if (/^(14|15|16|17|18|19)/.test(code)) return { key: 'pasivo_no_corriente', label: 'Pasivo no corriente' };
+    if (/^(400|401|403|404|405|406|410|411|419)/.test(code)) return { key: 'acreedores_comerciales', label: 'Acreedores comerciales y otras cuentas a pagar' };
+    if (/^(475|476|477)/.test(code)) return { key: 'administraciones_acreedoras', label: 'Administraciones públicas acreedoras' };
+    if (/^555/.test(code)) return { key: 'partidas_pendientes', label: 'Partidas pendientes de aplicación' };
+    return { key: 'deudas_corrientes', label: 'Deudas a corto plazo' };
+  }
+  if (kind === 'asset') {
+    if (/^2/.test(code)) return { key: 'activo_no_corriente', label: 'Activo no corriente' };
+    if (/^3/.test(code)) return { key: 'existencias', label: 'Existencias' };
+    if (/^(430|431|432|433|434|435|436|437|440|441|449)/.test(code)) return { key: 'deudores_comerciales', label: 'Deudores comerciales y otras cuentas a cobrar' };
+    if (/^(470|471|472|473|474)/.test(code)) return { key: 'administraciones_deudoras', label: 'Administraciones públicas deudoras' };
+    if (/^57/.test(code)) return { key: 'efectivo', label: 'Efectivo y otros activos líquidos equivalentes' };
+    return { key: 'activo_corriente', label: 'Otros activos corrientes' };
+  }
+  return { key: 'sin_clasificar', label: 'Pendiente de clasificación' };
+}
+
+function groupPresentation(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = row.section?.key || 'sin_clasificar';
+    if (!grouped.has(key)) grouped.set(key, { key, label: row.section?.label || 'Pendiente de clasificación', accounts: [], amount: 0 });
+    const group = grouped.get(key);
+    group.accounts.push(row);
+    group.amount += Number(row.amount || 0);
+  }
+  return [...grouped.values()].map(group => ({ ...group, amount: round2(group.amount) }));
+}
+
 function resolveModel(entries, lines) {
   const entryByKey = new Map();
   const linesByEntry = new Map();
@@ -156,6 +199,7 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
       balance,
       kind: bankOverdraft ? 'liability' : baseKind,
       presentationAdjustment: bankOverdraft ? 'descubierto_bancario_a_pasivo_corriente' : '',
+      section: presentationSection(account, bankOverdraft ? 'liability' : baseKind),
     };
   }).sort((a, b) => a.code.localeCompare(b.code));
   const income = accounts.filter(a => a.kind === 'income').map(a => ({ ...a, amount: round2(a.credit - a.debit) }));
@@ -182,8 +226,10 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
     pendingEntriesInYear: data.entries.filter(e => yearOf(e) === selectedYear && ['borrador', 'pendiente_revision'].includes(e.status)).length,
     accounts,
     trialBalance: { debit: trialDebit, credit: trialCredit, difference: round2(trialDebit - trialCredit) },
-    profitAndLoss: { income, expenses, totalIncome, totalExpenses, result },
-    balanceSheet: { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquityBeforeResult, result, totalEquity, difference: balanceDifference },
+    model: 'interno_simplificado_pgc',
+    modelNotice: 'Presentación interna basada en epígrafes PGC. No sustituye los modelos oficiales de depósito ni la memoria.',
+    profitAndLoss: { income, expenses, incomeSections: groupPresentation(income), expenseSections: groupPresentation(expenses), totalIncome, totalExpenses, result },
+    balanceSheet: { assets, liabilities, equity, assetSections: groupPresentation(assets), liabilitySections: groupPresentation(liabilities), equitySections: groupPresentation(equity), totalAssets, totalLiabilities, totalEquityBeforeResult, result, totalEquity, difference: balanceDifference },
   };
 }
 
