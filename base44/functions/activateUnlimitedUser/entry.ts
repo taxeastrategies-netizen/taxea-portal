@@ -37,8 +37,23 @@ Deno.serve(async (req) => {
         await admin.entities.User.update(targetUserId, { company_id: companyId });
       }
     }
+    let companyCreated = false;
     if (!companyId) {
-      return Response.json({ error: 'El usuario no tiene una empresa configurada. Configúrala antes de activar su contabilidad.' }, { status: 409 });
+      const normalizedEmail = String(targetUser.email || '').trim().toLowerCase();
+      const provisionalName = String(targetUser.full_name || normalizedEmail.split('@')[0] || 'Nueva empresa').trim();
+      const provisionalCompany = await admin.entities.Company.create({
+        razon_social: provisionalName,
+        nombre_comercial: provisionalName,
+        nif_cif: 'PENDIENTE',
+        email: normalizedEmail,
+        owner_email: normalizedEmail,
+        usuarios_autorizados: normalizedEmail ? [normalizedEmail] : [],
+        regimen_fiscal: 'otro',
+        activa: true,
+      });
+      companyId = provisionalCompany.id;
+      companyCreated = true;
+      await admin.entities.User.update(targetUserId, { company_id: companyId });
     }
 
     // 2. Activate user portal access
@@ -121,6 +136,8 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       companyId,
+      companyCreated,
+      onboardingRequired: companyCreated,
       user: { id: targetUserId, email: targetUser.email, isPortalActive: userUpdate?.isPortalActive, status: userUpdate.status },
       subscription: { id: subResult?.id, status: subResult?.status, planName: subResult?.planName },
       quota: { id: quotaResult?.id, isUnlimited: quotaResult?.isUnlimited, status: quotaResult?.status },
