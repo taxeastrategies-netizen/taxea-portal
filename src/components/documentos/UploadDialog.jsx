@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getAllCarpetas, DMS_STRUCTURE } from './CarpetasTree';
+import { MODELOS_AEAT, FISCAL_DOCUMENT_KINDS } from '@/components/obligaciones/CalendarioAEAT';
 import { cn } from '@/lib/utils';
 
 const ALL_CARPETAS = getAllCarpetas();
@@ -50,7 +51,7 @@ function uploadWithTimeout(file) {
 export default function UploadDialog({ open, onClose, company, user, onSuccess }) {
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
-  const [formData, setFormData] = useState({ nombre: '', carpeta: '', comentarios: '' });
+  const [formData, setFormData] = useState({ nombre: '', carpeta: '', comentarios: '', fiscal_model_code: '', fiscal_period: '', fiscal_year: new Date().getFullYear(), fiscal_document_kind: 'otro' });
   const [etiquetas, setEtiquetas] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [clasificando, setClasificando] = useState(false);
@@ -120,6 +121,7 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
   };
 
   const carpetaLabel = ALL_CARPETAS.find(c => c.value === formData.carpeta)?.label || '';
+  const fiscalFolder = formData.carpeta?.startsWith('fiscal_');
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) close(); }}>
