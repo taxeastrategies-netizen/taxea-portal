@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, userId: directUserId } = body;
+    const { email, userId: directUserId, note = '' } = body;
     const admin = base44.asServiceRole;
 
     // 1. Find user by email or direct ID
@@ -26,6 +26,20 @@ Deno.serve(async (req) => {
     }
 
     const targetUserId = targetUser.id;
+
+    // Resolver una empresa real antes de modificar acceso, suscripción o cuota.
+    let companyId = targetUser.data?.company_id || targetUser.company_id || '';
+    if (!companyId && targetUser.email) {
+      const companies = await admin.entities.Company.filter({ owner_email: targetUser.email }, '-created_date', 10);
+      const company = companies?.find(item => item.activa !== false) || companies?.[0] || null;
+      if (company) {
+        companyId = company.id;
+        await admin.entities.User.update(targetUserId, { company_id: companyId });
+      }
+    }
+    if (!companyId) {
+      return Response.json({ error: 'El usuario no tiene una empresa configurada. Configúrala antes de activar su contabilidad.' }, { status: 409 });
+    }
 
     // 2. Activate user portal access
     const userUpdate = await admin.entities.User.update(targetUserId, {
@@ -65,8 +79,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 4. Update or create OCR quota (unlimited)
-    const companyId = targetUser.company_id || targetUserId;
+    // 4. Update or create OCR quota (unlimited) para la empresa real.
     const quotaPeriods = await admin.entities.OcrQuotaPeriod.filter({ billingAccountId: companyId });
     let quotaResult;
     if (quotaPeriods && quotaPeriods.length > 0) {
@@ -97,9 +110,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    await admin.entities.UserAuditLog.create({
+      userId: targetUserId,
+      actionType: 'suscripcion_activada',
+      actionBy: user.email || 'admin',
+      actionAt: new Date().toISOString(),
+      details: `Cuenta activada por administrador.${note ? ` Nota: ${String(note).slice(0, 500)}` : ''}`,
+    }).catch(() => null);
+
     return Response.json({
       success: true,
-      user: { id: targetUserId, email: targetUser.email, isPortalActive: userUpdate.isPortalActive, status: userUpdate.status },
+      companyId,
+      user: { id: targetUserId, email: targetUser.email, isPortalActive: userUpdate?.isPortalActive, status: userUpdate.status },
       subscription: { id: subResult?.id, status: subResult?.status, planName: subResult?.planName },
       quota: { id: quotaResult?.id, isUnlimited: quotaResult?.isUnlimited, status: quotaResult?.status },
     });
