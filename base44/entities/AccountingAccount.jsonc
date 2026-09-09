@@ -109,6 +109,35 @@
     "pais": {
       "type": "string"
     },
+    "presentationRole": {
+      "type": "string"
+    },
+    "normalSide": {
+      "type": "string",
+      "enum": [
+        "debe",
+        "haber"
+      ]
+    },
+    "maturity": {
+      "type": "string",
+      "enum": [
+        "corriente",
+        "no_corriente",
+        "no_aplica"
+      ]
+    },
+    "cashFlowRole": {
+      "type": "string"
+    },
+    "canonical8": {
+      "type": "boolean",
+      "default": false
+    },
+    "codeLength": {
+      "type": "number",
+      "default": 8
+    },
     "telefono": {
       "type": "string"
     },
@@ -126,14 +155,6 @@
     },
     "tipoRegistro": {
       "type": "string"
-    },
-    "canonical8": {
-      "type": "boolean",
-      "default": false
-    },
-    "codeLength": {
-      "type": "number",
-      "default": 8
     },
     "parentCode": {
       "type": "string"
@@ -160,7 +181,9 @@
   ],
   "rls": {
     "create": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
@@ -175,10 +198,14 @@
       ]
     },
     "update": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
