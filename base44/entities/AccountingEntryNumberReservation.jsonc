@@ -1,0 +1,83 @@
+{
+  "name": "AccountingEntryNumberReservation",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "year": {
+      "type": "integer"
+    },
+    "series": {
+      "type": "string",
+      "default": "GENERAL"
+    },
+    "sequence": {
+      "type": "integer"
+    },
+    "entryNumber": {
+      "type": "string"
+    },
+    "reservationKey": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "reservado",
+        "usado",
+        "liberado"
+      ],
+      "default": "reservado"
+    },
+    "journalEntryId": {
+      "type": "string"
+    },
+    "reservedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "default": "pgc8-v2"
+    }
+  },
+  "required": [
+    "companyId",
+    "year",
+    "series",
+    "sequence",
+    "entryNumber",
+    "reservationKey",
+    "token"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
