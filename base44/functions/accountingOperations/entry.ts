@@ -1357,7 +1357,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'quality' || action === 'reports' || action === 'journal' || action === 'ledger') {
-      const data = await accountingData(svc, companyId);
+      const requestedYear = body.year && body.year !== 'all' ? Number(body.year) : null;
+      const data = await accountingData(svc, companyId, {
+        year: action === 'quality' ? null : requestedYear,
+        includeBusinessData: action === 'quality',
+      });
       if (action === 'quality') {
         return Response.json({ success: true, quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
       }
