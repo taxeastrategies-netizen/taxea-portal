@@ -61,7 +61,11 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
   const handleFile = async (f) => {
     setFile(f);
     const nombre = f.name.replace(/\.[^/.]+$/, '');
-    setFormData(p => ({ ...p, nombre }));
+    const modelMatch = f.name.match(/(?:modelo[\s_-]*)?(036|037|111|115|123|130|131|180|190|193|200|202|210|216|296|303|309|322|347|349|353|368|369|390|400|412|414|415|416|417|418|419|420|421|422|424|425)(?!\d)/i);
+    const yearMatch = f.name.match(/20\d{2}/);
+    const periodMatch = f.name.match(/(?:^|[\s_.-])(?:T([1-4])|([1-4])T|M(0[1-9]|1[0-2])|ANUAL)(?:[\s_.-]|$)/i);
+    const detectedPeriod = periodMatch ? (periodMatch[1] || periodMatch[2] ? `T${periodMatch[1] || periodMatch[2]}` : periodMatch[3] ? `M${periodMatch[3]}` : 'ANUAL') : '';
+    setFormData(p => ({ ...p, nombre, fiscal_model_code: modelMatch?.[1] || p.fiscal_model_code, fiscal_year: Number(yearMatch?.[0] || p.fiscal_year), fiscal_period: detectedPeriod || p.fiscal_period }));
     // Clasificar con IA automáticamente
     setClasificando(true);
     const ia = await clasificarConIA(f.name);
