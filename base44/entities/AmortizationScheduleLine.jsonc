@@ -1,0 +1,93 @@
+{
+  "name": "AmortizationScheduleLine",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "assetId": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string"
+    },
+    "postingDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "accumulatedAmount": {
+      "type": "number"
+    },
+    "netBookValue": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "posted"
+      ],
+      "default": "pending"
+    },
+    "journalEntryId": {
+      "type": "string"
+    },
+    "postingKey": {
+      "type": "string"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "assetId",
+    "period",
+    "postingDate",
+    "amount"
+  ],
+  "rls": {
+    "create": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user.role": {
+            "$in": [
+              "admin",
+              "super_admin"
+            ]
+          }
+        }
+      ]
+    },
+    "update": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    },
+    "delete": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    }
+  }
+}
