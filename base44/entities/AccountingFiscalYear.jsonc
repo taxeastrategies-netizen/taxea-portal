@@ -1,0 +1,113 @@
+{
+  "name": "AccountingFiscalYear",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "year": {
+      "type": "integer"
+    },
+    "startDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "endDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "abierto",
+        "cerrado"
+      ],
+      "default": "abierto"
+    },
+    "lockedThroughDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "accountingModel": {
+      "type": "string",
+      "enum": [
+        "interno_simplificado",
+        "pyme",
+        "abreviado",
+        "normal"
+      ],
+      "default": "interno_simplificado"
+    },
+    "previousYearId": {
+      "type": "string"
+    },
+    "openingEntryId": {
+      "type": "string"
+    },
+    "regularizationEntryId": {
+      "type": "string"
+    },
+    "closingEntryId": {
+      "type": "string"
+    },
+    "closedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closedBy": {
+      "type": "string"
+    },
+    "reopenedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reopenedBy": {
+      "type": "string"
+    },
+    "reopenReason": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "default": "pgc8-v2"
+    }
+  },
+  "required": [
+    "companyId",
+    "year",
+    "startDate",
+    "endDate"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
