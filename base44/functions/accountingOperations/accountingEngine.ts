@@ -330,13 +330,57 @@ function validateLines(lines) {
   return { debit, credit };
 }
 
-async function nextEntryNumber(svc, companyId, year) {
-  const entries = await svc.entities.JournalEntry.filter({ companyId, ejercicio: year }, '-entryNumber', 5000);
-  const seq = (entries || []).reduce((max, entry) => {
-    const match = clean(entry.entryNumber).match(/(\d+)$/);
-    return Math.max(max, match ? Number(match[1]) : 0);
-  }, 0) + 1;
-  return `${year}-${String(seq).padStart(6, '0')}`;
+async function assertAccountingDateOpen(svc, companyId, date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('La fecha contable no es válida.');
+  const year = Number(String(date).slice(0, 4));
+  const periods = await svc.entities.AccountingFiscalYear.filter({ companyId, year }, '-created_date', 5);
+  const period = periods?.[0];
+  if (!period) return { year, period: null };
+  if (period.status === 'cerrado') throw new Error(`El ejercicio ${year} está cerrado.`);
+  if (period.lockedThroughDate && String(date) <= String(period.lockedThroughDate)) {
+    throw new Error(`El período está bloqueado hasta ${period.lockedThroughDate}.`);
+  }
+  if (String(date) < String(period.startDate) || String(date) > String(period.endDate)) {
+    throw new Error(`La fecha queda fuera del ejercicio contable ${year}.`);
+  }
+  return { year, period };
+}
+
+async function reserveEntryNumber(svc, companyId, year, series = 'GENERAL') {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const [entries, reservations] = await Promise.all([
+      svc.entities.JournalEntry.filter({ companyId, ejercicio: year }, '-entryNumber', 5000),
+      svc.entities.AccountingEntryNumberReservation.filter({ companyId, year, series }, '-number', 5000),
+    ]);
+    const entryMaximum = (entries || []).reduce((max, entry) => {
+      const match = clean(entry.entryNumber).match(/(\d+)$/);
+      return Math.max(max, match ? Number(match[1]) : 0);
+    }, 0);
+    const reservationMaximum = (reservations || []).reduce((max, item) => Math.max(max, Number(item.number || 0)), 0);
+    const number = Math.max(entryMaximum, reservationMaximum) + 1;
+    const reservationKey = `${companyId}:${year}:${series}:${number}`;
+    const reservation = await svc.entities.AccountingEntryNumberReservation.create({
+      companyId,
+      year,
+      series,
+      number,
+      reservationKey,
+      token: crypto.randomUUID(),
+      status: 'reservado',
+      reservedAt: new Date().toISOString(),
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const contenders = await svc.entities.AccountingEntryNumberReservation.filter({ companyId, reservationKey }, 'created_date', 50);
+    const winner = [...(contenders || [])].sort((a, b) => String(a.created_date).localeCompare(String(b.created_date)) || String(a.id).localeCompare(String(b.id)))[0];
+    if (winner?.id === reservation.id) {
+      return {
+        entryNumber: series === 'GENERAL' ? `${year}-${String(number).padStart(6, '0')}` : `${series}-${year}-${String(number).padStart(6, '0')}`,
+        reservation,
+      };
+    }
+    await svc.entities.AccountingEntryNumberReservation.delete(reservation.id).catch(() => null);
+  }
+  throw new Error('No se pudo reservar un número de asiento único. Inténtalo de nuevo.');
 }
 
 export async function createJournalEntry(svc, companyId, payload, userEmail) {
