@@ -40,14 +40,19 @@ export default function ConfigContable({ companyId }) {
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [error, setError] = useState('');
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [refreshSeq, setRefreshSeq] = useState(0);
 
   useEffect(() => {
     if (!companyId) return;
     let active = true;
     base44.functions.invoke('accountingOperations', { action: 'get_accounting_configuration', companyId })
       .then(response => {
+        if (response?.data?.error || response?.data?.success === false) throw new Error(response.data.error || 'No se pudo analizar la configuración.');
         const record = response?.data?.configuration || null;
-        if (!active || !record) return;
+        if (!active) return;
+        setDiagnostics(response?.data?.diagnostics || null);
+        if (!record) return;
         try {
           const parsed = JSON.parse(record.mappingsJson || '[]');
           if (Array.isArray(parsed) && parsed.length) {
@@ -62,7 +67,13 @@ export default function ConfigContable({ companyId }) {
       })
       .catch(() => setError('No se pudo cargar la configuración contable.'))
     return () => { active = false; };
-  }, [companyId]);
+  }, [companyId, refreshSeq]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshSeq(value => value + 1);
+    window.addEventListener('financials:refresh', refresh);
+    return () => window.removeEventListener('financials:refresh', refresh);
+  }, []);
 
   const update = (idx, field, val) => {
     setMappings(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
@@ -87,7 +98,8 @@ export default function ConfigContable({ companyId }) {
         baseCurrency: 'EUR',
         unmatchedOutgoingMode: 'revision',
       });
-      const record = response?.data?.configuration;
+      if (response?.data?.error || response?.data?.success === false) throw new Error(response.data.error || 'No se pudo guardar la configuración.');
+      setDiagnostics(response?.data?.diagnostics || null);
       setSaved(true);
     } catch (err) {
       setError(err?.message || 'No se pudo guardar la configuración contable.');
@@ -104,6 +116,7 @@ export default function ConfigContable({ companyId }) {
       const response = await base44.functions.invoke('accountingOperations', { action: 'seed_pgc', companyId });
       if (response.data?.error) throw new Error(response.data.error);
       setSaved(false);
+      setRefreshSeq(value => value + 1);
       setError(response.data?.created
         ? 'Plan completado: ' + response.data.created + ' cuentas nuevas.'
         : 'El plan contable estándar ya estaba completo.');
@@ -133,6 +146,20 @@ export default function ConfigContable({ companyId }) {
           </Button>
         </div>
       </div>
+
+      {diagnostics && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ['Preparación', `${diagnostics.readinessScore || 0}%`],
+            ['Plan contable', `${diagnostics.accounts?.active || 0} cuentas activas`],
+            ['Bancos', `${diagnostics.banking?.mapped || 0}/${diagnostics.banking?.active || 0} vinculados`],
+            ['Ejercicio actual', diagnostics.periods?.currentYearConfigured ? diagnostics.periods.currentYearStatus : 'sin configurar'],
+          ].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>)}
+          {(diagnostics.accounts?.invalidMappingCodes?.length > 0 || diagnostics.categories?.unmapped?.length > 0 || diagnostics.banking?.orphanLedgerCodes?.length > 0) && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-800 sm:col-span-2 lg:col-span-4">Revisión inteligente: {diagnostics.accounts?.invalidMappingCodes?.length || 0} cuentas de mapeo inválidas, {diagnostics.categories?.unmapped?.length || 0} categorías sin regla y {diagnostics.banking?.orphanLedgerCodes?.length || 0} subcuentas bancarias huérfanas.</div>
+          )}
+        </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2 text-xs text-blue-800">
         <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
