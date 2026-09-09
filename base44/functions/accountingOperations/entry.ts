@@ -949,9 +949,10 @@ Deno.serve(async (req) => {
       const existing = rows?.[0] || null;
       if (action === 'get_accounting_configuration') return Response.json({ success: true, configuration: existing });
       const accountFields = ['clientAccount', 'supplierAccount', 'outputTaxAccount', 'inputTaxAccount', 'withholdingReceivableAccount', 'withholdingPayableAccount', 'unmatchedIncomingAccount', 'unmatchedOutgoingAccount'];
+      const defaults = { clientAccount: '43000000', supplierAccount: '41000000', outputTaxAccount: '47700000', inputTaxAccount: '47200000', withholdingReceivableAccount: '47300000', withholdingPayableAccount: '47510000', unmatchedIncomingAccount: '55500000', unmatchedOutgoingAccount: '' };
       const payload = {};
       for (const field of accountFields) {
-        const value = String(body[field] ?? existing?.[field] ?? '').trim();
+        const value = String(body[field] ?? existing?.[field] ?? defaults[field] ?? '').trim();
         if (!value && field === 'unmatchedOutgoingAccount') { payload[field] = ''; continue; }
         if (!isCanonical8(value)) throw new Error(`La cuenta configurada en ${field} debe tener exactamente 8 dígitos.`);
         const account = await svc.entities.AccountingAccount.filter({ companyId, code: value }, '-created_date', 1);
@@ -961,7 +962,15 @@ Deno.serve(async (req) => {
       const mappingsJson = String(body.mappingsJson ?? existing?.mappingsJson ?? '{}');
       let mappings;
       try { mappings = JSON.parse(mappingsJson); } catch { throw new Error('El mapa de cuentas no contiene JSON válido.'); }
-      if (!mappings || Array.isArray(mappings) || typeof mappings !== 'object') throw new Error('El mapa de cuentas debe ser un objeto JSON.');
+      if (!mappings || typeof mappings !== 'object') throw new Error('El mapa de cuentas debe ser un objeto o lista JSON.');
+      const mappedCodes = Array.isArray(mappings)
+        ? mappings.map(item => String(item?.cuenta || '').trim()).filter(Boolean)
+        : Object.values(mappings).map(value => String(value || '').trim()).filter(value => /^\d{8}$/.test(value));
+      for (const code of [...new Set(mappedCodes)]) {
+        if (!isCanonical8(code)) throw new Error(`La cuenta ${code} del mapeo debe tener exactamente 8 dígitos.`);
+        const account = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
+        if (!account?.[0] || account[0].status === 'inactiva') throw new Error(`La cuenta ${code} del mapeo no existe o está inactiva.`);
+      }
       payload.mappingsJson = JSON.stringify(mappings);
       payload.accountDigits = 8;
       payload.accountingModel = body.accountingModel || existing?.accountingModel || 'interno_simplificado';
