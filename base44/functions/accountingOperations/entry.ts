@@ -686,7 +686,23 @@ async function loadBankReconciliationOverview(svc, companyId) {
 
   const usableTransactions = (transactions || []).filter(usableBankTransaction);
   for (const transaction of usableTransactions) {
-    if (!validBankTransaction(transaction)) {
+    const physicalBank = bankById.get(transaction.bank_account_id);
+    const transactionCurrency = String(transaction.moneda || physicalBank?.moneda || 'EUR').trim().toUpperCase();
+    const transactionFxRate = Number(transaction.exchange_rate || transaction.tipo_cambio || 1);
+    if (transactionCurrency !== 'EUR' && (!Number.isFinite(transactionFxRate) || transactionFxRate <= 0 || transactionFxRate === 1)) {
+      incidents.push({
+        type: 'missing_exchange_rate',
+        severity: 'alta',
+        title: 'Movimiento en divisa sin contravalor EUR validado',
+        detail: `${transaction.concepto || transaction.referencia || transaction.id} · ${money(transaction.importe).toFixed(2)} ${transactionCurrency}`,
+        transactionId: transaction.id,
+        bankAccountId: transaction.bank_account_id,
+        currency: transactionCurrency,
+        amount: money(transaction.importe),
+        date: transaction.fecha_operacion || '',
+        currentRate: Number.isFinite(transactionFxRate) ? transactionFxRate : 0,
+      });
+    } else if (!validBankTransaction(transaction)) {
       const problems = [
         !/^\d{4}-\d{2}-\d{2}$/.test(String(transaction.fecha_operacion || '')) ? 'fecha no válida' : '',
         !['entrada', 'salida'].includes(transaction.tipo) ? 'sentido no válido' : '',
@@ -900,6 +916,65 @@ async function loadBankReconciliationOverview(svc, companyId) {
     incidents,
     selectableAccounts,
   };
+}
+
+async function saveBankExchangeRate(svc, companyId, body, userEmail) {
+  const transaction = await svc.entities.BankTransaction.get(String(body.transactionId || '')).catch(() => null);
+  if (!transaction || transaction.company_id !== companyId) throw new Error('El movimiento no pertenece a la empresa activa.');
+  const bankAccount = await svc.entities.BankAccount.get(transaction.bank_account_id).catch(() => null);
+  const currency = String(transaction.moneda || bankAccount?.moneda || 'EUR').trim().toUpperCase();
+  const rate = Number(body.exchangeRate);
+  const rateDate = String(body.exchangeRateDate || transaction.fecha_operacion || '').trim();
+  const source = String(body.exchangeRateSource || '').trim();
+  if (currency === 'EUR') throw new Error('El movimiento ya está denominado en EUR.');
+  if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new Error('Indica un tipo de cambio válido a EUR, distinto de 1.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rateDate)) throw new Error('Indica la fecha del tipo de cambio.');
+  if (source.length < 3) throw new Error('Indica la fuente del tipo de cambio (BCE, extracto bancario u otra fuente verificable).');
+
+  const currentEntry = transaction.journal_entry_id
+    ? await svc.entities.JournalEntry.get(transaction.journal_entry_id).catch(() => null)
+    : null;
+  let correction = null;
+  let delta = 0;
+  if (currentEntry && currentEntry.companyId === companyId && currentEntry.status === 'confirmado') {
+    const prior = await svc.entities.JournalEntry.filter({ companyId }, '-created_date', 100000);
+    const existingCorrection = (prior || []).find(entry => entry.status !== 'anulado' && String(entry.postingKey || '').startsWith(`bank-fx-correction:${transaction.id}:`));
+    if (existingCorrection) throw new Error('Este movimiento ya tiene una corrección de cambio activa. Para cambiarla, usa contraasiento y revisión contable.');
+    const currentLines = await resolveEntryLines(svc, companyId, currentEntry);
+    const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
+    const bankLine = (currentLines || []).find(line => line.accountId === bankPostingAccount.id || line.accountCode === bankPostingAccount.code);
+    if (!bankLine) throw new Error('El asiento existente no contiene la subcuenta bancaria esperada.');
+    const currentSigned = money(Number(bankLine.debit || 0) - Number(bankLine.credit || 0));
+    const targetSigned = money((transaction.tipo === 'entrada' ? 1 : -1) * Math.abs(Number(transaction.importe || 0)) * rate);
+    delta = money(targetSigned - currentSigned);
+    if (Math.abs(delta) > 0.01) {
+      const pendingRows = await svc.entities.AccountingAccount.filter({ companyId, code: '55500000' }, '-created_date', 1);
+      const isPending = transaction.estado_conciliacion === 'revisar' && transaction.entidad_id === pendingRows?.[0]?.id;
+      const counterpart = isPending
+        ? pendingRows[0]
+        : delta > 0
+          ? await ensureAccount(svc, companyId, '76800000', 'Diferencias positivas de cambio', 'ingreso')
+          : await ensureAccount(svc, companyId, '66800000', 'Diferencias negativas de cambio', 'gasto');
+      if (!counterpart) throw new Error('No se pudo resolver la contrapartida del ajuste de cambio.');
+      const amount = money(Math.abs(delta));
+      const description = `Corrección de cambio ${currency}/EUR · ${transaction.concepto || transaction.referencia || transaction.id}`;
+      const now = new Date().toISOString();
+      const line = (account, debit, credit) => ({ accountId: account.id, accountCode: account.code, accountName: account.name, description, debit: money(debit), credit: money(credit), bankTransactionId: transaction.id, isReconciled: true, reconciledAt: now, sourceLineType: 'ajuste' });
+      const created = await createJournalEntry(svc, companyId, {
+        date: rateDate, description, type: 'ajuste', source: 'banco', documentId: transaction.id,
+        postingKey: `bank-fx-correction:${transaction.id}:${rate.toFixed(8)}:${SCHEMA_VERSION}`, status: 'confirmado',
+        currency, fxRate: rate, originalAmount: Math.abs(Number(transaction.importe || 0)),
+        lines: delta > 0 ? [line(bankPostingAccount, amount, 0), line(counterpart, 0, amount)] : [line(counterpart, amount, 0), line(bankPostingAccount, 0, amount)],
+      }, userEmail);
+      correction = created.entry;
+    }
+  }
+  const updated = await svc.entities.BankTransaction.update(transaction.id, {
+    exchange_rate: rate, exchange_rate_date: rateDate, exchange_rate_source: source,
+    exchange_rate_reviewed_by: userEmail || '',
+    notas: `${transaction.notas ? `${transaction.notas}\n` : ''}Tipo de cambio ${currency}/EUR ${rate} validado el ${rateDate}; fuente: ${source}.${correction ? ` Corrección: ${correction.entryNumber}.` : ''}`.slice(0, 2000),
+  });
+  return { transaction: updated, correction, delta, currency, exchangeRate: rate };
 }
 
 async function reclassifyPendingBankTransaction(svc, companyId, transactionId, targetAccountId, userEmail) {
@@ -1676,6 +1751,12 @@ Deno.serve(async (req) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(postingDate)) return Response.json({ error: 'Fecha de consolidación no válida.' }, { status: 400 });
       const result = await consolidateDuplicateBankLedgers(svc, companyId, body.apply === true, user.email, postingDate);
       return Response.json({ success: true, ...result });
+    }
+
+    if (action === 'save_bank_exchange_rate') {
+      if (body.apply !== true) return Response.json({ success: true, mode: 'dry_run', transactionId: body.transactionId || '' });
+      const result = await saveBankExchangeRate(svc, companyId, body, user.email);
+      return Response.json({ success: true, mode: 'apply', result, overview: await loadBankReconciliationOverview(svc, companyId) });
     }
 
     if (action === 'bank_reconciliation_overview') {
