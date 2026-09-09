@@ -1,91 +1,62 @@
+import { FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getModeloInfo } from './CalendarioAEAT';
 
-const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const CLOSED = new Set(['presentado', 'pagado', 'finalizado', 'no_aplica']);
+const dateOf = value => value ? new Date(`${value}T12:00:00`) : null;
 
-const ESTADO_COLOR = {
-  pendiente_documentacion: 'bg-secondary text-muted-foreground border-border',
-  en_preparacion: 'bg-blue-50 text-blue-700 border-blue-200',
-  presentado: 'bg-green-100 text-green-800 border-green-300',
-  domiciliado: 'bg-green-50 text-green-700 border-green-200',
-  pagado: 'bg-green-100 text-green-800 border-green-300',
-  finalizado: 'bg-green-100 text-green-800 border-green-300',
-};
-
-function getEstadoColor(obl) {
-  const now = new Date();
-  if (obl.fecha_limite && new Date(obl.fecha_limite) < now && !['finalizado','presentado','pagado','domiciliado'].includes(obl.estado)) {
-    return 'bg-red-50 text-red-700 border-red-200';
-  }
-  if (obl.fecha_limite) {
-    const diff = (new Date(obl.fecha_limite) - now) / 86400000;
-    if (diff >= 0 && diff <= 15 && !['finalizado','presentado','pagado','domiciliado'].includes(obl.estado)) {
-      return 'bg-amber-50 text-amber-700 border-amber-200';
-    }
-  }
-  return ESTADO_COLOR[obl.estado] || 'bg-secondary text-muted-foreground border-border';
-}
-
-export default function VistaTimeline({ obligations }) {
-  const year = new Date().getFullYear();
-
-  // Agrupar por mes
-  const byMonth = Array.from({ length: 12 }, (_, i) => ({
-    mes: i,
-    label: MESES[i],
-    items: obligations.filter(o => {
-      if (!o.fecha_limite) return false;
-      const d = new Date(o.fecha_limite);
-      return d.getFullYear() === year && d.getMonth() === i;
-    })
-  }));
-
-  const sinFecha = obligations.filter(o => !o.fecha_limite);
+export default function VistaTimeline({ obligations = [], onEdit }) {
+  const dated = obligations.filter(item => item.filingDeadline);
+  const years = [...new Set(dated.map(item => dateOf(item.filingDeadline).getFullYear()))].sort();
+  const noDate = obligations.filter(item => !item.filingDeadline);
 
   return (
-    <div className="space-y-2">
-      {byMonth.filter(m => m.items.length > 0 || m.mes === new Date().getMonth()).map(m => {
-        const esMesActual = m.mes === new Date().getMonth();
-        return (
-          <div key={m.mes} className={cn('rounded-xl border p-4', esMesActual ? 'border-teal bg-teal/5' : 'border-border bg-card')}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className={cn('text-sm font-jakarta font-bold w-8', esMesActual ? 'text-teal' : 'text-muted-foreground')}>{m.label}</span>
-              {esMesActual && <span className="text-xs bg-teal text-white px-2 py-0.5 rounded font-medium">Mes actual</span>}
-              {m.items.length === 0 && <span className="text-xs text-muted-foreground">Sin vencimientos</span>}
-            </div>
-            {m.items.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {m.items.map(o => {
-                  const info = getModeloInfo(o.modelo);
-                  const colorClass = getEstadoColor(o);
-                  return (
-                    <div key={o.id} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium', colorClass)}>
-                      <span>{info.icon}</span>
-                      <span>{info.label}</span>
-                      <span className="opacity-70">· {new Date(o.fecha_limite).getDate()} {MESES[new Date(o.fecha_limite).getMonth()]}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
-      {sinFecha.length > 0 && (
-        <div className="bg-card border border-border rounded-xl p-4">
-          <p className="text-sm font-medium text-muted-foreground mb-2">Sin fecha asignada</p>
-          <div className="flex flex-wrap gap-2">
-            {sinFecha.map(o => {
-              const info = getModeloInfo(o.modelo);
+    <div className="space-y-6">
+      {years.map(year => (
+        <section key={year}>
+          <h3 className="text-sm font-semibold mb-3">Vencimientos durante {year}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {MONTHS.map((month, monthIndex) => {
+              const rows = dated.filter(item => {
+                const date = dateOf(item.filingDeadline);
+                return date.getFullYear() === year && date.getMonth() === monthIndex;
+              });
+              if (!rows.length) return null;
               return (
-                <div key={o.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-secondary text-xs font-medium text-muted-foreground">
-                  <span>{info.icon}</span><span>{info.label}</span>
+                <div key={month} className="rounded-xl border border-border bg-card p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">{month}</p>
+                  <div className="space-y-2">
+                    {rows.map(item => {
+                      const date = dateOf(item.filingDeadline);
+                      const closed = CLOSED.has(item.state);
+                      return (
+                        <button key={item.key} type="button" onClick={() => onEdit?.(item)} className="w-full flex items-center gap-3 text-left rounded-lg hover:bg-muted/30 p-2 -mx-2">
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold', closed ? 'bg-emerald-100 text-emerald-700' : item.authority === 'ATC' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')}>{date.getDate()}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold truncate">Modelo {item.code} · {item.period}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{item.name}</p>
+                          </div>
+                          {item.documents?.length > 0 && <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><FileText className="w-3 h-3" />{item.documents.length}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </section>
+      ))}
+      {noDate.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="text-sm font-semibold text-amber-900">Obligaciones dependientes del supuesto</h3>
+          <p className="text-xs text-amber-800 mt-1 mb-3">Necesitan fecha de devengo, operación o confirmación del asesor.</p>
+          <div className="flex flex-wrap gap-2">
+            {noDate.map(item => <button key={item.key} onClick={() => onEdit?.(item)} className="text-xs rounded-lg border border-amber-200 bg-white px-3 py-2">Modelo {item.code} · {item.period}</button>)}
+          </div>
+        </section>
       )}
     </div>
   );
 }
+
