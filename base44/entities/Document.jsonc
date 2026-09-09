@@ -45,6 +45,59 @@
     },
     "subido_por": {
       "type": "string"
+    },
+    "fiscal_model_code": {
+      "type": "string"
+    },
+    "fiscal_period": {
+      "type": "string"
+    },
+    "fiscal_year": {
+      "type": "number"
+    },
+    "fiscal_document_kind": {
+      "type": "string",
+      "enum": [
+        "borrador_modelo",
+        "modelo_presentado",
+        "justificante_presentacion",
+        "carta_pago",
+        "notificacion",
+        "requerimiento",
+        "respuesta_requerimiento",
+        "otro"
+      ]
+    },
+    "administracion": {
+      "type": "string",
+      "enum": [
+        "AEAT",
+        "ATC",
+        "Otro"
+      ]
+    },
+    "tax_obligation_id": {
+      "type": "string"
+    },
+    "tax_filing_id": {
+      "type": "string"
+    },
+    "fiscal_link_status": {
+      "type": "string",
+      "enum": [
+        "sin_clasificar",
+        "detectado",
+        "vinculado",
+        "requiere_revision"
+      ],
+      "default": "sin_clasificar"
+    },
+    "fiscal_linked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fiscal_linked_by": {
+      "type": "string"
     }
   },
   "required": [
