@@ -106,6 +106,45 @@ async function ensureBankPostingAccount(svc, companyId, bankAccount) {
   return await linkBankPostingAccount(svc, bankAccount, account, identityKey);
 }
 
+async function buildAccountingConfigurationDiagnostics(svc, companyId, configuration) {
+  const [accounts, banks, invoices, periods] = await Promise.all([
+    fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
+    fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
+    fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 10000),
+    listFiscalYears(svc, companyId),
+  ]);
+  const activeAccounts = accounts.filter(item => item.status !== 'inactiva');
+  const activeByCode = new Map(activeAccounts.map(item => [String(item.code || ''), item]));
+  let mappings = [];
+  try {
+    const parsed = JSON.parse(configuration?.mappingsJson || '[]');
+    mappings = Array.isArray(parsed) ? parsed : Object.entries(parsed || {}).map(([categoria, cuenta]) => ({ categoria, cuenta }));
+  } catch {
+    mappings = [];
+  }
+  const mappingCodes = [...new Set(mappings.map(item => String(item?.cuenta || '')).filter(Boolean))];
+  const invalidMappingCodes = mappingCodes.filter(code => !/^\d{8}$/.test(code) || !activeByCode.has(code));
+  const usedCategories = [...new Set(invoices.map(invoice => String(invoice.categoria || invoice.categoria_gasto || invoice.categoria_contable || '').trim()).filter(Boolean))];
+  const mappedCategories = new Set(mappings.map(item => String(item?.categoria || '').trim()).filter(Boolean));
+  const unmappedCategories = usedCategories.filter(category => !mappedCategories.has(category));
+  const activeBanks = banks.filter(bank => bank.activa !== false);
+  const connectedBanks = activeBanks.filter(bank => ['conectado', 'connected', 'active', 'ready'].includes(String(bank.estado_conexion || '').toLowerCase()));
+  const mappedBanks = activeBanks.filter(bank => bank.accounting_account_id && activeAccounts.some(account => account.id === bank.accounting_account_id));
+  const referencedLedgerIds = new Set(banks.map(bank => bank.accounting_account_id).filter(Boolean));
+  const orphanBankLedgers = activeAccounts.filter(account => account.type === 'banco' && /^5720/.test(String(account.code || '')) && !referencedLedgerIds.has(account.id));
+  const currentYear = new Date().getUTCFullYear();
+  const currentPeriod = periods.find(period => Number(period.year) === currentYear) || null;
+  const scoreParts = [invalidMappingCodes.length === 0, unmappedCategories.length === 0, activeBanks.length === mappedBanks.length, orphanBankLedgers.length === 0, Boolean(currentPeriod)];
+  return {
+    generatedAt: new Date().toISOString(),
+    readinessScore: Math.round((scoreParts.filter(Boolean).length / scoreParts.length) * 100),
+    accounts: { total: accounts.length, active: activeAccounts.length, invalidMappingCodes },
+    categories: { used: usedCategories, unmapped: unmappedCategories },
+    banking: { active: activeBanks.length, connected: connectedBanks.length, mapped: mappedBanks.length, orphanLedgerCodes: orphanBankLedgers.map(account => account.code) },
+    periods: { total: periods.length, currentYearConfigured: Boolean(currentPeriod), currentYearStatus: currentPeriod?.status || 'sin_configurar' },
+  };
+}
+
 const normalizeAuditText = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -1068,7 +1107,7 @@ Deno.serve(async (req) => {
     if (action === 'get_accounting_configuration' || action === 'save_accounting_configuration') {
       const rows = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 10);
       const existing = rows?.[0] || null;
-      if (action === 'get_accounting_configuration') return Response.json({ success: true, configuration: existing });
+      if (action === 'get_accounting_configuration') return Response.json({ success: true, configuration: existing, diagnostics: await buildAccountingConfigurationDiagnostics(svc, companyId, existing) });
       const accountFields = ['clientAccount', 'supplierAccount', 'outputTaxAccount', 'inputTaxAccount', 'withholdingReceivableAccount', 'withholdingPayableAccount', 'unmatchedIncomingAccount', 'unmatchedOutgoingAccount'];
       const defaults = { clientAccount: '43000000', supplierAccount: '41000000', outputTaxAccount: '47700000', inputTaxAccount: '47200000', withholdingReceivableAccount: '47300000', withholdingPayableAccount: '47510000', unmatchedIncomingAccount: '55500000', unmatchedOutgoingAccount: '' };
       const payload = {};
@@ -1104,7 +1143,7 @@ Deno.serve(async (req) => {
       const configuration = existing
         ? await svc.entities.AccountingConfiguration.update(existing.id, payload)
         : await svc.entities.AccountingConfiguration.create({ companyId, ...payload });
-      return Response.json({ success: true, configuration });
+      return Response.json({ success: true, configuration, diagnostics: await buildAccountingConfigurationDiagnostics(svc, companyId, configuration) });
     }
 
     if (action === 'tax_summary') {
