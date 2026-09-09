@@ -14,6 +14,9 @@
     "iaeCode": {
       "type": "string"
     },
+    "iaeActivityCode": {
+      "type": "string"
+    },
     "cnaeCode": {
       "type": "string"
     },
@@ -39,6 +42,7 @@
         "empresarial",
         "comercial_minorista",
         "agricola_ganadera",
+        "forestal",
         "inmobiliaria",
         "financiera_seguros",
         "sanitaria",
@@ -71,12 +75,15 @@
         "exenta_plena",
         "no_sujeta",
         "simplificado",
-        "agricola_ganadera",
+        "agricultura_ganaderia_pesca",
         "recargo_equivalencia",
         "criterio_caja",
         "rebu",
         "agencias_viajes",
         "oro_inversion",
+        "oss_exterior_union",
+        "oss_union",
+        "ioss_importacion",
         "grupo_entidades",
         "comerciante_minorista_igic",
         "pequeno_empresario_igic",
@@ -122,6 +129,46 @@
       "items": {
         "type": "string"
       }
+    },
+    "exemptionKey": {
+      "type": "string"
+    },
+    "exemptionLegalBasis": {
+      "type": "string"
+    },
+    "newProfessionalRateConfirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "retentionIncomePercent": {
+      "type": "number",
+      "default": 0
+    },
+    "model130Treatment": {
+      "type": "string",
+      "enum": [
+        "obligado",
+        "excluido_70_confirmado",
+        "pendiente_revision"
+      ],
+      "default": "pendiente_revision"
+    },
+    "hasIntraCommunityOperations": {
+      "type": "boolean",
+      "default": false
+    },
+    "ruleSetVersion": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
     },
     "automationLevel": {
       "type": "string",
