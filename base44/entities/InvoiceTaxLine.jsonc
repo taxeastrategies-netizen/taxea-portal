@@ -1,0 +1,129 @@
+{
+  "name": "InvoiceTaxLine",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "invoiceId": {
+      "type": "string"
+    },
+    "lineNumber": {
+      "type": "integer"
+    },
+    "operationDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "taxKind": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic",
+        "no_aplica"
+      ]
+    },
+    "rate": {
+      "type": "number"
+    },
+    "base": {
+      "type": "number"
+    },
+    "quota": {
+      "type": "number"
+    },
+    "deductibleQuota": {
+      "type": "number"
+    },
+    "nonDeductibleQuota": {
+      "type": "number"
+    },
+    "surchargeRate": {
+      "type": "number"
+    },
+    "surchargeQuota": {
+      "type": "number"
+    },
+    "regime": {
+      "type": "string",
+      "enum": [
+        "general",
+        "intracomunitaria",
+        "importacion_exportacion",
+        "exenta",
+        "no_sujeta",
+        "inversion_sujeto_pasivo",
+        "criterio_caja",
+        "comerciante_minorista",
+        "otro"
+      ]
+    },
+    "exemptionKey": {
+      "type": "string"
+    },
+    "deductible": {
+      "type": "boolean",
+      "default": true
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "ocr",
+        "migracion",
+        "sistema"
+      ],
+      "default": "manual"
+    },
+    "reviewStatus": {
+      "type": "string",
+      "enum": [
+        "validado",
+        "pendiente_revision"
+      ],
+      "default": "pendiente_revision"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "default": "pgc8-v1"
+    }
+  },
+  "required": [
+    "companyId",
+    "invoiceId",
+    "lineNumber",
+    "operationDate",
+    "taxKind",
+    "base",
+    "quota"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
