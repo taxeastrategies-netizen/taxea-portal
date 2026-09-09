@@ -1,23 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 async function fetchAll(entity, query = {}, sort = '-created_date', max = 100000) {
-  const rows = new Map();
+  const rows = [];
   const pageSize = 5000;
-  const descending = String(sort).startsWith('-');
-  const cursorField = String(sort).replace(/^-/, '');
-  let cursor;
-  while (rows.size < max) {
-    const cursorQuery = cursor === undefined ? query : { ...query, [cursorField]: { [descending ? '$lte' : '$gte']: cursor } };
-    const page = await entity.filter(cursorQuery, sort, Math.min(pageSize, max - rows.size), 0);
+  let offset = 0;
+  while (rows.length < max) {
+    const page = await entity.filter(query, sort, Math.min(pageSize, max - rows.length), offset);
     if (!page?.length) break;
-    const before = rows.size;
-    for (const row of page) rows.set(row.id || `${cursorField}:${row[cursorField]}:${rows.size}`, row);
-    const next = page[page.length - 1]?.[cursorField];
-    if (page.length < pageSize || next == null || (Object.is(next, cursor) && rows.size === before)) break;
-    cursor = next;
+    rows.push(...page);
+    offset += page.length;
+    if (page.length < pageSize) break;
   }
-  if (rows.size >= max) throw new Error(`El volumen supera el limite de seguridad de ${max} registros. Acota el ejercicio.`);
-  return [...rows.values()];
+  if (rows.length >= max) throw new Error(`El volumen supera el limite de seguridad de ${max} registros. Acota el ejercicio.`);
+  return rows;
 }
 
 Deno.serve(async (req) => {
