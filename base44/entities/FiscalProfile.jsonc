@@ -126,6 +126,76 @@
       "type": "boolean",
       "default": false
     },
+    "retainedIncomePercent": {
+      "type": "number",
+      "default": 0
+    },
+    "model130ExemptionConfirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "repepStatus": {
+      "type": "string",
+      "enum": [
+        "no_aplica",
+        "incluido",
+        "renunciado",
+        "excluido",
+        "transitorio_2026"
+      ],
+      "default": "no_aplica"
+    },
+    "repepEffectiveFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "repepEffectiveUntil": {
+      "type": "string",
+      "format": "date"
+    },
+    "paysEmploymentOrProfessionalIncome": {
+      "type": "boolean",
+      "default": false
+    },
+    "paysUrbanRent": {
+      "type": "boolean",
+      "default": false
+    },
+    "paysCapitalIncome": {
+      "type": "boolean",
+      "default": false
+    },
+    "hasNonResidentOperations": {
+      "type": "boolean",
+      "default": false
+    },
+    "hasThirdPartyReporting": {
+      "type": "boolean",
+      "default": false
+    },
+    "profileStatus": {
+      "type": "string",
+      "enum": [
+        "incompleto",
+        "pendiente_revision",
+        "validado_asesor"
+      ],
+      "default": "pendiente_revision"
+    },
+    "censusValidationSource": {
+      "type": "string",
+      "enum": [
+        "pendiente_confirmar",
+        "modelo_036",
+        "modelo_400",
+        "certificado_censal",
+        "criterio_asesor"
+      ],
+      "default": "pendiente_confirmar"
+    },
+    "ruleSetVersion": {
+      "type": "string"
+    },
     "reviewedAt": {
       "type": "string",
       "format": "date-time"
