@@ -37,20 +37,63 @@ async function resolveEntryLines(svc, companyId, entry) {
   return lines || [];
 }
 
+const normalizeBankIban = (value) => String(value || '').replace(/\s+/g, '').toUpperCase();
+const bankCurrency = (bankAccount) => String(bankAccount?.moneda || bankAccount?.currency || 'EUR').trim().toUpperCase();
+const stableBankIdentity = (bankAccount) => {
+  const currency = bankCurrency(bankAccount);
+  const iban = normalizeBankIban(bankAccount?.iban);
+  if (iban) return `iban:${iban}:${currency}`;
+  const providerAccountId = String(bankAccount?.provider_account_id || '').trim();
+  if (providerAccountId) return `provider:${providerAccountId}:${currency}`;
+  return '';
+};
+
+async function linkBankPostingAccount(svc, bankAccount, account, identityKey) {
+  await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: account.id, accounting_account_code: account.code });
+  const updates = {};
+  if (identityKey && account.bankIdentityKey !== identityKey) updates.bankIdentityKey = identityKey;
+  if (account.bankAccountId !== bankAccount.id) updates.bankAccountId = bankAccount.id;
+  if (account.bankCurrency !== bankCurrency(bankAccount)) updates.bankCurrency = bankCurrency(bankAccount);
+  if (Object.keys(updates).length) await svc.entities.AccountingAccount.update(account.id, updates);
+  return { ...account, ...updates };
+}
+
 async function ensureBankPostingAccount(svc, companyId, bankAccount) {
   if (!bankAccount || bankAccount.company_id !== companyId) throw new Error('La cuenta bancaria no pertenece a la empresa.');
+  const identityKey = stableBankIdentity(bankAccount);
   if (bankAccount.accounting_account_id) {
     const linked = await svc.entities.AccountingAccount.get(bankAccount.accounting_account_id).catch(() => null);
-    if (linked && linked.companyId === companyId && linked.status !== 'inactiva') return linked;
+    if (linked && linked.companyId === companyId && linked.status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked, identityKey);
   }
   if (bankAccount.accounting_account_code) {
     const linked = await svc.entities.AccountingAccount.filter({ companyId, code: bankAccount.accounting_account_code }, '-created_date', 1);
-    if (linked?.[0]) {
-      await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: linked[0].id });
-      return linked[0];
+    if (linked?.[0] && linked[0].status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked[0], identityKey);
+  }
+  if (identityKey) {
+    const byIdentity = await svc.entities.AccountingAccount.filter({ companyId, bankIdentityKey: identityKey }, '-created_date', 10);
+    const reusable = byIdentity?.find(item => item.status !== 'inactiva');
+    if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
+
+    const peerBanks = await fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000);
+    for (const peer of peerBanks) {
+      if (peer.id === bankAccount.id || stableBankIdentity(peer) !== identityKey) continue;
+      let peerAccount = null;
+      if (peer.accounting_account_id) peerAccount = await svc.entities.AccountingAccount.get(peer.accounting_account_id).catch(() => null);
+      if (!peerAccount && peer.accounting_account_code) {
+        const rows = await svc.entities.AccountingAccount.filter({ companyId, code: peer.accounting_account_code }, '-created_date', 1);
+        peerAccount = rows?.[0] || null;
+      }
+      if (peerAccount && peerAccount.companyId === companyId && peerAccount.status !== 'inactiva') {
+        return await linkBankPostingAccount(svc, bankAccount, peerAccount, identityKey);
+      }
     }
   }
+
   const accounts = await fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000);
+  if (identityKey) {
+    const reusable = accounts.find(item => item.bankIdentityKey === identityKey && item.status !== 'inactiva');
+    if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
+  }
   const used = new Set(accounts.map(account => String(account.code || '')));
   let code = '';
   for (let sequence = 1; sequence <= 9999; sequence += 1) {
@@ -59,9 +102,8 @@ async function ensureBankPostingAccount(svc, companyId, bankAccount) {
   }
   if (!code) throw new Error('No quedan subcuentas bancarias disponibles en el grupo 5720.');
   const suffix = bankAccount.ultimos_4 ? ` · ${bankAccount.ultimos_4}` : '';
-  const account = await ensureAccount(svc, companyId, code, `${bankAccount.nombre_banco || 'Banco'}${suffix}`, 'banco');
-  await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: account.id, accounting_account_code: account.code });
-  return account;
+  const account = await ensureAccount(svc, companyId, code, `${bankAccount.nombre_banco || 'Banco'}${suffix} · ${bankCurrency(bankAccount)}`, 'banco');
+  return await linkBankPostingAccount(svc, bankAccount, account, identityKey);
 }
 
 const normalizeAuditText = (value) => String(value || '')
