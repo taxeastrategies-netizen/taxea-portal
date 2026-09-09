@@ -1,140 +1,95 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { Receipt, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Receipt } from 'lucide-react';
 
-const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
+const fmt = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 
 export default function IVAResumen() {
   const { company } = useOutletContext() || {};
-  const [filterAnio, setFilterAnio] = useState('todos');
-  const [filterTrimestre, setFilterTrimestre] = useState('todos');
-
-  const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-iva', company?.id],
+  const [year, setYear] = useState('todos');
+  const [quarter, setQuarter] = useState('todos');
+  const query = useQuery({
+    queryKey: ['accounting-tax-summary', company?.id, year, quarter],
+    enabled: Boolean(company?.id),
     queryFn: async () => {
-      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
-      const finData = res?.data || res;
-      return (finData?.invoices || []).filter(i => i.estado_contable === 'contabilizada' && !i.anulada);
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'tax_summary',
+        companyId: company.id,
+        year,
+        quarter,
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      return response.data;
     },
-    enabled: !!company?.id,
   });
 
-  const anios = [...new Set(invoices.map(i => i.anio).filter(Boolean))].sort((a, b) => b - a);
+  if (query.isLoading) return <div className="p-10 text-center text-sm text-muted-foreground">Cargando resumen fiscal…</div>;
+  if (query.isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{query.error.message}</div>;
 
-  const filtered = invoices.filter(inv => {
-    const matchAnio = filterAnio === 'todos' || String(inv.anio) === filterAnio;
-    const matchT = filterTrimestre === 'todos' || inv.trimestre === filterTrimestre;
-    return matchAnio && matchT;
-  });
-
-  const emitidas = filtered.filter(i => i.tipo === 'emitida');
-  const recibidas = filtered.filter(i => i.tipo === 'recibida');
-
-  const ivaRepercutido = emitidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-  const ivaSoportado = recibidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-  const resultado = ivaRepercutido - ivaSoportado;
-
-  if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando...</div>;
+  const data = query.data || {};
+  const totals = data.totals || {};
+  const quality = data.quality || {};
+  const label = data.taxKind === 'igic' ? 'IGIC' : 'IVA';
+  const result = Number(totals.result || 0);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Receipt className="w-5 h-5 text-primary" />
+        <Receipt className="h-5 w-5 text-primary" />
         <div>
-          <p className="font-jakarta font-semibold">Resumen IVA / IGIC</p>
-          <p className="text-xs text-muted-foreground">Basado exclusivamente en facturas contabilizadas. No es un modelo fiscal definitivo.</p>
+          <p className="font-semibold">Resumen {label}</p>
+          <p className="text-xs text-muted-foreground">Cuotas repercutidas, soportadas, deducibles y no deducibles de facturas contabilizadas.</p>
         </div>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2 text-xs text-amber-800">
-        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-        <p>Este resumen es orientativo e interno. Solo se incluyen facturas con estado <strong>Contabilizada</strong>. Para calcular modelos fiscales definitivos consulta con tu asesor.</p>
-      </div>
-
-      <div className="flex gap-2">
-        <Select value={filterAnio} onValueChange={setFilterAnio}>
+      <div className="flex flex-wrap gap-2">
+        <Select value={year} onValueChange={setYear}>
           <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="Año" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {anios.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-          </SelectContent>
+          <SelectContent><SelectItem value="todos">Todos</SelectItem>{(data.years || []).map((item) => <SelectItem key={item} value={String(item)}>{item}</SelectItem>)}</SelectContent>
         </Select>
-        <Select value={filterTrimestre} onValueChange={setFilterTrimestre}>
-          <SelectTrigger className="h-8 w-28 text-xs"><SelectValue placeholder="Trimestre" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            {['T1', 'T2', 'T3', 'T4'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-          </SelectContent>
+        <Select value={quarter} onValueChange={setQuarter}>
+          <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Trimestre" /></SelectTrigger>
+          <SelectContent><SelectItem value="todos">Todos</SelectItem>{['T1', 'T2', 'T3', 'T4'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
         </Select>
       </div>
 
-      {invoices.length === 0 ? (
-        <div className="bg-card border border-border rounded-xl p-16 text-center space-y-3">
-          <Receipt className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-          <p className="font-semibold">No hay datos de IVA disponibles</p>
-          <p className="text-sm text-muted-foreground">El resumen de IVA se genera cuando existen facturas contabilizadas.</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-xs text-blue-600 font-medium">IVA repercutido (emitidas)</p>
-              <p className="text-2xl font-bold font-jakarta text-blue-700 mt-1">{fmt(ivaRepercutido)}</p>
-              <p className="text-[11px] text-blue-500 mt-1">{emitidas.length} facturas emitidas contabilizadas</p>
-            </div>
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-              <p className="text-xs text-purple-600 font-medium">IVA soportado (recibidas)</p>
-              <p className="text-2xl font-bold font-jakarta text-purple-700 mt-1">{fmt(ivaSoportado)}</p>
-              <p className="text-[11px] text-purple-500 mt-1">{recibidas.length} facturas recibidas contabilizadas</p>
-            </div>
-            <div className={`${resultado >= 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'} border rounded-xl p-4`}>
-              <p className={`text-xs font-medium ${resultado >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                Resultado IVA ({resultado >= 0 ? 'A pagar' : 'A compensar'})
-              </p>
-              <p className={`text-2xl font-bold font-jakarta mt-1 ${resultado >= 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                {fmt(Math.abs(resultado))}
-              </p>
-              <p className={`text-[11px] mt-1 ${resultado >= 0 ? 'text-red-500' : 'text-emerald-500'}`}>Orientativo — pendiente de revisión</p>
-            </div>
-          </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        {[
+          [`${label} repercutido`, totals.outputQuota, 'text-blue-700'],
+          [`${label} soportado`, totals.inputQuota, 'text-purple-700'],
+          [`${label} deducible`, totals.deductibleQuota, 'text-emerald-700'],
+          [`${label} no deducible`, totals.nonDeductibleQuota, 'text-amber-700'],
+        ].map(([title, value, color]) => (
+          <div key={title} className="rounded-xl border border-border bg-card p-4"><p className="text-xs text-muted-foreground">{title}</p><p className={`mt-1 text-xl font-semibold ${color}`}>{fmt(value)}</p></div>
+        ))}
+      </div>
 
-          {/* Por tipo de IVA */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <p className="text-sm font-semibold">Desglose por tipo impositivo</p>
-            </div>
-            <table className="w-full text-xs">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Tipo</th>
-                  <th className="px-4 py-2 text-right font-semibold text-muted-foreground">Base emitidas</th>
-                  <th className="px-4 py-2 text-right font-semibold text-muted-foreground">IVA repercutido</th>
-                  <th className="px-4 py-2 text-right font-semibold text-muted-foreground">Base recibidas</th>
-                  <th className="px-4 py-2 text-right font-semibold text-muted-foreground">IVA soportado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[...new Set(filtered.map(i => i.tipo_iva).filter(t => t != null))].sort().map(tipo => {
-                  const em = filtered.filter(i => i.tipo === 'emitida' && i.tipo_iva === tipo);
-                  const re = filtered.filter(i => i.tipo === 'recibida' && i.tipo_iva === tipo);
-                  return (
-                    <tr key={tipo} className="hover:bg-muted/20">
-                      <td className="px-4 py-2 font-medium">{tipo}%</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmt(em.reduce((s, i) => s + (i.base_imponible || 0), 0))}</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmt(em.reduce((s, i) => s + (i.cuota_iva || 0), 0))}</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmt(re.reduce((s, i) => s + (i.base_imponible || 0), 0))}</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmt(re.reduce((s, i) => s + (i.cuota_iva || 0), 0))}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
+      <div className={`rounded-xl border p-4 ${result >= 0 ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}>
+        <p className="text-xs font-medium">Resultado interno · {result >= 0 ? 'a ingresar' : 'a compensar'}</p>
+        <p className="mt-1 text-2xl font-bold">{fmt(Math.abs(result))}</p>
+      </div>
+
+      {(quality.legacyAggregateInvoices > 0 || quality.pendingReviewLines > 0) && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <p>{quality.legacyAggregateInvoices || 0} facturas históricas usan el agregado de cabecera y {quality.pendingReviewLines || 0} líneas siguen pendientes de revisión fiscal. No deben darse por listas para presentar.</p>
+        </div>
       )}
+
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="border-b border-border px-4 py-3"><p className="text-sm font-semibold">Desglose por impuesto y tipo</p><p className="text-xs text-muted-foreground">{quality.invoices || 0} facturas · {quality.detailedInvoices || 0} con detalle fiscal estructurado</p></div>
+        {(data.rows || []).length === 0 ? (
+          <div className="p-12 text-center text-sm text-muted-foreground">No hay facturas contabilizadas en el periodo.</div>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-muted/40"><tr>{['Tipo', 'Base emitida', 'Repercutido', 'Base recibida', 'Soportado', 'Deducible', 'No deducible'].map((title) => <th key={title} className="px-4 py-2 text-right first:text-left">{title}</th>)}</tr></thead><tbody className="divide-y divide-border">{data.rows.map((row) => <tr key={`${row.taxKind}-${row.rate}`}><td className="px-4 py-2 font-medium">{String(row.taxKind).toUpperCase()} {row.rate}%</td><td className="px-4 py-2 text-right font-mono">{fmt(row.issuedBase)}</td><td className="px-4 py-2 text-right font-mono">{fmt(row.outputQuota)}</td><td className="px-4 py-2 text-right font-mono">{fmt(row.receivedBase)}</td><td className="px-4 py-2 text-right font-mono">{fmt(row.inputQuota)}</td><td className="px-4 py-2 text-right font-mono">{fmt(row.deductibleQuota)}</td><td className="px-4 py-2 text-right font-mono">{fmt(row.nonDeductibleQuota)}</td></tr>)}</tbody></table></div>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">{data.notice}</p>
     </div>
   );
 }
+
