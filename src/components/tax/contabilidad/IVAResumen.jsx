@@ -1,30 +1,38 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, Receipt } from 'lucide-react';
 
 const fmt = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 
-export default function IVAResumen() {
-  const { company } = useOutletContext() || {};
+export default function IVAResumen({ companyId }) {
   const [year, setYear] = useState('todos');
   const [quarter, setQuarter] = useState('todos');
   const query = useQuery({
-    queryKey: ['accounting-tax-summary', company?.id, year, quarter],
-    enabled: Boolean(company?.id),
+    queryKey: ['accounting-tax-summary', companyId, year, quarter],
+    enabled: Boolean(companyId),
     queryFn: async () => {
       const response = await base44.functions.invoke('accountingOperations', {
         action: 'tax_summary',
-        companyId: company.id,
+        companyId,
         year,
         quarter,
       });
-      if (response.data?.error) throw new Error(response.data.error);
-      return response.data;
+      const result = response?.data || response || {};
+      if (result.error || result.success === false) throw new Error(result.error || 'No se pudo calcular el resumen fiscal.');
+      return result;
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    const refresh = () => query.refetch();
+    window.addEventListener('financials:refresh', refresh);
+    return () => window.removeEventListener('financials:refresh', refresh);
+  }, [query.refetch]);
 
   if (query.isLoading) return <div className="p-10 text-center text-sm text-muted-foreground">Cargando resumen fiscal…</div>;
   if (query.isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{query.error.message}</div>;
