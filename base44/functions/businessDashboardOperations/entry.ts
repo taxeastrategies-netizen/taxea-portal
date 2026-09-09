@@ -190,7 +190,7 @@ export function buildBusinessSummary(data: any, year: number, user: any = {}) {
     accounting: {
       pnl: { income: report.profitAndLoss.totalIncome, expenses: report.profitAndLoss.totalExpenses, result: report.profitAndLoss.result, margin: report.profitAndLoss.totalIncome ? Math.round((report.profitAndLoss.result / report.profitAndLoss.totalIncome) * 1000) / 10 : null },
       balance: { assets: report.balanceSheet.totalAssets, liabilities: report.balanceSheet.totalLiabilities, equity: report.balanceSheet.totalEquity, difference: report.balanceSheet.difference },
-      report: { includedEntries: report.includedEntries, excludedEntries: report.excludedEntries, pendingEntries: report.pendingEntriesInYear },
+      report: { includedEntries: report.includedEntries, excludedEntries: report.excludedEntries, pendingEntries: report.pendingEntriesInYear, years: report.years || [] },
       quality,
       monthly: monthlyAccounting(data.accounting, year),
       source: 'asientos_confirmados_cuadrados',
