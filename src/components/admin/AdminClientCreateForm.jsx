@@ -105,7 +105,34 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         });
       } catch (_inviteError) { /* puede existir previamente */ }
 
-      // 3. Enviar email personalizado en español vía backend function
+      // 3. Crear o actualizar la empresa canónica y dejar lista su contabilidad.
+      const companyResponse = await base44.functions.invoke('saveCompanyAsAdmin', {
+        clientEmail: form.email,
+        companyData: {
+          razon_social: form.legalName,
+          nombre_comercial: form.displayName || form.legalName,
+          nif_cif: form.taxId,
+          email: form.email,
+          telefono: form.phone,
+          actividad: form.activity,
+          regimen_fiscal: form.clientType === 'autonomo' ? 'autonomo' : 'sociedad_limitada',
+          tipo_impuesto: ['iva', 'igic', 'exento', 'mixto'].includes(form.taxRegime) ? form.taxRegime : 'mixto',
+        },
+      });
+      const companyPayload = companyResponse?.data ?? companyResponse;
+      if (!companyPayload?.success || !companyPayload?.company?.id) {
+        throw new Error(companyPayload?.error || 'No se pudo crear la empresa del cliente.');
+      }
+      const accountingResponse = await base44.functions.invoke('accountingOperations', {
+        action: 'ensure_accounting_ready',
+        companyId: companyPayload.company.id,
+      });
+      const accountingPayload = accountingResponse?.data ?? accountingResponse;
+      if (!accountingPayload?.success) {
+        throw new Error(accountingPayload?.error || 'No se pudo preparar la contabilidad del cliente.');
+      }
+
+      // 4. Enviar email personalizado en español vía backend function
       const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
@@ -116,7 +143,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         });
       } catch (_emailError) { /* no bloquear si falla */ }
 
-      // 4. Audit log
+      // 5. Audit log
       await base44.entities.ClientAccessAuditLog.create({
         clientAccountId: client.id,
         clientName: form.legalName,
