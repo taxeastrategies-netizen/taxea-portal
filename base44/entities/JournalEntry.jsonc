@@ -156,6 +156,33 @@
     },
     "migrationBatch": {
       "type": "string"
+    },
+    "series": {
+      "type": "string",
+      "default": "GENERAL"
+    },
+    "sourceEvent": {
+      "type": "string"
+    },
+    "costCenterId": {
+      "type": "string"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "fxRate": {
+      "type": "number",
+      "default": 1
+    },
+    "originalAmount": {
+      "type": "number"
+    },
+    "numberReservationId": {
+      "type": "string"
     }
   },
   "required": [
@@ -165,7 +192,9 @@
   ],
   "rls": {
     "create": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
@@ -180,10 +209,14 @@
       ]
     },
     "update": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.companyId": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
