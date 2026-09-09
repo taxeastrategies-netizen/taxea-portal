@@ -169,7 +169,7 @@ export async function executeClosing(svc, companyId, body, userEmail) {
     if (netDebit < 0) lines.push({ accountCode: resultAccount.code, accountName: resultAccount.name, debit: 0, credit: -netDebit });
     if (lines.length >= 2) {
       regularization = (await createJournalEntry(svc, companyId, {
-        date: period.endDate, description: `Regularización del ejercicio ${year}`, type: 'regularizacion', source: 'sistema', sourceEvent: 'cierre_ejercicio', postingKey: regularizationKey, status: 'confirmado', lines,
+        date: period.endDate, description: `Regularización del ejercicio ${year}`, type: 'regularizacion', source: 'sistema', sourceEvent: 'cierre_ejercicio', postingKey: regularizationKey, status: 'confirmado', systemOverride: true, lines,
       }, userEmail)).entry;
     }
   }
@@ -187,7 +187,7 @@ export async function executeClosing(svc, companyId, body, userEmail) {
     }
     if (closingLines.length >= 2) {
       closing = (await createJournalEntry(svc, companyId, {
-        date: period.endDate, description: `Cierre del ejercicio ${year}`, type: 'cierre', source: 'sistema', sourceEvent: 'cierre_ejercicio', postingKey: closingKey, status: 'confirmado', lines: closingLines,
+        date: period.endDate, description: `Cierre del ejercicio ${year}`, type: 'cierre', source: 'sistema', sourceEvent: 'cierre_ejercicio', postingKey: closingKey, status: 'confirmado', systemOverride: true, lines: closingLines,
       }, userEmail)).entry;
     }
   }
