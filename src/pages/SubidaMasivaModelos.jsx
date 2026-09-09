@@ -12,11 +12,6 @@ import { generarMensajeWhatsApp, formatearTelefono } from '@/lib/whatsappMensaje
 
 let nextId = 1;
 
-const MODELOS_ENUM = [
-  'modelo_303','modelo_390','modelo_130','modelo_111','modelo_115',
-  'modelo_202','modelo_200','modelo_349','modelo_420_igic','modelo_425_igic',
-  'renta','cuentas_anuales','libros_contables','otra'
-];
 
 const MODELO_A_CARPETA = {
   modelo_303: 'fiscal_iva', modelo_390: 'fiscal_iva',
