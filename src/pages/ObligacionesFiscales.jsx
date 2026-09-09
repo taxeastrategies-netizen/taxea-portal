@@ -25,7 +25,6 @@ const TABS = [
   { id: 'timeline', label: 'Timeline anual', icon: ShieldCheck },
   { id: 'documentos', label: 'Documentos fiscales', icon: FileCheck2 },
 ];
-const CLOSED = new Set(['presentado', 'pagado', 'finalizado', 'no_aplica']);
 const EMPTY_FORM = {
   modelCode: '303', period: 'T1', fiscalYear: new Date().getFullYear(), filingDeadline: '',
   domicileDeadline: '', internalDeadline: '', state: 'pendiente_documentacion', result: 'pendiente',
