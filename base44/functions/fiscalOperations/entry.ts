@@ -92,6 +92,7 @@ const MODEL_CATALOG = [
   ['200', 'Impuesto sobre Sociedades', 'AEAT', 'anual'], ['202', 'Pago fraccionado Impuesto sobre Sociedades', 'AEAT', 'segun_modelo'],
   ['210', 'IRNR sin establecimiento permanente', 'AEAT', 'segun_modelo'], ['216', 'Retenciones IRNR', 'AEAT', 'trimestral'], ['296', 'Resumen anual modelo 216', 'AEAT', 'anual'],
   ['400', 'Declaracion censal IGIC', 'ATC', 'segun_modelo'], ['412', 'Autoliquidacion ocasional IGIC', 'ATC', 'ocasional'],
+  ['414', 'Solicitud de devolucion IGIC a no establecidos', 'ATC', 'segun_modelo'],
   ['415', 'Operaciones economicas con terceras personas', 'ATC', 'anual'], ['416', 'Operaciones exentas art. 25 Ley 19/1994', 'ATC', 'anual'],
   ['417', 'Autoliquidacion IGIC SII', 'ATC', 'mensual'], ['418', 'IGIC grupo entidades individual', 'ATC', 'mensual'],
   ['419', 'IGIC grupo entidades agregado', 'ATC', 'mensual'], ['420', 'Autoliquidacion IGIC regimen general', 'ATC', 'trimestral'],
@@ -297,6 +298,17 @@ Deno.serve(async (req) => {
         else { const row = await svc.entities.TaxModel.create({ companyId, codigo: item.code, ...payload }); created.push(row.id); }
       }
       return Response.json({ success: true, mode: 'apply', created: created.length, updated: updated.length, recommendations });
+    }
+
+    if (action === 'save_manual_obligation') {
+      const code = clean(body.code);
+      const model = MODEL_CATALOG.find(item => item[0] === code);
+      if (!model) throw new Error('Modelo fiscal no incluido en el catalogo oficial configurado.');
+      const current = (models || []).find(item => clean(item.codigo) === code);
+      const tax = ['303','309','322','353','368','369','390'].includes(code) ? 'IVA' : ['400','412','414','415','416','417','418','419','420','421','422','424','425'].includes(code) ? 'IGIC' : ['130','131','210','216','296'].includes(code) ? 'IRPF' : ['111','115','123','180','190','193'].includes(code) ? 'Retenciones' : 'Otro';
+      const payload = { nombre: model[1], impuesto: tax, administracion: model[2], periodicidad: model[3], activo: body.active !== false, fuenteValidacion: 'criterio_asesor', estadoImplementacion: 'configuracion', observaciones: `Seleccion manual trazada ${RULESET}: ${clean(body.reason) || 'obligacion confirmada por usuario o asesor'}` };
+      const saved = current ? await svc.entities.TaxModel.update(current.id, payload) : await svc.entities.TaxModel.create({ companyId, codigo: code, ...payload });
+      return Response.json({ success: true, model: saved, mode: current ? 'updated' : 'created' });
     }
 
     if (action === 'save_invoice_tax_line') {
