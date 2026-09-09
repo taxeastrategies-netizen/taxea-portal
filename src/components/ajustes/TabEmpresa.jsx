@@ -166,6 +166,8 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
             <SelectContent>
               <SelectItem value="iva">IVA</SelectItem>
               <SelectItem value="igic">IGIC (Canarias)</SelectItem>
+              <SelectItem value="exento">Exento / no sujeto</SelectItem>
+              <SelectItem value="mixto">Régimen mixto</SelectItem>
             </SelectContent>
           </Select>
         </Field>
