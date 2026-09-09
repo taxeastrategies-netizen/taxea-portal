@@ -1149,6 +1149,81 @@ async function consolidateDuplicateBankLedgers(svc, companyId, apply, userEmail,
   };
 }
 
+const DEFAULT_CATEGORY_MAPPINGS = {
+  ventas_servicios: '70500000',
+  compras: '60000000',
+  suministros: '62800000',
+  alquiler: '62100000',
+  publicidad_marketing: '62700000',
+  servicios_profesionales: '62300000',
+  software: '62910000',
+  transporte: '62400000',
+  dietas: '62920000',
+  gastos_financieros: '66900000',
+  seguros: '62500000',
+  otros: '62900000',
+};
+
+async function ensureAccountingReady(svc, companyId, userEmail) {
+  const company = await svc.entities.Company.get(companyId).catch(() => null);
+  if (!company || company.activa === false) throw new Error('La empresa no existe o está inactiva.');
+
+  const pgc = await seedOperationalPgc(svc, companyId);
+  const year = new Date().getUTCFullYear();
+  const periods = await listFiscalYears(svc, companyId);
+  let period = periods.find(item => Number(item.year) === year) || null;
+  if (!period) period = await saveFiscalYear(svc, companyId, { year }, userEmail);
+
+  const taxKind = String(company.tipo_impuesto || 'iva').trim().toLowerCase();
+  const usesIgic = taxKind === 'igic';
+  const configurationRows = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 10);
+  let configuration = configurationRows?.[0] || null;
+  if (!configuration) {
+    configuration = await svc.entities.AccountingConfiguration.create({
+      companyId,
+      mappingsJson: JSON.stringify(DEFAULT_CATEGORY_MAPPINGS),
+      clientAccount: '43000000',
+      supplierAccount: '41000000',
+      outputTaxAccount: usesIgic ? '47770000' : '47700000',
+      inputTaxAccount: usesIgic ? '47270000' : '47200000',
+      withholdingReceivableAccount: '47300000',
+      withholdingPayableAccount: '47510000',
+      unmatchedIncomingAccount: '55500000',
+      unmatchedOutgoingMode: 'revision',
+      unmatchedOutgoingAccount: '',
+      accountDigits: 8,
+      accountingModel: 'interno_simplificado',
+      baseCurrency: 'EUR',
+      autoSeedAccounts: true,
+      accountingSchemaVersion: SCHEMA_VERSION,
+      updatedBy: userEmail,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const banks = await fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000);
+  const connectedBanks = banks.filter(bank =>
+    bank.activa !== false
+    && ['conectado', 'connected', 'active', 'ready'].includes(String(bank.estado_conexion || '').toLowerCase())
+  );
+  const bankMappings = [];
+  for (const bank of connectedBanks) {
+    const account = await ensureBankPostingAccount(svc, companyId, bank);
+    bankMappings.push({ bankAccountId: bank.id, accountingAccountId: account.id, accountingAccountCode: account.code });
+  }
+
+  return {
+    companyId,
+    year,
+    periodId: period.id,
+    configurationId: configuration.id,
+    pgc,
+    connectedBanks: connectedBanks.length,
+    bankMappings,
+    taxKind,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -1163,6 +1238,11 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = base44.asServiceRole;
+
+    if (action === 'ensure_accounting_ready') {
+      const result = await ensureAccountingReady(svc, companyId, user.email);
+      return Response.json({ success: true, schemaVersion: SCHEMA_VERSION, result });
+    }
 
     if (action === 'periods_overview') {
       return Response.json({ success: true, periods: await listFiscalYears(svc, companyId), schemaVersion: SCHEMA_VERSION });
