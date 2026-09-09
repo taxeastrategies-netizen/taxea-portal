@@ -1061,6 +1061,97 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   };
 }
 
+async function consolidateDuplicateBankLedgers(svc, companyId, apply, userEmail, postingDate) {
+  const [banks, transactions, accounts, entries, lines] = await Promise.all([
+    fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
+    fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
+    fetchAll(svc.entities.JournalEntry, { companyId }, 'date', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+  ]);
+  const accountById = new Map(accounts.map(item => [item.id, item]));
+  const bankById = new Map(banks.map(item => [item.id, item]));
+  const transactionById = new Map(transactions.map(item => [item.id, item]));
+  const entryById = new Map();
+  for (const entry of entries.filter(item => item.status === 'confirmado')) {
+    entryById.set(entry.id, entry);
+    if (entry.importKey) entryById.set(entry.importKey, entry);
+  }
+  const canonicalByIdentity = new Map();
+  const referencedLedgerIds = new Set();
+  for (const bank of banks.filter(item => item.activa !== false)) {
+    const identity = stableBankIdentity(bank);
+    const linked = accountById.get(bank.accounting_account_id);
+    if (!identity || !linked || linked.status === 'inactiva') continue;
+    referencedLedgerIds.add(linked.id);
+    if (!canonicalByIdentity.has(identity)) canonicalByIdentity.set(identity, linked);
+  }
+  const plans = [];
+  const skipped = [];
+  for (const orphan of accounts.filter(item => item.status !== 'inactiva' && item.type === 'banco' && /^5720\d{4}$/.test(String(item.code || '')) && item.code !== '57200000' && !referencedLedgerIds.has(item.id))) {
+    const orphanLines = lines.filter(line => line.accountId === orphan.id || line.accountCode === orphan.code);
+    const confirmedLines = orphanLines.filter(line => entryById.has(line.journalEntryId));
+    const identities = new Set();
+    for (const line of confirmedLines) {
+      const entry = entryById.get(line.journalEntryId);
+      const transaction = entry ? transactionById.get(entry.documentId) : null;
+      const bank = transaction ? bankById.get(transaction.bank_account_id) : null;
+      const identity = stableBankIdentity(bank);
+      if (identity) identities.add(identity);
+    }
+    if (identities.size !== 1) {
+      skipped.push({ fromCode: orphan.code, reason: identities.size ? 'origen_bancario_ambiguo' : 'sin_origen_bancario_verificable', lines: confirmedLines.length });
+      continue;
+    }
+    const identity = [...identities][0];
+    const canonical = canonicalByIdentity.get(identity);
+    if (!canonical || canonical.id === orphan.id) {
+      skipped.push({ fromCode: orphan.code, reason: 'sin_cuenta_572_canonica', lines: confirmedLines.length });
+      continue;
+    }
+    const balance = money(confirmedLines.reduce((sum, line) => sum + Number(line.debit || line.debeE || 0) - Number(line.credit || line.haberE || 0), 0));
+    const originBank = banks.find(bank => stableBankIdentity(bank) === identity);
+    plans.push({
+      orphan,
+      canonical,
+      balance,
+      lines: confirmedLines.length,
+      identity,
+      identityLabel: `${originBank?.ultimos_4 || '----'} · ${bankCurrency(originBank)}`,
+    });
+  }
+  const applied = [];
+  if (apply) {
+    await assertAccountingDateOpen(svc, companyId, postingDate);
+    for (const plan of plans) {
+      const postingKey = `bank-ledger-consolidation:${plan.orphan.id}:${plan.canonical.id}:${SCHEMA_VERSION}`;
+      const prior = entries.find(entry => entry.postingKey === postingKey && entry.status !== 'anulado');
+      let entry = prior || null;
+      if (!entry && Math.abs(plan.balance) > 0.01) {
+        const amount = Math.abs(plan.balance);
+        const oldLine = { accountId: plan.orphan.id, accountCode: plan.orphan.code, accountName: plan.orphan.name, description: `Consolidación en ${plan.canonical.code}`, debit: plan.balance < 0 ? amount : 0, credit: plan.balance > 0 ? amount : 0, sourceLineType: 'reclasificacion' };
+        const newLine = { accountId: plan.canonical.id, accountCode: plan.canonical.code, accountName: plan.canonical.name, description: `Consolidación desde ${plan.orphan.code}`, debit: plan.balance > 0 ? amount : 0, credit: plan.balance < 0 ? amount : 0, sourceLineType: 'reclasificacion' };
+        entry = (await createJournalEntry(svc, companyId, { date: postingDate, description: `Consolidación de subcuenta bancaria duplicada ${plan.orphan.code} → ${plan.canonical.code}`, type: 'ajuste', source: 'sistema', sourceEvent: 'bank_ledger_consolidation', postingKey, status: 'confirmado', lines: [oldLine, newLine] }, userEmail)).entry;
+      }
+      await svc.entities.AccountingAccount.update(plan.orphan.id, {
+        status: 'inactiva',
+        notes: `Subcuenta consolidada de forma trazable en ${plan.canonical.code} el ${postingDate}. No reutilizar.`,
+        accountingSchemaVersion: SCHEMA_VERSION,
+      });
+      if (plan.identity && plan.canonical.bankIdentityKey !== plan.identity) {
+        await svc.entities.AccountingAccount.update(plan.canonical.id, { bankIdentityKey: plan.identity, bankCurrency: bankCurrency(banks.find(bank => stableBankIdentity(bank) === plan.identity)) });
+      }
+      applied.push({ fromCode: plan.orphan.code, toCode: plan.canonical.code, balance: plan.balance, entryId: entry?.id || '', alreadyApplied: Boolean(prior) });
+    }
+  }
+  return {
+    mode: apply ? 'apply' : 'dry_run',
+    plans: plans.map(plan => ({ fromCode: plan.orphan.code, toCode: plan.canonical.code, balance: plan.balance, lines: plan.lines, bank: plan.identityLabel })),
+    skipped,
+    applied,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -1492,6 +1583,13 @@ Deno.serve(async (req) => {
       });
       return Response.json({ success: true, alreadyPosted: posting.alreadyPosted, proposal: updated, entry: posting.entry });
     }
+    if (action === 'consolidate_bank_ledgers') {
+      const postingDate = String(body.postingDate || new Date().toISOString().slice(0, 10));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(postingDate)) return Response.json({ error: 'Fecha de consolidación no válida.' }, { status: 400 });
+      const result = await consolidateDuplicateBankLedgers(svc, companyId, body.apply === true, user.email, postingDate);
+      return Response.json({ success: true, ...result });
+    }
+
     if (action === 'bank_reconciliation_overview') {
       return Response.json({
         success: true,
