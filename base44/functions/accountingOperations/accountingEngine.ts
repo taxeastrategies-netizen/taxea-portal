@@ -330,14 +330,14 @@ function validateLines(lines) {
   return { debit, credit };
 }
 
-export async function assertAccountingDateOpen(svc, companyId, date) {
+export async function assertAccountingDateOpen(svc, companyId, date, options = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('La fecha contable no es válida.');
   const year = Number(String(date).slice(0, 4));
   const periods = await svc.entities.AccountingFiscalYear.filter({ companyId, year }, '-created_date', 5);
   const period = periods?.[0];
   if (!period) return { year, period: null };
   if (period.status === 'cerrado') throw new Error(`El ejercicio ${year} está cerrado.`);
-  if (period.lockedThroughDate && String(date) <= String(period.lockedThroughDate)) {
+  if (!options.systemOverride && period.lockedThroughDate && String(date) <= String(period.lockedThroughDate)) {
     throw new Error(`El período está bloqueado hasta ${period.lockedThroughDate}.`);
   }
   if (String(date) < String(period.startDate) || String(date) > String(period.endDate)) {
@@ -400,7 +400,7 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
   const totals = validateLines(normalized);
   const date = payload.date;
-  const { year } = await assertAccountingDateOpen(svc, companyId, date);
+  const { year } = await assertAccountingDateOpen(svc, companyId, date, { systemOverride: payload.systemOverride === true && payload.source === 'sistema' });
   const series = clean(payload.series || 'GENERAL').toUpperCase();
   const currency = clean(payload.currency || 'EUR').toUpperCase();
   const fxRate = Number(payload.fxRate || 1);
