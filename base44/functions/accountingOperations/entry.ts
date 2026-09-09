@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import {
   SCHEMA_VERSION,
+  assertAccountingDateOpen,
   buildInvoicePosting,
   canonical8,
   createJournalEntry,
@@ -1454,6 +1455,7 @@ Deno.serve(async (req) => {
         lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5000);
       }
       if (action === 'confirm') {
+        await assertAccountingDateOpen(svc, companyId, entry.date);
         if (!lines?.length) return Response.json({ error: 'El asiento no tiene líneas.' }, { status: 409 });
         const bad = lines.find(line => !isCanonical8(line.accountCode));
         if (bad) return Response.json({ error: `La cuenta ${bad.accountCode} no tiene 8 dígitos. Migra el asiento antes de confirmarlo.` }, { status: 409 });
