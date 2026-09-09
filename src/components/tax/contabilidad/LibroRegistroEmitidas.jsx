@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowUpCircle, Search, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import InvoiceFiscalReview from './InvoiceFiscalReview';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
@@ -119,12 +120,13 @@ export default function LibroRegistroEmitidas({ companyId }) {
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Cliente</th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">NIF/CIF</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Base imp.</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Tipo IVA</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Tipo IVA/IGIC</th>
+                  <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA/IGIC</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Retención</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Total</th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Estado cont.</th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Doc.</th>
+                  <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fiscal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -151,6 +153,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                         </a>
                       ) : <span className="text-muted-foreground">—</span>}
                     </td>
+                    <td className="px-3 py-2"><InvoiceFiscalReview companyId={companyId} invoice={inv} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -162,7 +165,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                   <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.iva)}</td>
                   <td className="px-3 py-2 text-right font-mono font-bold">{totales.retencion ? fmt(totales.retencion) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.total)}</td>
-                  <td colSpan={2} />
+                  <td colSpan={3} />
                 </tr>
               </tfoot>
             </table>
