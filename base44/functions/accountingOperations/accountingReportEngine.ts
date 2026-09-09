@@ -2,13 +2,27 @@ const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 export async function fetchAll(entity, query = {}, sort = 'created_date', max = 30000) {
   const rowsById = new Map();
-  const pageSize = 5000;
-  for (let skip = 0; skip < max; skip += pageSize) {
-    const page = await entity.filter(query, sort, pageSize, skip);
-    for (const row of page || []) rowsById.set(row.id || `${skip}:${rowsById.size}`, row);
-    if (!page || page.length < pageSize) break;
+  const pageSize = Math.min(5000, max);
+  const descending = String(sort || '').startsWith('-');
+  const cursorField = String(sort || 'created_date').replace(/^-/, '');
+  let cursor;
+
+  while (rowsById.size < max) {
+    const cursorQuery = cursor === undefined
+      ? query
+      : { ...query, [cursorField]: { [descending ? '$lte' : '$gte']: cursor } };
+    const page = await entity.filter(cursorQuery, sort, pageSize, 0);
+    if (!page?.length) break;
+
+    const sizeBefore = rowsById.size;
+    for (const row of page) rowsById.set(row.id || `${cursorField}:${row[cursorField]}:${rowsById.size}`, row);
+    const nextCursor = page[page.length - 1]?.[cursorField];
+
+    if (page.length < pageSize || nextCursor === undefined || nextCursor === null) break;
+    if (Object.is(nextCursor, cursor) && rowsById.size === sizeBefore) break;
+    cursor = nextCursor;
   }
-  return [...rowsById.values()];
+  return [...rowsById.values()].slice(0, max);
 }
 
 function yearOf(entry) {
@@ -113,11 +127,11 @@ export async function accountingData(svc, companyId, options = {}) {
   const lineQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
   const [entries, lines, accounts, invoices, payments] = await Promise.all([
     selectedYear
-      ? Promise.all([fetchAll(svc.entities.JournalEntry, entryQuery, 'date'), fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: selectedYear - 1 }, 'date')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
-      : fetchAll(svc.entities.JournalEntry, entryQuery, 'date'),
+      ? Promise.all([fetchAll(svc.entities.JournalEntry, entryQuery, 'entryNumber'), fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: selectedYear - 1 }, 'entryNumber')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
+      : fetchAll(svc.entities.JournalEntry, entryQuery, 'entryNumber'),
     selectedYear
-      ? Promise.all([fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'), fetchAll(svc.entities.JournalEntryLine, { companyId, ejercicio: selectedYear - 1 }, 'entryDate')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
-      : fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'),
+      ? Promise.all([fetchAll(svc.entities.JournalEntryLine, lineQuery, 'journalEntryId'), fetchAll(svc.entities.JournalEntryLine, { companyId, ejercicio: selectedYear - 1 }, 'journalEntryId')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
+      : fetchAll(svc.entities.JournalEntryLine, lineQuery, 'journalEntryId'),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     options.includeBusinessData ? fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
     options.includeBusinessData ? fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
