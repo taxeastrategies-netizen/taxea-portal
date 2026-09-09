@@ -135,7 +135,7 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
   };
 
   const close = () => {
-    setFile(null); setFormData({ nombre: '', carpeta: '', comentarios: '' });
+    setFile(null); setFormData({ nombre: '', carpeta: '', comentarios: '', fiscal_model_code: '', fiscal_period: '', fiscal_year: new Date().getFullYear(), fiscal_document_kind: 'otro' });
     setEtiquetas([]); setSugerencia(null); onClose();
   };
 
