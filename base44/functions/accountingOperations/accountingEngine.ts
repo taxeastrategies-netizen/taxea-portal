@@ -330,7 +330,7 @@ function validateLines(lines) {
   return { debit, credit };
 }
 
-async function assertAccountingDateOpen(svc, companyId, date) {
+export async function assertAccountingDateOpen(svc, companyId, date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) throw new Error('La fecha contable no es válida.');
   const year = Number(String(date).slice(0, 4));
   const periods = await svc.entities.AccountingFiscalYear.filter({ companyId, year }, '-created_date', 5);
