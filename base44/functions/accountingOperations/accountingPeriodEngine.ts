@@ -63,8 +63,8 @@ export async function setPeriodLock(svc, companyId, body, userEmail) {
 
 async function yearModel(svc, companyId, year) {
   const [entries, lines, accounts] = await Promise.all([
-    fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: year }, 'date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId, ejercicio: year }, 'journalEntryId', 30000),
+    fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: year }, 'date', 100000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId, ejercicio: year }, 'journalEntryId', 100000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
   ]);
   const active = entries.filter(entry => entry.status !== 'anulado');
