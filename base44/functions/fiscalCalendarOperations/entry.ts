@@ -360,3 +360,5 @@ Deno.serve(async (req) => {
   }
 });
 
+export { generateSchedule, normalizeCode, normalizePeriod };
+
