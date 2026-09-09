@@ -18,6 +18,13 @@ import {
   buildReports,
   fetchAll,
 } from './accountingReportEngine.ts';
+import {
+  closingPreview,
+  executeClosing,
+  listFiscalYears,
+  saveFiscalYear,
+  setPeriodLock,
+} from './accountingPeriodEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -916,6 +923,59 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = base44.asServiceRole;
+
+    if (action === 'periods_overview') {
+      return Response.json({ success: true, periods: await listFiscalYears(svc, companyId), schemaVersion: SCHEMA_VERSION });
+    }
+    if (action === 'save_fiscal_year') {
+      const period = await saveFiscalYear(svc, companyId, body, user.email);
+      return Response.json({ success: true, period, periods: await listFiscalYears(svc, companyId) });
+    }
+    if (action === 'set_period_lock') {
+      const period = await setPeriodLock(svc, companyId, body, user.email);
+      return Response.json({ success: true, period, periods: await listFiscalYears(svc, companyId) });
+    }
+    if (action === 'closing_preview') {
+      return Response.json({ success: true, preview: await closingPreview(svc, companyId, body.year) });
+    }
+    if (action === 'closing_execute') {
+      if (body.apply !== true) return Response.json({ success: true, mode: 'dry_run', preview: await closingPreview(svc, companyId, body.year) });
+      const result = await executeClosing(svc, companyId, body, user.email);
+      return Response.json({ success: true, mode: 'apply', result });
+    }
+
+    if (action === 'get_accounting_configuration' || action === 'save_accounting_configuration') {
+      const rows = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 10);
+      const existing = rows?.[0] || null;
+      if (action === 'get_accounting_configuration') return Response.json({ success: true, configuration: existing });
+      const accountFields = ['clientAccount', 'supplierAccount', 'outputTaxAccount', 'inputTaxAccount', 'withholdingReceivableAccount', 'withholdingPayableAccount', 'unmatchedIncomingAccount', 'unmatchedOutgoingAccount'];
+      const payload = {};
+      for (const field of accountFields) {
+        const value = String(body[field] ?? existing?.[field] ?? '').trim();
+        if (!value && field === 'unmatchedOutgoingAccount') { payload[field] = ''; continue; }
+        if (!isCanonical8(value)) throw new Error(`La cuenta configurada en ${field} debe tener exactamente 8 dígitos.`);
+        const account = await svc.entities.AccountingAccount.filter({ companyId, code: value }, '-created_date', 1);
+        if (!account?.[0] || account[0].status === 'inactiva') throw new Error(`La cuenta ${value} no existe o está inactiva.`);
+        payload[field] = value;
+      }
+      const mappingsJson = String(body.mappingsJson ?? existing?.mappingsJson ?? '{}');
+      let mappings;
+      try { mappings = JSON.parse(mappingsJson); } catch { throw new Error('El mapa de cuentas no contiene JSON válido.'); }
+      if (!mappings || Array.isArray(mappings) || typeof mappings !== 'object') throw new Error('El mapa de cuentas debe ser un objeto JSON.');
+      payload.mappingsJson = JSON.stringify(mappings);
+      payload.accountDigits = 8;
+      payload.accountingModel = body.accountingModel || existing?.accountingModel || 'interno_simplificado';
+      payload.baseCurrency = String(body.baseCurrency || existing?.baseCurrency || 'EUR').toUpperCase();
+      payload.unmatchedOutgoingMode = body.unmatchedOutgoingMode || existing?.unmatchedOutgoingMode || 'revision';
+      payload.autoSeedAccounts = body.autoSeedAccounts === true;
+      payload.accountingSchemaVersion = SCHEMA_VERSION;
+      payload.updatedBy = user.email;
+      payload.updatedAt = new Date().toISOString();
+      const configuration = existing
+        ? await svc.entities.AccountingConfiguration.update(existing.id, payload)
+        : await svc.entities.AccountingConfiguration.create({ companyId, ...payload });
+      return Response.json({ success: true, configuration });
+    }
 
     if (action === 'bank_reconciliation_overview') {
       return Response.json({
