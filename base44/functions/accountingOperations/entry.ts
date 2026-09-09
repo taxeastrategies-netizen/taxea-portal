@@ -1014,7 +1014,12 @@ async function reclassifyPendingBankTransaction(svc, companyId, transactionId, t
       throw new Error('El movimiento ya fue reclasificado a otra cuenta. Debe corregirse mediante contraasiento.');
     }
   } else {
-    const amount = money(Math.abs(transaction.importe));
+    const transactionCurrency = String(transaction.moneda || 'EUR').trim().toUpperCase();
+    const transactionFxRate = transactionCurrency === 'EUR' ? 1 : Number(transaction.exchange_rate || transaction.tipo_cambio);
+    if (!Number.isFinite(transactionFxRate) || transactionFxRate <= 0 || (transactionCurrency !== 'EUR' && transactionFxRate === 1)) {
+      throw new Error('El movimiento en divisa necesita un tipo de cambio a EUR validado antes de reclasificar la 555.');
+    }
+    const amount = money(Math.abs(transaction.importe) * transactionFxRate);
     const description = 'Reclasificación de 555 · ' + (transaction.concepto || transaction.referencia || transaction.id);
     const now = new Date().toISOString();
     const line = (account, debit, credit, sourceLineType) => ({
