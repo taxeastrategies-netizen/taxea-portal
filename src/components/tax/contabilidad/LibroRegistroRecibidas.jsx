@@ -42,7 +42,7 @@ export default function LibroRegistroRecibidas() {
     queryFn: async () => {
       const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
       const finData = res?.data || res;
-      return (finData?.invoices || []).filter(i => i.tipo === 'recibida');
+      return (finData?.invoices || []).filter(i => i.tipo === 'recibida' && i.estado_contable === 'contabilizada' && !i.anulada);
     },
     enabled: !!company?.id,
   });
