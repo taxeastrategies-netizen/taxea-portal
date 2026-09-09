@@ -77,7 +77,7 @@ export async function accountingData(svc, companyId, options = {}) {
   ]);
   const resolved = resolveModel(entries, lines);
   const accountByCode = new Map(accounts.map(account => [account.code, account]));
-  return { entries, lines, accounts, invoices, payments, accountByCode, ...resolved };
+  return { entries, lines, accounts, invoices, payments, accountByCode, businessDataIncluded: Boolean(options.includeBusinessData), ...resolved };
 }
 
 export function accountingQuality(data) {
@@ -102,12 +102,13 @@ export function accountingQuality(data) {
     entriesWithoutLines: integrity.filter(item => !data.linesByEntry.get(item.entry.id)?.length).length,
     unbalancedEntries: integrity.filter(item => data.linesByEntry.get(item.entry.id)?.length && !item.balanced).length,
     unresolvedLines: data.unresolvedLines,
-    activeInvoices: activeInvoices.length,
-    healthyInvoicePostings: healthyInvoice.length,
-    pendingInvoicePostings: Math.max(0, activeInvoices.length - healthyInvoice.length),
-    brokenInvoiceLinks: brokenInvoiceLinks.length,
-    payments: data.payments.length,
-    paymentsWithEntry: data.payments.filter(payment => payment.journal_entry_id && entryByKey.has(payment.journal_entry_id)).length,
+    businessDataIncluded: Boolean(data.businessDataIncluded),
+    activeInvoices: data.businessDataIncluded ? activeInvoices.length : null,
+    healthyInvoicePostings: data.businessDataIncluded ? healthyInvoice.length : null,
+    pendingInvoicePostings: data.businessDataIncluded ? Math.max(0, activeInvoices.length - healthyInvoice.length) : null,
+    brokenInvoiceLinks: data.businessDataIncluded ? brokenInvoiceLinks.length : null,
+    payments: data.businessDataIncluded ? data.payments.length : null,
+    paymentsWithEntry: data.businessDataIncluded ? data.payments.filter(payment => payment.journal_entry_id && entryByKey.has(payment.journal_entry_id)).length : null,
   };
 }
 
