@@ -221,6 +221,40 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
             </Select>
           </div>
 
+          {fiscalFolder && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-blue-900">Vinculación fiscal</p>
+                <p className="text-xs text-blue-700 mt-0.5">Indica modelo, ejercicio y período para que aparezca automáticamente en Calendario y obligaciones.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Modelo fiscal</Label>
+                  <Select value={formData.fiscal_model_code} onValueChange={value => setFormData(previous => ({ ...previous, fiscal_model_code: value }))}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar modelo" /></SelectTrigger>
+                    <SelectContent className="max-h-64">{MODELOS_AEAT.map(model => <SelectItem key={model.code} value={model.code}>{model.label} · {model.authority}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tipo de documento</Label>
+                  <Select value={formData.fiscal_document_kind} onValueChange={value => setFormData(previous => ({ ...previous, fiscal_document_kind: value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{FISCAL_DOCUMENT_KINDS.map(kind => <SelectItem key={kind.value} value={kind.value}>{kind.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Ejercicio</Label>
+                  <Input type="number" min="2000" max="2100" value={formData.fiscal_year} onChange={event => setFormData(previous => ({ ...previous, fiscal_year: Number(event.target.value) }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Período</Label>
+                  <Input value={formData.fiscal_period} onChange={event => setFormData(previous => ({ ...previous, fiscal_period: event.target.value.toUpperCase() }))} placeholder="T1, M01, ANUAL…" />
+                </div>
+              </div>
+              {(!formData.fiscal_model_code || !formData.fiscal_period) && <p className="text-xs text-amber-700">El documento se guardará, pero quedará pendiente de vincular hasta completar modelo y período.</p>}
+            </div>
+          )}
+
           {etiquetas.length > 0 && (
             <div className="space-y-1.5">
               <Label className="text-xs">Etiquetas IA</Label>
