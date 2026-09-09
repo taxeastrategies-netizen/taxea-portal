@@ -314,6 +314,76 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
   }
   if (!postable.length) return result;
 
+  // Use the same reservation, period-lock and rollback engine as every other posting.
+  // Small concurrent waves keep the operation responsive without inventing numbers client-side.
+  const note = 'Clasificación contable provisional automática en 55500000. Pendiente de aplicar a factura o cuenta definitiva.';
+  const waveSize = 4;
+  for (let start = 0; start < postable.length; start += waveSize) {
+    const wave = postable.slice(start, start + waveSize);
+    const outcomes = await Promise.all(wave.map(async (transaction) => {
+      const bankAccount = bankPostingById.get(transaction.bank_account_id);
+      const amount = money(Math.abs(transaction.importe));
+      const concept = transaction.concepto || transaction.referencia || transaction.id;
+      const posting = await createJournalEntry(svc, companyId, {
+        date: transaction.fecha_operacion,
+        description: 'Movimiento bancario pendiente de aplicar · ' + concept,
+        type: 'cobro',
+        source: 'conciliacion',
+        sourceEvent: 'bank_unmatched_incoming',
+        documentId: transaction.id,
+        postingKey: 'bank:' + transaction.id + ':' + SCHEMA_VERSION,
+        status: 'confirmado',
+        lines: [
+          {
+            accountId: bankAccount.id,
+            accountCode: bankAccount.code,
+            accountName: bankAccount.name,
+            description: concept,
+            debit: amount,
+            credit: 0,
+            sourceLineType: 'banco',
+          },
+          {
+            accountId: pendingAccount.id,
+            accountCode: pendingAccount.code,
+            accountName: pendingAccount.name,
+            description: concept,
+            debit: 0,
+            credit: amount,
+            sourceLineType: 'ajuste',
+          },
+        ],
+      }, userEmail);
+      await svc.entities.BankTransaction.update(transaction.id, {
+        journal_entry_id: posting.entry.id,
+        accounting_account_id: bankAccount.id,
+        accounting_account_code: bankAccount.code,
+        entidad_tipo: 'accounting_account',
+        entidad_id: pendingAccount.id,
+        estado_conciliacion: 'revisar',
+        confianza_conciliacion: 'baja',
+        notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
+      });
+      return posting;
+    }).map(promise => promise.then(
+      posting => ({ ok: true, posting }),
+      error => ({ ok: false, error }),
+    )));
+    for (let index = 0; index < outcomes.length; index += 1) {
+      const outcome = outcomes[index];
+      if (outcome.ok) {
+        if (outcome.posting.alreadyPosted) result.alreadyPosted += 1;
+        else result.posted += 1;
+      } else {
+        result.issues.push({
+          transactionId: wave[index].id,
+          reason: outcome.error?.message || 'error_contabilizacion_555',
+        });
+      }
+    }
+  }
+  return result;
+
   const nextSequenceByYear = new Map();
   for (const transaction of postable) {
     const year = new Date(transaction.fecha_operacion).getFullYear();
@@ -1100,7 +1170,7 @@ Deno.serve(async (req) => {
                 companyId,
                 '55500000',
                 'Partidas pendientes de aplicación',
-                'activo',
+                'pasivo',
               );
             }
             const existingLines = await resolveEntryLines(svc, companyId, existing);
