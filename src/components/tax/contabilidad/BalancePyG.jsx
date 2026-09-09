@@ -129,15 +129,15 @@ export default function BalancePyG({ companyId }) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="space-y-3">
           <h3 className="text-sm font-bold uppercase tracking-wide">Balance de situación</h3>
-          <AccountsSection title="Activo" rows={bs.assets} total={bs.totalAssets} />
-          <AccountsSection title="Patrimonio neto" rows={bs.equity} total={bs.totalEquityBeforeResult} />
+          {(bs.assetSections || [{ key: 'activo', label: 'Activo', accounts: bs.assets, amount: bs.totalAssets }]).map(section => <AccountsSection key={section.key} title={section.label} rows={section.accounts} total={section.amount} />)}
+          {(bs.equitySections || [{ key: 'patrimonio', label: 'Patrimonio neto', accounts: bs.equity, amount: bs.totalEquityBeforeResult }]).map(section => <AccountsSection key={section.key} title={section.label} rows={section.accounts} total={section.amount} />)}
           {Math.abs(bs.result) > 0.004 && <AccountsSection title="Resultado del ejercicio" rows={[{ code: '129', name: 'Resultado del ejercicio', amount: bs.result }]} total={bs.result} tone={bs.result >= 0 ? 'positive' : 'negative'} />}
-          <AccountsSection title="Pasivo" rows={bs.liabilities} total={bs.totalLiabilities} />
+          {(bs.liabilitySections || [{ key: 'pasivo', label: 'Pasivo', accounts: bs.liabilities, amount: bs.totalLiabilities }]).map(section => <AccountsSection key={section.key} title={section.label} rows={section.accounts} total={section.amount} />)}
         </div>
         <div className="space-y-3">
           <h3 className="text-sm font-bold uppercase tracking-wide">Pérdidas y ganancias</h3>
-          <AccountsSection title="Ingresos" rows={pl.income} total={pl.totalIncome} tone="positive" />
-          <AccountsSection title="Gastos" rows={pl.expenses} total={pl.totalExpenses} tone="negative" />
+          {(pl.incomeSections || [{ key: 'ingresos', label: 'Ingresos', accounts: pl.income, amount: pl.totalIncome }]).map(section => <AccountsSection key={section.key} title={section.label} rows={section.accounts} total={section.amount} tone="positive" />)}
+          {(pl.expenseSections || [{ key: 'gastos', label: 'Gastos', accounts: pl.expenses, amount: pl.totalExpenses }]).map(section => <AccountsSection key={section.key} title={section.label} rows={section.accounts} total={section.amount} tone="negative" />)}
           <div className={cn('flex items-center justify-between rounded-xl border-2 px-5 py-4 font-bold', pl.result >= 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-red-300 bg-red-50 text-red-800')}><span>Resultado del ejercicio</span><span className="font-mono">{fmt(pl.result)}</span></div>
         </div>
       </div>
