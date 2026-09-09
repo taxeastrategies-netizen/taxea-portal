@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { AlertTriangle, BarChart2, CheckCircle2, Download, RefreshCw } from 'lucide-react';
@@ -50,11 +50,22 @@ export default function BalancePyG({ companyId }) {
     queryKey: ['accounting-reports-v2', companyId, year, scope],
     queryFn: async () => {
       const response = await base44.functions.invoke('accountingOperations', { action: 'reports', companyId, year: Number(year), scope });
-      return response?.data || response;
+      const result = response?.data || response || {};
+      if (result.error || result.success === false) throw new Error(result.errorlong || result.error || 'No se pudo calcular el informe.');
+      return result;
     },
     enabled: Boolean(companyId),
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
+
+  useEffect(() => {
+    const refresh = () => query.refetch();
+    window.addEventListener('financials:refresh', refresh);
+    return () => window.removeEventListener('financials:refresh', refresh);
+  }, [query.refetch]);
   const report = query.data?.report;
   const quality = query.data?.quality;
   const years = useMemo(() => {
@@ -66,7 +77,7 @@ export default function BalancePyG({ companyId }) {
   if (query.isLoading) return <div className="p-12 text-center text-sm text-muted-foreground">Calculando estados contables desde el diario...</div>;
   if (query.isError || !report) return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-      No se pudieron calcular los estados contables. {query.error?.response?.data?.error || query.error?.message || ''}
+      No se pudieron calcular los estados contables. {query.error?.message || ''}
     </div>
   );
 
