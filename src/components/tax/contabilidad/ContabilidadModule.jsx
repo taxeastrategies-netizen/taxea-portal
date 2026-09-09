@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
-  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark
+  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark, CalendarClock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FacturasPendientes from './FacturasPendientes';
@@ -17,6 +16,7 @@ import MayoresTab from './MayoresTab';
 import BalancePyG from './BalancePyG';
 import ConfigContable from './ConfigContable';
 import AccountingControlCenter from './AccountingControlCenter';
+import PeriodosContables from './PeriodosContables';
 
 const TABS = [
   { id: 'facturas', label: 'Facturas pendientes', icon: FileText },
@@ -29,6 +29,7 @@ const TABS = [
   { id: 'mayores', label: 'Mayores', icon: TrendingUp },
   { id: 'conciliacion', label: 'Conciliación', icon: Landmark },
   { id: 'balance', label: 'Balance y PyG', icon: BarChart2 },
+  { id: 'periodos', label: 'Ejercicios y cierre', icon: CalendarClock },
   { id: 'config', label: 'Config. contable', icon: Settings2 },
 ];
 
@@ -37,13 +38,6 @@ export default function ContabilidadModule() {
   const [activeTab, setActiveTab] = useState('facturas');
   const companyId = company?.id;
 
-  useEffect(() => {
-    if (!companyId) return;
-    base44.functions.invoke('accountingOperations', {
-      action: 'seed_pgc',
-      companyId,
-    }).catch(error => console.warn('[Contabilidad] No se pudo inicializar el plan PGC8:', error?.message));
-  }, [companyId]);
 
   return (
     <div className="space-y-0">
@@ -83,6 +77,7 @@ export default function ContabilidadModule() {
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
         {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
+        {activeTab === 'periodos' && <PeriodosContables companyId={companyId} />}
         {activeTab === 'config' && <ConfigContable companyId={companyId} user={user} />}
       </div>
     </div>
