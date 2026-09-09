@@ -44,12 +44,13 @@ export default function ConfigContable({ companyId, user }) {
   useEffect(() => {
     if (!companyId) return;
     let active = true;
-    base44.entities.AccountingConfiguration.filter({ companyId }, '-updatedAt', 1)
-      .then(records => {
-        if (!active || !records?.[0]) return;
-        setConfigId(records[0].id);
+    base44.functions.invoke('accountingOperations', { action: 'get_accounting_configuration', companyId })
+      .then(response => {
+        const record = response?.data?.configuration || null;
+        if (!active || !record) return;
+        setConfigId(record.id);
         try {
-          const parsed = JSON.parse(records[0].mappingsJson || '[]');
+          const parsed = JSON.parse(record.mappingsJson || '[]');
           if (Array.isArray(parsed) && parsed.length) {
             setMappings(parsed.map(item => ({
               ...item,
@@ -79,16 +80,16 @@ export default function ConfigContable({ companyId, user }) {
     setSaving(true);
     setError('');
     try {
-      const payload = {
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'save_accounting_configuration',
         companyId,
         mappingsJson: JSON.stringify(mappings),
-        updatedBy: user?.email || '',
-        updatedAt: new Date().toISOString(),
-      };
-      const record = configId
-        ? await base44.entities.AccountingConfiguration.update(configId, payload)
-        : await base44.entities.AccountingConfiguration.create(payload);
-      if (!configId) setConfigId(record.id);
+        accountingModel: 'interno_simplificado',
+        baseCurrency: 'EUR',
+        unmatchedOutgoingMode: 'revision',
+      });
+      const record = response?.data?.configuration;
+      if (record?.id) setConfigId(record.id);
       setSaved(true);
     } catch (err) {
       setError(err?.message || 'No se pudo guardar la configuración contable.');
