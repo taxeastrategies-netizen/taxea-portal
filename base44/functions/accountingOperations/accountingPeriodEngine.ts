@@ -110,28 +110,65 @@ export async function closingPreview(svc, companyId, yearInput) {
   const year = Number(yearInput);
   const period = await findPeriod(svc, companyId, year);
   if (!period) throw new Error('Configura primero el ejercicio contable.');
-  const model = await yearModel(svc, companyId, year);
+  const [model, invoices, taxLines, bankTransactions, profiles, activities] = await Promise.all([
+    yearModel(svc, companyId, year),
+    fetchAll(svc.entities.Invoice, { company_id: companyId, anio: year }, 'fecha_emision', 100000),
+    fetchAll(svc.entities.InvoiceTaxLine, { companyId }, 'operationDate', 100000),
+    fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 100000),
+    fetchAll(svc.entities.FiscalProfile, { company_id: companyId, active: true }, '-reviewedAt', 100),
+    fetchAll(svc.entities.FiscalActivity, { company_id: companyId, active: true }, 'name', 5000),
+  ]);
   const profitLoss = [...model.totals.entries()].filter(([code]) => /^[67]/.test(code)).map(([code, total]) => ({
     code,
     balance: money(total.debit - total.credit),
     account: model.accounts.find(item => item.code === code) || null,
   })).filter(item => Math.abs(item.balance) > 0.01);
-  const blockers = [];
-  if (model.pending.length) blockers.push(`${model.pending.length} asientos pendientes de revisión`);
-  if (model.unbalanced.length) blockers.push(`${model.unbalanced.length} asientos descuadrados o sin líneas`);
-  if (model.unresolvedLines) blockers.push(`${model.unresolvedLines} apuntes sin cabecera localizable`);
-  return {
-    year,
-    period,
-    blockers,
-    canClose: period.status !== 'cerrado' && blockers.length === 0,
-    pendingEntries: model.pending.length,
-    unbalancedEntries: model.unbalanced.length,
-    unresolvedLines: model.unresolvedLines,
-    resultBeforeTax: money(profitLoss.reduce((sum, item) => sum - item.balance, 0)),
-    profitLossAccounts: profitLoss.length,
-  };
-}
+  const activeInvoices = invoices.filter(invoice => !invoice.anulada && Number(invoice.anio || String(invoice.fecha_emision || '').slice(0, 4)) === year);
+  const pendingInvoices = activeInvoices.filter(invoice => invoice.estado_contable !== 'contabilizada' || ['pendiente_revision', ' Nzrequiere任选'].includes(invoice.accounting_review_status));
+  const taxLinesForYear = taxLines.filter(line => Number(String(line.operationDate || '').slice(0, 4)) === year);
+  const detailedInvoiceIds = new Set(taxLinesForYear.map(line => line.invoiceId));
+  const legacyFiscalInvoices = activeInvoices.filter(invoice => invoice.estado_contable === 'contabilizada' && !detailedInvoiceIds.has(invoice.id));
+  const pendingFiscalLines = taxLinesForYear.filter(line => line.reviewStatus !== 'validado');
+  const bankForYear = bankTransactions.filter(item => Number(String(item.fecha_operacion || '').slice(0, 4)) === year && item.estado_proveedor !== 'pending');
+  const unreconciledBank = bankForYear.filter(item => !item.journal_entry_id || !['conciliada_auto', 'conciliada_manual', 'movimiento_interno'].includes(item.estado_conciliacion));
+  const profile = profiles?.[0] || null;
+  const currencyIssues = model.entries.filter(entry => entry.status === 'confirmado' && String(entry.currency || 'EUR').toUpperCase() !== 'EUR' && (!Number.isFinite(Number(entry.fxRate)) || Number(entry.fxRate) <= 0 || Number(entry.fxRate) === 1));
+  const pending555Balance = money((model.totals.get('55500000')?.debit || 0) - (model.totals.get('55500000')?.credit || 0));
+  const today = new Date().toISOString().slice(0, 10);
++  const blockers = [];
++  if (today <= period.endDate) blockers.push(`el ejercicio no puede cerrarse antes de finalizar el ${period.endDate}`);
++  if (model.pending.length) blockers.push(`${model.pending.length} asientos pendientes de revision`);
++  if (model.unbalanced.length) blockers.push(`${model.unbalanced.length} asientos descuadrados o sin lineas`);
++  if (model.unresolvedLines) blockers.push(`${model.unresolvedLines} apuntes sin cabecera localizable`);
++  if (pendingInvoices.length) blockers.push(`${pendingInvoices.length} facturas activas sin contabilizacion validada`);
++  if (Math.abs(pending555Balance) > 0.01) blockers.push(`saldo pendiente en 55500000: ${pending555Balance.toFixed(2)} EUR`);
++  if (unreconciledBank.length) blockers.push(`${unreconciledBank.length} movimientos bancarios sin conciliacion contable definitiva`);
++  if (!profile || profile.profileStatus !== 'validado_asesor') blockers.push('perfil fiscal no validado por asesor');
++  if (!activities.length) blockers.push('no hay actividades fiscales activas');
++  if (legacyFiscalInvoices.length) blockers.push(`${legacyFiscalInvoices.length} facturas contabilizadas sin desglose fiscal estructurado`);
++   if (pendingFiscalLines.length) blockers.push(`${pendingFiscalLines.length} lineas fiscales pendientes de revision`);
++  if (currencyIssues.length) blockers.push(`${currencyIssues.length} asientos en divisa sin tipo de cambio EUR valido`);
++  return {
++    year,
++    period,
++    blockers,
++    canClose: period.status !== 'cerrado' && blockers.length === 0,
++    pendingEntries: model.pending.length,
++    unbalancedEntries: model.unbalanced.length,
++    unresolvedLines: model.unresolvedLines,
++    pendingInvoices: pendingInvoices.length,
++    pending555Balance,
++    unreconciledBankTransactions: unreconciledBank.length,
++    legacyFiscalInvoices: legacyFiscalInvoices.length,
++    pendingFiscalLines: pendingFiscalLines.length,
++    currencyIssues: currencyIssues.length,
++    fiscalProfileValidated: Boolean(profile?.profileStatus === 'validado_asesor'),
++    fiscalActivities: activities.length,
++    closeDateReached: today > period.endDate,
++    resultBeforeTax: money(profitLoss.reduce((sum, item) => sum - item.balance, 0)),
++    profitLossAccounts: profitLoss.length,
++  };
++}
 
 async function existingByKey(svc, companyId, postingKey) {
   const rows = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 10);
