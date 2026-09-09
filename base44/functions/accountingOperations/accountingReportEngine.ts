@@ -1,28 +1,18 @@
 const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
-export async function fetchAll(entity, query = {}, sort = 'created_date', max = 30000) {
-  const rowsById = new Map();
+export async function fetchAll(entity, query = {}, sort = 'created_date', max = 100000) {
+  const rows = [];
   const pageSize = Math.min(5000, max);
-  const descending = String(sort || '').startsWith('-');
-  const cursorField = String(sort || 'created_date').replace(/^-/, '');
-  let cursor;
-
-  while (rowsById.size < max) {
-    const cursorQuery = cursor === undefined
-      ? query
-      : { ...query, [cursorField]: { [descending ? '$lte' : '$gte']: cursor } };
-    const page = await entity.filter(cursorQuery, sort, pageSize, 0);
+  let offset = 0;
+  while (rows.length < max) {
+    const page = await entity.filter(query, sort, Math.min(pageSize, max - rows.length), offset);
     if (!page?.length) break;
-
-    const sizeBefore = rowsById.size;
-    for (const row of page) rowsById.set(row.id || `${cursorField}:${row[cursorField]}:${rowsById.size}`, row);
-    const nextCursor = page[page.length - 1]?.[cursorField];
-
-    if (page.length < pageSize || nextCursor === undefined || nextCursor === null) break;
-    if (Object.is(nextCursor, cursor) && rowsById.size === sizeBefore) break;
-    cursor = nextCursor;
+    rows.push(...page);
+    offset += page.length;
+    if (page.length < pageSize) break;
   }
-  return [...rowsById.values()].slice(0, max);
+  if (rows.length >= max) throw new Error(`El volumen contable supera el limite de seguridad de ${max} registros.`);
+  return rows;
 }
 
 function yearOf(entry) {
