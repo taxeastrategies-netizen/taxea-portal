@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
-  Activity, AlertTriangle, ArrowRight, BarChart3, Bell, Building2,
+  Activity, AlertTriangle, ArrowRight, BarChart3, Bell,
   Calendar, Calculator, CheckCircle, ChevronRight, Clock, Database,
   Euro, FileText, Heart, Landmark, RefreshCw, TrendingDown, TrendingUp,
   Upload, Users, Wallet,
