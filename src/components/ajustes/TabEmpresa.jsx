@@ -83,18 +83,39 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
       const ownerEmail = imp?.clientEmail || user?.email;
       const payload = { ...form, owner_email: ownerEmail, activa: true };
 
+      let savedCompanyId = company?.id || null;
       if (isImpersonating) {
-        // Admin impersonando: usar función backend con service role
+        // Admin impersonando: usar función backend con service role.
         const response = await base44.functions.invoke('saveCompanyAsAdmin', {
           companyData: payload,
           clientEmail: ownerEmail,
           companyId: company?.id || null,
         });
-        if (response.data?.error) throw new Error(response.data.error);
+        const companyResult = response?.data ?? response;
+        if (!companyResult?.success || !companyResult?.company?.id) {
+          throw new Error(companyResult?.error || 'No se pudo guardar la empresa.');
+        }
+        savedCompanyId = companyResult.company.id;
       } else {
-        // Usuario normal: SDK directo
-        if (company?.id) await base44.entities.Company.update(company.id, payload);
-        else await base44.entities.Company.create(payload);
+        // Usuario normal: guardar y enlazar explícitamente su empresa.
+        if (company?.id) {
+          await base44.entities.Company.update(company.id, payload);
+          savedCompanyId = company.id;
+        } else {
+          const createdCompany = await base44.entities.Company.create(payload);
+          savedCompanyId = createdCompany?.id || null;
+          if (savedCompanyId) await base44.auth.updateMe({ company_id: savedCompanyId });
+        }
+      }
+
+      if (!savedCompanyId) throw new Error('No se pudo identificar la empresa guardada.');
+      const accountingResponse = await base44.functions.invoke('accountingOperations', {
+        action: 'ensure_accounting_ready',
+        companyId: savedCompanyId,
+      });
+      const accountingResult = accountingResponse?.data ?? accountingResponse;
+      if (!accountingResult?.success) {
+        throw new Error(accountingResult?.error || 'Los datos se guardaron, pero no se pudo preparar la contabilidad.');
       }
 
       setDirty(false);
