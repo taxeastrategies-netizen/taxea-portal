@@ -81,7 +81,7 @@ export default function ContabilidadModule() {
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
         {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
         {activeTab === 'periodos' && <PeriodosContables companyId={companyId} />}
-        {activeTab === 'config' && <ConfigContable companyId={companyId} user={user} />}
+        {activeTab === 'config' && <ConfigContable companyId={companyId} />}
       </div>
     </div>
   );
