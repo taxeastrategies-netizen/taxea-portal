@@ -1118,7 +1118,7 @@ Deno.serve(async (req) => {
         if (!current || current.companyId !== companyId) return Response.json({ error: 'Activo no encontrado.' }, { status: 404 });
         const existingSchedule = await svc.entities.AmortizationScheduleLine.filter({ companyId, assetId: current.id }, 'postingDate', 1);
         if (existingSchedule?.length) {
-          return Response.json({ error: 'No se puede cambiar la base del activo después de generar su cuadro. Revisa recrea el cuadro only? no. Crea un ajuste contable documentado.' }, { status: 409 });
+          return Response.json({ error: 'No se puede cambiar la base del activo después de generar su cuadro. Crea un ajuste contable documentado.' }, { status: 409 });
         }
         asset = await svc.entities.AccountingAsset.update(current.id, payload);
       } else {
