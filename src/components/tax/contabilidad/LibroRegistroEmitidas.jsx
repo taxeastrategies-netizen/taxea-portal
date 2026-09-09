@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,21 +22,31 @@ const ESTADO_LABEL = {
   contabilizada: 'Contabilizada', rechazada: 'Rechazada', requiere_correccion: 'Requiere corrección',
 };
 
-export default function LibroRegistroEmitidas() {
-  const { company } = useOutletContext() || {};
+export default function LibroRegistroEmitidas({ companyId }) {
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
   const [filterEstado, setFilterEstado] = useState('contabilizada');
 
-  const { data: invoices = [], isLoading } = useQuery({
-    queryKey: ['invoices-emitidas', company?.id],
+  const query = useQuery({
+    queryKey: ['invoices-emitidas', companyId],
     queryFn: async () => {
-      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
+      const res = await base44.functions.invoke('getCompanyFinancials', { company_id: companyId });
       const finData = res?.data || res;
       return (finData?.invoices || []).filter(i => i.tipo === 'emitida');
     },
-    enabled: !!company?.id,
+    enabled: Boolean(companyId),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
+  const invoices = query.data || [];
+  const isLoading = query.isLoading;
+
+  useEffect(() => {
+    const refresh = () => query.refetch();
+    window.addEventListener('financials:refresh', refresh);
+    return () => window.removeEventListener('financials:refresh', refresh);
+  }, [query.refetch]);
 
   const anios = [...new Set(invoices.map(i => i.anio).filter(Boolean))].sort((a, b) => b - a);
 
