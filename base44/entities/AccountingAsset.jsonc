@@ -1,0 +1,131 @@
+{
+  "name": "AccountingAsset",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "acquisitionDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "inServiceDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "cost": {
+      "type": "number"
+    },
+    "residualValue": {
+      "type": "number",
+      "default": 0
+    },
+    "usefulLifeMonths": {
+      "type": "integer"
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "lineal"
+      ],
+      "default": "lineal"
+    },
+    "assetAccountCode": {
+      "type": "string"
+    },
+    "accumulatedDepreciationAccountCode": {
+      "type": "string"
+    },
+    "expenseAccountCode": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string",
+      "default": "EUR"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "fully_depreciated",
+        "disposed"
+      ],
+      "default": "active"
+    },
+    "sourceInvoiceId": {
+      "type": "string"
+    },
+    "disposedAt": {
+      "type": "string",
+      "format": "date"
+    },
+    "createdBy": {
+      "type": "string"
+    },
+    "updatedBy": {
+      "type": "string"
+    },
+    "accountingSchemaVersion": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "name",
+    "acquisitionDate",
+    "inServiceDate",
+    "cost",
+    "usefulLifeMonths",
+    "assetAccountCode",
+    "accumulatedDepreciationAccountCode",
+    "expenseAccountCode"
+  ],
+  "rls": {
+    "create": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user.role": {
+            "$in": [
+              "admin",
+              "super_admin"
+            ]
+          }
+        }
+      ]
+    },
+    "update": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    },
+    "delete": {
+      "user.role": {
+        "$in": [
+          "admin",
+          "super_admin"
+        ]
+      }
+    }
+  }
+}
