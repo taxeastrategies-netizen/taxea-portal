@@ -57,7 +57,7 @@
     },
     "accountingSchemaVersion": {
       "type": "string",
-      "default": "pgc8-v2"
+      "default": "pgc8-v1"
     },
     "accountingModel": {
       "type": "string",
