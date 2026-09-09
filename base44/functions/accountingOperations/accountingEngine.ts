@@ -356,25 +356,28 @@ async function reserveEntryNumber(svc, companyId, year, series = 'GENERAL') {
       const match = clean(entry.entryNumber).match(/(\d+)$/);
       return Math.max(max, match ? Number(match[1]) : 0);
     }, 0);
-    const reservationMaximum = (reservations || []).reduce((max, item) => Math.max(max, Number(item.number || 0)), 0);
+    const reservationMaximum = (reservations || []).reduce((max, item) => Math.max(max, Number(item.sequence ?? item.number ?? 0)), 0);
     const number = Math.max(entryMaximum, reservationMaximum) + 1;
+    const entryNumber = series === 'GENERAL' ? `${year}-${String(number).padStart(6, '0')}` : `${series}-${year}-${String(number).padStart(6, '0')}`;
     const reservationKey = `${companyId}:${year}:${series}:${number}`;
     const reservation = await svc.entities.AccountingEntryNumberReservation.create({
       companyId,
       year,
       series,
-      number,
+      sequence: number,
+      entryNumber,
       reservationKey,
       token: crypto.randomUUID(),
       status: 'reservado',
       reservedAt: new Date().toISOString(),
+      schemaVersion: SCHEMA_VERSION,
     });
     await new Promise(resolve => setTimeout(resolve, 50));
     const contenders = await svc.entities.AccountingEntryNumberReservation.filter({ companyId, reservationKey }, 'created_date', 50);
     const winner = [...(contenders || [])].sort((a, b) => String(a.created_date).localeCompare(String(b.created_date)) || String(a.id).localeCompare(String(b.id)))[0];
     if (winner?.id === reservation.id) {
       return {
-        entryNumber: series === 'GENERAL' ? `${year}-${String(number).padStart(6, '0')}` : `${series}-${year}-${String(number).padStart(6, '0')}`,
+        entryNumber,
         reservation,
       };
     }
@@ -477,9 +480,9 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
     }));
     const rows = await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
     await svc.entities.AccountingEntryNumberReservation.update(reserved.reservation.id, {
-      status: 'asignado',
-      entryId: entry.id,
-      assignedAt: new Date().toISOString(),
+      status: 'usado',
+      journalEntryId: entry.id,
+      usedAt: new Date().toISOString(),
     });
     return { entry, lines: rows };
   } catch (error) {
