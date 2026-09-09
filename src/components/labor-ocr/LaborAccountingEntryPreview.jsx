@@ -8,17 +8,53 @@ const fmt = (n) => typeof n === 'number' ? n.toLocaleString('es-ES', { minimumFr
 
 export default function LaborAccountingEntryPreview({ entry, document: doc, onRefresh }) {
   const [validating, setValidating] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [operationError, setOperationError] = useState('');
+  const [postingDate, setPostingDate] = useState(() => {
+    const match = String(entry?.period || '').match(/(\d{4})[-/](\d{1,2})/);
+    if (!match) return new Date().toISOString().slice(0, 10);
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  });
 
   const handleValidate = async () => {
     if (!entry?.id) return;
     setValidating(true);
-    await base44.entities.LaborAccountingEntryProposal.update(entry.id, {
-      status: 'validado',
-      validated_by: null,
-      validated_at: new Date().toISOString(),
-    });
-    setValidating(false);
-    onRefresh?.();
+    setOperationError('');
+    try {
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'validate_payroll_proposal',
+        companyId: entry.company_id,
+        proposalId: entry.id,
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      onRefresh?.();
+    } catch (error) {
+      setOperationError(error.response?.data?.error || error.message || 'No se pudo validar la propuesta.');
+    } finally {
+      setValidating(false);
+    }
+  };
+
+  const handlePost = async () => {
+    if (!entry?.id || !postingDate) return;
+    setPosting(true);
+    setOperationError('');
+    try {
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'post_payroll_proposal',
+        companyId: entry.company_id,
+        proposalId: entry.id,
+        date: postingDate,
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      onRefresh?.();
+    } catch (error) {
+      setOperationError(error.response?.data?.error || error.message || 'No se pudo contabilizar la nómina.');
+    } finally {
+      setPosting(false);
+    }
   };
 
   if (!entry) {
@@ -134,6 +170,12 @@ export default function LaborAccountingEntryPreview({ entry, document: doc, onRe
         </div>
       )}
 
+      {operationError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          {operationError}
+        </div>
+      )}
+
       {/* Validate button */}
       {entry.status === 'propuesto' && (
         <Button
@@ -146,8 +188,28 @@ export default function LaborAccountingEntryPreview({ entry, document: doc, onRe
         </Button>
       )}
       {entry.status === 'validado' && (
-        <div className="flex items-center justify-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg py-2.5">
-          <CheckCircle2 className="w-4 h-4" /> Asiento validado
+        <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+          <div className="flex items-center justify-center gap-2 text-sm text-emerald-700">
+            <CheckCircle2 className="w-4 h-4" /> Asiento validado
+          </div>
+          <label className="block text-xs font-medium text-emerald-900">
+            Fecha contable
+            <input
+              type="date"
+              value={postingDate}
+              onChange={(event) => setPostingDate(event.target.value)}
+              className="mt-1 h-9 w-full rounded-md border border-emerald-200 bg-white px-3 text-sm"
+            />
+          </label>
+          <Button onClick={handlePost} disabled={posting || !postingDate} className="w-full gap-2">
+            {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            Contabilizar nómina
+          </Button>
+        </div>
+      )}
+      {entry.status === 'contabilizado' && (
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 py-2.5 text-sm text-green-700">
+          <CheckCircle2 className="w-4 h-4" /> Contabilizado en diario
         </div>
       )}
     </div>
