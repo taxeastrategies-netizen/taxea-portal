@@ -159,7 +159,7 @@
     "total_factura": {
       "type": "number"
     },
-    "bies": {
+    "moneda": {
       "type": "string",
       "default": "EUR"
     },
