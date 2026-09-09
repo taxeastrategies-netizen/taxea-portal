@@ -53,6 +53,7 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selectedAccounts, setSelectedAccounts] = useState({});
+  const [fxValues, setFxValues] = useState({});
 
   const loadOverview = useCallback(async () => {
     if (!companyId) return;
