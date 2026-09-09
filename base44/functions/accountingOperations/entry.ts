@@ -590,6 +590,8 @@ const excludedBankStates = new Set(['duplicada', 'descartada', 'movimiento_inter
 const usableBankTransaction = (transaction) =>
   transaction.estado_proveedor !== 'pending'
   && !transaction.es_demo
+  && Number.isFinite(Number(transaction.importe))
+  && money(Math.abs(transaction.importe)) > 0
   && !excludedBankStates.has(transaction.estado_conciliacion);
 
 const validBankTransaction = (transaction) =>
@@ -1684,6 +1686,8 @@ Deno.serve(async (req) => {
         && (!requestedIds || requestedIds.has(transaction.id))
         && transaction.estado_proveedor !== 'pending'
         && !transaction.es_demo
+        && Number.isFinite(Number(transaction.importe))
+        && money(Math.abs(transaction.importe)) > 0
         && !transaction.entidad_id
         && !['duplicada', 'descartada', 'movimiento_interno', 'conciliada_auto', 'conciliada_manual'].includes(transaction.estado_conciliacion)
       );
