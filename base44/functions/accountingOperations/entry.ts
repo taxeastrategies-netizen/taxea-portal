@@ -1815,6 +1815,32 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, account });
     }
 
+    if (action === 'duplicate_entry') {
+      const original = await svc.entities.JournalEntry.get(String(body.entryId || '')).catch(() => null);
+      if (!original || original.companyId !== companyId) return Response.json({ error: 'Asiento no encontrado.' }, { status: 404 });
+      const originalLines = await resolveEntryLines(svc, companyId, original);
+      if (originalLines.length < 2) return Response.json({ error: 'El asiento no tiene líneas suficientes para duplicarse.' }, { status: 409 });
+      const date = String(body.date || new Date().toISOString().slice(0, 10));
+      const created = await createJournalEntry(svc, companyId, {
+        date,
+        description: 'Copia de ' + (original.entryNumber || '') + ' · ' + (original.description || ''),
+        type: original.type === 'cierre' || original.type === 'regularizacion' ? 'manual' : (original.type || 'manual'),
+        source: 'manual',
+        sourceEvent: 'entry_duplicated_as_draft',
+        status: 'borrador',
+        lines: originalLines.map(item => ({
+          accountId: item.accountId || '',
+          accountCode: canonical8(item.accountCode || item.subcuenta),
+          accountName: item.accountName || '',
+          description: item.description || original.description || '',
+          debit: money(item.debit || item.debeE),
+          credit: money(item.credit || item.haberE),
+          taxCode: item.taxCode || '',
+          sourceLineType: item.sourceLineType || 'manual',
+        })),
+      }, user.email);
+      return Response.json({ success: true, entryId: created.entry.id, entryNumber: created.entry.entryNumber });
+    }
     if (action === 'create_manual') {
       const { date, description, type = 'manual', status = 'borrador', lines = [] } = body;
       if (!date || !String(description || '').trim()) {
