@@ -36,6 +36,7 @@
         "trimestral",
         "mensual",
         "anual",
+        "ocasional",
         "segun_modelo"
       ],
       "default": "trimestral"
