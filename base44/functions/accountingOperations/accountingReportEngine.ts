@@ -64,13 +64,16 @@ function entryIntegrity(entry, rows) {
   return { debit, credit, balanced: rows.length >= 2 && Math.abs(debit - credit) <= 0.01 };
 }
 
-export async function accountingData(svc, companyId) {
+export async function accountingData(svc, companyId, options = {}) {
+  const selectedYear = Number(options.year) || null;
+  const entryQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
+  const lineQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
   const [entries, lines, accounts, invoices, payments] = await Promise.all([
-    fetchAll(svc.entities.JournalEntry, { companyId }),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }),
+    fetchAll(svc.entities.JournalEntry, entryQuery, 'date'),
+    fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
-    fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
-    fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000),
+    options.includeBusinessData ? fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
+    options.includeBusinessData ? fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
   ]);
   const resolved = resolveModel(entries, lines);
   const accountByCode = new Map(accounts.map(account => [account.code, account]));
