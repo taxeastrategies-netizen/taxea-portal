@@ -219,9 +219,16 @@ async function getTaxKind(svc, companyId, invoice) {
   if (['iva', 'igic', 'no_aplica'].includes(explicit)) return explicit;
   const treatment = clean(invoice.fiscal_treatment).toLowerCase();
   if (treatment.includes('igic')) return 'igic';
-  const profiles = await svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 1);
+  const [profiles, company] = await Promise.all([
+    svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 1),
+    svc.entities.Company.get(companyId).catch(() => null),
+  ]);
   const profile = profiles?.[0];
-  const defaultKind = profile?.indirectTaxDefault || (profile?.mainTerritory === 'canarias' ? 'igic' : 'iva');
+  const companyTaxKind = String(company?.tipo_impuesto || '').trim().toLowerCase();
+  const defaultKind = profile?.indirectTaxDefault
+    || (profile?.mainTerritory === 'canarias' ? 'igic' : '')
+    || (['iva', 'igic', 'mixto'].includes(companyTaxKind) ? companyTaxKind : '')
+    || (companyTaxKind === 'exento' ? 'no_aplica' : 'iva');
   if (defaultKind === 'mixto') {
     if (treatment.includes('igic')) return 'igic';
     if (treatment.includes('iva')) return 'iva';
