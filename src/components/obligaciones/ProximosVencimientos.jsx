@@ -64,7 +64,7 @@ export default function ProximosVencimientos({ obligations = [], onEdit }) {
       )}
       {overdue.length === 0 && upcoming.length === 0 && (
         <div className="py-12 text-center">
-          <CheckCircle2 className="w-10 h-10 text-emerald-5007f mx-auto mb-2" />
+          <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
           <p className="text-sm font-medium">Sin vencimientos pendientes en los próximos 45 días</p>
           <p className="text-xs text-muted-foreground mt-1">El calendario sigue mostrando el resto del ejercicio.</p>
         </div>
