@@ -977,9 +977,6 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   if (!bankAccount || bankAccount.company_id !== companyId || bankAccount.activa === false) {
     throw new Error('La cuenta bancaria no pertenece a la empresa activa.');
   }
-  if ((bankAccount.moneda || 'EUR') !== 'EUR') {
-    throw new Error('La regularización automática de apertura solo está disponible para cuentas en EUR.');
-  }
   const [transactions, entries, lines] = await Promise.all([
     fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 30000),
     fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
@@ -1011,6 +1008,9 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   const bankBalance = Number.isFinite(Number(bankAccount.saldo_contable))
     ? money(bankAccount.saldo_contable)
     : money(bankAccount.saldo_disponible);
+  if ((bankAccount.moneda || 'EUR') !== 'EUR' && Math.abs(bankBalance) > 0.01) {
+    throw new Error('La cuenta en divisa tiene saldo distinto de cero. Indica el contravalor EUR y el tipo de cambio antes de regularizarla.');
+  }
   const difference = money(bankBalance - ledgerBalance);
   if (Math.abs(difference) <= 0.01) {
     return { alreadyBalanced: true, bankBalance, ledgerBalance, difference: 0 };
@@ -1024,12 +1024,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
     .map(item => item.fecha_operacion)
     .filter(Boolean)
     .sort()[0] || bankAccount.sync_desde || new Date().toISOString().slice(0, 10);
-  const openingDate = new Date(firstDate + 'T12:00:00Z');
-  openingDate.setUTCDate(openingDate.getUTCDate() - 1);
-  const date = openingDate.toISOString().slice(0, 10);
-  if (difference < 0) {
-    throw new Error('La diferencia exigiría cargar la cuenta 555. Elige una cuenta de contrapartida y registra un ajuste revisado.');
-  }
+  const date = firstDate;
   const amount = money(Math.abs(difference));
   const description = 'Saldo inicial inferido de ' + (bankAccount.nombre_banco || 'cuenta bancaria') + ' a ' + firstDate;
   const line = (account, debit, credit) => ({
