@@ -1007,12 +1007,20 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, period, periods: await listFiscalYears(svc, companyId) });
     }
     if (action === 'closing_preview') {
-      return Response.json({ success: true, preview: await closingPreview(svc, companyId, body.year) });
+      try {
+        return Response.json({ success: true, preview: await closingPreview(svc, companyId, body.year) });
+      } catch (error) {
+        return Response.json({ error: error.message || 'No se pudo analizar el cierre.' }, { status: 409 });
+      }
     }
     if (action === 'closing_execute') {
-      if (body.apply !== true) return Response.json({ success: true, mode: 'dry_run', preview: await closingPreview(svc, companyId, body.year) });
-      const result = await executeClosing(svc, companyId, body, user.email);
-      return Response.json({ success: true, mode: 'apply', result });
+      try {
+        if (body.apply !== true) return Response.json({ success: true, mode: 'dry_run', preview: await closingPreview(svc, companyId, body.year) });
+        const result = await executeClosing(svc, companyId, body, user.email);
+        return Response.json({ success: true, mode: 'apply', result });
+      } catch (error) {
+        return Response.json({ error: error.message || 'No se pudo cerrar el ejercicio.' }, { status: 409 });
+      }
     }
 
     if (action === 'get_accounting_configuration' || action === 'save_accounting_configuration') {
