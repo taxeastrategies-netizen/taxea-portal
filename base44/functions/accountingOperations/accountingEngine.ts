@@ -400,70 +400,99 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
   const totals = validateLines(normalized);
   const date = payload.date;
-  const year = new Date(date).getFullYear();
-  const entryNumber = await nextEntryNumber(svc, companyId, year);
+  const { year } = await assertAccountingDateOpen(svc, companyId, date);
+  const series = clean(payload.series || 'GENERAL').toUpperCase();
+  const currency = clean(payload.currency || 'EUR').toUpperCase();
+  const fxRate = Number(payload.fxRate || 1);
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('La divisa debe indicarse con tres letras.');
+  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0)) {
+    throw new Error('Indica un tipo de cambio válido para contabilizar una operación en divisa distinta de EUR.');
+  }
+  const reserved = await reserveEntryNumber(svc, companyId, year, series);
   const now = new Date().toISOString();
   const status = payload.status || 'confirmado';
-  const entry = await svc.entities.JournalEntry.create({
-    companyId,
-    entryNumber,
-    date,
-    ejercicio: year,
-    type: payload.type || 'manual',
-    description: clean(payload.description),
-    documentId: payload.documentId || '',
-    ocrDocumentId: payload.ocrDocumentId || '',
-    source: payload.source || 'manual',
-    status,
-    totalDebit: totals.debit,
-    totalCredit: totals.credit,
-    isBalanced: true,
-    confirmedAt: status === 'confirmado' ? now : null,
-    confirmedBy: status === 'confirmado' ? userEmail : '',
-    validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
-    postingKey: payload.postingKey || '',
-    accountingSchemaVersion: SCHEMA_VERSION,
-  });
+  let entry;
   try {
-    const rows = [];
-    for (let index = 0; index < normalized.length; index += 1) {
-      const item = normalized[index];
-      rows.push(await svc.entities.JournalEntryLine.create({
-        journalEntryId: entry.id,
-        companyId,
-        lineNumber: index + 1,
-        accountId: item.accountId,
-        accountCode: item.accountCode,
-        accountName: item.accountName,
-        description: item.description || payload.description,
-        debit: item.debit,
-        credit: item.credit,
-        taxCode: item.taxCode || '',
-        counterpartyAccountId: item.counterpartyAccountId || '',
-        counterpartyAccountCode: item.counterpartyAccountCode || '',
-        documentId: payload.documentId || '',
-        bankTransactionId: item.bankTransactionId || '',
-        isReconciled: Boolean(item.isReconciled),
-        reconciledAt: item.reconciledAt || null,
-        entryStatus: status,
-        entryDate: date,
-        ejercicio: year,
-        subcuenta: item.accountCode,
-        cuenta4: item.accountCode.slice(0, 4),
-        cuenta3: item.accountCode.slice(0, 3),
-        grupo: item.accountCode.slice(0, 1),
-        sourceLineType: item.sourceLineType || 'manual',
-        validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
-        accountingSchemaVersion: SCHEMA_VERSION,
-      }));
-    }
+    entry = await svc.entities.JournalEntry.create({
+      companyId,
+      entryNumber: reserved.entryNumber,
+      numberReservationId: reserved.reservation.id,
+      series,
+      date,
+      ejercicio: year,
+      type: payload.type || 'manual',
+      description: clean(payload.description),
+      documentId: payload.documentId || '',
+      ocrDocumentId: payload.ocrDocumentId || '',
+      source: payload.source || 'manual',
+      sourceEvent: payload.sourceEvent || '',
+      status,
+      totalDebit: totals.debit,
+      totalCredit: totals.credit,
+      isBalanced: true,
+      confirmedAt: status === 'confirmado' ? now : null,
+      confirmedBy: status === 'confirmado' ? userEmail : '',
+      validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
+      postingKey: payload.postingKey || '',
+      currency,
+      fxRate,
+      originalAmount: payload.originalAmount == null ? null : money(payload.originalAmount),
+      costCenterId: payload.costCenterId || '',
+      projectId: payload.projectId || '',
+      accountingSchemaVersion: SCHEMA_VERSION,
+    });
+    const linePayloads = normalized.map((item, index) => ({
+      journalEntryId: entry.id,
+      companyId,
+      lineNumber: index + 1,
+      accountId: item.accountId,
+      accountCode: item.accountCode,
+      accountName: item.accountName,
+      description: item.description || payload.description,
+      debit: item.debit,
+      credit: item.credit,
+      taxCode: item.taxCode || '',
+      counterpartyAccountId: item.counterpartyAccountId || '',
+      counterpartyAccountCode: item.counterpartyAccountCode || '',
+      documentId: payload.documentId || '',
+      bankTransactionId: item.bankTransactionId || '',
+      isReconciled: Boolean(item.isReconciled),
+      reconciledAt: item.reconciledAt || null,
+      entryStatus: status,
+      entryDate: date,
+      ejercicio: year,
+      subcuenta: item.accountCode,
+      cuenta4: item.accountCode.slice(0, 4),
+      cuenta3: item.accountCode.slice(0, 3),
+      grupo: item.accountCode.slice(0, 1),
+      sourceLineType: item.sourceLineType || 'manual',
+      currency: item.currency || currency,
+      fxRate: Number(item.fxRate || fxRate),
+      originalDebit: item.originalDebit == null ? null : money(item.originalDebit),
+      originalCredit: item.originalCredit == null ? null : money(item.originalCredit),
+      costCenterId: item.costCenterId || payload.costCenterId || '',
+      projectId: item.projectId || payload.projectId || '',
+      validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
+      accountingSchemaVersion: SCHEMA_VERSION,
+    }));
+    const rows = await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
+    await svc.entities.AccountingEntryNumberReservation.update(reserved.reservation.id, {
+      status: 'asignado',
+      entryId: entry.id,
+      assignedAt: new Date().toISOString(),
+    });
     return { entry, lines: rows };
   } catch (error) {
-    await svc.entities.JournalEntry.update(entry.id, {
-      status: 'pendiente_revision',
-      validationStatus: 'ERROR_CREACION_LINEAS',
-      notes: `Error creando líneas: ${error.message}`,
-    });
+    if (entry?.id) {
+      await svc.entities.JournalEntry.delete(entry.id).catch(async () => {
+        await svc.entities.JournalEntry.update(entry.id, {
+          status: 'pendiente_revision',
+          validationStatus: 'ERROR_CREACION_LINEAS',
+          notes: `Error atómico creando líneas: ${error.message}`,
+        }).catch(() => null);
+      });
+    }
+    await svc.entities.AccountingEntryNumberReservation.delete(reserved.reservation.id).catch(() => null);
     throw error;
   }
 }
