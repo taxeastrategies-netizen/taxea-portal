@@ -115,6 +115,41 @@
     "fiscal_treatment": {
       "type": "string"
     },
+    "fiscal_activity_id": {
+      "type": "string"
+    },
+    "fiscal_rule_set_version": {
+      "type": "string"
+    },
+    "fiscal_review_status": {
+      "type": "string",
+      "enum": [
+        "pendiente_revision",
+        "validado",
+        "bloqueado"
+      ],
+      "default": "pendiente_revision"
+    },
+    "fiscal_reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fiscal_reviewed_by": {
+      "type": "string"
+    },
+    "fiscal_manual_override": {
+      "type": "boolean",
+      "default": false
+    },
+    "fiscal_manual_override_reason": {
+      "type": "string"
+    },
+    "fiscal_exemption_key": {
+      "type": "string"
+    },
+    "fiscal_legal_basis": {
+      "type": "string"
+    },
     "deductible_tax_amount": {
       "type": "number"
     },
@@ -124,9 +159,12 @@
     "total_factura": {
       "type": "number"
     },
-    "moneda": {
+    "bies": {
       "type": "string",
       "default": "EUR"
+    },
+    "exchange_rate": {
+      "type": "number"
     },
     "trimestre": {
       "type": "string",
