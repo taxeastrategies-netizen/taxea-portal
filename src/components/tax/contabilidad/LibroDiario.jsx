@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { AlertTriangle, BookOpen, CheckCircle, ChevronLeft, ChevronRight, Clock, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle, ChevronLeft, ChevronRight, Clock, Copy, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -52,6 +52,20 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
     catch (error) { alert(error?.response?.data?.error || error?.message || 'No se pudo anular el asiento.'); }
   };
 
+  const duplicateEntry = async entry => {
+    try {
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'duplicate_entry',
+        companyId,
+        entryId: entry.id,
+        date: new Date().toISOString().slice(0, 10),
+      });
+      if (response.data?.error) throw new Error(response.data.error);
+      refresh();
+    } catch (error) {
+      alert(error?.response?.data?.error || error?.message || 'No se pudo duplicar el asiento.');
+    }
+  };
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-3">
       <div className="mr-auto"><h2 className="text-lg font-jakarta font-bold">Libro diario</h2><p className="text-xs text-muted-foreground">Facturas, cobros, pagos, bancos, importaciones y asientos manuales con trazabilidad completa.</p></div>
@@ -71,7 +85,7 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/20 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? '' : entry.id)}>
           <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-semibold text-primary">{entry.entryNumber || '—'}</span><span className="text-sm font-medium truncate">{entry.description}</span><StatusBadge status={entry.status} />{entry.reversalEntryId && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700">Revertido</span>}{!entry.isBalanced && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}</div><p className="text-[11px] text-muted-foreground mt-0.5">{entry.date || '—'} · {entry.type || 'manual'} · {entry.source || 'manual'}{entry.documentId ? ` · doc. ${entry.documentId.slice(-8)}` : ''}</p></div>
           <div className="text-right text-xs font-mono"><p>D {fmt(entry.totalDebit)}</p><p>H {fmt(entry.totalCredit)}</p></div>
-          <div className="flex gap-1" onClick={event => event.stopPropagation()}>{['borrador','pendiente_revision'].includes(entry.status) && entry.isBalanced && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => confirmEntry(entry)}>Confirmar</Button>}{entry.status !== 'anulado' && !entry.reversalEntryId && <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => annulEntry(entry)}>{entry.status === 'confirmado' ? 'Revertir' : 'Anular'}</Button>}</div>
+          <div className="flex gap-1" onClick={event => event.stopPropagation()}>{entry.status !== 'anulado' && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => duplicateEntry(entry)}><Copy className="mr-1 h-3 w-3" />Duplicar</Button>}{['borrador','pendiente_revision'].includes(entry.status) && entry.isBalanced && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => confirmEntry(entry)}>Confirmar</Button>}{entry.status !== 'anulado' && !entry.reversalEntryId && <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" onClick={() => annulEntry(entry)}>{entry.status === 'confirmado' ? 'Revertir' : 'Anular'}</Button>}</div>
         </div>
         {expanded === entry.id && <div className="overflow-x-auto border-t border-border bg-muted/10"><table className="w-full text-xs"><thead className="bg-muted/30"><tr>{['Línea','Cuenta','Nombre','Descripción','Debe','Haber','Conc.'].map(header => <th key={header} className={cn('px-3 py-2 text-left text-[10px] uppercase text-muted-foreground', ['Debe','Haber'].includes(header) && 'text-right')}>{header}</th>)}</tr></thead><tbody className="divide-y divide-border/60">{entry.lines.map(line => <tr key={line.id}><td className="px-3 py-2">{line.lineNumber}</td><td className="px-3 py-2 font-mono font-semibold text-primary">{line.accountCode}</td><td className="px-3 py-2">{line.accountName || '—'}</td><td className="px-3 py-2 text-muted-foreground">{line.description || '—'}</td><td className="px-3 py-2 text-right font-mono">{line.debit ? fmt(line.debit) : ''}</td><td className="px-3 py-2 text-right font-mono">{line.credit ? fmt(line.credit) : ''}</td><td className="px-3 py-2">{line.isReconciled ? <CheckCircle className="w-3 h-3 text-emerald-500" /> : ''}</td></tr>)}</tbody></table></div>}
       </div>)}</div>}
