@@ -129,18 +129,18 @@ async function buildAccountingConfigurationDiagnostics(svc, companyId, configura
   const unmappedCategories = usedCategories.filter(category => !mappedCategories.has(category));
   const activeBanks = banks.filter(bank => bank.activa !== false);
   const connectedBanks = activeBanks.filter(bank => ['conectado', 'connected', 'active', 'ready'].includes(String(bank.estado_conexion || '').toLowerCase()));
-  const mappedBanks = activeBanks.filter(bank => bank.accounting_account_id && activeAccounts.some(account => account.id === bank.accounting_account_id));
+  const mappedBanks = connectedBanks.filter(bank => bank.accounting_account_id && activeAccounts.some(account => account.id === bank.accounting_account_id));
   const referencedLedgerIds = new Set(banks.map(bank => bank.accounting_account_id).filter(Boolean));
-  const orphanBankLedgers = activeAccounts.filter(account => account.type === 'banco' && /^5720/.test(String(account.code || '')) && !referencedLedgerIds.has(account.id));
+  const orphanBankLedgers = activeAccounts.filter(account => account.type === 'banco' && /^5720/.test(String(account.code || '')) && account.code !== '57200000' && !referencedLedgerIds.has(account.id));
   const currentYear = new Date().getUTCFullYear();
   const currentPeriod = periods.find(period => Number(period.year) === currentYear) || null;
-  const scoreParts = [invalidMappingCodes.length === 0, unmappedCategories.length === 0, activeBanks.length === mappedBanks.length, orphanBankLedgers.length === 0, Boolean(currentPeriod)];
+  const scoreParts = [invalidMappingCodes.length === 0, unmappedCategories.length === 0, connectedBanks.length === mappedBanks.length, orphanBankLedgers.length === 0, Boolean(currentPeriod)];
   return {
     generatedAt: new Date().toISOString(),
     readinessScore: Math.round((scoreParts.filter(Boolean).length / scoreParts.length) * 100),
     accounts: { total: accounts.length, active: activeAccounts.length, invalidMappingCodes },
     categories: { used: usedCategories, unmapped: unmappedCategories },
-    banking: { active: activeBanks.length, connected: connectedBanks.length, mapped: mappedBanks.length, orphanLedgerCodes: orphanBankLedgers.map(account => account.code) },
+    banking: { active: connectedBanks.length, connected: connectedBanks.length, mapped: mappedBanks.length, pendingConnections: activeBanks.length - connectedBanks.length, orphanLedgerCodes: orphanBankLedgers.map(account => account.code) },
     periods: { total: periods.length, currentYearConfigured: Boolean(currentPeriod), currentYearStatus: currentPeriod?.status || 'sin_configurar' },
   };
 }
