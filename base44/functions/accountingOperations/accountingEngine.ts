@@ -582,9 +582,23 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     return { alreadyPosted: true, entry: duplicate[0] };
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
+  const currency = clean(invoice.moneda || 'EUR').toUpperCase();
+  const fxRate = Number(options.fxRate || invoice.exchange_rate || invoice.tipo_cambio || 1);
+  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate === 1)) {
+    throw new Error(`La factura está en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarla.`);
+  }
+  const sourceLines = options.lines?.length ? options.lines : generatedProposal.lines;
   const proposal = {
     ...generatedProposal,
-    lines: options.lines?.length ? options.lines : generatedProposal.lines,
+    lines: sourceLines.map(line => currency === 'EUR' ? line : {
+      ...line,
+      originalDebit: money(line.debit),
+      originalCredit: money(line.credit),
+      debit: money(line.debit * fxRate),
+      credit: money(line.credit * fxRate),
+      currency,
+      fxRate,
+    }),
   };
   const created = await createJournalEntry(svc, companyId, {
     date: options.date || invoice.fecha_emision,
@@ -595,6 +609,9 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     ocrDocumentId: options.ocrDocumentId || invoice.ocr_document_id || '',
     postingKey,
     status: options.status || 'confirmado',
+    currency,
+    fxRate,
+    originalAmount: currency === 'EUR' ? null : money(invoice.total_factura),
     lines: proposal.lines,
   }, userEmail);
   const now = new Date().toISOString();
