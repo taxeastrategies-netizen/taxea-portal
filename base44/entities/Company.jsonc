@@ -3,22 +3,22 @@
   "type": "object",
   "properties": {
     "nombre_comercial": {
-      "type": "string"
+      "type": "string",
     },
     "razon_social": {
-      "type": "string"
+      "type": "string",
     },
     "nif_cif": {
-      "type": "string"
+      "type": "string",
     },
     "direccion_fiscal": {
-      "type": "string"
+      "type": "string",
     },
     "email": {
-      "type": "string"
+      "type": "string",
     },
     "telefono": {
-      "type": "string"
+      "type": "string",
     },
     "regimen_fiscal": {
       "type": "string",
@@ -30,109 +30,97 @@
         "sociedad_anonima",
         "comunidad_bienes",
         "asociacion",
-        "otro"
-      ]
+        "otro",
+      ],
     },
     "tipo_impuesto": {
       "type": "string",
-      "enum": [
-        "iva",
-        "igic",
-        "exento",
-        "mixto"
-      ]
+      "enum": ["iva", "igic", "exento", "mixto"],
     },
     "actividad": {
-      "type": "string"
+      "type": "string",
     },
     "epigrafe_iae": {
-      "type": "string"
+      "type": "string",
     },
     "logo_url": {
-      "type": "string"
+      "type": "string",
     },
     "datos_bancarios": {
-      "type": "string"
+      "type": "string",
     },
     "owner_email": {
-      "type": "string"
+      "type": "string",
     },
     "usuarios_autorizados": {
       "type": "array",
       "items": {
-        "type": "string"
-      }
+        "type": "string",
+      },
     },
     "activa": {
       "type": "boolean",
-      "default": true
-    }
+      "default": true,
+    },
   },
-  "required": [
-    "razon_social",
-    "nif_cif"
-  ],
+  "required": ["razon_social", "nif_cif"],
   "rls": {
     "create": {
       "$or": [
         {
-          "data.owner_email": "{{user.email}}"
+          "data.owner_email": "{{user.email}}",
         },
         {
           "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+            "role": "admin",
+          },
+        },
+      ],
     },
     "read": {
       "$or": [
         {
-          "id": "{{user.data.company_id}}"
+          "id": "{{user.data.company_id}}",
         },
         {
-          "data.owner_email": "{{user.email}}"
+          "data.owner_email": "{{user.email}}",
         },
         {
           "data.usuarios_autorizados": {
-            "$in": [
-              "{{user.email}}"
-            ]
-          }
+            "$in": ["{{user.email}}"],
+          },
         },
         {
           "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+            "role": "admin",
+          },
+        },
+      ],
     },
     "update": {
       "$or": [
         {
-          "id": "{{user.data.company_id}}"
+          "id": "{{user.data.company_id}}",
         },
         {
-          "data.owner_email": "{{user.email}}"
+          "data.owner_email": "{{user.email}}",
         },
         {
           "data.usuarios_autorizados": {
-            "$in": [
-              "{{user.email}}"
-            ]
-          }
+            "$in": ["{{user.email}}"],
+          },
         },
         {
           "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+            "role": "admin",
+          },
+        },
+      ],
     },
     "delete": {
       "user_condition": {
-        "role": "admin"
-      }
-    }
-  }
+        "role": "admin",
+      },
+    },
+  },
 }
