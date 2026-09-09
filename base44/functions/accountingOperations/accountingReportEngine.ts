@@ -239,12 +239,13 @@ export function buildReports(data, { year, scope = 'confirmed', withoutComparati
   return { ...report, comparative: buildReports(data, { year: selectedYear - 1, scope, withoutComparative: true }) };
 }
 
-export function buildJournal(data, { year, status = 'all', type = 'all', search = '', page = 1, pageSize = 100 } = {}) {
+export function buildJournal(data, { year, status = 'all', type = 'all', source = 'all', search = '', page = 1, pageSize = 100 } = {}) {
   const normalizedSearch = String(search || '').trim().toLowerCase();
   const rows = data.entries.filter(entry => {
     if (year && year !== 'all' && yearOf(entry) !== Number(year)) return false;
     if (status !== 'all' && entry.status !== status) return false;
     if (type !== 'all' && entry.type !== type) return false;
+    if (source !== 'all' && entry.source !== source) return false;
     return !normalizedSearch || `${entry.entryNumber || ''} ${entry.description || ''} ${entry.documentId || ''}`.toLowerCase().includes(normalizedSearch);
   }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.entryNumber || '').localeCompare(String(a.entryNumber || '')));
   const safeSize = Math.min(200, Math.max(20, Number(pageSize) || 100));
