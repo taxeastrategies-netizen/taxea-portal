@@ -606,7 +606,7 @@ async function loadBankReconciliationOverview(svc, companyId) {
     fetchAll(svc.entities.BankTransaction, { company_id: companyId }, '-fecha_operacion', 30000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
   ]);
   const activeBanks = (bankAccounts || []).filter(account =>
     account.activa !== false
@@ -980,7 +980,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   const [transactions, entries, lines] = await Promise.all([
     fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 30000),
     fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
   ]);
   const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
   const pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'pasivo');
@@ -1064,7 +1064,7 @@ async function consolidateDuplicateBankLedgers(svc, companyId, apply, userEmail,
     fetchAll(svc.entities.BankTransaction, { company_id: companyId }, 'fecha_operacion', 30000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     fetchAll(svc.entities.JournalEntry, { companyId }, 'date', 30000),
-    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'lineNumber', 30000),
+    fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 30000),
   ]);
   const accountById = new Map(accounts.map(item => [item.id, item]));
   const bankById = new Map(banks.map(item => [item.id, item]));
