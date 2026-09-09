@@ -93,21 +93,36 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
     try {
       const { file_url } = await uploadWithTimeout(file);
       if (!file_url) throw new Error('No se obtuvo URL del archivo subido');
-      await base44.entities.Document.create({
+      const fiscalModel = MODELOS_AEAT.find(model => model.code === formData.fiscal_model_code);
+      const documentRecord = await base44.entities.Document.create({
         company_id: company.id,
         nombre: formData.nombre,
         carpeta: formData.carpeta,
         comentarios: formData.comentarios,
         archivo_url: file_url,
         tipo_archivo: file.type,
-        anio: new Date().getFullYear(),
+        anio: Number(formData.fiscal_year || new Date().getFullYear()),
+        trimestre: formData.fiscal_period?.startsWith('T') ? formData.fiscal_period : undefined,
         estado: 'pendiente',
         subido_por: user?.email,
-        etiquetas,
+        etiquetas: [...new Set([...etiquetas, formData.fiscal_model_code ? `modelo_${formData.fiscal_model_code}` : '', formData.fiscal_period || ''].filter(Boolean))],
+        fiscal_model_code: fiscalFolder ? formData.fiscal_model_code || undefined : undefined,
+        fiscal_period: fiscalFolder ? formData.fiscal_period || undefined : undefined,
+        fiscal_year: fiscalFolder ? Number(formData.fiscal_year) : undefined,
+        fiscal_document_kind: fiscalFolder ? formData.fiscal_document_kind : undefined,
+        administracion: fiscalFolder ? fiscalModel?.authority || 'Otro' : undefined,
+        fiscal_link_status: fiscalFolder && formData.fiscal_model_code ? 'detectado' : 'sin_clasificar',
       });
+      if (fiscalFolder && formData.fiscal_model_code && formData.fiscal_period) {
+        await base44.functions.invoke('fiscalCalendarOperations', {
+          action: 'link_document', companyId: company.id, documentId: documentRecord.id,
+          modelCode: formData.fiscal_model_code, period: formData.fiscal_period,
+          year: Number(formData.fiscal_year), documentKind: formData.fiscal_document_kind,
+        });
+      }
       setUploading(false);
       setFile(null);
-      setFormData({ nombre: '', carpeta: '', comentarios: '' });
+      setFormData({ nombre: '', carpeta: '', comentarios: '', fiscal_model_code: '', fiscal_period: '', fiscal_year: new Date().getFullYear(), fiscal_document_kind: 'otro' });
       setEtiquetas([]);
       setSugerencia(null);
       onSuccess();
