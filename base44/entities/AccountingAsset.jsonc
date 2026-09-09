@@ -29,6 +29,34 @@
     "usefulLifeMonths": {
       "type": "integer"
     },
+    "depreciationRate": {
+      "type": "number"
+    },
+    "fiscalTable": {
+      "type": "string",
+      "enum": [
+        "lis",
+        "irpf_eds",
+        "manual"
+      ],
+      "default": "manual"
+    },
+    "fiscalCategoryCode": {
+      "type": "string"
+    },
+    "fiscalCategoryLabel": {
+      "type": "string"
+    },
+    "fiscalMaxRate": {
+      "type": "number"
+    },
+    "fiscalMaxYears": {
+      "type": "integer"
+    },
+    "fiscalReviewRequired": {
+      "type": "boolean",
+      "default": false
+    },
     "method": {
       "type": "string",
       "enum": [
