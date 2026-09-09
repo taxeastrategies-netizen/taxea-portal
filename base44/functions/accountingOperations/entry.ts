@@ -1057,6 +1057,87 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, configuration });
     }
 
+    if (action === 'validate_payroll_proposal' || action === 'post_payroll_proposal') {
+      const proposalId = String(body.proposalId || '');
+      if (!proposalId) return Response.json({ error: 'Falta la propuesta contable de nómina.' }, { status: 400 });
+      const proposal = await svc.entities.LaborAccountingEntryProposal.get(proposalId).catch(() => null);
+      if (!proposal || proposal.company_id !== companyId) {
+        return Response.json({ error: 'La propuesta no existe o no pertenece a la empresa.' }, { status: 404 });
+      }
+      const proposalLines = Array.isArray(proposal.lines) ? proposal.lines : [];
+      const debit = money(proposalLines.reduce((sum, item) => sum + Number(item.debe || 0), 0));
+      const credit = money(proposalLines.reduce((sum, item) => sum + Number(item.haber || 0), 0));
+      if (proposalLines.length < 2 || debit <= 0 || Math.abs(debit - credit) > 0.01) {
+        return Response.json({ error: 'La propuesta debe tener al menos dos líneas y estar cuadrada antes de validarse.' }, { status: 409 });
+      }
+      if (action === 'validate_payroll_proposal') {
+        if (proposal.status === 'contabilizado') {
+          return Response.json({ success: true, alreadyPosted: true, proposal });
+        }
+        const validated = await svc.entities.LaborAccountingEntryProposal.update(proposal.id, {
+          status: 'validado',
+          balanced: true,
+          debit_total: debit,
+          credit_total: credit,
+          validated_by: user.email,
+          validated_at: new Date().toISOString(),
+        });
+        return Response.json({ success: true, proposal: validated });
+      }
+
+      if (proposal.status === 'contabilizado' && proposal.journal_entry_id) {
+        const linked = await svc.entities.JournalEntry.get(proposal.journal_entry_id).catch(() => null);
+        if (linked && linked.companyId === companyId && linked.status !== 'anulado') {
+          return Response.json({ success: true, alreadyPosted: true, proposal, entry: linked });
+        }
+      }
+      if (proposal.status !== 'validado') {
+        return Response.json({ error: 'Primero valida la propuesta de nómina.' }, { status: 409 });
+      }
+      const date = String(body.date || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return Response.json({ error: 'Indica la fecha contable de la nómina.' }, { status: 400 });
+      }
+      await assertAccountingDateOpen(svc, companyId, date);
+      const resolvedLines = [];
+      for (const item of proposalLines) {
+        const code = canonical8(item.cuenta);
+        const rows = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
+        const account = rows?.[0];
+        if (!account || account.status === 'inactiva') {
+          return Response.json({ error: 'La cuenta ' + code + ' no existe o está inactiva. Inicializa o completa el plan contable.' }, { status: 409 });
+        }
+        resolvedLines.push({
+          accountId: account.id,
+          accountCode: account.code,
+          accountName: account.name,
+          description: item.descripcion || ('Nómina ' + (proposal.employee_name || proposal.period || '')).trim(),
+          debit: money(item.debe),
+          credit: money(item.haber),
+          sourceLineType: 'nomina',
+        });
+      }
+      const postingKey = 'payroll:' + proposal.id + ':' + SCHEMA_VERSION;
+      const posting = await createJournalEntry(svc, companyId, {
+        date,
+        description: ('Nómina ' + (proposal.employee_name || '') + ' · ' + (proposal.period || date)).trim(),
+        type: 'nomina',
+        source: 'sistema',
+        sourceEvent: 'payroll_validated',
+        documentId: proposal.labor_ocr_document_id || proposal.id,
+        postingKey,
+        status: 'confirmado',
+        lines: resolvedLines,
+      }, user.email);
+      const updated = await svc.entities.LaborAccountingEntryProposal.update(proposal.id, {
+        status: 'contabilizado',
+        journal_entry_id: posting.entry.id,
+        posting_key: postingKey,
+        accounted_at: new Date().toISOString(),
+        accounted_by: user.email,
+      });
+      return Response.json({ success: true, alreadyPosted: posting.alreadyPosted, proposal: updated, entry: posting.entry });
+    }
     if (action === 'bank_reconciliation_overview') {
       return Response.json({
         success: true,
