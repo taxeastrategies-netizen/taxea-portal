@@ -1,6 +1,7 @@
 globalThis.Deno = { serve: () => undefined };
 
-const { generateSchedule, normalizeCode, normalizePeriod } = await import('file:///tmp/fiscal-test.mjs');
+const imported = await import('file:///tmp/fiscal-test.cjs');
+const { generateSchedule, normalizeCode, normalizePeriod } = imported.default || imported;
 
 const pick = (code, year, period, periodicidad = 'trimestral') =>
   generateSchedule({ codigo: code, periodicidad }, year).find(item => item.period === period);
