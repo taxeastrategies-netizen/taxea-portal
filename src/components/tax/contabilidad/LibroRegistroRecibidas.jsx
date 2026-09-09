@@ -26,15 +26,28 @@ const CAT_LABEL = {
   gastos_financieros: 'Gastos financieros', seguros: 'Seguros', otros: 'Otros',
 };
 
-export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
+export default function LibroRegistroRecibidas({ companyId }) {
   const [search, setSearch] = useState('');
   const [filterAnio, setFilterAnio] = useState('todos');
+  const fiscalQuery = useQuery({
+    queryKey: ['fiscal-bundle-books', companyId],
+    enabled: Boolean(companyId),
+    queryFn: async () => {
+      const response = await base44.functions.invoke('fiscalOperations', { action: 'bundle', companyId });
+      const payload = response?.data ?? response;
+      if (!payload?.success) throw new Error(payload?.error || 'No se pudo cargar el perfil fiscal.');
+      return payload;
+    },
+    staleTime: 30000,
+  });
+  const fiscalProfile = fiscalQuery.data?.profile;
+  const fiscalActivities = fiscalQuery.data?.activities || [];
 
   // Comerciante minorista en Canarias: sin derecho a deducción de IGIC
   // El IGIC soportado en facturas recibidas NO es deducible → se trata como mayor gasto
   const isComercianteMinorista = fiscalProfile?.indirectTaxDefault === 'igic'
     && fiscalProfile?.mainTerritory === 'canarias'
-    && fiscalProfile?.activities?.some(a => a.indirectTaxRegime === 'comerciante_minorista_igic' || a.deductionRight === 'sin_derecho');
+    && fiscalActivities.some(a => a.active !== false && (a.indirectTaxRegime === 'comerciante_minorista_igic' || a.deductionRight === 'sin_derecho'));
 
   const query = useQuery({
     queryKey: ['invoices-recibidas', companyId],
@@ -75,8 +88,8 @@ export default function LibroRegistroRecibidas({ companyId, fiscalProfile }) {
     return {
       base: acc.base + base,
       iva: acc.iva + cuota,
-      // Mayor gasto: base + IGIC no deducible
-      gastoTotal: acc.gastoTotal + (isComercianteMinorista ? base + cuota : base),
+      // La cuota no deducible aumenta el gasto; prevalece la revisión fiscal de la factura.
+      gastoTotal: acc.gastoTotal + base + Number(inv.non_deductible_tax_amount ?? (isComercianteMinorista ? cuota : 0)),
       total: acc.total + (inv.total_factura || 0),
     };
   }, { base: 0, iva: 0, gastoTotal: 0, total: 0 });
