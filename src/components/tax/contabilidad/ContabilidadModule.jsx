@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
-  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark, CalendarClock
+  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark, CalendarClock, Boxes
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FacturasPendientes from './FacturasPendientes';
@@ -17,6 +17,7 @@ import BalancePyG from './BalancePyG';
 import ConfigContable from './ConfigContable';
 import AccountingControlCenter from './AccountingControlCenter';
 import PeriodosContables from './PeriodosContables';
+import ActivosContables from './ActivosContables';
 
 const TABS = [
   { id: 'facturas', label: 'Facturas pendientes', icon: FileText },
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'recibidas', label: 'Registro recibidas', icon: ArrowDownCircle },
   { id: 'iva', label: 'IVA / IGIC', icon: Receipt },
   { id: 'mayores', label: 'Mayores', icon: TrendingUp },
+  { id: 'activos', label: 'Activos y amortización', icon: Boxes },
   { id: 'conciliacion', label: 'Conciliación', icon: Landmark },
   { id: 'balance', label: 'Balance y PyG', icon: BarChart2 },
   { id: 'periodos', label: 'Ejercicios y cierre', icon: CalendarClock },
@@ -75,6 +77,7 @@ export default function ContabilidadModule() {
         {activeTab === 'recibidas' && <LibroRegistroRecibidas />}
         {activeTab === 'iva' && <IVAResumen />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
+        {activeTab === 'activos' && <ActivosContables companyId={companyId} />}
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
         {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
         {activeTab === 'periodos' && <PeriodosContables companyId={companyId} />}
