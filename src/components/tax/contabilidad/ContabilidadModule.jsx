@@ -44,10 +44,16 @@ export default function ContabilidadModule() {
   const [bootstrap, setBootstrap] = useState({ status: 'idle', error: '' });
   const [retryToken, setRetryToken] = useState(0);
   const companyId = company?.id;
+  const companyReady = Boolean(
+    companyId
+    && company?.nif_cif
+    && String(company.nif_cif).trim().toUpperCase() !== 'PENDIENTE'
+    && ['iva', 'igic', 'exento', 'mixto'].includes(String(company?.tipo_impuesto || '').trim().toLowerCase())
+  );
 
   useEffect(() => {
     let cancelled = false;
-    if (!companyId) {
+    if (!companyId || !companyReady) {
       setBootstrap({ status: 'idle', error: '' });
       return () => { cancelled = true; };
     }
@@ -64,9 +70,9 @@ export default function ContabilidadModule() {
       });
 
     return () => { cancelled = true; };
-  }, [companyId, retryToken]);
+  }, [companyId, companyReady, retryToken]);
 
-  if (!companyId) return <NoCompanyState pageName="la contabilidad" />;
+  if (!companyId || !companyReady) return <NoCompanyState pageName="la contabilidad" />;
 
   if (bootstrap.status === 'loading' || bootstrap.status === 'idle') {
     return (
@@ -126,7 +132,7 @@ export default function ContabilidadModule() {
         {activeTab === 'manuales' && <AsientosManualesTab companyId={companyId} user={user} />}
         {activeTab === 'cuentas' && <CuadrosCuentas companyId={companyId} user={user} />}
         {activeTab === 'emitidas' && <LibroRegistroEmitidas companyId={companyId} />}
-        {activeTab === 'recibidas' && <LibroRegistroRecibidas companyId={companyId} fiscalProfile={fiscalProfile} />}
+        {activeTab === 'recibidas' && <LibroRegistroRecibidas companyId={companyId} />}
         {activeTab === 'iva' && <IVAResumen companyId={companyId} />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
         {activeTab === 'activos' && <ActivosContables companyId={companyId} />}
