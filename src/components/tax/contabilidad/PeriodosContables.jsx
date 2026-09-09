@@ -25,12 +25,12 @@ export default function PeriodosContables({ companyId }) {
   const selected = useMemo(() => (query.data?.periods || []).find(item => Number(item.year) === Number(year)), [query.data, year]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['accounting-periods', companyId] });
   const mutation = useMutation({
-    mutationFn: async (payload) => unwrap(await base44.functions.invoke('accountingOperations', { companyId, ...payload })),
+    mutationFn: async (payload = {}) => unwrap(await base44.functions.invoke('accountingOperations', { companyId, ...payload })),
     onSuccess: (data) => {
       if (data.preview) setPreview(data.preview);
       refresh();
     },
-    onError: (error) => toast.error(error?.response?.data?.error || error?.message || 'No se pudo completar la operación.'),
+    onError: (error) => toast.error(error?.message || 'No se pudo completar la operación.'),
   });
   const configure = async () => {
     await mutation.mutateAsync({ action: 'save_fiscal_year', year: Number(year), startDate: `${year}-01-01`, endDate: `${year}-12-31` });
