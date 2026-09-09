@@ -4,10 +4,15 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CalendarClock, CheckCircle2, LockKeyhole, UnlockKeyhole } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, LockKeyhole, UnlockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
 
 const unwrap = (response) => response?.data || response || {};
+const invokeAccounting = async (payload) => {
+  const data = unwrap(await base44.functions.invoke('accountingOperations', payload));
+  if (data.error || data.success === false) throw new Error(data.error || 'La operación contable no se pudo completar.');
+  return data;
+};
 
 export default function PeriodosContables({ companyId }) {
   const currentYear = new Date().getFullYear();
@@ -16,21 +21,30 @@ export default function PeriodosContables({ companyId }) {
   const [unlockReason, setUnlockReason] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [preview, setPreview] = useState(null);
+  const [actionError, setActionError] = useState('');
   const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['accounting-periods', companyId],
     enabled: Boolean(companyId),
-    queryFn: async () => unwrap(await base44.functions.invoke('accountingOperations', { action: 'periods_overview', companyId })),
+    queryFn: async () => invokeAccounting({ action: 'periods_overview', companyId }),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
   const selected = useMemo(() => (query.data?.periods || []).find(item => Number(item.year) === Number(year)), [query.data, year]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['accounting-periods', companyId] });
   const mutation = useMutation({
-    mutationFn: async (payload = {}) => unwrap(await base44.functions.invoke('accountingOperations', { companyId, ...payload })),
+    mutationFn: async (payload) => invokeAccounting({ companyId, ...payload }),
     onSuccess: (data) => {
+      setActionError('');
       if (data.preview) setPreview(data.preview);
       refresh();
     },
-    onError: (error) => toast.error(error?.message || 'No se pudo completar la operación.'),
+    onError: (error) => {
+      const message = error?.response?.data?.error || error?.message || 'No se pudo completar la operación.';
+      setActionError(message);
+      toast.error(message);
+    },
   });
   const configure = async () => {
     await mutation.mutateAsync({ action: 'save_fiscal_year', year: Number(year), startDate: `${year}-01-01`, endDate: `${year}-12-31` });
@@ -46,6 +60,19 @@ export default function PeriodosContables({ companyId }) {
     setConfirmation('');
     setPreview(null);
   };
+  const availableYears = useMemo(() => [...new Set([
+    currentYear - 2,
+    currentYear - 1,
+    currentYear,
+    currentYear + 1,
+    ...(query.data?.periods || []).map(item => Number(item.year)),
+  ])].filter(Number.isInteger).sort((a, b) => b - a), [currentYear, query.data]);
+  const selectYear = (nextYear) => {
+    setYear(nextYear);
+    setLockDate(`${nextYear}-12-31`);
+    setPreview(null);
+    setActionError('');
+  };
 
   if (!companyId) return <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Selecciona una empresa.</div>;
 
@@ -58,16 +85,26 @@ export default function PeriodosContables({ companyId }) {
             <p className="mt-1 text-xs text-muted-foreground">Bloquea períodos cerrados y prepara regularización, cierre y apertura sin borrar asientos.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Input type="number" className="w-28" value={year} onChange={(event) => { setYear(Number(event.target.value)); setPreview(null); }} />
+            <Input type="number" className="w-28" value={year} onChange={(event) => selectYear(Number(event.target.value))} />
             {selected ? <Badge variant={selected.status === 'cerrado' ? 'secondary' : 'default'}>{selected.status}</Badge> : <Badge variant="outline">sin configurar</Badge>}
           </div>
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {availableYears.map(item => (
+          <Button type="button" size="sm" key={item} variant={item === year ? 'default' : 'outline'} onClick={() => selectYear(item)}>
+            {item}{(query.data?.periods || []).some(period => Number(period.year) === item) ? ' · configurado' : ''}
+          </Button>
+        ))}
+      </div>
+
+      {(query.error || actionError) && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{query.error?.message || actionError}</div>}
+
       {!selected ? (
         <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center">
           <p className="text-sm">El ejercicio {year} todavía no tiene calendario contable.</p>
-          <Button className="mt-3" onClick={configure} disabled={mutation.isPending}>Configurar ejercicio natural</Button>
+          <Button type="button" className="mt-3" onClick={configure} disabled={mutation.isPending}>{mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Configurar ejercicio natural</Button>
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
