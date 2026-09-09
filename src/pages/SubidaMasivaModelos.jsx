@@ -163,7 +163,7 @@ export default function SubidaMasivaModelos() {
       fiscal_year: parseInt(ex.ejercicio) || now.getFullYear(),
       fiscal_document_kind: 'justificante_presentacion',
       administracion: carpeta === 'fiscal_modelos_atc' ? 'ATC' : 'AEAT',
-      fiscal_link_status:: 'detectado',
+      fiscal_link_status: 'detectado',
     };
     const doc = await base44.entities.Document.create(docData);
 
