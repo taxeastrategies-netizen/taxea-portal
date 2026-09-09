@@ -72,6 +72,7 @@ export default function BalancePyG({ companyId }) {
 
   const bs = report.balanceSheet;
   const pl = report.profitAndLoss;
+  const comparative = report.comparative;
   const trialOk = Math.abs(report.trialBalance.difference) <= 0.01;
   const balanceOk = Math.abs(bs.difference) <= 0.01;
 
@@ -110,6 +111,25 @@ export default function BalancePyG({ companyId }) {
           ['Modelo', 'PGC interno'],
         ].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-3"><p className="text-[11px] text-muted-foreground">{label}</p><p className="font-mono text-lg font-bold mt-1">{value}</p></div>)}
       </div>
+
+      {comparative && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold">Comparativa anual</p>
+            <span className="text-xs text-muted-foreground">{report.year} frente a {comparative.year}</span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              ['Ingresos', pl.totalIncome, comparative.profitAndLoss.totalIncome],
+              ['Gastos', pl.totalExpenses, comparative.profitAndLoss.totalExpenses],
+              ['Resultado', pl.result, comparative.profitAndLoss.result],
+            ].map(([label, current, previous]) => {
+              const delta = Number(current || 0) - Number(previous || 0);
+              return <div key={label} className="rounded-lg bg-muted/30 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-mono text-sm font-bold">{fmt(current)}</p><p className={cn('mt-1 text-xs', delta >= 0 ? 'text-emerald-700' : 'text-red-600')}>{delta >= 0 ? '+' : ''}{fmt(delta)} frente a {comparative.year}</p></div>;
+            })}
+          </div>
+        </div>
+      )}
 
       {(report.excludedEntries > 0 || quality.unresolvedLines > 0) && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
