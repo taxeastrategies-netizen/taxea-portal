@@ -1227,7 +1227,14 @@ Deno.serve(async (req) => {
       const inServiceDate = String(body.inServiceDate || '');
       const cost = money(body.cost);
       const residualValue = money(body.residualValue);
-      const usefulLifeMonths = Number(body.usefulLifeMonths);
+      const requestedUsefulLifeMonths = Number(body.usefulLifeMonths);
+      const requestedRate = Number(body.depreciationRate);
+      const depreciationRate = requestedRate > 0
+        ? Math.round(requestedRate * 10000) / 10000
+        : (requestedUsefulLifeMonths > 0 ? Math.round((1200 / requestedUsefulLifeMonths) * 10000) / 10000 : 0);
+      const usefulLifeMonths = requestedRate > 0 ? Math.ceil(1200 / requestedRate) : requestedUsefulLifeMonths;
+      const fiscalMaxRate = Number(body.fiscalMaxRate || 0);
+      const fiscalMaxYears = Number(body.fiscalMaxYears || 0);
       const codes = {
         assetAccountCode: String(body.assetAccountCode || ''),
         accumulatedDepreciationAccountCode: String(body.accumulatedDepreciationAccountCode || ''),
@@ -1236,8 +1243,8 @@ Deno.serve(async (req) => {
       if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(acquisitionDate) || !/^\d{4}-\d{2}-\d{2}$/.test(inServiceDate)) {
         return Response.json({ error: 'Nombre, fecha de compra y fecha de puesta en servicio son obligatorios.' }, { status: 400 });
       }
-      if (cost <= 0 || residualValue < 0 || residualValue >= cost || !Number.isInteger(usefulLifeMonths) || usefulLifeMonths < 1 || usefulLifeMonths > 1200) {
-        return Response.json({ error: 'Revisa coste, valor residual y vida útil mensual.' }, { status: 400 });
+      if (cost <= 0 || residualValue < 0 || residualValue >= cost || !Number.isInteger(usefulLifeMonths) || usefulLifeMonths < 1 || usefulLifeMonths > 1200 || depreciationRate <= 0 || depreciationRate > 100) {
+        return Response.json({ error: 'Revisa coste, valor residual, porcentaje anual y vida útil.' }, { status: 400 });
       }
       for (const [field, rawCode] of Object.entries(codes)) {
         if (!isCanonical8(rawCode)) return Response.json({ error: 'La cuenta de ' + field + ' debe tener 8 dígitos.' }, { status: 400 });
@@ -1255,6 +1262,13 @@ Deno.serve(async (req) => {
         cost,
         residualValue,
         usefulLifeMonths,
+        depreciationRate,
+        fiscalTable: ['lis', 'irpf_eds'].includes(String(body.fiscalTable || '')) ? String(body.fiscalTable) : 'manual',
+        fiscalCategoryCode: String(body.fiscalCategoryCode || ''),
+        fiscalCategoryLabel: String(body.fiscalCategoryLabel || ''),
+        fiscalMaxRate: fiscalMaxRate > 0 ? fiscalMaxRate : 0,
+        fiscalMaxYears: Number.isInteger(fiscalMaxYears) && fiscalMaxYears > 0 ? fiscalMaxYears : 0,
+        fiscalReviewRequired: fiscalMaxRate > 0 && depreciationRate > fiscalMaxRate + 0.0001,
         method: 'lineal',
         currency: 'EUR',
         status: body.status || 'active',
@@ -1285,12 +1299,14 @@ Deno.serve(async (req) => {
       const existing = await svc.entities.AmortizationScheduleLine.filter({ companyId, assetId: asset.id }, 'postingDate', 5000);
       if (existing?.length) return Response.json({ success: true, alreadyGenerated: true, schedule: existing });
       const depreciable = money(Number(asset.cost) - Number(asset.residualValue || 0));
-      const months = Number(asset.usefulLifeMonths);
-      if (depreciable <= 0 || !Number.isInteger(months) || months < 1) {
-        return Response.json({ error: 'La base amortizable o la vida útil no son válidas.' }, { status: 409 });
+      const configuredMonths = Number(asset.usefulLifeMonths);
+      const annualRate = Number(asset.depreciationRate || 0);
+      if (depreciable <= 0 || !Number.isInteger(configuredMonths) || configuredMonths < 1 || (annualRate && (annualRate <= 0 || annualRate > 100))) {
+        return Response.json({ error: 'La base amortizable, el porcentaje anual o la vida útil no son válidos.' }, { status: 409 });
       }
       const start = new Date(asset.inServiceDate + 'T12:00:00Z');
-      const regularAmount = money(depreciable / months);
+      const regularAmount = money(annualRate > 0 ? (depreciable * annualRate / 1200) : (depreciable / configuredMonths));
+      const months = annualRate > 0 ? Math.min(1200, Math.ceil(depreciable / regularAmount)) : configuredMonths;
       let accumulated = 0;
       const payloads = [];
       for (let index = 0; index < months; index += 1) {
