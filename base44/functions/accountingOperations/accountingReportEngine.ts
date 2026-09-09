@@ -112,8 +112,12 @@ export async function accountingData(svc, companyId, options = {}) {
   const entryQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
   const lineQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
   const [entries, lines, accounts, invoices, payments] = await Promise.all([
-    fetchAll(svc.entities.JournalEntry, entryQuery, 'date'),
-    fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'),
+    selectedYear
+      ? Promise.all([fetchAll(svc.entities.JournalEntry, entryQuery, 'date'), fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: selectedYear - 1 }, 'date')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
+      : fetchAll(svc.entities.JournalEntry, entryQuery, 'date'),
+    selectedYear
+      ? Promise.all([fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'), fetchAll(svc.entities.JournalEntryLine, { companyId, ejercicio: selectedYear - 1 }, 'entryDate')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
+      : fetchAll(svc.entities.JournalEntryLine, lineQuery, 'entryDate'),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     options.includeBusinessData ? fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
     options.includeBusinessData ? fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
@@ -159,7 +163,7 @@ export function accountingQuality(data) {
   };
 }
 
-export function buildReports(data, { year, scope = 'confirmed' } = {}) {
+export function buildReports(data, { year, scope = 'confirmed', withoutComparative = false } = {}) {
   const selectedYear = Number(year) || new Date().getFullYear();
   const eligible = data.entries.filter(entry => {
     if (yearOf(entry) !== selectedYear || entry.status === 'anulado') return false;
@@ -217,7 +221,7 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
   const balanceDifference = round2(totalAssets - totalLiabilities - totalEquity);
   const trialDebit = round2(accounts.reduce((s, a) => s + a.debit, 0));
   const trialCredit = round2(accounts.reduce((s, a) => s + a.credit, 0));
-  return {
+  const report = {
     year: selectedYear, scope,
     years: data.availableYears || [...new Set(data.entries.map(yearOf).filter(Boolean))].sort((a, b) => b - a),
     includedEntries: validEntries.length,
@@ -231,6 +235,8 @@ export function buildReports(data, { year, scope = 'confirmed' } = {}) {
     profitAndLoss: { income, expenses, incomeSections: groupPresentation(income), expenseSections: groupPresentation(expenses), totalIncome, totalExpenses, result },
     balanceSheet: { assets, liabilities, equity, assetSections: groupPresentation(assets), liabilitySections: groupPresentation(liabilities), equitySections: groupPresentation(equity), totalAssets, totalLiabilities, totalEquityBeforeResult, result, totalEquity, difference: balanceDifference },
   };
+  if (withoutComparative) return report;
+  return { ...report, comparative: buildReports(data, { year: selectedYear - 1, scope, withoutComparative: true }) };
 }
 
 export function buildJournal(data, { year, status = 'all', type = 'all', search = '', page = 1, pageSize = 100 } = {}) {
