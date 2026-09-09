@@ -411,7 +411,7 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
 }
 
-export async function postBankReconciliation(s(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
+export async function postBankReconciliation(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
   const originalAmount = money(Math.abs(Number(transaction.importe) || 0));
   const currency = clean(options.currency || transaction.moneda || bankAccount.currency || bankAccount.moneda || 'EUR').toUpperCase();
   const fxRate = Number(options.fxRate || transaction.exchange_rate || transaction.tipo_cambio || 1);
