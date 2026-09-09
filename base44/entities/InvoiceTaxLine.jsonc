@@ -61,6 +61,53 @@
     "exemptionKey": {
       "type": "string"
     },
+    "operationType": {
+      "type": "string",
+      "enum": [
+        "subject_taxed",
+        "subject_zero",
+        "exempt_limited",
+        "exempt_full",
+        "non_subject_article",
+        "non_subject_location",
+        "reverse_charge",
+        "intra_eu_supply",
+        "intra_eu_acquisition",
+        "export",
+        "import",
+        "canary_peninsula_goods",
+        "canary_peninsula_service",
+        "special_margin",
+        "outside_scope"
+      ]
+    },
+    "legalBasis": {
+      "type": "string"
+    },
+    "deductiblePercent": {
+      "type": "number",
+      "default": 100
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "manualOverride": {
+      "type": "boolean",
+      "default": false
+    },
+    "manualOverrideReason": {
+      "type": "string"
+    },
+    "ruleSetVersion": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
     "deductible": {
       "type": "boolean",
       "default": true
