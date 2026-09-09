@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Settings2, Plus, Trash2, Save, Info } from 'lucide-react';
+import { Settings2, Plus, Trash2, Save, Info, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -34,11 +34,11 @@ const DEFAULT_MAPPINGS = [
   { categoria: 'seguros', tipo: 'gasto', cuenta: '62500000', nombre: 'Primas de seguros' },
 ];
 
-export default function ConfigContable({ companyId, user }) {
+export default function ConfigContable({ companyId }) {
   const [mappings, setMappings] = useState(DEFAULT_MAPPINGS);
-  const [configId, setConfigId] = useState(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [initializing, setInitializing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -48,7 +48,6 @@ export default function ConfigContable({ companyId, user }) {
       .then(response => {
         const record = response?.data?.configuration || null;
         if (!active || !record) return;
-        setConfigId(record.id);
         try {
           const parsed = JSON.parse(record.mappingsJson || '[]');
           if (Array.isArray(parsed) && parsed.length) {
@@ -89,12 +88,29 @@ export default function ConfigContable({ companyId, user }) {
         unmatchedOutgoingMode: 'revision',
       });
       const record = response?.data?.configuration;
-      if (record?.id) setConfigId(record.id);
       setSaved(true);
     } catch (err) {
       setError(err?.message || 'No se pudo guardar la configuración contable.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const initializePlan = async () => {
+    if (!companyId) return;
+    setInitializing(true);
+    setError('');
+    try {
+      const response = await base44.functions.invoke('accountingOperations', { action: 'seed_pgc', companyId });
+      if (response.data?.error) throw new Error(response.data.error);
+      setSaved(false);
+      setError(response.data?.created
+        ? 'Plan completado: ' + response.data.created + ' cuentas nuevas.'
+        : 'El plan contable estándar ya estaba completo.');
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'No se pudo completar el plan contable.');
+    } finally {
+      setInitializing(false);
     }
   };
 
@@ -108,9 +124,14 @@ export default function ConfigContable({ companyId, user }) {
             <p className="text-xs text-muted-foreground">Mapea categorías de factura a cuentas contables del PGC. Estas reglas guían las propuestas de asiento.</p>
           </div>
         </div>
-        <Button size="sm" className="gap-1.5 h-8" onClick={save} disabled={saving}>
-          <Save className="w-3.5 h-3.5" /> {saving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar cambios'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={initializePlan} disabled={initializing}>
+            <Database className="h-3.5 w-3.5" /> {initializing ? 'Completando…' : 'Completar PGC'}
+          </Button>
+          <Button size="sm" className="gap-1.5 h-8" onClick={save} disabled={saving}>
+            <Save className="w-3.5 h-3.5" /> {saving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar cambios'}
+          </Button>
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2 text-xs text-blue-800">
