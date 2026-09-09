@@ -197,6 +197,9 @@ function buildDuplicateAudit(invoices, entries) {
   const activeEntriesByDocument = new Map();
   for (const entry of activeEntries) {
     if (!entry.documentId) continue;
+    const isInvoicePosting = String(entry.postingKey || '').startsWith('invoice:')
+      || ['factura_emitida', 'factura_recibida', 'OCR'].includes(entry.source);
+    if (!isInvoicePosting) continue;
     activeEntriesByDocument.set(entry.documentId, [...(activeEntriesByDocument.get(entry.documentId) || []), entry]);
   }
   const invoiceEntryConflicts = [];
