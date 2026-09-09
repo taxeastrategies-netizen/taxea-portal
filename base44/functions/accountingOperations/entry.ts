@@ -1770,7 +1770,7 @@ Deno.serve(async (req) => {
         return Response.json({ success: true, report: buildReports(data, { year: body.year, scope: body.scope }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
       }
       if (action === 'journal') {
-        return Response.json({ success: true, journal: buildJournal(data, { year: body.year, status: body.status, type: body.type, search: body.search, page: body.page, pageSize: body.pageSize }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
+        return Response.json({ success: true, journal: buildJournal(data, { year: body.year, status: body.status, type: body.type, source: body.source, search: body.search, page: body.page, pageSize: body.pageSize }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
       }
       return Response.json({ success: true, ledger: buildLedger(data, { year: body.year, scope: body.scope, accountCode: body.accountCode }), quality: accountingQuality(data), schemaVersion: SCHEMA_VERSION });
     }
