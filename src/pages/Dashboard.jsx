@@ -42,7 +42,7 @@ const HR_TOOLS = [
   { label: 'Empleados', to: '/people/employees', icon: Users },
   { label: 'Ausencias', to: '/people/absences', icon: Calendar },
   { label: 'Documentos', to: '/people/documents', icon: FileText },
-  { label: 'Nóminas', to: '/people/payroll', icon: Euro },
+  { label: 'OCR laboral', to: '/tax-accounting/labor-ocr', icon: Euro },
 ];
 
 const currency = (value) => Number(value || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
