@@ -73,6 +73,9 @@
     "schemaVersion": {
       "type": "string",
       "default": "pgc8-v2"
+    },
+    "updatedBy": {
+      "type": "string"
     }
   },
   "required": [
