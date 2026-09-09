@@ -51,7 +51,7 @@ export default function BalancePyG({ companyId }) {
     queryFn: async () => {
       const response = await base44.functions.invoke('accountingOperations', { action: 'reports', companyId, year: Number(year), scope });
       const result = response?.data || response || {};
-      if (result.error || result.success === false) throw new Error(result.errorlong || result.error || 'No se pudo calcular el informe.');
+      if (result.error || result.success === false) throw new Error(result.error || 'No se pudo calcular el informe.');
       return result;
     },
     enabled: Boolean(companyId),
