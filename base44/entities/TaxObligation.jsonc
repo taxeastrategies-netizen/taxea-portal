@@ -29,10 +29,12 @@
         "modelo_347",
         "modelo_349",
         "modelo_353",
+        "modelo_368",
         "modelo_369",
         "modelo_390",
         "modelo_400_igic",
         "modelo_412_igic",
+        "modelo_414_igic",
         "modelo_415_igic",
         "modelo_416_igic",
         "modelo_417_igic",
@@ -49,10 +51,43 @@
         "otra"
       ]
     },
+    "modelo_codigo": {
+      "type": "string"
+    },
+    "administracion": {
+      "type": "string",
+      "enum": [
+        "AEAT",
+        "ATC",
+        "Otro"
+      ]
+    },
     "periodo": {
       "type": "string"
     },
+    "anio": {
+      "type": "number"
+    },
+    "trimestre": {
+      "type": "string"
+    },
+    "fecha_inicio_presentacion": {
+      "type": "string",
+      "format": "date"
+    },
     "fecha_limite": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_limite_domiciliacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_limite_presentacion": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_limite_interna": {
       "type": "string",
       "format": "date"
     },
@@ -61,10 +96,18 @@
       "enum": [
         "pendiente_documentacion",
         "en_preparacion",
+        "calculado",
+        "borrador",
+        "pendiente_revision",
+        "revisado",
+        "listo_presentar",
         "presentado",
         "domiciliado",
         "pagado",
-        "finalizado"
+        "finalizado",
+        "rechazado",
+        "con_requerimiento",
+        "no_aplica"
       ],
       "default": "pendiente_documentacion"
     },
@@ -72,8 +115,11 @@
       "type": "string",
       "enum": [
         "a_pagar",
+        "a_ingresar",
         "a_devolver",
+        "a_compensar",
         "cero",
+        "informativo",
         "pendiente"
       ],
       "default": "pendiente"
@@ -87,10 +133,58 @@
     "comentarios_asesor": {
       "type": "string"
     },
-    "anio": {
-      "type": "number"
+    "calendar_key": {
+      "type": "string"
     },
-    "trimestre": {
+    "source": {
+      "type": "string",
+      "enum": [
+        "perfil_fiscal",
+        "asesor",
+        "documento_fiscal",
+        "importacion",
+        "legacy"
+      ]
+    },
+    "calendar_rule_version": {
+      "type": "string"
+    },
+    "calendar_confidence": {
+      "type": "string",
+      "enum": [
+        "oficial_verificado",
+        "provisional",
+        "criterio_asesor"
+      ]
+    },
+    "deadline_status": {
+      "type": "string",
+      "enum": [
+        "verificado",
+        "provisional",
+        "revisar"
+      ]
+    },
+    "tax_model_id": {
+      "type": "string"
+    },
+    "tax_period_id": {
+      "type": "string"
+    },
+    "tax_filing_id": {
+      "type": "string"
+    },
+    "document_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "last_synced_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_synced_by": {
       "type": "string"
     }
   },
