@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import iaeCatalog from '@/data/iaeCatalog.json';
-import { AlertTriangle, BadgeCheck, BookOpenCheck, CheckCircle2, ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
