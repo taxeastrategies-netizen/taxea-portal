@@ -1057,6 +1057,107 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, configuration });
     }
 
+    if (action === 'tax_summary') {
+      const [invoices, taxLines, company] = await Promise.all([
+        fetchAll(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision', 10000),
+        fetchAll(svc.entities.InvoiceTaxLine, { companyId }, 'operationDate', 30000),
+        svc.entities.Company.get(companyId).catch(() => null),
+      ]);
+      const activeInvoices = invoices.filter(invoice => invoice.estado_contable === 'contabilizada' && !invoice.anulada);
+      const invoiceById = new Map(activeInvoices.map(invoice => [invoice.id, invoice]));
+      const detailedByInvoice = new Map();
+      for (const item of taxLines) {
+        if (!invoiceById.has(item.invoiceId)) continue;
+        detailedByInvoice.set(item.invoiceId, [...(detailedByInvoice.get(item.invoiceId) || []), item]);
+      }
+      const companyTaxKind = company?.tipo_impuesto === 'igic' ? 'igic' : 'iva';
+      const rows = [];
+      for (const invoice of activeInvoices) {
+        const details = detailedByInvoice.get(invoice.id);
+        if (details?.length) {
+          for (const detail of details) rows.push({
+            invoiceId: invoice.id,
+            invoiceType: invoice.tipo,
+            operationDate: detail.operationDate || invoice.fecha_emision,
+            taxKind: detail.taxKind || companyTaxKind,
+            rate: Number(detail.rate || 0),
+            base: money(detail.base),
+            quota: money(detail.quota),
+            deductibleQuota: invoice.tipo === 'recibida'
+              ? money(detail.deductibleQuota ?? (detail.deductible === false ? 0 : detail.quota))
+              : 0,
+            nonDeductibleQuota: invoice.tipo === 'recibida'
+              ? money(detail.nonDeductibleQuota ?? (detail.deductible === false ? detail.quota : 0))
+              : 0,
+            regime: detail.regime || 'general',
+            reviewStatus: detail.reviewStatus || 'pendiente_revision',
+            source: 'detalle_fiscal',
+          });
+        } else {
+          rows.push({
+            invoiceId: invoice.id,
+            invoiceType: invoice.tipo,
+            operationDate: invoice.fecha_emision,
+            taxKind: companyTaxKind,
+            rate: Number(invoice.tipo_iva || 0),
+            base: money(invoice.base_imponible),
+            quota: money(invoice.cuota_iva),
+            deductibleQuota: invoice.tipo === 'recibida' ? money(invoice.cuota_iva) : 0,
+            nonDeductibleQuota: 0,
+            regime: 'general',
+            reviewStatus: 'pendiente_revision',
+            source: 'factura_agregada_legacy',
+          });
+        }
+      }
+      const years = [...new Set(rows.map(row => Number(String(row.operationDate || '').slice(0, 4))).filter(Boolean))].sort((a, b) => b - a);
+      const selectedYear = body.year && body.year !== 'todos' ? Number(body.year) : null;
+      const selectedQuarter = body.quarter && body.quarter !== 'todos' ? Number(String(body.quarter).replace('T', '')) : null;
+      const filtered = rows.filter(row => {
+        const date = new Date(String(row.operationDate || '') + 'T12:00:00Z');
+        const yearMatches = !selectedYear || date.getUTCFullYear() === selectedYear;
+        const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+        return yearMatches && (!selectedQuarter || quarter === selectedQuarter);
+      });
+      const groups = new Map();
+      for (const row of filtered) {
+        const key = row.taxKind + ':' + row.rate;
+        if (!groups.has(key)) groups.set(key, { taxKind: row.taxKind, rate: row.rate, issuedBase: 0, outputQuota: 0, receivedBase: 0, inputQuota: 0, deductibleQuota: 0, nonDeductibleQuota: 0, invoices: new Set() });
+        const group = groups.get(key);
+        group.invoices.add(row.invoiceId);
+        if (row.invoiceType === 'emitida') {
+          group.issuedBase = money(group.issuedBase + row.base);
+          group.outputQuota = money(group.outputQuota + row.quota);
+        } else {
+          group.receivedBase = money(group.receivedBase + row.base);
+          group.inputQuota = money(group.inputQuota + row.quota);
+          group.deductibleQuota = money(group.deductibleQuota + row.deductibleQuota);
+          group.nonDeductibleQuota = money(group.nonDeductibleQuota + row.nonDeductibleQuota);
+        }
+      }
+      const summaryRows = [...groups.values()].map(group => ({ ...group, invoiceCount: group.invoices.size, invoices: undefined }));
+      const totals = {
+        outputQuota: money(filtered.filter(row => row.invoiceType === 'emitida').reduce((sum, row) => sum + row.quota, 0)),
+        inputQuota: money(filtered.filter(row => row.invoiceType === 'recibida').reduce((sum, row) => sum + row.quota, 0)),
+        deductibleQuota: money(filtered.filter(row => row.invoiceType === 'recibida').reduce((sum, row) => sum + row.deductibleQuota, 0)),
+        nonDeductibleQuota: money(filtered.filter(row => row.invoiceType === 'recibida').reduce((sum, row) => sum + row.nonDeductibleQuota, 0)),
+      };
+      totals.result = money(totals.outputQuota - totals.deductibleQuota);
+      return Response.json({
+        success: true,
+        taxKind: companyTaxKind,
+        years,
+        rows: summaryRows,
+        totals,
+        quality: {
+          invoices: new Set(filtered.map(row => row.invoiceId)).size,
+          detailedInvoices: new Set(filtered.filter(row => row.source === 'detalle_fiscal').map(row => row.invoiceId)).size,
+          legacyAggregateInvoices: new Set(filtered.filter(row => row.source === 'factura_agregada_legacy').map(row => row.invoiceId)).size,
+          pendingReviewLines: filtered.filter(row => row.reviewStatus !== 'validado').length,
+        },
+        notice: 'Resumen interno basado en facturas contabilizadas. Las facturas históricas sin desglose fiscal se muestran como agregado pendiente de revisión.',
+      });
+    }
     if (action === 'assets_overview') {
       const [assets, schedule] = await Promise.all([
         fetchAll(svc.entities.AccountingAsset, { companyId }, 'inServiceDate', 10000),
