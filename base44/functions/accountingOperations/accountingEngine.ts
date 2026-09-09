@@ -612,6 +612,38 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     accounting_review_status: created.entry.status === 'confirmado' ? 'validada_contabilizada' : 'pendiente_revision',
   });
   try {
+    const existingTaxLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+    if (!existingTaxLines?.length) {
+      const deductibleQuota = invoice.tipo === 'recibida'
+        ? money(invoice.deductible_tax_amount != null ? invoice.deductible_tax_amount : proposal.tax)
+        : money(proposal.tax);
+      const nonDeductibleQuota = invoice.tipo === 'recibida'
+        ? money(invoice.non_deductible_tax_amount != null ? invoice.non_deductible_tax_amount : proposal.tax - deductibleQuota)
+        : 0;
+      await svc.entities.InvoiceTaxLine.create({
+        companyId,
+        invoiceId: invoice.id,
+        lineNumber: 1,
+        operationDate: invoice.fecha_operacion || invoice.fecha_emision,
+        taxKind: proposal.taxKind || 'no_aplica',
+        rate: Number(invoice.tipo_iva || 0),
+        base: money(proposal.base),
+        quota: money(proposal.tax),
+        deductibleQuota,
+        nonDeductibleQuota,
+        surchargeRate: Number(invoice.recargo_equivalencia || 0),
+        surchargeQuota: Number(invoice.cuota_recargo || 0),
+        regime: invoice.fiscal_treatment || 'general',
+        deductible: invoice.tipo !== 'recibida' || nonDeductibleQuota === 0,
+        source: invoice.origin === 'ocr' ? 'ocr' : 'sistema',
+        reviewStatus: invoice.tipo_iva != null ? 'validado' : 'pendiente_revision',
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+  } catch (error) {
+    console.warn('[accountingEngine] InvoiceTaxLine:', error.message);
+  }
+  try {
     await svc.entities.DocumentAccountingSource.create({
       companyId,
       documentType: invoice.tipo === 'emitida' ? 'factura_emitida' : 'factura_recibida',
