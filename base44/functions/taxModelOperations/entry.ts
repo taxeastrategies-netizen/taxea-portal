@@ -573,12 +573,19 @@ Deno.serve(async (req) => {
     const body=await req.json().catch(()=>({})); const action=clean(body.action||'catalog');
     if(action==='catalog') return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),recommendedExtensions:[{code:'349',reason:'Operaciones intracomunitarias'},{code:'131',reason:'Estimación objetiva'},{code:'417',reason:'IGIC con SII'},{code:'421',reason:'IGIC régimen simplificado'},{code:'216/296',reason:'Retenciones a no residentes'}],sources:SOURCES});
     if(action==='self_test') {
-      const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA'}; const profile={isREDEME:false,usesSII:false};
+      const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
       const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'28',value:30},{code:'30',value:30},{code:'09',value:19},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
+      const thirdParties={result:0,details:[{taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,quarters:{T1:1000,T2:1000,T3:1000,T4:500},cashAmount:0,propertyTransferAmount:0,propertyRentAmount:0,cashAccounting:false,reverseCharge:false,exempt:false}]};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); return {model,length:wrapped.length,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`)}});
-      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks});
+      const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
+      const import415=export415Import(company,2025,thirdParties).split('\r\n');
+      const transferChecks=[
+        {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
+        {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),valid:import415.length===2&&import415[0].length===246&&import415[1].length===356&&import415[1].startsWith('2415')},
+      ];
+      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks});
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
     if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
@@ -609,10 +616,21 @@ Deno.serve(async (req) => {
       if(!DEFINITIONS[model].officialExport) return Response.json({ok:false,error:'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
       if(blockers.length) return Response.json({ok:false,error:'La exportación está bloqueada por incidencias fiscales.',blockers:unique(blockers),warnings:unique(warnings)},{status:422});
       if(['303'].includes(model)&&activities.some((a:any)=>['simplificado','grupo_entidades'].includes(a.indirectTaxRegime))) return Response.json({ok:false,error:'El perfil requiere páginas/regímenes especiales no exportables de forma automática.',blockers:['Revisa régimen simplificado/grupo de entidades y utiliza el modelo específico aplicable.']},{status:422});
-      const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF')); if(!developerTaxId) return Response.json({ok:false,error:'Falta configurar TAXEA_DEVELOPER_NIF para completar el diseño oficial AEAT.',blockers:['Añade el NIF de la entidad desarrolladora como secreto de backend antes de exportar.']},{status:422});
-      const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation); const content=wrap(model,year,period,pages,developerTaxId); const hash=await sha256(content); const filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`;
-      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:'AEAT',nombreFichero:filename,extension:model,formato:'Diseño de registro AEAT',versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result})});
-      return Response.json({...result,file:{id:record.id,filename,extension:model,format:'Diseño de registro AEAT',design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content)}});
+      let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
+      if(model==='347') {
+        content=export347(company,year,calculation,sequentialDeclarationNumber('347'));
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_347.txt`; extension='txt'; format='Diseño de registro AEAT modelo 347';
+      } else if(model==='415') {
+        content=export415Import(company,year,calculation);
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_415_importacion.txt`; extension='txt'; format='Soporte de importación oficial programa ATC 415';
+      } else {
+        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF')); if(!developerTaxId) return Response.json({ok:false,error:'Falta configurar TAXEA_DEVELOPER_NIF para completar el diseño oficial AEAT.',blockers:['Añade el NIF de la entidad desarrolladora como secreto de backend antes de exportar.']},{status:422});
+        const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
+        content=wrap(model,year,period,pages,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`; extension=model; format='Diseño de registro AEAT';
+      }
+      const hash=await sha256(content);
+      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined})});
+      return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content),nextStep:model==='415'?'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Corrige cualquier incidencia y genera allí el .dec.':undefined}});
     }
     if(action==='export_review') {
       const content=JSON.stringify({...result,exportNotice:'Borrador técnico de revisión. No presentable ante AEAT/ATC.'},null,2); return Response.json({...result,file:{filename:`${model}_${year}_${period}_revision_taxea.json`,extension:'json',format:'Borrador técnico de revisión',hash:await sha256(content),contentBase64:encodeBase64(content)}});
