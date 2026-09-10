@@ -53,6 +53,12 @@ Deno.serve(async (req) => {
     if (!fechaEmision) {
       return Response.json({ error: 'La fecha es obligatoria' }, { status: 400 });
     }
+    const fechaRecepcion = invoiceType === 'recibida'
+      ? (form.fecha_recepcion || String(doc.uploadedAt || doc.created_date || new Date().toISOString()).slice(0, 10))
+      : '';
+    if (invoiceType === 'recibida' && fechaRecepcion < fechaEmision) {
+      return Response.json({ error: 'La fecha real de recepción no puede ser anterior a la fecha de emisión.' }, { status: 400 });
+    }
 
     const baseImponible = parseFloat(form.base_imponible) || 0;
     const esRectificativa = form.es_rectificativa === true || form.es_rectificativa === 'true' || extractedData?.es_rectificativa === true;
@@ -169,6 +175,7 @@ Deno.serve(async (req) => {
         company_id: doc.company_id,
         numero_factura: numeroFactura,
         fecha_emision: form.fecha,
+        fecha_recepcion: fechaRecepcion,
         proveedor_nombre: form.proveedor_cliente || '',
         proveedor_nif: form.nif_proveedor || extractedData?.nif_proveedor || '',
         proveedor_email: form.email_proveedor || extractedData?.email_proveedor || extractedData?.proveedor_email || '',
@@ -320,3 +327,4 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message || 'Error interno del servidor' }, { status: 500 });
   }
 });
+
