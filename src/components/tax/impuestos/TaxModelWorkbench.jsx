@@ -47,6 +47,7 @@ function downloadBase64(file) {
 }
 
 function StatusBadge({ model }) {
+  if (model.exportMode === 'atc_guided_packet') return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado ATC</span>;
   if (model.exportMode === 'atc_program_import') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Importable en ATC</span>;
   if (model.officialExport) return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Diseño AEAT</span>;
   if (model.authority === 'ATC') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Programa ATC</span>;
@@ -104,9 +105,9 @@ export default function TaxModelWorkbench() {
     onSuccess: (data, variables) => {
       setActionError('');
       if (variables.action === 'calculate' || variables.action === 'save_draft') setResult(data);
-      if (variables.action === 'export' || variables.action === 'export_review') {
+      if (['export', 'export_review', 'export_handoff'].includes(variables.action)) {
         downloadBase64(data.file);
-        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, isReview: variables.action === 'export_review' });
+        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
       }
     },
     onError: error => {
@@ -179,7 +180,7 @@ export default function TaxModelWorkbench() {
             <div className="flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{actionError}</span></div>
           )}
           {lastExportInfo && (
-            <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
+            <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : lastExportInfo.isHandoff ? 'Traspaso ATC descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
           )}
 
           {modelCode === '130' && (
@@ -254,8 +255,9 @@ export default function TaxModelWorkbench() {
               <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar versión</Button>
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review' })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>
-                <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export' })} disabled={invoke.isPending || !result.validation?.canExportOfficial}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar diseño oficial'}</Button>
-                {!result.validation?.canExportOfficial && <p className="flex items-center text-xs text-slate-500">Resuelve los bloqueos o usa el programa oficial indicado antes de presentar.</p>}
+                {definition?.exportMode === 'atc_guided_packet' && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff' })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso ATC</Button>}
+                {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export' })} disabled={invoke.isPending || !result.validation?.canExportOfficial}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar diseño oficial'}</Button>}
+                {!result.validation?.canExportOfficial && <p className="flex items-center text-xs text-slate-500">{definition?.exportMode === 'atc_guided_packet' ? 'El traspaso ayuda a cumplimentar; el .dec se genera y valida siempre en el programa oficial.' : 'Resuelve los bloqueos o usa el programa oficial indicado antes de presentar.'}</p>}
               </div>
             </>
           )}
