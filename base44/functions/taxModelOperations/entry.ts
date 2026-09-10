@@ -485,6 +485,66 @@ function export303(company: any, profile: any, year: number, period: string, cal
   return p1.join('')+p3.join('');
 }
 
+function export347(company: any, year: number, calculation: any, declarationNumber: string) {
+  const details = [...(calculation.details || [])].sort((a: any, b: any) => `${a.taxId}|${a.operationKey}`.localeCompare(`${b.taxId}|${b.operationKey}`));
+  const header = Array(500).fill(' ');
+  place(header, 1, 1, '1'); place(header, 2, 3, '347'); place(header, 5, 4, String(year));
+  place(header, 9, 9, normalizedText(company.nif_cif, 9)); place(header, 18, 40, normalizedText(company.razon_social, 40));
+  place(header, 58, 1, 'T'); place(header, 59, 9, numeric(clean(company.telefono).replace(/\D/g, ''), 9, false, 0));
+  place(header, 108, 13, declarationNumber); place(header, 123, 13, numeric(0, 13, false, 0));
+  place(header, 136, 9, numeric(details.length, 9, false, 0));
+  place(header, 145, 16, signedAmount(details.reduce((sum: number, row: any) => sum + money(row.total), 0)));
+  place(header, 161, 9, numeric(0, 9, false, 0)); place(header, 170, 16, signedAmount(0));
+  const records = details.map((row: any) => {
+    const record = Array(500).fill(' ');
+    const country = normalizedCountry(row.country) || 'ES';
+    place(record, 1, 1, '2'); place(record, 2, 3, '347'); place(record, 5, 4, String(year)); place(record, 9, 9, normalizedText(company.nif_cif, 9));
+    if (country === 'ES') place(record, 18, 9, normalizedText(row.taxId, 9));
+    place(record, 36, 40, normalizedText(row.name, 40)); place(record, 76, 1, 'D');
+    place(record, 77, 2, country === 'ES' ? row.provinceCode : '99'); place(record, 79, 2, country === 'ES' ? '  ' : country);
+    place(record, 82, 1, row.operationKey); place(record, 83, 16, signedAmount(row.total));
+    place(record, 101, 15, numeric(row.cashAmount, 15)); place(record, 116, 16, signedAmount(row.propertyTransferAmount));
+    place(record, 132, 4, row.cashAmount ? String(year) : '0000');
+    place(record, 136, 16, signedAmount(row.quarters?.T1)); place(record, 152, 16, signedAmount(0));
+    place(record, 168, 16, signedAmount(row.quarters?.T2)); place(record, 184, 16, signedAmount(0));
+    place(record, 200, 16, signedAmount(row.quarters?.T3)); place(record, 216, 16, signedAmount(0));
+    place(record, 232, 16, signedAmount(row.quarters?.T4)); place(record, 248, 16, signedAmount(0));
+    if (country !== 'ES') place(record, 264, 17, normalizedText(row.taxId, 17));
+    place(record, 281, 1, row.cashAccounting ? 'X' : ' '); place(record, 282, 1, row.reverseCharge ? 'X' : ' ');
+    place(record, 284, 16, signedAmount(row.cashAccounting ? row.total : 0)); place(record, 300, 6, numeric(0, 6, false, 0));
+    return record.join('');
+  });
+  return [header.join(''), ...records].join('\r\n');
+}
+
+function export415Import(company: any, year: number, calculation: any) {
+  const details = [...(calculation.details || [])].sort((a: any, b: any) => `${a.taxId}|${a.operationKey}`.localeCompare(`${b.taxId}|${b.operationKey}`));
+  const keys = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+  const summary = Object.fromEntries(keys.map(key => [key, {
+    count: details.filter((row: any) => row.operationKey === key).length,
+    amount: details.filter((row: any) => row.operationKey === key).reduce((sum: number, row: any) => sum + money(row.total), 0),
+  }]));
+  const declaration = [
+    '1', '415', String(year), normalizedText(company.nif_cif, 9), normalizedText(company.razon_social, 40),
+    ...keys.flatMap(key => [numeric(summary[key].count, 9, false, 0), signedAmount(summary[key].amount)]),
+    ' ', ' '.repeat(13),
+  ].join('');
+  const records = details.map((row: any) => {
+    const country = normalizedCountry(row.country) || 'ES';
+    return [
+      '2', '415', String(year), normalizedText(company.nif_cif, 9), row.operationKey,
+      country === 'ES' ? normalizedText(row.taxId, 9) : ' '.repeat(9), normalizedText(row.name, 40), ' '.repeat(9), country === 'ES' ? '  ' : country,
+      row.cashAccounting ? 'X' : ' ', row.reverseCharge ? 'X' : ' ', row.exempt ? 'X' : ' ', signedAmount(row.cashAccounting ? row.total : 0),
+      signedAmount(row.total), numeric(row.cashAmount, 15), signedAmount(row.propertyRentAmount), signedAmount(row.propertyTransferAmount), row.cashAmount ? String(year) : '0000',
+      signedAmount(row.quarters?.T1), signedAmount(0), signedAmount(0),
+      signedAmount(row.quarters?.T2), signedAmount(0), signedAmount(0),
+      signedAmount(row.quarters?.T3), signedAmount(0), signedAmount(0),
+      signedAmount(row.quarters?.T4), signedAmount(0), signedAmount(0),
+    ].join('');
+  });
+  return [declaration, ...records].join('\r\n');
+}
+
 function wrap(model: string, year: number, period: string, pages: string, developerTaxId: string) {
   const prefix=`<T${model}0${year}${period}0000><AUX>${' '.repeat(70)}TX01${' '.repeat(4)}${normalizedText(developerTaxId,9)}${' '.repeat(213)}</AUX>`;
   const suffix=`</T${model}0${year}${period}0000>`;
