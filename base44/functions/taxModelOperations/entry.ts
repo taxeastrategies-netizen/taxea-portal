@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v7';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v8';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -10,7 +10,7 @@ const DEFINITIONS: Record<string, any> = {
   '130': { name: 'Pago fraccionado IRPF en estimación directa', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'HAP/258/2015 v1.2', designYear: '2019+', officialExport: true },
   '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
   '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida se habilita para registros de nómina clave A y profesionales clave G después de completar y validar la ficha anual. Otras claves requieren ampliar su bloque específico antes de exportar.' },
-  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025+', officialExport: false, designWarning: 'El cálculo anual es revisable, pero no se genera un fichero presentable hasta completar y validar la naturaleza de la renta, emisor, mercado y demás datos exigidos por el diseño AEAT.' },
+  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida exige clasificar y validar cada renta. Esta versión admite registros de perceptor sin relación de gastos del art. 26.1.a LIRPF; si ese anexo resulta aplicable, la exportación queda bloqueada.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
   '390': { name: 'Resumen anual IVA', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'DR390e2025', designYear: '2025', officialExport: false, designWarning: 'El diseño oficial del ejercicio 2026 todavía no está publicado/validado.' },
@@ -79,6 +79,30 @@ function sanitize190Payload(input: any) {
     if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = money(input[key]);
   }
   for (const key of ['ceutaMelilla','mobility','specialDataConfirmed']) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = booleanValue(input[key]);
+  }
+  if (clean(input?.sourceFingerprint)) payload.sourceFingerprint = clean(input.sourceFingerprint);
+  return payload;
+}
+
+function sanitize193Payload(input: any) {
+  const payload: any = {};
+  for (const key of ['representativeTaxId','provinceCode','keyCode','issuerCode','perceptionKey','nature','paymentRole','accountCodeType','accountCode','accrualYear','perceptionType','isin','loanStartDate','loanEndDate','ceutaPalmaCode','previousPayerTaxId','accrualDate','marketKey']) {
+    if (clean(input?.[key])) payload[key] = clean(input[key]);
+  }
+  for (const key of ['perceptionAmount','reductions','retentionBase','retentionRate','penalties','loanCompensation','loanGuarantees','stateWithholding','navarraWithholding','alavaWithholding','gipuzkoaWithholding','bizkaiaWithholding']) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = money(input[key]);
+  }
+  for (const key of ['recipientMediator','pending','specialDataConfirmed']) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = booleanValue(input[key]);
+  }
+  if (clean(input?.sourceFingerprint)) payload.sourceFingerprint = clean(input.sourceFingerprint);
+  return payload;
+}
+
+function sanitize193DeclarationPayload(input: any) {
+  const payload: any = {};
+  for (const key of ['declarantNatureSpecial','expenseAnnexNotApplicable','specialDataConfirmed']) {
     if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = booleanValue(input[key]);
   }
   if (clean(input?.sourceFingerprint)) payload.sourceFingerprint = clean(input.sourceFingerprint);
@@ -568,6 +592,7 @@ function applyModelValidation(model: string, data: any, calculation: any) {
   if (model === '390' && year > 2025) data.blockers.push('La AEAT todavía no ha publicado el diseño anual 390 del ejercicio 2026.');
   if (model === '180' && year > 2025) data.blockers.push('El modelo anual 180 del ejercicio 2026 todavía no está abierto ni contrastado con la campaña AEAT correspondiente.');
   if (model === '190' && year > 2025) data.blockers.push('El modelo anual 190 del ejercicio 2026 todavía no está abierto ni contrastado con la campaña AEAT correspondiente.');
+  if (model === '193' && year > 2025) data.blockers.push('El modelo anual 193 del ejercicio 2026 todavía no está abierto ni contrastado con la campaña AEAT correspondiente.');
   if (model === '347' && profile?.usesSII) data.blockers.push('El perfil está adscrito al SII y, con carácter general, queda excluido de presentar el modelo 347; confirme cualquier excepción censal.');
   if (model === '415' && !['igic', 'mixto'].includes(indirect)) data.blockers.push('El modelo 415 solo corresponde a operaciones en el ámbito del IGIC canario.');
   if (['347', '415'].includes(model) && !(calculation.details || []).length) data.blockers.push('No existen operaciones que superen el umbral por tercero; no procede generar una declaración vacía.');
@@ -629,6 +654,87 @@ function calculate190(data: any, b: any) {
   return {...base,details};
 }
 
+function calculate193(data: any, b: any) {
+  const base = calculateSimpleRetention(data, b, '123');
+  const records = new Map((data.declarables || []).filter((row: any) => row.modeloCodigo === '193').map((row: any) => [row.recordKey, row]));
+  const invoiceById = new Map((data.invoices || []).map((invoice: any) => [invoice.id, invoice]));
+  const sourceFacts = base.details.map((detail: any) => `${detail.id}:${money(detail.base)}:${money(detail.withholding)}:${(detail.paymentSources || []).join(',')}`);
+  const declarationFingerprint = sourceFingerprint(sourceFacts);
+  const declarationStored: any = records.get('Annual193:Declarant');
+  const declarationPayload = sanitize193DeclarationPayload(declarationStored?.payload || {});
+  const declarationReviewIsCurrent = declarationStored?.reviewStatus === 'validado_asesor' && declarationPayload.sourceFingerprint === declarationFingerprint;
+  const declarationMissingFields: string[] = [];
+  if (!booleanValue(declarationPayload.expenseAnnexNotApplicable)) declarationMissingFields.push('confirmación de que no procede la relación de gastos del art. 26.1.a LIRPF');
+  if (!booleanValue(declarationPayload.specialDataConfirmed)) declarationMissingFields.push('confirmación de la naturaleza del declarante y del anexo de gastos');
+  const declaration = {
+    recordKey: 'Annual193:Declarant', sourceType: 'TaxDeclarationConfig', sourceIds: base.details.flatMap((detail: any) => detail.paymentSources || []),
+    manual: { declarantNatureSpecial: booleanValue(declarationPayload.declarantNatureSpecial), expenseAnnexNotApplicable: booleanValue(declarationPayload.expenseAnnexNotApplicable), specialDataConfirmed: booleanValue(declarationPayload.specialDataConfirmed), sourceFingerprint: declarationFingerprint },
+    reviewStatus: declarationReviewIsCurrent ? 'validado_asesor' : 'pendiente_revision', missingFields: declarationMissingFields, sourceFingerprint: declarationFingerprint,
+  };
+  const allowedNatures: Record<string, string[]> = { A:['01','02','03','04','05','06','07','08'], B:['01','02','03','04','05','06','07'], C:['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15'], D:['01','02','03','04','05','06','07'] };
+  let incomplete = 0, pendingReview = 0, staleReview = 0;
+  const details = base.details.map((detail: any) => {
+    const invoice: any = invoiceById.get(detail.id);
+    const recordKey = `Annual193:Invoice:${detail.id}`;
+    const stored: any = records.get(recordKey);
+    const payload = sanitize193Payload(stored?.payload || {});
+    const currentSourceFingerprint = sourceFingerprint([`${detail.id}:${money(detail.base)}:${money(detail.withholding)}:${(detail.paymentSources || []).join(',')}`]);
+    const reviewIsCurrent = stored?.reviewStatus === 'validado_asesor' && payload.sourceFingerprint === currentSourceFingerprint;
+    const perceptionKey = clean(payload.perceptionKey).toUpperCase();
+    const nature = clean(payload.nature).padStart(2, '0').slice(-2);
+    const province = clean(payload.provinceCode || provinceCode(invoiceCounterparty(invoice || {}).province));
+    const derivedRate = Math.abs(money(detail.base)) > 0 ? money(Math.abs(money(detail.withholding) / money(detail.base)) * 100) : 0;
+    const manual: any = {
+      representativeTaxId: clean(payload.representativeTaxId), provinceCode: province, recipientMediator: booleanValue(payload.recipientMediator),
+      keyCode: clean(payload.keyCode), issuerCode: clean(payload.issuerCode), perceptionKey, nature, paymentRole: clean(payload.paymentRole), accountCodeType: clean(payload.accountCodeType).toUpperCase(), accountCode: clean(payload.accountCode),
+      pending: booleanValue(payload.pending), accrualYear: clean(payload.accrualYear), perceptionType: clean(payload.perceptionType) || '1',
+      perceptionAmount: payload.perceptionAmount === undefined ? money(detail.base) : money(payload.perceptionAmount), reductions: money(payload.reductions), retentionBase: payload.retentionBase === undefined ? money(detail.base) : money(payload.retentionBase),
+      retentionRate: payload.retentionRate === undefined ? derivedRate : money(payload.retentionRate), penalties: money(payload.penalties), isin: clean(payload.isin).toUpperCase(),
+      loanStartDate: clean(payload.loanStartDate), loanEndDate: clean(payload.loanEndDate), loanCompensation: money(payload.loanCompensation), loanGuarantees: money(payload.loanGuarantees),
+      stateWithholding: money(payload.stateWithholding), navarraWithholding: money(payload.navarraWithholding), alavaWithholding: money(payload.alavaWithholding), gipuzkoaWithholding: money(payload.gipuzkoaWithholding), bizkaiaWithholding: money(payload.bizkaiaWithholding),
+      ceutaPalmaCode: clean(payload.ceutaPalmaCode) || '0', previousPayerTaxId: clean(payload.previousPayerTaxId), accrualDate: clean(payload.accrualDate), marketKey: clean(payload.marketKey).toUpperCase(),
+      specialDataConfirmed: booleanValue(payload.specialDataConfirmed), sourceFingerprint: currentSourceFingerprint,
+    };
+    const missingFields: string[] = [];
+    if (!validSpanishTaxId(detail.taxId)) missingFields.push('NIF válido del perceptor');
+    if (!detail.name) missingFields.push('nombre o razón social del perceptor');
+    if (!/^\d{2}$/.test(province)) missingFields.push('código de provincia');
+    if (!['A','B','C','D'].includes(perceptionKey)) missingFields.push('clave de percepción A, B, C o D');
+    if (!allowedNatures[perceptionKey]?.includes(nature)) missingFields.push('naturaleza compatible con la clave de percepción');
+    if (!['1','2'].includes(manual.perceptionType)) missingFields.push('tipo de percepción dineraria o en especie');
+    if (manual.accrualYear && !/^\d{4}$/.test(manual.accrualYear)) missingFields.push('ejercicio de devengo válido');
+    if (!['0','1','2'].includes(manual.ceutaPalmaCode)) missingFields.push('código Ceuta/Melilla/La Palma válido');
+    if (manual.retentionBase < 0 || manual.perceptionAmount < 0 || money(detail.withholding) < 0) missingFields.push('importes positivos exigidos por el diseño');
+    if (['A','B','D'].includes(perceptionKey) && !booleanValue(declaration.manual.declarantNatureSpecial)) {
+      if (!['1','2','3','4'].includes(manual.keyCode)) missingFields.push('clave de identificación del emisor');
+      if (!['1','2','3','4','5'].includes(manual.paymentRole)) missingFields.push('papel del pagador');
+      if (!['A','B','C','D'].includes(manual.marketKey)) missingFields.push('clave de mercado');
+      if (manual.keyCode === '1' && !validSpanishTaxId(manual.issuerCode)) missingFields.push('NIF válido del emisor');
+      if (manual.keyCode === '2' && !/^[A-Z]{2}[A-Z0-9]{10}$/.test(manual.isin)) missingFields.push('código ISIN válido');
+      if (manual.keyCode === '3' && !/^Z[A-Z]{2}$/.test(manual.issuerCode)) missingFields.push('código Z más país del emisor extranjero');
+      if (manual.keyCode === '4' && (!validSpanishTaxId(manual.issuerCode) || !/^[A-Z]{2}[A-Z0-9]{10}$/.test(manual.isin))) missingFields.push('NIF del emisor e ISIN válidos');
+      if (['2','3','4','5'].includes(manual.paymentRole) && !validSpanishTaxId(manual.previousPayerTaxId)) missingFields.push('NIF del pagador anterior');
+      if (perceptionKey === 'A' && !/^\d{4}-\d{2}-\d{2}$/.test(manual.accrualDate)) missingFields.push('fecha de devengo del dividendo');
+    }
+    if (manual.accountCodeType && !['C','O','P'].includes(manual.accountCodeType)) missingFields.push('tipo de código de cuenta/operación válido');
+    if (manual.accountCodeType === 'P' && (!/^\d{4}-\d{2}-\d{2}$/.test(manual.loanStartDate) || !/^\d{4}-\d{2}-\d{2}$/.test(manual.loanEndDate))) missingFields.push('fechas de inicio y vencimiento del préstamo de valores');
+    const allocated = money(manual.stateWithholding + manual.navarraWithholding + manual.alavaWithholding + manual.gipuzkoaWithholding + manual.bizkaiaWithholding);
+    if (allocated && Math.abs(allocated - Math.abs(money(detail.withholding))) > 0.01) missingFields.push('reparto territorial de retenciones igual al total retenido');
+    if (!manual.specialDataConfirmed) missingFields.push('confirmación de la ficha anual');
+    if (missingFields.length) incomplete += 1;
+    if (!reviewIsCurrent) pendingReview += 1;
+    if (stored?.reviewStatus === 'validado_asesor' && !reviewIsCurrent) staleReview += 1;
+    return { ...detail, recordKey, sourceType:'InvoicePayment', sourceIds:detail.paymentSources || [], manual, perceptionKey, nature, provinceCode:province, reviewStatus:reviewIsCurrent?'validado_asesor':'pendiente_revision', missingFields:unique(missingFields), sourceFingerprint:currentSourceFingerprint };
+  });
+  if (declarationMissingFields.length) data.blockers.push('La configuración general del modelo 193 está incompleta.');
+  if (!declarationReviewIsCurrent) data.blockers.push('La configuración general del modelo 193 no ha sido validada por un asesor.');
+  if (incomplete) data.blockers.push(`${incomplete} registro(s) del modelo 193 necesitan completar su ficha anual.`);
+  if (pendingReview) data.blockers.push(`${pendingReview} registro(s) del modelo 193 no han sido validados por un asesor.`);
+  if (staleReview || (declarationStored?.reviewStatus === 'validado_asesor' && !declarationReviewIsCurrent)) data.warnings.push('Se invalidaron validaciones del 193 porque cambiaron pagos o facturas de origen.');
+  if (!details.length) data.blockers.push('No se han detectado rentas anuales declarables en el modelo 193.');
+  return { ...base, details, declaration };
+}
+
 function calculateAnnualRetention(data: any, b: any, model: '180'|'190'|'193') {
   if (model === '180') {
     const base = calculateSimpleRetention(data, b, '115');
@@ -674,11 +780,7 @@ function calculateAnnualRetention(data: any, b: any, model: '180'|'190'|'193') {
     if (!details.length) data.blockers.push('No se han detectado pagos de alquiler con retención para el resumen anual 180.');
     return { ...base, details };
   }
-  if (model === '193') {
-    const base = calculateSimpleRetention(data, b, '123');
-    if (base.details.length) data.blockers.push('El modelo 193 exige clave de percepción, naturaleza, tipo de pago y datos identificativos adicionales por perceptor.');
-    return base;
-  }
+  if (model === '193') return calculate193(data, b);
   return calculate190(data,b);
 }
 
@@ -808,6 +910,37 @@ function export190(company: any, year: number, calculation: any, declarationNumb
   return [header.join(''),...records].join('\r\n');
 }
 
+function export193(company: any, year: number, calculation: any, declarationNumber: string) {
+  const details = [...(calculation.details || [])].sort((a:any,b:any)=>`${a.taxId}|${a.perceptionKey}|${a.nature}|${a.recordKey}`.localeCompare(`${b.taxId}|${b.perceptionKey}|${b.nature}|${b.recordKey}`));
+  const declaration = calculation.declaration?.manual || {};
+  const specialDeclarant = booleanValue(declaration.declarantNatureSpecial);
+  const totalBase = details.reduce((sum:number,row:any)=>sum + money(row.manual?.retentionBase), 0);
+  const totalWithholding = details.reduce((sum:number,row:any)=>sum + Math.abs(money(row.withholding)), 0);
+  const totalDeposited = specialDeclarant ? 0 : details.reduce((sum:number,row:any)=>sum + (row.perceptionKey === 'C' || ['1','3'].includes(clean(row.manual?.paymentRole)) ? Math.abs(money(row.withholding)) : 0), 0);
+  const header = Array(500).fill(' ');
+  place(header,1,1,'1'); place(header,2,3,'193'); place(header,5,4,String(year)); place(header,9,9,normalizedText(company.nif_cif,9)); place(header,18,40,normalizedText(company.razon_social,40));
+  place(header,58,1,'T'); place(header,59,9,numeric(clean(company.telefono).replace(/\D/g,''),9,false,0)); place(header,68,40,normalizedText(company.razon_social,40));
+  place(header,108,13,declarationNumber); place(header,121,2,'  '); place(header,123,13,numeric(0,13,false,0)); place(header,136,9,numeric(details.length,9,false,0));
+  place(header,145,15,numeric(totalBase,15)); place(header,160,15,numeric(totalWithholding,15)); place(header,175,15,numeric(totalDeposited,15)); place(header,220,15,numeric(0,15)); place(header,235,1,specialDeclarant?'S':' ');
+  const dateDDMMYYYY = (value: unknown) => { const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(clean(value)); return match ? `${match[3]}${match[2]}${match[1]}` : '00000000'; };
+  const records = details.map((row:any,index:number)=>{
+    const m=row.manual||{}; const key=clean(row.perceptionKey||m.perceptionKey).toUpperCase(); const capital=['A','B','D'].includes(key); const managed=capital&&!specialDeclarant;
+    const record=Array(500).fill(' '); place(record,1,1,'2'); place(record,2,3,'193'); place(record,5,4,String(year)); place(record,9,9,normalizedText(company.nif_cif,9));
+    place(record,18,9,normalizedText(row.taxId,9)); place(record,27,9,normalizedText(m.representativeTaxId,9)); place(record,36,40,normalizedText(row.name,40));
+    place(record,76,1,managed&&m.recipientMediator?'X':' '); place(record,77,2,numeric(row.provinceCode,2,false,0)); place(record,79,1,managed?numeric(m.keyCode,1,false,0):'0'); place(record,80,12,managed?normalizedText(m.issuerCode,12):' '.repeat(12));
+    place(record,92,1,key); place(record,93,2,numeric(row.nature,2,false,0)); place(record,95,1,managed?numeric(m.paymentRole,1,false,0):'0'); place(record,96,1,managed?normalizedText(m.accountCodeType,1):' '); place(record,97,20,managed?normalizedText(m.accountCode,20):' '.repeat(20));
+    place(record,117,1,managed&&m.pending?'X':' '); place(record,118,4,managed&&/^\d{4}$/.test(clean(m.accrualYear))?m.accrualYear:'0000'); place(record,122,1,numeric(m.perceptionType,1,false,0));
+    place(record,123,13,numeric(m.perceptionAmount,13)); place(record,139,13,numeric(m.reductions,13)); place(record,152,13,numeric(m.retentionBase,13)); place(record,165,4,numeric(m.retentionRate,4)); place(record,169,13,numeric(Math.abs(money(row.withholding)),13));
+    place(record,182,11,numeric(managed?m.penalties:0,11)); place(record,193,12,managed?normalizedText(m.isin,12):' '.repeat(12)); place(record,208,1,specialDeclarant?'S':' ');
+    place(record,209,8,managed&&m.accountCodeType==='P'?dateDDMMYYYY(m.loanStartDate):numeric(0,8,false,0)); place(record,217,8,managed&&m.accountCodeType==='P'?dateDDMMYYYY(m.loanEndDate):numeric(0,8,false,0));
+    place(record,225,12,numeric(managed&&m.accountCodeType==='P'?m.loanCompensation:0,12)); place(record,237,12,numeric(managed&&m.accountCodeType==='P'?m.loanGuarantees:0,12));
+    place(record,249,13,numeric(m.stateWithholding,13)); place(record,262,13,numeric(m.navarraWithholding,13)); place(record,275,13,numeric(m.alavaWithholding,13)); place(record,288,13,numeric(m.gipuzkoaWithholding,13)); place(record,301,13,numeric(m.bizkaiaWithholding,13));
+    place(record,314,1,numeric(m.ceutaPalmaCode,1,false,0)); place(record,315,7,numeric(index+1,7,false,0)); place(record,322,9,managed?normalizedText(m.previousPayerTaxId,9):' '.repeat(9));
+    place(record,331,8,key==='A'?dateDDMMYYYY(m.accrualDate):numeric(0,8,false,0)); place(record,339,1,managed?normalizedText(m.marketKey,1):' '); return record.join('');
+  });
+  return [header.join(''),...records].join('\r\n');
+}
+
 function export347(company: any, year: number, calculation: any, declarationNumber: string) {
   const details = [...(calculation.details || [])].sort((a: any, b: any) => `${a.taxId}|${a.operationKey}`.localeCompare(`${b.taxId}|${b.operationKey}`));
   const header = Array(500).fill(' ');
@@ -931,6 +1064,19 @@ function transferLayoutErrors(model: string, content: string) {
     const count=Number(records[0]?.slice(135,144)||0); if(count!==records.length-1) errors.push('El total de perceptores de la cabecera 190 no coincide con los registros tipo 2.');
     return errors;
   }
+  if (model === '193') {
+    const errors = records.length < 2 ? ['El 193 debe incluir cabecera y al menos un perceptor.'] : [];
+    if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 193 deben tener exactamente 500 posiciones.');
+    if (!records[0]?.startsWith('1193')) errors.push('La cabecera del 193 no tiene el identificador oficial esperado.');
+    if (records.slice(1).some(record => !record.startsWith('2193') || !['A','B','C','D'].includes(record[91]))) errors.push('Hay registros de perceptor 193 con identificador o clave inválida.');
+    const count=Number(records[0]?.slice(135,144)||0); if(count!==records.length-1) errors.push('El total de perceptores de la cabecera 193 no coincide con los registros tipo 2.');
+    const decimal=(value:string)=>money(Number(value||0)/100); const headerBase=decimal(records[0]?.slice(144,159)||''); const headerWithholding=decimal(records[0]?.slice(159,174)||'');
+    const detailBase=money(records.slice(1).reduce((sum,record)=>sum+decimal(record.slice(151,164)),0)); const detailWithholding=money(records.slice(1).reduce((sum,record)=>sum+decimal(record.slice(168,181)),0));
+    if(Math.abs(headerBase-detailBase)>0.01) errors.push('La base total de la cabecera 193 no coincide con los perceptores.');
+    if(Math.abs(headerWithholding-detailWithholding)>0.01) errors.push('Las retenciones totales de la cabecera 193 no coinciden con los perceptores.');
+    const special=records[0]?.[234]==='S'; if(records.slice(1).some(record=>(record[207]==='S')!==special)) errors.push('La naturaleza del declarante no es coherente entre cabecera y perceptores del 193.');
+    return errors;
+  }
   if (model === '347') {
     const errors = records.length < 2 ? ['El 347 debe incluir cabecera y al menos un declarado.'] : [];
     if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 347 deben tener exactamente 500 posiciones.');
@@ -997,16 +1143,19 @@ Deno.serve(async (req) => {
       const thirdParties={result:0,details:[{recordKey:'ThirdParty:B87654321|B|C0|I0|E0',taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,ordinaryTotal:1800,totalAccordingToOperation:3500,quarters:{T1:575,T2:575,T3:575,T4:75},rentQuarters:{T1:300,T2:300,T3:300,T4:300},transferQuarters:{T1:125,T2:125,T3:125,T4:125},cashAmount:7000,cashYear:'2024',propertyTransferAmount:500,propertyRentAmount:1200,cashAccounting:false,cashAccountingAnnualAmount:0,reverseCharge:false,exemptArticle13:false,representativeTaxId:'',properties:[{amount:1200,cadastralUnavailable:false,cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',numberQualifier:'',block:'',portal:'',stair:'',floor:'',door:'',complement:'',locality:'SANTA CRUZ DE TENERIFE',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',provinceCode:'38',postalCode:'38001'}]}]};
       const annual180={result:0,details:[{id:'invoice-test',taxId:'B87654321',name:'ARRENDADOR PRUEBA',base:12000,withholding:2280,manual:{representativeTaxId:'',recipientProvinceCode:'38',modality:'1',withholdingRate:19,accrualYear:'0000',propertySituation:'1',cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',propertyProvinceCode:'38',postalCode:'38001'}}]};
       const annual190={result:0,details:[{taxId:'12345678Z',name:'TRABAJADOR PRUEBA',provinceCode:'38',key:'A',subkey:'',base:24000,withholding:2400,manual:{representativeTaxId:'',accrualYear:'',birthYear:'1990',familySituation:'3',spouseTaxId:'',disability:'0',contractType:'1',ceutaMelilla:false,mobility:false,reductions:0,deductibleExpenses:1524,compensatoryPensions:0,childSupport:0}}]};
+      const annual193={result:0,declaration:{manual:{declarantNatureSpecial:true,expenseAnnexNotApplicable:true,specialDataConfirmed:true}},details:[{recordKey:'Annual193:Invoice:test',taxId:'B87654321',name:'PERCEPTOR PRUEBA',provinceCode:'38',perceptionKey:'C',nature:'12',base:1000,withholding:190,manual:{representativeTaxId:'',provinceCode:'38',recipientMediator:false,keyCode:'',issuerCode:'',perceptionKey:'C',nature:'12',paymentRole:'',accountCodeType:'',accountCode:'',pending:false,accrualYear:'',perceptionType:'1',perceptionAmount:1000,reductions:0,retentionBase:1000,retentionRate:19,penalties:0,isin:'',loanStartDate:'',loanEndDate:'',loanCompensation:0,loanGuarantees:0,stateWithholding:0,navarraWithholding:0,alavaWithholding:0,gipuzkoaWithholding:0,bizkaiaWithholding:0,ceutaPalmaCode:'0',previousPayerTaxId:'',accrualDate:'',marketKey:''}}]};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); return {model,length:wrapped.length,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`)}});
       const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record190Content=export190(company,2025,annual190,'1901234567890'); const record190=record190Content.split('\r\n');
+      const record193Content=export193(company,2025,annual193,'1931234567890'); const record193=record193Content.split('\r\n');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
       const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
       const transferChecks=[
         {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'190',records:record190.length,recordLengths:record190.map(line=>line.length),layoutErrors:transferLayoutErrors('190',record190Content),valid:record190.length===2&&record190.every(line=>line.length===500)&&record190[1].startsWith('2190')&&record190[1][77]==='A'&&transferLayoutErrors('190',record190Content).length===0},
+        {model:'193',records:record193.length,recordLengths:record193.map(line=>line.length),layoutErrors:transferLayoutErrors('193',record193Content),valid:record193.length===2&&record193.every(line=>line.length===500)&&record193[1].startsWith('2193')&&record193[1][91]==='C'&&record193[0][234]==='S'&&transferLayoutErrors('193',record193Content).length===0},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),layoutErrors:transferLayoutErrors('415',import415Content),valid:import415.length===3&&import415[0].length===246&&import415[1].length===356&&import415[2].length===309&&import415[1].startsWith('2415')&&import415[2].startsWith('3415')&&import415[1].slice(113,128)==='000000000700000'&&import415[1].slice(160,164)==='2024'&&transferLayoutErrors('415',import415Content).length===0},
       ];
@@ -1043,13 +1192,13 @@ Deno.serve(async (req) => {
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
     const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,blockers,warnings,period,year};
     if(action==='upsert_declarable') {
-      if(!['180','190','347','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para los modelos 180, 190, 347 y 415.'},{status:400});
+      if(!['180','190','193','347','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para los modelos 180, 190, 193, 347 y 415.'},{status:400});
       const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
       const sourceId=clean(body.sourceId); const sourceType=clean(body.sourceType)||'manual'; const input=body.payload||{};
       const allowed180=['representativeTaxId','recipientProvinceCode','modality','withholdingRate','accrualYear','propertySituation','cadastralReference','roadType','roadName','numberingType','houseNumber','numberQualifier','block','portal','stair','floor','door','complement','locality','municipality','municipalityCode','propertyProvinceCode','postalCode'];
       const payload=model==='180'
         ? Object.fromEntries(allowed180.map(key=>[key,key==='withholdingRate'?money(input[key]):clean(input[key])]).filter(([,value])=>value!==''&&value!=null))
-        : model==='190' ? sanitize190Payload(input) : sanitizeThirdPartyPayload(input);
+        : model==='190' ? sanitize190Payload(input) : model==='193' ? (recordKey==='Annual193:Declarant'?sanitize193DeclarationPayload(input):sanitize193Payload(input)) : sanitizeThirdPartyPayload(input);
       const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role); const reviewRequested=body.reviewStatus==='validado_asesor';
       const reviewStatus=reviewRequested&&canReview?'validado_asesor':'pendiente_revision'; const recordPayload:any={companyId,modeloCodigo:model,ejercicio:year,recordKey,sourceType,sourceId,payload,reviewStatus,notes:clean(body.notes)};
       if(reviewStatus==='validado_asesor'){recordPayload.reviewedBy=user.email;recordPayload.reviewedAt=new Date().toISOString();}
@@ -1086,6 +1235,9 @@ Deno.serve(async (req) => {
       } else if(model==='190') {
         content=export190(company,year,calculation,sequentialDeclarationNumber('190'));
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_190.txt`; extension='txt'; format='Diseño de registro AEAT modelo 190 (claves A y G)';
+      } else if(model==='193') {
+        content=export193(company,year,calculation,sequentialDeclarationNumber('193'));
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_193.txt`; extension='txt'; format='Diseño de registro AEAT modelo 193 sin relación de gastos';
       } else if(model==='347') {
         content=export347(company,year,calculation,sequentialDeclarationNumber('347'));
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_347.txt`; extension='txt'; format='Diseño de registro AEAT modelo 347';
