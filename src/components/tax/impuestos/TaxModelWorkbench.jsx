@@ -32,6 +32,11 @@ const MODEL_180_FIELDS = [
   ['complement', 'Complemento de dirección', 'text'], ['representativeTaxId', 'NIF representante (si procede)', 'text'],
 ];
 
+const MODEL_190_NUMERIC_FIELDS = [
+  ['reductions', 'Reducciones aplicables'], ['deductibleExpenses', 'Gastos deducibles'],
+  ['compensatoryPensions', 'Pensiones compensatorias'], ['childSupport', 'Anualidades por alimentos'],
+];
+
 const THIRD_PARTY_SPECIAL_FIELDS = [
   ['cashAmount', 'Cobros en metálico (> 6.000 €)'], ['cashAccountingAnnualAmount', 'Devengado anual por criterio de caja'],
   ['propertyRentAmount', 'Arrendamientos de locales · anual'], ['propertyTransferAmount', 'Transmisiones de inmuebles · anual'],
@@ -110,6 +115,66 @@ function Annual180Editor({ details, values, onChange, onSave, saving, canReview 
   );
 }
 
+function Annual190Editor({ details, values, onChange, onSave, saving, canReview }) {
+  if (!details?.length) return null;
+  return (
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+      <div className="flex items-start gap-3">
+        <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-slate-800">Fichas de perceptores del modelo 190</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Taxea agrupa nóminas en clave A y facturas profesionales pagadas en clave G. Los datos personales y fiscales deben confirmarse y quedar validados por asesor antes de generar el fichero AEAT.</p>
+          <div className="mt-3 space-y-3">
+            {details.map(detail => {
+              const payload = values[detail.recordKey] || detail.manual || {};
+              const isPayroll = (payload.key || detail.key) === 'A';
+              return (
+                <details key={detail.recordKey} className="rounded-xl border border-indigo-200 bg-white p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-800">
+                    {payload.key || detail.key} · {detail.name || detail.taxId} · {formatMoney(detail.base)} · <span className={detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'text-emerald-700' : 'text-amber-700'}>{detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'Validado' : `${detail.missingFields?.length || 0} dato(s) pendiente(s)`}</span>
+                  </summary>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="text-xs font-medium text-slate-600">Provincia del perceptor
+                      <input inputMode="numeric" maxLength={2} value={payload.provinceCode ?? ''} onChange={event => onChange(detail.recordKey, 'provinceCode', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm" />
+                    </label>
+                    <label className="text-xs font-medium text-slate-600">Clave
+                      <select value={payload.key || detail.key || ''} onChange={event => onChange(detail.recordKey, 'key', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm"><option value="A">A · Rendimientos del trabajo</option><option value="G">G · Actividades profesionales</option></select>
+                    </label>
+                    {!isPayroll && <label className="text-xs font-medium text-slate-600">Subclave G
+                      <select value={payload.subkey || detail.subkey || '01'} onChange={event => onChange(detail.recordKey, 'subkey', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm"><option value="01">01 · Profesional general</option><option value="02">02 · Recaudadores municipales y similares</option><option value="03">03 · Inicio de actividad</option><option value="04">04 · Actividades especiales</option><option value="05">05 · Rendimientos artísticos</option><option value="06">06 · Anticipos cesión de derechos de autor</option><option value="07">07 · Propiedad intelectual</option><option value="08">08 · Otras percepciones profesionales</option></select>
+                    </label>}
+                    <label className="text-xs font-medium text-slate-600">Ejercicio de devengo atrasado
+                      <input inputMode="numeric" maxLength={4} placeholder="Vacío si es el actual" value={payload.accrualYear ?? ''} onChange={event => onChange(detail.recordKey, 'accrualYear', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm" />
+                    </label>
+                    <label className="text-xs font-medium text-slate-600">NIF representante (si procede)
+                      <input maxLength={9} value={payload.representativeTaxId ?? ''} onChange={event => onChange(detail.recordKey, 'representativeTaxId', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm uppercase" />
+                    </label>
+                    {isPayroll && <>
+                      <label className="text-xs font-medium text-slate-600">Año de nacimiento<input inputMode="numeric" maxLength={4} value={payload.birthYear ?? ''} onChange={event => onChange(detail.recordKey, 'birthYear', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm" /></label>
+                      <label className="text-xs font-medium text-slate-600">Situación familiar<select value={payload.familySituation ?? ''} onChange={event => onChange(detail.recordKey, 'familySituation', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm"><option value="">Seleccionar</option><option value="1">1 · Soltero/viudo/divorciado con hijos</option><option value="2">2 · Casado, cónyuge sin rentas suficientes</option><option value="3">3 · Otras situaciones</option></select></label>
+                      <label className="text-xs font-medium text-slate-600">NIF del cónyuge (situación 2)<input maxLength={9} value={payload.spouseTaxId ?? ''} onChange={event => onChange(detail.recordKey, 'spouseTaxId', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm uppercase" /></label>
+                      <label className="text-xs font-medium text-slate-600">Discapacidad<select value={payload.disability || '0'} onChange={event => onChange(detail.recordKey, 'disability', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm"><option value="0">0 · Sin discapacidad</option><option value="1">1 · Entre 33% y 65%</option><option value="2">2 · Entre 33% y 65% con movilidad reducida</option><option value="3">3 · Igual o superior al 65%</option></select></label>
+                      <label className="text-xs font-medium text-slate-600">Contrato o relación<select value={payload.contractType ?? ''} onChange={event => onChange(detail.recordKey, 'contractType', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm"><option value="">Seleccionar</option><option value="1">1 · General</option><option value="2">2 · Menos de un año</option><option value="3">3 · Relación laboral especial</option><option value="4">4 · Peonadas o jornales diarios</option></select></label>
+                    </>}
+                    {MODEL_190_NUMERIC_FIELDS.map(([key, label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type="number" step="0.01" value={payload[key] ?? ''} onChange={event => onChange(detail.recordKey, key, event.target.value === '' ? '' : Number(event.target.value))} className="mt-1 h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm" /></label>)}
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"><input type="checkbox" checked={!!payload.ceutaMelilla} onChange={event => onChange(detail.recordKey, 'ceutaMelilla', event.target.checked)} />Rentas obtenidas en Ceuta o Melilla</label>
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"><input type="checkbox" checked={!!payload.mobility} onChange={event => onChange(detail.recordKey, 'mobility', event.target.checked)} />Movilidad geográfica aplicable</label>
+                  </div>
+                  <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={!!payload.specialDataConfirmed} onChange={event => onChange(detail.recordKey, 'specialDataConfirmed', event.target.checked)} />Confirmo que la clave, subclave, provincia, devengo, datos personales y reducciones de este perceptor han sido revisados.</label>
+                  {!!detail.missingFields?.length && <p className="mt-3 text-xs text-amber-700">Pendiente: {detail.missingFields.join('; ')}.</p>}
+                  <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => onSave(detail, 'pendiente_revision')} disabled={saving}><Save className="mr-2 h-3.5 w-3.5" />Guardar ficha</Button>{canReview && <Button size="sm" className="bg-indigo-700 hover:bg-indigo-800" onClick={() => onSave(detail, 'validado_asesor')} disabled={saving || !!detail.missingFields?.length}><ShieldCheck className="mr-2 h-3.5 w-3.5" />Validar como asesor</Button>}</div>
+                </details>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ThirdPartyEditor({ modelCode, details, values, onChange, onPropertyChange, onAddProperty, onRemoveProperty, onSave, saving, canReview }) {
   if (!details?.length) return null;
   return (
@@ -138,7 +203,6 @@ function ThirdPartyEditor({ modelCode, details, values, onChange, onPropertyChan
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {[['cashAccounting', 'Operación IGIC/IVA de caja'], ['reverseCharge', 'Inversión del sujeto pasivo'], ['exemptArticle13', 'Exenta art. 13 Ley 20/1991']].filter(([key]) => modelCode === '415' || key !== 'exemptArticle13').map(([key, label]) => <label key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700"><input type="checkbox" checked={!!payload[key]} onChange={event => onChange(detail.recordKey, key, event.target.checked)} />{label}</label>)}
                   </div>
-                  <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={!!payload.specialDataConfirmed} onChange={event => onChange(detail.recordKey, 'specialDataConfirmed', event.target.checked)} />Confirmo que se han revisado los cobros en metálico, el criterio de caja, las operaciones inmobiliarias y los marcadores especiales de este declarado.</label>
                   <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                     <table className="w-full min-w-[760px] text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Desglose</th>{['T1','T2','T3','T4'].map(q => <th key={q} className="px-3 py-2 text-right">{q}</th>)}</tr></thead><tbody>
                       {modelCode === '415' && <tr className="border-t"><td className="px-3 py-2 font-medium">Arrendamientos</td>{['T1','T2','T3','T4'].map(q => <td key={q} className="px-2 py-1"><input type="number" step="0.01" value={payload[`propertyRent${q}`] ?? ''} onChange={event => onChange(detail.recordKey, `propertyRent${q}`, event.target.value === '' ? '' : Number(event.target.value))} className="h-8 w-full rounded border border-slate-200 px-2 text-right" /></td>)}</tr>}
@@ -185,6 +249,7 @@ export default function TaxModelWorkbench() {
   const [lastExportInfo, setLastExportInfo] = useState(null);
   const [adjustments, setAdjustments] = useState({});
   const [annualRecordEdits, setAnnualRecordEdits] = useState({});
+  const [annual190RecordEdits, setAnnual190RecordEdits] = useState({});
   const [thirdPartyRecordEdits, setThirdPartyRecordEdits] = useState({});
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -214,6 +279,11 @@ export default function TaxModelWorkbench() {
   useEffect(() => {
     if (modelCode !== '180' || !result?.calculation?.details) return;
     setAnnualRecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
+  }, [modelCode, result?.source?.hash]);
+
+  useEffect(() => {
+    if (modelCode !== '190' || !result?.calculation?.details) return;
+    setAnnual190RecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
   }, [modelCode, result?.source?.hash]);
 
   useEffect(() => {
@@ -251,14 +321,17 @@ export default function TaxModelWorkbench() {
   const saveDeclarable = useMutation({
     mutationFn: async ({ detail, reviewStatus, targetModel = modelCode }) => (await base44.functions.invoke('taxModelOperations', {
       action: 'upsert_declarable', companyId, modeloCodigo: targetModel, ejercicio: year, periodo: 'Anual',
-      recordKey: detail.recordKey, sourceType: targetModel === '180' ? 'Invoice' : 'ThirdPartyAggregate', sourceId: targetModel === '180' ? detail.id : (detail.invoices || []).join('|'),
-      payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
+      recordKey: detail.recordKey,
+      sourceType: targetModel === '180' ? 'Invoice' : targetModel === '190' ? detail.sourceType : 'ThirdPartyAggregate',
+      sourceId: targetModel === '180' ? detail.id : targetModel === '190' ? (detail.sourceIds || []).join('|') : (detail.invoices || []).join('|'),
+      payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '190' ? (annual190RecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
     })).data,
     onSuccess: () => { setActionError(''); invoke.mutate({ action: 'calculate' }); },
     onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo guardar la ficha anual.'),
   });
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
+  const updateAnnual190Record = (recordKey, key, value) => setAnnual190RecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
   const updateThirdPartyRecord = (recordKey, key, value) => setThirdPartyRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
   const updateThirdPartyProperty = (recordKey, propertyIndex, key, value) => setThirdPartyRecordEdits(current => {
     const record = { ...(current[recordKey] || {}) };
@@ -362,6 +435,7 @@ export default function TaxModelWorkbench() {
           )}
 
           {modelCode === '180' && result && <Annual180Editor details={result.calculation?.details} values={annualRecordEdits} onChange={updateAnnualRecord} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '180' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
+          {modelCode === '190' && result && <Annual190Editor details={result.calculation?.details} values={annual190RecordEdits} onChange={updateAnnual190Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '190' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {['347', '415'].includes(modelCode) && result && <ThirdPartyEditor modelCode={modelCode} details={result.calculation?.details} values={thirdPartyRecordEdits} onChange={updateThirdPartyRecord} onPropertyChange={updateThirdPartyProperty} onAddProperty={addThirdPartyProperty} onRemoveProperty={removeThirdPartyProperty} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: modelCode })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
 
           {!result ? (
