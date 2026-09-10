@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v5';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v6';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -32,6 +32,53 @@ const SOURCES = [
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? '').trim();
 const unique = <T>(values: T[]) => [...new Set(values)];
+
+const THIRD_PARTY_NUMERIC_FIELDS = [
+  'cashAmount', 'cashAccountingAnnualAmount', 'propertyRentAmount', 'propertyTransferAmount',
+  'propertyRentT1', 'propertyRentT2', 'propertyRentT3', 'propertyRentT4',
+  'propertyTransferT1', 'propertyTransferT2', 'propertyTransferT3', 'propertyTransferT4',
+];
+
+function booleanValue(value: unknown, fallback = false) {
+  return value === true || value === 'true' || value === '1' ? true : value === false || value === 'false' || value === '0' ? false : fallback;
+}
+
+function sanitizeThirdPartyPayload(input: any) {
+  const payload: any = {};
+  for (const key of THIRD_PARTY_NUMERIC_FIELDS) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = money(input[key]);
+  }
+  for (const key of ['cashYear', 'representativeTaxId']) {
+    if (clean(input?.[key])) payload[key] = clean(input[key]);
+  }
+  if (clean(input?.sourceFingerprint)) payload.sourceFingerprint = clean(input.sourceFingerprint);
+  for (const key of ['cashAccounting', 'reverseCharge', 'exemptArticle13', 'specialDataConfirmed']) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = booleanValue(input[key]);
+  }
+  if (Array.isArray(input?.properties)) {
+    payload.properties = input.properties.slice(0, 100).map((property: any) => ({
+      amount: money(property?.amount),
+      cadastralUnavailable: booleanValue(property?.cadastralUnavailable),
+      cadastralReference: clean(property?.cadastralReference),
+      roadType: clean(property?.roadType), roadName: clean(property?.roadName), numberingType: clean(property?.numberingType) || 'NUM',
+      houseNumber: clean(property?.houseNumber), numberQualifier: clean(property?.numberQualifier), block: clean(property?.block), portal: clean(property?.portal),
+      stair: clean(property?.stair), floor: clean(property?.floor), door: clean(property?.door), complement: clean(property?.complement),
+      locality: clean(property?.locality), municipality: clean(property?.municipality), municipalityCode: clean(property?.municipalityCode),
+      provinceCode: clean(property?.provinceCode), postalCode: clean(property?.postalCode),
+    }));
+  }
+  return payload;
+}
+
+function sourceFingerprint(values: unknown[]) {
+  const text = values.map(value => clean(value)).sort().join('|');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a32-${(hash >>> 0).toString(16).padStart(8, '0')}-${values.length}`;
+}
 
 function authorize(user: any, companyId: string, company: any) {
   const role = clean(user?.role).toLowerCase();
@@ -329,6 +376,13 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
   const groups = new Map<string, any>();
   const totalsByTaxId = new Map<string, number>();
   const missingGroups = new Map<string, number>();
+  const paymentsByInvoice = new Map<string, any[]>();
+  const cashByTaxId = new Map<string, { amount: number; originYears: Set<string>; sourceIds: string[] }>();
+  const declarableRecords = new Map((data.declarables || []).filter((row: any) => row.modeloCodigo === model).map((row: any) => [row.recordKey, row]));
+  for (const payment of data.invoicePayments || []) {
+    if (!inRange(payment, b.start, b.end)) continue;
+    paymentsByInvoice.set(payment.invoice_id, [...(paymentsByInvoice.get(payment.invoice_id) || []), payment]);
+  }
   let excluded347 = 0;
   for (const invoice of data.invoices.filter((f: any) => !f.anulada && inRange(f, b.start, b.end))) {
     const cp = invoiceCounterparty(invoice);
@@ -344,39 +398,135 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
     if (model === '347' && (separatelyReported || territoriallyExcluded)) { excluded347 += 1; continue; }
     const operationKey = invoice.tipo === 'emitida' ? 'B' : 'A';
     const normalizedTaxId = canonical(cp.id).replace(/\s/g, '');
-    const groupKey = `${normalizedTaxId}|${operationKey}`;
+    const cashAccounting = clean(invoice.indirect_tax_regime || invoice.regimen_iva) === 'criterio_caja';
+    const reverseCharge = operation === 'reverse_charge';
+    const legalBasis = canonical(`${invoice.fiscal_legal_basis || ''} ${invoice.fiscal_exemption_key || ''}`);
+    const exemptArticle13 = model === '415' && ['exempt_full', 'exempt_limited', 'subject_exempt'].includes(operation) && /ART(?:ICULO)?\s*13|LEY\s*20\s*\/\s*1991/.test(legalBasis);
+    const groupKey = `${normalizedTaxId}|${operationKey}|C${cashAccounting ? 1 : 0}|I${reverseCharge ? 1 : 0}|E${exemptArticle13 ? 1 : 0}`;
+    const recordKey = `ThirdParty:${groupKey}`;
     const row = groups.get(groupKey) || {
-      taxId: normalizedTaxId, name: cp.name, country: normalizedCountry(cp.country), province: cp.province,
+      recordKey, taxId: normalizedTaxId, name: cp.name, country: normalizedCountry(cp.country), province: cp.province,
       provinceCode: provinceCode(cp.province), operationKey, total: 0,
-      quarters: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [],
-      cashAmount: 0, propertyTransferAmount: 0, propertyRentAmount: 0,
-      cashAccounting: false, reverseCharge: false, exempt: false,
+      quarters: { T1: 0, T2: 0, T3: 0, T4: 0 }, rentQuarters: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [],
+      sourceFacts: [],
+      autoCashAmount: 0, cashAmount: 0, cashYear: '', propertyTransferAmount: 0, propertyRentAmount: 0,
+      cashAccounting, cashAccountingAnnualAmount: 0, reverseCharge, exemptArticle13,
     };
     row.total += amount;
     const month = Number(dateOf(invoice).slice(5, 7));
     const quarter = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
     row.quarters[quarter] += amount;
-    row.cashAccounting ||= clean(invoice.indirect_tax_regime || invoice.regimen_iva) === 'criterio_caja';
-    row.reverseCharge ||= operation === 'reverse_charge';
-    row.exempt ||= ['exempt_full', 'exempt_limited', 'subject_exempt'].includes(operation);
+    const explicitRent = invoice.categoria_gasto === 'alquiler' || clean(invoice.retencion_tipo) === 'alquiler' || invoice.es_arrendamiento === true;
+    if (explicitRent) {
+      row.propertyRentAmount += amount;
+      row.rentQuarters[quarter] += amount;
+    }
+    if (cashAccounting) row.cashAccountingAnnualAmount += (paymentsByInvoice.get(invoice.id) || []).reduce((sum: number, payment: any) => sum + money(payment.amount), 0);
+    if (operationKey === 'B') {
+      const cashPayments = (paymentsByInvoice.get(invoice.id) || []).filter((payment: any) => payment.method === 'efectivo');
+      if (cashPayments.length) {
+        const cash = cashByTaxId.get(normalizedTaxId) || { amount: 0, originYears: new Set<string>(), sourceIds: [] };
+        cash.amount += cashPayments.reduce((sum: number, payment: any) => sum + Math.abs(money(payment.amount)), 0);
+        cash.originYears.add(dateOf(invoice).slice(0, 4));
+        cash.sourceIds.push(...cashPayments.map((payment: any) => `InvoicePayment:${payment.id}`));
+        cashByTaxId.set(normalizedTaxId, cash);
+      }
+    }
+    row.sourceFacts.push(`${invoice.id}:${dateOf(invoice).slice(0,10)}:${money(amount)}:${invoice.categoria_gasto || ''}:${cashAccounting ? 1 : 0}:${reverseCharge ? 1 : 0}:${exemptArticle13 ? 1 : 0}:${(paymentsByInvoice.get(invoice.id) || []).map((payment: any) => `${payment.id}:${dateOf(payment).slice(0,10)}:${money(payment.amount)}:${payment.method}`).sort().join(',')}`);
     row.invoices.push(invoice.id);
     groups.set(groupKey, row);
     totalsByTaxId.set(normalizedTaxId, money((totalsByTaxId.get(normalizedTaxId) || 0) + Math.abs(amount)));
   }
+
+  for (const [taxId, cash] of cashByTaxId) {
+    if (cash.amount <= 6000) continue;
+    const target = [...groups.values()].find((row: any) => row.taxId === taxId && row.operationKey === 'B');
+    if (!target) continue;
+    target.autoCashAmount = money(cash.amount);
+    target.cashAmount = money(cash.amount);
+    target.cashYear = cash.originYears.size === 1 ? [...cash.originYears][0] : '';
+    target.cashSourceIds = unique(cash.sourceIds);
+  }
+
   const missingAboveThreshold = [...missingGroups.entries()].filter(([, total]) => total > 3005.06);
   if (missingAboveThreshold.length) data.blockers.push(`${missingAboveThreshold.length} contraparte(s) podrían superar 3.005,06 € pero no tienen NIF y no pueden declararse.`);
   if (model === '347' && excluded347) data.warnings.push(`${excluded347} factura(s) se excluyeron del 347 por retenciones ya informadas u operaciones territoriales declarables en otros modelos; deben revisarse antes del cierre.`);
   const roundQuarter = (quarters: any) => Object.fromEntries(Object.entries(quarters).map(([key, value]) => [key, money(value)]));
+  let pendingReview = 0;
+  let incomplete = 0;
+  let staleReview = 0;
   const details = [...groups.values()]
     .filter(row => (totalsByTaxId.get(row.taxId) || 0) > 3005.06)
-    .map(row => ({ ...row, total: money(row.total), quarters: roundQuarter(row.quarters) }));
+    .map(row => {
+      const stored: any = declarableRecords.get(row.recordKey);
+      const payload = sanitizeThirdPartyPayload(stored?.payload || {});
+      const currentSourceFingerprint = sourceFingerprint(row.sourceFacts);
+      const reviewIsCurrent = stored?.reviewStatus === 'validado_asesor' && payload.sourceFingerprint === currentSourceFingerprint;
+      const effective = (key: string, fallback: unknown) => payload[key] === undefined ? fallback : payload[key];
+      const rentQuarters: any = {};
+      const transferQuarters: any = {};
+      for (const quarter of ['T1', 'T2', 'T3', 'T4']) {
+        rentQuarters[quarter] = money(effective(`propertyRent${quarter}`, row.rentQuarters[quarter]));
+        transferQuarters[quarter] = money(effective(`propertyTransfer${quarter}`, 0));
+      }
+      const cashAccountingFinal = booleanValue(payload.cashAccounting, row.cashAccounting);
+      const rentAmount = money(effective('propertyRentAmount', row.propertyRentAmount));
+      const transferAmount = money(effective('propertyTransferAmount', 0));
+      const fullQuarters = roundQuarter(row.quarters);
+      const generalQuarters = cashAccountingFinal ? { T1: 0, T2: 0, T3: 0, T4: 0 } : Object.fromEntries(['T1','T2','T3','T4'].map(quarter => [quarter, money(fullQuarters[quarter] - (model === '415' ? rentQuarters[quarter] + transferQuarters[quarter] : 0))]));
+      const properties = model === '415' ? (payload.properties || []) : [];
+      const missingFields: string[] = [];
+      const cashAmount = Math.abs(money(effective('cashAmount', row.cashAmount)));
+      const cashYear = clean(effective('cashYear', row.cashYear));
+      if (cashAmount > 0 && cashAmount <= 6000) missingFields.push('el metálico solo se informa si supera 6.000 euros');
+      if (cashAmount > 6000 && !/^\d{4}$/.test(cashYear)) missingFields.push('ejercicio de origen del cobro en metálico');
+      if (!cashAccountingFinal && Math.abs(money(Object.values(rentQuarters).reduce((sum: number, value: any) => sum + Number(value || 0), 0)) - rentAmount) > 0.01) missingFields.push('desglose trimestral de arrendamientos no cuadra con el anual');
+      if (!cashAccountingFinal && Math.abs(money(Object.values(transferQuarters).reduce((sum: number, value: any) => sum + Number(value || 0), 0)) - transferAmount) > 0.01) missingFields.push('desglose trimestral de transmisiones no cuadra con el anual');
+      if (model === '415' && Math.abs(rentAmount) + Math.abs(transferAmount) > Math.abs(money(row.total)) + 0.01) missingFields.push('arrendamientos y transmisiones superan el importe anual de las operaciones');
+      if (model === '415' && !cashAccountingFinal && ['T1','T2','T3','T4'].some(quarter => Math.abs(rentQuarters[quarter]) + Math.abs(transferQuarters[quarter]) > Math.abs(fullQuarters[quarter]) + 0.01)) missingFields.push('algún desglose especial trimestral supera el total del trimestre');
+      if (model === '415' && row.operationKey === 'B' && rentAmount !== 0) {
+        if (!properties.length) missingFields.push('anexo de inmuebles del arrendador');
+        for (const [index, property] of properties.entries()) {
+          if (!property.amount) missingFields.push(`importe del inmueble ${index + 1}`);
+          if (!property.cadastralUnavailable && !property.cadastralReference) missingFields.push(`referencia catastral del inmueble ${index + 1}`);
+          if (!property.roadType || !property.roadName || !property.municipality || !/^\d{5}$/.test(property.municipalityCode) || !/^\d{2}$/.test(property.provinceCode) || !/^\d{5}$/.test(property.postalCode)) missingFields.push(`dirección oficial completa del inmueble ${index + 1}`);
+        }
+        const propertyTotal = money(properties.reduce((sum: number, property: any) => sum + money(property.amount), 0));
+        if (properties.length && Math.abs(propertyTotal - rentAmount) > 0.01) missingFields.push('el total del anexo de inmuebles no cuadra con los arrendamientos');
+      }
+      if (!booleanValue(payload.specialDataConfirmed)) missingFields.push('confirmación de efectivo, arrendamientos, transmisiones y marcadores especiales');
+      if (missingFields.length) incomplete += 1;
+      if (!reviewIsCurrent) pendingReview += 1;
+      if (stored?.reviewStatus === 'validado_asesor' && !reviewIsCurrent) staleReview += 1;
+      return {
+        ...row, sourceFacts: undefined, total: money(row.total), ordinaryTotal: model === '415' ? money(row.total - rentAmount - transferAmount) : money(row.total),
+        totalAccordingToOperation: model === '415' ? money(row.total - rentAmount - transferAmount + rentAmount + transferAmount) : money(row.total),
+        quarters: generalQuarters, fullQuarters, rentQuarters, transferQuarters,
+        cashAmount, cashYear, propertyRentAmount: rentAmount, propertyTransferAmount: transferAmount,
+        cashAccounting: cashAccountingFinal, cashAccountingAnnualAmount: money(effective('cashAccountingAnnualAmount', row.cashAccountingAnnualAmount)),
+        reverseCharge: booleanValue(payload.reverseCharge, row.reverseCharge), exemptArticle13: booleanValue(payload.exemptArticle13, row.exemptArticle13),
+        representativeTaxId: clean(payload.representativeTaxId), properties, manual: {
+          cashAmount, cashYear, propertyRentAmount: rentAmount, propertyTransferAmount: transferAmount,
+          ...Object.fromEntries(['T1','T2','T3','T4'].flatMap(quarter => [[`propertyRent${quarter}`, rentQuarters[quarter]], [`propertyTransfer${quarter}`, transferQuarters[quarter]]])),
+          cashAccounting: cashAccountingFinal, cashAccountingAnnualAmount: money(effective('cashAccountingAnnualAmount', row.cashAccountingAnnualAmount)),
+          reverseCharge: booleanValue(payload.reverseCharge, row.reverseCharge), exemptArticle13: booleanValue(payload.exemptArticle13, row.exemptArticle13),
+          representativeTaxId: clean(payload.representativeTaxId), specialDataConfirmed: booleanValue(payload.specialDataConfirmed), properties, sourceFingerprint: currentSourceFingerprint,
+        },
+        reviewStatus: reviewIsCurrent ? 'validado_asesor' : 'pendiente_revision', sourceFingerprint: currentSourceFingerprint, missingFields: unique(missingFields), enrichmentId: stored?.id,
+      };
+    });
+  if (incomplete) data.blockers.push(`${incomplete} registro(s) ${model} necesitan completar o confirmar sus datos especiales.`);
+  if (pendingReview) data.blockers.push(`${pendingReview} registro(s) ${model} no han sido validados por un asesor.`);
+  if (staleReview) data.warnings.push(`${staleReview} validación(es) anteriores se invalidaron porque cambiaron las facturas o pagos de origen.`);
+  if (details.some(row => row.cashAccounting)) data.warnings.push('Las operaciones en criterio de caja usan los cobros/pagos registrados; el asesor debe confirmar también devengos de ejercicios anteriores.');
   if (details.some(row => !row.name)) data.blockers.push('Hay registros declarables sin nombre o razón social.');
   if (details.some(row => row.country === 'ES' && !validSpanishTaxId(row.taxId))) data.blockers.push('Hay NIF españoles que no tienen exactamente nueve caracteres válidos para el diseño oficial.');
   if (details.some(row => row.country === 'ES' && !row.provinceCode)) data.blockers.push('Hay declarados españoles sin código de provincia oficial resoluble.');
   if (details.some(row => !row.country)) data.blockers.push('Hay declarados con país no normalizado al código ISO de dos letras.');
   const fields: any[] = [];
-  addField(fields, 'DECLARADOS', 'Registros A/B que superan el umbral por tercero', details.length, details.flatMap(row => row.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
+  addField(fields, 'DECLARADOS', 'Registros que superan el umbral por tercero', details.length, details.flatMap(row => row.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
   addField(fields, 'IMPORTE', 'Importe anual declarado', details.reduce((sum, row) => sum + row.total, 0), details.flatMap(row => row.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
+  addField(fields, 'METALICO', 'Cobros en metálico declarables', details.reduce((sum, row) => sum + row.cashAmount, 0), details.flatMap(row => row.cashSourceIds || []), 'Control especial');
   return { fields, result: 0, details };
 }
 
@@ -478,6 +628,10 @@ function calculate(model: string, data: any, b: any, adjustments: any) {
 
 function normalizedText(value: unknown, length: number) {
   return clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 &.,\/-]/g, ' ').replace(/\s+/g, ' ').slice(0, length).padEnd(length, ' ');
+}
+
+function leftPaddedText(value: unknown, length: number, fill = ' ') {
+  return normalizedText(value, length).trim().slice(-length).padStart(length, fill);
 }
 
 function numeric(value: unknown, length: number, signed = false, decimals = 2) {
@@ -587,11 +741,11 @@ function export347(company: any, year: number, calculation: any, declarationNumb
     place(record, 77, 2, country === 'ES' ? row.provinceCode : '99'); place(record, 79, 2, country === 'ES' ? '  ' : country);
     place(record, 82, 1, row.operationKey); place(record, 83, 16, signedAmount(row.total));
     place(record, 101, 15, numeric(row.cashAmount, 15)); place(record, 116, 16, signedAmount(row.propertyTransferAmount));
-    place(record, 132, 4, row.cashAmount ? String(year) : '0000');
-    place(record, 136, 16, signedAmount(row.quarters?.T1)); place(record, 152, 16, signedAmount(0));
-    place(record, 168, 16, signedAmount(row.quarters?.T2)); place(record, 184, 16, signedAmount(0));
-    place(record, 200, 16, signedAmount(row.quarters?.T3)); place(record, 216, 16, signedAmount(0));
-    place(record, 232, 16, signedAmount(row.quarters?.T4)); place(record, 248, 16, signedAmount(0));
+    place(record, 132, 4, row.cashAmount ? row.cashYear : '0000');
+    place(record, 136, 16, signedAmount(row.quarters?.T1)); place(record, 152, 16, signedAmount(row.transferQuarters?.T1));
+    place(record, 168, 16, signedAmount(row.quarters?.T2)); place(record, 184, 16, signedAmount(row.transferQuarters?.T2));
+    place(record, 200, 16, signedAmount(row.quarters?.T3)); place(record, 216, 16, signedAmount(row.transferQuarters?.T3));
+    place(record, 232, 16, signedAmount(row.quarters?.T4)); place(record, 248, 16, signedAmount(row.transferQuarters?.T4));
     if (country !== 'ES') place(record, 264, 17, normalizedText(row.taxId, 17));
     place(record, 281, 1, row.cashAccounting ? 'X' : ' '); place(record, 282, 1, row.reverseCharge ? 'X' : ' ');
     place(record, 284, 16, signedAmount(row.cashAccounting ? row.total : 0)); place(record, 300, 6, numeric(0, 6, false, 0));
@@ -605,7 +759,7 @@ function export415Import(company: any, year: number, calculation: any) {
   const keys = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
   const summary = Object.fromEntries(keys.map(key => [key, {
     count: details.filter((row: any) => row.operationKey === key).length,
-    amount: details.filter((row: any) => row.operationKey === key).reduce((sum: number, row: any) => sum + money(row.total), 0),
+    amount: details.filter((row: any) => row.operationKey === key).reduce((sum: number, row: any) => sum + money(row.totalAccordingToOperation ?? row.total), 0),
   }]));
   const declaration = [
     '1', '415', String(year), normalizedText(company.nif_cif, 9), normalizedText(company.razon_social, 40),
@@ -616,16 +770,24 @@ function export415Import(company: any, year: number, calculation: any) {
     const country = normalizedCountry(row.country) || 'ES';
     return [
       '2', '415', String(year), normalizedText(company.nif_cif, 9), row.operationKey,
-      country === 'ES' ? normalizedText(row.taxId, 9) : ' '.repeat(9), normalizedText(row.name, 40), ' '.repeat(9), country === 'ES' ? '  ' : country,
-      row.cashAccounting ? 'X' : ' ', row.reverseCharge ? 'X' : ' ', row.exempt ? 'X' : ' ', signedAmount(row.cashAccounting ? row.total : 0),
-      signedAmount(row.total), numeric(row.cashAmount, 15), signedAmount(row.propertyRentAmount), signedAmount(row.propertyTransferAmount), row.cashAmount ? String(year) : '0000',
-      signedAmount(row.quarters?.T1), signedAmount(0), signedAmount(0),
-      signedAmount(row.quarters?.T2), signedAmount(0), signedAmount(0),
-      signedAmount(row.quarters?.T3), signedAmount(0), signedAmount(0),
-      signedAmount(row.quarters?.T4), signedAmount(0), signedAmount(0),
+      country === 'ES' ? normalizedText(row.taxId, 9) : ' '.repeat(9), normalizedText(row.name, 40), normalizedText(row.representativeTaxId, 9), country === 'ES' ? '  ' : country,
+      row.cashAccounting ? 'X' : ' ', row.reverseCharge ? 'X' : ' ', row.exemptArticle13 ? 'X' : ' ', signedAmount(row.cashAccounting ? row.cashAccountingAnnualAmount : 0),
+      signedAmount(row.ordinaryTotal ?? row.total), numeric(row.cashAmount, 15), signedAmount(row.propertyRentAmount), signedAmount(row.propertyTransferAmount), row.cashAmount ? row.cashYear : '0000',
+      signedAmount(row.quarters?.T1), signedAmount(row.rentQuarters?.T1), signedAmount(row.transferQuarters?.T1),
+      signedAmount(row.quarters?.T2), signedAmount(row.rentQuarters?.T2), signedAmount(row.transferQuarters?.T2),
+      signedAmount(row.quarters?.T3), signedAmount(row.rentQuarters?.T3), signedAmount(row.transferQuarters?.T3),
+      signedAmount(row.quarters?.T4), signedAmount(row.rentQuarters?.T4), signedAmount(row.transferQuarters?.T4),
     ].join('');
   });
-  return [declaration, ...records].join('\r\n');
+  const properties = details.flatMap((row: any) => (row.properties || []).map((property: any) => [
+    '3', '415', String(year), normalizedText(company.nif_cif, 9), normalizedText(row.taxId, 9), normalizedText(row.name, 40), normalizedText(row.representativeTaxId, 9),
+    signedAmount(property.amount, 15), property.cadastralUnavailable ? 'N' : 'S', normalizedText(property.cadastralReference, 25),
+    normalizedText(property.roadType, 5), normalizedText(property.roadName, 50), normalizedText(property.numberingType || 'NUM', 3), leftPaddedText(property.houseNumber, 5, '0'),
+    normalizedText(property.numberQualifier, 3), normalizedText(property.block, 3), normalizedText(property.portal, 3), normalizedText(property.stair, 3),
+    normalizedText(property.floor, 3), normalizedText(property.door, 3), normalizedText(property.complement, 40), normalizedText(property.locality, 30),
+    normalizedText(property.municipality, 30), normalizedText(property.municipalityCode, 5), normalizedText(property.provinceCode, 2), normalizedText(property.postalCode, 5),
+  ].join('')));
+  return [declaration, ...records, ...properties].join('\r\n');
 }
 
 function csvCell(value: unknown) {
@@ -685,7 +847,30 @@ function transferLayoutErrors(model: string, content: string) {
   if (model === '415') {
     const errors = records.length < 2 ? ['El soporte 415 debe incluir declaración y al menos un declarado.'] : [];
     if (records[0]?.length !== 246 || !records[0]?.startsWith('1415')) errors.push('La cabecera de importación 415 no cumple las 246 posiciones del programa ATC.');
-    if (records.slice(1).some(record => record.length !== 356 || !record.startsWith('2415'))) errors.push('Hay registros de declarado 415 que no cumplen las 356 posiciones del importador ATC.');
+    const detailRecords = records.slice(1).filter(record => record.startsWith('2415'));
+    const propertyRecords = records.slice(1).filter(record => record.startsWith('3415'));
+    if (!detailRecords.length) errors.push('El soporte 415 no contiene registros de declarado tipo 2.');
+    if (detailRecords.some(record => record.length !== 356)) errors.push('Hay registros de declarado 415 que no cumplen las 356 posiciones del importador ATC.');
+    if (propertyRecords.some(record => record.length !== 309)) errors.push('Hay anexos de inmueble 415 que no cumplen las 309 posiciones del importador ATC.');
+    if (records.slice(1).some(record => !record.startsWith('2415') && !record.startsWith('3415'))) errors.push('El soporte 415 contiene un tipo de registro no reconocido por el importador oficial.');
+    const firstProperty = records.findIndex(record => record.startsWith('3415'));
+    if (firstProperty >= 0 && records.slice(firstProperty + 1).some(record => record.startsWith('2415'))) errors.push('Los anexos de inmueble 415 deben situarse después de todos los registros de declarados.');
+    const fixedAmount = (text: string) => {
+      const negative = text[0] === 'N';
+      const digits = text.replace(/^[N ]/, '').replace(/\D/g, '');
+      return money((negative ? -1 : 1) * (Number(digits || 0) / 100));
+    };
+    const keys = ['A','B','C','D','E','F','G'];
+    keys.forEach((key, index) => {
+      const matching = detailRecords.filter(record => record[17] === key);
+      const headerStart = 57 + index * 25;
+      const headerCount = Number(records[0]?.slice(headerStart, headerStart + 9) || 0);
+      const headerAmount = fixedAmount(records[0]?.slice(headerStart + 9, headerStart + 25) || '');
+      const detailAmount = money(matching.reduce((sum, record) => sum + fixedAmount(record.slice(97, 113)) + fixedAmount(record.slice(128, 144)) + fixedAmount(record.slice(144, 160)), 0));
+      if (headerCount !== matching.length) errors.push(`El resumen 415 de la clave ${key} no cuadra en número de declarados.`);
+      if (Math.abs(headerAmount - detailAmount) > 0.01) errors.push(`El resumen 415 de la clave ${key} no cuadra en importe.`);
+    });
+    if (propertyRecords.some(property => !detailRecords.some(detail => detail[17] === 'B' && detail.slice(18,27) === property.slice(17,26)))) errors.push('Hay anexos de inmueble sin un declarado de ventas/arrendamientos asociado.');
     return errors;
   }
   return [];
@@ -715,18 +900,18 @@ Deno.serve(async (req) => {
     if(action==='self_test') {
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
       const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'28',value:30},{code:'30',value:30},{code:'09',value:19},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
-      const thirdParties={result:0,details:[{taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,quarters:{T1:1000,T2:1000,T3:1000,T4:500},cashAmount:0,propertyTransferAmount:0,propertyRentAmount:0,cashAccounting:false,reverseCharge:false,exempt:false}]};
+      const thirdParties={result:0,details:[{recordKey:'ThirdParty:B87654321|B|C0|I0|E0',taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,ordinaryTotal:1800,totalAccordingToOperation:3500,quarters:{T1:575,T2:575,T3:575,T4:75},rentQuarters:{T1:300,T2:300,T3:300,T4:300},transferQuarters:{T1:125,T2:125,T3:125,T4:125},cashAmount:7000,cashYear:'2024',propertyTransferAmount:500,propertyRentAmount:1200,cashAccounting:false,cashAccountingAnnualAmount:0,reverseCharge:false,exemptArticle13:false,representativeTaxId:'',properties:[{amount:1200,cadastralUnavailable:false,cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',numberQualifier:'',block:'',portal:'',stair:'',floor:'',door:'',complement:'',locality:'SANTA CRUZ DE TENERIFE',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',provinceCode:'38',postalCode:'38001'}]}]};
       const annual180={result:0,details:[{id:'invoice-test',taxId:'B87654321',name:'ARRENDADOR PRUEBA',base:12000,withholding:2280,manual:{representativeTaxId:'',recipientProvinceCode:'38',modality:'1',withholdingRate:19,accrualYear:'0000',propertySituation:'1',cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',propertyProvinceCode:'38',postalCode:'38001'}}]};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); return {model,length:wrapped.length,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`)}});
       const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
-      const import415=export415Import(company,2025,thirdParties).split('\r\n');
+      const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
       const transferChecks=[
         {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
-        {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),valid:import415.length===2&&import415[0].length===246&&import415[1].length===356&&import415[1].startsWith('2415')},
+        {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),layoutErrors:transferLayoutErrors('415',import415Content),valid:import415.length===3&&import415[0].length===246&&import415[1].length===356&&import415[2].length===309&&import415[1].startsWith('2415')&&import415[2].startsWith('3415')&&import415[1].slice(113,128)==='000000000700000'&&import415[1].slice(160,164)==='2024'&&transferLayoutErrors('415',import415Content).length===0},
       ];
       const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test'); const handoffCheck={model:'420/425 handoff',valid:handoff420.includes('PASO_FINAL')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff420.split('\r\n').length>8};
       const accessCompany={id:'company-test',owner_email:'owner@example.test',usuarios_autorizados:['authorized@example.test']};
@@ -754,11 +939,13 @@ Deno.serve(async (req) => {
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
     const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,declarables,blockers,warnings,period,year};
     if(action==='upsert_declarable') {
-      if(model!=='180') return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para el modelo 180.'},{status:400});
+      if(!['180','347','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para los modelos 180, 347 y 415.'},{status:400});
       const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
       const sourceId=clean(body.sourceId); const sourceType=clean(body.sourceType)||'manual'; const input=body.payload||{};
       const allowed180=['representativeTaxId','recipientProvinceCode','modality','withholdingRate','accrualYear','propertySituation','cadastralReference','roadType','roadName','numberingType','houseNumber','numberQualifier','block','portal','stair','floor','door','complement','locality','municipality','municipalityCode','propertyProvinceCode','postalCode'];
-      const allowed=model==='180'?allowed180:[]; const payload=Object.fromEntries(allowed.map(key=>[key,key==='withholdingRate'?money(input[key]):clean(input[key])]).filter(([,value])=>value!==''&&value!=null));
+      const payload=model==='180'
+        ? Object.fromEntries(allowed180.map(key=>[key,key==='withholdingRate'?money(input[key]):clean(input[key])]).filter(([,value])=>value!==''&&value!=null))
+        : sanitizeThirdPartyPayload(input);
       const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role); const reviewRequested=body.reviewStatus==='validado_asesor';
       const reviewStatus=reviewRequested&&canReview?'validado_asesor':'pendiente_revision'; const recordPayload:any={companyId,modeloCodigo:model,ejercicio:year,recordKey,sourceType,sourceId,payload,reviewStatus,notes:clean(body.notes)};
       if(reviewStatus==='validado_asesor'){recordPayload.reviewedBy=user.email;recordPayload.reviewedAt=new Date().toISOString();}
