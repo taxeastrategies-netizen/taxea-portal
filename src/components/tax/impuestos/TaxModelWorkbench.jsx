@@ -33,6 +33,7 @@ const MODEL_180_FIELDS = [
 ];
 
 
+function formatMoney(value) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
 }
 
