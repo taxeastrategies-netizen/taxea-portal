@@ -37,6 +37,17 @@ const MODEL_190_NUMERIC_FIELDS = [
   ['compensatoryPensions', 'Pensiones compensatorias'], ['childSupport', 'Anualidades por alimentos'],
 ];
 
+const MODEL_193_NATURES = {
+  A: [['01', 'Primas por asistencia'], ['02', 'Dividendos y beneficios'], ['03', 'Otros activos con participación'], ['04', 'Derechos de uso sobre valores'], ['05', 'Otras utilidades de socio'], ['06', 'Rendimientos exentos'], ['07', 'Dividendos IIC'], ['08', 'Dividendos sin retención']],
+  B: [['01', 'Intereses de títulos privados'], ['02', 'Intereses de títulos públicos'], ['03', 'Intereses de préstamos no bancarios'], ['04', 'Régimen transitorio financiero'], ['05', 'Cesión de crédito por entidad financiera'], ['06', 'Otros rendimientos'], ['07', 'Rendimientos exentos']],
+  C: [['01', 'Propiedad intelectual, no autor'], ['02', 'Propiedad industrial'], ['03', 'Asistencia técnica'], ['04', 'Arrendamiento de muebles, negocios o minas'], ['05', 'Rentas vitalicias o temporales'], ['06', 'Derechos de imagen IRPF'], ['07', 'Subarrendamiento urbano IRPF'], ['08', 'Derechos de imagen IS/IRNR-EP'], ['09', 'Premios IS/IRNR-EP'], ['10', 'Administradores IS/IRNR-EP'], ['11', 'Rendimientos exentos'], ['12', 'Otros · base general'], ['13', 'Otros · base del ahorro'], ['14', 'Otros · no IRPF'], ['15', 'Anticipos de derechos de autor']],
+  D: [['01', 'Intereses de títulos privados'], ['02', 'Intereses de títulos públicos'], ['03', 'Intereses de préstamos no bancarios'], ['04', 'Régimen transitorio financiero'], ['05', 'Cesión de crédito por entidad financiera'], ['06', 'Otros rendimientos'], ['07', 'Rendimientos exentos']],
+};
+
+const MODEL_193_MONEY_FIELDS = [
+  ['perceptionAmount', 'Importe íntegro de la percepción'], ['reductions', 'Reducciones'], ['retentionBase', 'Base de retención'], ['retentionRate', 'Último tipo de retención (%)'], ['penalties', 'Penalizaciones'],
+];
+
 const THIRD_PARTY_SPECIAL_FIELDS = [
   ['cashAmount', 'Cobros en metálico (> 6.000 €)'], ['cashAccountingAnnualAmount', 'Devengado anual por criterio de caja'],
   ['propertyRentAmount', 'Arrendamientos de locales · anual'], ['propertyTransferAmount', 'Transmisiones de inmuebles · anual'],
@@ -175,6 +186,73 @@ function Annual190Editor({ details, values, onChange, onSave, saving, canReview 
   );
 }
 
+function Annual193Editor({ details, declaration, values, onChange, onSave, saving, canReview }) {
+  if (!details?.length) return null;
+  const declarationPayload = values[declaration?.recordKey] || declaration?.manual || {};
+  const specialDeclarant = !!declarationPayload.declarantNatureSpecial;
+  return (
+    <section className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50/40 p-4">
+      <div className="flex items-start gap-3">
+        <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-fuchsia-700" />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-slate-800">Clasificación anual del modelo 193</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-600">Las facturas financieras pagadas aportan importes y retenciones. La naturaleza de la renta, emisor, mercado y papel del pagador se completan aquí conforme al diseño AEAT.</p>
+          <div className="mt-3 rounded-xl border border-fuchsia-200 bg-white p-3">
+            <p className="text-xs font-semibold text-slate-800">Configuración de la declaración</p>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-700"><input className="mt-1" type="checkbox" checked={specialDeclarant} onChange={event => onChange(declaration.recordKey, 'declarantNatureSpecial', event.target.checked)} />Marcar “S” porque el declarante no pertenece a las categorías especiales indicadas en el diseño 193.</label>
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-700"><input className="mt-1" type="checkbox" checked={!!declarationPayload.expenseAnnexNotApplicable} onChange={event => onChange(declaration.recordKey, 'expenseAnnexNotApplicable', event.target.checked)} />Confirmo que no procede la relación de gastos del art. 26.1.a LIRPF.</label>
+            </div>
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={!!declarationPayload.specialDataConfirmed} onChange={event => onChange(declaration.recordKey, 'specialDataConfirmed', event.target.checked)} />Confirmo que se ha revisado la naturaleza del declarante y que el fichero no requiere registros de relación de gastos.</label>
+            {!!declaration?.missingFields?.length && <p className="mt-2 text-xs text-amber-700">Pendiente: {declaration.missingFields.join('; ')}.</p>}
+            <div className="mt-2 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => onSave(declaration, 'pendiente_revision')} disabled={saving}><Save className="mr-2 h-3.5 w-3.5" />Guardar configuración</Button>{canReview && <Button size="sm" className="bg-fuchsia-700 hover:bg-fuchsia-800" onClick={() => onSave(declaration, 'validado_asesor')} disabled={saving || !!declaration?.missingFields?.length}><ShieldCheck className="mr-2 h-3.5 w-3.5" />Validar configuración</Button>}</div>
+          </div>
+          <div className="mt-3 space-y-3">
+            {details.map(detail => {
+              const payload = values[detail.recordKey] || detail.manual || {};
+              const perceptionKey = payload.perceptionKey || detail.perceptionKey || '';
+              const capital = ['A', 'B', 'D'].includes(perceptionKey);
+              return (
+                <details key={detail.recordKey} className="rounded-xl border border-fuchsia-200 bg-white p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-800">{perceptionKey || 'Sin clasificar'} · {detail.name || detail.taxId} · {formatMoney(detail.base)} · <span className={detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'text-emerald-700' : 'text-amber-700'}>{detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'Validado' : `${detail.missingFields?.length || 0} dato(s) pendiente(s)`}</span></summary>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="text-xs font-medium text-slate-600">Provincia<input inputMode="numeric" maxLength={2} value={payload.provinceCode ?? ''} onChange={event => onChange(detail.recordKey, 'provinceCode', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm" /></label>
+                    <label className="text-xs font-medium text-slate-600">Clave de percepción<select value={perceptionKey} onChange={event => onChange(detail.recordKey, 'perceptionKey', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm"><option value="">Seleccionar</option><option value="A">A · Fondos propios</option><option value="B">B · Cesión de capitales</option><option value="C">C · Otros rendimientos</option><option value="D">D · Capitales a entidad vinculada</option></select></label>
+                    <label className="text-xs font-medium text-slate-600">Naturaleza<select value={payload.nature || ''} onChange={event => onChange(detail.recordKey, 'nature', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm"><option value="">Seleccionar</option>{(MODEL_193_NATURES[perceptionKey] || []).map(([code, label]) => <option key={code} value={code}>{code} · {label}</option>)}</select></label>
+                    <label className="text-xs font-medium text-slate-600">Tipo de percepción<select value={payload.perceptionType || '1'} onChange={event => onChange(detail.recordKey, 'perceptionType', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm"><option value="1">1 · Dineraria</option><option value="2">2 · En especie</option></select></label>
+                    <label className="text-xs font-medium text-slate-600">NIF representante<input maxLength={9} value={payload.representativeTaxId ?? ''} onChange={event => onChange(detail.recordKey, 'representativeTaxId', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm uppercase" /></label>
+                    <label className="text-xs font-medium text-slate-600">Ejercicio de devengo anterior<input inputMode="numeric" maxLength={4} value={payload.accrualYear ?? ''} onChange={event => onChange(detail.recordKey, 'accrualYear', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm" /></label>
+                    {MODEL_193_MONEY_FIELDS.map(([key, label]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type="number" step="0.01" value={payload[key] ?? ''} onChange={event => onChange(detail.recordKey, key, event.target.value === '' ? '' : Number(event.target.value))} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 px-3 text-sm" /></label>)}
+                  </div>
+                  {capital && !specialDeclarant && <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3"><p className="text-xs font-semibold text-slate-800">Identificación del emisor y pago</p><div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="text-xs text-slate-600">Clave código<select value={payload.keyCode || ''} onChange={event => onChange(detail.recordKey, 'keyCode', event.target.value)} className="mt-1 h-9 w-full rounded border px-2"><option value="">Seleccionar</option><option value="1">1 · NIF emisor</option><option value="2">2 · ISIN</option><option value="3">3 · Extranjero sin ISIN</option><option value="4">4 · NIF + ISIN</option></select></label>
+                    <label className="text-xs text-slate-600">Código emisor<input value={payload.issuerCode ?? ''} onChange={event => onChange(detail.recordKey, 'issuerCode', event.target.value)} className="mt-1 h-9 w-full rounded border px-2 uppercase" /></label>
+                    <label className="text-xs text-slate-600">ISIN<input maxLength={12} value={payload.isin ?? ''} onChange={event => onChange(detail.recordKey, 'isin', event.target.value)} className="mt-1 h-9 w-full rounded border px-2 uppercase" /></label>
+                    <label className="text-xs text-slate-600">Papel del pagador<select value={payload.paymentRole || ''} onChange={event => onChange(detail.recordKey, 'paymentRole', event.target.value)} className="mt-1 h-9 w-full rounded border px-2"><option value="">Seleccionar</option><option value="1">1 · Emisor</option><option value="2">2 · Mediador nacional</option><option value="3">3 · Mediador extranjero</option><option value="4">4 · Mediador extranjero no retenedor</option><option value="5">5 · Mediador de otras rentas B-06</option></select></label>
+                    <label className="text-xs text-slate-600">Tipo código cuenta<select value={payload.accountCodeType || ''} onChange={event => onChange(detail.recordKey, 'accountCodeType', event.target.value)} className="mt-1 h-9 w-full rounded border px-2"><option value="">Sin contenido</option><option value="C">C · Código cuenta</option><option value="O">O · Otra identificación</option><option value="P">P · Préstamo de valores</option></select></label>
+                    <label className="text-xs text-slate-600">Cuenta/operación<input maxLength={20} value={payload.accountCode ?? ''} onChange={event => onChange(detail.recordKey, 'accountCode', event.target.value)} className="mt-1 h-9 w-full rounded border px-2" /></label>
+                    <label className="text-xs text-slate-600">Mercado<select value={payload.marketKey || ''} onChange={event => onChange(detail.recordKey, 'marketKey', event.target.value)} className="mt-1 h-9 w-full rounded border px-2"><option value="">Seleccionar</option><option value="A">A · Mercado español</option><option value="B">B · Mercado UE</option><option value="C">C · Otro mercado oficial extranjero</option><option value="D">D · Otros</option></select></label>
+                    <label className="text-xs text-slate-600">NIF pagador anterior<input maxLength={9} value={payload.previousPayerTaxId ?? ''} onChange={event => onChange(detail.recordKey, 'previousPayerTaxId', event.target.value)} className="mt-1 h-9 w-full rounded border px-2 uppercase" /></label>
+                    {perceptionKey === 'A' && <label className="text-xs text-slate-600">Fecha de devengo<input type="date" value={payload.accrualDate ?? ''} onChange={event => onChange(detail.recordKey, 'accrualDate', event.target.value)} className="mt-1 h-9 w-full rounded border px-2" /></label>}
+                  </div><label className="mt-2 flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={!!payload.recipientMediator} onChange={event => onChange(detail.recordKey, 'recipientMediator', event.target.checked)} />El perceptor es mediador</label></div>}
+                  <details className="mt-3 rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-semibold text-slate-700">Campos especiales y distribución territorial</summary><div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="text-xs text-slate-600">Ceuta/Melilla/La Palma<select value={payload.ceutaPalmaCode || '0'} onChange={event => onChange(detail.recordKey, 'ceutaPalmaCode', event.target.value)} className="mt-1 h-9 w-full rounded border px-2"><option value="0">0 · No aplica</option><option value="1">1 · Ceuta o Melilla</option><option value="2">2 · Isla de La Palma</option></select></label>
+                    {[['stateWithholding','Hacienda estatal'],['navarraWithholding','Navarra'],['alavaWithholding','Álava'],['gipuzkoaWithholding','Gipuzkoa'],['bizkaiaWithholding','Bizkaia'],['loanCompensation','Compensaciones préstamo'],['loanGuarantees','Garantías préstamo']].map(([key,label]) => <label key={key} className="text-xs text-slate-600">{label}<input type="number" step="0.01" value={payload[key] ?? ''} onChange={event => onChange(detail.recordKey, key, event.target.value === '' ? '' : Number(event.target.value))} className="mt-1 h-9 w-full rounded border px-2" /></label>)}
+                    {payload.accountCodeType === 'P' && <><label className="text-xs text-slate-600">Inicio préstamo<input type="date" value={payload.loanStartDate ?? ''} onChange={event => onChange(detail.recordKey, 'loanStartDate', event.target.value)} className="mt-1 h-9 w-full rounded border px-2" /></label><label className="text-xs text-slate-600">Vencimiento préstamo<input type="date" value={payload.loanEndDate ?? ''} onChange={event => onChange(detail.recordKey, 'loanEndDate', event.target.value)} className="mt-1 h-9 w-full rounded border px-2" /></label></>}
+                  </div></details>
+                  <label className="mt-3 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={!!payload.specialDataConfirmed} onChange={event => onChange(detail.recordKey, 'specialDataConfirmed', event.target.checked)} />Confirmo que la clasificación, importes, identificación financiera y territorialidad del perceptor han sido revisados.</label>
+                  {!!detail.missingFields?.length && <p className="mt-3 text-xs text-amber-700">Pendiente: {detail.missingFields.join('; ')}.</p>}
+                  <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => onSave(detail, 'pendiente_revision')} disabled={saving}><Save className="mr-2 h-3.5 w-3.5" />Guardar ficha</Button>{canReview && <Button size="sm" className="bg-fuchsia-700 hover:bg-fuchsia-800" onClick={() => onSave(detail, 'validado_asesor')} disabled={saving || !!detail.missingFields?.length}><ShieldCheck className="mr-2 h-3.5 w-3.5" />Validar como asesor</Button>}</div>
+                </details>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ThirdPartyEditor({ modelCode, details, values, onChange, onPropertyChange, onAddProperty, onRemoveProperty, onSave, saving, canReview }) {
   if (!details?.length) return null;
   return (
@@ -250,6 +328,7 @@ export default function TaxModelWorkbench() {
   const [adjustments, setAdjustments] = useState({});
   const [annualRecordEdits, setAnnualRecordEdits] = useState({});
   const [annual190RecordEdits, setAnnual190RecordEdits] = useState({});
+  const [annual193RecordEdits, setAnnual193RecordEdits] = useState({});
   const [thirdPartyRecordEdits, setThirdPartyRecordEdits] = useState({});
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -284,6 +363,15 @@ export default function TaxModelWorkbench() {
   useEffect(() => {
     if (modelCode !== '190' || !result?.calculation?.details) return;
     setAnnual190RecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
+  }, [modelCode, result?.source?.hash]);
+
+  useEffect(() => {
+    if (modelCode !== '193' || !result?.calculation?.details) return;
+    const declaration = result.calculation.declaration;
+    setAnnual193RecordEdits(Object.fromEntries([
+      ...(declaration ? [[declaration.recordKey, { ...(declaration.manual || {}) }]] : []),
+      ...result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }]),
+    ]));
   }, [modelCode, result?.source?.hash]);
 
   useEffect(() => {
@@ -322,9 +410,9 @@ export default function TaxModelWorkbench() {
     mutationFn: async ({ detail, reviewStatus, targetModel = modelCode }) => (await base44.functions.invoke('taxModelOperations', {
       action: 'upsert_declarable', companyId, modeloCodigo: targetModel, ejercicio: year, periodo: 'Anual',
       recordKey: detail.recordKey,
-      sourceType: targetModel === '180' ? 'Invoice' : targetModel === '190' ? detail.sourceType : 'ThirdPartyAggregate',
-      sourceId: targetModel === '180' ? detail.id : targetModel === '190' ? (detail.sourceIds || []).join('|') : (detail.invoices || []).join('|'),
-      payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '190' ? (annual190RecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
+      sourceType: targetModel === '180' ? 'Invoice' : ['190', '193'].includes(targetModel) ? detail.sourceType : 'ThirdPartyAggregate',
+      sourceId: targetModel === '180' ? detail.id : ['190', '193'].includes(targetModel) ? (detail.sourceIds || []).join('|') : (detail.invoices || []).join('|'),
+      payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '190' ? (annual190RecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '193' ? (annual193RecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
     })).data,
     onSuccess: () => { setActionError(''); invoke.mutate({ action: 'calculate' }); },
     onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo guardar la ficha anual.'),
@@ -332,6 +420,7 @@ export default function TaxModelWorkbench() {
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
   const updateAnnual190Record = (recordKey, key, value) => setAnnual190RecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
+  const updateAnnual193Record = (recordKey, key, value) => setAnnual193RecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
   const updateThirdPartyRecord = (recordKey, key, value) => setThirdPartyRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
   const updateThirdPartyProperty = (recordKey, propertyIndex, key, value) => setThirdPartyRecordEdits(current => {
     const record = { ...(current[recordKey] || {}) };
@@ -436,6 +525,7 @@ export default function TaxModelWorkbench() {
 
           {modelCode === '180' && result && <Annual180Editor details={result.calculation?.details} values={annualRecordEdits} onChange={updateAnnualRecord} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '180' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {modelCode === '190' && result && <Annual190Editor details={result.calculation?.details} values={annual190RecordEdits} onChange={updateAnnual190Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '190' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
+          {modelCode === '193' && result && <Annual193Editor details={result.calculation?.details} declaration={result.calculation?.declaration} values={annual193RecordEdits} onChange={updateAnnual193Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '193' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {['347', '415'].includes(modelCode) && result && <ThirdPartyEditor modelCode={modelCode} details={result.calculation?.details} values={thirdPartyRecordEdits} onChange={updateThirdPartyRecord} onPropertyChange={updateThirdPartyProperty} onAddProperty={addThirdPartyProperty} onRemoveProperty={removeThirdPartyProperty} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: modelCode })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
 
           {!result ? (
