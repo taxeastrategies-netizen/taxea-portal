@@ -12,6 +12,17 @@ const PERIODS = {
   mensual: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
 };
 
+const MODEL_130_ADJUSTMENTS = [
+  ['previousPayments', 'Pagos fraccionados anteriores (casilla 05)'],
+  ['withholdings', 'Retenciones soportadas acumuladas (casilla 06)'],
+  ['article110Reduction', 'Minoración art. 110.3 RIRPF (casilla 13)'],
+  ['priorNegativeResults', 'Resultados negativos anteriores (casilla 15)'],
+  ['housingDeduction', 'Deducción vivienda habitual (casilla 16)'],
+  ['previousSamePeriodResult', 'Resultado previo de la misma autoliquidación'],
+  ['agricultureRevenue', 'Ingresos agrícolas/ganaderos del trimestre'],
+  ['agricultureWithholdings', 'Retenciones agrícolas/ganaderas'],
+];
+
 function formatMoney(value) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
 }
@@ -50,6 +61,7 @@ export default function TaxModelWorkbench() {
   const [period, setPeriod] = useState('1T');
   const [result, setResult] = useState(null);
   const [actionError, setActionError] = useState('');
+  const [adjustments, setAdjustments] = useState({});
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
     queryKey: ['tax-model-engine-catalog'],
@@ -71,7 +83,8 @@ export default function TaxModelWorkbench() {
     if (definition && !periodOptions.includes(period)) setPeriod(periodOptions[0]);
     setResult(null);
     setActionError('');
-  }, [modelCode, year, definition?.frequency]);
+    setAdjustments({});
+  }, [modelCode, year, definition?.frequency, periodOptions]);
 
   const invoke = useMutation({
     mutationFn: async ({ action }) => {
@@ -81,6 +94,7 @@ export default function TaxModelWorkbench() {
         modeloCodigo: modelCode,
         ejercicio: year,
         periodo: period,
+        adjustments: modelCode === '130' ? adjustments : {},
       });
       return response.data;
     },
@@ -136,7 +150,7 @@ export default function TaxModelWorkbench() {
               <select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
                 {[year - 2, year - 1, year, year + 1].filter((value, index, array) => array.indexOf(value) === index).map(value => <option key={value}>{value}</option>)}
               </select>
-              <select value={period} onChange={event => { setPeriod(event.target.value); setResult(null); }} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
+              <select value={period} onChange={event => { setPeriod(event.target.value); setResult(null); setAdjustments({}); }} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
                 {periodOptions.map(value => <option key={value}>{value}</option>)}
               </select>
               <Button onClick={() => invoke.mutate({ action: 'calculate' })} disabled={invoke.isPending} className="gap-2 bg-slate-950 text-white hover:bg-slate-800">
@@ -157,6 +171,32 @@ export default function TaxModelWorkbench() {
 
           {actionError && (
             <div className="flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{actionError}</span></div>
+          )}
+
+          {modelCode === '130' && (
+            <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-slate-800">Ajustes fiscales revisables del modelo 130</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">La contabilidad calcula ingresos y gastos acumulados. Estas casillas no se inventan: confírmalas cuando procedan; en 2T–4T los pagos anteriores son obligatorios para exportar.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {MODEL_130_ADJUSTMENTS.map(([key, label]) => (
+                      <label key={key} className="text-xs font-medium text-slate-600">
+                        {label}
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={adjustments[key] ?? ''}
+                          onChange={event => { setAdjustments(current => ({ ...current, [key]: event.target.value === '' ? undefined : Number(event.target.value) })); setResult(null); }}
+                          className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-cyan-300"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
           )}
 
           {!result ? (
