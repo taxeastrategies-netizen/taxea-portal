@@ -23,6 +23,8 @@ const MODEL_130_ADJUSTMENTS = [
   ['agricultureWithholdings', 'Retenciones agrícolas/ganaderas'],
 ];
 
+const INDIRECT_TAX_MODELS = ['303', '420'];
+
 const MODEL_180_FIELDS = [
   ['recipientProvinceCode', 'Provincia perceptor (2 dígitos)', 'text'],
   ['cadastralReference', 'Referencia catastral', 'text'],
@@ -106,9 +108,9 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [fileInfo, setFileInfo] = useState(null);
-  const [form, setForm] = useState({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', boxesText: '', confirmed: false });
+  const [form, setForm] = useState({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', resultDisposition: '', boxesText: '', confirmed: false });
 
-  const reset = () => { setError(''); setNotice(''); setFileInfo(null); setForm({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', boxesText: '', confirmed: false }); };
+  const reset = () => { setError(''); setNotice(''); setFileInfo(null); setForm({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', resultDisposition: '', boxesText: '', confirmed: false }); };
 
   async function analyzeFile(file) {
     if (!file) return;
@@ -125,7 +127,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
             type: 'object',
             properties: {
               modelo: { type: 'string' }, ejercicio: { type: 'number' }, periodo: { type: 'string' }, nif_cif: { type: 'string' },
-              fechaPresentacion: { type: 'string' }, numeroJustificante: { type: 'string' }, tipoDeclaracion: { type: 'string' }, importeFinal: { type: 'number' },
+              fechaPresentacion: { type: 'string' }, numeroJustificante: { type: 'string' }, tipoDeclaracion: { type: 'string' }, importeFinal: { type: 'number' }, resultadoDestino: { type: 'string' },
               fields: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, label: { type: 'string' }, value: { type: 'number' } } } },
             },
           },
@@ -142,7 +144,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
       });
       const data = response.data;
       setFileInfo({ fileUrl: upload.file_url, fileName: file.name, fileHash: hash, rawContent, extracted, preview: data.preview, warnings: data.warnings || [] });
-      setForm(current => ({ ...current, presentationDate: data.preview?.presentationDate || current.presentationDate, justificationNumber: data.preview?.justificationNumber || current.justificationNumber, declarationType: data.preview?.declarationType || 'original', result: data.preview?.result ?? '', boxesText: boxesToText(data.preview?.boxes), confirmed: false }));
+      setForm(current => ({ ...current, presentationDate: data.preview?.presentationDate || current.presentationDate, justificationNumber: data.preview?.justificationNumber || current.justificationNumber, declarationType: data.preview?.declarationType || 'original', result: data.preview?.result ?? '', resultDisposition: data.preview?.resultDisposition || '', boxesText: boxesToText(data.preview?.boxes), confirmed: false }));
       if (data.errors?.length) setError(data.errors.join(' '));
       if (data.warnings?.length) setNotice(data.warnings.join(' '));
     } catch (caught) {
@@ -159,7 +161,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
         action: 'import_filed_return', companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period,
         rawContent: fileInfo.rawContent, extracted: fileInfo.extracted, fileUrl: fileInfo.fileUrl, fileName: fileInfo.fileName, fileHash: fileInfo.fileHash,
         presentationDate: form.presentationDate, justificationNumber: form.justificationNumber, previousJustificationNumber: form.previousJustificationNumber,
-        declarationType: form.declarationType, importeFinal: form.result === '' ? undefined : Number(form.result), presentedBoxes: boxesFromText(form.boxesText), confirmImport: true,
+        declarationType: form.declarationType, importeFinal: form.result === '' ? undefined : Number(form.result), resultDisposition: form.resultDisposition, presentedBoxes: boxesFromText(form.boxesText), confirmImport: true,
       });
       setNotice(response.data?.alreadyImported ? 'Este modelo ya estaba guardado; no se creó un duplicado.' : 'Modelo presentado guardado. Los períodos posteriores ya pueden usar su arrastre.');
       onImported?.();
@@ -184,6 +186,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
             <label className="text-xs text-slate-600">Tipo de declaración<select value={form.declarationType} onChange={event => setForm(current => ({ ...current, declarationType: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2"><option value="original">Original</option><option value="complementaria">Complementaria</option><option value="rectificativa">Rectificativa</option><option value="sustitutiva">Sustitutiva</option></select></label>
             <label className="text-xs text-slate-600">Resultado presentado<input type="number" step="0.01" value={form.result} onChange={event => setForm(current => ({ ...current, result: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>
           </div>
+          {['303', '420'].includes(modelCode) && Number(form.result) < 0 && <label className="block text-xs text-slate-600">Destino del resultado negativo presentado<select value={form.resultDisposition} onChange={event => setForm(current => ({ ...current, resultDisposition: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2"><option value="">Seleccionar</option><option value="a_compensar">Quedó a compensar</option><option value="a_devolver">Se solicitó a devolver</option></select></label>}
           {form.declarationType !== 'original' && <label className="block text-xs text-slate-600">Justificante anterior<input value={form.previousJustificationNumber} onChange={event => setForm(current => ({ ...current, previousJustificationNumber: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>}
           <label className="block text-xs text-slate-600">Casillas presentadas · una por línea (`01=1000.00`)<textarea rows={7} value={form.boxesText} onChange={event => setForm(current => ({ ...current, boxesText: event.target.value, confirmed: false }))} className="mt-1 w-full rounded border p-2 font-mono text-xs" /></label>
           <label className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={form.confirmed} onChange={event => setForm(current => ({ ...current, confirmed: event.target.checked }))} />He contrastado modelo, ejercicio, período, NIF, resultado y casillas con la declaración efectivamente presentada.</label>
@@ -204,7 +207,8 @@ function HistoryAndCarryforwardPanel({ result, modelCode }) {
   const deferred = carryforward?.deferred || [];
   const prior130 = carryforward?.type === 'irpf_cumulative' ? carryforward.previousFilings || [] : [];
   const missing130 = carryforward?.type === 'irpf_cumulative' ? carryforward.missingPeriods || [] : [];
-  const hasContent = history?.presented || history?.importedCount || applied.length || review.length || deferred.length || prior130.length || missing130.length;
+  const indirectCarry = ['iva_deduction', 'igic_deduction'].includes(carryforward?.type) ? carryforward : null;
+  const hasContent = history?.presented || history?.importedCount || applied.length || review.length || deferred.length || prior130.length || missing130.length || indirectCarry;
   if (!hasContent) return null;
   return (
     <section className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
@@ -227,8 +231,15 @@ function HistoryAndCarryforwardPanel({ result, modelCode }) {
       </div>}
 
       {carryforward?.type === 'irpf_cumulative' && <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-indigo-100 bg-white p-3"><p className="text-xs font-semibold text-slate-700">Pagos anteriores usados en la casilla 05</p><p className="mt-2 text-xl font-bold text-indigo-800">{prior130.length}</p><p className="mt-1 text-xs text-slate-500">{carryforward.previousPaymentsSource === 'filed_returns' ? 'Tomados de modelos presentados importados.' : carryforward.previousPaymentsSource === 'manual' ? 'Confirmados manualmente para este cálculo.' : 'Falta completar el histórico anterior.'}</p>{prior130.map(row => <p key={row.id} className="mt-1 text-xs text-slate-600">{row.period}: {formatMoney(row.amount)} · {row.date}</p>)}</div>
-        <div className={`rounded-xl border p-3 ${missing130.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}><p className="text-xs font-semibold text-slate-700">Continuidad acumulativa</p><p className="mt-2 text-xs leading-5 text-slate-600">Los ingresos y gastos de grupos 6 y 7 se recalculan desde el 1 de enero. Una factura tardía conserva su ejercicio de devengo y entra en el siguiente trimestre abierto.</p>{!!missing130.length && <p className="mt-2 text-xs font-medium text-red-700">Falta importar: {missing130.join(', ')}.</p>}</div>
+        <div className="rounded-xl border border-indigo-100 bg-white p-3"><p className="text-xs font-semibold text-slate-700">Pagos anteriores usados en la casilla 05</p><p className="mt-2 text-xl font-bold text-indigo-800">{prior130.length}</p><p className="mt-1 text-xs text-slate-500">{carryforward.previousPaymentsSource === 'filed_returns' ? 'Suma de casillas 07 positivas menos casillas 16 de los modelos importados.' : carryforward.previousPaymentsSource === 'manual' ? 'Confirmados manualmente para este cálculo.' : 'Falta completar el histórico anterior.'}</p>{prior130.map(row => <p key={row.id} className="mt-1 text-xs text-slate-600">{row.period}: {formatMoney(row.amount)} · {row.date}</p>)}</div>
+        <div className={`rounded-xl border p-3 ${missing130.length || carryforward.missingNegativePeriods?.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}><p className="text-xs font-semibold text-slate-700">Continuidad acumulativa</p><p className="mt-2 text-xs leading-5 text-slate-600">Los ingresos y gastos de grupos 6 y 7 se recalculan desde el 1 de enero. Una factura tardía conserva su ejercicio de devengo y entra en el siguiente trimestre abierto.</p><p className="mt-2 text-xs text-slate-600">Casilla 15: {formatMoney(carryforward.priorNegativeApplied)} aplicada · {formatMoney(carryforward.priorNegativeRemaining)} pendiente.</p>{!!missing130.length && <p className="mt-2 text-xs font-medium text-red-700">Falta casilla 05: {missing130.join(', ')}.</p>}{!!carryforward.missingNegativePeriods?.length && <p className="mt-2 text-xs font-medium text-red-700">Falta casilla 19: {carryforward.missingNegativePeriods.join(', ')}.</p>}</div>
+      </div>}
+
+      {indirectCarry && <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-indigo-100 bg-white p-3"><p className="text-xs text-slate-500">Saldo anterior</p><p className="mt-1 text-lg font-bold text-indigo-800">{formatMoney(indirectCarry.previousBalance)}</p><p className="text-xs text-slate-500">{indirectCarry.balanceSource === 'filed_return' ? `Importado de ${indirectCarry.previousFiling?.period || ''} ${indirectCarry.previousFiling?.year || ''}` : indirectCarry.balanceSource === 'manual' ? 'Confirmado manualmente' : 'Histórico pendiente'}</p></div>
+        <div className="rounded-xl border border-cyan-100 bg-white p-3"><p className="text-xs text-slate-500">Aplicado ahora</p><p className="mt-1 text-lg font-bold text-cyan-800">{formatMoney(indirectCarry.appliedPrevious)}</p></div>
+        <div className="rounded-xl border border-amber-100 bg-white p-3"><p className="text-xs text-slate-500">Nuevo saldo generado</p><p className="mt-1 text-lg font-bold text-amber-800">{formatMoney(indirectCarry.newCompensation)}</p><p className="text-xs text-slate-500">{indirectCarry.resultDisposition === 'a_compensar' ? 'A compensar' : indirectCarry.resultDisposition === 'a_devolver' ? 'A devolver' : 'Pendiente de decisión'}</p></div>
+        <div className="rounded-xl border border-emerald-100 bg-white p-3"><p className="text-xs text-slate-500">Saldo para el próximo período</p><p className="mt-1 text-lg font-bold text-emerald-800">{formatMoney(indirectCarry.nextBalance)}</p></div>
       </div>}
 
       {(applied.length > 0 || review.length > 0 || deferred.length > 0) && <div className="grid gap-3 sm:grid-cols-3">
@@ -551,7 +562,7 @@ export default function TaxModelWorkbench() {
         modeloCodigo: modelCode,
         ejercicio: year,
         periodo: period,
-        adjustments: modelCode === '130' ? adjustments : {},
+        adjustments: modelCode === '130' || INDIRECT_TAX_MODELS.includes(modelCode) ? adjustments : {},
       });
       return response.data;
     },
@@ -683,6 +694,22 @@ export default function TaxModelWorkbench() {
                         />
                       </label>
                     ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {INDIRECT_TAX_MODELS.includes(modelCode) && (
+            <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-slate-800">Cartera de cuotas y destino del resultado</h3>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">Taxea toma el saldo del período presentado anterior. Si no existe histórico, confirma el saldo manualmente, incluso con cero. Los datos importados prevalecen salvo ajuste revisado.</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="text-xs font-medium text-slate-600">Saldo anterior a compensar<input type="number" min="0" step="0.01" value={adjustments.previousCompensationBalance ?? ''} onChange={event => { setAdjustments(current => ({ ...current, previousCompensationBalance: event.target.value === '' ? undefined : Number(event.target.value) })); setResult(null); }} placeholder="Automático desde el modelo importado" className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-cyan-300" /></label>
+                    <label className="text-xs font-medium text-slate-600">Si el resultado es negativo<select value={adjustments.resultDisposition || ''} onChange={event => { setAdjustments(current => ({ ...current, resultDisposition: event.target.value || undefined })); setResult(null); }} className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800"><option value="">Seleccionar al calcular</option><option value="a_compensar">Dejar a compensar</option><option value="a_devolver">Solicitar devolución (último período)</option></select></label>
                   </div>
                 </div>
               </div>
