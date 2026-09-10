@@ -322,48 +322,56 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
 
 function calculateThirdParties(data: any, b: any, model: '347' | '415') {
   const groups = new Map<string, any>();
+  const totalsByTaxId = new Map<string, number>();
   const missingGroups = new Map<string, number>();
   let excluded347 = 0;
   for (const invoice of data.invoices.filter((f: any) => !f.anulada && inRange(f, b.start, b.end))) {
     const cp = invoiceCounterparty(invoice);
     const amount = money(invoice.total_factura);
     if (!cp.id) {
-      const key = cp.name || 'CONTRAPARTE_SIN_IDENTIFICAR';
-      missingGroups.set(key, money((missingGroups.get(key) || 0) + amount));
+      const missingKey = cp.name || 'CONTRAPARTE_SIN_IDENTIFICAR';
+      missingGroups.set(missingKey, money((missingGroups.get(missingKey) || 0) + Math.abs(amount)));
       continue;
     }
-    const operation = clean(invoice.fiscal_treatment);
+    const operation = clean(invoice.fiscal_treatment || invoice.indirect_tax_treatment);
     const separatelyReported = ['alquiler', 'servicios_profesionales', 'gastos_financieros'].includes(invoice.categoria_gasto) && retentionAmount(invoice) !== 0;
-    const territoriallyExcluded = ['import', 'export', 'canary_peninsula_goods'].includes(operation);
+    const territoriallyExcluded = ['import', 'export', 'canary_peninsula_goods', 'intra_eu_supply', 'intra_eu_acquisition'].includes(operation);
     if (model === '347' && (separatelyReported || territoriallyExcluded)) { excluded347 += 1; continue; }
-    const row = groups.get(cp.id) || {
-      taxId: cp.id, name: cp.name, country: cp.country, province: cp.province,
-      total: 0, sales: 0, purchases: 0,
-      quarters: { T1: 0, T2: 0, T3: 0, T4: 0 },
-      quartersSales: { T1: 0, T2: 0, T3: 0, T4: 0 },
-      quartersPurchases: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [],
+    const operationKey = invoice.tipo === 'emitida' ? 'B' : 'A';
+    const normalizedTaxId = canonical(cp.id).replace(/\s/g, '');
+    const groupKey = `${normalizedTaxId}|${operationKey}`;
+    const row = groups.get(groupKey) || {
+      taxId: normalizedTaxId, name: cp.name, country: normalizedCountry(cp.country), province: cp.province,
+      provinceCode: provinceCode(cp.province), operationKey, total: 0,
+      quarters: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [],
+      cashAmount: 0, propertyTransferAmount: 0, propertyRentAmount: 0,
+      cashAccounting: false, reverseCharge: false, exempt: false,
     };
     row.total += amount;
     const month = Number(dateOf(invoice).slice(5, 7));
-    const q = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
-    row.quarters[q] += amount;
-    if (invoice.tipo === 'emitida') { row.sales += amount; row.quartersSales[q] += amount; }
-    else { row.purchases += amount; row.quartersPurchases[q] += amount; }
+    const quarter = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
+    row.quarters[quarter] += amount;
+    row.cashAccounting ||= clean(invoice.indirect_tax_regime || invoice.regimen_iva) === 'criterio_caja';
+    row.reverseCharge ||= operation === 'reverse_charge';
+    row.exempt ||= ['exempt_full', 'exempt_limited', 'subject_exempt'].includes(operation);
     row.invoices.push(invoice.id);
-    groups.set(cp.id, row);
+    groups.set(groupKey, row);
+    totalsByTaxId.set(normalizedTaxId, money((totalsByTaxId.get(normalizedTaxId) || 0) + Math.abs(amount)));
   }
-  const missingAboveThreshold = [...missingGroups.entries()].filter(([, total]) => Math.abs(total) > 3005.06);
+  const missingAboveThreshold = [...missingGroups.entries()].filter(([, total]) => total > 3005.06);
   if (missingAboveThreshold.length) data.blockers.push(`${missingAboveThreshold.length} contraparte(s) podrían superar 3.005,06 € pero no tienen NIF y no pueden declararse.`);
-  if (model === '347' && excluded347) data.warnings.push(`${excluded347} factura(s) se excluyeron del 347 por retenciones ya informadas o por reglas territoriales; deben revisarse antes del cierre.`);
+  if (model === '347' && excluded347) data.warnings.push(`${excluded347} factura(s) se excluyeron del 347 por retenciones ya informadas u operaciones territoriales declarables en otros modelos; deben revisarse antes del cierre.`);
   const roundQuarter = (quarters: any) => Object.fromEntries(Object.entries(quarters).map(([key, value]) => [key, money(value)]));
-  const details = [...groups.values()].filter(row => Math.abs(money(row.total)) > 3005.06).map(row => ({
-    ...row, total: money(row.total), sales: money(row.sales), purchases: money(row.purchases),
-    quarters: roundQuarter(row.quarters), quartersSales: roundQuarter(row.quartersSales), quartersPurchases: roundQuarter(row.quartersPurchases),
-  }));
-  if (details.some(r => !r.name || (!r.province && (r.country === 'ES' || !r.country)))) data.blockers.push('Hay declarados sin nombre o provincia/código territorial obligatorio.');
+  const details = [...groups.values()]
+    .filter(row => (totalsByTaxId.get(row.taxId) || 0) > 3005.06)
+    .map(row => ({ ...row, total: money(row.total), quarters: roundQuarter(row.quarters) }));
+  if (details.some(row => !row.name)) data.blockers.push('Hay registros declarables sin nombre o razón social.');
+  if (details.some(row => row.country === 'ES' && !validSpanishTaxId(row.taxId))) data.blockers.push('Hay NIF españoles que no tienen exactamente nueve caracteres válidos para el diseño oficial.');
+  if (details.some(row => row.country === 'ES' && !row.provinceCode)) data.blockers.push('Hay declarados españoles sin código de provincia oficial resoluble.');
+  if (details.some(row => !row.country)) data.blockers.push('Hay declarados con país no normalizado al código ISO de dos letras.');
   const fields: any[] = [];
-  addField(fields, 'DECLARADOS', 'Terceros que superan 3.005,06 €', details.length, details.flatMap(r => r.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
-  addField(fields, 'IMPORTE', 'Importe anual declarado', details.reduce((s,r) => s + r.total, 0), details.flatMap(r => r.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
+  addField(fields, 'DECLARADOS', 'Registros A/B que superan el umbral por tercero', details.length, details.flatMap(row => row.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
+  addField(fields, 'IMPORTE', 'Importe anual declarado', details.reduce((sum, row) => sum + row.total, 0), details.flatMap(row => row.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
   return { fields, result: 0, details };
 }
 
