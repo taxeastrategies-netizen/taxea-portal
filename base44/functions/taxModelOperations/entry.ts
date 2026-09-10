@@ -748,7 +748,7 @@ function export347(company: any, year: number, calculation: any, declarationNumb
     place(record, 232, 16, signedAmount(row.quarters?.T4)); place(record, 248, 16, signedAmount(row.transferQuarters?.T4));
     if (country !== 'ES') place(record, 264, 17, normalizedText(row.taxId, 17));
     place(record, 281, 1, row.cashAccounting ? 'X' : ' '); place(record, 282, 1, row.reverseCharge ? 'X' : ' ');
-    place(record, 284, 16, signedAmount(row.cashAccounting ? row.total : 0)); place(record, 300, 6, numeric(0, 6, false, 0));
+    place(record, 284, 16, signedAmount(row.cashAccounting ? row.cashAccountingAnnualAmount : 0)); place(record, 300, 6, numeric(0, 6, false, 0));
     return record.join('');
   });
   return [header.join(''), ...records].join('\r\n');
@@ -922,6 +922,13 @@ Deno.serve(async (req) => {
       try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
       authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
       const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid; return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck});
+    }
+    if(action==='context') {
+      const companyId=clean(body.companyId); if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
+      const svc=base44.asServiceRole; const company=await svc.entities.Company.get(companyId); if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
+      authorize(user,companyId,company);
+      const profiles=await listAll(svc.entities.FiscalProfile,{company_id:companyId}); const profile=profiles.find((item:any)=>item.active!==false)||profiles[0]||null;
+      return Response.json({ok:true,engineVersion:ENGINE_VERSION,profile:profile?{id:profile.id,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,isLargeCompany:booleanValue(profile.isLargeCompany),isREDEME:booleanValue(profile.isREDEME),usesSII:booleanValue(profile.usesSII),repepStatus:profile.repepStatus,profileStatus:profile.profileStatus}:null});
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
     if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
