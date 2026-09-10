@@ -44,6 +44,33 @@
       "type": "string",
       "format": "date"
     },
+    "fechaImportacion": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "importadoPor": {
+      "type": "string"
+    },
+    "snapshotVersion": {
+      "type": "integer",
+      "default": 1
+    },
+    "tipoDeclaracion": {
+      "type": "string",
+      "enum": [
+        "original",
+        "complementaria",
+        "rectificativa",
+        "sustitutiva"
+      ],
+      "default": "original"
+    },
+    "declaracionAnteriorId": {
+      "type": "string"
+    },
+    "numeroJustificanteAnterior": {
+      "type": "string"
+    },
     "numeroJustificante": {
       "type": "string"
     },
@@ -58,6 +85,70 @@
     },
     "ficheroPresentadoUrl": {
       "type": "string"
+    },
+    "nombreFicheroImportado": {
+      "type": "string"
+    },
+    "hashFicheroImportado": {
+      "type": "string"
+    },
+    "fuenteImportacion": {
+      "type": "string",
+      "enum": [
+        "fichero_oficial",
+        "pdf_ocr_revisado",
+        "manual_revisado",
+        "taxea"
+      ]
+    },
+    "casillasPresentadas": {
+      "type": "object",
+      "description": "Foto inmutable de las casillas del modelo realmente presentado."
+    },
+    "sourceIdsPresentados": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Fuentes Taxea incluidas cuando la presentaci\u00f3n se gener\u00f3 desde la plataforma."
+    },
+    "snapshotBloqueado": {
+      "type": "boolean",
+      "default": true
+    },
+    "revisionImportacion": {
+      "type": "string",
+      "enum": [
+        "pendiente_revision",
+        "revisado_usuario",
+        "validado_estructura",
+        "validado_asesor"
+      ],
+      "default": "pendiente_revision"
+    },
+    "avisosImportacion": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "confianzaExtraccion": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja"
+      ]
+    },
+    "snapshotHash": {
+      "type": "string"
+    },
+    "analisisArrastre": {
+      "type": "object"
+    },
+    "confirmadoPorUsuario": {
+      "type": "boolean",
+      "default": false
     },
     "usuarioPresentador": {
       "type": "string"
