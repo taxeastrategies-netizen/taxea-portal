@@ -430,6 +430,15 @@ function numeric(value: unknown, length: number, signed = false, decimals = 2) {
   return digits.padStart(length, '0').slice(-length);
 }
 
+function signedAmount(value: unknown, length = 16) {
+  const amount = Number(value) || 0;
+  return `${amount < 0 ? 'N' : ' '}${numeric(amount, length - 1)}`;
+}
+
+function sequentialDeclarationNumber(model: string) {
+  return `${model}${String(Math.floor(Date.now() / 1000)).padStart(10, '0').slice(-10)}`;
+}
+
 function place(buffer: string[], position: number, length: number, value: string) {
   const text = value.slice(0, length).padEnd(length, ' ');
   for (let i = 0; i < length; i++) buffer[position - 1 + i] = text[i];
