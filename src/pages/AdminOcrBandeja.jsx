@@ -131,6 +131,7 @@ const mapFormGastos = (r) => ({
   pais_proveedor: r?.pais_proveedor || r?.proveedor_pais || '',
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
+  fecha_recepcion: new Date().toISOString().slice(0, 10),
   base_imponible: r?.base_imponible || '',
   tipo_impuesto: r?.tipo_impuesto || 21,
   cuota_impuesto: r?.cuota_impuesto || '',
@@ -798,3 +799,4 @@ function RejectDialog({ doc, onClose, onConfirm }) {
     </Dialog>
   );
 }
+
