@@ -53,7 +53,14 @@ async function listAll(entity: any, filter: any, sort = '-created_date') {
 }
 
 function dateOf(item: any) {
-  return clean(item.operationDate || item.fecha_operacion || item.fecha_emision || item.entryDate || item.date || item.fecha);
+  const direct = clean(item.operationDate || item.payment_date || item.fecha_operacion || item.fecha_emision || item.entryDate || item.date || item.fecha || item.ultimo_pago_at);
+  if (direct) return direct;
+  const label = clean(item.period_label);
+  const yearMonth = /^(\d{4})[-/](\d{1,2})/.exec(label);
+  if (yearMonth) return `${yearMonth[1]}-${String(Number(yearMonth[2])).padStart(2, '0')}-01`;
+  const monthYear = /^(\d{1,2})[-/](\d{4})/.exec(label);
+  if (monthYear) return `${monthYear[2]}-${String(Number(monthYear[1])).padStart(2, '0')}-01`;
+  return '';
 }
 
 function bounds(year: number, period: string) {
@@ -94,6 +101,8 @@ function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[]
   const byInvoice = new Map<string, any[]>();
   taxLines.forEach(line => byInvoice.set(line.invoiceId, [...(byInvoice.get(line.invoiceId) || []), line]));
   const result: any[] = [];
+  let fallbackCount = 0;
+  let pendingFallbackCount = 0;
   for (const invoice of invoices) {
     if (invoice.anulada) continue;
     const lines = byInvoice.get(invoice.id) || [];
@@ -120,9 +129,11 @@ function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[]
       reviewStatus: invoice.fiscal_review_status === 'validado' ? 'validado' : 'pendiente_revision',
       fallback: true,
     });
-    warnings.push(`Factura ${invoice.numero_factura || invoice.id}: se usa la cabecera porque no tiene líneas fiscales normalizadas.`);
-    if (invoice.fiscal_review_status !== 'validado') blockers.push(`Factura ${invoice.numero_factura || invoice.id}: tratamiento fiscal pendiente de revisión.`);
+    fallbackCount += 1;
+    if (invoice.fiscal_review_status !== 'validado') pendingFallbackCount += 1;
   }
+  if (fallbackCount) warnings.push(`${fallbackCount} factura(s) usan temporalmente la cabecera porque no tienen líneas fiscales normalizadas.`);
+  if (pendingFallbackCount) warnings.push(`${pendingFallbackCount} factura(s) sin líneas fiscales normalizadas siguen pendientes de revisión; solo bloquearán los modelos IVA/IGIC afectados.`);
   return result;
 }
 
@@ -130,46 +141,73 @@ function addField(fields: any[], code: string, label: string, value: unknown, so
   fields.push({ code, label, value: money(value), sourceIds: unique(sourceIds), section });
 }
 
-function classifyRetainedInvoices(invoices: any[], periodBounds: any) {
-  return invoices.filter(invoice => !invoice.anulada && invoice.tipo === 'recibida' && inRange(invoice, periodBounds.start, periodBounds.end) && money(invoice.importe_retencion || money(invoice.base_imponible) * Number(invoice.retencion_irpf || 0) / 100) !== 0);
-}
-
 function retentionAmount(invoice: any) {
   return money(invoice.importe_retencion || money(invoice.base_imponible) * Number(invoice.retencion_irpf || 0) / 100);
+}
+
+function retainedPaymentEvents(data: any, periodBounds: any) {
+  const paymentsByInvoice = new Map<string, any[]>();
+  for (const payment of data.invoicePayments || []) {
+    if (!inRange(payment, periodBounds.start, periodBounds.end)) continue;
+    paymentsByInvoice.set(payment.invoice_id, [...(paymentsByInvoice.get(payment.invoice_id) || []), payment]);
+  }
+  const events: any[] = [];
+  let missingPaymentTrace = 0;
+  for (const invoice of data.invoices.filter((item: any) => !item.anulada && item.tipo === 'recibida' && retentionAmount(item) !== 0)) {
+    const payments = paymentsByInvoice.get(invoice.id) || [];
+    let factor = 0;
+    let sourceIds: string[] = [];
+    if (payments.length) {
+      const paidInPeriod = payments.reduce((sum: number, payment: any) => sum + Math.abs(money(payment.amount)), 0);
+      const payable = Math.abs(money(invoice.total_factura)) || Math.abs(money(invoice.base_imponible) + money(invoice.cuota_iva) - retentionAmount(invoice));
+      factor = payable ? Math.min(1, paidInPeriod / payable) : 0;
+      sourceIds = payments.map((payment: any) => `InvoicePayment:${payment.id}`);
+    } else if (invoice.estado_cobro === 'cobrada' && invoice.ultimo_pago_at && inRange({ date: invoice.ultimo_pago_at }, periodBounds.start, periodBounds.end)) {
+      factor = 1;
+      sourceIds = [`Invoice:${invoice.id}`];
+      data.warnings.push(`La factura ${clean(invoice.numero_factura) || invoice.id} usa ultimo_pago_at porque no tiene detalle InvoicePayment.`);
+    } else if (inRange(invoice, periodBounds.start, periodBounds.end)) {
+      missingPaymentTrace += 1;
+    }
+    if (factor > 0) events.push({ invoice, factor, sourceIds, base: money(money(invoice.base_imponible) * factor), withholding: money(retentionAmount(invoice) * factor) });
+  }
+  if (missingPaymentTrace) data.blockers.push(`${missingPaymentTrace} factura(s) con retención del periodo no tienen pago trazado; las retenciones se declaran por el pago y no se han incluido automáticamente.`);
+  return events;
 }
 
 function calculate111(data: any, b: any) {
   const fields: any[] = [];
   const payrolls = data.payrolls.filter((p: any) => inRange(p, b.start, b.end));
-  const invoices = classifyRetainedInvoices(data.invoices, b);
-  const professional = invoices.filter((f: any) => f.categoria_gasto === 'servicios_profesionales');
-  const unknown = invoices.filter((f: any) => !['servicios_profesionales', 'alquiler', 'gastos_financieros'].includes(f.categoria_gasto));
+  const payments = retainedPaymentEvents(data, b);
+  const professional = payments.filter((event: any) => event.invoice.categoria_gasto === 'servicios_profesionales');
+  const unknown = payments.filter((event: any) => !['servicios_profesionales', 'alquiler', 'gastos_financieros'].includes(event.invoice.categoria_gasto));
   const payrollBase = payrolls.reduce((s: number, p: any) => s + money(p.total_accruals ?? p.gross_salary), 0);
   const payrollTax = payrolls.reduce((s: number, p: any) => s + money(p.irpf_amount), 0);
-  const proBase = professional.reduce((s: number, f: any) => s + money(f.base_imponible), 0);
-  const proTax = professional.reduce((s: number, f: any) => s + retentionAmount(f), 0);
+  const proBase = professional.reduce((s: number, event: any) => s + event.base, 0);
+  const proTax = professional.reduce((s: number, event: any) => s + event.withholding, 0);
   if (unknown.length) data.blockers.push(`${unknown.length} factura(s) con retención sin clasificar como profesional, alquiler o capital mobiliario.`);
   const payrollIds = payrolls.map((p: any) => `PayrollExtraction:${p.id}`);
-  const proIds = professional.map((f: any) => `Invoice:${f.id}`);
+  const proIds = professional.flatMap((event: any) => event.sourceIds);
   addField(fields, '01', 'Perceptores rendimientos del trabajo dinerarios', unique(payrolls.map((p: any) => p.employee_tax_id || p.employee_name)).length, payrollIds, 'Trabajo');
   addField(fields, '02', 'Importe rendimientos del trabajo dinerarios', payrollBase, payrollIds, 'Trabajo');
   addField(fields, '03', 'Retenciones rendimientos del trabajo', payrollTax, payrollIds, 'Trabajo');
-  addField(fields, '04', 'Perceptores actividades económicas dinerarias', unique(professional.map((f: any) => invoiceCounterparty(f).id || invoiceCounterparty(f).name)).length, proIds, 'Actividades económicas');
+  addField(fields, '04', 'Perceptores actividades económicas dinerarias', unique(professional.map((event: any) => invoiceCounterparty(event.invoice).id || invoiceCounterparty(event.invoice).name)).length, proIds, 'Actividades económicas');
   addField(fields, '05', 'Importe actividades económicas dinerarias', proBase, proIds, 'Actividades económicas');
   addField(fields, '06', 'Retenciones actividades económicas', proTax, proIds, 'Actividades económicas');
   addField(fields, '28', 'Total retenciones e ingresos a cuenta', payrollTax + proTax, [...payrollIds, ...proIds], 'Liquidación');
   addField(fields, '30', 'Resultado a ingresar', payrollTax + proTax, [...payrollIds, ...proIds], 'Liquidación');
   if (payrolls.some((p: any) => p.confidence_global < 80 && !p.corrected_by_user)) data.blockers.push('Hay nóminas con confianza OCR inferior al 80% sin corrección validada.');
-  return { fields, result: money(payrollTax + proTax), details: [...payrolls.map((p: any) => ({ type: 'nómina', id: p.id, name: p.employee_name, base: money(p.total_accruals ?? p.gross_salary), withholding: money(p.irpf_amount) })), ...professional.map((f: any) => ({ type: 'factura profesional', id: f.id, name: invoiceCounterparty(f).name, base: money(f.base_imponible), withholding: retentionAmount(f) }))] };
+  if (data.payrolls.some((p: any) => !dateOf(p))) data.blockers.push('Hay nóminas sin periodo normalizado; no se han podido asignar con seguridad al modelo 111.');
+  return { fields, result: money(payrollTax + proTax), details: [...payrolls.map((p: any) => ({ type: 'nómina', id: p.id, name: p.employee_name, base: money(p.total_accruals ?? p.gross_salary), withholding: money(p.irpf_amount) })), ...professional.map((event: any) => ({ type: 'factura profesional pagada', id: event.invoice.id, name: invoiceCounterparty(event.invoice).name, base: event.base, withholding: event.withholding, paymentSources: event.sourceIds }))] };
 }
 
 function calculateSimpleRetention(data: any, b: any, model: '115' | '123') {
   const category = model === '115' ? 'alquiler' : 'gastos_financieros';
-  const invoices = classifyRetainedInvoices(data.invoices, b).filter((f: any) => f.categoria_gasto === category);
-  const ids = invoices.map((f: any) => `Invoice:${f.id}`);
-  const base = invoices.reduce((s: number, f: any) => s + money(f.base_imponible), 0);
-  const tax = invoices.reduce((s: number, f: any) => s + retentionAmount(f), 0);
-  const payees = unique(invoices.map((f: any) => invoiceCounterparty(f).id || invoiceCounterparty(f).name)).length;
+  const events = retainedPaymentEvents(data, b).filter((event: any) => event.invoice.categoria_gasto === category);
+  const ids = events.flatMap((event: any) => event.sourceIds);
+  const base = events.reduce((sum: number, event: any) => sum + event.base, 0);
+  const tax = events.reduce((sum: number, event: any) => sum + event.withholding, 0);
+  const payees = unique(events.map((event: any) => invoiceCounterparty(event.invoice).id || invoiceCounterparty(event.invoice).name)).length;
   const fields: any[] = [];
   if (model === '115') {
     addField(fields, '01', 'Número de perceptores', payees, ids, 'Retenciones');
@@ -183,7 +221,7 @@ function calculateSimpleRetention(data: any, b: any, model: '115' | '123') {
     addField(fields, '12', 'Retenciones más regularización', tax, ids, 'Liquidación');
     addField(fields, '14', 'Resultado a ingresar', tax, ids, 'Liquidación');
   }
-  return { fields, result: money(tax), details: invoices.map((f: any) => ({ type: model === '115' ? 'arrendamiento' : 'capital mobiliario', id: f.id, name: invoiceCounterparty(f).name, taxId: invoiceCounterparty(f).id, base: money(f.base_imponible), withholding: retentionAmount(f) })) };
+  return { fields, result: money(tax), details: events.map((event: any) => ({ type: model === '115' ? 'arrendamiento pagado' : 'capital mobiliario pagado', id: event.invoice.id, name: invoiceCounterparty(event.invoice).name, taxId: invoiceCounterparty(event.invoice).id, base: event.base, withholding: event.withholding, paymentSources: event.sourceIds })) };
 }
 
 function calculate130(data: any, b: any, adjustments: any) {
@@ -210,6 +248,7 @@ function calculate130(data: any, b: any, adjustments: any) {
   [['01','Ingresos computables acumulados',revenue],['02','Gastos fiscalmente deducibles acumulados',expense],['03','Rendimiento neto',net],['04','20% del rendimiento neto',grossPayment],['05','Pagos fraccionados anteriores',previous],['06','Retenciones soportadas acumuladas',withholdings],['07','Pago fraccionado previo',preliminary],['08','Ingresos agrícolas/ganaderos del trimestre',agricultureRevenue],['09','2% de ingresos agrícolas/ganaderos',money(agricultureRevenue * .02)],['10','Retenciones agrícolas/ganaderas',agricultureWithholdings],['11','Pago previo agrícola/ganadero',agriculturePayment],['12','Suma de pagos previos',total],['13','Minoración art. 110.3 RIRPF',reduction],['14','Diferencia',money(total-reduction)],['15','Resultados negativos anteriores',priorNegative],['16','Deducción vivienda habitual',housing],['17','Total',money(total-reduction-priorNegative-housing)],['19','Resultado de la autoliquidación',result]].forEach(([c,l,v]) => addField(fields, String(c), String(l), v, ids, 'Liquidación'));
   if (!lines.length) data.blockers.push('No hay asientos confirmados y cuadrados de grupos 6 y 7 para calcular el modelo 130.');
   if (data.profile?.irpfEstimation === 'objetiva_modulos') data.blockers.push('El perfil está en estimación objetiva: corresponde revisar el modelo 131, no el 130.');
+  if (data.period !== '1T' && adjustments.previousPayments == null) data.blockers.push('En 2T, 3T o 4T debe confirmarse manualmente el importe de pagos fraccionados anteriores (casilla 05).');
   return { fields, result, details: [{ type: 'contabilidad acumulada', revenue, expense, entries: validEntryIds.size }] };
 }
 
@@ -223,6 +262,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   };
   let deductibleBase = 0, deductibleQuota = 0, reverseBase = 0, reverseQuota = 0, intraBase = 0, intraQuota = 0;
   let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0, criterionCash = 0;
+  let pendingReviewLines = 0;
   for (const line of lines) {
     const invoice = line.invoice;
     const base = money(line.base), quota = money(line.quota), id = line.sourceId;
@@ -240,9 +280,10 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       else if (op === 'reverse_charge') { reverseBase += base; reverseQuota += quota; }
       deductibleBase += base;
       deductibleQuota += money(line.deductibleQuota ?? quota);
-      if (line.reviewStatus !== 'validado') data.blockers.push(`Línea fiscal ${line.id || line.sourceId}: deducibilidad pendiente de revisión.`);
     }
+    if (line.reviewStatus !== 'validado') pendingReviewLines += 1;
   }
+  if (pendingReviewLines) data.blockers.push(`${pendingReviewLines} línea(s) fiscales recibidas tienen la deducibilidad pendiente de revisión.`);
   for (const row of [...rates.values()].sort((a, z) => a.rate - z.rate)) addField(fields, `RATE_${row.rate}`, `Base y cuota al ${row.rate}%`, row.quota, row.sourceIds, `Devengado: base ${money(row.base).toFixed(2)} €`);
   const outputQuota = money([...rates.values()].reduce((s, r) => s + r.quota, 0) + intraQuota + reverseQuota);
   const result = money(outputQuota - deductibleQuota);
@@ -257,25 +298,64 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
 
 function calculateThirdParties(data: any, b: any, model: '347' | '415') {
   const groups = new Map<string, any>();
+  const missingGroups = new Map<string, number>();
+  let excluded347 = 0;
   for (const invoice of data.invoices.filter((f: any) => !f.anulada && inRange(f, b.start, b.end))) {
     const cp = invoiceCounterparty(invoice);
-    if (!cp.id) { data.blockers.push(`Factura ${invoice.numero_factura || invoice.id}: falta NIF de la contraparte.`); continue; }
-    if (model === '347' && ['alquiler', 'servicios_profesionales', 'gastos_financieros'].includes(invoice.categoria_gasto) && retentionAmount(invoice) !== 0) continue;
-    const row = groups.get(cp.id) || { taxId: cp.id, name: cp.name, country: cp.country, province: cp.province, total: 0, quarters: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [] };
     const amount = money(invoice.total_factura);
+    if (!cp.id) {
+      const key = cp.name || 'CONTRAPARTE_SIN_IDENTIFICAR';
+      missingGroups.set(key, money((missingGroups.get(key) || 0) + amount));
+      continue;
+    }
+    const operation = clean(invoice.fiscal_treatment);
+    const separatelyReported = ['alquiler', 'servicios_profesionales', 'gastos_financieros'].includes(invoice.categoria_gasto) && retentionAmount(invoice) !== 0;
+    const territoriallyExcluded = ['import', 'export', 'canary_peninsula_goods'].includes(operation);
+    if (model === '347' && (separatelyReported || territoriallyExcluded)) { excluded347 += 1; continue; }
+    const row = groups.get(cp.id) || {
+      taxId: cp.id, name: cp.name, country: cp.country, province: cp.province,
+      total: 0, sales: 0, purchases: 0,
+      quarters: { T1: 0, T2: 0, T3: 0, T4: 0 },
+      quartersSales: { T1: 0, T2: 0, T3: 0, T4: 0 },
+      quartersPurchases: { T1: 0, T2: 0, T3: 0, T4: 0 }, invoices: [],
+    };
     row.total += amount;
     const month = Number(dateOf(invoice).slice(5, 7));
     const q = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
     row.quarters[q] += amount;
+    if (invoice.tipo === 'emitida') { row.sales += amount; row.quartersSales[q] += amount; }
+    else { row.purchases += amount; row.quartersPurchases[q] += amount; }
     row.invoices.push(invoice.id);
     groups.set(cp.id, row);
   }
-  const details = [...groups.values()].filter(r => Math.abs(money(r.total)) > 3005.06).map(r => ({ ...r, total: money(r.total), quarters: Object.fromEntries(Object.entries(r.quarters).map(([k,v]) => [k,money(v)])) }));
+  const missingAboveThreshold = [...missingGroups.entries()].filter(([, total]) => Math.abs(total) > 3005.06);
+  if (missingAboveThreshold.length) data.blockers.push(`${missingAboveThreshold.length} contraparte(s) podrían superar 3.005,06 € pero no tienen NIF y no pueden declararse.`);
+  if (model === '347' && excluded347) data.warnings.push(`${excluded347} factura(s) se excluyeron del 347 por retenciones ya informadas o por reglas territoriales; deben revisarse antes del cierre.`);
+  const roundQuarter = (quarters: any) => Object.fromEntries(Object.entries(quarters).map(([key, value]) => [key, money(value)]));
+  const details = [...groups.values()].filter(row => Math.abs(money(row.total)) > 3005.06).map(row => ({
+    ...row, total: money(row.total), sales: money(row.sales), purchases: money(row.purchases),
+    quarters: roundQuarter(row.quarters), quartersSales: roundQuarter(row.quartersSales), quartersPurchases: roundQuarter(row.quartersPurchases),
+  }));
   if (details.some(r => !r.name || (!r.province && (r.country === 'ES' || !r.country)))) data.blockers.push('Hay declarados sin nombre o provincia/código territorial obligatorio.');
   const fields: any[] = [];
   addField(fields, 'DECLARADOS', 'Terceros que superan 3.005,06 €', details.length, details.flatMap(r => r.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
   addField(fields, 'IMPORTE', 'Importe anual declarado', details.reduce((s,r) => s + r.total, 0), details.flatMap(r => r.invoices.map((id: string) => `Invoice:${id}`)), 'Resumen');
   return { fields, result: 0, details };
+}
+
+function applyModelValidation(model: string, data: any, calculation: any) {
+  const profile = data.profile;
+  const indirect = clean(profile?.indirectTaxDefault);
+  if (model === '130') {
+    if (profile?.entityType !== 'autonomo' || !profile?.subjectToIRPF || profile?.irpfEstimation === 'no_aplica') data.blockers.push('El modelo 130 solo es aplicable a personas físicas en estimación directa sujetas a pago fraccionado.');
+    if (profile?.model130ExemptionConfirmed) data.blockers.push('El perfil marca exención del modelo 130 por porcentaje de ingresos sometidos a retención; revise la obligación censal antes de generar fichero.');
+  }
+  if (model === '303' && !['iva', 'mixto'].includes(indirect)) data.blockers.push('El perfil no está configurado en territorio IVA; no corresponde exportar el modelo 303.');
+  if (model === '420' && !['igic', 'mixto'].includes(indirect)) data.blockers.push('El perfil no está configurado en IGIC; no corresponde preparar el modelo 420.');
+  if (model === '420' && profile?.usesSII) data.blockers.push('Los sujetos IGIC incluidos en SII deben revisar el modelo 417, no el 420 ordinario.');
+  if (model === '347' && profile?.usesSII) data.blockers.push('El perfil está adscrito al SII y, con carácter general, queda excluido de presentar el modelo 347; confirme cualquier excepción censal.');
+  if (model === '415' && !['igic', 'mixto'].includes(indirect)) data.blockers.push('El modelo 415 solo corresponde a operaciones en el ámbito del IGIC canario.');
+  if (['111', '115', '123'].includes(model) && !(calculation.details || []).length) data.blockers.push(`No se han detectado pagos sometidos a retención para el modelo ${model}; no debe generarse una autoliquidación negativa por ausencia de rentas pagadas.`);
 }
 
 function calculateAnnualRetention(data: any, b: any, model: '180'|'190'|'193') {
@@ -357,7 +437,7 @@ function export130(company: any, year: number, period: string, calculation: any)
 
 function export303(company: any, profile: any, year: number, period: string, calculation: any) {
   const o=calculation.operations||{}, rates=new Map((o.rates||[]).map((r:any)=>[Number(r.rate),r]));
-  const p1=page(1581,1570,'</T30301000>'); place(p1,1,11,'<T30301000>'); place(p1,13,1,declarationType(calculation.result)); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,80,normalizedText(company.razon_social,80)); place(p1,103,4,String(year)); place(p1,107,2,period); place(p1,109,1,'2'); place(p1,110,1,profile?.isREDEME?'1':'2'); place(p1,111,1,'3'); place(p1,112,1,'2'); place(p1,113,1,profile?.indirectTaxDefault==='criterio_caja'?'1':'2'); place(p1,114,1,'2'); place(p1,115,1,'2'); place(p1,116,1,'2'); place(p1,117,1,'2'); place(p1,127,1,profile?.usesSII?'1':'2'); place(p1,128,1,['4T','12'].includes(period)?'2':'0'); place(p1,129,1,['4T','12'].includes(period)?'1':'0'); place(p1,130,1,['01','1T','2T','3T','4T'].includes(period)?'0':'2');
+  const p1=page(1581,1570,'</T30301000>'); place(p1,1,11,'<T30301000>'); place(p1,13,1,declarationType(calculation.result)); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,80,normalizedText(company.razon_social,80)); place(p1,103,4,String(year)); place(p1,107,2,period); place(p1,109,1,'2'); place(p1,110,1,profile?.isREDEME?'1':'2'); place(p1,111,1,'3'); place(p1,112,1,'2'); place(p1,113,1,o.criterionCash?'1':'2'); place(p1,114,1,'2'); place(p1,115,1,'2'); place(p1,116,1,'2'); place(p1,117,1,'2'); place(p1,127,1,profile?.usesSII?'1':'2'); place(p1,128,1,['4T','12'].includes(period)?'2':'0'); place(p1,129,1,['4T','12'].includes(period)?'1':'0'); place(p1,130,1,['01','1T','2T','3T','4T'].includes(period)?'0':'2');
   const rateFields:any={0:[131,148,153],4:[209,226,231],10:[287,304,309],21:[326,343,348]}; for(const [rate,positions] of Object.entries(rateFields)){const row:any=rates.get(Number(rate))||{}; place(p1,positions[0],17,numeric(row.base,17)); place(p1,positions[1],5,numeric(Number(rate),5,false,2)); place(p1,positions[2],17,numeric(row.quota,17));}
   place(p1,365,17,numeric(o.intraBase,17)); place(p1,382,17,numeric(o.intraQuota,17)); place(p1,399,17,numeric(o.reverseBase,17)); place(p1,416,17,numeric(o.reverseQuota,17)); place(p1,696,17,numeric(o.outputQuota,17,true)); place(p1,713,17,numeric(o.deductibleBase,17)); place(p1,730,17,numeric(o.deductibleQuota,17)); place(p1,1002,17,numeric(o.deductibleQuota,17,true)); place(p1,1019,17,numeric(calculation.result,17,true));
   const p3=page(1017,1006,'</T30303000>'); place(p3,1,11,'<T30303000>'); place(p3,12,17,numeric(o.intraSupplies,17,true)); place(p3,29,17,numeric(o.exports,17,true)); place(p3,46,17,numeric(o.nonSubject,17,true)); place(p3,63,17,numeric(o.reverseBase,17,true)); place(p3,199,17,numeric(calculation.result,17,true)); place(p3,216,5,numeric(100,5,false,2)); place(p3,221,17,numeric(calculation.result,17,true)); place(p3,340,17,numeric(calculation.result,17,true)); place(p3,408,17,numeric(calculation.result,17,true)); place(p3,425,1,(calculation.details||[]).length?' ':'X');
@@ -396,23 +476,23 @@ Deno.serve(async (req) => {
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
     if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
     authorize(user,companyId); const svc=base44.asServiceRole;
-    const [company,profiles,activities,invoices,rawTaxLines,payrolls,entries,entryLines]=await Promise.all([
-      svc.entities.Company.get(companyId), listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}),
+    const [company,profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,entries,entryLines]=await Promise.all([
+      svc.entities.Company.get(companyId), listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}),
     ]);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
     if(!company.nif_cif) blockers.push('La empresa no tiene NIF/CIF configurado.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
-    const data={company,profile,activities,invoices,taxLines,payrolls,entries,entryLines,blockers,warnings};
+    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,blockers,warnings,period};
     if(action==='calculate_bundle') {
       const models=TARGET_MODELS.map(code=>{
-        const annual=['180','190','193','347','390','415','425'].includes(code); const modelBounds=bounds(year,annual?'Anual':'1T'); const modelData={...data,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:unique(modelData.blockers),warnings:unique(modelData.warnings)};
+        const annual=['180','190','193','347','390','415','425'].includes(code); const modelPeriod=annual?'Anual':'1T'; const modelBounds=bounds(year,modelPeriod); const modelData={...data,period:modelPeriod,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); applyModelValidation(code,modelData,modelCalculation); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:unique(modelData.blockers),warnings:unique(modelData.warnings)};
       });
-      return Response.json({ok:true,engineVersion:ENGINE_VERSION,models,sourceStats:{invoices:invoices.length,taxLines:taxLines.length,payrolls:payrolls.length,journalEntries:entries.length}});
+      return Response.json({ok:true,engineVersion:ENGINE_VERSION,models,sourceStats:{invoices:invoices.length,taxLines:taxLines.length,invoicePayments:invoicePayments.length,payrolls:payrolls.length,journalEntries:entries.length}});
     }
-    const calculation=calculate(model,data,b,body.adjustments||{}); const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[])); const sourceHash=await sha256(JSON.stringify({model,year,period,sourceIds,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
-    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},validation:{blockers:unique(blockers),warnings:unique(warnings),canSaveDraft:true,canExportOfficial:DEFINITIONS[model].officialExport&&blockers.length===0},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length}},sources:SOURCES};
+    const adjustments=body.adjustments||{}; const calculation=calculate(model,data,b,adjustments); applyModelValidation(model,data,calculation); const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[])); const sourceHash=await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
+    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},validation:{blockers:unique(blockers),warnings:unique(warnings),canSaveDraft:true,canExportOfficial:DEFINITIONS[model].officialExport&&blockers.length===0},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length}},sources:SOURCES};
     if(action==='calculate') return Response.json(result);
     if(action==='save_draft') {
       const payload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,version:1,origenDatos:`${ENGINE_VERSION}:${sourceHash}`,resumen:{definition:result.definition,calculation:result.calculation,source:result.source},validaciones:result.validation.warnings.map((message:string)=>({severity:'warning',message})),errores:result.validation.blockers.map((message:string)=>({severity:'blocker',message})),ajustesManuales:Object.entries(body.adjustments||{}).map(([field,value])=>({field,value,reason:clean(body.adjustmentReason)})),usuarioCreador:user.email,estado:result.validation.blockers.length?'en_revision':'borrador',notas:clean(body.notes)};
