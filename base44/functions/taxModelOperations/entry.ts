@@ -97,6 +97,30 @@ function invoiceCounterparty(invoice: any) {
   };
 }
 
+const PROVINCE_CODES: Record<string, string> = {
+  ALAVA:'01',ARABA:'01',ALBACETE:'02',ALICANTE:'03',ALACANT:'03',ALMERIA:'04',AVILA:'05',BADAJOZ:'06',BALEARES:'07','ILLES BALEARS':'07',BARCELONA:'08',BURGOS:'09',CACERES:'10',CADIZ:'11',CASTELLON:'12',CASTELLO:'12','CIUDAD REAL':'13',CORDOBA:'14','A CORUNA':'15',CORUNA:'15',CUENCA:'16',GIRONA:'17',GRANADA:'18',GUADALAJARA:'19',GUIPUZCOA:'20',GIPUZKOA:'20',HUELVA:'21',HUESCA:'22',JAEN:'23',LEON:'24',LLEIDA:'25','LA RIOJA':'26',RIOJA:'26',LUGO:'27',MADRID:'28',MALAGA:'29',MURCIA:'30',NAVARRA:'31',OURENSE:'32',ASTURIAS:'33',PALENCIA:'34','LAS PALMAS':'35',PALMAS:'35',PONTEVEDRA:'36',SALAMANCA:'37','SANTA CRUZ DE TENERIFE':'38','S C TENERIFE':'38',TENERIFE:'38',CANTABRIA:'39',SEGOVIA:'40',SEVILLA:'41',SORIA:'42',TARRAGONA:'43',TERUEL:'44',TOLEDO:'45',VALENCIA:'46',VALLADOLID:'47',VIZCAYA:'48',BIZKAIA:'48',ZAMORA:'49',ZARAGOZA:'50',CEUTA:'51',MELILLA:'52','ISLA DE LA PALMA':'53','LA PALMA':'53',
+};
+
+function canonical(value: unknown) {
+  return clean(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizedCountry(value: unknown) {
+  const code = canonical(value);
+  if (!code || ['ES', 'ESPANA', 'SPAIN'].includes(code)) return 'ES';
+  return /^[A-Z]{2}$/.test(code) ? code : '';
+}
+
+function provinceCode(value: unknown) {
+  const code = canonical(value);
+  if (/^\d{2}$/.test(code)) return code;
+  return PROVINCE_CODES[code] || '';
+}
+
+function validSpanishTaxId(value: unknown) {
+  return /^[A-Z0-9]{9}$/.test(canonical(value).replace(/\s/g, ''));
+}
+
 function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[], blockers: string[]) {
   const byInvoice = new Map<string, any[]>();
   taxLines.forEach(line => byInvoice.set(line.invoiceId, [...(byInvoice.get(line.invoiceId) || []), line]));
