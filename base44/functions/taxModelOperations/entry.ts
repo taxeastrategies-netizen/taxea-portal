@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v8';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v9';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -23,6 +23,9 @@ const SOURCES = [
   { title: 'AEAT - Diseños de registro, modelos 100 a 199', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-100-199.html' },
   { title: 'AEAT - Diseños de registro, modelos 300 a 399', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-300-399.html' },
   { title: 'AEAT - Instrucciones modelo 130', url: 'https://sede.agenciatributaria.gob.es/Sede/impuestos-tasas/impuesto-sobre-renta-personas-fisicas/modelo-130-irpf______esionales-estimacion-directa-fraccionado_/instrucciones.html' },
+  { title: 'AEAT - IVA soportado deducible y plazo de cuatro años', url: 'https://sede.agenciatributaria.gob.es/Sede/iva/que-iva-soportado-puedo-deducir/que-requisitos-debo-cumplir-poder-iva.html' },
+  { title: 'AEAT - Factura recibida tarde y período de deducción', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/manual-iva-2023/capitulo-05-deducciones-devoluciones/cuestiones-frecuentes-planteadas-capitulo.html' },
+  { title: 'AEAT - Autoliquidaciones complementarias', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/presentacion-declaraciones-ayuda-tecnica/presentacion-autoliquidaciones-complementarias.html' },
   { title: 'AEAT - Modelo 347, operaciones excluidas', url: 'https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/declaraciones-informativas/modelo-347-decla_____racion-anual-operaciones-personas_/operaciones-excluidas-modelo-347.html' },
   { title: 'ATC - Modelo 420', url: 'https://www3.gobiernodecanarias.org/tributos/atc/w/modelo-420' },
   { title: 'ATC - Modelo 415', url: 'https://www3.gobiernodecanarias.org/tributos/atc/w/modelo-415' },
@@ -171,6 +174,137 @@ function bounds(year: number, period: string) {
     end: `${year}-${String(lastMonth).padStart(2, '0')}-${String(last).padStart(2, '0')}`,
     cumulativeStart: `${year}-01-01`,
   };
+}
+
+const FILED_STATUSES = new Set(['presentado', 'subsanado']);
+
+function filingDate(filing: any) {
+  return clean(filing?.fechaPresentacion || filing?.fechaImportacion || filing?.updated_date || filing?.created_date).slice(0, 10);
+}
+
+function latestFiling(filings: any[], model: string, year: number, period: string) {
+  return filings
+    .filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === Number(year) && clean(row.periodo) === clean(period) && FILED_STATUSES.has(clean(row.estadoPresentacion)))
+    .sort((a: any, b: any) => `${filingDate(b)}|${String(b.snapshotVersion || 0).padStart(6, '0')}|${b.created_date || ''}`.localeCompare(`${filingDate(a)}|${String(a.snapshotVersion || 0).padStart(6, '0')}|${a.created_date || ''}`))[0] || null;
+}
+
+function boxMap(value: any) {
+  const source = Array.isArray(value)
+    ? Object.fromEntries(value.map((row: any) => [clean(row?.code || row?.casilla), row?.value ?? row?.valor]))
+    : (value && typeof value === 'object' ? value : {});
+  const result: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(source)) {
+    const code = clean(key).toUpperCase().replace(/^CASILLA\s*/i, '').replace(/[^A-Z0-9_]/g, '').slice(0, 40);
+    const normalized = typeof raw === 'number' ? raw : Number(clean(raw).replace(/\s|€|EUR/gi, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.'));
+    if (!code || raw === '' || raw == null || !Number.isFinite(normalized)) continue;
+    result[code] = money(normalized);
+  }
+  return result;
+}
+
+function periodsForStyle(monthly: boolean) {
+  return monthly ? ['01','02','03','04','05','06','07','08','09','10','11','12'] : ['1T','2T','3T','4T'];
+}
+
+function periodForDate(value: string, monthly: boolean) {
+  const month = Number(clean(value).slice(5, 7));
+  if (!month) return '';
+  return monthly ? String(month).padStart(2, '0') : `${Math.ceil(month / 3)}T`;
+}
+
+function periodOrdinal(year: number, period: string) {
+  const monthly = /^\d{2}$/.test(period);
+  const index = periodsForStyle(monthly).indexOf(period);
+  return year * (monthly ? 12 : 4) + Math.max(index, 0);
+}
+
+function periodSequence(startDate: string, endYear: number, endPeriod: string) {
+  const monthly = /^\d{2}$/.test(endPeriod);
+  const periods = periodsForStyle(monthly);
+  const startYear = Number(startDate.slice(0, 4));
+  const startPeriod = periodForDate(startDate, monthly);
+  const result: Array<{year:number,period:string}> = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    for (const period of periods) {
+      if (periodOrdinal(year, period) < periodOrdinal(startYear, startPeriod)) continue;
+      if (periodOrdinal(year, period) > periodOrdinal(endYear, endPeriod)) continue;
+      result.push({ year, period });
+    }
+  }
+  return result;
+}
+
+function receiptDateOf(line: any) {
+  const explicit = clean(line.receiptDate || line.invoice?.fecha_recepcion).slice(0, 10);
+  if (explicit) return { date: explicit, inferred: false };
+  const created = clean(line.created_date || line.invoice?.created_date).slice(0, 10);
+  return { date: created || clean(line.date || dateOf(line.invoice)).slice(0, 10), inferred: true };
+}
+
+function plusFourYears(value: string) {
+  const year = Number(value.slice(0, 4));
+  return year ? `${year + 4}${value.slice(4, 10)}` : '';
+}
+
+function deductionDecision(line: any, data: any, selectedBounds: any, model: '303'|'420') {
+  const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
+  const receipt = receiptDateOf(line);
+  const selected = { year: Number(data.year), period: clean(data.period) };
+  const explicitYear = Number(line.deductionYear || 0);
+  const explicitPeriod = clean(line.deductionPeriod);
+  const basic = { sourceId: line.sourceId, invoiceId: line.invoice?.id, invoiceNumber: line.invoice?.numero_factura, operationDate, receiptDate: receipt.date, receiptDateInferred: receipt.inferred, base: money(line.base), quota: money(line.deductibleQuota ?? line.quota), originalYear: Number(operationDate.slice(0, 4)), originalPeriod: periodForDate(operationDate, /^\d{2}$/.test(selected.period)) };
+  if (explicitYear && explicitPeriod) return { ...basic, targetYear: explicitYear, targetPeriod: explicitPeriod, treatment: 'asignacion_confirmada', include: explicitYear === selected.year && explicitPeriod === selected.period };
+  if (!operationDate || !receipt.date) return { ...basic, treatment: 'revision_fecha_recepcion', include: false, review: true, reason: 'Falta fecha suficiente para separar devengo y ejercicio de la deducción.' };
+  if (clean(line.regime) === 'criterio_caja') return { ...basic, treatment: 'revision_criterio_caja', include: false, review: true, reason: 'El criterio de caja exige cruzar cobros/pagos y no se asigna solo por la fecha de factura.' };
+  if (model === '420' && ['incluido','transitorio_2026'].includes(clean(data.profile?.repepStatus))) return { ...basic, treatment: 'no_deducible_repep', include: false, review: true, reason: 'El perfil REPEP no permite deducir automáticamente el IGIC soportado de sus operaciones corrientes.' };
+  const expiry = plusFourYears(operationDate);
+  if (expiry && selectedBounds.end > expiry) return { ...basic, treatment: 'caducado_revision', include: false, review: true, reason: 'La fecha seleccionada supera el plazo general de cuatro años; requiere revisión profesional.' };
+  const sequence = periodSequence(operationDate, selected.year, selected.period);
+  for (const candidate of sequence) {
+    const candidateBounds = bounds(candidate.year, candidate.period);
+    if (candidateBounds.end < receipt.date) continue;
+    const filed = latestFiling(data.filings || [], model, candidate.year, candidate.period);
+    if (!filed) return { ...basic, targetYear: candidate.year, targetPeriod: candidate.period, treatment: candidate.year === basic.originalYear && candidate.period === basic.originalPeriod ? 'periodo_devengo_abierto' : 'deduccion_periodo_posterior', include: candidate.year === selected.year && candidate.period === selected.period };
+    const submittedSources = Array.isArray(filed.sourceIdsPresentados) ? filed.sourceIdsPresentados : [];
+    if (submittedSources.includes(line.sourceId)) return { ...basic, targetYear: candidate.year, targetPeriod: candidate.period, treatment: 'ya_incluida_presentado', include: false, alreadyFiled: true };
+    if (filingDate(filed) < receipt.date || submittedSources.length) continue;
+    return { ...basic, treatment: 'revision_contra_modelo_importado', include: false, review: true, reason: 'La factura existía antes de la presentación importada, pero el fichero no conserva identificadores de factura; confirme si ya fue deducida.' };
+  }
+  return { ...basic, treatment: 'pendiente_periodo_futuro', include: false, targetYear: selected.year, targetPeriod: selected.period, future: true };
+}
+
+function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: boolean) {
+  const candidates = data.taxLines.filter((line: any) => line.taxKind === kind);
+  if (annual) return { lines: candidates.filter((line: any) => inRange(line, b.start, b.end)), carry: [], review: [], deferred: [] };
+  const model: '303'|'420' = kind === 'iva' ? '303' : '420';
+  const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [];
+  for (const line of candidates) {
+    if (line.invoice?.tipo !== 'recibida') {
+      if (inRange(line, b.start, b.end)) lines.push(line);
+      continue;
+    }
+    const decision: any = deductionDecision(line, data, b, model);
+    if (decision.include) {
+      lines.push({ ...line, deductionDecision: decision });
+      if (decision.treatment === 'deduccion_periodo_posterior' || decision.treatment === 'asignacion_confirmada') carry.push(decision);
+    } else if (decision.review) review.push(decision);
+    else if (!decision.alreadyFiled && (decision.future || periodOrdinal(Number(decision.targetYear || 0), clean(decision.targetPeriod)) > periodOrdinal(Number(data.year), clean(data.period)))) deferred.push(decision);
+  }
+  return { lines, carry, review, deferred };
+}
+
+function previous130FromFilings(data: any) {
+  const periods = ['1T','2T','3T','4T'];
+  const selectedIndex = periods.indexOf(clean(data.period));
+  if (selectedIndex <= 0) return { complete: true, amount: 0, filings: [], missing: [] };
+  const found: any[] = [], missing: string[] = [];
+  for (const period of periods.slice(0, selectedIndex)) {
+    const filing = latestFiling(data.filings || [], '130', Number(data.year), period);
+    if (!filing) { missing.push(period); continue; }
+    const boxes = boxMap(filing.casillasPresentadas);
+    found.push({ id: filing.id, period, amount: Math.max(0, money(boxes['07'] ?? boxes['19'] ?? filing.importeFinal)), date: filingDate(filing), justification: filing.numeroJustificante });
+  }
+  return { complete: missing.length === 0, amount: money(found.reduce((sum, row) => sum + row.amount, 0)), filings: found, missing };
 }
 
 function inRange(item: any, start: string, end: string) {
@@ -347,7 +481,9 @@ function calculate130(data: any, b: any, adjustments: any) {
   const expense = money(lines.filter((l: any) => /^6/.test(account(l))).reduce((s: number, l: any) => s + money(l.debit) - money(l.credit), 0));
   const net = money(revenue - expense);
   const grossPayment = money(Math.max(0, net * 0.2));
-  const previous = money(adjustments.previousPayments);
+  const filedPrevious = previous130FromFilings(data);
+  const previousProvided = adjustments.previousPayments !== undefined && adjustments.previousPayments !== null && adjustments.previousPayments !== '';
+  const previous = previousProvided ? money(adjustments.previousPayments) : filedPrevious.complete ? filedPrevious.amount : 0;
   const withholdings = money(adjustments.withholdings ?? data.invoices.filter((f: any) => f.tipo === 'emitida' && inRange(f, b.cumulativeStart, b.end)).reduce((s: number, f: any) => s + retentionAmount(f), 0));
   const preliminary = money(grossPayment - previous - withholdings);
   const agricultureRevenue = money(adjustments.agricultureRevenue);
@@ -363,12 +499,14 @@ function calculate130(data: any, b: any, adjustments: any) {
   [['01','Ingresos computables acumulados',revenue],['02','Gastos fiscalmente deducibles acumulados',expense],['03','Rendimiento neto',net],['04','20% del rendimiento neto',grossPayment],['05','Pagos fraccionados anteriores',previous],['06','Retenciones soportadas acumuladas',withholdings],['07','Pago fraccionado previo',preliminary],['08','Ingresos agrícolas/ganaderos del trimestre',agricultureRevenue],['09','2% de ingresos agrícolas/ganaderos',money(agricultureRevenue * .02)],['10','Retenciones agrícolas/ganaderas',agricultureWithholdings],['11','Pago previo agrícola/ganadero',agriculturePayment],['12','Suma de pagos previos',total],['13','Minoración art. 110.3 RIRPF',reduction],['14','Diferencia',money(total-reduction)],['15','Resultados negativos anteriores',priorNegative],['16','Deducción vivienda habitual',housing],['17','Total',money(total-reduction-priorNegative-housing)],['19','Resultado de la autoliquidación',result]].forEach(([c,l,v]) => addField(fields, String(c), String(l), v, ids, 'Liquidación'));
   if (!lines.length) data.blockers.push('No hay asientos confirmados y cuadrados de grupos 6 y 7 para calcular el modelo 130.');
   if (data.profile?.irpfEstimation === 'objetiva_modulos') data.blockers.push('El perfil está en estimación objetiva: corresponde revisar el modelo 131, no el 130.');
-  if (data.period !== '1T' && adjustments.previousPayments == null) data.blockers.push('En 2T, 3T o 4T debe confirmarse manualmente el importe de pagos fraccionados anteriores (casilla 05).');
-  return { fields, result, details: [{ type: 'contabilidad acumulada', revenue, expense, entries: validEntryIds.size }] };
+  if (data.period !== '1T' && !previousProvided && !filedPrevious.complete) data.blockers.push(`Falta importar el modelo 130 presentado de ${filedPrevious.missing.join(', ')} o confirmar manualmente la casilla 05.`);
+  if (data.period !== '1T' && !previousProvided && filedPrevious.complete) data.warnings.push(`La casilla 05 se arrastra automáticamente desde ${filedPrevious.filings.map((row: any) => row.period).join(', ')} presentado(s).`);
+  return { fields, result, details: [{ type: 'contabilidad acumulada', revenue, expense, entries: validEntryIds.size }], carryforward: { type: 'irpf_cumulative', previousPaymentsSource: previousProvided ? 'manual' : filedPrevious.complete ? 'filed_returns' : 'missing', previousFilings: filedPrevious.filings, missingPeriods: filedPrevious.missing, rule: 'Los ingresos y gastos se acumulan desde el 1 de enero hasta el cierre del trimestre; el gasto mantiene su ejercicio de devengo.' } };
 }
 
 function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = false) {
-  const lines = data.taxLines.filter((line: any) => line.taxKind === kind && inRange(line, b.start, b.end));
+  const selection = selectIndirectTaxLines(data, b, kind, annual);
+  const lines = selection.lines;
   const fields: any[] = [];
   const rates = new Map<number, any>();
   const addRate = (rate: number, base: number, quota: number, id: string) => {
@@ -405,10 +543,16 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   addField(fields, 'DEVENGADO', 'Total cuota devengada', outputQuota, lines.filter((l: any) => l.invoice.tipo === 'emitida' || ['reverse_charge','intra_eu_acquisition'].includes(l.operationType)).map((l: any) => l.sourceId), 'Liquidación');
   addField(fields, 'DEDUCIBLE_BASE', 'Base de cuotas deducibles', deductibleBase, lines.filter((l: any) => l.invoice.tipo === 'recibida').map((l: any) => l.sourceId), 'Deducciones');
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').map((l: any) => l.sourceId), 'Deducciones');
+  if (selection.carry.length) addField(fields, 'DEDUCIBLE_ARRASTRADO', 'Cuota recibida tarde deducida en este período', selection.carry.reduce((sum: number, row: any) => sum + money(row.quota), 0), selection.carry.map((row: any) => row.sourceId), 'Deducciones de períodos anteriores');
   addField(fields, 'RESULTADO', 'Resultado', result, lines.map((l: any) => l.sourceId), 'Liquidación');
   const operations = { rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash) };
-  if (annual) return { fields, result, details: operations.rates, operations };
-  return { fields, result, details: lines.map((l: any) => ({ type: l.invoice.tipo, id: l.invoice.id, invoice: l.invoice.numero_factura, operationType: l.operationType, rate: l.rate, base: money(l.base), quota: money(l.quota), deductibleQuota: money(l.deductibleQuota) })), operations };
+  if (selection.review.length) data.blockers.push(`${selection.review.length} factura(s) recibida(s) requieren confirmar la fecha o el período real de deducción antes de exportar.`);
+  if (selection.carry.some((row: any) => row.receiptDateInferred)) data.warnings.push('Hay deducciones diferidas asignadas mediante la fecha de alta en Taxea porque no consta la fecha acreditada de recepción. Confírmala antes de presentar.');
+  if (annual) {
+    data.warnings.push('En el resumen anual, el IVA/IGIC devengado sigue el devengo y las cuotas soportadas deben conciliarse con el período efectivo de deducción. Revise los arrastres antes del cierre anual.');
+    return { fields, result, details: operations.rates, operations, carryforward: selection };
+  }
+  return { fields, result, details: lines.map((l: any) => ({ type: l.invoice.tipo, id: l.invoice.id, invoice: l.invoice.numero_factura, operationDate: clean(l.date || dateOf(l.invoice)).slice(0, 10), deductionPeriod: l.deductionDecision ? `${l.deductionDecision.targetPeriod} ${l.deductionDecision.targetYear}` : data.period, deductionTreatment: l.deductionDecision?.treatment || 'periodo_corriente', operationType: l.operationType, rate: l.rate, base: money(l.base), quota: money(l.quota), deductibleQuota: money(l.deductibleQuota) })), operations, carryforward: selection };
 }
 
 function calculateThirdParties(data: any, b: any, model: '347' | '415') {
@@ -1131,6 +1275,167 @@ function encodeBase64(text: string) {
   const bytes=new TextEncoder().encode(text); let binary=''; for(let i=0;i<bytes.length;i+=0x8000) binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000)); return btoa(binary);
 }
 
+function readFixedNumber(source: string, position: number, length: number, decimals = 2, signed = false) {
+  const raw = source.slice(position - 1, position - 1 + length);
+  const negative = signed && raw.trim().startsWith('N');
+  const digits = raw.replace(/\D/g, '');
+  return money((negative ? -1 : 1) * Number(digits || 0) / Math.pow(10, decimals));
+}
+
+function pageFromFiledText(raw: string, model: string) {
+  const compact = clean(raw).replace(/^\uFEFF/, '').replace(/[\r\n]/g, '');
+  const marker = `<T${model}01000>`;
+  const index = compact.indexOf(marker);
+  return index >= 0 ? compact.slice(index) : compact;
+}
+
+function parseFiledText(model: string, raw: string) {
+  if (!raw || !['111','115','123','130','303'].includes(model)) return null;
+  const source = pageFromFiledText(raw, model);
+  if (!source.startsWith(`<T${model}01000>`)) return null;
+  const boxes: Record<string, number> = {};
+  const read = (code: string, position: number, length: number, decimals = 2, signed = false) => { boxes[code] = readFixedNumber(source, position, length, decimals, signed); };
+  if (model === '111') {
+    read('01',109,8,0); read('02',117,17); read('03',134,17); read('04',193,8,0); read('05',201,17); read('06',218,17); read('28',487,17); read('30',521,17);
+  } else if (model === '115') {
+    read('01',109,15,0); read('02',124,17); read('03',141,17); read('05',175,17);
+  } else if (model === '123') {
+    read('03',124,15,0); read('06',171,17); read('09',222,17); read('12',290,17); read('14',324,17);
+  } else if (model === '130') {
+    const positions: Record<string, number> = {'01':109,'02':126,'03':143,'04':160,'05':177,'06':194,'07':211,'08':228,'09':245,'10':262,'11':279,'12':296,'13':313,'14':330,'15':347,'16':364,'17':381,'18':398,'19':415};
+    const signed = new Set(['03','07','11','14','17','19']);
+    for (const [code, position] of Object.entries(positions)) read(code,position,17,2,signed.has(code));
+  } else if (model === '303') {
+    read('DEVENGADO',696,17,2,true); read('DEDUCIBLE_BASE',713,17); read('DEDUCIBLE',730,17); read('RESULTADO',1019,17,2,true);
+  }
+  return { model, nif: clean(source.slice(13,22)).toUpperCase(), year: Number(source.slice(102,106)), period: clean(source.slice(106,108)), boxes };
+}
+
+function normalizeFiledImport(body: any, company: any, model: string, year: number, period: string) {
+  const extracted = body.extracted && typeof body.extracted === 'object' ? body.extracted : {};
+  const parsed = parseFiledText(model, clean(body.rawContent));
+  const detectedModel = clean(parsed?.model || extracted.modelo || extracted.model || model).replace(/\D/g, '');
+  const detectedYear = Number(parsed?.year || extracted.ejercicio || extracted.year || year);
+  const rawPeriod = clean(parsed?.period || extracted.periodo || extracted.period || period).toUpperCase().replace(/^T([1-4])$/, '$1T').replace(/^Q([1-4])$/, '$1T');
+  const detectedPeriod = rawPeriod === 'ANUAL' ? 'Anual' : rawPeriod;
+  const detectedNif = canonical(parsed?.nif || extracted.nif_cif || extracted.nif || '').replace(/\s/g, '');
+  const boxes = { ...boxMap(extracted.fields || extracted.casillas || extracted.boxes), ...boxMap(body.presentedBoxes), ...(parsed?.boxes || {}) };
+  const result = body.importeFinal ?? extracted.importeFinal ?? extracted.importe ?? boxes.RESULTADO ?? boxes['19'] ?? boxes['30'] ?? boxes['14'] ?? boxes['05'] ?? 0;
+  const preview = {
+    model: detectedModel || model, year: detectedYear, period: detectedPeriod || period,
+    nif: detectedNif, companyNif: canonical(company.nif_cif).replace(/\s/g,''),
+    presentationDate: clean(body.presentationDate || extracted.fechaPresentacion || extracted.fecha_presentacion).slice(0,10),
+    justificationNumber: clean(body.justificationNumber || extracted.numeroJustificante || extracted.numero_justificante || extracted.csv),
+    previousJustificationNumber: clean(body.previousJustificationNumber || extracted.numeroJustificanteAnterior),
+    declarationType: ['original','complementaria','rectificativa','sustitutiva'].includes(clean(body.declarationType || extracted.tipoDeclaracion)) ? clean(body.declarationType || extracted.tipoDeclaracion) : 'original',
+    boxes, result: money(result), fileUrl: clean(body.fileUrl), fileName: clean(body.fileName), fileHash: clean(body.fileHash).toLowerCase(),
+    source: parsed ? 'fichero_oficial' : clean(body.fileName).toLowerCase().endsWith('.pdf') ? 'pdf_ocr_revisado' : 'fichero_oficial',
+  };
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (preview.model !== model) errors.push(`El documento parece corresponder al modelo ${preview.model}, no al ${model}.`);
+  if (preview.year !== year) errors.push(`El documento parece corresponder al ejercicio ${preview.year}, no al ${year}.`);
+  if (preview.period !== period) errors.push(`El documento parece corresponder al período ${preview.period}, no a ${period}.`);
+  if (preview.nif && preview.companyNif && preview.nif !== preview.companyNif) errors.push('El NIF detectado no coincide con la empresa seleccionada.');
+  if (!preview.presentationDate) errors.push('Indica la fecha efectiva de presentación.');
+  if (preview.presentationDate > new Date().toISOString().slice(0, 10)) errors.push('La fecha de presentación no puede estar en el futuro.');
+  if (!Object.keys(preview.boxes).length) errors.push('No se han obtenido casillas. Revisa y añade al menos los importes principales del modelo presentado.');
+  if (!preview.justificationNumber) warnings.push('No consta número de justificante o CSV; el histórico podrá guardarse, pero la trazabilidad administrativa queda incompleta.');
+  if (!parsed) warnings.push('Las casillas proceden de OCR o entrada revisada, no de un diseño de registro reconocido automáticamente.');
+  return { preview, errors, warnings };
+}
+
+function createdDateOf(item: any) {
+  return clean(item?.created_date || item?.createdAt || item?.updated_date || item?.updatedAt).slice(0, 10);
+}
+
+function lateItemsAfterFiling(data: any, model: string, year: number, period: string, filing: any) {
+  if (!filing) return [];
+  const filedAt = filingDate(filing);
+  const periodBounds = bounds(year, period);
+  const rows: any[] = [];
+  const seen = new Set<string>();
+  const add = (row: any) => {
+    const key = clean(row.sourceId || `${row.type}:${row.document}:${row.operationDate}`);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  };
+  if (['303', '420'].includes(model)) {
+    const kind = model === '303' ? 'iva' : 'igic';
+    for (const line of data.taxLines || []) {
+      if (line.taxKind !== kind || line.invoice?.tipo !== 'emitida' || !inRange(line, periodBounds.start, periodBounds.end)) continue;
+      const addedAt = createdDateOf(line) || createdDateOf(line.invoice);
+      if (!addedAt || addedAt <= filedAt) continue;
+      add({
+        sourceId: line.sourceId,
+        type: 'cuota_devengada_omitida',
+        document: clean(line.invoice?.numero_factura) || line.invoice?.id,
+        operationDate: clean(line.date || dateOf(line.invoice)).slice(0, 10),
+        addedAt,
+        amount: money(line.quota),
+        treatment: 'rectificar_periodo_origen',
+        reason: 'Una cuota repercutida no se traslada silenciosamente a un período posterior; debe revisarse la rectificación o complementaria del período de devengo.',
+      });
+    }
+  }
+  if (['111', '115', '123'].includes(model)) {
+    if (model === '111') {
+      for (const payroll of data.payrolls || []) {
+        const addedAt = createdDateOf(payroll);
+        if (!inRange(payroll, periodBounds.start, periodBounds.end) || !addedAt || addedAt <= filedAt) continue;
+        add({ sourceId: `PayrollExtraction:${payroll.id}`, type: 'retencion_nomina_omitida', document: payroll.employee_name || payroll.id, operationDate: dateOf(payroll).slice(0, 10), addedAt, amount: money(payroll.irpf_amount), treatment: 'rectificar_periodo_origen', reason: 'Las retenciones corresponden al período de pago y no se arrastran automáticamente a otro trimestre.' });
+      }
+    }
+    const category = model === '111' ? 'servicios_profesionales' : model === '115' ? 'alquiler' : 'gastos_financieros';
+    const invoicesById = new Map((data.invoices || []).map((invoice: any) => [invoice.id, invoice]));
+    for (const payment of data.invoicePayments || []) {
+      const invoice: any = invoicesById.get(payment.invoice_id);
+      const addedAt = createdDateOf(payment);
+      if (!invoice || invoice.anulada || invoice.categoria_gasto !== category || !inRange(payment, periodBounds.start, periodBounds.end) || !addedAt || addedAt <= filedAt) continue;
+      const payable = Math.abs(money(invoice.total_factura)) || Math.abs(money(invoice.base_imponible) + money(invoice.cuota_iva) - retentionAmount(invoice));
+      const factor = payable ? Math.min(1, Math.abs(money(payment.amount)) / payable) : 0;
+      add({ sourceId: `InvoicePayment:${payment.id}`, type: 'retencion_pago_omitida', document: clean(invoice.numero_factura) || invoice.id, operationDate: dateOf(payment).slice(0, 10), addedAt, amount: money(retentionAmount(invoice) * factor), treatment: 'rectificar_periodo_origen', reason: 'La retención se imputa al período del pago; requiere revisar la declaración de origen.' });
+    }
+  }
+  if (model === '130') {
+    for (const entry of data.entries || []) {
+      const addedAt = createdDateOf(entry);
+      if (entry.status !== 'confirmado' || entry.isBalanced === false || !inRange(entry, periodBounds.cumulativeStart, periodBounds.end) || !addedAt || addedAt <= filedAt) continue;
+      add({
+        sourceId: `JournalEntry:${entry.id}`,
+        type: 'asiento_contable_posterior',
+        document: clean(entry.entryNumber || entry.reference || entry.description) || entry.id,
+        operationDate: dateOf(entry).slice(0, 10),
+        addedAt,
+        amount: 0,
+        treatment: period === '4T' ? 'revisar_rectificacion_o_renta' : 'siguiente_trimestre_acumulado',
+        reason: period === '4T'
+          ? 'Tras el 4T no existe otro pago fraccionado del ejercicio; revise rectificación y su efecto en la declaración anual de IRPF.'
+          : 'El modelo 130 es acumulativo desde el 1 de enero: el asiento entra en el siguiente trimestre abierto sin cambiar su ejercicio contable.',
+      });
+    }
+  }
+  return rows.sort((a, b) => `${a.operationDate}|${a.sourceId}`.localeCompare(`${b.operationDate}|${b.sourceId}`));
+}
+
+function filingComparison(data: any, model: string, year: number, period: string, calculation: any) {
+  const filing = latestFiling(data.filings || [], model, year, period);
+  if (!filing) return { presented: false, importedCount: (data.filings || []).filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === year).length, differences: [], lateItems: [], carryforward: calculation.carryforward || null };
+  const presented = boxMap(filing.casillasPresentadas);
+  const current = fieldMap(calculation);
+  const codes = unique([...Object.keys(presented), ...Object.keys(current)]);
+  const differences = codes.map(code => ({ code, presented: money(presented[code]), current: money(current[code]), difference: money(current[code] - presented[code]) })).filter(row => Math.abs(row.difference) > 0.009);
+  return { presented: true, filing: { id: filing.id, date: filingDate(filing), justificationNumber: filing.numeroJustificante, declarationType: filing.tipoDeclaracion || 'original', snapshotVersion: filing.snapshotVersion || 1, result: money(filing.importeFinal), boxes: presented, fileUrl: filing.ficheroPresentadoUrl }, importedCount: (data.filings || []).filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === year).length, resultDifference: money(calculation.result - filing.importeFinal), differences, lateItems: lateItemsAfterFiling(data, model, year, period, filing), carryforward: calculation.carryforward || null };
+}
+
+function taxPeriodOutcome(model: string, value: number) {
+  if (DEFINITIONS[model]?.kind === 'informative') return 'informativo';
+  if (value > 0) return 'a_ingresar';
+  if (value < 0) return ['130', '303', '420'].includes(model) ? 'a_compensar' : 'cero';
+  return 'cero';
+}
+
 Deno.serve(async (req) => {
   try {
     const base44=createClientFromRequest(req); const user=await base44.auth.me();
@@ -1167,7 +1472,21 @@ Deno.serve(async (req) => {
       try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
       try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
       authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
-      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid; return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck});
+      const parsed130=parseFiledText('130',samples['130']);
+      const prior130=previous130FromFilings({year:2026,period:'3T',filings:[
+        {id:'130-q1',modeloCodigo:'130',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20',casillasPresentadas:{'07':120}},
+        {id:'130-q2',modeloCodigo:'130',ejercicio:2026,periodo:'2T',estadoPresentacion:'presentado',fechaPresentacion:'2026-07-20',casillasPresentadas:{'07':50}},
+      ]});
+      const lateReceivedLine={id:'tax-line-late',sourceId:'InvoiceTaxLine:tax-line-late',date:'2026-03-15',receiptDate:'2026-04-25',taxKind:'iva',rate:21,base:100,quota:21,deductibleQuota:21,reviewStatus:'validado',invoice:{id:'invoice-late',tipo:'recibida',numero_factura:'R-LATE-1'}};
+      const carrySelection=selectIndirectTaxLines({year:2026,period:'2T',profile:{},filings:[{id:'303-q1',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20'}],taxLines:[lateReceivedLine]},bounds(2026,'2T'),'iva',false);
+      const lateOutputItems=lateItemsAfterFiling({taxLines:[{id:'tax-line-output',sourceId:'InvoiceTaxLine:tax-line-output',date:'2026-03-10',created_date:'2026-04-25',taxKind:'iva',quota:42,invoice:{id:'invoice-output',tipo:'emitida',numero_factura:'E-LATE-1'}}],invoices:[],invoicePayments:[],payrolls:[],entries:[]},'303',2026,'1T',{fechaPresentacion:'2026-04-20'});
+      const historyChecks={
+        parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20,
+        cumulative130:prior130.complete&&prior130.amount===170&&prior130.filings.length===2,
+        lateDeduction:carrySelection.lines.length===1&&carrySelection.carry.length===1&&carrySelection.carry[0].targetPeriod==='2T'&&carrySelection.review.length===0,
+        outputCorrection:lateOutputItems.length===1&&lateOutputItems[0].treatment==='rectificar_periodo_origen',
+      };
+      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid&&Object.values(historyChecks).every(Boolean); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck,historyChecks});
     }
     if(action==='context') {
       const companyId=clean(body.companyId); if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
@@ -1181,8 +1500,8 @@ Deno.serve(async (req) => {
     const svc=base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
-    const [profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables]=await Promise.all([
-      listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.Employee,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}),
+    const [profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings]=await Promise.all([
+      listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.Employee,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}), listAll(svc.entities.TaxFiling,{companyId}),
     ]);
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
     if(!company.nif_cif) blockers.push('La empresa no tiene NIF/CIF configurado.');
@@ -1190,7 +1509,41 @@ Deno.serve(async (req) => {
     if(!company.razon_social) blockers.push('La empresa no tiene razón social legal configurada.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
-    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,blockers,warnings,period,year};
+    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings,blockers,warnings,period,year};
+    if(action==='preview_filed_return'||action==='import_filed_return') {
+      const normalized=normalizeFiledImport(body,company,model,year,period);
+      if(action==='preview_filed_return') return Response.json({ok:normalized.errors.length===0,engineVersion:ENGINE_VERSION,...normalized});
+      if(body.confirmImport!==true) return Response.json({error:'Confirma expresamente que los datos coinciden con el modelo realmente presentado.'},{status:400});
+      if(normalized.errors.length) return Response.json({error:'El modelo presentado no supera los controles de importación.',blockers:normalized.errors,warnings:normalized.warnings,preview:normalized.preview},{status:422});
+      if(normalized.preview.declarationType!=='original'&&!normalized.preview.previousJustificationNumber) return Response.json({error:'Una declaración complementaria, rectificativa o sustitutiva debe identificar el justificante anterior.'},{status:422});
+      const snapshotHash=normalized.preview.fileHash&&/^[a-f0-9]{64}$/.test(normalized.preview.fileHash)
+        ? normalized.preview.fileHash
+        : await sha256(JSON.stringify({companyId,model,year,period,boxes:normalized.preview.boxes,result:normalized.preview.result,justification:normalized.preview.justificationNumber,date:normalized.preview.presentationDate}));
+      const duplicate=(filings||[]).find((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&clean(row.periodo)===period&&([row.hashFicheroImportado,row.snapshotHash].map(clean).includes(snapshotHash)||(normalized.preview.justificationNumber&&clean(row.numeroJustificante)===normalized.preview.justificationNumber)));
+      if(duplicate) return Response.json({ok:true,alreadyImported:true,filing:duplicate,preview:normalized.preview,warnings:unique([...normalized.warnings,'Este mismo modelo ya estaba importado; no se ha creado un duplicado.'])});
+      const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&clean(row.periodo)===period);
+      const previous=previousVersions.sort((a:any,z:any)=>Number(z.snapshotVersion||0)-Number(a.snapshotVersion||0))[0]||null;
+      if(previous&&normalized.preview.declarationType==='original') return Response.json({error:'Ya existe una declaración original para este período.',blockers:['Si el fichero corresponde a una corrección posterior, selecciónalo como complementaria, rectificativa o sustitutiva e indica el justificante anterior.']},{status:409});
+      const linkedPrevious=normalized.preview.previousJustificationNumber
+        ? previousVersions.find((row:any)=>clean(row.numeroJustificante)===normalized.preview.previousJustificationNumber)
+        : previous;
+      if(previous&&normalized.preview.declarationType!=='original'&&!linkedPrevious) return Response.json({error:'El justificante anterior no coincide con ninguna versión importada de este período.'},{status:422});
+      const filing=await svc.entities.TaxFiling.create({
+        companyId,modeloCodigo:model,ejercicio:year,periodo:period,estadoPresentacion:'presentado',via:'presentacion_manual',
+        fechaPresentacion:normalized.preview.presentationDate,fechaImportacion:new Date().toISOString(),importadoPor:user.email,
+        snapshotVersion:Math.max(0,...previousVersions.map((row:any)=>Number(row.snapshotVersion||0)))+1,
+        tipoDeclaracion:normalized.preview.declarationType,declaracionAnteriorId:linkedPrevious?.id||'',numeroJustificanteAnterior:normalized.preview.previousJustificationNumber,
+        numeroJustificante:normalized.preview.justificationNumber,csv:clean(body.csv),importeFinal:normalized.preview.result,
+        ficheroPresentadoUrl:normalized.preview.fileUrl,nombreFicheroImportado:normalized.preview.fileName,hashFicheroImportado:snapshotHash,
+        fuenteImportacion:normalized.preview.source,casillasPresentadas:normalized.preview.boxes,sourceIdsPresentados:Array.isArray(body.sourceIdsPresentados)?unique(body.sourceIdsPresentados.map(clean).filter(Boolean)):[],
+        snapshotBloqueado:true,revisionImportacion:normalized.preview.source==='fichero_oficial'?'validado_estructura':'revisado_usuario',
+        avisosImportacion:unique(normalized.warnings),snapshotHash,analisisArrastre:{engineVersion:ENGINE_VERSION,importedAsImmutableSnapshot:true},confirmadoPorUsuario:true,usuarioPresentador:user.email,notas:clean(body.notes),
+      });
+      const periodRows=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year,periodo:period},'-created_date',1);
+      const periodPayload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:b.start,fechaFin:b.end,estado:'presentado',importeConfirmado:normalized.preview.result,resultado:taxPeriodOutcome(model,normalized.preview.result),notas:`Modelo importado en Taxea · snapshot ${filing.id}`};
+      if(periodRows?.[0]) await svc.entities.TaxPeriod.update(periodRows[0].id,periodPayload); else await svc.entities.TaxPeriod.create(periodPayload);
+      return Response.json({ok:true,alreadyImported:false,filing,preview:normalized.preview,warnings:normalized.warnings,nextStep:'Calcula el período siguiente. Taxea utilizará las cifras presentadas para el arrastre y analizará las facturas incorporadas con posterioridad.'});
+    }
     if(action==='upsert_declarable') {
       if(!['180','190','193','347','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para los modelos 180, 190, 193, 347 y 415.'},{status:400});
       const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
@@ -1212,7 +1565,8 @@ Deno.serve(async (req) => {
       return Response.json({ok:true,engineVersion:ENGINE_VERSION,models,sourceStats:{invoices:invoices.length,taxLines:taxLines.length,invoicePayments:invoicePayments.length,payrolls:payrolls.length,journalEntries:entries.length}});
     }
     const adjustments=body.adjustments||{}; const calculation=calculate(model,data,b,adjustments); applyModelValidation(model,data,calculation); const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[])); const sourceHash=await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
-    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},validation:{blockers:unique(blockers),warnings:unique(warnings),canSaveDraft:true,canExportOfficial:DEFINITIONS[model].officialExport&&blockers.length===0},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length}},sources:SOURCES};
+    const history=filingComparison(data,model,year,period,calculation); if(history.presented) warnings.push('Este período ya tiene una declaración presentada importada. Taxea muestra diferencias, pero bloquea una segunda declaración original.');
+    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:unique(blockers),warnings:unique(warnings),canSaveDraft:true,canExportOfficial:DEFINITIONS[model].officialExport&&blockers.length===0&&!history.presented},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length,filings:filings.length}},sources:SOURCES};
     if(action==='calculate') return Response.json(result);
     if(action==='export_handoff') {
       if(!['420','425'].includes(model)) return Response.json({error:'El traspaso guiado solo está disponible para los modelos 420 y 425.'},{status:400});
@@ -1225,6 +1579,7 @@ Deno.serve(async (req) => {
       const existing=await svc.entities.TaxDraft.filter({companyId,modeloCodigo:model,ejercicio:year,periodo:period},'-created_date',1); const draft=existing?.[0]?await svc.entities.TaxDraft.update(existing[0].id,{...payload,version:Number(existing[0].version||0)+1}):await svc.entities.TaxDraft.create(payload); return Response.json({...result,draft});
     }
     if(action==='export') {
+      if(history.presented) return Response.json({ok:false,error:'Este período ya consta presentado.',blockers:['No se generará otra declaración original. Revise las diferencias y prepare, cuando proceda, una rectificativa, complementaria o solicitud de rectificación con referencia al justificante anterior.']},{status:422});
       if(!DEFINITIONS[model].officialExport) return Response.json({ok:false,error:'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
       if(blockers.length) return Response.json({ok:false,error:'La exportación está bloqueada por incidencias fiscales.',blockers:unique(blockers),warnings:unique(warnings)},{status:422});
       if(['303'].includes(model)&&activities.some((a:any)=>['simplificado','grupo_entidades'].includes(a.indirectTaxRegime))) return Response.json({ok:false,error:'El perfil requiere páginas/regímenes especiales no exportables de forma automática.',blockers:['Revisa régimen simplificado/grupo de entidades y utiliza el modelo específico aplicable.']},{status:422});
