@@ -551,6 +551,25 @@ function export415Import(company: any, year: number, calculation: any) {
   return [declaration, ...records].join('\r\n');
 }
 
+function transferLayoutErrors(model: string, content: string) {
+  const records = content.split('
+');
+  if (model === '347') {
+    const errors = records.length < 2 ? ['El 347 debe incluir cabecera y al menos un declarado.'] : [];
+    if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 347 deben tener exactamente 500 posiciones.');
+    if (!records[0]?.startsWith('1347')) errors.push('La cabecera del 347 no tiene el identificador oficial esperado.');
+    if (records.slice(1).some(record => !record.startsWith('2347') || record[75] !== 'D')) errors.push('Hay registros de declarado 347 con tipo de hoja inválido.');
+    return errors;
+  }
+  if (model === '415') {
+    const errors = records.length < 2 ? ['El soporte 415 debe incluir declaración y al menos un declarado.'] : [];
+    if (records[0]?.length !== 246 || !records[0]?.startsWith('1415')) errors.push('La cabecera de importación 415 no cumple las 246 posiciones del programa ATC.');
+    if (records.slice(1).some(record => record.length !== 356 || !record.startsWith('2415'))) errors.push('Hay registros de declarado 415 que no cumplen las 356 posiciones del importador ATC.');
+    return errors;
+  }
+  return [];
+}
+
 function wrap(model: string, year: number, period: string, pages: string, developerTaxId: string) {
   const prefix=`<T${model}0${year}${period}0000><AUX>${' '.repeat(70)}TX01${' '.repeat(4)}${normalizedText(developerTaxId,9)}${' '.repeat(213)}</AUX>`;
   const suffix=`</T${model}0${year}${period}0000>`;
@@ -596,6 +615,8 @@ Deno.serve(async (req) => {
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
     if(!company.nif_cif) blockers.push('La empresa no tiene NIF/CIF configurado.');
+    else if(!validSpanishTaxId(company.nif_cif)) blockers.push('El NIF/CIF de la empresa no tiene nueve caracteres válidos para los diseños oficiales.');
+    if(!company.razon_social) blockers.push('La empresa no tiene razón social legal configurada.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
     const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,blockers,warnings,period,year};
@@ -628,6 +649,8 @@ Deno.serve(async (req) => {
         const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
         content=wrap(model,year,period,pages,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`; extension=model; format='Diseño de registro AEAT';
       }
+      const layoutErrors=transferLayoutErrors(model,content);
+      if(layoutErrors.length) return Response.json({ok:false,error:'El fichero generado no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
       const hash=await sha256(content);
       const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined})});
       return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content),nextStep:model==='415'?'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Corrige cualquier incidencia y genera allí el .dec.':undefined}});
