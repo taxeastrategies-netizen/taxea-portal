@@ -211,6 +211,7 @@ function GastosFields({ form, set }) {
       <F label="Proveedor" col2><Input value={form.proveedor_cliente || ''} onChange={e => set('proveedor_cliente', e.target.value)} className="h-8 text-sm" /></F>
       <F label="NIF/CIF proveedor"><Input value={form.nif_proveedor || ''} onChange={e => set('nif_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Fecha"><Input type="date" value={form.fecha || ''} onChange={e => set('fecha', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Fecha real de recepción"><Input type="date" value={form.fecha_recepcion || ''} onChange={e => set('fecha_recepcion', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Email"><Input type="email" value={form.email_proveedor || ''} onChange={e => set('email_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Teléfono"><Input value={form.telefono_proveedor || ''} onChange={e => set('telefono_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Dirección fiscal" col2><Input value={form.direccion_proveedor || ''} onChange={e => set('direccion_proveedor', e.target.value)} className="h-8 text-sm" /></F>
@@ -253,3 +254,4 @@ function F({ label, children, col2 }) {
     </div>
   );
 }
+
