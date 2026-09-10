@@ -15,6 +15,11 @@
       "type": "string",
       "format": "date"
     },
+    "receiptDate": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha acreditada de recepci\u00f3n del justificante. Si falta, el motor solo puede usar la fecha de alta como aproximaci\u00f3n y lo advierte."
+    },
     "taxKind": {
       "type": "string",
       "enum": [
@@ -34,6 +39,27 @@
     },
     "deductibleQuota": {
       "type": "number"
+    },
+    "deductionYear": {
+      "type": "number",
+      "description": "Ejercicio en el que se ejerce el derecho a deducir, que puede diferir del devengo de la factura."
+    },
+    "deductionPeriod": {
+      "type": "string",
+      "description": "Per\u00edodo de autoliquidaci\u00f3n en el que se ejerce la deducci\u00f3n (1T-4T o 01-12)."
+    },
+    "deductionAssignmentSource": {
+      "type": "string",
+      "enum": [
+        "fecha_recepcion",
+        "alta_posterior_presentacion",
+        "manual_asesor",
+        "criterio_caja",
+        "migracion"
+      ]
+    },
+    "deductionAssignmentReason": {
+      "type": "string"
     },
     "nonDeductibleQuota": {
       "type": "number"
