@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v4';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v5';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -9,8 +9,8 @@ const DEFINITIONS: Record<string, any> = {
   '123': { name: 'Retenciones de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v2.0', designYear: '2024+', officialExport: true },
   '130': { name: 'Pago fraccionado IRPF en estimación directa', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'HAP/258/2015 v1.2', designYear: '2019+', officialExport: true },
   '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
-  '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: false },
-  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025+', officialExport: false },
+  '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: false, designWarning: 'El cálculo anual es revisable, pero no se genera un fichero presentable hasta completar y validar claves, subclaves y datos personales exigidos por el diseño AEAT.' },
+  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025+', officialExport: false, designWarning: 'El cálculo anual es revisable, pero no se genera un fichero presentable hasta completar y validar la naturaleza de la renta, emisor, mercado y demás datos exigidos por el diseño AEAT.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
   '390': { name: 'Resumen anual IVA', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'DR390e2025', designYear: '2025', officialExport: false, designWarning: 'El diseño oficial del ejercicio 2026 todavía no está publicado/validado.' },
@@ -33,12 +33,17 @@ const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? '').trim();
 const unique = <T>(values: T[]) => [...new Set(values)];
 
-function authorize(user: any, companyId: string) {
+function authorize(user: any, companyId: string, company: any) {
   const role = clean(user?.role).toLowerCase();
   if (['admin', 'super_admin', 'advisor', 'asesor'].includes(role)) return;
-  if (!companyId || clean(user?.data?.company_id) !== companyId) {
-    throw Object.assign(new Error('No tienes permiso para consultar la empresa seleccionada.'), { status: 403 });
-  }
+  const ownCompanyId = clean(user?.data?.company_id || user?.company_id);
+  const userEmail = clean(user?.email).toLowerCase();
+  const ownerEmail = clean(company?.owner_email).toLowerCase();
+  const authorizedEmails = Array.isArray(company?.usuarios_autorizados)
+    ? company.usuarios_autorizados.map((email: unknown) => clean(email).toLowerCase())
+    : [];
+  if (companyId && (ownCompanyId === companyId || (!!userEmail && ownerEmail === userEmail) || authorizedEmails.includes(userEmail))) return;
+  throw Object.assign(new Error('No tienes permiso para consultar la empresa seleccionada.'), { status: 403 });
 }
 
 async function listAll(entity: any, filter: any, sort = '-created_date') {
@@ -724,15 +729,23 @@ Deno.serve(async (req) => {
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),valid:import415.length===2&&import415[0].length===246&&import415[1].length===356&&import415[1].startsWith('2415')},
       ];
       const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test'); const handoffCheck={model:'420/425 handoff',valid:handoff420.includes('PASO_FINAL')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff420.split('\r\n').length>8};
-      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid; return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck});
+      const accessCompany={id:'company-test',owner_email:'owner@example.test',usuarios_autorizados:['authorized@example.test']};
+      const authorizationCheck:any={model:'legacy user authorization',owner:false,authorized:false,directCompany:false,crossCompanyDenied:false};
+      try{authorize({role:'user',email:'owner@example.test'},'company-test',accessCompany);authorizationCheck.owner=true;}catch{}
+      try{authorize({role:'user',email:'authorized@example.test'},'company-test',accessCompany);authorizationCheck.authorized=true;}catch{}
+      try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
+      try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
+      authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
+      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid; return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck});
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
     if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
-    authorize(user,companyId); const svc=base44.asServiceRole;
-    const [company,profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,entries,entryLines,declarables]=await Promise.all([
-      svc.entities.Company.get(companyId), listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}),
-    ]);
+    const svc=base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
+    authorize(user,companyId,company);
+    const [profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,entries,entryLines,declarables]=await Promise.all([
+      listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}),
+    ]);
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
     if(!company.nif_cif) blockers.push('La empresa no tiene NIF/CIF configurado.');
     else if(!validSpanishTaxId(company.nif_cif)) blockers.push('El NIF/CIF de la empresa no tiene nueve caracteres válidos para los diseños oficiales.');
@@ -741,7 +754,7 @@ Deno.serve(async (req) => {
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
     const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,declarables,blockers,warnings,period,year};
     if(action==='upsert_declarable') {
-      if(!['180','190','193'].includes(model)) return Response.json({error:'Modelo anual no soportado para enriquecimiento manual.'},{status:400});
+      if(model!=='180') return Response.json({error:'El enriquecimiento manual estructurado solo está habilitado para el modelo 180.'},{status:400});
       const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
       const sourceId=clean(body.sourceId); const sourceType=clean(body.sourceType)||'manual'; const input=body.payload||{};
       const allowed180=['representativeTaxId','recipientProvinceCode','modality','withholdingRate','accrualYear','propertySituation','cadastralReference','roadType','roadName','numberingType','houseNumber','numberQualifier','block','portal','stair','floor','door','complement','locality','municipality','municipalityCode','propertyProvinceCode','postalCode'];
