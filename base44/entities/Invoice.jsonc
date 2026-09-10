@@ -20,6 +20,11 @@
       "type": "string",
       "format": "date"
     },
+    "fecha_recepcion": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha real de recepci\u00f3n de la factura recibida. Determina desde qu\u00e9 per\u00edodo puede ejercerse la deducci\u00f3n del IVA/IGIC, sin alterar el devengo contable."
+    },
     "cliente_nombre": {
       "type": "string"
     },
