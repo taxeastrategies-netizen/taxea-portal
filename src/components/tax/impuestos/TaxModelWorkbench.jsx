@@ -32,16 +32,7 @@ const MODEL_180_FIELDS = [
   ['complement', 'Complemento de dirección', 'text'], ['representativeTaxId', 'NIF representante (si procede)', 'text'],
 ];
 
-const MODEL_180_FIELDS = [
-  ['recipientProvinceCode', 'Provincia perceptor (2 dígitos)', 'text'],
-  ['cadastralReference', 'Referencia catastral', 'text'],
-  ['roadType', 'Tipo vía INE', 'text'], ['roadName', 'Nombre de la vía', 'text'], ['houseNumber', 'Número', 'text'],
-  ['locality', 'Localidad', 'text'], ['municipality', 'Municipio', 'text'], ['municipalityCode', 'Código municipio INE (5 dígitos)', 'text'],
-  ['propertyProvinceCode', 'Provincia inmueble (2 dígitos)', 'text'], ['postalCode', 'Código postal', 'text'],
-  ['complement', 'Complemento de dirección', 'text'], ['representativeTaxId', 'NIF representante (si procede)', 'text'],
-];
 
-function formatMoney(value) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
 }
 
@@ -107,50 +98,7 @@ function Annual180Editor({ details, values, onChange, onSave, saving, canReview 
   );
 }
 
-function Annual180Editor({ details, values, onChange, onSave, saving, canReview }) {
-  if (!details?.length) return null;
-  return (
-    <section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
-      <div className="flex items-start gap-3">
-        <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-700" />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-slate-800">Fichas de inmueble obligatorias del modelo 180</h3>
-          <p className="mt-1 text-xs leading-5 text-slate-600">Cada pago conserva su factura de origen. La ficha debe completarse y quedar validada por asesor antes de habilitar el fichero AEAT.</p>
-          <div className="mt-3 space-y-3">
-            {details.map(detail => {
-              const payload = values[detail.recordKey] || detail.manual || {};
-              return (
-                <details key={detail.recordKey} className="rounded-xl border border-violet-200 bg-white p-3">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-800">
-                    {detail.name || detail.taxId} · {formatMoney(detail.base)} · <span className={detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'text-emerald-700' : 'text-amber-700'}>{detail.reviewStatus === 'validado_asesor' && !detail.missingFields?.length ? 'Validado' : `${detail.missingFields?.length || 0} dato(s) pendiente(s)`}</span>
-                  </summary>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <label className="text-xs font-medium text-slate-600">Situación inmueble
-                      <select value={payload.propertySituation || ''} onChange={event => onChange(detail.recordKey, 'propertySituation', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm">
-                        <option value="">Seleccionar</option><option value="1">1 · España salvo País Vasco/Navarra, con referencia</option><option value="2">2 · País Vasco, con referencia</option><option value="3">3 · Navarra, con referencia</option><option value="4">4 · Sin referencia catastral</option>
-                      </select>
-                    </label>
-                    <label className="text-xs font-medium text-slate-600">Modalidad
-                      <select value={payload.modality || '1'} onChange={event => onChange(detail.recordKey, 'modality', event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm"><option value="1">1 · Dineraria</option><option value="2">2 · En especie</option></select>
-                    </label>
-                    {MODEL_180_FIELDS.map(([key, label, type]) => <label key={key} className="text-xs font-medium text-slate-600">{label}<input type={type} value={payload[key] ?? ''} onChange={event => onChange(detail.recordKey, key, event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm" /></label>)}
-                  </div>
-                  {!!detail.missingFields?.length && <p className="mt-3 text-xs text-amber-700">Pendiente: {detail.missingFields.join(', ')}.</p>}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onSave(detail, 'pendiente_revision')} disabled={saving}><Save className="mr-2 h-3.5 w-3.5" />Guardar ficha</Button>
-                    {canReview && <Button size="sm" className="bg-violet-700 hover:bg-violet-800" onClick={() => onSave(detail, 'validado_asesor')} disabled={saving || !!detail.missingFields?.length}><ShieldCheck className="mr-2 h-3.5 w-3.5" />Validar como asesor</Button>}
-                  </div>
-                </details>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
-function StatusBadge({ model }) {
   if (model.exportMode === 'atc_guided_packet') return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado ATC</span>;
   if (model.exportMode === 'atc_program_import') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Importable en ATC</span>;
   if (model.officialExport) return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Diseño AEAT</span>;
@@ -168,8 +116,7 @@ export default function TaxModelWorkbench() {
   const [result, setResult] = useState(null);
   const [actionError, setActionError] = useState('');
   const [lastExportInfo, setLastExportInfo] = useState(null);
-  const [adjustments, setAdjustments] = useState({});
-  const [annualRecordEdits, setAnnualRecordEdits] = useState({});
+
   const [annualRecordEdits, setAnnualRecordEdits] = useState({});
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -201,12 +148,7 @@ export default function TaxModelWorkbench() {
     setAnnualRecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
   }, [modelCode, result?.source?.hash]);
 
-  useEffect(() => {
-    if (modelCode !== '180' || !result?.calculation?.details) return;
-    setAnnualRecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
-  }, [modelCode, result?.source?.hash]);
 
-  const invoke = useMutation({
     mutationFn: async ({ action }) => {
       const response = await base44.functions.invoke('taxModelOperations', {
         action,
@@ -244,18 +186,7 @@ export default function TaxModelWorkbench() {
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
 
-  const saveDeclarable = useMutation({
-    mutationFn: async ({ detail, reviewStatus }) => (await base44.functions.invoke('taxModelOperations', {
-      action: 'upsert_declarable', companyId, modeloCodigo: '180', ejercicio: year, periodo: 'Anual',
-      recordKey: detail.recordKey, sourceType: 'Invoice', sourceId: detail.id, payload: annualRecordEdits[detail.recordKey] || detail.manual || {}, reviewStatus,
-    })).data,
-    onSuccess: () => { setActionError(''); invoke.mutate({ action: 'calculate' }); },
-    onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo guardar la ficha anual.'),
-  });
-  const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
-  const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
 
-  if (!companyId) return <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa para preparar sus modelos.</div>;
 
   return (
     <div className="grid min-h-[690px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -349,9 +280,7 @@ export default function TaxModelWorkbench() {
 
           {modelCode === '180' && result && <Annual180Editor details={result.calculation?.details} values={annualRecordEdits} onChange={updateAnnualRecord} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
 
-          {modelCode === '180' && result && <Annual180Editor details={result.calculation?.details} values={annualRecordEdits} onChange={updateAnnualRecord} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
 
-          {!result ? (
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><RefreshCw className="h-5 w-5 text-cyan-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Fuente única</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cruza líneas fiscales, facturas, nóminas y asientos confirmados sin alterar ningún registro.</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Validación previa</h3><p className="mt-1 text-xs leading-5 text-slate-500">Los datos obligatorios ausentes bloquean la exportación. Un aviso nunca se convierte en una cifra inventada.</p></div>
