@@ -58,6 +58,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     tipo: 'emitida',
     numero_factura: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
+    fecha_recepcion: new Date().toISOString().slice(0, 10),
     fecha_vencimiento: '',
     cliente_nombre: '',
     cliente_nif: '',
@@ -144,6 +145,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     const e = {};
     if (!form.numero_factura?.trim()) e.numero_factura = 'Obligatorio';
     if (!form.fecha_emision) e.fecha_emision = 'Obligatorio';
+    if (form.tipo === 'recibida' && !form.fecha_recepcion) e.fecha_recepcion = 'Obligatorio para asignar la deducción al período correcto';
+    if (form.tipo === 'recibida' && form.fecha_recepcion && form.fecha_emision && form.fecha_recepcion < form.fecha_emision) e.fecha_recepcion = 'No puede ser anterior a la fecha de emisión';
     if (form.base_imponible === '' || isNaN(parseFloat(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
     else if (parseFloat(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
     if (form.aplica_retencion && (form.retencion_irpf === '' || isNaN(parseFloat(form.retencion_irpf)))) {
@@ -174,6 +177,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       trimestre,
       subido_por: user?.email,
     };
+    if (payload.tipo !== 'recibida') delete payload.fecha_recepcion;
     try {
       if (editing?.id) {
         setSaveError('Las facturas definitivas no se editan. Anula la factura y emite una nueva o rectificativa.');
@@ -293,6 +297,12 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <Label>Fecha vencimiento</Label>
               <Input type="date" value={form.fecha_vencimiento || ''} onChange={set('fecha_vencimiento')} />
             </div>
+            {form.tipo === 'recibida' && <div className="col-span-2 space-y-1.5">
+              <Label>Fecha real de recepción *</Label>
+              <Input type="date" value={form.fecha_recepcion || ''} onChange={set('fecha_recepcion')} className={errors.fecha_recepcion ? 'border-destructive' : ''} />
+              <p className="text-xs text-muted-foreground">Determina desde qué período puede deducirse el IVA/IGIC. No cambia el ejercicio contable de la factura.</p>
+              <ErrMsg msg={errors.fecha_recepcion} />
+            </div>}
           </div>
 
           {/* Cliente */}
@@ -549,3 +559,4 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     </Dialog>
   );
 }
+
