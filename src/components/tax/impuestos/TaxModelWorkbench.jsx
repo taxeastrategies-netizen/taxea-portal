@@ -192,13 +192,13 @@ export default function TaxModelWorkbench() {
     queryFn: async () => (await base44.functions.invoke('taxModelOperations', { action: 'catalog' })).data,
   });
 
-  const { data: fiscalProfiles = [] } = useQuery({
+  const { data: fiscalContext } = useQuery({
     queryKey: ['fiscal-profile-tax-models', companyId],
-    queryFn: () => base44.entities.FiscalProfile.filter({ company_id: companyId }),
+    queryFn: async () => (await base44.functions.invoke('taxModelOperations', { action: 'context', companyId })).data,
     enabled: !!companyId,
   });
 
-  const profile = fiscalProfiles.find(item => item.active !== false) || fiscalProfiles[0];
+  const profile = fiscalContext?.profile;
   const models = catalogResponse?.models || [];
   const definition = models.find(item => item.code === modelCode) || models[0];
   const periodOptions = useMemo(() => definition ? periodsFor(definition, profile) : PERIODS.trimestral, [definition, profile]);
