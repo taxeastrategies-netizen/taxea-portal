@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v3';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.10-v4';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -8,7 +8,7 @@ const DEFINITIONS: Record<string, any> = {
   '115': { name: 'Retenciones por arrendamientos urbanos', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v1.3', designYear: '2019+', officialExport: true },
   '123': { name: 'Retenciones de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v2.0', designYear: '2024+', officialExport: true },
   '130': { name: 'Pago fraccionado IRPF en estimación directa', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'HAP/258/2015 v1.2', designYear: '2019+', officialExport: true },
-  '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014', designYear: '2023+', officialExport: false },
+  '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
   '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: false },
   '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025+', officialExport: false },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true },
@@ -396,6 +396,7 @@ function applyModelValidation(model: string, data: any, calculation: any) {
   if (model === '425' && year > 2025) data.blockers.push('La ATC todavía no ha publicado el programa anual 425 del ejercicio 2026.');
   if (model === '390' && !['iva', 'mixto'].includes(indirect)) data.blockers.push('El modelo 390 solo corresponde a sujetos y operaciones en territorio IVA.');
   if (model === '390' && year > 2025) data.blockers.push('La AEAT todavía no ha publicado el diseño anual 390 del ejercicio 2026.');
+  if (model === '180' && year > 2025) data.blockers.push('El modelo anual 180 del ejercicio 2026 todavía no está abierto ni contrastado con la campaña AEAT correspondiente.');
   if (model === '347' && profile?.usesSII) data.blockers.push('El perfil está adscrito al SII y, con carácter general, queda excluido de presentar el modelo 347; confirme cualquier excepción censal.');
   if (model === '415' && !['igic', 'mixto'].includes(indirect)) data.blockers.push('El modelo 415 solo corresponde a operaciones en el ámbito del IGIC canario.');
   if (['347', '415'].includes(model) && !(calculation.details || []).length) data.blockers.push('No existen operaciones que superen el umbral por tercero; no procede generar una declaración vacía.');
@@ -405,8 +406,47 @@ function applyModelValidation(model: string, data: any, calculation: any) {
 function calculateAnnualRetention(data: any, b: any, model: '180'|'190'|'193') {
   if (model === '180') {
     const base = calculateSimpleRetention(data, b, '115');
-    if (base.details.length) data.blockers.push('El modelo 180 exige referencia catastral, situación y dirección estructurada del inmueble; esos datos no existen todavía en la ficha de factura/contraparte.');
-    return base;
+    const records = new Map((data.declarables || []).filter((row: any) => row.modeloCodigo === '180').map((row: any) => [row.recordKey, row]));
+    let incomplete = 0;
+    let pendingReview = 0;
+    const details = base.details.map((detail: any) => {
+      const recordKey = `Invoice:${detail.id}`;
+      const stored: any = records.get(recordKey);
+      const invoice = data.invoices.find((item: any) => item.id === detail.id);
+      const payload = stored?.payload || {};
+      const derivedRate = detail.base ? money(Math.abs(detail.withholding / detail.base) * 100) : 0;
+      const manual = {
+        representativeTaxId: clean(payload.representativeTaxId),
+        recipientProvinceCode: clean(payload.recipientProvinceCode) || provinceCode(invoiceCounterparty(invoice || {}).province),
+        modality: ['1','2'].includes(clean(payload.modality)) ? clean(payload.modality) : '1',
+        withholdingRate: payload.withholdingRate == null ? derivedRate : money(payload.withholdingRate),
+        accrualYear: /^\d{4}$/.test(clean(payload.accrualYear)) ? clean(payload.accrualYear) : '0000',
+        propertySituation: clean(payload.propertySituation),
+        cadastralReference: clean(payload.cadastralReference),
+        roadType: clean(payload.roadType), roadName: clean(payload.roadName), numberingType: clean(payload.numberingType) || 'NUM',
+        houseNumber: clean(payload.houseNumber), numberQualifier: clean(payload.numberQualifier), block: clean(payload.block), portal: clean(payload.portal),
+        stair: clean(payload.stair), floor: clean(payload.floor), door: clean(payload.door), complement: clean(payload.complement),
+        locality: clean(payload.locality), municipality: clean(payload.municipality), municipalityCode: clean(payload.municipalityCode),
+        propertyProvinceCode: clean(payload.propertyProvinceCode), postalCode: clean(payload.postalCode),
+      };
+      const missingFields: string[] = [];
+      if (!/^\d{2}$/.test(manual.recipientProvinceCode)) missingFields.push('provincia del perceptor');
+      if (!['1','2','3','4'].includes(manual.propertySituation)) missingFields.push('situación del inmueble');
+      if (manual.propertySituation !== '4' && !manual.cadastralReference) missingFields.push('referencia catastral');
+      if (!manual.roadType) missingFields.push('tipo de vía');
+      if (!manual.roadName) missingFields.push('nombre de vía');
+      if (!manual.municipality) missingFields.push('municipio');
+      if (!/^\d{5}$/.test(manual.municipalityCode)) missingFields.push('código INE de municipio');
+      if (!/^\d{2}$/.test(manual.propertyProvinceCode)) missingFields.push('provincia del inmueble');
+      if (!/^\d{5}$/.test(manual.postalCode)) missingFields.push('código postal');
+      if (missingFields.length) incomplete += 1;
+      if (stored?.reviewStatus !== 'validado_asesor') pendingReview += 1;
+      return { ...detail, recordKey, manual, enrichmentId: stored?.id, reviewStatus: stored?.reviewStatus || 'pendiente_revision', missingFields };
+    });
+    if (incomplete) data.blockers.push(`${incomplete} registro(s) del modelo 180 no tienen completa la ficha oficial del inmueble.`);
+    if (pendingReview) data.blockers.push(`${pendingReview} registro(s) del modelo 180 no han sido validados por un asesor.`);
+    if (!details.length) data.blockers.push('No se han detectado pagos de alquiler con retención para el resumen anual 180.');
+    return { ...base, details };
   }
   if (model === '193') {
     const base = calculateSimpleRetention(data, b, '123');
@@ -495,6 +535,32 @@ function export303(company: any, profile: any, year: number, period: string, cal
   place(p1,365,17,numeric(o.intraBase,17)); place(p1,382,17,numeric(o.intraQuota,17)); place(p1,399,17,numeric(o.reverseBase,17)); place(p1,416,17,numeric(o.reverseQuota,17)); place(p1,696,17,numeric(o.outputQuota,17,true)); place(p1,713,17,numeric(o.deductibleBase,17)); place(p1,730,17,numeric(o.deductibleQuota,17)); place(p1,1002,17,numeric(o.deductibleQuota,17,true)); place(p1,1019,17,numeric(calculation.result,17,true));
   const p3=page(1017,1006,'</T30303000>'); place(p3,1,11,'<T30303000>'); place(p3,12,17,numeric(o.intraSupplies,17,true)); place(p3,29,17,numeric(o.exports,17,true)); place(p3,46,17,numeric(o.nonSubject,17,true)); place(p3,63,17,numeric(o.reverseBase,17,true)); place(p3,199,17,numeric(calculation.result,17,true)); place(p3,216,5,numeric(100,5,false,2)); place(p3,221,17,numeric(calculation.result,17,true)); place(p3,340,17,numeric(calculation.result,17,true)); place(p3,408,17,numeric(calculation.result,17,true)); place(p3,425,1,(calculation.details||[]).length?' ':'X');
   return p1.join('')+p3.join('');
+}
+
+function export180(company: any, year: number, calculation: any, declarationNumber: string) {
+  const details = calculation.details || [];
+  const header = Array(500).fill(' ');
+  place(header,1,1,'1'); place(header,2,3,'180'); place(header,5,4,String(year)); place(header,9,9,normalizedText(company.nif_cif,9));
+  place(header,18,40,normalizedText(company.razon_social,40)); place(header,58,1,'T');
+  place(header,59,9,numeric(clean(company.telefono).replace(/\D/g,''),9,false,0)); place(header,68,40,normalizedText(company.razon_social,40));
+  place(header,108,13,declarationNumber); place(header,121,2,'  '); place(header,123,13,numeric(0,13,false,0));
+  place(header,136,9,numeric(details.length,9,false,0)); place(header,145,16,signedAmount(details.reduce((sum:number,row:any)=>sum+money(row.base),0),16));
+  place(header,161,15,numeric(details.reduce((sum:number,row:any)=>sum+Math.abs(money(row.withholding)),0),15));
+  const records=details.map((row:any)=>{
+    const m=row.manual||{}; const record=Array(500).fill(' ');
+    place(record,1,1,'2'); place(record,2,3,'180'); place(record,5,4,String(year)); place(record,9,9,normalizedText(company.nif_cif,9));
+    place(record,18,9,normalizedText(row.taxId,9)); place(record,27,9,normalizedText(m.representativeTaxId,9)); place(record,36,40,normalizedText(row.name,40));
+    place(record,76,2,numeric(m.recipientProvinceCode,2,false,0)); place(record,78,1,m.modality||'1'); place(record,79,14,signedAmount(row.base,14));
+    place(record,93,4,numeric(m.withholdingRate,4,false,2)); place(record,97,13,numeric(Math.abs(money(row.withholding)),13)); place(record,110,4,numeric(m.accrualYear||0,4,false,0));
+    place(record,114,1,m.propertySituation); place(record,115,20,normalizedText(m.cadastralReference,20));
+    place(record,135,5,normalizedText(m.roadType,5)); place(record,140,50,normalizedText(m.roadName,50)); place(record,190,3,normalizedText(m.numberingType,3));
+    place(record,193,5,normalizedText(m.houseNumber,5)); place(record,198,3,normalizedText(m.numberQualifier,3)); place(record,201,3,normalizedText(m.block,3));
+    place(record,204,3,normalizedText(m.portal,3)); place(record,207,3,normalizedText(m.stair,3)); place(record,210,3,normalizedText(m.floor,3)); place(record,213,3,normalizedText(m.door,3));
+    place(record,216,40,normalizedText(m.complement,40)); place(record,256,30,normalizedText(m.locality,30)); place(record,286,30,normalizedText(m.municipality,30));
+    place(record,316,5,numeric(m.municipalityCode,5,false,0)); place(record,321,2,numeric(m.propertyProvinceCode,2,false,0)); place(record,323,5,numeric(m.postalCode,5,false,0));
+    return record.join('');
+  });
+  return [header.join(''),...records].join('\r\n');
 }
 
 function export347(company: any, year: number, calculation: any, declarationNumber: string) {
@@ -598,6 +664,13 @@ function exportAtcHandoff(model: '420' | '425', company: any, year: number, peri
 function transferLayoutErrors(model: string, content: string) {
   const records = content.split('
 ');
+  if (model === '180') {
+    const errors = records.length < 2 ? ['El 180 debe incluir cabecera y al menos un perceptor.'] : [];
+    if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 180 deben tener exactamente 500 posiciones.');
+    if (!records[0]?.startsWith('1180')) errors.push('La cabecera del 180 no tiene el identificador oficial esperado.');
+    if (records.slice(1).some(record => !record.startsWith('2180'))) errors.push('Hay registros de perceptor 180 con identificador inválido.');
+    return errors;
+  }
   if (model === '347') {
     const errors = records.length < 2 ? ['El 347 debe incluir cabecera y al menos un declarado.'] : [];
     if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 347 deben tener exactamente 500 posiciones.');
@@ -639,12 +712,15 @@ Deno.serve(async (req) => {
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
       const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'28',value:30},{code:'30',value:30},{code:'09',value:19},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
       const thirdParties={result:0,details:[{taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,quarters:{T1:1000,T2:1000,T3:1000,T4:500},cashAmount:0,propertyTransferAmount:0,propertyRentAmount:0,cashAccounting:false,reverseCharge:false,exempt:false}]};
+      const annual180={result:0,details:[{id:'invoice-test',taxId:'B87654321',name:'ARRENDADOR PRUEBA',base:12000,withholding:2280,manual:{representativeTaxId:'',recipientProvinceCode:'38',modality:'1',withholdingRate:19,accrualYear:'0000',propertySituation:'1',cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',propertyProvinceCode:'38',postalCode:'38001'}}]};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); return {model,length:wrapped.length,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`)}});
+      const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
       const import415=export415Import(company,2025,thirdParties).split('\r\n');
       const transferChecks=[
+        {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),valid:import415.length===2&&import415[0].length===246&&import415[1].length===356&&import415[1].startsWith('2415')},
       ];
@@ -654,8 +730,8 @@ Deno.serve(async (req) => {
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
     if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
     authorize(user,companyId); const svc=base44.asServiceRole;
-    const [company,profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,entries,entryLines]=await Promise.all([
-      svc.entities.Company.get(companyId), listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}),
+    const [company,profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,entries,entryLines,declarables]=await Promise.all([
+      svc.entities.Company.get(companyId), listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}),
     ]);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
@@ -664,7 +740,18 @@ Deno.serve(async (req) => {
     if(!company.razon_social) blockers.push('La empresa no tiene razón social legal configurada.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
     const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
-    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,blockers,warnings,period,year};
+    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,entries,entryLines,declarables,blockers,warnings,period,year};
+    if(action==='upsert_declarable') {
+      if(!['180','190','193'].includes(model)) return Response.json({error:'Modelo anual no soportado para enriquecimiento manual.'},{status:400});
+      const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
+      const sourceId=clean(body.sourceId); const sourceType=clean(body.sourceType)||'manual'; const input=body.payload||{};
+      const allowed180=['representativeTaxId','recipientProvinceCode','modality','withholdingRate','accrualYear','propertySituation','cadastralReference','roadType','roadName','numberingType','houseNumber','numberQualifier','block','portal','stair','floor','door','complement','locality','municipality','municipalityCode','propertyProvinceCode','postalCode'];
+      const allowed=model==='180'?allowed180:[]; const payload=Object.fromEntries(allowed.map(key=>[key,key==='withholdingRate'?money(input[key]):clean(input[key])]).filter(([,value])=>value!==''&&value!=null));
+      const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role); const reviewRequested=body.reviewStatus==='validado_asesor';
+      const reviewStatus=reviewRequested&&canReview?'validado_asesor':'pendiente_revision'; const recordPayload={companyId,modeloCodigo:model,ejercicio:year,recordKey,sourceType,sourceId,payload,reviewStatus,reviewedBy:reviewStatus==='validado_asesor'?user.email:'',reviewedAt:reviewStatus==='validado_asesor'?new Date().toISOString():null,notes:clean(body.notes)};
+      const existing=await svc.entities.TaxDeclarableRecord.filter({companyId,modeloCodigo:model,ejercicio:year,recordKey},'-created_date',1); const record=existing?.[0]?await svc.entities.TaxDeclarableRecord.update(existing[0].id,recordPayload):await svc.entities.TaxDeclarableRecord.create(recordPayload);
+      return Response.json({ok:true,record});
+    }
     if(action==='calculate_bundle') {
       const models=TARGET_MODELS.map(code=>{
         const annual=['180','190','193','347','390','415','425'].includes(code); const modelPeriod=annual?'Anual':'1T'; const modelBounds=bounds(year,modelPeriod); const modelData={...data,period:modelPeriod,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); applyModelValidation(code,modelData,modelCalculation); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:unique(modelData.blockers),warnings:unique(modelData.warnings)};
@@ -689,7 +776,10 @@ Deno.serve(async (req) => {
       if(blockers.length) return Response.json({ok:false,error:'La exportación está bloqueada por incidencias fiscales.',blockers:unique(blockers),warnings:unique(warnings)},{status:422});
       if(['303'].includes(model)&&activities.some((a:any)=>['simplificado','grupo_entidades'].includes(a.indirectTaxRegime))) return Response.json({ok:false,error:'El perfil requiere páginas/regímenes especiales no exportables de forma automática.',blockers:['Revisa régimen simplificado/grupo de entidades y utiliza el modelo específico aplicable.']},{status:422});
       let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
-      if(model==='347') {
+      if(model==='180') {
+        content=export180(company,year,calculation,sequentialDeclarationNumber('180'));
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_180.txt`; extension='txt'; format='Diseño de registro AEAT modelo 180';
+      } else if(model==='347') {
         content=export347(company,year,calculation,sequentialDeclarationNumber('347'));
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_347.txt`; extension='txt'; format='Diseño de registro AEAT modelo 347';
       } else if(model==='415') {
