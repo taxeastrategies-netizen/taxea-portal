@@ -531,7 +531,7 @@ function export130(company: any, year: number, period: string, calculation: any)
 function export303(company: any, profile: any, year: number, period: string, calculation: any) {
   const o=calculation.operations||{}, rates=new Map((o.rates||[]).map((r:any)=>[Number(r.rate),r]));
   const p1=page(1581,1570,'</T30301000>'); place(p1,1,11,'<T30301000>'); place(p1,13,1,declarationType(calculation.result)); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,80,normalizedText(company.razon_social,80)); place(p1,103,4,String(year)); place(p1,107,2,period); place(p1,109,1,'2'); place(p1,110,1,profile?.isREDEME?'1':'2'); place(p1,111,1,'3'); place(p1,112,1,'2'); place(p1,113,1,o.criterionCash?'1':'2'); place(p1,114,1,'2'); place(p1,115,1,'2'); place(p1,116,1,'2'); place(p1,117,1,'2'); place(p1,127,1,profile?.usesSII?'1':'2'); place(p1,128,1,['4T','12'].includes(period)?'2':'0'); place(p1,129,1,['4T','12'].includes(period)?'1':'0'); place(p1,130,1,['01','1T','2T','3T','4T'].includes(period)?'0':'2');
-  const rateFields:any={0:[131,148,153],4:[209,226,231],10:[287,304,309],21:[326,343,348]}; for(const [rate,positions] of Object.entries(rateFields)){const row:any=rates.get(Number(rate))||{}; place(p1,positions[0],17,numeric(row.base,17)); place(p1,positions[1],5,numeric(Number(rate),5,false,2)); place(p1,positions[2],17,numeric(row.quota,17));}
+  const rateFields:Record<string, number[]>={0:[131,148,153],4:[209,226,231],10:[287,304,309],21:[326,343,348]}; for(const [rate,positions] of Object.entries(rateFields)){const row:any=rates.get(Number(rate))||{}; place(p1,positions[0],17,numeric(row.base,17)); place(p1,positions[1],5,numeric(Number(rate),5,false,2)); place(p1,positions[2],17,numeric(row.quota,17));}
   place(p1,365,17,numeric(o.intraBase,17)); place(p1,382,17,numeric(o.intraQuota,17)); place(p1,399,17,numeric(o.reverseBase,17)); place(p1,416,17,numeric(o.reverseQuota,17)); place(p1,696,17,numeric(o.outputQuota,17,true)); place(p1,713,17,numeric(o.deductibleBase,17)); place(p1,730,17,numeric(o.deductibleQuota,17)); place(p1,1002,17,numeric(o.deductibleQuota,17,true)); place(p1,1019,17,numeric(calculation.result,17,true));
   const p3=page(1017,1006,'</T30303000>'); place(p3,1,11,'<T30303000>'); place(p3,12,17,numeric(o.intraSupplies,17,true)); place(p3,29,17,numeric(o.exports,17,true)); place(p3,46,17,numeric(o.nonSubject,17,true)); place(p3,63,17,numeric(o.reverseBase,17,true)); place(p3,199,17,numeric(calculation.result,17,true)); place(p3,216,5,numeric(100,5,false,2)); place(p3,221,17,numeric(calculation.result,17,true)); place(p3,340,17,numeric(calculation.result,17,true)); place(p3,408,17,numeric(calculation.result,17,true)); place(p3,425,1,(calculation.details||[]).length?' ':'X');
   return p1.join('')+p3.join('');
@@ -662,8 +662,7 @@ function exportAtcHandoff(model: '420' | '425', company: any, year: number, peri
 }
 
 function transferLayoutErrors(model: string, content: string) {
-  const records = content.split('
-');
+  const records = content.split('\r\n');
   if (model === '180') {
     const errors = records.length < 2 ? ['El 180 debe incluir cabecera y al menos un perceptor.'] : [];
     if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 180 deben tener exactamente 500 posiciones.');
@@ -724,7 +723,7 @@ Deno.serve(async (req) => {
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),valid:import415.length===2&&import415[0].length===246&&import415[1].length===356&&import415[1].startsWith('2415')},
       ];
-      const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test'); const handoffCheck={model:'420/425 handoff',valid:handoff420.includes('PASO_FINAL')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff420.split('\\r\\n').length>8};
+      const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test'); const handoffCheck={model:'420/425 handoff',valid:handoff420.includes('PASO_FINAL')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff420.split('\r\n').length>8};
       const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid; return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck});
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
@@ -794,7 +793,7 @@ Deno.serve(async (req) => {
       const layoutErrors=transferLayoutErrors(model,content);
       if(layoutErrors.length) return Response.json({ok:false,error:'El fichero generado no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
       const hash=await sha256(content);
-      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined})});
+      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined})});
       return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content),nextStep:model==='415'?'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Corrige cualquier incidencia y genera allí el .dec.':undefined}});
     }
     if(action==='export_review') {
@@ -803,4 +802,5 @@ Deno.serve(async (req) => {
     return Response.json({error:'Acción no soportada.'},{status:400});
   } catch(error){const status=Number((error as any)?.status)||500; return Response.json({error:(error as Error).message||'Error interno'},{status});}
 });
+
 
