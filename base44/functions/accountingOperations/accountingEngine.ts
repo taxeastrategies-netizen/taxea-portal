@@ -665,6 +665,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
         invoiceId: invoice.id,
         lineNumber: 1,
         operationDate: invoice.fecha_operacion || invoice.fecha_emision,
+        receiptDate: invoice.tipo === 'recibida' ? (invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined,
         taxKind: proposal.taxKind || 'no_aplica',
         rate: Number(invoice.tipo_iva || 0),
         base: money(proposal.base),
@@ -711,3 +712,4 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   }
   return { ...created, proposal };
 }
+
