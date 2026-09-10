@@ -100,6 +100,7 @@ function Annual180Editor({ details, values, onChange, onSave, saving, canReview 
 }
 
 
+function StatusBadge({ model }) {
   if (model.exportMode === 'atc_guided_packet') return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado ATC</span>;
   if (model.exportMode === 'atc_program_import') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Importable en ATC</span>;
   if (model.officialExport) return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Diseño AEAT</span>;
@@ -117,7 +118,7 @@ export default function TaxModelWorkbench() {
   const [result, setResult] = useState(null);
   const [actionError, setActionError] = useState('');
   const [lastExportInfo, setLastExportInfo] = useState(null);
-
+  const [adjustments, setAdjustments] = useState({});
   const [annualRecordEdits, setAnnualRecordEdits] = useState({});
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -149,7 +150,7 @@ export default function TaxModelWorkbench() {
     setAnnualRecordEdits(Object.fromEntries(result.calculation.details.map(detail => [detail.recordKey, { ...(detail.manual || {}) }])));
   }, [modelCode, result?.source?.hash]);
 
-
+  const invoke = useMutation({
     mutationFn: async ({ action }) => {
       const response = await base44.functions.invoke('taxModelOperations', {
         action,
@@ -187,7 +188,7 @@ export default function TaxModelWorkbench() {
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
 
-
+  if (!companyId) return <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa para preparar sus modelos.</div>;
 
   return (
     <div className="grid min-h-[690px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -281,7 +282,7 @@ export default function TaxModelWorkbench() {
 
           {modelCode === '180' && result && <Annual180Editor details={result.calculation?.details} values={annualRecordEdits} onChange={updateAnnualRecord} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
 
-
+          {!result ? (
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><RefreshCw className="h-5 w-5 text-cyan-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Fuente única</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cruza líneas fiscales, facturas, nóminas y asientos confirmados sin alterar ningún registro.</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Validación previa</h3><p className="mt-1 text-xs leading-5 text-slate-500">Los datos obligatorios ausentes bloquean la exportación. Un aviso nunca se convierte en una cifra inventada.</p></div>
