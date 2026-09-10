@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertCircle, AlertTriangle, Calculator, CheckCircle2, Download, FileCheck2, FileJson, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Calculator, CheckCircle2, Download, FileCheck2, FileJson, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const PERIODS = {
@@ -81,6 +81,170 @@ function downloadBase64(file) {
   link.download = file.filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function boxesToText(boxes = {}) {
+  return Object.entries(boxes).sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true })).map(([code, value]) => `${code}=${value}`).join('\n');
+}
+
+function boxesFromText(text) {
+  return Object.fromEntries(String(text || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+    const [code, ...rest] = line.split(/[=:;]/);
+    const normalized = rest.join('.').trim().replace(/\s|€|EUR/gi, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
+    return [String(code || '').trim().toUpperCase().replace(/^CASILLA\s*/i, ''), Number(normalized)];
+  }).filter(([code, value]) => code && Number.isFinite(value)));
+}
+
+async function fileSha256(file) {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
+  const [open, setOpen] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [fileInfo, setFileInfo] = useState(null);
+  const [form, setForm] = useState({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', boxesText: '', confirmed: false });
+
+  const reset = () => { setError(''); setNotice(''); setFileInfo(null); setForm({ presentationDate: '', justificationNumber: '', previousJustificationNumber: '', declarationType: 'original', result: '', boxesText: '', confirmed: false }); };
+
+  async function analyzeFile(file) {
+    if (!file) return;
+    setWorking(true); setError(''); setNotice('');
+    try {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const [hash, upload] = await Promise.all([fileSha256(file), base44.integrations.Core.UploadFile({ file })]);
+      let rawContent = '';
+      let extracted = {};
+      if (isPdf) {
+        const response = await base44.integrations.Core.ExtractDataFromUploadedFile({
+          file_url: upload.file_url,
+          json_schema: {
+            type: 'object',
+            properties: {
+              modelo: { type: 'string' }, ejercicio: { type: 'number' }, periodo: { type: 'string' }, nif_cif: { type: 'string' },
+              fechaPresentacion: { type: 'string' }, numeroJustificante: { type: 'string' }, tipoDeclaracion: { type: 'string' }, importeFinal: { type: 'number' },
+              fields: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, label: { type: 'string' }, value: { type: 'number' } } } },
+            },
+          },
+        });
+        extracted = response?.output || response || {};
+      } else {
+        rawContent = await file.text();
+        if (rawContent.length > 2000000) throw new Error('El fichero supera el límite de 2 MB para lectura estructurada.');
+      }
+      const response = await base44.functions.invoke('taxModelOperations', {
+        action: 'preview_filed_return', companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period,
+        rawContent, extracted, fileUrl: upload.file_url, fileName: file.name, fileHash: hash,
+        presentationDate: extracted.fechaPresentacion || '', justificationNumber: extracted.numeroJustificante || '', declarationType: extracted.tipoDeclaracion || 'original',
+      });
+      const data = response.data;
+      setFileInfo({ fileUrl: upload.file_url, fileName: file.name, fileHash: hash, rawContent, extracted, preview: data.preview, warnings: data.warnings || [] });
+      setForm(current => ({ ...current, presentationDate: data.preview?.presentationDate || current.presentationDate, justificationNumber: data.preview?.justificationNumber || current.justificationNumber, declarationType: data.preview?.declarationType || 'original', result: data.preview?.result ?? '', boxesText: boxesToText(data.preview?.boxes), confirmed: false }));
+      if (data.errors?.length) setError(data.errors.join(' '));
+      if (data.warnings?.length) setNotice(data.warnings.join(' '));
+    } catch (caught) {
+      setError(caught?.response?.data?.error || caught?.message || 'No se pudo analizar el modelo presentado.');
+    } finally { setWorking(false); }
+  }
+
+  async function importSnapshot() {
+    if (!fileInfo) return setError('Selecciona el fichero o justificante presentado.');
+    if (!form.confirmed) return setError('Confirma que las casillas coinciden con la declaración presentada.');
+    setWorking(true); setError(''); setNotice('');
+    try {
+      const response = await base44.functions.invoke('taxModelOperations', {
+        action: 'import_filed_return', companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period,
+        rawContent: fileInfo.rawContent, extracted: fileInfo.extracted, fileUrl: fileInfo.fileUrl, fileName: fileInfo.fileName, fileHash: fileInfo.fileHash,
+        presentationDate: form.presentationDate, justificationNumber: form.justificationNumber, previousJustificationNumber: form.previousJustificationNumber,
+        declarationType: form.declarationType, importeFinal: form.result === '' ? undefined : Number(form.result), presentedBoxes: boxesFromText(form.boxesText), confirmImport: true,
+      });
+      setNotice(response.data?.alreadyImported ? 'Este modelo ya estaba guardado; no se creó un duplicado.' : 'Modelo presentado guardado. Los períodos posteriores ya pueden usar su arrastre.');
+      onImported?.();
+    } catch (caught) {
+      const payload = caught?.response?.data;
+      setError(payload?.blockers?.join(' ') || payload?.error || caught?.message || 'No se pudo guardar el modelo presentado.');
+    } finally { setWorking(false); }
+  }
+
+  return (
+    <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h3 className="text-sm font-semibold text-slate-800">Histórico presentado y arrastres</h3><p className="mt-1 text-xs leading-5 text-slate-600">Importa la declaración realmente presentada. Taxea conserva sus casillas como una foto, evita duplicados y compara las facturas incorporadas después.</p></div>
+        <Button type="button" variant="outline" className="gap-2 border-blue-300 bg-white" onClick={() => { setOpen(value => !value); if (open) reset(); }}><Upload className="h-4 w-4" />{open ? 'Cerrar importación' : 'Importar modelo presentado'}</Button>
+      </div>
+      {open && <div className="mt-4 space-y-3 rounded-xl border border-blue-200 bg-white p-4">
+        <label className="block cursor-pointer rounded-xl border border-dashed border-blue-300 bg-blue-50/40 p-4 text-center text-xs text-blue-800"><input type="file" className="hidden" accept=".pdf,.txt,.111,.115,.123,.130,.180,.190,.193,.303,.347,.390,.415,.420,.425,application/pdf,text/plain" onChange={event => analyzeFile(event.target.files?.[0])} />{working ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Analizando…</span> : fileInfo ? fileInfo.fileName : 'Seleccionar fichero oficial o justificante PDF'}</label>
+        {fileInfo && <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <label className="text-xs text-slate-600">Fecha de presentación<input type="date" value={form.presentationDate} onChange={event => setForm(current => ({ ...current, presentationDate: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>
+            <label className="text-xs text-slate-600">Justificante o CSV<input value={form.justificationNumber} onChange={event => setForm(current => ({ ...current, justificationNumber: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>
+            <label className="text-xs text-slate-600">Tipo de declaración<select value={form.declarationType} onChange={event => setForm(current => ({ ...current, declarationType: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2"><option value="original">Original</option><option value="complementaria">Complementaria</option><option value="rectificativa">Rectificativa</option><option value="sustitutiva">Sustitutiva</option></select></label>
+            <label className="text-xs text-slate-600">Resultado presentado<input type="number" step="0.01" value={form.result} onChange={event => setForm(current => ({ ...current, result: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>
+          </div>
+          {form.declarationType !== 'original' && <label className="block text-xs text-slate-600">Justificante anterior<input value={form.previousJustificationNumber} onChange={event => setForm(current => ({ ...current, previousJustificationNumber: event.target.value, confirmed: false }))} className="mt-1 h-9 w-full rounded border px-2" /></label>}
+          <label className="block text-xs text-slate-600">Casillas presentadas · una por línea (`01=1000.00`)<textarea rows={7} value={form.boxesText} onChange={event => setForm(current => ({ ...current, boxesText: event.target.value, confirmed: false }))} className="mt-1 w-full rounded border p-2 font-mono text-xs" /></label>
+          <label className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-800"><input className="mt-1" type="checkbox" checked={form.confirmed} onChange={event => setForm(current => ({ ...current, confirmed: event.target.checked }))} />He contrastado modelo, ejercicio, período, NIF, resultado y casillas con la declaración efectivamente presentada.</label>
+          <Button type="button" onClick={importSnapshot} disabled={working || !form.confirmed} className="gap-2 bg-blue-700 hover:bg-blue-800">{working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Guardar histórico presentado</Button>
+        </>}
+        {error && <p className="text-xs leading-5 text-red-700">{error}</p>}
+        {notice && <p className="text-xs leading-5 text-amber-700">{notice}</p>}
+      </div>}
+    </section>
+  );
+}
+
+function HistoryAndCarryforwardPanel({ result, modelCode }) {
+  const history = result?.history;
+  const carryforward = history?.carryforward || result?.calculation?.carryforward;
+  const applied = carryforward?.carry || [];
+  const review = carryforward?.review || [];
+  const deferred = carryforward?.deferred || [];
+  const prior130 = carryforward?.type === 'irpf_cumulative' ? carryforward.previousFilings || [] : [];
+  const missing130 = carryforward?.type === 'irpf_cumulative' ? carryforward.missingPeriods || [] : [];
+  const hasContent = history?.presented || history?.importedCount || applied.length || review.length || deferred.length || prior130.length || missing130.length;
+  if (!hasContent) return null;
+  return (
+    <section className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+      <div className="flex items-start gap-3">
+        <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" />
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">Histórico, diferencias y arrastres</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-600">La declaración presentada queda congelada. Los documentos posteriores se analizan sin alterar aquella foto ni mover el devengo contable.</p>
+        </div>
+      </div>
+
+      {history?.presented && <div className="rounded-xl border border-amber-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Período ya presentado</p><p className="mt-1 text-sm text-slate-700">{history.filing?.date || 'Fecha no disponible'} · versión {history.filing?.snapshotVersion || 1}{history.filing?.justificationNumber ? ` · justificante ${history.filing.justificationNumber}` : ''}</p></div>
+          <div className="text-right"><p className="text-xs text-slate-500">Presentado / cálculo actual</p><p className="text-sm font-semibold text-slate-900">{formatMoney(history.filing?.result)} / {formatMoney(result.calculation?.result)}</p></div>
+        </div>
+        {!!history.differences?.length ? <div className="mt-3 overflow-auto rounded-lg border border-amber-100">
+          <table className="w-full min-w-[480px] text-xs"><thead className="bg-amber-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Casilla</th><th className="px-3 py-2 text-right">Presentada</th><th className="px-3 py-2 text-right">Actual</th><th className="px-3 py-2 text-right">Diferencia</th></tr></thead><tbody>{history.differences.map(row => <tr key={row.code} className="border-t border-amber-100"><td className="px-3 py-2 font-mono font-semibold text-indigo-700">{row.code}</td><td className="px-3 py-2 text-right">{formatMoney(row.presented)}</td><td className="px-3 py-2 text-right">{formatMoney(row.current)}</td><td className={`px-3 py-2 text-right font-semibold ${Number(row.difference) > 0 ? 'text-red-700' : 'text-emerald-700'}`}>{formatMoney(row.difference)}</td></tr>)}</tbody></table>
+        </div> : <p className="mt-3 text-xs text-emerald-700">El cálculo actual coincide con las casillas importadas.</p>}
+      </div>}
+
+      {carryforward?.type === 'irpf_cumulative' && <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-indigo-100 bg-white p-3"><p className="text-xs font-semibold text-slate-700">Pagos anteriores usados en la casilla 05</p><p className="mt-2 text-xl font-bold text-indigo-800">{prior130.length}</p><p className="mt-1 text-xs text-slate-500">{carryforward.previousPaymentsSource === 'filed_returns' ? 'Tomados de modelos presentados importados.' : carryforward.previousPaymentsSource === 'manual' ? 'Confirmados manualmente para este cálculo.' : 'Falta completar el histórico anterior.'}</p>{prior130.map(row => <p key={row.id} className="mt-1 text-xs text-slate-600">{row.period}: {formatMoney(row.amount)} · {row.date}</p>)}</div>
+        <div className={`rounded-xl border p-3 ${missing130.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}><p className="text-xs font-semibold text-slate-700">Continuidad acumulativa</p><p className="mt-2 text-xs leading-5 text-slate-600">Los ingresos y gastos de grupos 6 y 7 se recalculan desde el 1 de enero. Una factura tardía conserva su ejercicio de devengo y entra en el siguiente trimestre abierto.</p>{!!missing130.length && <p className="mt-2 text-xs font-medium text-red-700">Falta importar: {missing130.join(', ')}.</p>}</div>
+      </div>}
+
+      {(applied.length > 0 || review.length > 0 || deferred.length > 0) && <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-emerald-200 bg-white p-3"><p className="text-xs text-slate-500">Deducciones tardías aplicadas</p><p className="mt-1 text-xl font-bold text-emerald-700">{applied.length}</p><p className="text-xs text-slate-500">{formatMoney(applied.reduce((sum, row) => sum + Number(row.quota || 0), 0))}</p></div>
+        <div className="rounded-xl border border-red-200 bg-white p-3"><p className="text-xs text-slate-500">Requieren revisión</p><p className="mt-1 text-xl font-bold text-red-700">{review.length}</p></div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">Pendientes de período futuro</p><p className="mt-1 text-xl font-bold text-slate-700">{deferred.length}</p></div>
+      </div>}
+
+      {!!history?.lateItems?.length && <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Altas posteriores que afectan al período presentado</p>
+        <div className="mt-3 space-y-2">{history.lateItems.map(item => <div key={item.sourceId} className="rounded-lg border border-red-100 bg-white p-3 text-xs"><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold text-slate-800">{item.document}</span><span className="text-slate-500">Devengo/pago {item.operationDate} · alta {item.addedAt}</span></div><p className="mt-1 leading-5 text-red-700">{item.reason}</p>{Number(item.amount) !== 0 && <p className="mt-1 font-medium text-slate-700">Efecto detectado: {formatMoney(item.amount)}</p>}</div>)}</div>
+      </div>}
+
+      {['111', '115', '123', '303', '420'].includes(modelCode) && history?.presented && <p className="rounded-lg border border-indigo-100 bg-white p-3 text-xs leading-5 text-slate-600">Las ventas, cuotas devengadas y retenciones omitidas no se pasan automáticamente a otro período: Taxea las separa para revisar el procedimiento corrector aplicable al período original.</p>}
+    </section>
+  );
 }
 
 function Annual180Editor({ details, values, onChange, onSave, saving, canReview }) {
@@ -497,6 +661,8 @@ export default function TaxModelWorkbench() {
             <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : lastExportInfo.isHandoff ? 'Traspaso ATC descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
           )}
 
+          <FiledReturnImport key={`${companyId}-${modelCode}-${year}-${period}`} companyId={companyId} modelCode={modelCode} year={year} period={period} onImported={() => invoke.mutate({ action: 'calculate' })} />
+
           {modelCode === '130' && (
             <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
               <div className="flex items-start gap-3">
@@ -536,6 +702,8 @@ export default function TaxModelWorkbench() {
             </div>
           ) : (
             <>
+              <HistoryAndCarryforwardPanel result={result} modelCode={modelCode} />
+
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Resultado</p><p className={`mt-2 text-2xl font-bold ${Number(result.calculation?.result) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{definition?.kind === 'informative' ? 'Informativo' : formatMoney(result.calculation?.result)}</p></div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Documentos trazados</p><p className="mt-2 text-2xl font-bold text-slate-900">{result.source?.count || 0}</p><p className="mt-1 text-[11px] text-slate-400">Hash {result.source?.hash?.slice(0, 12)}…</p></div>
