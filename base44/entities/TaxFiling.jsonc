@@ -157,6 +157,19 @@
       "type": "number",
       "default": 0
     },
+    "resultadoDestino": {
+      "type": "string",
+      "enum": [
+        "a_ingresar",
+        "a_compensar",
+        "a_devolver",
+        "a_deducir",
+        "negativa",
+        "cero",
+        "sin_actividad"
+      ],
+      "description": "Destino confirmado del resultado presentado; necesario para reconstruir saldos a compensar."
+    },
     "notas": {
       "type": "string"
     }
