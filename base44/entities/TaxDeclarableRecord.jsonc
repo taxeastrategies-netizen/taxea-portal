@@ -1,0 +1,79 @@
+{
+  "name": "TaxDeclarableRecord",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string",
+      "enum": [
+        "180",
+        "190",
+        "193"
+      ]
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "recordKey": {
+      "type": "string"
+    },
+    "sourceType": {
+      "type": "string"
+    },
+    "sourceId": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "reviewStatus": {
+      "type": "string",
+      "enum": [
+        "pendiente_revision",
+        "validado_asesor"
+      ],
+      "default": "pendiente_revision"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "modeloCodigo",
+    "ejercicio",
+    "recordKey"
+  ],
+  "rls": {
+    "create": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "data.companyId": "{{user.data.company_id}}"
+    },
+    "delete": {
+      "data.companyId": "{{user.data.company_id}}"
+    }
+  }
+}
