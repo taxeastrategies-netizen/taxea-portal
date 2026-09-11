@@ -46,7 +46,7 @@ export default function ImpuestosModule() {
             <p className="mt-0.5 text-sm text-muted-foreground">Cálculo, revisión, trazabilidad y exportación controlada desde la contabilidad real</p>
           </div>
           <div className="max-w-xl rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs leading-5 text-cyan-800">
-            Taxea bloquea la exportación si faltan datos fiscales obligatorios. La presentación final sigue requiriendo revisión y autorización profesional.
+            Taxea muestra las incidencias como recomendaciones y mantiene disponible la exportación. La sede AEAT o el programa ATC realizan la validación definitiva antes de presentar.
           </div>
         </div>
         <div className="flex gap-1 overflow-x-auto">
