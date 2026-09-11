@@ -40,6 +40,22 @@
     "deductibleQuota": {
       "type": "number"
     },
+    "deductionCategory": {
+      "type": "string",
+      "enum": [
+        "interior_current",
+        "interior_investment",
+        "import_current",
+        "import_investment",
+        "intra_goods_current",
+        "intra_goods_investment",
+        "intra_services",
+        "agriculture_compensation",
+        "administrative_resolution",
+        "deduction_adjustment"
+      ],
+      "description": "Clasificaci\u00f3n anual del IVA soportado para los apartados de deducciones del modelo 390. Si falta, el motor propone una categor\u00eda y emite una recomendaci\u00f3n revisable."
+    },
     "deductionYear": {
       "type": "number",
       "description": "Ejercicio en el que se ejerce el derecho a deducir, que puede diferir del devengo de la factura."
