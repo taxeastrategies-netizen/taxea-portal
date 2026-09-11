@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.11-v11';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.11-v12';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -9,15 +9,20 @@ const DEFINITIONS: Record<string, any> = {
   '123': { name: 'Retenciones de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v2.0', designYear: '2024+', officialExport: true },
   '130': { name: 'Pago fraccionado IRPF en estimación directa', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'HAP/258/2015 v1.2', designYear: '2019+', officialExport: true },
   '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
-  '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida se habilita para registros de nómina clave A y profesionales clave G después de completar y validar la ficha anual. Otras claves requieren ampliar su bloque específico antes de exportar.' },
-  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida exige clasificar y validar cada renta. Esta versión admite registros de perceptor sin relación de gastos del art. 26.1.a LIRPF; si ese anexo resulta aplicable, la exportación queda bloqueada.' },
+  '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida automatiza nóminas clave A y profesionales clave G. Revisa manualmente cualquier otra clave antes de importar el fichero.' },
+  '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida admite registros de perceptor sin relación de gastos del art. 26.1.a LIRPF. Si ese anexo resulta aplicable, complétalo en la sede tras importar y validar el fichero.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
-  '390': { name: 'Resumen anual IVA', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'DR390e2025', designYear: '2025', officialExport: false, designWarning: 'El diseño oficial del ejercicio 2026 todavía no está publicado/validado.' },
+  '390': { name: 'Resumen anual IVA', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'DR390e2025 v1.02', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida usa el último diseño oficial publicado (ejercicio 2025). Las diferencias de clasificación anual se muestran como recomendaciones revisables.' },
   '415': { name: 'Operaciones económicas con terceras personas', authority: 'ATC', frequency: 'anual', kind: 'informative', design: 'BOC 41/2015 + Programa de ayuda ATC 2025', designYear: '2025', officialExport: true, exportMode: 'atc_program_import', designWarning: 'Taxea genera el soporte oficial de importación de declarados. El programa ATC debe importarlo, validarlo y generar el .dec final.' },
   '420': { name: 'Autoliquidación trimestral IGIC régimen general', authority: 'ATC', frequency: 'trimestral', kind: 'indirect_tax', design: 'Programa de ayuda ATC 2026 v9.3.0', designYear: '2026', officialExport: false, exportMode: 'atc_guided_packet', handoffExport: true, designWarning: 'La ATC no publica un formato de importación externo para este modelo: el .dec presentable debe generarse y validarse en su programa de ayuda.' },
   '425': { name: 'Resumen anual IGIC', authority: 'ATC', frequency: 'anual', kind: 'informative', design: 'Programa de ayuda ATC 2025 v6.3.1', designYear: '2025', officialExport: false, exportMode: 'atc_guided_packet', handoffExport: true, designWarning: 'La ATC no publica un formato de importación externo para este modelo y el programa anual 2026 aún no está disponible. El .dec presentable debe generarse y validarse en el programa oficial.' },
 };
+
+// Extracted from AEAT's official DR390e2025 v1.02 workbook. Positions are
+// one-based. Numeric tuples contain [position, length, decimalPlaces] and box
+// tuples contain [box, position, length, decimalPlaces].
+const MODEL390_LAYOUT: Record<string, any> = {"01000":{"length":1187,"numeric":[[3,3,0],[6,5,0],[103,4,0],[133,1,0],[134,1,0],[734,8,0],[843,8,0],[952,8,0]],"boxes":[]},"02000":{"length":1806,"numeric":[[3,3,0],[6,5,0],[13,17,2],[30,17,0],[47,17,0],[64,17,0],[81,17,2],[98,17,2],[115,17,0],[132,17,0],[149,17,0],[166,17,0],[183,17,2],[200,17,2],[217,17,2],[234,17,2],[251,17,2],[268,17,0],[285,17,0],[302,17,0],[319,17,2],[336,17,2],[353,17,0],[370,17,0],[387,17,0],[404,17,0],[421,17,2],[438,17,2],[455,17,2],[472,17,2],[489,17,2],[506,17,0],[523,17,0],[540,17,0],[557,17,2],[574,17,2],[591,17,0],[608,17,0],[625,17,0],[642,17,0],[659,17,2],[676,17,2],[693,17,2],[710,17,2],[727,17,2],[744,17,0],[761,17,0],[778,17,0],[795,17,2],[812,17,2],[829,17,0],[846,17,0],[863,17,0],[880,17,0],[897,17,2],[914,17,2],[931,17,2],[948,17,2],[965,17,2],[982,17,2],[999,17,2],[1016,17,0],[1033,17,0],[1050,17,0],[1067,17,2],[1084,17,2],[1101,17,0],[1118,17,0],[1135,17,0],[1152,17,0],[1169,17,2],[1186,17,2],[1203,17,2],[1220,17,2],[1237,17,2],[1254,17,0],[1271,17,0],[1288,17,0],[1305,17,2],[1322,17,2],[1339,17,0],[1356,17,0],[1373,17,0],[1390,17,0],[1407,17,2],[1424,17,2],[1441,17,2],[1458,17,2],[1475,17,2],[1492,17,2],[1509,17,2],[1526,17,2],[1543,17,2],[1560,17,2],[1577,17,2],[1594,17,2],[1611,17,2],[1628,17,2]],"boxes":[["700",13,17,2],["701",30,17,0],["667",47,17,0],["668",64,17,0],["01",81,17,2],["02",98,17,2],["702",115,17,0],["703",132,17,0],["669",149,17,0],["670",166,17,0],["03",183,17,2],["04",200,17,2],["05",217,17,2],["06",234,17,2],["704",251,17,2],["705",268,17,0],["671",285,17,0],["672",302,17,0],["500",319,17,2],["501",336,17,2],["706",353,17,0],["707",370,17,0],["673",387,17,0],["674",404,17,0],["502",421,17,2],["503",438,17,2],["504",455,17,2],["505",472,17,2],["708",489,17,2],["709",506,17,0],["675",523,17,0],["676",540,17,0],["643",557,17,2],["644",574,17,2],["710",591,17,0],["711",608,17,0],["677",625,17,0],["678",642,17,0],["645",659,17,2],["646",676,17,2],["647",693,17,2],["648",710,17,2],["712",727,17,2],["713",744,17,0],["679",761,17,0],["680",778,17,0],["07",795,17,2],["08",812,17,2],["714",829,17,0],["715",846,17,0],["681",863,17,0],["682",880,17,0],["09",897,17,2],["10",914,17,2],["11",931,17,2],["12",948,17,2],["13",965,17,2],["14",982,17,2],["716",999,17,2],["717",1016,17,0],["683",1033,17,0],["684",1050,17,0],["21",1067,17,2],["22",1084,17,2],["718",1101,17,0],["719",1118,17,0],["685",1135,17,0],["686",1152,17,0],["23",1169,17,2],["24",1186,17,2],["25",1203,17,2],["26",1220,17,2],["720",1237,17,2],["721",1254,17,0],["687",1271,17,0],["688",1288,17,0],["545",1305,17,2],["546",1322,17,2],["722",1339,17,0],["723",1356,17,0],["689",1373,17,0],["690",1390,17,0],["547",1407,17,2],["548",1424,17,2],["551",1441,17,2],["552",1458,17,2],["27",1475,17,2],["28",1492,17,2],["29",1509,17,2],["30",1526,17,2],["649",1543,17,2],["650",1560,17,2],["31",1577,17,2],["32",1594,17,2],["33",1611,17,2],["34",1628,17,2]]},"02B00":{"length":531,"numeric":[[3,3,0],[6,5,0],[13,17,0],[30,17,0],[47,17,0],[64,17,0],[81,17,2],[98,17,2],[115,17,0],[132,17,0],[149,17,0],[166,17,0],[183,17,2],[200,17,2],[217,17,2],[234,17,2],[251,17,2],[268,17,2],[285,17,2],[302,17,2],[319,17,2],[336,17,2],[353,17,2]],"boxes":[["663",13,17,0],["664",30,17,0],["691",47,17,0],["692",64,17,0],["35",81,17,2],["36",98,17,2],["665",115,17,0],["666",132,17,0],["693",149,17,0],["694",166,17,0],["599",183,17,2],["600",200,17,2],["601",217,17,2],["602",234,17,2],["41",251,17,2],["42",268,17,2],["43",285,17,2],["44",302,17,2],["45",319,17,2],["46",336,17,2],["47",353,17,2]]},"03000":{"length":1840,"numeric":[[3,3,0],[6,5,0],[13,17,2],[30,17,2],[47,17,2],[64,17,2],[81,17,2],[98,17,2],[115,17,2],[132,17,2],[149,17,2],[166,17,2],[183,17,2],[200,17,2],[217,17,2],[234,17,2],[251,17,2],[268,17,2],[285,17,2],[302,17,2],[319,17,2],[336,17,2],[353,17,2],[370,17,2],[387,17,2],[404,17,2],[421,17,2],[438,17,2],[455,17,2],[472,17,2],[489,17,0],[506,17,0],[523,17,2],[540,17,2],[557,17,0],[574,17,0],[591,17,0],[608,17,0],[625,17,2],[642,17,2],[659,17,2],[676,17,2],[693,17,2],[710,17,2],[727,17,0],[744,17,0],[761,17,2],[778,17,2],[795,17,0],[812,17,0],[829,17,0],[846,17,0],[863,17,2],[880,17,2],[897,17,2],[914,17,2],[931,17,2],[948,17,2],[965,17,2],[982,17,2],[999,17,2],[1016,17,2],[1033,17,2],[1050,17,2],[1067,17,2],[1084,17,2],[1101,17,2],[1118,17,2],[1135,17,2],[1152,17,2],[1169,17,2],[1186,17,2],[1203,17,0],[1220,17,0],[1237,17,2],[1254,17,2],[1271,17,0],[1288,17,0],[1305,17,0],[1322,17,0],[1339,17,2],[1356,17,2],[1373,17,2],[1390,17,2],[1407,17,2],[1424,17,2],[1441,17,2],[1458,17,2],[1475,17,2],[1492,17,2],[1509,17,2],[1526,17,2],[1543,17,2],[1560,17,2],[1577,17,2],[1594,17,2],[1611,17,2],[1628,17,2],[1645,17,2],[1662,17,2]],"boxes":[["695",13,17,2],["696",30,17,2],["190",47,17,2],["191",64,17,2],["724",81,17,2],["725",98,17,2],["697",115,17,2],["698",132,17,2],["603",149,17,2],["604",166,17,2],["605",183,17,2],["606",200,17,2],["48",217,17,2],["49",234,17,2],["745",251,17,2],["746",268,17,2],["506",285,17,2],["507",302,17,2],["726",319,17,2],["727",336,17,2],["747",353,17,2],["748",370,17,2],["607",387,17,2],["608",404,17,2],["609",421,17,2],["610",438,17,2],["512",455,17,2],["513",472,17,2],["749",489,17,0],["750",506,17,0],["196",523,17,2],["197",540,17,2],["728",557,17,0],["729",574,17,0],["751",591,17,0],["752",608,17,0],["611",625,17,2],["612",642,17,2],["613",659,17,2],["614",676,17,2],["50",693,17,2],["51",710,17,2],["753",727,17,0],["754",744,17,0],["514",761,17,2],["515",778,17,2],["730",795,17,0],["731",812,17,0],["755",829,17,0],["756",846,17,0],["615",863,17,2],["616",880,17,2],["617",897,17,2],["618",914,17,2],["520",931,17,2],["521",948,17,2],["757",965,17,2],["758",982,17,2],["202",999,17,2],["203",1016,17,2],["732",1033,17,2],["733",1050,17,2],["759",1067,17,2],["760",1084,17,2],["619",1101,17,2],["620",1118,17,2],["621",1135,17,2],["622",1152,17,2],["52",1169,17,2],["53",1186,17,2],["761",1203,17,0],["762",1220,17,0],["208",1237,17,2],["209",1254,17,2],["734",1271,17,0],["735",1288,17,0],["763",1305,17,0],["764",1322,17,0],["623",1339,17,2],["624",1356,17,2],["625",1373,17,2],["626",1390,17,2],["54",1407,17,2],["55",1424,17,2],["765",1441,17,2],["766",1458,17,2],["214",1475,17,2],["215",1492,17,2],["736",1509,17,2],["737",1526,17,2],["767",1543,17,2],["768",1560,17,2],["627",1577,17,2],["628",1594,17,2],["629",1611,17,2],["630",1628,17,2],["56",1645,17,2],["57",1662,17,2]]},"04000":{"length":854,"numeric":[[3,3,0],[6,5,0],[13,17,0],[30,17,0],[47,17,2],[64,17,2],[81,17,0],[98,17,0],[115,17,0],[132,17,0],[149,17,2],[166,17,2],[183,17,2],[200,17,2],[217,17,2],[234,17,2],[251,17,0],[268,17,0],[285,17,2],[302,17,2],[319,17,0],[336,17,0],[353,17,0],[370,17,0],[387,17,2],[404,17,2],[421,17,2],[438,17,2],[455,17,2],[472,17,2],[489,17,2],[506,17,2],[523,17,2],[540,17,2],[557,17,2],[574,17,2],[591,17,2],[608,17,2],[625,17,2],[642,17,2],[659,17,2],[676,17,2]],"boxes":[["769",13,17,0],["770",30,17,0],["220",47,17,2],["221",64,17,2],["738",81,17,0],["739",98,17,0],["771",115,17,0],["772",132,17,0],["631",149,17,2],["632",166,17,2],["633",183,17,2],["634",200,17,2],["58",217,17,2],["59",234,17,2],["773",251,17,0],["774",268,17,0],["587",285,17,2],["588",302,17,2],["740",319,17,0],["741",336,17,0],["775",353,17,0],["776",370,17,0],["635",387,17,2],["636",404,17,2],["637",421,17,2],["638",438,17,2],["597",455,17,2],["598",472,17,2],["60",489,17,2],["61",506,17,2],["660",523,17,2],["661",540,17,2],["639",557,17,2],["62",574,17,2],["651",591,17,2],["652",608,17,2],["63",625,17,2],["522",642,17,2],["64",659,17,2],["65",676,17,2]]},"05000":{"length":1519,"numeric":[[3,3,0],[6,5,0],[17,10,2],[27,17,2],[44,10,2],[54,17,2],[71,10,2],[81,17,2],[98,10,2],[108,17,2],[125,10,2],[135,17,2],[152,10,2],[162,17,2],[179,10,2],[189,17,2],[206,17,2],[240,17,2],[257,3,2],[260,17,2],[277,5,2],[282,17,2],[299,17,2],[316,17,2],[337,10,2],[347,17,2],[364,10,2],[374,17,2],[391,10,2],[401,17,2],[418,10,2],[428,17,2],[445,10,2],[455,17,2],[472,10,2],[482,17,2],[499,10,2],[509,17,2],[526,17,2],[560,17,2],[577,3,2],[580,17,2],[597,5,2],[602,17,2],[619,17,2],[636,17,2],[653,2,0],[655,17,2],[672,6,5],[678,17,2],[695,17,2],[712,17,2],[729,2,0],[731,17,2],[748,6,5],[754,17,2],[771,17,2],[788,17,2],[805,2,0],[807,17,2],[824,6,5],[830,17,2],[847,17,2],[864,17,2],[881,2,0],[883,17,2],[900,6,5],[906,17,2],[923,17,2],[940,17,2],[957,2,0],[959,17,2],[976,6,5],[982,17,2],[999,17,2],[1016,17,2],[1033,17,2],[1050,17,2],[1067,17,2],[1084,17,2],[1101,17,2],[1118,17,2],[1135,17,2],[1152,17,2],[1169,17,2],[1186,17,2]],"boxes":[["66",13,4,0],["66",333,4,0],["74",1033,17,2],["75",1050,17,2],["76",1067,17,2],["77",1084,17,2],["78",1101,17,2],["79",1118,17,2],["80",1135,17,2],["81",1152,17,2],["82",1169,17,2],["83",1186,17,2]]},"06000":{"length":828,"numeric":[[3,3,0],[6,5,0],[13,17,2],[30,17,2],[47,17,2],[64,17,2],[81,17,2],[98,5,2],[103,5,2],[108,5,2],[113,5,2],[118,5,2],[123,17,2],[140,17,2],[157,17,2],[174,17,2],[191,17,2],[208,17,2],[225,17,2],[242,17,2],[259,17,2],[276,17,2],[293,17,2],[310,17,2],[327,17,2],[344,17,2],[361,17,2],[378,17,2],[395,17,2],[412,17,2],[429,17,2],[446,17,2],[463,17,2],[480,17,2],[497,17,2],[514,17,2],[531,17,2],[548,17,2],[565,17,2],[582,17,2],[599,17,2],[616,17,2],[633,17,2],[650,17,2]],"boxes":[["658",13,17,2],["84",30,17,2],["659",47,17,2],["85",64,17,2],["86",81,17,2],["87",98,5,2],["88",103,5,2],["89",108,5,2],["90",113,5,2],["91",118,5,2],["658",123,17,2],["84",140,17,2],["92",157,17,2],["659",174,17,2],["93",191,17,2],["94",208,17,2],["95",225,17,2],["96",242,17,2],["524",259,17,2],["97",276,17,2],["98",293,17,2],["662",310,17,2],["525",327,17,2],["526",344,17,2],["99",361,17,2],["653",378,17,2],["103",395,17,2],["104",412,17,2],["105",429,17,2],["110",446,17,2],["125",463,17,2],["126",480,17,2],["127",497,17,2],["128",514,17,2],["100",531,17,2],["101",548,17,2],["102",565,17,2],["227",582,17,2],["228",599,17,2],["106",616,17,2],["107",633,17,2],["108",650,17,2]]},"07000":{"length":776,"numeric":[[3,3,0],[6,5,0],[13,17,2],[30,17,2],[47,17,2],[64,17,2],[81,17,2],[98,17,2],[115,17,2],[132,17,2],[149,17,2],[166,17,2],[183,17,2],[243,17,2],[260,17,2],[278,5,2],[326,17,2],[343,17,2],[361,5,2],[409,17,2],[426,17,2],[444,5,2],[492,17,2],[509,17,2],[527,5,2],[575,17,2],[592,17,2],[610,5,2]],"boxes":[["230",13,17,2],["109",30,17,2],["231",47,17,2],["232",64,17,2],["111",81,17,2],["113",98,17,2],["523",115,17,2],["654",132,17,2],["655",149,17,2],["656",166,17,2],["657",183,17,2],["114",240,3,0],["115",243,17,2],["116",260,17,2],["117",277,1,0],["118",278,5,2],["114",323,3,0],["115",326,17,2],["116",343,17,2],["117",360,1,0],["118",361,5,2],["114",406,3,0],["115",409,17,2],["116",426,17,2],["117",443,1,0],["118",444,5,2],["114",489,3,0],["115",492,17,2],["116",509,17,2],["117",526,1,0],["118",527,5,2],["114",572,3,0],["115",575,17,2],["116",592,17,2],["117",609,1,0],["118",610,5,2]]},"08000":{"length":1092,"numeric":[[3,3,0],[6,5,0],[13,17,2],[30,17,2],[47,17,2],[64,17,2],[81,17,2],[98,17,2],[115,17,2],[132,17,2],[149,17,2],[166,17,2],[183,17,2],[200,17,2],[217,17,2],[234,17,2],[251,17,2],[268,17,2],[285,17,2],[302,17,2],[319,17,2],[336,17,2],[353,17,2],[370,17,2],[387,17,2],[404,17,2],[421,17,2],[438,17,2],[455,17,2],[472,17,2],[489,17,2],[506,17,2],[523,17,2],[540,17,2],[557,17,2],[574,17,2],[591,17,2],[608,17,2],[625,17,2],[642,17,2],[659,17,2],[676,17,2],[693,17,2],[710,17,2],[727,17,2],[744,17,2],[761,17,2],[778,17,2],[795,17,2],[812,17,2],[829,17,2],[846,17,2],[863,17,2],[880,17,2],[897,17,2],[914,17,2]],"boxes":[["139",13,17,2],["140",30,17,2],["141",47,17,2],["142",64,17,2],["143",81,17,2],["144",98,17,2],["145",115,17,2],["146",132,17,2],["147",149,17,2],["148",166,17,2],["149",183,17,2],["150",200,17,2],["151",217,17,2],["152",234,17,2],["640",251,17,2],["153",268,17,2],["154",285,17,2],["155",302,17,2],["156",319,17,2],["157",336,17,2],["158",353,17,2],["159",370,17,2],["160",387,17,2],["161",404,17,2],["162",421,17,2],["163",438,17,2],["164",455,17,2],["165",472,17,2],["166",489,17,2],["167",506,17,2],["168",523,17,2],["169",540,17,2],["641",557,17,2],["170",574,17,2],["171",591,17,2],["172",608,17,2],["173",625,17,2],["174",642,17,2],["175",659,17,2],["176",676,17,2],["177",693,17,2],["178",710,17,2],["179",727,17,2],["180",744,17,2],["181",761,17,2],["182",778,17,2],["183",795,17,2],["184",812,17,2],["185",829,17,2],["186",846,17,2],["642",863,17,2],["187",880,17,2],["188",897,17,2],["189",914,17,2]]}};
 
 const SOURCES = [
   { title: 'AEAT - Diseños de registro, modelos 100 a 199', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-100-199.html' },
@@ -451,7 +456,7 @@ function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[]
     if (invoice.fiscal_review_status !== 'validado') pendingFallbackCount += 1;
   }
   if (fallbackCount) warnings.push(`${fallbackCount} factura(s) usan temporalmente la cabecera porque no tienen líneas fiscales normalizadas.`);
-  if (pendingFallbackCount) warnings.push(`${pendingFallbackCount} factura(s) sin líneas fiscales normalizadas siguen pendientes de revisión; solo bloquearán los modelos IVA/IGIC afectados.`);
+  if (pendingFallbackCount) warnings.push(`${pendingFallbackCount} factura(s) sin líneas fiscales normalizadas siguen pendientes de revisión; aparecerán como recomendación en los modelos IVA/IGIC afectados.`);
   return result;
 }
 
@@ -586,19 +591,38 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   const lines = selection.lines;
   const fields: any[] = [];
   const rates = new Map<number, any>();
+  const categorizedOutputRates = new Map<string, any>();
+  const deductibleRates = new Map<string, any>();
   const addRate = (rate: number, base: number, quota: number, id: string) => {
     const row = rates.get(rate) || { rate, base: 0, quota: 0, sourceIds: [] };
     row.base += base; row.quota += quota; row.sourceIds.push(id); rates.set(rate, row);
   };
-  let deductibleBase = 0, deductibleQuota = 0, reverseBase = 0, reverseQuota = 0, intraBase = 0, intraQuota = 0;
-  let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0, criterionCash = 0;
+  const addDeductibleRate = (category: string, rate: number, base: number, quota: number, id: string) => {
+    const key = `${category}|${rate}`;
+    const row = deductibleRates.get(key) || { category, rate, base: 0, quota: 0, sourceIds: [] };
+    row.base += base; row.quota += quota; row.sourceIds.push(id); deductibleRates.set(key, row);
+  };
+  const addCategorizedOutputRate = (category: string, rate: number, base: number, quota: number, id: string) => {
+    const key = `${category}|${rate}`;
+    const row = categorizedOutputRates.get(key) || { category, rate, base: 0, quota: 0, sourceIds: [] };
+    row.base += base; row.quota += quota; row.sourceIds.push(id); categorizedOutputRates.set(key, row);
+  };
+  let deductibleBase = 0, deductibleQuota = 0, nonDeductibleBase = 0, reverseBase = 0, reverseQuota = 0, intraBase = 0, intraQuota = 0;
+  let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0, criterionCash = 0, criterionCashQuota = 0, criterionCashReceived = 0, criterionCashReceivedQuota = 0;
+  let annualClassificationPending = 0;
   let pendingReviewLines = 0;
   for (const line of lines) {
     const invoice = line.invoice;
     const base = money(line.base), quota = money(line.quota), id = line.sourceId;
     const op = clean(line.operationType || 'subject_taxed');
     if (invoice.tipo === 'emitida') {
-      if (['subject_taxed', 'subject_zero'].includes(op)) addRate(Number(line.rate || 0), base, quota, id);
+      if (['subject_taxed', 'subject_zero', 'special_margin'].includes(op)) {
+        const rate = Number(line.rate || 0);
+        addRate(rate, base, quota, id);
+        const regime = clean(line.regime);
+        const category = op === 'special_margin' || ['rebu','bienes_usados'].includes(regime) ? 'margin' : regime === 'criterio_caja' ? 'cash' : regime === 'agencias_viajes' ? 'travel' : regime === 'grupo_entidades' ? 'intragroup' : 'ordinary';
+        addCategorizedOutputRate(category, rate, base, quota, id);
+      }
       else if (op === 'intra_eu_supply') intraSupplies += base;
       else if (['export', 'exempt_full'].includes(op)) exports += base;
       else if (op === 'exempt_limited') exemptLimited += base;
@@ -609,8 +633,19 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       if (op === 'intra_eu_acquisition') { intraBase += base; intraQuota += quota; }
       else if (op === 'reverse_charge') { reverseBase += base; reverseQuota += quota; }
       deductibleBase += base;
-      deductibleQuota += money(line.deductibleQuota ?? quota);
+      const deductibleLineQuota = money(line.deductibleQuota ?? quota);
+      deductibleQuota += deductibleLineQuota;
+      const deductibleRatio = Math.abs(quota) > 0.0001 ? Math.max(0, Math.min(1, deductibleLineQuota / quota)) : 0;
+      nonDeductibleBase += money(base * (1 - deductibleRatio));
+      const explicitCategory = clean(line.deductionCategory);
+      const investmentHint = /INMOVILIZADO|ACTIVO FIJO|BIEN(?:ES)? DE INVERSION/.test(canonical(`${invoice.categoria_gasto || ''} ${invoice.concepto || ''}`));
+      const investment = explicitCategory.includes('investment') || (!explicitCategory && investmentHint);
+      const category = explicitCategory || (op === 'import' ? (investment ? 'import_investment' : 'import_current') : op === 'intra_eu_acquisition' ? (investment ? 'intra_goods_investment' : 'intra_goods_current') : (investment ? 'interior_investment' : 'interior_current'));
+      addDeductibleRate(category, Number(line.rate || 0), base, deductibleLineQuota, id);
+      if (annual && !explicitCategory) annualClassificationPending += 1;
+      if (line.regime === 'criterio_caja') { criterionCashReceived += base; criterionCashReceivedQuota += deductibleLineQuota; }
     }
+    if (invoice.tipo === 'emitida' && line.regime === 'criterio_caja') criterionCashQuota += quota;
     if (line.reviewStatus !== 'validado') pendingReviewLines += 1;
   }
   if (pendingReviewLines) data.blockers.push(`${pendingReviewLines} línea(s) fiscales recibidas tienen la deducibilidad pendiente de revisión.`);
@@ -643,10 +678,11 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (!annual && !manualBalanceProvided && !historicalBalance.complete) data.blockers.push(`${historicalBalance.reason} Importa el período anterior o confirma manualmente el saldo, incluso si es cero.`);
   if (!annual && result < 0 && !['a_compensar','a_devolver'].includes(resultDisposition)) data.blockers.push('Confirma si el resultado negativo queda a compensar o se solicita a devolver.');
   if (!annual && result < 0 && resultDisposition === 'a_devolver' && !['4T','12'].includes(clean(data.period))) data.blockers.push('La devolución del saldo no se habilita fuera del último período del año salvo supuesto especial revisado.');
-  const operations = { rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), rawResult, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash) };
+  const operations = { rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), categorizedOutputRates: [...categorizedOutputRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), deductibleRates: [...deductibleRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), nonDeductibleBase: money(nonDeductibleBase), rawResult, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash), criterionCashQuota: money(criterionCashQuota), criterionCashReceived: money(criterionCashReceived), criterionCashReceivedQuota: money(criterionCashReceivedQuota) };
   if (selection.review.length) data.blockers.push(`${selection.review.length} factura(s) recibida(s) requieren confirmar la fecha o el período real de deducción antes de exportar.`);
   if (selection.carry.some((row: any) => row.receiptDateInferred)) data.warnings.push('Hay deducciones diferidas asignadas mediante la fecha de alta en Taxea porque no consta la fecha acreditada de recepción. Confírmala antes de presentar.');
   if (annual) {
+    if (annualClassificationPending) data.blockers.push(`${annualClassificationPending} línea(s) de IVA soportado no indican todavía si son operaciones corrientes, bienes de inversión, importaciones o adquisiciones intracomunitarias. Taxea las clasifica provisionalmente por sus datos disponibles; revisa el desglose anual antes de presentar.`);
     data.warnings.push('En el resumen anual, el IVA/IGIC devengado sigue el devengo y las cuotas soportadas deben conciliarse con el período efectivo de deducción. Revise los arrastres antes del cierre anual.');
     return { fields, result, details: operations.rates, operations, carryforward: selection };
   }
@@ -824,6 +860,7 @@ function applyModelValidation(model: string, data: any, calculation: any) {
     if (profile?.model130ExemptionConfirmed) data.blockers.push('El perfil marca exención del modelo 130 por porcentaje de ingresos sometidos a retención; revise la obligación censal antes de generar fichero.');
   }
   if (model === '303' && !['iva', 'mixto'].includes(indirect)) data.blockers.push('El perfil no está configurado en territorio IVA; no corresponde exportar el modelo 303.');
+  if (model === '303' && data.activities.some((activity: any) => ['simplificado','grupo_entidades'].includes(activity.indirectTaxRegime))) data.blockers.push('Hay actividades en régimen simplificado o grupo de entidades. El fichero puede exportarse, pero las páginas específicas no están automatizadas y deben completarse en la sede electrónica antes de presentar.');
   if (model === '420' && !['igic', 'mixto'].includes(indirect)) data.blockers.push('El perfil no está configurado en IGIC; no corresponde preparar el modelo 420.');
   if (model === '420' && profile?.usesSII) data.blockers.push('Los sujetos IGIC incluidos en SII deben revisar el modelo 417, no el 420 ordinario.');
   if (model === '420' && ['incluido', 'transitorio_2026'].includes(profile?.repepStatus)) data.blockers.push('El perfil consta incluido en REPEP: no procede el modelo 420 periódico; debe revisarse el resumen anual 425 y las excepciones que correspondan.');
@@ -1109,6 +1146,84 @@ function export303(company: any, profile: any, year: number, period: string, cal
   return p1.join('')+p3.join('');
 }
 
+function export390(company: any, profile: any, activities: any[], year: number, calculation: any, filings: any[]) {
+  const pageOrder = ['01000','02000','02B00','03000','04000','05000','06000','07000','08000'];
+  const pages: Record<string, string[]> = {};
+  for (const pageCode of pageOrder) {
+    const layout = MODEL390_LAYOUT[pageCode];
+    const buffer = Array(layout.length).fill(' ');
+    for (const [position, length, decimals] of layout.numeric || []) place(buffer, position, length, numeric(0, length, false, decimals));
+    place(buffer, 1, 11, `<T390${pageCode}>`);
+    place(buffer, layout.length - 11, 12, `</T390${pageCode}>`);
+    pages[pageCode] = buffer;
+  }
+  const putBox = (code: string, value: number | string) => {
+    const target = String(code).padStart(2, '0');
+    for (const pageCode of pageOrder) for (const [box, position, length, decimals] of MODEL390_LAYOUT[pageCode].boxes || []) {
+      if (box !== target) continue;
+      place(pages[pageCode], position, length, typeof value === 'string' ? normalizedText(value, length) : numeric(value, length, value < 0, decimals));
+    }
+  };
+  const p1 = pages['01000'];
+  place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,60,normalizedText(company.razon_social,60)); place(p1,103,4,String(year));
+  place(p1,109,1,profile?.isREDEME?'1':'0'); place(p1,110,1,profile?.isGroupEntity?'1':'0'); place(p1,130,1,profile?.hasInsolvencyProceedings?'1':'0'); place(p1,131,1,(calculation.operations?.criterionCash||0)?'1':'0'); place(p1,132,1,(calculation.operations?.criterionCashReceived||0)?'1':'0');
+  const activeActivities = (activities || []).filter(activity => activity.active !== false).slice(0, 6);
+  activeActivities.forEach((activity, index) => {
+    const start = 148 + index * 47;
+    place(p1,start,40,normalizedText(activity.name,40)); place(p1,start+40,3,normalizedText(activity.iaeActivityCode,3)); place(p1,start+43,4,normalizedText(activity.iaeCode,4));
+  });
+
+  const outputRateBoxes: Record<string, Record<string, string[]>> = {
+    ordinary: {'0':['700','701'],'2':['667','668'],'4':['01','02'],'5':['702','703'],'7.5':['669','670'],'10':['03','04'],'21':['05','06']},
+    intragroup: {'0':['704','705'],'2':['671','672'],'4':['500','501'],'5':['706','707'],'7.5':['673','674'],'10':['502','503'],'21':['504','505']},
+    cash: {'0':['708','709'],'2':['675','676'],'4':['643','644'],'5':['710','711'],'7.5':['677','678'],'10':['645','646'],'21':['647','648']},
+    margin: {'0':['712','713'],'2':['679','680'],'4':['07','08'],'5':['714','715'],'7.5':['681','682'],'10':['09','10'],'21':['11','12']},
+    travel: {'21':['13','14']},
+  };
+  const outputRows = calculation.operations?.categorizedOutputRates?.length ? calculation.operations.categorizedOutputRates : (calculation.operations?.rates || []).map((row: any) => ({...row, category:'ordinary'}));
+  for (const row of outputRows) {
+    const boxes = outputRateBoxes[row.category]?.[String(Number(row.rate))];
+    if (boxes) { putBox(boxes[0], row.base); putBox(boxes[1], row.quota); }
+  }
+  const intraOutputBoxes: Record<string,string[]> = {'0':['716','717'],'2':['683','684'],'4':['21','22'],'5':['718','719'],'7.5':['685','686'],'10':['23','24'],'21':['25','26']};
+  const intraRate = calculation.operations?.intraBase ? Number(((calculation.operations.intraQuota / calculation.operations.intraBase) * 100).toFixed(2)) : 0;
+  if (calculation.operations?.intraBase && intraOutputBoxes[String(intraRate)]) { putBox(intraOutputBoxes[String(intraRate)][0],calculation.operations.intraBase); putBox(intraOutputBoxes[String(intraRate)][1],calculation.operations.intraQuota); }
+  putBox('27',calculation.operations?.reverseBase||0); putBox('28',calculation.operations?.reverseQuota||0);
+  const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0));
+  putBox('33',totalOutputBase); putBox('34',calculation.operations?.outputQuota||0); putBox('47',calculation.operations?.outputQuota||0);
+
+  const deductionRateBoxes: Record<string, Record<string, string[]>> = {
+    interior_current: {'2':['695','696'],'4':['190','191'],'5':['724','725'],'7.5':['697','698'],'10':['603','604'],'21':['605','606']},
+    interior_investment: {'2':['749','750'],'4':['196','197'],'5':['728','729'],'7.5':['751','752'],'10':['611','612'],'21':['613','614']},
+    import_current: {'2':['757','758'],'4':['202','203'],'5':['732','733'],'7.5':['759','760'],'10':['619','620'],'21':['621','622']},
+    import_investment: {'2':['761','762'],'4':['208','209'],'5':['734','735'],'7.5':['763','764'],'10':['623','624'],'21':['625','626']},
+    intra_goods_current: {'2':['765','766'],'4':['214','215'],'5':['736','737'],'7.5':['767','768'],'10':['627','628'],'21':['629','630']},
+    intra_goods_investment: {'2':['769','770'],'4':['220','221'],'5':['738','739'],'7.5':['771','772'],'10':['631','632'],'21':['633','634']},
+    intra_services: {'2':['773','774'],'4':['587','588'],'5':['740','741'],'7.5':['775','776'],'10':['635','636'],'21':['637','638']},
+  };
+  const deductionTotals: Record<string,string[]> = {interior_current:['48','49'],interior_investment:['50','51'],import_current:['52','53'],import_investment:['54','55'],intra_goods_current:['56','57'],intra_goods_investment:['58','59'],intra_services:['597','598']};
+  const categoryTotals = new Map<string,{base:number,quota:number}>();
+  for (const row of calculation.operations?.deductibleRates || []) {
+    const boxes = deductionRateBoxes[row.category]?.[String(Number(row.rate))];
+    if (boxes) { putBox(boxes[0],row.base); putBox(boxes[1],row.quota); }
+    const total = categoryTotals.get(row.category) || {base:0,quota:0}; total.base += money(row.base); total.quota += money(row.quota); categoryTotals.set(row.category,total);
+  }
+  for (const [category,total] of categoryTotals) { const boxes=deductionTotals[category]; if(boxes){putBox(boxes[0],total.base);putBox(boxes[1],total.quota);} }
+  putBox('64',calculation.operations?.deductibleQuota||0); putBox('65',calculation.result||0);
+
+  const filed303 = (filings || []).filter(row => row.modeloCodigo === '303' && Number(row.ejercicio) === year && FILED_STATUSES.has(clean(row.estadoPresentacion)));
+  const last303 = [...filed303].sort((a:any,b:any)=>`${normalizedPeriod(b.periodo)}|${filingDate(b)}`.localeCompare(`${normalizedPeriod(a.periodo)}|${filingDate(a)}`))[0];
+  putBox('84',calculation.result||0); putBox('86',calculation.result||0); putBox('87',100);
+  putBox('95',filed303.reduce((sum,row)=>sum+Math.max(0,money(row.importeFinal)),0));
+  if(last303?.resultadoDestino==='a_compensar') putBox('97',Math.abs(money(last303.importeFinal))); if(last303?.resultadoDestino==='a_devolver') putBox('98',Math.abs(money(last303.importeFinal)));
+  const generalVolume = money(outputRows.filter((row:any)=>!['cash'].includes(row.category)).reduce((sum:number,row:any)=>sum+money(row.base),0));
+  putBox('99',generalVolume); putBox('653',calculation.operations?.criterionCash||0); putBox('103',calculation.operations?.intraSupplies||0); putBox('104',calculation.operations?.exports||0); putBox('105',calculation.operations?.exemptLimited||0); putBox('110',calculation.operations?.nonSubject||0); putBox('125',calculation.operations?.reverseBase||0);
+  putBox('108',money(generalVolume+(calculation.operations?.criterionCash||0)+(calculation.operations?.intraSupplies||0)+(calculation.operations?.exports||0)+(calculation.operations?.exemptLimited||0)+(calculation.operations?.nonSubject||0)+(calculation.operations?.reverseBase||0)));
+  putBox('232',calculation.operations?.nonDeductibleBase||0); putBox('654',calculation.operations?.criterionCash||0); putBox('655',calculation.operations?.criterionCashQuota||0); putBox('656',calculation.operations?.criterionCashReceived||0); putBox('657',calculation.operations?.criterionCashReceivedQuota||0);
+  activeActivities.slice(0,5).forEach((activity,index)=>{const start=240+index*83; place(pages['07000'],start,3,normalizedText(activity.cnaeCode,3)); place(pages['07000'],start+37,1,['prorrata_general','prorrata_especial'].includes(activity.deductionRight)?(activity.deductionRight==='prorrata_especial'?'2':'1'):'0'); place(pages['07000'],start+38,5,numeric(Number(activity.proRataPercent??100),5,false,2));});
+  return pageOrder.map(code=>pages[code].join('')).join('');
+}
+
 function export180(company: any, year: number, calculation: any, declarationNumber: string) {
   const details = calculation.details || [];
   const header = Array(500).fill(' ');
@@ -1283,14 +1398,75 @@ function exportAtcHandoff(model: '420' | '425', company: any, year: number, peri
     ['RESULTADO', 'Resultado calculado', calculation.result],
   ];
   for (const [code, label, value] of operationRows) rows.push(['DESGLOSE', model, year, period, code, label, money(value).toFixed(2), sourceHash]);
-  for (const message of validation.blockers || []) rows.push(['INCIDENCIA_BLOQUEANTE', model, year, period, '', message, '', '']);
-  for (const message of validation.warnings || []) rows.push(['AVISO', model, year, period, '', message, '', '']);
+  for (const message of validation.recommendations || validation.warnings || []) rows.push(['RECOMENDACION', model, year, period, '', message, '', '']);
   rows.push(['INSTRUCCION', model, year, period, 'PASO_FINAL', 'Trasladar los importes al programa oficial, resolver sus validaciones y generar allí el fichero .dec. Este CSV no es presentable.', '', 'ATC']);
   return rows.map(row => row.map(csvCell).join(';')).join('\r\n');
 }
 
 function transferLayoutErrors(model: string, content: string) {
   const records = content.split('\r\n');
+  if (['111','115','123','130','303'].includes(model)) {
+    const errors: string[] = [];
+    const pageLayouts: Record<string, Array<[string, number]>> = {
+      '111': [['01000',1000]],
+      '115': [['01000',500]],
+      '123': [['01000',600]],
+      '130': [['01000',600]],
+      '303': [['01000',1581],['03000',1017]],
+    };
+    let previousIndex = -1;
+    const extracted: Record<string,string> = {};
+    for (const [pageCode, expectedLength] of pageLayouts[model]) {
+      const startMarker = `<T${model}${pageCode}>`, endMarker = `</T${model}${pageCode}>`;
+      const start = content.indexOf(startMarker), end = content.indexOf(endMarker, start);
+      if (start < 0 || end < 0) { errors.push(`Falta la página oficial ${pageCode} del modelo ${model}.`); continue; }
+      if (start <= previousIndex) errors.push(`La página ${pageCode} del modelo ${model} está fuera de orden.`);
+      previousIndex = start;
+      const value = content.slice(start,end+endMarker.length);
+      extracted[pageCode] = value;
+      if (value.length !== expectedLength) errors.push(`La página ${pageCode} del modelo ${model} debe tener exactamente ${expectedLength} posiciones.`);
+    }
+    const envelope = content.match(new RegExp(`^<T${model}0(\\d{4})([A-Z0-9]{2})0000>`));
+    const expectedEnd = envelope ? `</T${model}0${envelope[1]}${envelope[2]}0000>` : '';
+    if (!envelope || !content.endsWith(expectedEnd)) errors.push(`La envolvente del modelo ${model} no tiene apertura y cierre coherentes.`);
+    if (content.includes('NaN') || content.includes('undefined')) errors.push(`El fichero del modelo ${model} contiene valores técnicos inválidos.`);
+    if (model === '303' && extracted['01000'] && extracted['03000']) {
+      const p1 = extracted['01000'], p3 = extracted['03000'];
+      const read = (source:string, position:number, signed=false) => readFixedNumber(source,position,17,2,signed);
+      const devengado = read(p1,696,true), deducible = read(p1,1002,true), resultadoGeneral = read(p1,1019,true);
+      const sumaResultados = read(p3,199,true), atribuibleEstado = read(p3,221,true), resultadoAutoliquidacion = read(p3,340,true), resultadoFinal = read(p3,408,true);
+      if (Math.abs(resultadoGeneral - money(devengado - deducible)) > 0.01) errors.push('El resultado del régimen general del 303 no cuadra con IVA devengado menos IVA deducible.');
+      if (Math.abs(sumaResultados - resultadoGeneral) > 0.01 || Math.abs(atribuibleEstado - sumaResultados) > 0.01) errors.push('El resultado del régimen general no se ha trasladado correctamente a la página 3 del 303.');
+      if (Math.abs(resultadoAutoliquidacion - resultadoFinal) > 0.01) errors.push('El resultado de la autoliquidación 303 no coincide con el resultado final exportado.');
+    }
+    return errors;
+  }
+  if (model === '390') {
+    const errors: string[] = [];
+    const envelope = content.match(/^<T3900(\d{4})0A0000>/);
+    const expectedEnd = envelope ? `</T3900${envelope[1]}0A0000>` : '';
+    if (!envelope || !content.endsWith(expectedEnd)) errors.push('La envolvente anual del modelo 390 no tiene apertura y cierre coherentes.');
+    if (content.includes('NaN') || content.includes('undefined')) errors.push('El fichero del modelo 390 contiene valores técnicos inválidos.');
+    const pageOrder = ['01000','02000','02B00','03000','04000','05000','06000','07000','08000'];
+    const extracted: Record<string,string> = {};
+    let previousIndex = -1;
+    for (const pageCode of pageOrder) {
+      const startMarker = `<T390${pageCode}>`, endMarker = `</T390${pageCode}>`;
+      const start = content.indexOf(startMarker), end = content.indexOf(endMarker, start);
+      if (start < 0 || end < 0) { errors.push(`Falta la página oficial ${pageCode} del modelo 390.`); continue; }
+      if (start <= previousIndex) errors.push(`La página ${pageCode} del modelo 390 está fuera de orden.`);
+      previousIndex = start;
+      const value = content.slice(start,end+endMarker.length); extracted[pageCode]=value;
+      if (value.length !== MODEL390_LAYOUT[pageCode].length) errors.push(`La página ${pageCode} del modelo 390 debe tener exactamente ${MODEL390_LAYOUT[pageCode].length} posiciones.`);
+    }
+    const readBox = (pageCode:string,boxCode:string) => {
+      const tuple=(MODEL390_LAYOUT[pageCode].boxes||[]).find((item:any)=>item[0]===String(boxCode).padStart(2,'0'));
+      return tuple&&extracted[pageCode]?readFixedNumber(extracted[pageCode],tuple[1],tuple[2],tuple[3],true):0;
+    };
+    if(Math.abs(readBox('02B00','47')-readBox('02000','34'))>0.01) errors.push('La cuota devengada total del modelo 390 no coincide entre las casillas 34 y 47.');
+    if(Math.abs(readBox('04000','65')-(readBox('02B00','47')-readBox('04000','64')))>0.01) errors.push('El resultado del régimen general del modelo 390 no cuadra con cuotas devengadas menos deducciones.');
+    return errors;
+  }
   if (model === '180') {
     const errors = records.length < 2 ? ['El 180 debe incluir cabecera y al menos un perceptor.'] : [];
     if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 180 deben tener exactamente 500 posiciones.');
@@ -1359,7 +1535,8 @@ function transferLayoutErrors(model: string, content: string) {
 }
 
 function wrap(model: string, year: number, period: string, pages: string, developerTaxId: string) {
-  const prefix=`<T${model}0${year}${period}0000><AUX>${' '.repeat(70)}TX01${' '.repeat(4)}${normalizedText(developerTaxId,9)}${' '.repeat(213)}</AUX>`;
+  const auxiliary=developerTaxId?`${' '.repeat(70)}TX01${' '.repeat(4)}${normalizedText(developerTaxId,9)}${' '.repeat(213)}`:' '.repeat(300);
+  const prefix=`<T${model}0${year}${period}0000><AUX>${auxiliary}</AUX>`;
   const suffix=`</T${model}0${year}${period}0000>`;
   return prefix+pages+suffix;
 }
@@ -1388,7 +1565,36 @@ function pageFromFiledText(raw: string, model: string, pageCode = '01000') {
 }
 
 function parseFiledText(model: string, raw: string) {
-  if (!raw || !['111','115','123','130','303'].includes(model)) return null;
+  if (!raw || !['111','115','123','130','180','190','193','303','347','390','415'].includes(model)) return null;
+  if (['180','190','193','347'].includes(model)) {
+    const header=clean(raw).replace(/^\uFEFF/,'').split(/\r?\n/)[0]||'';
+    if(header.length!==500||!header.startsWith(`1${model}`)) return null;
+    const boxes:Record<string,number>={DECLARADOS:Number(header.slice(135,144)||0)};
+    if(model==='180'){boxes.BASE=readFixedNumber(header,145,16,2,true);boxes.RETENCIONES=readFixedNumber(header,161,15);}
+    if(model==='190'){boxes.PERCEPCIONES=readFixedNumber(header,145,16,2,true);boxes.RETENCIONES=readFixedNumber(header,161,15);}
+    if(model==='193'){boxes.BASE=readFixedNumber(header,145,15);boxes.RETENCIONES=readFixedNumber(header,160,15);boxes.INGRESADO=readFixedNumber(header,175,15);}
+    if(model==='347'){boxes.IMPORTE=readFixedNumber(header,145,16,2,true);boxes.INMUEBLES=readFixedNumber(header,170,16,2,true);}
+    boxes.RESULTADO=0;
+    return {model,nif:clean(header.slice(8,17)).toUpperCase(),year:Number(header.slice(4,8)),period:'Anual',boxes};
+  }
+  if(model==='415'){
+    const header=clean(raw).replace(/^\uFEFF/,'').split(/\r?\n/)[0]||'';
+    if(header.length!==246||!header.startsWith('1415')) return null;
+    const boxes:Record<string,number>={}; const keys=['A','B','C','D','E','F','G'];
+    keys.forEach((key,index)=>{const start=57+index*25;boxes[`DECLARADOS_${key}`]=Number(header.slice(start,start+9)||0);boxes[`IMPORTE_${key}`]=readFixedNumber(header,start+10,16,2,true);}); boxes.RESULTADO=0;
+    return {model,nif:clean(header.slice(8,17)).toUpperCase(),year:Number(header.slice(4,8)),period:'Anual',boxes};
+  }
+  if(model==='390'){
+    const firstPage=pageFromFiledText(raw,model,'01000');
+    if(!firstPage.startsWith('<T39001000>')) return null;
+    const boxes:Record<string,number>={};
+    for(const [pageCode,layout] of Object.entries(MODEL390_LAYOUT) as [string,any][]){
+      const pageValue=pageFromFiledText(raw,model,pageCode); if(!pageValue.startsWith(`<T390${pageCode}>`)) continue;
+      for(const [box,position,length,decimals] of layout.boxes||[]) boxes[box]=readFixedNumber(pageValue,position,length,decimals,true);
+    }
+    boxes.RESULTADO=boxes['86']??boxes['65']??0;
+    return {model,nif:clean(firstPage.slice(13,22)).toUpperCase(),year:Number(firstPage.slice(102,106)),period:'Anual',boxes};
+  }
   const source = pageFromFiledText(raw, model);
   if (!source.startsWith(`<T${model}01000>`)) return null;
   const boxes: Record<string, number> = {};
@@ -1562,17 +1768,19 @@ Deno.serve(async (req) => {
       const annual193={result:0,declaration:{manual:{declarantNatureSpecial:true,expenseAnnexNotApplicable:true,specialDataConfirmed:true}},details:[{recordKey:'Annual193:Invoice:test',taxId:'B87654321',name:'PERCEPTOR PRUEBA',provinceCode:'38',perceptionKey:'C',nature:'12',base:1000,withholding:190,manual:{representativeTaxId:'',provinceCode:'38',recipientMediator:false,keyCode:'',issuerCode:'',perceptionKey:'C',nature:'12',paymentRole:'',accountCodeType:'',accountCode:'',pending:false,accrualYear:'',perceptionType:'1',perceptionAmount:1000,reductions:0,retentionBase:1000,retentionRate:19,penalties:0,isin:'',loanStartDate:'',loanEndDate:'',loanCompensation:0,loanGuarantees:0,stateWithholding:0,navarraWithholding:0,alavaWithholding:0,gipuzkoaWithholding:0,bizkaiaWithholding:0,ceutaPalmaCode:'0',previousPayerTaxId:'',accrualDate:'',marketKey:''}}]};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
-      const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); return {model,length:wrapped.length,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`)}});
+      const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); const layoutErrors=transferLayoutErrors(model,wrapped); return {model,length:wrapped.length,layoutErrors,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`),valid:layoutErrors.length===0}});
       const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record190Content=export190(company,2025,annual190,'1901234567890'); const record190=record190Content.split('\r\n');
       const record193Content=export193(company,2025,annual193,'1931234567890'); const record193=record193Content.split('\r\n');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
       const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
+      const model390Content=wrap('390',2025,'0A',export390(company,profile,[],2025,standard,[]),'B12345678');
       const transferChecks=[
         {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'190',records:record190.length,recordLengths:record190.map(line=>line.length),layoutErrors:transferLayoutErrors('190',record190Content),valid:record190.length===2&&record190.every(line=>line.length===500)&&record190[1].startsWith('2190')&&record190[1][77]==='A'&&transferLayoutErrors('190',record190Content).length===0},
         {model:'193',records:record193.length,recordLengths:record193.map(line=>line.length),layoutErrors:transferLayoutErrors('193',record193Content),valid:record193.length===2&&record193.every(line=>line.length===500)&&record193[1].startsWith('2193')&&record193[1][91]==='C'&&record193[0][234]==='S'&&transferLayoutErrors('193',record193Content).length===0},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
+        {model:'390',records:9,recordLengths:Object.values(MODEL390_LAYOUT).map((layout:any)=>layout.length),layoutErrors:transferLayoutErrors('390',model390Content),valid:model390Content.includes('<T39001000>')&&model390Content.includes('</T39008000>')&&transferLayoutErrors('390',model390Content).length===0},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),layoutErrors:transferLayoutErrors('415',import415Content),valid:import415.length===3&&import415[0].length===246&&import415[1].length===356&&import415[2].length===309&&import415[1].startsWith('2415')&&import415[2].startsWith('3415')&&import415[1].slice(113,128)==='000000000700000'&&import415[1].slice(160,164)==='2024'&&transferLayoutErrors('415',import415Content).length===0},
       ];
       const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test'); const handoffCheck={model:'420/425 handoff',valid:handoff420.includes('PASO_FINAL')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff420.split('\r\n').length>8};
@@ -1583,7 +1791,7 @@ Deno.serve(async (req) => {
       try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
       try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
       authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
-      const parsed130=parseFiledText('130',samples['130']); const parsed303=parseFiledText('303',samples['303']);
+      const parsed130=parseFiledText('130',samples['130']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
       const prior130=previous130FromFilings({year:2026,period:'3T',filings:[
         {id:'130-q1',modeloCodigo:'130',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20',casillasPresentadas:{'07':120,'15':0,'16':20,'19':-30}},
         {id:'130-q2',modeloCodigo:'130',ejercicio:2026,periodo:'2T',estadoPresentacion:'presentado',fechaPresentacion:'2026-07-20',casillasPresentadas:{'07':50,'15':10,'16':0,'19':40}},
@@ -1594,12 +1802,13 @@ Deno.serve(async (req) => {
       const lateOutputItems=lateItemsAfterFiling({taxLines:[{id:'tax-line-output',sourceId:'InvoiceTaxLine:tax-line-output',date:'2026-03-10',created_date:'2026-04-25',taxKind:'iva',quota:42,invoice:{id:'invoice-output',tipo:'emitida',numero_factura:'E-LATE-1'}}],invoices:[],invoicePayments:[],payrolls:[],entries:[]},'303',2026,'1T',{fechaPresentacion:'2026-04-20'});
       const historyChecks={
         parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
+        annualRoundTrip:parsed190?.year===2025&&money(parsed190?.boxes?.RETENCIONES)===2400&&parsed390?.year===2025&&money(parsed390?.boxes?.RESULTADO)===21&&parsed415?.year===2025&&money(parsed415?.boxes?.IMPORTE_B)===3500,
         cumulative130:prior130.complete&&prior130.negativeComplete&&prior130.amount===150&&prior130.negativeAmount===20&&prior130.filings.length===2,
         compensationWallet303:prior303.complete&&prior303.amount===60,
         lateDeduction:carrySelection.lines.length===1&&carrySelection.carry.length===1&&carrySelection.carry[0].targetPeriod==='2T'&&carrySelection.review.length===0,
         outputCorrection:lateOutputItems.length===1&&lateOutputItems[0].treatment==='rectificar_periodo_origen',
       };
-      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid&&Object.values(historyChecks).every(Boolean); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck,historyChecks});
+      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope&&c.valid)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&authorizationCheck.valid&&Object.values(historyChecks).every(Boolean); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,authorizationCheck,historyChecks});
     }
     if(action==='context') {
       const companyId=clean(body.companyId); if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
@@ -1627,14 +1836,17 @@ Deno.serve(async (req) => {
         listAll(svc.entities.TaxSubmission,yearFilter),
       ]);
       const periodKey=(item:any)=>`${clean(item?.modeloCodigo)}|${Number(item?.ejercicio)||0}|${normalizedPeriod(item?.periodo)}`;
-      const normalizeMessages=(items:any,severity:string)=>(Array.isArray(items)?items:[]).map((item:any)=>typeof item==='string'?{severity,message:item}:{severity:item?.severity||severity,message:clean(item?.message||item?.descripcion||item?.title)}).filter((item:any)=>item.message);
-      const drafts=draftRows.map((item:any)=>({
+      const normalizeMessages=(items:any,severity:string)=>(Array.isArray(items)?items:[]).map((item:any)=>typeof item==='string'?{severity,message:item}:{severity,message:clean(item?.message||item?.descripcion||item?.title)}).filter((item:any)=>item.message);
+      const drafts=draftRows.map((item:any)=>{
+        const recommendations=normalizeMessages([...(Array.isArray(item.validaciones)?item.validaciones:[]),...(Array.isArray(item.errores)?item.errores:[])],'recommendation');
+        return {
         id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,version:Number(item.version||1),parentDraftId:item.parentDraftId||'',estado:item.estado||'borrador',
         engineVersion:item.engineVersion||clean(item.origenDatos).split(':')[0]||'',sourceHash:item.sourceHash||item.resumen?.source?.hash||clean(item.origenDatos).split(':').slice(1).join(':'),snapshotHash:item.snapshotHash||'',
         resultadoCalculado:money(item.resultadoCalculado??item.resumen?.calculation?.result),sourceCount:Number(item.resumen?.source?.count||0),sourceStats:item.resumen?.source?.stats||{},definition:item.resumen?.definition||{},calculation:item.resumen?.calculation||{},
-        warnings:normalizeMessages(item.validaciones,'warning'),blockers:normalizeMessages(item.errores,'blocker'),adjustments:Array.isArray(item.ajustesManuales)?item.ajustesManuales:[],usuarioCreador:item.usuarioCreador||'',usuarioRevisor:item.usuarioRevisor||'',notas:item.notas||'',
+        warnings:recommendations,recommendations,blockers:[],adjustments:Array.isArray(item.ajustesManuales)?item.ajustesManuales:[],usuarioCreador:item.usuarioCreador||'',usuarioRevisor:item.usuarioRevisor||'',notas:item.notas||'',
         createdAt:item.frozenAt||item.created_date||'',updatedAt:item.updated_date||item.frozenAt||item.created_date||'',
-      }));
+        };
+      });
       const draftByKey=new Map<string,any>();
       for(const item of [...drafts].sort((a:any,b:any)=>(Number(b.version)-Number(a.version))||(new Date(b.updatedAt||0).getTime()-new Date(a.updatedAt||0).getTime()))) if(!draftByKey.has(periodKey(item))) draftByKey.set(periodKey(item),item);
       const latestDrafts=[...draftByKey.values()];
@@ -1651,22 +1863,21 @@ Deno.serve(async (req) => {
       const activeModels=modelRows.filter((item:any)=>item.activo!==false);
       const validationIssues:any[]=[];
       const addIssue=(severity:string,code:string,message:string,extra:any={})=>validationIssues.push({id:`${code}:${extra.sourceId||validationIssues.length}`,severity,code,message,...extra});
-      if(!profile) addIssue('blocker','CFG-PERFIL','Falta el perfil fiscal maestro de la empresa.',{category:'configuracion'});
+      if(!profile) addIssue('warning','CFG-PERFIL','Falta el perfil fiscal maestro de la empresa.',{category:'configuracion'});
       else if(profile.profileStatus!=='validado_asesor') addIssue('warning','CFG-REVISION','El perfil fiscal no consta validado por un asesor.',{category:'configuracion',sourceId:profile.id});
-      if(activeModels.length===0) addIssue('blocker','CFG-OBLIGACIONES','No hay obligaciones fiscales activas y sincronizadas.',{category:'configuracion'});
+      if(activeModels.length===0) addIssue('warning','CFG-OBLIGACIONES','No hay obligaciones fiscales activas y sincronizadas.',{category:'configuracion'});
       for(const draft of latestDrafts) {
-        for(const issue of draft.blockers) addIssue('blocker','BORRADOR-BLOQUEO',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
-        for(const issue of draft.warnings) addIssue('warning','BORRADOR-AVISO',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
+        for(const issue of draft.recommendations) addIssue('warning','BORRADOR-RECOMENDACION',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
       }
       for(const filing of filings) {
         if(filing.revisionImportacion==='pendiente_revision') addIssue('warning','PRESENTACION-REVISION','La extracción/importación de la presentación está pendiente de revisión.',{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
         if(!filing.numeroJustificante&&!filing.csv&&!filing.justificantePdfUrl&&!filing.ficheroPresentadoUrl) addIssue('warning','PRESENTACION-EVIDENCIA','La presentación no tiene justificante, CSV ni fichero presentado asociado.',{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
         for(const message of filing.avisosImportacion) addIssue('warning','PRESENTACION-AVISO',clean(message),{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
       }
-      for(const savedPeriod of periodRows.filter((item:any)=>item.estado==='presentado')) if(!filingByKey.has(periodKey(savedPeriod))) addIssue('blocker','PERIODO-SIN-SNAPSHOT','El período figura presentado pero no existe una foto de la declaración. Importe el modelo presentado antes de usar arrastres.',{category:'presentacion',sourceId:savedPeriod.id,modeloCodigo:savedPeriod.modeloCodigo,ejercicio:savedPeriod.ejercicio,periodo:savedPeriod.periodo});
+      for(const savedPeriod of periodRows.filter((item:any)=>item.estado==='presentado')) if(!filingByKey.has(periodKey(savedPeriod))) addIssue('warning','PERIODO-SIN-SNAPSHOT','El período figura presentado pero no existe una foto de la declaración. Importe el modelo presentado para mejorar la fiabilidad de los arrastres.',{category:'presentacion',sourceId:savedPeriod.id,modeloCodigo:savedPeriod.modeloCodigo,ejercicio:savedPeriod.ejercicio,periodo:savedPeriod.periodo});
       for(const legacy of legacySubmissionRows.filter((item:any)=>['presentado','validado'].includes(item.estado))) if(!filingByKey.has(periodKey(legacy))) addIssue('warning','LEGACY-SIN-MIGRAR','Existe un registro antiguo de presentación sin casillas incorporadas al histórico fiscal. Importe el modelo presentado para habilitar arrastres fiables.',{category:'presentacion',sourceId:legacy.id,modeloCodigo:legacy.modeloCodigo,ejercicio:legacy.ejercicio,periodo:legacy.periodo});
-      for(const issue of fiscalErrorRows.filter((item:any)=>!['resuelto','ignorado'].includes(item.estado))) addIssue(['alta','critica'].includes(issue.severidad)?'blocker':'warning','INCIDENCIA-FISCAL',issue.descripcion||issue.tipo,{category:'incidencia',sourceId:issue.id,entityType:issue.entidad_tipo||'',entityId:issue.entidad_id||'',recommendedAction:issue.accion_recomendada||'',status:issue.estado,severitySource:issue.severidad});
-      for(const file of officialFileRows.filter((item:any)=>item.estado==='rechazado_validacion')) for(const message of (file.errores||['Fichero rechazado por la validación interna.'])) addIssue('blocker','FICHERO-RECHAZADO',clean(message),{category:'fichero',sourceId:file.id,modeloCodigo:file.modeloCodigo,ejercicio:file.ejercicio,periodo:file.periodo});
+      for(const issue of fiscalErrorRows.filter((item:any)=>!['resuelto','ignorado'].includes(item.estado))) addIssue('warning','INCIDENCIA-FISCAL',issue.descripcion||issue.tipo,{category:'incidencia',sourceId:issue.id,entityType:issue.entidad_tipo||'',entityId:issue.entidad_id||'',recommendedAction:issue.accion_recomendada||'',status:issue.estado,severitySource:issue.severidad});
+      for(const file of officialFileRows.filter((item:any)=>item.estado==='rechazado_validacion')) for(const message of (file.errores||['Fichero rechazado por la validación interna.'])) addIssue('warning','FICHERO-RECHAZADO',clean(message),{category:'fichero',sourceId:file.id,modeloCodigo:file.modeloCodigo,ejercicio:file.ejercicio,periodo:file.periodo});
       const events:any[]=[
         ...drafts.map((item:any)=>({id:`draft:${item.id}`,type:'draft',date:item.updatedAt||item.createdAt,title:`Borrador ${item.modeloCodigo} v${item.version}`,detail:`${item.periodo} ${item.ejercicio} · ${item.estado}`,modeloCodigo:item.modeloCodigo,ejercicio:item.ejercicio,periodo:item.periodo,status:item.estado,result:item.resultadoCalculado,hash:item.snapshotHash||item.sourceHash,sourceId:item.id})),
         ...filings.map((item:any)=>({id:`filing:${item.id}`,type:'filing',date:item.fechaPresentacion||item.fechaImportacion||item.createdAt,title:`${item.tipoDeclaracion==='original'?'Presentación':'Declaración '+item.tipoDeclaracion} ${item.modeloCodigo}`,detail:`${item.periodo} ${item.ejercicio} · snapshot v${item.snapshotVersion}`,modeloCodigo:item.modeloCodigo,ejercicio:item.ejercicio,periodo:item.periodo,status:item.estadoPresentacion,result:item.importeFinal,hash:item.snapshotHash,sourceId:item.id})),
@@ -1674,7 +1885,7 @@ Deno.serve(async (req) => {
       ].filter((item:any)=>item.date).sort((a:any,b:any)=>new Date(b.date).getTime()-new Date(a.date).getTime());
       const officialFiles=officialFileRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,administracion:item.administracion,nombreFichero:item.nombreFichero,extension:item.extension,formato:item.formato,versionDiseno:item.versionDiseno,fileUrl:item.fileUrl||'',hash:item.hash||'',generadoPor:item.generadoPor||'',fechaGeneracion:item.fechaGeneracion||item.created_date||'',estado:item.estado||'generado',errores:item.errores||[],avisos:item.avisos||[],taxDraftId:item.taxDraftId||''}));
       const legacySubmissions=legacySubmissionRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,estado:item.estado||'pendiente',viaPresentacion:item.viaPresentacion||'',fechaEnvio:item.fechaEnvio||item.created_date||'',numeroJustificante:item.numeroJustificante||'',csv:item.csv||'',justificantePdfUrl:item.justificantePdfUrl||'',importeFinal:money(item.importeFinal),incorporadoAlHistorico:filingByKey.has(periodKey(item))}));
-      return Response.json({ok:true,engineVersion:ENGINE_VERSION,generatedAt:new Date().toISOString(),year:year||null,profile:profile?{id:profile.id,profileStatus:profile.profileStatus,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,filingFrequency:profile.filingFrequency,repepStatus:profile.repepStatus,usesSII:booleanValue(profile.usesSII),isREDEME:booleanValue(profile.isREDEME),isLargeCompany:booleanValue(profile.isLargeCompany)}:null,models:activeModels.map((item:any)=>({id:item.id,codigo:item.codigo,nombre:item.nombre,administracion:item.administracion,periodicidad:item.periodicidad,fuenteValidacion:item.fuenteValidacion,activo:item.activo!==false})),drafts,latestDrafts,filings,latestFilings:[...filingByKey.values()],periods:periodRows,officialFiles,legacySubmissions,validationIssues,events,stats:{drafts:drafts.length,latestDrafts:latestDrafts.length,filings:filings.length,presentedPeriods:periodRows.filter((item:any)=>item.estado==='presentado').length,officialFiles:officialFiles.length,blockers:validationIssues.filter((item:any)=>item.severity==='blocker').length,warnings:validationIssues.filter((item:any)=>item.severity==='warning').length,evidencePending:filings.filter((item:any)=>!item.numeroJustificante&&!item.csv&&!item.justificantePdfUrl&&!item.ficheroPresentadoUrl).length,legacyPending:legacySubmissions.filter((item:any)=>!item.incorporadoAlHistorico).length}});
+      return Response.json({ok:true,engineVersion:ENGINE_VERSION,generatedAt:new Date().toISOString(),year:year||null,profile:profile?{id:profile.id,profileStatus:profile.profileStatus,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,filingFrequency:profile.filingFrequency,repepStatus:profile.repepStatus,usesSII:booleanValue(profile.usesSII),isREDEME:booleanValue(profile.isREDEME),isLargeCompany:booleanValue(profile.isLargeCompany)}:null,models:activeModels.map((item:any)=>({id:item.id,codigo:item.codigo,nombre:item.nombre,administracion:item.administracion,periodicidad:item.periodicidad,fuenteValidacion:item.fuenteValidacion,activo:item.activo!==false})),drafts,latestDrafts,filings,latestFilings:[...filingByKey.values()],periods:periodRows,officialFiles,legacySubmissions,validationIssues,events,stats:{drafts:drafts.length,latestDrafts:latestDrafts.length,filings:filings.length,presentedPeriods:periodRows.filter((item:any)=>item.estado==='presentado').length,officialFiles:officialFiles.length,blockers:0,warnings:validationIssues.length,recommendations:validationIssues.length,evidencePending:filings.filter((item:any)=>!item.numeroJustificante&&!item.csv&&!item.justificantePdfUrl&&!item.ficheroPresentadoUrl).length,legacyPending:legacySubmissions.filter((item:any)=>!item.incorporadoAlHistorico).length}});
     }
 
     if(action==='update_draft_status') {
@@ -1687,7 +1898,6 @@ Deno.serve(async (req) => {
       const related=(relatedAll||[]).filter((item:any)=>normalizedPeriod(item.periodo)===normalizedPeriod(draft.periodo));
       const latest=[...(related||[])].sort((a:any,b:any)=>(Number(b.version||0)-Number(a.version||0))||(new Date(b.updated_date||b.created_date||0).getTime()-new Date(a.updated_date||a.created_date||0).getTime()))[0];
       if(latest?.id!==draft.id) return Response.json({error:'Solo puede cambiarse el estado de la última versión del borrador.'},{status:409});
-      if(['revisado','aprobado'].includes(nextStatus)&&Array.isArray(draft.errores)&&draft.errores.length) return Response.json({error:'No se puede revisar ni aprobar un borrador con incidencias bloqueantes.'},{status:422});
       const update:any={estado:nextStatus}; if(canReview&&['revisado','aprobado','rechazado'].includes(nextStatus)) update.usuarioRevisor=user.email;
       const saved=await svc.entities.TaxDraft.update(draft.id,update);
       const stateMap:any={borrador:'borrador',en_revision:'pendiente_revision',revisado:'revisado',aprobado:'listo_presentar',rechazado:'pendiente_revision'};
@@ -1775,13 +1985,16 @@ Deno.serve(async (req) => {
     }
     if(action==='calculate_bundle') {
       const models=TARGET_MODELS.map(code=>{
-        const annual=['180','190','193','347','390','415','425'].includes(code); const modelPeriod=annual?'Anual':'1T'; const modelBounds=bounds(year,modelPeriod); const modelData={...data,period:modelPeriod,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); applyModelValidation(code,modelData,modelCalculation); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:unique(modelData.blockers),warnings:unique(modelData.warnings)};
+        const annual=['180','190','193','347','390','415','425'].includes(code); const modelPeriod=annual?'Anual':'1T'; const modelBounds=bounds(year,modelPeriod); const modelData={...data,period:modelPeriod,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); applyModelValidation(code,modelData,modelCalculation); const recommendations=unique([...modelData.blockers,...modelData.warnings]); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:[],warnings:recommendations,recommendations,canExport:DEFINITIONS[code].officialExport||DEFINITIONS[code].handoffExport};
       });
       return Response.json({ok:true,engineVersion:ENGINE_VERSION,models,sourceStats:{invoices:invoices.length,taxLines:taxLines.length,invoicePayments:invoicePayments.length,payrolls:payrolls.length,journalEntries:entries.length}});
     }
-    const adjustments=body.adjustments||{}; const calculation=calculate(model,data,b,adjustments); applyModelValidation(model,data,calculation); const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[])); const sourceHash=await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
-    const history=filingComparison(data,model,year,period,calculation); if(history.presented) warnings.push('Este período ya tiene una declaración presentada importada. Taxea muestra diferencias, pero bloquea una segunda declaración original.');
-    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:unique(blockers),warnings:unique(warnings),canSaveDraft:true,canExportOfficial:DEFINITIONS[model].officialExport&&blockers.length===0&&!history.presented},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length,filings:filings.length}},sources:SOURCES};
+    const adjustments=body.adjustments||{}; const calculation=calculate(model,data,b,adjustments); applyModelValidation(model,data,calculation);
+    if(['111','115','123','130','303','390'].includes(model)&&!clean(Deno.env.get('TAXEA_DEVELOPER_NIF'))) warnings.push('No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
+    const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[])); const sourceHash=await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
+    const history=filingComparison(data,model,year,period,calculation); if(history.presented) warnings.push('Este período ya tiene una declaración presentada. Puedes exportar otra versión, pero en la sede debes elegir el tipo correctivo que proceda e identificar el justificante anterior cuando sea obligatorio.');
+    const recommendations=unique([...blockers,...warnings]);
+    const result={ok:true,engineVersion:ENGINE_VERSION,definition:{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:DEFINITIONS[model].officialExport||DEFINITIONS[model].handoffExport,canExportOfficial:DEFINITIONS[model].officialExport,requiresReview:recommendations.length>0},source:{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,b.start,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,b.start,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,b.start,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,b.start,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,b.start,b.end)).length,filings:filings.length}},sources:SOURCES};
     if(action==='calculate') return Response.json(result);
     if(action==='export_handoff') {
       if(!['420','425'].includes(model)) return Response.json({error:'El traspaso guiado solo está disponible para los modelos 420 y 425.'},{status:400});
@@ -1791,25 +2004,22 @@ Deno.serve(async (req) => {
     }
     if(action==='save_draft') {
       const adjustmentsList=Object.entries(body.adjustments||{}).map(([field,value])=>({field,value,reason:clean(body.adjustmentReason)}));
-      const draftSnapshotHash=await sha256(JSON.stringify({companyId,model,year,period,sourceHash,adjustments:adjustmentsList,fields:(calculation.fields||[]).map((field:any)=>[field.code,field.value]),blockers:unique(blockers),warnings:unique(warnings)}));
+      const draftSnapshotHash=await sha256(JSON.stringify({companyId,model,year,period,sourceHash,adjustments:adjustmentsList,fields:(calculation.fields||[]).map((field:any)=>[field.code,field.value]),recommendations}));
       const allExisting=await svc.entities.TaxDraft.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',500);
       const existing=(allExisting||[]).filter((item:any)=>normalizedPeriod(item.periodo)===period);
       const duplicate=(existing||[]).find((item:any)=>clean(item.snapshotHash)===draftSnapshotHash);
       if(duplicate) return Response.json({...result,draft:duplicate,alreadySaved:true});
       const previous=[...(existing||[])].sort((a:any,b:any)=>(Number(b.version||0)-Number(a.version||0))||(new Date(b.updated_date||b.created_date||0).getTime()-new Date(a.updated_date||a.created_date||0).getTime()))[0]||null;
-      const payload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,version:Number(previous?.version||0)+1,parentDraftId:previous?.id||'',engineVersion:ENGINE_VERSION,sourceHash,snapshotHash:draftSnapshotHash,resultadoCalculado:money(calculation.result),frozenAt:new Date().toISOString(),origenDatos:`${ENGINE_VERSION}:${sourceHash}`,resumen:{definition:result.definition,calculation:result.calculation,source:result.source},validaciones:result.validation.warnings.map((message:string)=>({severity:'warning',message})),errores:result.validation.blockers.map((message:string)=>({severity:'blocker',message})),ajustesManuales:adjustmentsList,usuarioCreador:user.email,estado:result.validation.blockers.length?'en_revision':'borrador',notas:clean(body.notes)};
+      const payload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,version:Number(previous?.version||0)+1,parentDraftId:previous?.id||'',engineVersion:ENGINE_VERSION,sourceHash,snapshotHash:draftSnapshotHash,resultadoCalculado:money(calculation.result),frozenAt:new Date().toISOString(),origenDatos:`${ENGINE_VERSION}:${sourceHash}`,resumen:{definition:result.definition,calculation:result.calculation,source:result.source},validaciones:recommendations.map((message:string)=>({severity:'recommendation',message})),errores:[],ajustesManuales:adjustmentsList,usuarioCreador:user.email,estado:'borrador',notas:clean(body.notes)};
       const draft=await svc.entities.TaxDraft.create(payload);
       const allSavedPeriods=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',100);
       const savedPeriods=(allSavedPeriods||[]).filter((item:any)=>normalizedPeriod(item.periodo)===period);
-      const periodPayload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:b.start,fechaFin:b.end,estado:result.validation.blockers.length?'pendiente_revision':'borrador',importeCalculado:money(calculation.result),resultado:taxPeriodOutcome(model,money(calculation.result)),notas:`Borrador ${draft.id} · snapshot ${draftSnapshotHash}`};
+      const periodPayload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:b.start,fechaFin:b.end,estado:'borrador',importeCalculado:money(calculation.result),resultado:taxPeriodOutcome(model,money(calculation.result)),notas:`Borrador ${draft.id} · snapshot ${draftSnapshotHash}`};
       if(savedPeriods?.[0]&&savedPeriods[0].estado!=='presentado') await svc.entities.TaxPeriod.update(savedPeriods[0].id,periodPayload); else if(!savedPeriods?.[0]) await svc.entities.TaxPeriod.create(periodPayload);
       return Response.json({...result,draft,alreadySaved:false});
     }
     if(action==='export') {
-      if(history.presented) return Response.json({ok:false,error:'Este período ya consta presentado.',blockers:['No se generará otra declaración original. Revise las diferencias y prepare, cuando proceda, una rectificativa, complementaria o solicitud de rectificación con referencia al justificante anterior.']},{status:422});
       if(!DEFINITIONS[model].officialExport) return Response.json({ok:false,error:'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
-      if(blockers.length) return Response.json({ok:false,error:'La exportación está bloqueada por incidencias fiscales.',blockers:unique(blockers),warnings:unique(warnings)},{status:422});
-      if(['303'].includes(model)&&activities.some((a:any)=>['simplificado','grupo_entidades'].includes(a.indirectTaxRegime))) return Response.json({ok:false,error:'El perfil requiere páginas/regímenes especiales no exportables de forma automática.',blockers:['Revisa régimen simplificado/grupo de entidades y utiliza el modelo específico aplicable.']},{status:422});
       let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
       if(model==='180') {
         content=export180(company,year,calculation,sequentialDeclarationNumber('180'));
@@ -1826,16 +2036,22 @@ Deno.serve(async (req) => {
       } else if(model==='415') {
         content=export415Import(company,year,calculation);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_415_importacion.txt`; extension='txt'; format='Soporte de importación oficial programa ATC 415';
+      } else if(model==='390') {
+        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF'));
+        content=wrap(model,year,'0A',export390(company,profile,activities,year,calculation,filings),developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.390`; extension='390'; format='Diseño de registro AEAT modelo 390';
       } else {
-        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF')); if(!developerTaxId) return Response.json({ok:false,error:'Falta configurar TAXEA_DEVELOPER_NIF para completar el diseño oficial AEAT.',blockers:['Añade el NIF de la entidad desarrolladora como secreto de backend antes de exportar.']},{status:422});
+        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF'));
         const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
         content=wrap(model,year,period,pages,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`; extension=model; format='Diseño de registro AEAT';
       }
       const layoutErrors=transferLayoutErrors(model,content);
       if(layoutErrors.length) return Response.json({ok:false,error:'El fichero generado no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
       const hash=await sha256(content);
-      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:unique(warnings),resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined})});
-      return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content),nextStep:model==='415'?'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Corrige cualquier incidencia y genera allí el .dec.':undefined}});
+      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:recommendations,resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined,recommendations})});
+      const nextStep = model === '415'
+        ? 'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Revisa sus avisos y genera allí el .dec.'
+        : `Importa el fichero en la presentación del modelo ${model} de la sede AEAT. La validación definitiva corresponde a la AEAT; sus avisos no invalidan la descarga generada por Taxea.`;
+      return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64:encodeBase64(content),nextStep}});
     }
     if(action==='export_review') {
       const content=JSON.stringify({...result,exportNotice:'Borrador técnico de revisión. No presentable ante AEAT/ATC.'},null,2); return Response.json({...result,file:{filename:`${model}_${year}_${period}_revision_taxea.json`,extension:'json',format:'Borrador técnico de revisión',hash:await sha256(content),contentBase64:encodeBase64(content)}});
