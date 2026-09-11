@@ -1,164 +1,56 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useMemo, useState } from 'react';
+import { ArrowRight, FileCheck2, FileClock, FileDown, History, Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { History, FileCheck, FilePen, Send } from 'lucide-react';
+import { formatDate, formatMoney, useTaxWorkspace } from './useTaxWorkspace';
 
-const ESTADO_CONFIG = {
-  presentado:        { label: 'Presentado',  color: 'bg-green-100 text-green-700', icon: FileCheck },
-  borrador:          { label: 'Borrador',    color: 'bg-blue-100 text-blue-700',   icon: FilePen },
-  aprobado:          { label: 'Aprobado',    color: 'bg-teal-100 text-teal-700',   icon: FileCheck },
-  en_revision:       { label: 'En revisión', color: 'bg-yellow-100 text-yellow-700', icon: FilePen },
-  rechazado:         { label: 'Rechazado',   color: 'bg-red-100 text-red-700',     icon: Send },
-  con_requerimiento: { label: 'Requerimiento', color: 'bg-red-200 text-red-800',   icon: Send },
+const EVENT = {
+  draft: { label: 'Borrador', icon: FileClock, color: 'bg-cyan-100 text-cyan-700' },
+  filing: { label: 'Presentación', icon: FileCheck2, color: 'bg-emerald-100 text-emerald-700' },
+  file: { label: 'Fichero', icon: FileDown, color: 'bg-violet-100 text-violet-700' },
 };
 
-function fmt(n) { return n != null ? `${Number(n).toFixed(2)} €` : '—'; }
+function Metric({ label, value }) {
+  return <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold text-slate-900">{value}</p></div>;
+}
 
-export default function HistorialFiscalTab() {
+export default function HistorialFiscalTab({ onOpenModel }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
   const companyId = company?.id;
-  const [yearFilter, setYearFilter] = useState('todos');
   const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [type, setType] = useState('all');
+  const [model, setModel] = useState('all');
+  const workspace = useTaxWorkspace(companyId, year);
+  const models = useMemo(() => [...new Set((workspace.data?.events || []).map(item => item.modeloCodigo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true })), [workspace.data]);
+  const events = useMemo(() => (workspace.data?.events || []).filter(item => (type === 'all' || item.type === type) && (model === 'all' || item.modeloCodigo === model)), [workspace.data, type, model]);
 
-  const { data: filings = [], isLoading: loadingFilings } = useQuery({
-    queryKey: ['taxFilings', companyId],
-    queryFn: () => base44.entities.TaxFiling.filter({ companyId }),
-    enabled: !!companyId,
-  });
+  if (!companyId) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa.</div>;
 
-  const { data: drafts = [], isLoading: loadingDrafts } = useQuery({
-    queryKey: ['taxDrafts', companyId],
-    queryFn: () => base44.entities.TaxDraft.filter({ companyId }),
-    enabled: !!companyId,
-  });
+  return <div className="mx-auto max-w-6xl space-y-5">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-semibold text-slate-900">Historial fiscal auditable</h2><p className="mt-1 text-sm text-slate-500">Cronología sin duplicar estados: versiones guardadas, ficheros generados y declaraciones realmente presentadas.</p></div><div className="flex flex-wrap gap-2"><select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 3, currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</select><Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Actualizar</Button></div></div>
 
-  const { data: periods = [] } = useQuery({
-    queryKey: ['taxPeriods', companyId],
-    queryFn: () => base44.entities.TaxPeriod.filter({ companyId }),
-    enabled: !!companyId,
-  });
+    <div className="grid gap-3 sm:grid-cols-3"><Metric label="Versiones de borrador" value={workspace.data?.stats?.drafts || 0} /><Metric label="Snapshots presentados" value={workspace.data?.stats?.filings || 0} /><Metric label="Ficheros generados" value={workspace.data?.stats?.officialFiles || 0} /></div>
 
-  if (!companyId) return <div className="text-center py-16 text-sm text-gray-400">Selecciona un cliente.</div>;
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row"><select value={type} onChange={event => setType(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todos los eventos</option><option value="draft">Borradores</option><option value="filing">Presentaciones</option><option value="file">Ficheros</option></select><select value={model} onChange={event => setModel(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todos los modelos</option>{models.map(value => <option key={value} value={value}>Modelo {value}</option>)}</select></div>
 
-  const years = [...new Set([
-    ...filings.map(f => f.ejercicio),
-    ...drafts.map(d => d.ejercicio),
-  ])].filter(Boolean).sort((a, b) => b - a);
+    {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : events.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><History className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Sin actividad fiscal con estos filtros</p><p className="mt-1 text-xs text-slate-500">El historial se alimenta automáticamente al guardar versiones, generar ficheros o importar presentaciones.</p></div>
+      : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="divide-y divide-slate-100">{events.map(event => {
+        const cfg = EVENT[event.type] || EVENT.draft;
+        const Icon = cfg.icon;
+        return <div key={event.id} className="flex flex-col gap-3 p-4 hover:bg-slate-50/70 sm:flex-row sm:items-center">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${cfg.color}`}><Icon className="h-4 w-4" /></div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-slate-900">{event.title}</p><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{cfg.label}</span></div><p className="mt-0.5 text-xs text-slate-500">{event.detail} · {formatDate(event.date, true)}</p>{event.hash && <p className="mt-1 truncate font-mono text-[10px] text-slate-400">Huella {event.hash}</p>}</div>
+          {event.result != null && <div className="sm:text-right"><p className="text-[11px] text-slate-400">Resultado</p><p className={`text-sm font-semibold ${event.result > 0 ? 'text-red-600' : event.result < 0 ? 'text-emerald-700' : 'text-slate-600'}`}>{formatMoney(event.result)}</p></div>}
+          {event.modeloCodigo && <Button size="sm" variant="ghost" onClick={() => onOpenModel?.({ modelCode: event.modeloCodigo, year: event.ejercicio, period: event.periodo })}>Abrir <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>}
+        </div>;
+      })}</div></div>}
 
-  const filteredFilings = yearFilter === 'todos' ? filings : filings.filter(f => f.ejercicio === parseInt(yearFilter));
-  const filteredDrafts = yearFilter === 'todos' ? drafts : drafts.filter(d => d.ejercicio === parseInt(yearFilter));
-
-  // Combine into timeline events
-  const events = [
-    ...filteredFilings.map(f => ({
-      id: `f-${f.id}`,
-      date: f.fechaPresentacion || f.created_date,
-      tipo: 'presentacion',
-      modelo: f.modeloCodigo,
-      periodo: f.periodo,
-      ejercicio: f.ejercicio,
-      estado: f.estadoPresentacion || 'presentado',
-      importe: f.importeFinal,
-      via: f.via,
-      justificante: f.numeroJustificante,
-      notas: f.notas,
-    })),
-    ...filteredDrafts.map(d => ({
-      id: `d-${d.id}`,
-      date: d.updated_date || d.created_date,
-      tipo: 'borrador',
-      modelo: d.modeloCodigo,
-      periodo: d.periodo,
-      ejercicio: d.ejercicio,
-      estado: d.estado,
-      importe: null,
-      notas: d.notas,
-    })),
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-gray-800">Historial fiscal</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Registro de borradores y presentaciones realizadas</p>
-        </div>
-        <select value={yearFilter} onChange={e => setYearFilter(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white">
-          <option value="todos">Todos los años</option>
-          {years.map(y => <option key={y} value={y}>{y}</option>)}
-          <option value={currentYear}>{currentYear}</option>
-        </select>
-      </div>
-
-      {loadingFilings || loadingDrafts ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Cargando historial...</div>
-      ) : events.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-gray-200 rounded-xl">
-          <History className="w-10 h-10 text-gray-300 mb-3" />
-          <p className="text-sm font-medium text-gray-500 mb-1">Sin historial registrado</p>
-          <p className="text-xs text-gray-400 max-w-xs">Las presentaciones y borradores aprobados aparecerán aquí automáticamente.</p>
-        </div>
-      ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {/* Summary stats */}
-          <div className="grid grid-cols-3 gap-0 border-b border-gray-200">
-            <div className="px-4 py-3 border-r border-gray-200">
-              <p className="text-xs text-gray-400">Presentaciones</p>
-              <p className="text-xl font-bold text-gray-800">{filteredFilings.length}</p>
-            </div>
-            <div className="px-4 py-3 border-r border-gray-200">
-              <p className="text-xs text-gray-400">Borradores</p>
-              <p className="text-xl font-bold text-gray-800">{filteredDrafts.length}</p>
-            </div>
-            <div className="px-4 py-3">
-              <p className="text-xs text-gray-400">Total ingresado</p>
-              <p className="text-xl font-bold text-red-600">
-                {fmt(filteredFilings.reduce((s, f) => s + (f.importeFinal > 0 ? f.importeFinal : 0), 0))}
-              </p>
-            </div>
-          </div>
-
-          {/* Timeline */}
-          <div className="divide-y divide-gray-100">
-            {events.map(ev => {
-              const cfg = ESTADO_CONFIG[ev.estado] || { label: ev.estado, color: 'bg-gray-100 text-gray-600', icon: FilePen };
-              const Icon = cfg.icon;
-              const dateStr = ev.date ? new Date(ev.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-              return (
-                <div key={ev.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${ev.tipo === 'presentacion' ? 'bg-green-100' : 'bg-blue-100'}`}>
-                    <Icon className={`w-4 h-4 ${ev.tipo === 'presentacion' ? 'text-green-600' : 'text-blue-600'}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-800">{ev.modelo}</span>
-                      <span className="text-sm text-gray-500">— {ev.periodo} {ev.ejercicio}</span>
-                      {ev.justificante && <span className="text-xs text-gray-400 font-mono">#{ev.justificante}</span>}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-xs text-gray-400">{dateStr}</span>
-                      {ev.via && <span className="text-xs text-gray-400">· {ev.via.replace(/_/g, ' ')}</span>}
-                      {ev.notas && <span className="text-xs text-gray-400 truncate">· {ev.notas}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {ev.importe != null && (
-                      <span className={`text-sm font-semibold ${ev.importe > 0 ? 'text-red-600' : ev.importe < 0 ? 'text-green-600' : 'text-gray-500'}`}>
-                        {fmt(Math.abs(ev.importe))}
-                      </span>
-                    )}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>{cfg.label}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">El historial muestra evidencia operativa interna. Una presentación queda acreditada por su snapshot, justificante, CSV o fichero oficial; un borrador o una descarga no son prueba de presentación.</div>
+  </div>;
 }
+
