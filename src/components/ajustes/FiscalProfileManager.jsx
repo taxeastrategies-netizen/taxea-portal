@@ -33,7 +33,7 @@ const emptyActivity = (profile) => ({
   exemptionKey: '', exemptionLegalBasis: '', newProfessionalRateConfirmed: false, hasIntraCommunityOperations: false,
 });
 
-export default function FiscalProfileManager({ company, user }) {
+export default function FiscalProfileManager({ company, onChanged }) {
   const companyId = company?.id;
   const queryClient = useQueryClient();
   const [profileDraft, setProfileDraft] = useState(null);
@@ -48,7 +48,10 @@ export default function FiscalProfileManager({ company, user }) {
   const recommendations = bundle.data?.recommendations || [];
   const mutate = useMutation({
     mutationFn: invoke,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fiscal-bundle', companyId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fiscal-bundle', companyId] });
+      onChanged?.();
+    },
     onError: (error) => toast.error(error.message),
   });
   const set = (key, value) => setProfileDraft({ ...profile, [key]: value });
@@ -148,4 +151,5 @@ export default function FiscalProfileManager({ company, user }) {
 
 function Field({ label, children }) { return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>; }
 function Check({ checked, onChange, label }) { return <label className="flex items-center gap-2 text-xs"><Checkbox checked={Boolean(checked)} onCheckedChange={value=>onChange(value===true)} /><span>{label}</span></label>; }
+
 
