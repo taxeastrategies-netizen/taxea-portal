@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.11-v10';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.11-v11';
 const TARGET_MODELS = ['111', '115', '123', '130', '180', '190', '193', '303', '347', '390', '415', '420', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -26,10 +26,13 @@ const SOURCES = [
   { title: 'AEAT - IVA soportado deducible y plazo de cuatro años', url: 'https://sede.agenciatributaria.gob.es/Sede/iva/que-iva-soportado-puedo-deducir/que-requisitos-debo-cumplir-poder-iva.html' },
   { title: 'AEAT - Factura recibida tarde y período de deducción', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/manuales-videos-folletos/manuales-practicos/manual-iva-2023/capitulo-05-deducciones-devoluciones/cuestiones-frecuentes-planteadas-capitulo.html' },
   { title: 'AEAT - Autoliquidaciones complementarias', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/presentacion-declaraciones-ayuda-tecnica/presentacion-autoliquidaciones-complementarias.html' },
+  { title: 'AEAT - Errores y autoliquidación rectificativa del modelo 303', url: 'https://sede.agenciatributaria.gob.es/Sede/iva/presentar-declaracion-iva-modelo-303/errores-declaracion.html' },
+  { title: 'AEAT - Consulta y evidencia de declaraciones presentadas', url: 'https://sede.agenciatributaria.gob.es/Sede/irpf/declaraciones-presentadas/consulta-declaraciones-presentadas.html' },
   { title: 'AEAT - Modelo 347, operaciones excluidas', url: 'https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/declaraciones-informativas/modelo-347-decla_____racion-anual-operaciones-personas_/operaciones-excluidas-modelo-347.html' },
   { title: 'ATC - Modelo 420', url: 'https://www3.gobiernodecanarias.org/tributos/atc/w/modelo-420' },
   { title: 'ATC - Modelo 415', url: 'https://www3.gobiernodecanarias.org/tributos/atc/w/modelo-415' },
   { title: 'ATC - Modelo 425', url: 'https://www3.gobiernodecanarias.org/tributos/atc/w/modelo-425' },
+  { title: 'ATC - Cómo presentar los modelos', url: 'https://www3.gobiernodecanarias.org/tributos/atc/c%C3%B3mo-presentar-los-modelos' },
 ];
 
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -157,7 +160,18 @@ function dateOf(item: any) {
   return '';
 }
 
-function bounds(year: number, period: string) {
+function normalizedPeriod(value: unknown) {
+  const period = clean(value).toUpperCase();
+  const legacyQuarter = /^T([1-4])$/.exec(period);
+  if (legacyQuarter) return `${legacyQuarter[1]}T`;
+  const quarter = /^([1-4])T$/.exec(period);
+  if (quarter) return `${quarter[1]}T`;
+  if (/^\d{1,2}$/.test(period)) return String(Number(period)).padStart(2, '0');
+  return period === 'ANUAL' ? 'Anual' : period;
+}
+
+function bounds(year: number, periodInput: string) {
+  const period = normalizedPeriod(periodInput);
   if (period === 'Anual') return { start: `${year}-01-01`, end: `${year}-12-31`, cumulativeStart: `${year}-01-01` };
   const monthMatch = /^(0[1-9]|1[0-2])$/.exec(period);
   if (monthMatch) {
@@ -184,7 +198,7 @@ function filingDate(filing: any) {
 
 function latestFiling(filings: any[], model: string, year: number, period: string) {
   return filings
-    .filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === Number(year) && clean(row.periodo) === clean(period) && FILED_STATUSES.has(clean(row.estadoPresentacion)))
+    .filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === Number(year) && normalizedPeriod(row.periodo) === normalizedPeriod(period) && FILED_STATUSES.has(clean(row.estadoPresentacion)))
     .sort((a: any, b: any) => `${filingDate(b)}|${String(b.snapshotVersion || 0).padStart(6, '0')}|${b.created_date || ''}`.localeCompare(`${filingDate(a)}|${String(a.snapshotVersion || 0).padStart(6, '0')}|${a.created_date || ''}`))[0] || null;
 }
 
@@ -213,6 +227,7 @@ function periodForDate(value: string, monthly: boolean) {
 }
 
 function periodOrdinal(year: number, period: string) {
+  period = normalizedPeriod(period);
   const monthly = /^\d{2}$/.test(period);
   const index = periodsForStyle(monthly).indexOf(period);
   return year * (monthly ? 12 : 4) + Math.max(index, 0);
@@ -249,9 +264,9 @@ function plusFourYears(value: string) {
 function deductionDecision(line: any, data: any, selectedBounds: any, model: '303'|'420') {
   const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
   const receipt = receiptDateOf(line);
-  const selected = { year: Number(data.year), period: clean(data.period) };
+  const selected = { year: Number(data.year), period: normalizedPeriod(data.period) };
   const explicitYear = Number(line.deductionYear || 0);
-  const explicitPeriod = clean(line.deductionPeriod);
+  const explicitPeriod = normalizedPeriod(line.deductionPeriod);
   const basic = { sourceId: line.sourceId, invoiceId: line.invoice?.id, invoiceNumber: line.invoice?.numero_factura, operationDate, receiptDate: receipt.date, receiptDateInferred: receipt.inferred, base: money(line.base), quota: money(line.deductibleQuota ?? line.quota), originalYear: Number(operationDate.slice(0, 4)), originalPeriod: periodForDate(operationDate, /^\d{2}$/.test(selected.period)) };
   if (explicitYear && explicitPeriod) return { ...basic, targetYear: explicitYear, targetPeriod: explicitPeriod, treatment: 'asignacion_confirmada', include: explicitYear === selected.year && explicitPeriod === selected.period };
   if (!operationDate || !receipt.date) return { ...basic, treatment: 'revision_fecha_recepcion', include: false, review: true, reason: 'Falta fecha suficiente para separar devengo y ejercicio de la deducción.' };
@@ -295,7 +310,7 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
 
 function previous130FromFilings(data: any) {
   const periods = ['1T','2T','3T','4T'];
-  const selectedIndex = periods.indexOf(clean(data.period));
+  const selectedIndex = periods.indexOf(normalizedPeriod(data.period));
   if (selectedIndex <= 0) return { complete: true, amount: 0, negativeComplete: true, negativeAmount: 0, filings: [], missing: [], missingNegative: [] };
   const found: any[] = [], missing: string[] = [], missingNegative: string[] = [];
   for (const period of periods.slice(0, selectedIndex)) {
@@ -332,6 +347,7 @@ function previous130FromFilings(data: any) {
 }
 
 function previousPeriod(year: number, period: string) {
+  period = normalizedPeriod(period);
   const monthly = /^\d{2}$/.test(period);
   const periods = periodsForStyle(monthly);
   const index = periods.indexOf(period);
@@ -1592,11 +1608,111 @@ Deno.serve(async (req) => {
       const profiles=await listAll(svc.entities.FiscalProfile,{company_id:companyId}); const profile=profiles.find((item:any)=>item.active!==false)||profiles[0]||null;
       return Response.json({ok:true,engineVersion:ENGINE_VERSION,profile:profile?{id:profile.id,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,isLargeCompany:booleanValue(profile.isLargeCompany),isREDEME:booleanValue(profile.isREDEME),usesSII:booleanValue(profile.usesSII),repepStatus:profile.repepStatus,profileStatus:profile.profileStatus}:null});
     }
-    const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=clean(body.periodo||'Anual');
-    if(!companyId||(!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'companyId, modeloCodigo y ejercicio son obligatorios.'},{status:400});
+    const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=normalizedPeriod(body.periodo||'Anual');
+    if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
     const svc=base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
+
+    if(action==='workspace') {
+      const yearFilter=year?{companyId,ejercicio:year}:{companyId};
+      const [draftRows,filingRows,periodRows,officialFileRows,fiscalErrorRows,profileRows,modelRows,legacySubmissionRows]=await Promise.all([
+        listAll(svc.entities.TaxDraft,yearFilter),
+        listAll(svc.entities.TaxFiling,yearFilter),
+        listAll(svc.entities.TaxPeriod,yearFilter),
+        listAll(svc.entities.TaxOfficialFile,yearFilter),
+        listAll(svc.entities.FiscalError,{company_id:companyId}),
+        listAll(svc.entities.FiscalProfile,{company_id:companyId}),
+        listAll(svc.entities.TaxModel,{companyId}),
+        listAll(svc.entities.TaxSubmission,yearFilter),
+      ]);
+      const periodKey=(item:any)=>`${clean(item?.modeloCodigo)}|${Number(item?.ejercicio)||0}|${normalizedPeriod(item?.periodo)}`;
+      const normalizeMessages=(items:any,severity:string)=>(Array.isArray(items)?items:[]).map((item:any)=>typeof item==='string'?{severity,message:item}:{severity:item?.severity||severity,message:clean(item?.message||item?.descripcion||item?.title)}).filter((item:any)=>item.message);
+      const drafts=draftRows.map((item:any)=>({
+        id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,version:Number(item.version||1),parentDraftId:item.parentDraftId||'',estado:item.estado||'borrador',
+        engineVersion:item.engineVersion||clean(item.origenDatos).split(':')[0]||'',sourceHash:item.sourceHash||item.resumen?.source?.hash||clean(item.origenDatos).split(':').slice(1).join(':'),snapshotHash:item.snapshotHash||'',
+        resultadoCalculado:money(item.resultadoCalculado??item.resumen?.calculation?.result),sourceCount:Number(item.resumen?.source?.count||0),sourceStats:item.resumen?.source?.stats||{},definition:item.resumen?.definition||{},calculation:item.resumen?.calculation||{},
+        warnings:normalizeMessages(item.validaciones,'warning'),blockers:normalizeMessages(item.errores,'blocker'),adjustments:Array.isArray(item.ajustesManuales)?item.ajustesManuales:[],usuarioCreador:item.usuarioCreador||'',usuarioRevisor:item.usuarioRevisor||'',notas:item.notas||'',
+        createdAt:item.frozenAt||item.created_date||'',updatedAt:item.updated_date||item.frozenAt||item.created_date||'',
+      }));
+      const draftByKey=new Map<string,any>();
+      for(const item of [...drafts].sort((a:any,b:any)=>(Number(b.version)-Number(a.version))||(new Date(b.updatedAt||0).getTime()-new Date(a.updatedAt||0).getTime()))) if(!draftByKey.has(periodKey(item))) draftByKey.set(periodKey(item),item);
+      const latestDrafts=[...draftByKey.values()];
+      const filings=filingRows.map((item:any)=>({
+        id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,estadoPresentacion:item.estadoPresentacion||'presentado',via:item.via||'presentacion_manual',fechaPresentacion:item.fechaPresentacion||'',fechaImportacion:item.fechaImportacion||item.created_date||'',
+        snapshotVersion:Number(item.snapshotVersion||1),tipoDeclaracion:item.tipoDeclaracion||'original',declaracionAnteriorId:item.declaracionAnteriorId||'',numeroJustificanteAnterior:item.numeroJustificanteAnterior||'',numeroJustificante:item.numeroJustificante||'',csv:item.csv||'',
+        justificantePdfUrl:item.justificantePdfUrl||'',ficheroPresentadoUrl:item.ficheroPresentadoUrl||'',nombreFicheroImportado:item.nombreFicheroImportado||'',hashFicheroImportado:item.hashFicheroImportado||'',snapshotHash:item.snapshotHash||'',
+        fuenteImportacion:item.fuenteImportacion||'',revisionImportacion:item.revisionImportacion||'pendiente_revision',snapshotBloqueado:item.snapshotBloqueado!==false,resultadoDestino:item.resultadoDestino||'',importeFinal:money(item.importeFinal),
+        avisosImportacion:Array.isArray(item.avisosImportacion)?item.avisosImportacion:[],analisisArrastre:item.analisisArrastre||{},confirmadoPorUsuario:item.confirmadoPorUsuario===true,usuarioPresentador:item.usuarioPresentador||item.importadoPor||'',respuestaAdministracion:item.respuestaAdministracion||'',notas:item.notas||'',createdAt:item.created_date||item.fechaImportacion||'',
+      }));
+      const filingByKey=new Map<string,any>();
+      for(const item of [...filings].sort((a:any,b:any)=>(Number(b.snapshotVersion)-Number(a.snapshotVersion))||(new Date(b.fechaPresentacion||b.createdAt||0).getTime()-new Date(a.fechaPresentacion||a.createdAt||0).getTime()))) if(!filingByKey.has(periodKey(item))) filingByKey.set(periodKey(item),item);
+      const profile=profileRows.find((item:any)=>item.active!==false)||profileRows[0]||null;
+      const activeModels=modelRows.filter((item:any)=>item.activo!==false);
+      const validationIssues:any[]=[];
+      const addIssue=(severity:string,code:string,message:string,extra:any={})=>validationIssues.push({id:`${code}:${extra.sourceId||validationIssues.length}`,severity,code,message,...extra});
+      if(!profile) addIssue('blocker','CFG-PERFIL','Falta el perfil fiscal maestro de la empresa.',{category:'configuracion'});
+      else if(profile.profileStatus!=='validado_asesor') addIssue('warning','CFG-REVISION','El perfil fiscal no consta validado por un asesor.',{category:'configuracion',sourceId:profile.id});
+      if(activeModels.length===0) addIssue('blocker','CFG-OBLIGACIONES','No hay obligaciones fiscales activas y sincronizadas.',{category:'configuracion'});
+      for(const draft of latestDrafts) {
+        for(const issue of draft.blockers) addIssue('blocker','BORRADOR-BLOQUEO',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
+        for(const issue of draft.warnings) addIssue('warning','BORRADOR-AVISO',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
+      }
+      for(const filing of filings) {
+        if(filing.revisionImportacion==='pendiente_revision') addIssue('warning','PRESENTACION-REVISION','La extracción/importación de la presentación está pendiente de revisión.',{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
+        if(!filing.numeroJustificante&&!filing.csv&&!filing.justificantePdfUrl&&!filing.ficheroPresentadoUrl) addIssue('warning','PRESENTACION-EVIDENCIA','La presentación no tiene justificante, CSV ni fichero presentado asociado.',{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
+        for(const message of filing.avisosImportacion) addIssue('warning','PRESENTACION-AVISO',clean(message),{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
+      }
+      for(const savedPeriod of periodRows.filter((item:any)=>item.estado==='presentado')) if(!filingByKey.has(periodKey(savedPeriod))) addIssue('blocker','PERIODO-SIN-SNAPSHOT','El período figura presentado pero no existe una foto de la declaración. Importe el modelo presentado antes de usar arrastres.',{category:'presentacion',sourceId:savedPeriod.id,modeloCodigo:savedPeriod.modeloCodigo,ejercicio:savedPeriod.ejercicio,periodo:savedPeriod.periodo});
+      for(const legacy of legacySubmissionRows.filter((item:any)=>['presentado','validado'].includes(item.estado))) if(!filingByKey.has(periodKey(legacy))) addIssue('warning','LEGACY-SIN-MIGRAR','Existe un registro antiguo de presentación sin casillas incorporadas al histórico fiscal. Importe el modelo presentado para habilitar arrastres fiables.',{category:'presentacion',sourceId:legacy.id,modeloCodigo:legacy.modeloCodigo,ejercicio:legacy.ejercicio,periodo:legacy.periodo});
+      for(const issue of fiscalErrorRows.filter((item:any)=>!['resuelto','ignorado'].includes(item.estado))) addIssue(['alta','critica'].includes(issue.severidad)?'blocker':'warning','INCIDENCIA-FISCAL',issue.descripcion||issue.tipo,{category:'incidencia',sourceId:issue.id,entityType:issue.entidad_tipo||'',entityId:issue.entidad_id||'',recommendedAction:issue.accion_recomendada||'',status:issue.estado,severitySource:issue.severidad});
+      for(const file of officialFileRows.filter((item:any)=>item.estado==='rechazado_validacion')) for(const message of (file.errores||['Fichero rechazado por la validación interna.'])) addIssue('blocker','FICHERO-RECHAZADO',clean(message),{category:'fichero',sourceId:file.id,modeloCodigo:file.modeloCodigo,ejercicio:file.ejercicio,periodo:file.periodo});
+      const events:any[]=[
+        ...drafts.map((item:any)=>({id:`draft:${item.id}`,type:'draft',date:item.updatedAt||item.createdAt,title:`Borrador ${item.modeloCodigo} v${item.version}`,detail:`${item.periodo} ${item.ejercicio} · ${item.estado}`,modeloCodigo:item.modeloCodigo,ejercicio:item.ejercicio,periodo:item.periodo,status:item.estado,result:item.resultadoCalculado,hash:item.snapshotHash||item.sourceHash,sourceId:item.id})),
+        ...filings.map((item:any)=>({id:`filing:${item.id}`,type:'filing',date:item.fechaPresentacion||item.fechaImportacion||item.createdAt,title:`${item.tipoDeclaracion==='original'?'Presentación':'Declaración '+item.tipoDeclaracion} ${item.modeloCodigo}`,detail:`${item.periodo} ${item.ejercicio} · snapshot v${item.snapshotVersion}`,modeloCodigo:item.modeloCodigo,ejercicio:item.ejercicio,periodo:item.periodo,status:item.estadoPresentacion,result:item.importeFinal,hash:item.snapshotHash,sourceId:item.id})),
+        ...officialFileRows.map((item:any)=>({id:`file:${item.id}`,type:'file',date:item.fechaGeneracion||item.created_date,title:`Fichero ${item.modeloCodigo}`,detail:`${item.nombreFichero||'Fichero fiscal'} · ${item.estado||'generado'}`,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,status:item.estado||'generado',hash:item.hash||'',sourceId:item.id})),
+      ].filter((item:any)=>item.date).sort((a:any,b:any)=>new Date(b.date).getTime()-new Date(a.date).getTime());
+      const officialFiles=officialFileRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,administracion:item.administracion,nombreFichero:item.nombreFichero,extension:item.extension,formato:item.formato,versionDiseno:item.versionDiseno,fileUrl:item.fileUrl||'',hash:item.hash||'',generadoPor:item.generadoPor||'',fechaGeneracion:item.fechaGeneracion||item.created_date||'',estado:item.estado||'generado',errores:item.errores||[],avisos:item.avisos||[],taxDraftId:item.taxDraftId||''}));
+      const legacySubmissions=legacySubmissionRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,estado:item.estado||'pendiente',viaPresentacion:item.viaPresentacion||'',fechaEnvio:item.fechaEnvio||item.created_date||'',numeroJustificante:item.numeroJustificante||'',csv:item.csv||'',justificantePdfUrl:item.justificantePdfUrl||'',importeFinal:money(item.importeFinal),incorporadoAlHistorico:filingByKey.has(periodKey(item))}));
+      return Response.json({ok:true,engineVersion:ENGINE_VERSION,generatedAt:new Date().toISOString(),year:year||null,profile:profile?{id:profile.id,profileStatus:profile.profileStatus,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,filingFrequency:profile.filingFrequency,repepStatus:profile.repepStatus,usesSII:booleanValue(profile.usesSII),isREDEME:booleanValue(profile.isREDEME),isLargeCompany:booleanValue(profile.isLargeCompany)}:null,models:activeModels.map((item:any)=>({id:item.id,codigo:item.codigo,nombre:item.nombre,administracion:item.administracion,periodicidad:item.periodicidad,fuenteValidacion:item.fuenteValidacion,activo:item.activo!==false})),drafts,latestDrafts,filings,latestFilings:[...filingByKey.values()],periods:periodRows,officialFiles,legacySubmissions,validationIssues,events,stats:{drafts:drafts.length,latestDrafts:latestDrafts.length,filings:filings.length,presentedPeriods:periodRows.filter((item:any)=>item.estado==='presentado').length,officialFiles:officialFiles.length,blockers:validationIssues.filter((item:any)=>item.severity==='blocker').length,warnings:validationIssues.filter((item:any)=>item.severity==='warning').length,evidencePending:filings.filter((item:any)=>!item.numeroJustificante&&!item.csv&&!item.justificantePdfUrl&&!item.ficheroPresentadoUrl).length,legacyPending:legacySubmissions.filter((item:any)=>!item.incorporadoAlHistorico).length}});
+    }
+
+    if(action==='update_draft_status') {
+      const draftId=clean(body.draftId); const nextStatus=clean(body.status);
+      if(!draftId||!['borrador','en_revision','revisado','aprobado','rechazado'].includes(nextStatus)) return Response.json({error:'draftId y estado válido son obligatorios.'},{status:400});
+      const draft=await svc.entities.TaxDraft.get(draftId); if(!draft||draft.companyId!==companyId) return Response.json({error:'Borrador no encontrado.'},{status:404});
+      const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role);
+      if(['revisado','aprobado','rechazado'].includes(nextStatus)&&!canReview) return Response.json({error:'Solo un asesor o administrador puede revisar, aprobar o rechazar un borrador.'},{status:403});
+      const relatedAll=await svc.entities.TaxDraft.filter({companyId,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio},'-created_date',100);
+      const related=(relatedAll||[]).filter((item:any)=>normalizedPeriod(item.periodo)===normalizedPeriod(draft.periodo));
+      const latest=[...(related||[])].sort((a:any,b:any)=>(Number(b.version||0)-Number(a.version||0))||(new Date(b.updated_date||b.created_date||0).getTime()-new Date(a.updated_date||a.created_date||0).getTime()))[0];
+      if(latest?.id!==draft.id) return Response.json({error:'Solo puede cambiarse el estado de la última versión del borrador.'},{status:409});
+      if(['revisado','aprobado'].includes(nextStatus)&&Array.isArray(draft.errores)&&draft.errores.length) return Response.json({error:'No se puede revisar ni aprobar un borrador con incidencias bloqueantes.'},{status:422});
+      const update:any={estado:nextStatus}; if(canReview&&['revisado','aprobado','rechazado'].includes(nextStatus)) update.usuarioRevisor=user.email;
+      const saved=await svc.entities.TaxDraft.update(draft.id,update);
+      const stateMap:any={borrador:'borrador',en_revision:'pendiente_revision',revisado:'revisado',aprobado:'listo_presentar',rechazado:'pendiente_revision'};
+      const allPeriods=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio},'-created_date',100);
+      const periods=(allPeriods||[]).filter((item:any)=>normalizedPeriod(item.periodo)===normalizedPeriod(draft.periodo));
+      if(periods?.[0]&&periods[0].estado!=='presentado') await svc.entities.TaxPeriod.update(periods[0].id,{estado:stateMap[nextStatus],notas:`Borrador ${draft.id} · ${nextStatus}`});
+      return Response.json({ok:true,draft:saved});
+    }
+
+    if(action==='attach_filing_evidence') {
+      const filingId=clean(body.filingId); if(!filingId||body.confirmEvidence!==true) return Response.json({error:'Selecciona la presentación y confirma expresamente la evidencia.'},{status:400});
+      const filing=await svc.entities.TaxFiling.get(filingId); if(!filing||filing.companyId!==companyId) return Response.json({error:'Presentación no encontrada.'},{status:404});
+      const incoming={numeroJustificante:clean(body.numeroJustificante),csv:clean(body.csv),justificantePdfUrl:clean(body.justificantePdfUrl),respuestaAdministracion:clean(body.respuestaAdministracion)};
+      if(!incoming.numeroJustificante&&!incoming.csv&&!incoming.justificantePdfUrl&&!incoming.respuestaAdministracion) return Response.json({error:'Añade un justificante, CSV, PDF o respuesta de la Administración.'},{status:400});
+      for(const key of ['numeroJustificante','csv'] as const) if(clean(filing[key])&&incoming[key]&&clean(filing[key])!==incoming[key]) return Response.json({error:`La evidencia ya contiene ${key}. Para sustituir una declaración, importa una nueva versión enlazada.`},{status:409});
+      const update:any={confirmadoPorUsuario:true}; for(const [key,value] of Object.entries(incoming)) if(value) update[key]=value;
+      if(incoming.numeroJustificante||incoming.csv||incoming.justificantePdfUrl) update.estadoPresentacion='presentado';
+      const saved=await svc.entities.TaxFiling.update(filing.id,update);
+      const allPeriods=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio},'-created_date',100);
+      const periods=(allPeriods||[]).filter((item:any)=>normalizedPeriod(item.periodo)===normalizedPeriod(filing.periodo));
+      if(periods?.[0]) await svc.entities.TaxPeriod.update(periods[0].id,{estado:'presentado',importeConfirmado:money(filing.importeFinal),resultado:filing.resultadoDestino||taxPeriodOutcome(filing.modeloCodigo,money(filing.importeFinal)),notas:`Evidencia acreditada · snapshot ${filing.id}`});
+      return Response.json({ok:true,filing:saved});
+    }
+
+    if((!TARGET_MODELS.includes(model)&&action!=='calculate_bundle')||!year) return Response.json({error:'modeloCodigo y ejercicio son obligatorios.'},{status:400});
     const [profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings]=await Promise.all([
       listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.Employee,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}), listAll(svc.entities.TaxFiling,{companyId}),
     ]);
@@ -1616,9 +1732,9 @@ Deno.serve(async (req) => {
       const snapshotHash=normalized.preview.fileHash&&/^[a-f0-9]{64}$/.test(normalized.preview.fileHash)
         ? normalized.preview.fileHash
         : await sha256(JSON.stringify({companyId,model,year,period,boxes:normalized.preview.boxes,result:normalized.preview.result,resultDisposition:normalized.preview.resultDisposition,justification:normalized.preview.justificationNumber,date:normalized.preview.presentationDate}));
-      const duplicate=(filings||[]).find((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&clean(row.periodo)===period&&([row.hashFicheroImportado,row.snapshotHash].map(clean).includes(snapshotHash)||(normalized.preview.justificationNumber&&clean(row.numeroJustificante)===normalized.preview.justificationNumber)));
+      const duplicate=(filings||[]).find((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period&&([row.hashFicheroImportado,row.snapshotHash].map(clean).includes(snapshotHash)||(normalized.preview.justificationNumber&&clean(row.numeroJustificante)===normalized.preview.justificationNumber)));
       if(duplicate) return Response.json({ok:true,alreadyImported:true,filing:duplicate,preview:normalized.preview,warnings:unique([...normalized.warnings,'Este mismo modelo ya estaba importado; no se ha creado un duplicado.'])});
-      const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&clean(row.periodo)===period);
+      const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period);
       const previous=previousVersions.sort((a:any,z:any)=>Number(z.snapshotVersion||0)-Number(a.snapshotVersion||0))[0]||null;
       if(previous&&normalized.preview.declarationType==='original') return Response.json({error:'Ya existe una declaración original para este período.',blockers:['Si el fichero corresponde a una corrección posterior, selecciónalo como complementaria, rectificativa o sustitutiva e indica el justificante anterior.']},{status:409});
       const linkedPrevious=normalized.preview.previousJustificationNumber
@@ -1636,7 +1752,8 @@ Deno.serve(async (req) => {
         snapshotBloqueado:true,revisionImportacion:normalized.preview.source==='fichero_oficial'?'validado_estructura':'revisado_usuario',
         avisosImportacion:unique(normalized.warnings),snapshotHash,analisisArrastre:{engineVersion:ENGINE_VERSION,importedAsImmutableSnapshot:true},confirmadoPorUsuario:true,usuarioPresentador:user.email,notas:clean(body.notes),
       });
-      const periodRows=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year,periodo:period},'-created_date',1);
+      const allPeriodRows=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',100);
+      const periodRows=(allPeriodRows||[]).filter((item:any)=>normalizedPeriod(item.periodo)===period);
       const periodOutcome=['a_ingresar','a_devolver','a_compensar','cero','informativo'].includes(normalized.preview.resultDisposition) ? normalized.preview.resultDisposition : taxPeriodOutcome(model,normalized.preview.result);
       const periodPayload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:b.start,fechaFin:b.end,estado:'presentado',importeConfirmado:normalized.preview.result,resultado:periodOutcome,notas:`Modelo importado en Taxea · snapshot ${filing.id}`};
       if(periodRows?.[0]) await svc.entities.TaxPeriod.update(periodRows[0].id,periodPayload); else await svc.entities.TaxPeriod.create(periodPayload);
@@ -1673,8 +1790,20 @@ Deno.serve(async (req) => {
       return Response.json({...result,file:{filename,extension:'csv',format:'Paquete de traspaso revisable al programa oficial ATC',design:DEFINITIONS[model].design,hash:await sha256(content),contentBase64:encodeBase64(content),nextStep:'Abre el programa oficial de ayuda de la ATC para este ejercicio, crea la declaración, traslada y contrasta las casillas del CSV, resuelve sus validaciones y genera allí el .dec presentable.'}});
     }
     if(action==='save_draft') {
-      const payload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,version:1,origenDatos:`${ENGINE_VERSION}:${sourceHash}`,resumen:{definition:result.definition,calculation:result.calculation,source:result.source},validaciones:result.validation.warnings.map((message:string)=>({severity:'warning',message})),errores:result.validation.blockers.map((message:string)=>({severity:'blocker',message})),ajustesManuales:Object.entries(body.adjustments||{}).map(([field,value])=>({field,value,reason:clean(body.adjustmentReason)})),usuarioCreador:user.email,estado:result.validation.blockers.length?'en_revision':'borrador',notas:clean(body.notes)};
-      const existing=await svc.entities.TaxDraft.filter({companyId,modeloCodigo:model,ejercicio:year,periodo:period},'-created_date',1); const draft=existing?.[0]?await svc.entities.TaxDraft.update(existing[0].id,{...payload,version:Number(existing[0].version||0)+1}):await svc.entities.TaxDraft.create(payload); return Response.json({...result,draft});
+      const adjustmentsList=Object.entries(body.adjustments||{}).map(([field,value])=>({field,value,reason:clean(body.adjustmentReason)}));
+      const draftSnapshotHash=await sha256(JSON.stringify({companyId,model,year,period,sourceHash,adjustments:adjustmentsList,fields:(calculation.fields||[]).map((field:any)=>[field.code,field.value]),blockers:unique(blockers),warnings:unique(warnings)}));
+      const allExisting=await svc.entities.TaxDraft.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',500);
+      const existing=(allExisting||[]).filter((item:any)=>normalizedPeriod(item.periodo)===period);
+      const duplicate=(existing||[]).find((item:any)=>clean(item.snapshotHash)===draftSnapshotHash);
+      if(duplicate) return Response.json({...result,draft:duplicate,alreadySaved:true});
+      const previous=[...(existing||[])].sort((a:any,b:any)=>(Number(b.version||0)-Number(a.version||0))||(new Date(b.updated_date||b.created_date||0).getTime()-new Date(a.updated_date||a.created_date||0).getTime()))[0]||null;
+      const payload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,version:Number(previous?.version||0)+1,parentDraftId:previous?.id||'',engineVersion:ENGINE_VERSION,sourceHash,snapshotHash:draftSnapshotHash,resultadoCalculado:money(calculation.result),frozenAt:new Date().toISOString(),origenDatos:`${ENGINE_VERSION}:${sourceHash}`,resumen:{definition:result.definition,calculation:result.calculation,source:result.source},validaciones:result.validation.warnings.map((message:string)=>({severity:'warning',message})),errores:result.validation.blockers.map((message:string)=>({severity:'blocker',message})),ajustesManuales:adjustmentsList,usuarioCreador:user.email,estado:result.validation.blockers.length?'en_revision':'borrador',notas:clean(body.notes)};
+      const draft=await svc.entities.TaxDraft.create(payload);
+      const allSavedPeriods=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',100);
+      const savedPeriods=(allSavedPeriods||[]).filter((item:any)=>normalizedPeriod(item.periodo)===period);
+      const periodPayload={companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:b.start,fechaFin:b.end,estado:result.validation.blockers.length?'pendiente_revision':'borrador',importeCalculado:money(calculation.result),resultado:taxPeriodOutcome(model,money(calculation.result)),notas:`Borrador ${draft.id} · snapshot ${draftSnapshotHash}`};
+      if(savedPeriods?.[0]&&savedPeriods[0].estado!=='presentado') await svc.entities.TaxPeriod.update(savedPeriods[0].id,periodPayload); else if(!savedPeriods?.[0]) await svc.entities.TaxPeriod.create(periodPayload);
+      return Response.json({...result,draft,alreadySaved:false});
     }
     if(action==='export') {
       if(history.presented) return Response.json({ok:false,error:'Este período ya consta presentado.',blockers:['No se generará otra declaración original. Revise las diferencias y prepare, cuando proceda, una rectificativa, complementaria o solicitud de rectificación con referencia al justificante anterior.']},{status:422});
