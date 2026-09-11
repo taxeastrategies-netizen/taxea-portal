@@ -1,193 +1,59 @@
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useMemo, useState } from 'react';
+import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, Loader2, RefreshCw, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
+import { useTaxWorkspace } from './useTaxWorkspace';
 
-function fmt(n) { return n != null ? `${Number(n).toFixed(2)} €` : '—'; }
+const CATEGORY_LABEL = { configuracion: 'Configuración', borrador: 'Borrador', presentacion: 'Presentación', incidencia: 'Incidencia fiscal', fichero: 'Fichero' };
 
-function facturaEnEjercicio(f, year) {
-  const anio = f.anio || (f.fecha_emision && new Date(f.fecha_emision).getFullYear());
-  return anio === year;
+function Metric({ label, value, tone }) {
+  const color = tone === 'red' ? 'text-red-700' : tone === 'amber' ? 'text-amber-700' : 'text-emerald-700';
+  return <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p></div>;
 }
 
-export default function ErroresValidacionesTab() {
+export default function ErroresValidacionesTab({ onOpenModel, onOpenConfig }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
   const companyId = company?.id;
   const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [severity, setSeverity] = useState('all');
+  const [category, setCategory] = useState('all');
+  const workspace = useTaxWorkspace(companyId, year);
+  const issues = useMemo(() => (workspace.data?.validationIssues || []).filter(item => (severity === 'all' || item.severity === severity) && (category === 'all' || item.category === category)), [workspace.data, severity, category]);
 
-  const { data: modelos = [] } = useQuery({
-    queryKey: ['taxModels', companyId],
-    queryFn: () => base44.entities.TaxModel.filter({ companyId }),
-    enabled: !!companyId,
-  });
+  if (!companyId) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa.</div>;
 
-  const { data: invoices = [] } = useQuery({
-    queryKey: ['invoices', companyId],
-    queryFn: () => base44.entities.Invoice.filter({ company_id: companyId }),
-    enabled: !!companyId,
-  });
+  const blockers = workspace.data?.stats?.blockers || 0;
+  const warnings = workspace.data?.stats?.warnings || 0;
+  const reviewedDrafts = (workspace.data?.latestDrafts || []).filter(item => ['revisado', 'aprobado'].includes(item.estado) && !item.blockers?.length).length;
 
-  const { data: periods = [] } = useQuery({
-    queryKey: ['taxPeriods', companyId, currentYear],
-    queryFn: () => base44.entities.TaxPeriod.filter({ companyId, ejercicio: currentYear }),
-    enabled: !!companyId,
-  });
-
-  if (!companyId) return <div className="text-center py-16 text-sm text-gray-400">Selecciona un cliente.</div>;
-
-  const activeModelos = modelos.filter(m => m.activo);
-  const yearInvoices = invoices.filter(f => !f.anulada && facturaEnEjercicio(f, currentYear));
-
-  // Generar validaciones automáticas
-  const errores = [];
-  const advertencias = [];
-  const ok = [];
-
-  // 1. Facturas sin NIF
-  const sinNif = yearInvoices.filter(f => !f.cliente_nif && !f.proveedor_nif);
-  if (sinNif.length > 0) {
-    advertencias.push({
-      tipo: 'advertencia',
-      codigo: 'VAL-001',
-      titulo: `${sinNif.length} factura(s) sin NIF/CIF del contraparte`,
-      descripcion: 'Las facturas sin identificación fiscal pueden ser rechazadas en modelos 303 y 347.',
-      afectados: sinNif.slice(0, 3).map(f => f.numero_factura).join(', ') + (sinNif.length > 3 ? '...' : ''),
-    });
-  }
-
-  // 2. Facturas sin tipo IVA
-  const sinIva = yearInvoices.filter(f => f.cuota_iva == null || f.tipo_iva == null);
-  if (sinIva.length > 0) {
-    advertencias.push({
-      tipo: 'advertencia',
-      codigo: 'VAL-002',
-      titulo: `${sinIva.length} factura(s) sin tipo IVA definido`,
-      descripcion: 'Sin tipo IVA, el modelo 303 no puede calcularse correctamente.',
-      afectados: sinIva.slice(0, 3).map(f => f.numero_factura).join(', ') + (sinIva.length > 3 ? '...' : ''),
-    });
-  }
-
-  // 3. Facturas no contabilizadas
-  const noContab = yearInvoices.filter(f => f.estado_contable !== 'contabilizada' && !f.linked_journal_entry_id);
-  if (noContab.length > 0) {
-    advertencias.push({
-      tipo: 'advertencia',
-      codigo: 'VAL-003',
-      titulo: `${noContab.length} factura(s) pendientes de contabilizar`,
-      descripcion: 'Los importes de borradores pueden ser incompletos hasta que todas las facturas estén contabilizadas.',
-      afectados: '',
-    });
-  }
-
-  // 4. Modelos anuales sin configurar (sin TaxPeriod creado)
-  const modelosAnuales = activeModelos.filter(m => ['390','190','180','193','347','415','425'].includes(m.codigo));
-  modelosAnuales.forEach(m => {
-    const hasPeriod = periods.find(p => p.modeloCodigo === m.codigo && p.periodo === 'Anual');
-    if (!hasPeriod) {
-      advertencias.push({
-        tipo: 'advertencia',
-        codigo: 'VAL-004',
-        titulo: `Modelo ${m.codigo} anual sin período iniciado`,
-        descripcion: `El modelo ${m.codigo} es anual. Crea el período "Anual ${currentYear}" en la sección Modelos.`,
-        afectados: '',
-      });
-    }
-  });
-
-  // 5. Sin modelos configurados
-  if (activeModelos.length === 0) {
-    errores.push({
-      tipo: 'error',
-      codigo: 'CFG-001',
-      titulo: 'Sin modelos fiscales configurados',
-      descripcion: 'El cliente no tiene ningún modelo activo. Ve a Configuración fiscal para activarlos.',
-      afectados: '',
-    });
-  } else {
-    ok.push({ titulo: `${activeModelos.length} modelos activos configurados correctamente` });
-  }
-
-  // 6. Facturas sin errores
-  if (sinNif.length === 0 && sinIva.length === 0 && noContab.length === 0) {
-    ok.push({ titulo: 'Todas las facturas del ejercicio tienen datos fiscales completos' });
-  }
-
-  const total = errores.length + advertencias.length;
-
-  return (
-    <div className="max-w-3xl mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-gray-800">Errores y validaciones</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Comprobaciones automáticas del ejercicio {currentYear}</p>
-        </div>
-        <div className="flex gap-3 text-sm">
-          {errores.length > 0 && <span className="flex items-center gap-1.5 text-red-600 font-medium"><AlertCircle className="w-4 h-4" />{errores.length} errores</span>}
-          {advertencias.length > 0 && <span className="flex items-center gap-1.5 text-amber-600 font-medium"><AlertTriangle className="w-4 h-4" />{advertencias.length} advertencias</span>}
-          {ok.length > 0 && <span className="flex items-center gap-1.5 text-green-600 font-medium"><CheckCircle className="w-4 h-4" />{ok.length} correctos</span>}
-        </div>
-      </div>
-
-      {/* Errores */}
-      {errores.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">Errores</p>
-          {errores.map((e, i) => (
-            <div key={i} className="flex gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-red-800">{e.titulo}</p>
-                  <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-mono">{e.codigo}</span>
-                </div>
-                <p className="text-sm text-red-700 mt-1">{e.descripcion}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Advertencias */}
-      {advertencias.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Advertencias</p>
-          {advertencias.map((e, i) => (
-            <div key={i} className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-amber-800">{e.titulo}</p>
-                  <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded font-mono">{e.codigo}</span>
-                </div>
-                <p className="text-sm text-amber-700 mt-1">{e.descripcion}</p>
-                {e.afectados && <p className="text-xs text-amber-600 mt-1 font-mono">Afectados: {e.afectados}</p>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* OK */}
-      {ok.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-green-600 uppercase tracking-wide">Correcto</p>
-          {ok.map((e, i) => (
-            <div key={i} className="flex gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
-              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-green-700">{e.titulo}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {total === 0 && ok.length === 0 && (
-        <div className="text-center py-16 text-gray-400 text-sm">
-          <CheckCircle className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          Sin datos suficientes para ejecutar validaciones.
-        </div>
-      )}
+  return <div className="mx-auto max-w-6xl space-y-5">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div><h2 className="text-base font-semibold text-slate-900">Centro de validaciones</h2><p className="mt-1 text-sm text-slate-500">Una única bandeja para bloqueos del motor, avisos de borradores, evidencias incompletas e incidencias fiscales abiertas.</p></div>
+      <div className="flex flex-wrap items-center gap-2"><select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</select><Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Volver a comprobar</Button></div>
     </div>
-  );
+
+    <div className="grid gap-3 sm:grid-cols-3"><Metric label="Bloqueos" value={blockers} tone={blockers ? 'red' : 'emerald'} /><Metric label="Avisos a revisar" value={warnings} tone={warnings ? 'amber' : 'emerald'} /><Metric label="Borradores revisados sin bloqueos" value={reviewedDrafts} tone="emerald" /></div>
+
+    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-wrap gap-2">{[['all','Todo'],['blocker','Bloqueos'],['warning','Avisos']].map(([value,label]) => <button key={value} onClick={() => setSeverity(value)} className={`rounded-full border px-3 py-1 text-xs font-medium ${severity === value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{label}</button>)}</div>
+      <select value={category} onChange={event => setCategory(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todas las áreas</option>{Object.entries(CATEGORY_LABEL).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>
+    </div>
+
+    {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : issues.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-14 text-center"><CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" /><p className="mt-3 font-semibold text-emerald-900">No hay incidencias con estos filtros</p><p className="mt-1 text-xs text-emerald-700">La validación acredita coherencia interna de los datos disponibles; no sustituye la revisión profesional ni la aceptación administrativa.</p></div>
+      : <div className="space-y-3">{issues.map(issue => {
+        const blocker = issue.severity === 'blocker';
+        const Icon = blocker ? AlertCircle : AlertTriangle;
+        return <article key={issue.id} className={`rounded-2xl border p-4 ${blocker ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/60'}`}>
+          <div className="flex items-start gap-3"><div className={`mt-0.5 rounded-lg p-2 ${blocker ? 'bg-red-100' : 'bg-amber-100'}`}><Icon className={`h-4 w-4 ${blocker ? 'text-red-700' : 'text-amber-700'}`} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${blocker ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{blocker ? 'Bloquea exportación o arrastre' : 'Revisión necesaria'}</span><span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{CATEGORY_LABEL[issue.category] || issue.category}</span><span className="font-mono text-[10px] text-slate-400">{issue.code}</span></div><p className="mt-2 text-sm font-medium text-slate-800">{issue.message}</p>{issue.modeloCodigo && <p className="mt-1 text-xs text-slate-500">Modelo {issue.modeloCodigo} · {issue.periodo} {issue.ejercicio}</p>}{issue.recommendedAction && <p className="mt-2 text-xs text-slate-600"><strong>Acción recomendada:</strong> {issue.recommendedAction}</p>}</div><div className="flex shrink-0 gap-2">{issue.category === 'configuracion' && <Button size="sm" variant="outline" onClick={onOpenConfig}><Settings className="mr-1 h-3.5 w-3.5" />Configurar</Button>}{issue.modeloCodigo && <Button size="sm" variant="outline" onClick={() => onOpenModel?.({ modelCode: issue.modeloCodigo, year: issue.ejercicio || year, period: issue.periodo || 'Anual' })}>Revisar <ArrowRight className="ml-1 h-3.5 w-3.5" /></Button>}</div></div>
+        </article>;
+      })}</div>}
+
+    <div className="flex gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-xs leading-5 text-cyan-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>Los avisos se resuelven corrigiendo su fuente —perfil, factura, nómina, asiento, borrador o modelo importado—. Esta pestaña no permite “marcar como resuelto” sin arreglar el dato que originó la incidencia.</p></div>
+  </div>;
 }
+
