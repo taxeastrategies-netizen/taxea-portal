@@ -490,16 +490,17 @@ function StatusBadge({ model }) {
   return <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 border border-slate-200">Borrador validable</span>;
 }
 
-export default function TaxModelWorkbench() {
+export default function TaxModelWorkbench({ initialSelection }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
   const companyId = company?.id;
-  const [modelCode, setModelCode] = useState('303');
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [period, setPeriod] = useState('1T');
+  const [modelCode, setModelCode] = useState(initialSelection?.modelCode || '303');
+  const [year, setYear] = useState(Number(initialSelection?.year) || new Date().getFullYear());
+  const [period, setPeriod] = useState(initialSelection?.period || '1T');
   const [result, setResult] = useState(null);
   const [actionError, setActionError] = useState('');
   const [lastExportInfo, setLastExportInfo] = useState(null);
+  const [lastSaveInfo, setLastSaveInfo] = useState('');
   const [adjustments, setAdjustments] = useState({});
   const [annualRecordEdits, setAnnualRecordEdits] = useState({});
   const [annual190RecordEdits, setAnnual190RecordEdits] = useState({});
@@ -527,6 +528,7 @@ export default function TaxModelWorkbench() {
     setResult(null);
     setActionError('');
     setLastExportInfo(null);
+    setLastSaveInfo('');
     setAdjustments({});
   }, [modelCode, year, definition?.frequency, periodOptions]);
 
@@ -569,6 +571,7 @@ export default function TaxModelWorkbench() {
     onSuccess: (data, variables) => {
       setActionError('');
       if (variables.action === 'calculate' || variables.action === 'save_draft') setResult(data);
+      if (variables.action === 'save_draft') setLastSaveInfo(data.alreadySaved ? 'Este cálculo ya estaba guardado: no se creó una versión duplicada.' : `Versión ${data.draft?.version || ''} guardada con su huella y trazabilidad.`);
       if (['export', 'export_review', 'export_handoff'].includes(variables.action)) {
         downloadBase64(data.file);
         setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
@@ -671,6 +674,7 @@ export default function TaxModelWorkbench() {
           {lastExportInfo && (
             <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : lastExportInfo.isHandoff ? 'Traspaso ATC descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
           )}
+          {lastSaveInfo && <div className="flex gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-800"><Save className="mt-0.5 h-4 w-4 shrink-0" /><span>{lastSaveInfo}</span></div>}
 
           <FiledReturnImport key={`${companyId}-${modelCode}-${year}-${period}`} companyId={companyId} modelCode={modelCode} year={year} period={period} onImported={() => invoke.mutate({ action: 'calculate' })} />
 
