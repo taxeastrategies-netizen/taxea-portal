@@ -21,6 +21,29 @@
       "type": "number",
       "default": 1
     },
+    "parentDraftId": {
+      "type": "string",
+      "description": "Version inmediatamente anterior del mismo modelo y periodo."
+    },
+    "engineVersion": {
+      "type": "string"
+    },
+    "sourceHash": {
+      "type": "string",
+      "description": "Huella de las fuentes y casillas usadas para calcular esta version."
+    },
+    "snapshotHash": {
+      "type": "string",
+      "description": "Huella idempotente de la version guardada."
+    },
+    "resultadoCalculado": {
+      "type": "number",
+      "default": 0
+    },
+    "frozenAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "origenDatos": {
       "type": "string"
     },
