@@ -4,6 +4,13 @@ import { base44 } from '@/api/base44Client';
 
 const unwrap = response => response?.data ?? response;
 const money = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+const DEDUCTION_CATEGORIES = [
+  ['interior_current', 'Operación interior corriente'], ['interior_investment', 'Operación interior · bien de inversión'],
+  ['import_current', 'Importación corriente'], ['import_investment', 'Importación · bien de inversión'],
+  ['intra_goods_current', 'Adquisición intracomunitaria de bienes corrientes'], ['intra_goods_investment', 'Adquisición intracomunitaria · bien de inversión'],
+  ['intra_services', 'Adquisición intracomunitaria de servicios'], ['agriculture_compensation', 'Compensación agricultura, ganadería y pesca'],
+  ['administrative_resolution', 'Resolución administrativa o sentencia'], ['deduction_adjustment', 'Rectificación/regularización de deducciones'],
+];
 
 async function invoke(payload) {
   const result = unwrap(await base44.functions.invoke('fiscalOperations', payload));
@@ -30,13 +37,14 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
     setLoading(true);
     setError('');
     Promise.all([
-      invoke({ action: 'bundle', companyId }),
+      invoke({ action: 'bundle', companyId, invoiceId: invoice.id }),
       invoke({ action: 'catalog', companyId }),
     ]).then(([bundleData, catalogData]) => {
       setBundle(bundleData);
       setCatalog(catalogData);
       const activity = (bundleData.activities || []).find(item => item.id === invoice.fiscal_activity_id)
         || (bundleData.activities || []).find(item => item.active !== false);
+      const existingTaxLine = (bundleData.invoiceTaxLines || [])[0];
       setForm({
         activityId: activity?.id || '',
         taxKind: invoice.indirect_tax_kind || activity?.indirectTax || bundleData.profile?.indirectTaxDefault || 'iva',
@@ -46,6 +54,7 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
         taxRate: Number(invoice.tipo_iva || 0),
         taxAmount: Number(invoice.cuota_iva || 0),
         deductiblePercent: invoice.cuota_iva ? Math.round(Number(invoice.deductible_tax_amount || invoice.cuota_iva) * 10000 / Number(invoice.cuota_iva)) / 100 : 0,
+        deductionCategory: existingTaxLine?.deductionCategory || '',
         withholdingRate: Number(invoice.retencion_irpf || 0),
         counterpartyIsWithholdingAgent: Boolean(invoice.retencion_irpf || invoice.importe_retencion),
         exemptionKey: invoice.exemption_key || '',
@@ -142,6 +151,13 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
                   {invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Cuota deducible (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.deductiblePercent ?? 0} onChange={event => update('deductiblePercent', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>}
+                  {invoice.tipo === 'recibida' && taxKind === 'iva' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Clasificación anual para el modelo 390
+                    <select value={form.deductionCategory || ''} onChange={event => update('deductionCategory', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                      <option value="">Propuesta automática pendiente de revisar</option>
+                      {DEDUCTION_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <span className="mt-1 block font-normal text-slate-500">Permite separar correctamente operaciones corrientes, inversiones, importaciones e intracomunitarias en el resumen anual.</span>
+                  </label>}
                   <label className="text-xs font-medium text-slate-700">Retención IRPF (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.withholdingRate ?? 0} onChange={event => update('withholdingRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
@@ -180,4 +196,5 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
     </>
   );
 }
+
 
