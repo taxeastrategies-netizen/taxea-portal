@@ -96,6 +96,8 @@ const evidence = await invoke({ action: 'attach_filing_evidence', companyId: 'co
 const evidenceConflict = await invoke({ action: 'attach_filing_evidence', companyId: 'company-test', filingId: 'filing-1', numeroJustificante: 'OTRO', confirmEvidence: true });
 const firstSave = await invoke({ action: 'save_draft', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const secondSave = await invoke({ action: 'save_draft', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
+const advisoryCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
+const advisoryExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 
 const workflowChecks = {
   workspaceLoads: workspace.response.ok && workspace.payload.latestDrafts?.length === 1 && workspace.payload.latestFilings?.length === 1,
@@ -108,6 +110,12 @@ const workflowChecks = {
   evidenceConflictBlocked: evidenceConflict.response.status === 409,
   draftVersionCreated: firstSave.response.ok && firstSave.payload.alreadySaved === false && firstSave.payload.draft?.version === 1,
   duplicateDraftAvoided: secondSave.response.ok && secondSave.payload.alreadySaved === true && secondSave.payload.draft?.id === firstSave.payload.draft?.id,
+  recommendationsDoNotBlockExport: advisoryCalculation.response.ok
+    && advisoryCalculation.payload.validation?.recommendations?.length > 0
+    && advisoryCalculation.payload.validation?.blockers?.length === 0
+    && advisoryCalculation.payload.validation?.canExport === true
+    && advisoryExport.response.ok
+    && advisoryExport.payload.file?.contentBase64?.length > 0,
 };
 const output = { ...selfTest.payload, workflowChecks, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
 console.log(JSON.stringify(output, null, 2));
