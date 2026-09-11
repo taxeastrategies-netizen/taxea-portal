@@ -574,7 +574,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
       if (variables.action === 'save_draft') setLastSaveInfo(data.alreadySaved ? 'Este cálculo ya estaba guardado: no se creó una versión duplicada.' : `Versión ${data.draft?.version || ''} guardada con su huella y trazabilidad.`);
       if (['export', 'export_review', 'export_handoff'].includes(variables.action)) {
         downloadBase64(data.file);
-        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
+        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
       }
     },
     onError: error => {
@@ -664,7 +664,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
           {definition?.designWarning && (
             <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div><p className="font-semibold">Límite de exportación oficial</p><p className="mt-0.5 text-xs leading-5">{definition.designWarning}</p></div>
+              <div><p className="font-semibold">Recomendación sobre el diseño</p><p className="mt-0.5 text-xs leading-5">{definition.designWarning}</p></div>
             </div>
           )}
 
@@ -672,7 +672,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
             <div className="flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{actionError}</span></div>
           )}
           {lastExportInfo && (
-            <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : lastExportInfo.isHandoff ? 'Traspaso ATC descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
+            <div className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><FileCheck2 className="mt-0.5 h-4 w-4 shrink-0" /><div><p className="font-semibold">{lastExportInfo.isReview ? 'Borrador descargado' : lastExportInfo.isHandoff ? 'Traspaso ATC descargado' : 'Fichero generado'}: {lastExportInfo.filename}</p>{lastExportInfo.recommendationCount > 0 && !lastExportInfo.isReview && <p className="mt-1 text-xs leading-5">El fichero se ha generado con {lastExportInfo.recommendationCount} recomendación(es) pendientes. Revísalas y utiliza siempre la validación final de AEAT/ATC antes de presentar.</p>}{lastExportInfo.nextStep && <p className="mt-1 text-xs leading-5">{lastExportInfo.nextStep}</p>}</div></div>
           )}
           {lastSaveInfo && <div className="flex gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-800"><Save className="mt-0.5 h-4 w-4 shrink-0" /><span>{lastSaveInfo}</span></div>}
 
@@ -684,7 +684,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-slate-800">Ajustes fiscales revisables del modelo 130</h3>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">La contabilidad calcula ingresos y gastos acumulados. Estas casillas no se inventan: confírmalas cuando procedan; en 2T–4T los pagos anteriores son obligatorios para exportar.</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">La contabilidad calcula ingresos y gastos acumulados. Confirma los ajustes y pagos anteriores cuando proceda; cualquier dato pendiente aparecerá como recomendación, sin impedir la exportación.</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     {MODEL_130_ADJUSTMENTS.map(([key, label]) => (
                       <label key={key} className="text-xs font-medium text-slate-600">
@@ -728,7 +728,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
           {!result ? (
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><RefreshCw className="h-5 w-5 text-cyan-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Fuente única</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cruza líneas fiscales, facturas, nóminas y asientos confirmados sin alterar ningún registro.</p></div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Validación previa</h3><p className="mt-1 text-xs leading-5 text-slate-500">Los datos obligatorios ausentes bloquean la exportación. Un aviso nunca se convierte en una cifra inventada.</p></div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5"><ShieldCheck className="h-5 w-5 text-emerald-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Revisión previa</h3><p className="mt-1 text-xs leading-5 text-slate-500">Las incidencias se presentan como recomendaciones. Puedes exportar y completar o validar el fichero en la Administración sin que Taxea invente cifras.</p></div>
               <div className="rounded-2xl border border-slate-200 bg-white p-5"><FileCheck2 className="h-5 w-5 text-violet-600" /><h3 className="mt-4 text-sm font-semibold text-slate-800">Trazabilidad</h3><p className="mt-1 text-xs leading-5 text-slate-500">Cada casilla conserva los identificadores de sus facturas, nóminas o líneas contables de origen.</p></div>
             </div>
           ) : (
@@ -738,7 +738,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Resultado</p><p className={`mt-2 text-2xl font-bold ${Number(result.calculation?.result) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{definition?.kind === 'informative' ? 'Informativo' : formatMoney(result.calculation?.result)}</p></div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Documentos trazados</p><p className="mt-2 text-2xl font-bold text-slate-900">{result.source?.count || 0}</p><p className="mt-1 text-[11px] text-slate-400">Hash {result.source?.hash?.slice(0, 12)}…</p></div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Incidencias bloqueantes</p><p className={`mt-2 text-2xl font-bold ${result.validation?.blockers?.length ? 'text-red-600' : 'text-emerald-600'}`}>{result.validation?.blockers?.length || 0}</p></div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Recomendaciones</p><p className={`mt-2 text-2xl font-bold ${result.validation?.recommendations?.length ? 'text-amber-600' : 'text-emerald-600'}`}>{result.validation?.recommendations?.length || 0}</p><p className="mt-1 text-[11px] text-slate-400">Nunca bloquean la descarga</p></div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Diseño</p><p className="mt-2 text-sm font-bold text-slate-900">{result.definition?.design}</p><p className="mt-1 text-[11px] text-slate-400">Motor {result.engineVersion}</p></div>
               </section>
 
@@ -754,10 +754,10 @@ export default function TaxModelWorkbench({ initialSelection }) {
                 </div>
 
                 <div className="space-y-4">
-                  <div className={`rounded-2xl border p-4 ${result.validation?.blockers?.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}>
-                    <div className="flex items-center gap-2"><CheckCircle2 className={`h-4 w-4 ${result.validation?.blockers?.length ? 'text-red-600' : 'text-emerald-600'}`} /><h3 className="text-sm font-semibold text-slate-800">Control previo</h3></div>
-                    {result.validation?.blockers?.length ? <ul className="mt-3 space-y-2 text-xs leading-5 text-red-700">{result.validation.blockers.map((message, index) => <li key={index}>• {message}</li>)}</ul> : <p className="mt-2 text-xs text-emerald-700">No se han detectado bloqueos con los datos disponibles.</p>}
-                    {!!result.validation?.warnings?.length && <ul className="mt-3 space-y-2 border-t border-amber-200 pt-3 text-xs leading-5 text-amber-700">{result.validation.warnings.map((message, index) => <li key={index}>• {message}</li>)}</ul>}
+                  <div className={`rounded-2xl border p-4 ${result.validation?.recommendations?.length ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                    <div className="flex items-center gap-2"><CheckCircle2 className={`h-4 w-4 ${result.validation?.recommendations?.length ? 'text-amber-600' : 'text-emerald-600'}`} /><h3 className="text-sm font-semibold text-slate-800">Recomendaciones antes de presentar</h3></div>
+                    {!!result.validation?.recommendations?.length ? <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-800">{result.validation.recommendations.map((message, index) => <li key={index}>• {message}</li>)}</ul> : <p className="mt-2 text-xs text-emerald-700">No se han detectado recomendaciones con los datos disponibles.</p>}
+                    <p className="mt-3 border-t border-current/10 pt-3 text-[11px] leading-5 text-slate-600">Estas recomendaciones no impiden exportar. La validación definitiva corresponde al programa o sede oficial.</p>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <h3 className="text-sm font-semibold text-slate-800">Cobertura del cálculo</h3>
@@ -774,8 +774,8 @@ export default function TaxModelWorkbench({ initialSelection }) {
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar versión</Button>
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review' })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>
                 {definition?.exportMode === 'atc_guided_packet' && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff' })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso ATC</Button>}
-                {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export' })} disabled={invoke.isPending || !result.validation?.canExportOfficial}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar diseño oficial'}</Button>}
-                {!result.validation?.canExportOfficial && <p className="flex items-center text-xs text-slate-500">{definition?.exportMode === 'atc_guided_packet' ? 'El traspaso ayuda a cumplimentar; el .dec se genera y valida siempre en el programa oficial.' : 'Resuelve los bloqueos o usa el programa oficial indicado antes de presentar.'}</p>}
+                {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export' })} disabled={invoke.isPending}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar para AEAT'}</Button>}
+                {!definition?.officialExport && <p className="flex items-center text-xs text-slate-500">El traspaso ayuda a cumplimentar; el .dec presentable se genera y valida siempre en el programa oficial de la ATC.</p>}
               </div>
             </>
           )}
