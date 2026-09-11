@@ -37,7 +37,7 @@ export default function BorradoresTab({ onOpenModel }) {
 
   const latest = workspace.data?.latestDrafts || [];
   const inReview = latest.filter(item => item.estado === 'en_revision').length;
-  const blocked = latest.filter(item => item.blockers?.length).length;
+  const recommendations = latest.reduce((sum, item) => sum + (item.recommendations?.length || item.warnings?.length || 0), 0);
   const approved = latest.filter(item => item.estado === 'aprobado').length;
 
   return <div className="mx-auto max-w-6xl space-y-5">
@@ -52,7 +52,7 @@ export default function BorradoresTab({ onOpenModel }) {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Últimas versiones" value={latest.length} />
       <Metric label="Pendientes de revisión" value={inReview} tone={inReview ? 'amber' : 'emerald'} />
-      <Metric label="Con bloqueos" value={blocked} tone={blocked ? 'red' : 'emerald'} />
+      <Metric label="Recomendaciones" value={recommendations} tone={recommendations ? 'amber' : 'emerald'} />
       <Metric label="Aprobados" value={approved} tone="emerald" />
     </div>
 
@@ -68,7 +68,7 @@ export default function BorradoresTab({ onOpenModel }) {
       : <div className="space-y-3">{rows.map(draft => {
         const status = statusPill(DRAFT_STATUS[draft.estado], draft.estado);
         const isLatest = workspace.data?.latestDrafts?.some(item => item.id === draft.id);
-        return <article key={draft.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${draft.blockers?.length ? 'border-red-200' : 'border-slate-200'}`}>
+        return <article key={draft.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-cyan-200">{draft.modeloCodigo}</div>
@@ -78,16 +78,16 @@ export default function BorradoresTab({ onOpenModel }) {
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <div className={`rounded-xl border p-3 ${draft.blockers?.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center gap-2">{draft.blockers?.length ? <AlertCircle className="h-4 w-4 text-red-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}<span className="text-xs font-semibold">{draft.blockers?.length || 0} bloqueos</span></div>{draft.blockers?.slice(0, 2).map((item, index) => <p key={index} className="mt-1 text-xs text-red-700">{item.message}</p>)}</div>
-            <div className={`rounded-xl border p-3 ${draft.warnings?.length ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center gap-2"><AlertTriangle className={`h-4 w-4 ${draft.warnings?.length ? 'text-amber-600' : 'text-slate-400'}`} /><span className="text-xs font-semibold">{draft.warnings?.length || 0} avisos</span></div>{draft.warnings?.slice(0, 2).map((item, index) => <p key={index} className="mt-1 text-xs text-amber-700">{item.message}</p>)}</div>
+            <div className={`rounded-xl border p-3 ${draft.recommendations?.length ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center gap-2">{draft.recommendations?.length ? <AlertTriangle className="h-4 w-4 text-amber-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}<span className="text-xs font-semibold">{draft.recommendations?.length || 0} recomendaciones</span></div>{draft.recommendations?.slice(0, 2).map((item, index) => <p key={index} className="mt-1 text-xs text-amber-700">{item.message}</p>)}</div>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /><span className="text-xs font-semibold">Exportación disponible</span></div><p className="mt-1 text-xs text-emerald-700">Las recomendaciones no bloquean la descarga ni la revisión del borrador.</p></div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2"><FileClock className="h-4 w-4 text-cyan-700" /><span className="text-xs font-semibold">Ajustes revisables</span></div><p className="mt-1 text-xs text-slate-600">{draft.adjustments?.length ? `${draft.adjustments.length} ajustes conservados en esta versión.` : 'Sin ajustes manuales.'}</p></div>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
             <Button size="sm" variant="outline" className="gap-2" onClick={() => onOpenModel?.({ modelCode: draft.modeloCodigo, year: draft.ejercicio, period: draft.periodo })}><ArrowRight className="h-3.5 w-3.5" />Abrir modelo</Button>
             {isLatest && draft.estado === 'borrador' && <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'en_revision' })} disabled={updateStatus.isPending}>Enviar a revisión</Button>}
-            {isLatest && reviewer && draft.estado === 'en_revision' && <Button size="sm" variant="outline" className="border-cyan-300 text-cyan-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'revisado' })} disabled={updateStatus.isPending || draft.blockers?.length}><ShieldCheck className="mr-1 h-3.5 w-3.5" />Marcar revisado</Button>}
-            {isLatest && reviewer && draft.estado === 'revisado' && <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'aprobado' })} disabled={updateStatus.isPending || draft.blockers?.length}>Aprobar</Button>}
+            {isLatest && reviewer && draft.estado === 'en_revision' && <Button size="sm" variant="outline" className="border-cyan-300 text-cyan-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'revisado' })} disabled={updateStatus.isPending}><ShieldCheck className="mr-1 h-3.5 w-3.5" />Marcar revisado</Button>}
+            {isLatest && reviewer && draft.estado === 'revisado' && <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'aprobado' })} disabled={updateStatus.isPending}>Aprobar</Button>}
             {isLatest && reviewer && !['aprobado', 'rechazado'].includes(draft.estado) && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'rechazado' })} disabled={updateStatus.isPending}>Rechazar</Button>}
           </div>
         </article>;
