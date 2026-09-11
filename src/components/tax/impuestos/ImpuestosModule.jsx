@@ -10,24 +10,30 @@ import HistorialFiscalTab from './HistorialFiscalTab';
 const TABS = [
   { id: 'preparacion', label: 'Modelos y periodos', icon: Calculator },
   { id: 'borradores', label: 'Borradores', icon: FilePen },
-  { id: 'presentaciones', label: 'Presentaciones', icon: Send },
   { id: 'errores', label: 'Validaciones', icon: AlertTriangle },
+  { id: 'presentaciones', label: 'Presentaciones', icon: Send },
   { id: 'configuracion', label: 'Configuración fiscal', icon: Settings },
   { id: 'historial', label: 'Historial', icon: History },
 ];
 
 export default function ImpuestosModule() {
   const [activeTab, setActiveTab] = useState('preparacion');
+  const [workbenchSelection, setWorkbenchSelection] = useState(null);
+
+  const openModel = selection => {
+    setWorkbenchSelection({ ...selection, requestId: Date.now() });
+    setActiveTab('preparacion');
+  };
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'preparacion': return <TaxModelWorkbench />;
-      case 'borradores': return <BorradoresTab />;
-      case 'presentaciones': return <PresentacionesTab />;
-      case 'errores': return <ErroresValidacionesTab />;
+      case 'preparacion': return <TaxModelWorkbench initialSelection={workbenchSelection} />;
+      case 'borradores': return <BorradoresTab onOpenModel={openModel} />;
+      case 'presentaciones': return <PresentacionesTab onOpenModel={openModel} />;
+      case 'errores': return <ErroresValidacionesTab onOpenModel={openModel} onOpenConfig={() => setActiveTab('configuracion')} />;
       case 'configuracion': return <ConfiguracionFiscal />;
-      case 'historial': return <HistorialFiscalTab />;
-      default: return <TaxModelWorkbench />;
+      case 'historial': return <HistorialFiscalTab onOpenModel={openModel} />;
+      default: return <TaxModelWorkbench initialSelection={workbenchSelection} />;
     }
   };
 
@@ -60,4 +66,5 @@ export default function ImpuestosModule() {
     </div>
   );
 }
+
 
