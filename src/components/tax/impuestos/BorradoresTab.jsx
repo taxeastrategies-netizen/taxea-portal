@@ -1,279 +1,97 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, FileClock, FilePen, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { Button } from '@/components/ui/button';
-import { FilePen, CheckCircle, ChevronDown, ChevronRight, AlertCircle, Info } from 'lucide-react';
-import { mesATrimestreLabel } from './aeatDeadlines';
+import { base44 } from '@/api/base44Client';
+import { DRAFT_STATUS, formatDate, formatMoney, isReviewer, statusPill, taxWorkspaceKey, useTaxWorkspace } from './useTaxWorkspace';
 
-const ESTADO_CONFIG = {
-  borrador: { label: 'Borrador', color: 'bg-indigo-100 text-indigo-700' },
-  en_revision: { label: 'En revisión', color: 'bg-yellow-100 text-yellow-700' },
-  revisado: { label: 'Revisado', color: 'bg-teal-100 text-teal-700' },
-  aprobado: { label: 'Aprobado', color: 'bg-green-100 text-green-700' },
-  rechazado: { label: 'Rechazado', color: 'bg-red-100 text-red-700' },
-};
-
-function fmt(n) { return n != null ? `${Number(n).toFixed(2)} €` : '—'; }
-
-/**
- * Determina si una factura pertenece a un periodo trimestral
- */
-function facturaEnPeriodo(factura, periodo, ejercicio) {
-  const anio = factura.anio || (factura.fecha_emision && new Date(factura.fecha_emision).getFullYear());
-  if (anio !== ejercicio) return false;
-  if (periodo === 'Anual') return true;
-  const trimestre = factura.trimestre || (factura.fecha_emision && mesATrimestreLabel(new Date(factura.fecha_emision).getMonth() + 1));
-  return trimestre === periodo;
+function Metric({ label, value, tone = 'slate' }) {
+  const tones = { slate: 'text-slate-900', amber: 'text-amber-700', red: 'text-red-700', emerald: 'text-emerald-700' };
+  return <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className={`mt-1 text-2xl font-bold ${tones[tone]}`}>{value}</p></div>;
 }
 
-function DraftDetail({ draft, invoices, journalEntries, onClose }) {
-  const emitidas = invoices.filter(f => f.tipo === 'emitida' && !f.anulada && facturaEnPeriodo(f, draft.periodo, draft.ejercicio));
-  const recibidas = invoices.filter(f => f.tipo === 'recibida' && !f.anulada && facturaEnPeriodo(f, draft.periodo, draft.ejercicio));
-  const contabilizadas = invoices.filter(f => !f.anulada && facturaEnPeriodo(f, draft.periodo, draft.ejercicio) && (f.estado_contable === 'contabilizada' || f.linked_journal_entry_id));
-  const pendientesContab = invoices.filter(f => !f.anulada && facturaEnPeriodo(f, draft.periodo, draft.ejercicio) && f.estado_contable !== 'contabilizada' && !f.linked_journal_entry_id);
-
-  const baseEmitida = emitidas.reduce((s, f) => s + (f.base_imponible || 0), 0);
-  const cuotaEmitida = emitidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
-  const baseRecibida = recibidas.reduce((s, f) => s + (f.base_imponible || 0), 0);
-  const cuotaRecibida = recibidas.reduce((s, f) => s + (f.cuota_iva || 0), 0);
-  const resultado = cuotaEmitida - cuotaRecibida;
-
-  return (
-    <div className="border border-border rounded-xl bg-white mt-3 p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Borrador {draft.modeloCodigo} — {draft.periodo} {draft.ejercicio}</h3>
-        <Button size="sm" variant="ghost" className="text-xs h-7" onClick={onClose}>Cerrar</Button>
-      </div>
-
-      {/* Alertas de datos */}
-      {pendientesContab.length > 0 && (
-        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-amber-700">
-            <strong>{pendientesContab.length} factura(s)</strong> del período aún no están contabilizadas. El importe puede ser incompleto.
-            <span className="block mt-0.5">Ve a <strong>Contabilidad → Facturas pendientes</strong> para contabilizarlas.</span>
-          </p>
-        </div>
-      )}
-
-      {/* Resumen de casillas */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="border border-border rounded-lg p-3">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">IVA REPERCUTIDO (ventas)</p>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between"><span>Facturas emitidas</span><span className="font-medium">{emitidas.length}</span></div>
-            <div className="flex justify-between"><span>Base imponible</span><span className="font-medium">{fmt(baseEmitida)}</span></div>
-            <div className="flex justify-between text-blue-700 font-semibold"><span>Cuota IVA repercutida</span><span>{fmt(cuotaEmitida)}</span></div>
-          </div>
-        </div>
-        <div className="border border-border rounded-lg p-3">
-          <p className="text-xs text-muted-foreground mb-2 font-medium">IVA SOPORTADO (compras)</p>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between"><span>Facturas recibidas</span><span className="font-medium">{recibidas.length}</span></div>
-            <div className="flex justify-between"><span>Base imponible</span><span className="font-medium">{fmt(baseRecibida)}</span></div>
-            <div className="flex justify-between text-orange-700 font-semibold"><span>Cuota IVA soportada</span><span>{fmt(cuotaRecibida)}</span></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Resultado */}
-      <div className={`rounded-lg p-3 flex items-center justify-between ${resultado >= 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-        <p className="text-sm font-semibold">Resultado del período</p>
-        <div className="text-right">
-          <p className={`text-lg font-bold ${resultado >= 0 ? 'text-red-700' : 'text-green-700'}`}>{fmt(resultado)}</p>
-          <p className="text-xs text-muted-foreground">{resultado >= 0 ? 'A ingresar' : 'A devolver / compensar'}</p>
-        </div>
-      </div>
-
-      {/* Trazabilidad */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground mb-2">
-          Trazabilidad — {contabilizadas.length} de {emitidas.length + recibidas.length} facturas contabilizadas
-        </p>
-        <div className="space-y-1 max-h-48 overflow-y-auto">
-          {[...emitidas, ...recibidas].map(f => (
-            <div key={f.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-muted/30">
-              <div className="flex items-center gap-2">
-                {(f.estado_contable === 'contabilizada' || f.linked_journal_entry_id)
-                  ? <CheckCircle className="w-3 h-3 text-green-500" />
-                  : <AlertCircle className="w-3 h-3 text-amber-400" />}
-                <span className="font-medium">{f.numero_factura}</span>
-                <span className="text-muted-foreground">{f.tipo === 'emitida' ? f.cliente_nombre : f.proveedor_nombre}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span>{fmt(f.cuota_iva)}</span>
-                <span className={`px-1.5 py-0.5 rounded text-xs ${f.estado_contable === 'contabilizada' || f.linked_journal_entry_id ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-600'}`}>
-                  {f.estado_contable === 'contabilizada' || f.linked_journal_entry_id ? 'Contabilizada' : 'Pendiente'}
-                </span>
-              </div>
-            </div>
-          ))}
-          {emitidas.length + recibidas.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-3">Sin datos suficientes para calcular el modelo. Pendiente de facturas contabilizadas.</p>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        <Info className="w-3 h-3" />
-        Los importes proceden exclusivamente de facturas reales. Los ajustes manuales se añadirán en la próxima fase.
-      </div>
-    </div>
-  );
-}
-
-export default function BorradoresTab() {
+export default function BorradoresTab({ onOpenModel }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
   const companyId = company?.id;
-  const qc = useQueryClient();
-  const [expandedId, setExpandedId] = useState(null);
-
-  const { data: drafts = [], isLoading } = useQuery({
-    queryKey: ['taxDrafts', companyId],
-    queryFn: () => base44.entities.TaxDraft.filter({ companyId }),
-    enabled: !!companyId,
-  });
-
-  const { data: modelos = [] } = useQuery({
-    queryKey: ['taxModels', companyId],
-    queryFn: () => base44.entities.TaxModel.filter({ companyId }),
-    enabled: !!companyId,
-  });
-
-  const { data: invoices = [] } = useQuery({
-    queryKey: ['invoices', companyId],
-    queryFn: () => base44.entities.Invoice.filter({ company_id: companyId }),
-    enabled: !!companyId,
-  });
-
-  const { data: journalEntries = [] } = useQuery({
-    queryKey: ['journalEntries', companyId],
-    queryFn: () => base44.entities.JournalEntry.filter({ companyId, status: 'confirmado' }),
-    enabled: !!companyId,
-  });
-
-  const updateDraft = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.TaxDraft.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['taxDrafts', companyId] }),
-  });
-
-  // Crear borrador desde período
-  const createDraft = useMutation({
-    mutationFn: ({ modeloCodigo, periodo, ejercicio }) => base44.entities.TaxDraft.create({
-      companyId, modeloCodigo, periodo, ejercicio,
-      version: 1,
-      estado: 'borrador',
-      origenDatos: 'facturas_asientos',
-      usuarioCreador: user?.email,
-    }),
-    onSuccess: (newDraft) => {
-      qc.invalidateQueries({ queryKey: ['taxDrafts', companyId] });
-      setExpandedId(newDraft.id);
-    },
-  });
-
-  const activeModelos = modelos.filter(m => m.activo);
   const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const [showVersions, setShowVersions] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const queryClient = useQueryClient();
+  const workspace = useTaxWorkspace(companyId, year);
+  const reviewer = isReviewer(user);
 
-  if (!companyId) return <div className="text-center py-16 text-sm text-muted-foreground">Selecciona un cliente.</div>;
+  const rows = useMemo(() => [...(showVersions ? workspace.data?.drafts || [] : workspace.data?.latestDrafts || [])]
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)), [showVersions, workspace.data]);
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Borradores de modelos fiscales</h2>
-        <p className="text-xs text-muted-foreground">Calculados desde facturas y asientos reales</p>
-      </div>
+  const updateStatus = useMutation({
+    mutationFn: async ({ draftId, status }) => (await base44.functions.invoke('taxModelOperations', { action: 'update_draft_status', companyId, draftId, status })).data,
+    onSuccess: async () => { setActionError(''); await queryClient.invalidateQueries({ queryKey: taxWorkspaceKey(companyId, year) }); },
+    onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo actualizar el borrador.'),
+  });
 
-      {/* Crear nuevo borrador */}
-      {activeModelos.length > 0 && (
-        <div className="bg-white border border-border rounded-xl p-4">
-          <p className="text-xs font-medium text-muted-foreground mb-3">Crear nuevo borrador</p>
-          <div className="flex flex-wrap gap-2">
-            {activeModelos.map(m => (
-              ['T1','T2','T3','T4'].map(p => {
-                const exists = drafts.find(d => d.modeloCodigo === m.codigo && d.periodo === p && d.ejercicio === currentYear);
-                if (exists) return null;
-                return (
-                  <Button key={`${m.codigo}-${p}`} size="sm" variant="outline" className="h-7 text-xs gap-1"
-                    onClick={() => createDraft.mutate({ modeloCodigo: m.codigo, periodo: p, ejercicio: currentYear })}>
-                    <FilePen className="w-3 h-3" /> {m.codigo} {p}
-                  </Button>
-                );
-              })
-            ))}
-          </div>
-        </div>
-      )}
+  if (!companyId) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa.</div>;
 
-      {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">Cargando...</div>
-      ) : drafts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-xl">
-          <FilePen className="w-10 h-10 text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium text-foreground mb-1">No hay borradores creados</p>
-          <p className="text-xs text-muted-foreground max-w-sm">Pulsa un botón arriba para crear un borrador. Los importes se calcularán automáticamente desde facturas reales y asientos confirmados.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {drafts.map(d => {
-            const cfg = ESTADO_CONFIG[d.estado] || ESTADO_CONFIG.borrador;
-            const isExpanded = expandedId === d.id;
-            const facturasPeriodo = invoices.filter(f => !f.anulada && facturaEnPeriodo(f, d.periodo, d.ejercicio));
-            const contabilizadas = facturasPeriodo.filter(f => f.estado_contable === 'contabilizada' || f.linked_journal_entry_id);
-            const pendientes = facturasPeriodo.length - contabilizadas.length;
+  const latest = workspace.data?.latestDrafts || [];
+  const inReview = latest.filter(item => item.estado === 'en_revision').length;
+  const blocked = latest.filter(item => item.blockers?.length).length;
+  const approved = latest.filter(item => item.estado === 'aprobado').length;
 
-            return (
-              <div key={d.id} className="bg-white border border-border rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/20" onClick={() => setExpandedId(isExpanded ? null : d.id)}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{d.modeloCodigo}</div>
-                    <div>
-                      <p className="text-sm font-medium">{d.modeloCodigo} — {d.periodo} {d.ejercicio} <span className="text-muted-foreground font-normal">v{d.version}</span></p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-muted-foreground">{contabilizadas.length}/{facturasPeriodo.length} facturas contabilizadas</span>
-                        {pendientes > 0 && <span className="text-xs text-amber-600 font-medium">· {pendientes} pendiente(s)</span>}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.color}`}>{cfg.label}</span>
-                    <div className="flex gap-1">
-                      {d.estado === 'borrador' && (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600" onClick={e => { e.stopPropagation(); updateDraft.mutate({ id: d.id, data: { estado: 'en_revision' } }); }}>
-                          Enviar a revisión
-                        </Button>
-                      )}
-                      {d.estado === 'en_revision' && (
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600" onClick={e => { e.stopPropagation(); updateDraft.mutate({ id: d.id, data: { estado: 'aprobado' } }); }}>
-                          <CheckCircle className="w-3 h-3 mr-1" /> Aprobar
-                        </Button>
-                      )}
-                    </div>
-                    {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-                  </div>
-                </div>
-                {isExpanded && (
-                  <div className="px-4 pb-4">
-                    <DraftDetail
-                      draft={d}
-                      invoices={invoices}
-                      journalEntries={journalEntries}
-                      onClose={() => setExpandedId(null)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700">
-        Los borradores calculan automáticamente base imponible y cuota IVA de las facturas reales del período. Las facturas no contabilizadas se marcan como pendientes.
+  return <div className="mx-auto max-w-6xl space-y-5">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div><h2 className="text-base font-semibold text-slate-900">Borradores versionados</h2><p className="mt-1 text-sm text-slate-500">Cada versión procede del motor tributario, conserva su huella de datos y nunca recalcula importes en esta pestaña.</p></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</select>
+        <Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Actualizar</Button>
       </div>
     </div>
-  );
+
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Metric label="Últimas versiones" value={latest.length} />
+      <Metric label="Pendientes de revisión" value={inReview} tone={inReview ? 'amber' : 'emerald'} />
+      <Metric label="Con bloqueos" value={blocked} tone={blocked ? 'red' : 'emerald'} />
+      <Metric label="Aprobados" value={approved} tone="emerald" />
+    </div>
+
+    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+      <span>Guardar de nuevo el mismo cálculo no crea duplicados. Si cambian fuentes o ajustes, Taxea crea una versión enlazada.</span>
+      <label className="ml-4 flex shrink-0 items-center gap-2"><input type="checkbox" checked={showVersions} onChange={event => setShowVersions(event.target.checked)} />Ver todas las versiones</label>
+    </div>
+
+    {actionError && <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{actionError}</div>}
+    {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : rows.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><FilePen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Todavía no hay borradores guardados</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">Calcula el modelo en “Modelos y periodos” y pulsa “Guardar versión”. Aquí aparecerá la fotografía exacta del cálculo.</p></div>
+      : <div className="space-y-3">{rows.map(draft => {
+        const status = statusPill(DRAFT_STATUS[draft.estado], draft.estado);
+        const isLatest = workspace.data?.latestDrafts?.some(item => item.id === draft.id);
+        return <article key={draft.id} className={`rounded-2xl border bg-white p-5 shadow-sm ${draft.blockers?.length ? 'border-red-200' : 'border-slate-200'}`}>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-cyan-200">{draft.modeloCodigo}</div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-slate-900">Modelo {draft.modeloCodigo} · {draft.periodo} {draft.ejercicio}</h3><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${status.className}`}>{status.label}</span>{!isLatest && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">Histórica</span>}</div><p className="mt-1 text-xs text-slate-500">Versión {draft.version} · guardada {formatDate(draft.updatedAt, true)} · motor {draft.engineVersion || 'sin versión registrada'}</p><p className="mt-1 truncate font-mono text-[11px] text-slate-400">Huella {draft.snapshotHash || draft.sourceHash || 'no disponible'}</p></div>
+            </div>
+            <div className="text-left xl:text-right"><p className="text-xs text-slate-500">Resultado calculado</p><p className={`text-xl font-bold ${draft.resultadoCalculado > 0 ? 'text-red-600' : draft.resultadoCalculado < 0 ? 'text-emerald-700' : 'text-slate-700'}`}>{formatMoney(draft.resultadoCalculado)}</p><p className="text-[11px] text-slate-400">{draft.sourceCount} fuentes trazadas</p></div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            <div className={`rounded-xl border p-3 ${draft.blockers?.length ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'}`}><div className="flex items-center gap-2">{draft.blockers?.length ? <AlertCircle className="h-4 w-4 text-red-600" /> : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}<span className="text-xs font-semibold">{draft.blockers?.length || 0} bloqueos</span></div>{draft.blockers?.slice(0, 2).map((item, index) => <p key={index} className="mt-1 text-xs text-red-700">{item.message}</p>)}</div>
+            <div className={`rounded-xl border p-3 ${draft.warnings?.length ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}><div className="flex items-center gap-2"><AlertTriangle className={`h-4 w-4 ${draft.warnings?.length ? 'text-amber-600' : 'text-slate-400'}`} /><span className="text-xs font-semibold">{draft.warnings?.length || 0} avisos</span></div>{draft.warnings?.slice(0, 2).map((item, index) => <p key={index} className="mt-1 text-xs text-amber-700">{item.message}</p>)}</div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><div className="flex items-center gap-2"><FileClock className="h-4 w-4 text-cyan-700" /><span className="text-xs font-semibold">Ajustes revisables</span></div><p className="mt-1 text-xs text-slate-600">{draft.adjustments?.length ? `${draft.adjustments.length} ajustes conservados en esta versión.` : 'Sin ajustes manuales.'}</p></div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => onOpenModel?.({ modelCode: draft.modeloCodigo, year: draft.ejercicio, period: draft.periodo })}><ArrowRight className="h-3.5 w-3.5" />Abrir modelo</Button>
+            {isLatest && draft.estado === 'borrador' && <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'en_revision' })} disabled={updateStatus.isPending}>Enviar a revisión</Button>}
+            {isLatest && reviewer && draft.estado === 'en_revision' && <Button size="sm" variant="outline" className="border-cyan-300 text-cyan-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'revisado' })} disabled={updateStatus.isPending || draft.blockers?.length}><ShieldCheck className="mr-1 h-3.5 w-3.5" />Marcar revisado</Button>}
+            {isLatest && reviewer && draft.estado === 'revisado' && <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'aprobado' })} disabled={updateStatus.isPending || draft.blockers?.length}>Aprobar</Button>}
+            {isLatest && reviewer && !['aprobado', 'rechazado'].includes(draft.estado) && <Button size="sm" variant="ghost" className="text-red-600" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'rechazado' })} disabled={updateStatus.isPending}>Rechazar</Button>}
+          </div>
+        </article>;
+      })}</div>}
+  </div>;
 }
+
