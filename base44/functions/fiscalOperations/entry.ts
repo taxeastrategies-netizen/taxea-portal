@@ -221,6 +221,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   return {
     status: reviewRequired ? 'review_required' : 'ready', reviewRequired, confidence: Math.max(0, confidence),
     ruleSetVersion: RULESET, activityId: activity.id, taxKind, regime, operationType, exemptionKey, legalBasis,
+    deductionCategory: clean(body.deductionCategory),
     base, taxRate, taxAmount, deductiblePercent, deductibleTax, nonDeductibleTax,
     withholdingRate, withholdingAmount, total: money(base + taxAmount - withholdingAmount),
     manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, bookImpact, modelImpact: [...new Set(modelImpact)],
@@ -253,7 +254,10 @@ Deno.serve(async (req) => {
     ]);
     const profile = profiles?.[0] || null;
 
-    if (action === 'bundle') return Response.json({ success: true, ruleSetVersion: RULESET, profile, activities, models, recommendations: recommendedObligations(profile, activities), sources: SOURCES });
+    if (action === 'bundle') {
+      const invoiceTaxLines=body.invoiceId?await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:clean(body.invoiceId)},'lineNumber',100):[];
+      return Response.json({ success: true, ruleSetVersion: RULESET, profile, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), sources: SOURCES });
+    }
     if (action === 'evaluate') return Response.json({ success: true, evaluation: evaluate(profile, activities, body), ruleSetVersion: RULESET });
 
     if (action === 'save_profile') {
@@ -317,7 +321,7 @@ Deno.serve(async (req) => {
       const evaluation = evaluate(profile, activities, { ...body, direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso', base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva, taxAmount: body.taxAmount ?? invoice.cuota_iva, operationDate: body.operationDate ?? invoice.fecha_emision });
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: evaluation.deductibleTax >= evaluation.taxAmount, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: evaluation.deductibleTax >= evaluation.taxAmount, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       await svc.entities.Invoice.update(invoice.id, { indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, deductible_tax_amount: payload.deductibleQuota, non_deductible_tax_amount: payload.nonDeductibleQuota, tipo_iva: payload.rate, cuota_iva: payload.quota, retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
