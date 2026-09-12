@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
-import { AlertCircle, AlertTriangle, Calculator, CheckCircle2, Download, FileCheck2, FileJson, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Calculator, CheckCircle2, ChevronLeft, ChevronRight, Download, ExternalLink, FileCheck2, FileJson, FileSearch, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const PERIODS = {
@@ -490,6 +490,73 @@ function StatusBadge({ model }) {
   return <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 border border-slate-200">Borrador validable</span>;
 }
 
+const SOURCE_LABELS = {
+  Invoice: 'Factura', InvoiceTaxLine: 'Línea fiscal', InvoicePayment: 'Pago', PayrollExtraction: 'Nómina', JournalEntryLine: 'Apunte contable', TaxFiling: 'Modelo presentado', ManualAdjustment: 'Ajuste manual',
+};
+
+function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage }) {
+  if (!field) return null;
+  const sourceRows = trace?.sources || [];
+  const totals = trace?.totals || {};
+  const meaningfulTotals = [
+    ['Base', totals.base], ['Cuota', totals.tax], ['Retención', totals.withholding], ['Importe', totals.amount], ['Debe', totals.debit], ['Haber', totals.credit],
+  ].filter(([, value]) => Math.abs(Number(value || 0)) > 0.009);
+  return <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/45 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Trazabilidad de la casilla ${field.code}`}>
+    <button type="button" className="min-w-0 flex-1 cursor-default" onClick={onClose} aria-label="Cerrar trazabilidad" />
+    <aside className="flex h-full w-full max-w-2xl flex-col bg-slate-50 shadow-2xl">
+      <header className="border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Trazabilidad de cálculo</p><h3 className="mt-1 text-lg font-bold">Casilla {field.code} · {field.label}</h3><p className="mt-1 text-sm text-slate-300">{field.section || 'Detalle del modelo'} · {formatMoney(field.value)}</p></div>
+          <Button type="button" size="icon" variant="ghost" className="shrink-0 text-white hover:bg-white/10 hover:text-white" onClick={onClose}><X className="h-5 w-5" /></Button>
+        </div>
+      </header>
+      <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        {(trace?.field?.formula || field.formula || trace?.field?.dependsOn?.length || field.dependsOn?.length) && <section className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cyan-800">Cómo se calcula</p>
+          <p className="mt-2 text-sm leading-6 text-slate-700">{trace?.field?.formula || field.formula || 'Resultado derivado de otras casillas.'}</p>
+          {!!(trace?.field?.dependsOn || field.dependsOn)?.length && <p className="mt-2 text-xs text-slate-600">Depende de: {(trace?.field?.dependsOn || field.dependsOn).map(code => `casilla ${code}`).join(', ')}.</p>}
+        </section>}
+
+        {loading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
+          : error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error?.response?.data?.error || error?.message || 'No se pudo cargar la trazabilidad.'}</div>
+            : <>
+              <section className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">Fuentes directas</p><p className="mt-1 text-xl font-bold text-slate-900">{trace?.sourceCount ?? field.sourceIds?.length ?? 0}</p></div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">Resueltas</p><p className="mt-1 text-xl font-bold text-emerald-700">{trace?.total || 0}</p></div>
+                <div className={`rounded-xl border p-3 ${trace?.unresolvedCount ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}><p className="text-xs text-slate-500">No localizadas</p><p className={`mt-1 text-xl font-bold ${trace?.unresolvedCount ? 'text-amber-700' : 'text-slate-900'}`}>{trace?.unresolvedCount || 0}</p></div>
+              </section>
+
+              {!!meaningfulTotals.length && <section className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Totales de las fuentes</p><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">{meaningfulTotals.map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-2"><p className="text-[11px] text-slate-400">{label}</p><p className="mt-0.5 text-sm font-semibold text-slate-800">{formatMoney(value)}</p></div>)}</div></section>}
+
+              {trace?.unresolvedCount > 0 && <div className="flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{trace.unresolvedCount} fuente(s) del borrador ya no están disponibles. El importe congelado no cambia; conviene revisar esta versión antes de presentar.</span></div>}
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-slate-800">Documentos incluidos</h4>{trace?.frozen && <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700">Foto guardada</span>}</div>
+                {!sourceRows.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-10 text-center"><FileSearch className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-2 text-sm font-medium text-slate-700">Sin documentos directos</p><p className="mt-1 text-xs leading-5 text-slate-500">La casilla es cero, manual o se obtiene de otras casillas según la fórmula mostrada.</p></div>
+                  : sourceRows.map(source => <article key={source.sourceId} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{SOURCE_LABELS[source.type] || source.type}</span>{source.invoiceType && <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] text-cyan-700">{source.invoiceType}</span>}</div><h5 className="mt-2 font-semibold text-slate-900">{source.title}</h5><p className="mt-0.5 text-xs text-slate-500">{[source.date, source.subtitle, source.taxId].filter(Boolean).join(' · ')}</p>{source.concept && <p className="mt-2 text-xs leading-5 text-slate-600">{source.concept}</p>}</div>
+                      {source.invoiceId && <a href={`/facturas?factura=${encodeURIComponent(source.invoiceId)}`} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900">Abrir factura<ExternalLink className="h-3.5 w-3.5" /></a>}
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
+                      {source.base != null && <div><dt className="text-slate-400">Base</dt><dd className="font-medium text-slate-800">{formatMoney(source.base)}</dd></div>}
+                      {source.tax != null && <div><dt className="text-slate-400">Cuota</dt><dd className="font-medium text-slate-800">{formatMoney(source.tax)}</dd></div>}
+                      {source.withholding != null && <div><dt className="text-slate-400">Retención</dt><dd className="font-medium text-slate-800">{formatMoney(source.withholding)}</dd></div>}
+                      {source.total != null && <div><dt className="text-slate-400">Total factura</dt><dd className="font-medium text-slate-800">{formatMoney(source.total)}</dd></div>}
+                      {source.amount != null && <div><dt className="text-slate-400">Importe</dt><dd className="font-medium text-slate-800">{formatMoney(source.amount)}</dd></div>}
+                      {source.accountCode && <div><dt className="text-slate-400">Cuenta</dt><dd className="font-medium text-slate-800">{source.accountCode}</dd></div>}
+                      {source.debit != null && <div><dt className="text-slate-400">Debe</dt><dd className="font-medium text-slate-800">{formatMoney(source.debit)}</dd></div>}
+                      {source.credit != null && <div><dt className="text-slate-400">Haber</dt><dd className="font-medium text-slate-800">{formatMoney(source.credit)}</dd></div>}
+                    </dl>
+                  </article>)}
+              </section>
+            </>}
+      </div>
+      {trace?.totalPages > 1 && <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-5 py-3 text-xs text-slate-600"><span>Página {trace.page} de {trace.totalPages}</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => onPage(trace.page - 1)} disabled={trace.page <= 1}><ChevronLeft className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" onClick={() => onPage(trace.page + 1)} disabled={trace.page >= trace.totalPages}><ChevronRight className="h-4 w-4" /></Button></div></footer>}
+    </aside>
+  </div>;
+}
+
 export default function TaxModelWorkbench({ initialSelection }) {
   const { user } = useAuth();
   const { company } = useCompanyContext(user);
@@ -506,6 +573,8 @@ export default function TaxModelWorkbench({ initialSelection }) {
   const [annual190RecordEdits, setAnnual190RecordEdits] = useState({});
   const [annual193RecordEdits, setAnnual193RecordEdits] = useState({});
   const [thirdPartyRecordEdits, setThirdPartyRecordEdits] = useState({});
+  const [selectedField, setSelectedField] = useState(null);
+  const [tracePage, setTracePage] = useState(1);
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
     queryKey: ['tax-model-engine-catalog'],
@@ -523,6 +592,16 @@ export default function TaxModelWorkbench({ initialSelection }) {
   const definition = models.find(item => item.code === modelCode) || models[0];
   const periodOptions = useMemo(() => definition ? periodsFor(definition, profile) : PERIODS.trimestral, [definition, profile]);
 
+  const fieldTrace = useQuery({
+    queryKey: ['tax-model-field-trace', companyId, result?.draft?.id || result?.source?.hash, modelCode, year, period, selectedField?.code, selectedField?.label, selectedField?.section, tracePage],
+    queryFn: async () => (await base44.functions.invoke('taxModelOperations', {
+      action: 'field_trace', companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period,
+      draftId: result?.draft?.id || undefined, fieldCode: selectedField.code, fieldLabel: selectedField.label, fieldSection: selectedField.section, page: tracePage, pageSize: 25,
+      adjustments: modelCode === '130' || INDIRECT_TAX_MODELS.includes(modelCode) ? adjustments : {},
+    })).data,
+    enabled: !!companyId && !!result && !!selectedField,
+  });
+
   useEffect(() => {
     if (definition && !periodOptions.includes(period)) setPeriod(periodOptions[0]);
     setResult(null);
@@ -530,6 +609,8 @@ export default function TaxModelWorkbench({ initialSelection }) {
     setLastExportInfo(null);
     setLastSaveInfo('');
     setAdjustments({});
+    setSelectedField(null);
+    setTracePage(1);
   }, [modelCode, year, definition?.frequency, periodOptions]);
 
   useEffect(() => {
@@ -557,7 +638,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
   }, [modelCode, result?.source?.hash]);
 
   const invoke = useMutation({
-    mutationFn: async ({ action }) => {
+    mutationFn: async ({ action, ...extra }) => {
       const response = await base44.functions.invoke('taxModelOperations', {
         action,
         companyId,
@@ -565,13 +646,22 @@ export default function TaxModelWorkbench({ initialSelection }) {
         ejercicio: year,
         periodo: period,
         adjustments: modelCode === '130' || INDIRECT_TAX_MODELS.includes(modelCode) ? adjustments : {},
+        ...extra,
       });
       return response.data;
     },
     onSuccess: (data, variables) => {
       setActionError('');
-      if (variables.action === 'calculate' || variables.action === 'save_draft') setResult(data);
+      if (['calculate', 'save_draft', 'open_draft'].includes(variables.action)) {
+        setResult(data);
+        setSelectedField(null);
+        setTracePage(1);
+      }
       if (variables.action === 'save_draft') setLastSaveInfo(data.alreadySaved ? 'Este cálculo ya estaba guardado: no se creó una versión duplicada.' : `Versión ${data.draft?.version || ''} guardada con su huella y trazabilidad.`);
+      if (variables.action === 'open_draft') {
+        setAdjustments(data.adjustments || {});
+        setLastSaveInfo(`Borrador v${data.draft?.version || ''} abierto como fotografía guardada. Sus importes no se han recalculado.`);
+      }
       if (['export', 'export_review', 'export_handoff'].includes(variables.action)) {
         downloadBase64(data.file);
         setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
@@ -584,6 +674,11 @@ export default function TaxModelWorkbench({ initialSelection }) {
     },
   });
 
+  useEffect(() => {
+    if (!companyId || !definition || definition.code !== modelCode || !initialSelection?.draftId || modelCode !== initialSelection.modelCode || Number(year) !== Number(initialSelection.year) || period !== initialSelection.period) return;
+    invoke.mutate({ action: 'open_draft', draftId: initialSelection.draftId });
+  }, [companyId, definition?.code, initialSelection?.draftId, initialSelection?.requestId]);
+
   const saveDeclarable = useMutation({
     mutationFn: async ({ detail, reviewStatus, targetModel = modelCode }) => (await base44.functions.invoke('taxModelOperations', {
       action: 'upsert_declarable', companyId, modeloCodigo: targetModel, ejercicio: year, periodo: 'Anual',
@@ -592,7 +687,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
       sourceId: targetModel === '180' ? detail.id : ['190', '193'].includes(targetModel) ? (detail.sourceIds || []).join('|') : (detail.invoices || []).join('|'),
       payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '190' ? (annual190RecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '193' ? (annual193RecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
     })).data,
-    onSuccess: () => { setActionError(''); invoke.mutate({ action: 'calculate' }); },
+    onSuccess: () => { setActionError(''); invoke.mutate({ action: 'save_draft' }); },
     onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo guardar la ficha anual.'),
   });
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
@@ -613,6 +708,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
 
   return (
     <div className="grid min-h-[690px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[260px_minmax(0,1fr)]">
+      <FieldTraceDrawer field={selectedField} trace={fieldTrace.data} loading={fieldTrace.isLoading || fieldTrace.isFetching} error={fieldTrace.error} onClose={() => setSelectedField(null)} onPage={setTracePage} />
       <aside className="border-b border-slate-200 bg-slate-950 lg:border-b-0 lg:border-r">
         <div className="border-b border-white/10 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Motor tributario</p>
@@ -652,9 +748,9 @@ export default function TaxModelWorkbench({ initialSelection }) {
               <select value={period} onChange={event => { setPeriod(event.target.value); setResult(null); setAdjustments({}); }} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700">
                 {periodOptions.map(value => <option key={value}>{value}</option>)}
               </select>
-              <Button onClick={() => invoke.mutate({ action: 'calculate' })} disabled={invoke.isPending} className="gap-2 bg-slate-950 text-white hover:bg-slate-800">
+              <Button onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending} className="gap-2 bg-slate-950 text-white hover:bg-slate-800">
                 {invoke.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-                Calcular borrador
+                Calcular y guardar borrador
               </Button>
             </div>
           </div>
@@ -676,7 +772,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
           )}
           {lastSaveInfo && <div className="flex gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-800"><Save className="mt-0.5 h-4 w-4 shrink-0" /><span>{lastSaveInfo}</span></div>}
 
-          <FiledReturnImport key={`${companyId}-${modelCode}-${year}-${period}`} companyId={companyId} modelCode={modelCode} year={year} period={period} onImported={() => invoke.mutate({ action: 'calculate' })} />
+          <FiledReturnImport key={`${companyId}-${modelCode}-${year}-${period}`} companyId={companyId} modelCode={modelCode} year={year} period={period} onImported={() => invoke.mutate({ action: 'save_draft' })} />
 
           {modelCode === '130' && (
             <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
@@ -733,6 +829,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
             </div>
           ) : (
             <>
+              {result.draft && <div className="flex flex-col gap-2 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Save className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" /><div><p className="text-sm font-semibold text-slate-800">Borrador v{result.draft.version} guardado</p><p className="mt-0.5 text-xs text-slate-500">{result.frozen ? 'Estás trabajando sobre la fotografía guardada; no se ha recalculado.' : result.alreadySaved ? 'Coincide con una versión existente y no se ha duplicado.' : 'La versión conserva casillas, fuentes, ajustes y recomendaciones.'}</p></div></div><span className="font-mono text-[11px] text-slate-400">{(result.draft.snapshotHash || result.source?.hash || '').slice(0, 16)}…</span></div>}
               <HistoryAndCarryforwardPanel result={result} modelCode={modelCode} />
 
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -744,11 +841,11 @@ export default function TaxModelWorkbench({ initialSelection }) {
 
               <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(310px,0.7fr)]">
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                  <div className="border-b border-slate-200 px-4 py-3"><h3 className="text-sm font-semibold text-slate-800">Casillas calculadas</h3><p className="mt-0.5 text-xs text-slate-500">Importes y recuentos obtenidos de sus fuentes.</p></div>
+                  <div className="border-b border-slate-200 px-4 py-3"><h3 className="text-sm font-semibold text-slate-800">Casillas calculadas</h3><p className="mt-0.5 text-xs text-slate-500">Pulsa cualquier casilla para ver su fórmula y los documentos exactos incluidos.</p></div>
                   <div className="max-h-[390px] overflow-auto">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-2 text-left">Casilla</th><th className="px-4 py-2 text-left">Concepto</th><th className="px-4 py-2 text-right">Valor</th><th className="px-4 py-2 text-right">Fuentes</th></tr></thead>
-                      <tbody>{(result.calculation?.fields || []).map(field => <tr key={`${field.code}-${field.label}`} className="border-t border-slate-100"><td className="px-4 py-2 font-mono text-xs font-semibold text-cyan-700">{field.code}</td><td className="px-4 py-2 text-slate-700"><p>{field.label}</p>{field.section && <p className="text-[11px] text-slate-400">{field.section}</p>}</td><td className="px-4 py-2 text-right font-medium text-slate-900">{field.code === 'DECLARADOS' || /Perceptores|Número/.test(field.label) ? Number(field.value).toLocaleString('es-ES') : formatMoney(field.value)}</td><td className="px-4 py-2 text-right text-xs text-slate-400">{field.sourceIds?.length || 0}</td></tr>)}</tbody>
+                      <tbody>{(result.calculation?.fields || []).map(field => <tr key={`${field.code}-${field.label}`} role="button" tabIndex={0} onClick={() => { setSelectedField(field); setTracePage(1); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedField(field); setTracePage(1); } }} className="cursor-pointer border-t border-slate-100 transition hover:bg-cyan-50/70 focus:bg-cyan-50 focus:outline-none"><td className="px-4 py-2 font-mono text-xs font-semibold text-cyan-700">{field.code}</td><td className="px-4 py-2 text-slate-700"><p>{field.label}</p>{field.section && <p className="text-[11px] text-slate-400">{field.section}</p>}</td><td className="px-4 py-2 text-right font-medium text-slate-900">{field.code === 'DECLARADOS' || /Perceptores|Número/.test(field.label) ? Number(field.value).toLocaleString('es-ES') : formatMoney(field.value)}</td><td className="px-4 py-2 text-right"><span className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-700">{field.sourceIds?.length || 0}<ChevronRight className="h-3.5 w-3.5" /></span></td></tr>)}</tbody>
                     </table>
                   </div>
                 </div>
@@ -771,10 +868,10 @@ export default function TaxModelWorkbench({ initialSelection }) {
               )}
 
               <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
-                <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar versión</Button>
-                <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review' })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>
-                {definition?.exportMode === 'atc_guided_packet' && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff' })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso ATC</Button>}
-                {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export' })} disabled={invoke.isPending}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar para AEAT'}</Button>}
+                <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar nueva versión si cambió</Button>
+                <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review', draftId: result.draft?.id })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>
+                {definition?.exportMode === 'atc_guided_packet' && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff', draftId: result.draft?.id })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso ATC</Button>}
+                {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export', draftId: result.draft?.id })} disabled={invoke.isPending}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar para AEAT'}</Button>}
                 {!definition?.officialExport && <p className="flex items-center text-xs text-slate-500">El traspaso ayuda a cumplimentar; el .dec presentable se genera y valida siempre en el programa oficial de la ATC.</p>}
               </div>
             </>
