@@ -38,6 +38,30 @@
     "fileUrl": {
       "type": "string"
     },
+    "contentBase64": {
+      "type": "string",
+      "description": "Contenido exacto e inmutable generado por Taxea, codificado en Base64 para permitir su re-descarga verificable."
+    },
+    "contentEncoding": {
+      "type": "string",
+      "enum": [
+        "base64"
+      ],
+      "default": "base64"
+    },
+    "contentSize": {
+      "type": "integer"
+    },
+    "immutable": {
+      "type": "boolean",
+      "default": true
+    },
+    "sourceHash": {
+      "type": "string"
+    },
+    "snapshotHash": {
+      "type": "string"
+    },
     "hash": {
       "type": "string"
     },
