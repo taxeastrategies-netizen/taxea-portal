@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.12-v17';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.12-v21';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -8,18 +8,18 @@ const DEFINITIONS: Record<string, any> = {
   '115': { name: 'Retenciones por arrendamientos urbanos', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v1.3', designYear: '2019+', officialExport: true },
   '123': { name: 'Retenciones de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'withholding', design: 'EHA/3435/2007 v2.0', designYear: '2024+', officialExport: true },
   '130': { name: 'Pago fraccionado IRPF en estimación directa', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'HAP/258/2015 v1.2', designYear: '2019+', officialExport: true },
-  '131': { name: 'Pago fraccionado IRPF en estimación objetiva', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'Diseño de registro AEAT 2026', designYear: '2026', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'El rendimiento por módulos exige los signos, índices y datos-base de la Orden anual. Taxea prepara un borrador estructurado y trazable; el fichero presentable se obtendrá tras validarlo en Predeclaración/AEAT.' },
+  '131': { name: 'Pago fraccionado IRPF en estimación objetiva', authority: 'AEAT', frequency: 'trimestral', kind: 'income_tax', design: 'Diseño de registro AEAT modelo 131 · ejercicio 2026', designYear: '2026', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'El fichero incluye la página de liquidación y una DPA por actividad. El rendimiento, módulos, personal, índices y datos-base deben proceder de la Orden anual; si hay rendimiento por módulos sin fichas DPA, Taxea no genera un fichero incompleto.' },
   '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
   '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Taxea propone automáticamente nóminas A y profesionales G y permite completar manualmente todas las claves A-L, subclaves, percepciones en especie, incapacidad y distribución foral del diseño 2025.' },
   '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Incluye registros de perceptor y, cuando proceda, el anexo de relación de gastos del artículo 26.1.a LIRPF conforme al diseño 2025.' },
   '200': { name: 'Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'anual', kind: 'corporate_tax', design: 'Sociedades WEB y diseño de registro AEAT 2025', designYear: '2025', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'El modelo 200 no se obtiene solo de facturas: requiere cierre contable, balances, ajustes extracontables, bases negativas, deducciones y régimen societario. Taxea prepara la conciliación contable-fiscal; la presentación debe completarse y validarse en Sociedades WEB.' },
   '202': { name: 'Pago fraccionado del Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'abril/octubre/diciembre', kind: 'corporate_tax_payment', design: 'Diseño de registro AEAT 2026', designYear: '2026', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', periods: ['1P', '2P', '3P'], designWarning: 'La base depende de la modalidad del artículo 40.2 o 40.3 LIS y de magnitudes societarias confirmadas. Taxea no infiere la modalidad únicamente por las facturas.' },
-  '216': { name: 'Retenciones e ingresos a cuenta de no residentes', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'non_resident_withholding', design: 'Modelo 216 e instrucciones AEAT vigentes', designYear: '2026', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'Incluye rentas IRNR satisfechas a no residentes, también determinadas rentas exentas o exceptuadas de retención. Cada perceptor debe documentarse con país, clave de renta y motivo de exención o convenio.' },
+  '216': { name: 'Retenciones e ingresos a cuenta de no residentes', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'non_resident_withholding', design: 'Diseño de registro AEAT modelo 216 · versión 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'Incluye rentas IRNR satisfechas a no residentes, también determinadas rentas exentas o exceptuadas de retención. Cada perceptor debe documentarse con país, clave de renta y motivo de exención o convenio; el fichero oficial contiene la autoliquidación agregada.' },
   '232': { name: 'Operaciones vinculadas y territorios no cooperativos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Formulario modelo 232 AEAT', designYear: '2025+', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'La obligación y los umbrales dependen de la vinculación, el tipo y conjunto de operaciones, patent box y territorios no cooperativos. Solo se incorporan registros expresamente clasificados y revisados.' },
-  '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro modelo 296 AEAT 2024+', designYear: '2024+', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'El resumen anual necesita identificación y clave completa de cada perceptor, país, naturaleza, exención/convenio y retención. Taxea concilia los registros del 216, pero no crea perceptores por suposición.' },
+  '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 296 · ejercicio 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', designWarning: 'Taxea concilia los perceptores del 216 y genera los registros tipo 1 y 2 de 500 posiciones. Personalidad, naturaleza, subclave, residencia, fecha de devengo y supuestos especiales deben confirmarse; los anexos A, B o F se señalan como revisión específica cuando procedan.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true, designWarning: 'Taxea genera las páginas 1 y 3 y, cuando existen actividades de IVA simplificado revisadas, las páginas 2 necesarias del diseño 2026. Las magnitudes de módulos deben proceder de la Orden anual y quedar confirmadas; el régimen especial del grupo de entidades se declara mediante 322/353, no mediante 303.' },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
-  '349': { name: 'Operaciones intracomunitarias', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'informative', design: 'Diseño de registro modelo 349 AEAT vigente', designYear: '2026', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', periodOptions: ['1T','2T','3T','4T','01','02','03','04','05','06','07','08','09','10','11','12'], designWarning: 'Taxea propone operaciones desde líneas fiscales intracomunitarias y permite completar rectificaciones. El NIF-IVA/VIES, la clave de operación y la periodicidad deben confirmarse antes de presentar.' },
+  '349': { name: 'Operaciones intracomunitarias', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'informative', design: 'Diseño lógico AEAT modelo 349 vigente · registros de 500 posiciones', designYear: '2026', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', periodOptions: ['1T','2T','3T','4T','01','02','03','04','05','06','07','08','09','10','11','12'], designWarning: 'Taxea propone operaciones desde líneas fiscales intracomunitarias y genera registros normales y de rectificación. El NIF-IVA/VIES, la clave, el período y las bases anteriores de cada rectificación deben revisarse antes de importar en AEAT.' },
   '390': { name: 'Resumen anual IVA', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'DR390e2025 v1.02', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'La salida usa el último diseño oficial publicado (ejercicio 2025). Las diferencias de clasificación anual se muestran como recomendaciones revisables.' },
   '415': { name: 'Operaciones económicas con terceras personas', authority: 'ATC', frequency: 'anual', kind: 'informative', design: 'BOC 41/2015 + Programa de ayuda ATC 2025', designYear: '2025', officialExport: true, exportMode: 'atc_program_import', designWarning: 'Taxea genera el soporte oficial de importación de declarados. El programa ATC debe importarlo, validarlo y generar el .dec final.' },
   '417': { name: 'SII-IGIC · autoliquidación periódica', authority: 'ATC', frequency: 'mensual', kind: 'indirect_tax', design: 'Programa de ayuda ATC modelo 417 · períodos 2025+', designYear: '2025+', officialExport: false, handoffExport: true, exportMode: 'atc_guided_packet', designWarning: 'Desde los períodos iniciados en 2025 el modelo 417 se presenta mensualmente. Taxea calcula desde los libros IGIC/SII; el .dec debe generarse y validarse en el programa oficial ATC.' },
@@ -196,16 +196,21 @@ const MODEL_190_SUBKEYS: Record<string, string[]> = {
 const MODEL_190_PERSONAL_KEYS = new Set(['A','B01','B03','B04','B99','C01','C02','C03','C04','C05','C06','C07','C08','C09']);
 
 const GENERIC_DECLARABLE_FIELDS: Record<string, { text: string[]; numeric: string[]; boolean: string[] }> = {
+  '131': {
+    text: ['iaeCode','auxIndicator','startYear','ceutaMelillaCode','singlePremiseCode','loadCapacityCode','municipalityCode','accrualDate'],
+    numeric: ['participationRate','seasonalDays','vehicles','higherPaymentRate','salariedAdultHours','salariedMinorHours','salariedDisabledHours','collectiveAgreementHours','otherSalariedAdultHours','otherSalariedMinorHours','otherSalariedDisabledHours','otherCollectiveAgreementHours','ownerHours','spouseHours','minorChildrenHours','tableCapacity1','tableUnits1','tableCapacity2','tableUnits2','tableCapacity3','tableUnits3','tableCapacity4','tableUnits4',...Array.from({length:7},(_,index)=>`module${index+1}Units`),...Array.from({length:7},(_,index)=>`module${index+1}Amount`),'employmentIncentive','investmentIncentive','specialIndex','smallBusinessIndex','seasonalIndex','excessIndex','startupIndex','quarterDays','netYield','paymentRate','quarterPayment'],
+    boolean: ['tractorWithoutTrailer','singleTractorWithoutTrailer','specialDataConfirmed'],
+  },
   '216': {
     text: ['recipientTaxId','recipientName','country','incomeKey','nature','exemptionCode','treatyCode','paymentDate','operationDate','representativeTaxId','provinceCode','incomeGroup'],
     numeric: ['accruedAmount','withholdingBase','withholdingAmount'], boolean: ['notSubjectToWithholding','dividendOrEquityIncome','specialDataConfirmed'],
   },
   '296': {
-    text: ['recipientTaxId','recipientName','country','incomeKey','nature','exemptionCode','treatyCode','paymentDate','operationDate','representativeTaxId','provinceCode','incomeGroup'],
-    numeric: ['accruedAmount','withholdingBase','withholdingAmount'], boolean: ['notSubjectToWithholding','dividendOrEquityIncome','specialDataConfirmed'],
+    text: ['recipientTaxId','spanishTaxId','foreignTaxId','recipientName','country','incomeKey','subkey','nature','exemptionCode','treatyCode','paymentDate','operationDate','representativeTaxId','personalityKey','provinceCode','incomeGroup','recordOrder','mediatorCode','bic','issuerCodeType','issuerCode','paymentRole','accountCodeType','accountCode','accrualYear','loanStartDate','loanEndDate','previousPayerTaxId','marketKey','lei','address','addressComplement','city','region','postalCode','birthDate','birthCity','birthCountry'],
+    numeric: ['accruedAmount','withholdingBase','withholdingRate','withholdingAmount','lenderRemuneration','loanCompensation','loanGuarantees','passedOnAccountPayment'], boolean: ['notSubjectToWithholding','dividendOrEquityIncome','recipientMediator','pendingAccrual','specialWithholdingProcedure','requiresSpecialAnnex','specialDataConfirmed'],
   },
   '349': {
-    text: ['operatorTaxId','operatorName','country','operationKey','operationDate','originalYear','originalPeriod','originalOperatorTaxId'],
+    text: ['operatorTaxId','operatorName','country','operationKey','operationDate','originalYear','originalPeriod','originalOperatorTaxId','replacementOperatorTaxId','replacementOperatorName'],
     numeric: ['amount','rectificationAmount','originalAmount'], boolean: ['rectification','specialDataConfirmed'],
   },
   '232': {
@@ -1494,16 +1499,18 @@ function manualSourceId(record: any) {
   return `TaxDeclarableRecord:${record.id}`;
 }
 
-function calculate131(data: any, _b: any, adjustments: any) {
+function calculate131(data: any, b: any, adjustments: any) {
   const value = (key: string) => money(adjustments?.[key]);
   const source = (key: string) => adjustments?.[key] === undefined || adjustments?.[key] === null || adjustments?.[key] === '' ? [] : [`ManualAdjustment:${key}`];
-  const fields: any[] = [];
-  const box01 = Math.max(0, value('modulesNetYield'));
+  const fields: any[] = [], activityRecords=declarableRows(data,'131',b,false);
+  const activityDetails=activityRecords.map((record:any)=>{const payload=record.payload||{}; const netYield=money(payload.netYield); const paymentRate=Number(payload.paymentRate||0); const quarterPayment=payload.quarterPayment!==undefined&&payload.quarterPayment!==null&&payload.quarterPayment!==''?money(payload.quarterPayment):money(netYield*paymentRate/100); return {recordId:record.id,recordKey:record.recordKey,sourceId:manualSourceId(record),reviewStatus:record.reviewStatus,...payload,netYield,paymentRate,quarterPayment};});
+  const activitySources=activityDetails.map((row:any)=>row.sourceId);
+  const box01 = activityDetails.length?money(activityDetails.reduce((sum:number,row:any)=>sum+row.netYield,0)):Math.max(0, value('modulesNetYield'));
   const employees = Number(adjustments?.salariedEmployees ?? NaN);
   const statutoryRate = Number.isFinite(employees) ? employees <= 0 ? 2 : employees <= 1 ? 3 : 4 : 0;
   const requestedRate = Number(adjustments?.modulesPaymentRate ?? statutoryRate);
   const modulesRate = Number.isFinite(requestedRate) ? Math.max(statutoryRate || 0, requestedRate) : 0;
-  const box02 = adjustments?.modulesQuarterPayment !== undefined ? Math.max(0, value('modulesQuarterPayment')) : money(box01 * modulesRate / 100);
+  const box02 = activityDetails.length?money(activityDetails.reduce((sum:number,row:any)=>sum+row.quarterPayment,0)):adjustments?.modulesQuarterPayment !== undefined ? Math.max(0, value('modulesQuarterPayment')) : money(box01 * modulesRate / 100);
   const box03 = Math.max(0, value('noBaseDataRevenue'));
   const noBaseRate = Math.max(2, Number(adjustments?.noBaseDataRate || 2));
   const box04 = money(box03 * noBaseRate / 100);
@@ -1523,8 +1530,8 @@ function calculate131(data: any, _b: any, adjustments: any) {
   const box13 = money(box10 < 0 ? box10 : box10 - box11 - box12);
   const box14 = Math.max(0, value('previousSamePeriodResult'));
   const box15 = money(box13 - box14);
-  addField(fields, '01', 'Suma de rendimientos netos por módulos', box01, source('modulesNetYield'), 'I. Actividades con datos-base', { formula: 'Suma de rendimientos netos a efectos del pago fraccionado por actividad, calculados con signos, módulos, minoraciones e índices de la Orden anual.' });
-  addField(fields, '02', 'Pago fraccionado por módulos', box02, unique([...source('modulesQuarterPayment'), ...source('modulesNetYield'), ...source('salariedEmployees'), ...source('modulesPaymentRate')]), 'I. Actividades con datos-base', { formula: adjustments?.modulesQuarterPayment !== undefined ? 'Importe por actividad confirmado manualmente.' : `${modulesRate || 0}% sobre casilla 01. El mínimo ordinario es 2%, 3% o 4% según personal asalariado.`, dependsOn: ['01'] });
+  addField(fields, '01', 'Suma de rendimientos netos por módulos', box01, activityDetails.length?activitySources:source('modulesNetYield'), 'I. Actividades con datos-base', { formula: 'Suma de rendimientos netos a efectos del pago fraccionado por actividad, calculados con signos, módulos, minoraciones e índices de la Orden anual.' });
+  addField(fields, '02', 'Pago fraccionado por módulos', box02, activityDetails.length?activitySources:unique([...source('modulesQuarterPayment'), ...source('modulesNetYield'), ...source('salariedEmployees'), ...source('modulesPaymentRate')]), 'I. Actividades con datos-base', { formula: activityDetails.length?'Suma del pago fraccionado confirmado para cada actividad DPA.':adjustments?.modulesQuarterPayment !== undefined ? 'Importe por actividad confirmado manualmente.' : `${modulesRate || 0}% sobre casilla 01. El mínimo ordinario es 2%, 3% o 4% según personal asalariado.`, dependsOn: ['01'] });
   addField(fields, '03', 'Ventas o ingresos sin datos-base', box03, source('noBaseDataRevenue'), 'II. Sin datos-base');
   addField(fields, '04', 'Pago fraccionado sin datos-base', box04, unique([...source('noBaseDataRevenue'), ...source('noBaseDataRate')]), 'II. Sin datos-base', { formula: `${noBaseRate}% de la casilla 03.`, dependsOn: ['03'] });
   addField(fields, '05', 'Ingresos agrícolas, ganaderos y forestales', box05, source('agricultureRevenue'), 'III. Actividades agrarias');
@@ -1539,9 +1546,10 @@ function calculate131(data: any, _b: any, adjustments: any) {
   addField(fields, '14', 'Resultado previo de la misma autoliquidación', box14, source('previousSamePeriodResult'), 'Complementaria');
   addField(fields, '15', 'Resultado de la autoliquidación', box15, [], 'Liquidación', { formula: 'Casilla 13 − casilla 14.', dependsOn: ['13','14'] });
   if (!box01 && !box03 && !box05) data.warnings.push('Informa los datos-base del modelo 131: no se ha consignado rendimiento por módulos ni ingresos de las secciones II o III.');
-  if (box01 && !Number.isFinite(employees) && adjustments?.modulesQuarterPayment === undefined) data.warnings.push('Falta el número de personas asalariadas o el pago trimestral calculado por actividad; no puede elegirse con seguridad el 2%, 3% o 4%.');
+  if (!activityDetails.length && box01 && !Number.isFinite(employees) && adjustments?.modulesQuarterPayment === undefined) data.warnings.push('Falta el número de personas asalariadas o el pago trimestral calculado por actividad; no puede elegirse con seguridad el 2%, 3% o 4%.');
+  if(activityDetails.some((row:any)=>!clean(row.iaeCode)||!row.netYield||(!row.quarterPayment&&!row.paymentRate)||!booleanValue(row.specialDataConfirmed))) data.warnings.push('Hay actividades del 131 sin epígrafe, rendimiento, pago fraccionado o confirmación de los datos-base de la Orden anual.');
   if (adjustments?.article110Reduction === undefined && !Number.isFinite(previousYearNet)) data.warnings.push('Falta el rendimiento neto del ejercicio anterior para calcular la casilla 09 y coordinarla, si procede, con el modelo 130.');
-  return { fields, result: box15, details: [{ type: 'estimacion_objetiva', modulesRate, statutoryRate, youngFarmerReduction, manualDataRequired: true }] };
+  return { fields, result: box15, details: activityDetails, moduleSummary:{modulesRate,statutoryRate,youngFarmerReduction,manualDataRequired:!activityDetails.length}, adjustmentsSnapshot:{...adjustments,noBaseRate,agricultureRate,previousYearNet} };
 }
 
 function calculate216(data: any, b: any, adjustments: any) {
@@ -1594,17 +1602,23 @@ function calculate296(data: any, b: any) {
   addField(fields, 'INTEGRO', 'Importe íntegro anual', sum('accruedAmount'), ids, 'Resumen anual');
   addField(fields, 'BASE', 'Base anual de retenciones', sum('withholdingBase'), ids, 'Resumen anual');
   addField(fields, 'RETENCIONES', 'Retenciones e ingresos a cuenta anuales', sum('withholdingAmount'), ids, 'Resumen anual');
+  const deposited=money(records.reduce((total:number,record:any)=>{const key=Number(record.payload?.incomeKey||0), role=clean(record.payload?.paymentRole); return total+((key>=3||role==='1')?money(record.payload?.withholdingAmount):0);},0));
+  addField(fields, 'INGRESADO', 'Retenciones e ingresos a cuenta ingresados', deposited, ids, 'Resumen anual');
   if (!records.length) data.warnings.push('No hay perceptores IRNR individualizados para el resumen anual 296.');
   if (records.some((record: any) => !clean(record.payload?.recipientTaxId) || !clean(record.payload?.country) || !clean(record.payload?.incomeKey))) data.warnings.push('Hay registros del 296 sin identificación, país o clave de renta completa.');
+  if(records.some((record:any)=>!['F','J'].includes(clean(record.payload?.personalityKey))||!['D','E'].includes(clean(record.payload?.nature))||!/^\d{2}$/.test(clean(record.payload?.subkey||record.payload?.exemptionCode))||!/^\d{4}-\d{2}-\d{2}$/.test(clean(record.payload?.paymentDate||record.payload?.operationDate)))) data.warnings.push('Hay perceptores del 296 sin personalidad F/J, naturaleza D/E, subclave o fecha de devengo confirmadas.');
+  if(records.some((record:any)=>booleanValue(record.payload?.requiresSpecialAnnex))) data.warnings.push('Hay perceptores que requieren revisar y completar un anexo especial A, B o F del modelo 296 en la AEAT.');
+  if(records.some((record:any)=>['1','2','01','02'].includes(clean(record.payload?.incomeKey))&&!clean(record.payload?.paymentRole))) data.warnings.push('Para las claves de renta 1 y 2 del 296 debe confirmarse el papel del pagador para calcular el total ingresado de la cabecera.');
   return { fields, result: 0, details: records.map((record: any) => ({ recordId: record.modeloCodigo === '296' ? record.id : undefined, recordKey: record.recordKey, sourceId: manualSourceId(record), sourceModel: record.modeloCodigo, reviewStatus: record.reviewStatus, ...(record.payload || {}) })) };
 }
 
 function calculate349(data: any, b: any) {
   const aggregates = new Map<string, any>();
   const add = (row: any) => {
-    const key = `${clean(row.country)}|${clean(row.operatorTaxId)}|${clean(row.operationKey)}`;
-    const current = aggregates.get(key) || { recordKey: `M349:${key}`, country: row.country, operatorTaxId: row.operatorTaxId, operatorName: row.operatorName, operationKey: row.operationKey, amount: 0, rectificationAmount: 0, sourceIds: [], reviewStatus: row.reviewStatus || 'propuesto' };
-    current.amount = money(current.amount + money(row.amount)); current.rectificationAmount = money(current.rectificationAmount + money(row.rectificationAmount)); current.sourceIds.push(...(row.sourceIds || []));
+    const rectification=booleanValue(row.rectification)||!!clean(row.originalYear)||!!clean(row.originalPeriod)||row.originalAmount!==undefined;
+    const key = `${clean(row.country)}|${clean(row.operatorTaxId)}|${clean(row.operationKey)}|${rectification?'R':'O'}|${clean(row.originalYear)}|${clean(row.originalPeriod)}`;
+    const current = aggregates.get(key) || { recordKey: `M349:${key}`, country: row.country, operatorTaxId: row.operatorTaxId, operatorName: row.operatorName, operationKey: row.operationKey, rectification, amount: 0, rectificationAmount: 0, originalAmount: 0, originalAmountProvided: row.originalAmount!==undefined&&row.originalAmount!==null&&row.originalAmount!=='', originalYear: clean(row.originalYear), originalPeriod: clean(row.originalPeriod), replacementOperatorTaxId: clean(row.replacementOperatorTaxId), replacementOperatorName: clean(row.replacementOperatorName), sourceIds: [], reviewStatus: row.reviewStatus || 'propuesto' };
+    current.amount = money(current.amount + money(row.amount)); current.rectificationAmount = money(current.rectificationAmount + money(row.rectificationAmount)); current.originalAmount = money(current.originalAmount + money(row.originalAmount)); current.sourceIds.push(...(row.sourceIds || []));
     current.sourceIds = unique(current.sourceIds); if (row.recordId) current.recordIds = unique([...(current.recordIds || []), row.recordId]); if (row.manual) current.manual = true; aggregates.set(key, current);
   };
   for (const line of (data.taxLines || []).filter((item: any) => inRange(item, b.start, b.end))) {
@@ -1618,14 +1632,17 @@ function calculate349(data: any, b: any) {
     const payload = record.payload || {};
     add({ ...payload, sourceIds: [manualSourceId(record)], recordId: record.id, manual: true, reviewStatus: record.reviewStatus });
   }
-  const details = [...aggregates.values()].map((row: any) => ({ ...row, recordId: row.recordIds?.length === 1 ? row.recordIds[0] : undefined, amount: money(row.amount), rectificationAmount: money(row.rectificationAmount) }));
+  const details = [...aggregates.values()].map((row: any) => ({ ...row, recordId: row.recordIds?.length === 1 ? row.recordIds[0] : undefined, amount: money(row.amount), rectificationAmount: money(row.rectificationAmount), originalAmount: money(row.originalAmount) }));
+  const ordinary=details.filter((row:any)=>!row.rectification), rectifications=details.filter((row:any)=>row.rectification);
   const ids = details.flatMap((row: any) => row.sourceIds), fields: any[] = [];
-  addField(fields, 'OPERADORES', 'Operadores intracomunitarios', details.length, ids, 'Resumen');
-  addField(fields, 'OPERACIONES', 'Importe de operaciones intracomunitarias', details.reduce((sum: number, row: any) => sum + row.amount, 0), ids, 'Resumen');
-  addField(fields, 'RECTIFICACIONES', 'Importe de rectificaciones', details.reduce((sum: number, row: any) => sum + row.rectificationAmount, 0), ids, 'Resumen');
+  addField(fields, 'OPERADORES', 'Registros de operadores intracomunitarios', ordinary.length, ordinary.flatMap((row:any)=>row.sourceIds), 'Resumen');
+  addField(fields, 'OPERACIONES', 'Importe de operaciones intracomunitarias', ordinary.reduce((sum: number, row: any) => sum + row.amount, 0), ordinary.flatMap((row:any)=>row.sourceIds), 'Resumen');
+  addField(fields, 'RECTIFICACIONES_NUMERO', 'Registros de rectificación', rectifications.length, rectifications.flatMap((row:any)=>row.sourceIds), 'Resumen');
+  addField(fields, 'RECTIFICACIONES', 'Nueva base o importe tras rectificación', rectifications.reduce((sum: number, row: any) => sum + row.rectificationAmount, 0), rectifications.flatMap((row:any)=>row.sourceIds), 'Resumen');
   if (!details.length) data.warnings.push('No se han detectado operaciones intracomunitarias en el período.');
   if (details.some((row: any) => !clean(row.operatorTaxId) || !clean(row.country) || !clean(row.operationKey))) data.warnings.push('Hay operaciones del 349 sin NIF-IVA, país o clave de operación completa.');
-  if (details.some((row: any) => !['A','E','I','S','T','H','M'].includes(clean(row.operationKey)))) data.warnings.push('Hay claves de operación del 349 no reconocidas; deben revisarse en el formulario AEAT.');
+  if (details.some((row: any) => !['A','E','I','S','T','H','M','R','D','C'].includes(clean(row.operationKey)))) data.warnings.push('Hay claves de operación del 349 no reconocidas; deben revisarse en el formulario AEAT.');
+  if(rectifications.some((row:any)=>!/^\d{4}$/.test(clean(row.originalYear))||!(/^([1-4])T$/.test(clean(row.originalPeriod))||/^(0[1-9]|1[0-2])$/.test(clean(row.originalPeriod)))||!row.originalAmountProvided)) data.warnings.push('Hay rectificaciones del 349 sin ejercicio, período o base declarada anteriormente completos.');
   return { fields, result: 0, details };
 }
 
@@ -2122,6 +2139,73 @@ function export130(company: any, year: number, period: string, calculation: any)
   const positions:any={'01':109,'02':126,'03':143,'04':160,'05':177,'06':194,'07':211,'08':228,'09':245,'10':262,'11':279,'12':296,'13':313,'14':330,'15':347,'16':364,'17':381,'18':398,'19':415}; const signed=new Set(['03','07','11','14','17','19']); Object.entries(positions).forEach(([code,pos])=>place(p,Number(pos),17,numeric(v[code]||0,17,signed.has(code)))); return p.join('');
 }
 
+function export131(company:any, year:number, period:string, calculation:any) {
+  const v=fieldMap(calculation), a=calculation.adjustmentsSnapshot||{}, activities=(calculation.details||[]).slice(0,5), p=page(831,820,'</T13101000>');
+  place(p,1,11,'<T13101000>'); place(p,13,1,declarationType(calculation.result)); place(p,14,9,normalizedText(company.nif_cif,9)); place(p,23,60,normalizedText(company.razon_social,60)); place(p,103,4,String(year)); place(p,107,2,period);
+  activities.forEach((row:any,index:number)=>{const start=110+index*43; place(p,start,4,normalizedText(row.iaeCode,4)); place(p,start+4,17,numeric(row.netYield,17,true)); place(p,start+21,5,numeric(row.paymentRate,5,false,2)); place(p,start+26,17,numeric(row.quarterPayment,17,true));});
+  place(p,325,17,numeric(v['01'],17,true)); place(p,342,17,numeric(v['02'],17,true)); place(p,359,1,numeric(a.noBaseCeutaMelillaCode,1,false,0)); place(p,360,10,numeric(v['03'],10)); place(p,370,4,numeric(a.noBaseDataRate||2,4,false,2)); place(p,374,10,numeric(a.noBaseHousingFirstQuarterRevenue,10)); place(p,384,3,numeric(a.noBaseHousingWorkedDays,3,false,0)); place(p,387,3,numeric(a.noBaseHousingExpectedDays,3,false,0)); place(p,390,17,numeric(v['03'],17,true)); place(p,407,17,numeric(v['04'],17,true));
+  place(p,424,10,numeric(a.agricultureOrdinaryRevenue??v['05'],10)); place(p,434,10,numeric(a.agriculturePriorityRevenue,10)); place(p,444,4,numeric(a.agricultureRate||2,4,false,2)); place(p,448,10,numeric(a.agricultureCeutaRevenue,10)); place(p,458,10,numeric(a.agricultureCeutaPriorityRevenue,10)); place(p,468,4,numeric(a.agricultureCeutaRate,4,false,2)); place(p,472,10,numeric(a.agricultureHousingFirstQuarterRevenue,10)); place(p,482,3,numeric(a.agricultureHousingWorkedDays,3,false,0)); place(p,485,3,numeric(a.agricultureHousingExpectedDays,3,false,0)); place(p,488,17,numeric(v['05'],17,true)); place(p,505,17,numeric(v['06'],17,true));
+  const boxPositions:Record<string,number>={'07':522,'08':539,'09':562,'10':579,'11':596,'12':624,'13':641,'14':658,'15':675}; Object.entries(boxPositions).forEach(([code,position])=>place(p,position,17,numeric(v[code],17,true)));
+  const previousYearNet=Number(a.previousYearNet); const band=Number.isFinite(previousYearNet)?previousYearNet<=9000?1:previousYearNet<=10000?2:previousYearNet<=11000?3:previousYearNet<=12000?4:0:0; place(p,556,1,numeric(band,1,false,0)); place(p,557,5,numeric(a.model130ReductionShare,5)); if(money(v['12'])) place(p,613,1,'X'); place(p,614,10,numeric(a.previousHousingDeductions,10));
+  const dpa=activities.map((row:any)=>{const value=page(598,587,'</T131DPA00>'); place(value,1,11,'<T131DPA00>'); place(value,13,4,normalizedText(row.iaeCode,4)); place(value,17,1,normalizedText(row.auxIndicator,1)); place(value,18,4,numeric(row.participationRate,4,false,2)); place(value,22,3,numeric(row.seasonalDays,3,false,0)); place(value,25,4,numeric(row.startYear,4,false,0)); place(value,29,1,numeric(row.ceutaMelillaCode,1,false,0)); place(value,30,1,numeric(row.singlePremiseCode,1,false,0)); place(value,31,2,numeric(row.vehicles,2,false,0)); place(value,33,1,booleanValue(row.tractorWithoutTrailer)?'X':' '); place(value,34,1,booleanValue(row.singleTractorWithoutTrailer)?'X':' '); place(value,35,1,numeric(row.loadCapacityCode,1,false,0)); place(value,36,1,numeric(row.municipalityCode,1,false,0)); place(value,43,4,numeric(row.higherPaymentRate,4,false,2));
+    const hours:Array<[number,string]>=[[47,'salariedAdultHours'],[54,'salariedMinorHours'],[61,'salariedDisabledHours'],[72,'otherSalariedAdultHours'],[79,'otherSalariedMinorHours'],[86,'otherSalariedDisabledHours']]; hours.forEach(([position,key])=>place(value,position,7,numeric(row[key],7,false,0))); place(value,68,4,numeric(row.collectiveAgreementHours,4,false,0)); place(value,93,4,numeric(row.otherCollectiveAgreementHours,4,false,0)); place(value,97,4,numeric(row.ownerHours,4,false,0)); place(value,101,4,numeric(row.spouseHours,4,false,0)); place(value,105,7,numeric(row.minorChildrenHours,7,false,0)); for(let tableIndex=1;tableIndex<=4;tableIndex+=1){const start=112+(tableIndex-1)*6; place(value,start,2,numeric(row[`tableCapacity${tableIndex}`],2,false,0)); place(value,start+2,4,numeric(row[`tableUnits${tableIndex}`],4,false,0));} for(let moduleIndex=1;moduleIndex<=7;moduleIndex+=1){const start=136+(moduleIndex-1)*27; place(value,start,10,numeric(row[`module${moduleIndex}Units`],10)); place(value,start+10,17,numeric(row[`module${moduleIndex}Amount`],17));} place(value,325,10,numeric(row.employmentIncentive,10)); place(value,335,10,numeric(row.investmentIncentive,10)); place(value,345,4,numeric(row.specialIndex,4,false,2)); place(value,349,4,numeric(row.smallBusinessIndex,4,false,2)); place(value,353,4,numeric(row.seasonalIndex,4,false,2)); place(value,357,4,numeric(row.excessIndex,4,false,2)); place(value,361,4,numeric(row.startupIndex,4,false,2)); place(value,385,2,numeric(row.quarterDays,2,false,0)); return value.join('');});
+  return p.join('')+dpa.join('');
+}
+
+function export216(company: any, year: number, period: string, calculation: any) {
+  const v=fieldMap(calculation), p=page(600,589,'</T21601000>');
+  place(p,1,11,'<T21601000>'); place(p,13,1,declarationType(calculation.result)); place(p,14,9,normalizedText(company.nif_cif,9)); place(p,23,80,normalizedText(company.razon_social,80)); place(p,103,4,String(year)); place(p,107,2,period);
+  const integerBoxes:Record<string,number>={'05':109,'06':126,'07':143,'14':262,'15':279,'16':296};
+  const amountBoxes:Record<string,number>={'08':160,'09':177,'10':194,'11':211,'12':228,'13':245,'17':313,'18':330,'19':347,'20':364,'21':381};
+  Object.entries(integerBoxes).forEach(([code,position])=>place(p,position,17,numeric(v[code],17,false,0)));
+  Object.entries(amountBoxes).forEach(([code,position])=>place(p,position,17,numeric(v[code],17)));
+  return p.join('');
+}
+
+function export349(company: any, year: number, period: string, calculation: any, declarationNumber: string) {
+  const details=[...(calculation.details||[])];
+  const ordinary=details.filter((row:any)=>!booleanValue(row.rectification));
+  const rectifications=details.filter((row:any)=>booleanValue(row.rectification));
+  const amount=(rows:any[],key:string)=>money(rows.reduce((total:number,row:any)=>total+Math.abs(money(row[key])),0));
+  const header=Array(500).fill(' ');
+  place(header,1,1,'1'); place(header,2,3,'349'); place(header,5,4,String(year)); place(header,9,9,normalizedText(company.nif_cif,9)); place(header,18,40,normalizedText(company.razon_social,40));
+  place(header,59,9,numeric(String(company.telefono||'').replace(/\D/g,'').slice(-9),9,false,0)); place(header,68,40,normalizedText(company.razon_social,40)); place(header,108,13,numeric(declarationNumber,13,false,0)); place(header,123,13,numeric(0,13,false,0)); place(header,136,2,period);
+  place(header,138,9,numeric(ordinary.length,9,false,0)); place(header,147,15,numeric(amount(ordinary,'amount'),15)); place(header,162,9,numeric(rectifications.length,9,false,0)); place(header,171,15,numeric(amount(rectifications,'rectificationAmount'),15));
+  const operatorParts=(row:any, replacement=false)=>{
+    const country=normalizedText(row.country,2).toUpperCase();
+    const raw=normalizedText(replacement?row.replacementOperatorTaxId:row.operatorTaxId,20).replace(/\s/g,'').toUpperCase();
+    return {country,number:raw.startsWith(country)?raw.slice(2):raw};
+  };
+  const record=(row:any)=>{
+    const value=Array(500).fill(' '), operator=operatorParts(row);
+    place(value,1,1,'2'); place(value,2,3,'349'); place(value,5,4,String(year)); place(value,9,9,normalizedText(company.nif_cif,9)); place(value,76,2,operator.country); place(value,78,15,normalizedText(operator.number,15)); place(value,93,40,normalizedText(row.operatorName,40)); place(value,133,1,normalizedText(row.operationKey,1));
+    if(booleanValue(row.rectification)){
+      place(value,147,4,numeric(row.originalYear,4,false,0)); place(value,151,2,clean(row.originalPeriod)); place(value,153,13,numeric(Math.abs(money(row.rectificationAmount)),13)); place(value,166,13,numeric(Math.abs(money(row.originalAmount)),13));
+    } else {
+      place(value,134,13,numeric(Math.abs(money(row.amount)),13));
+      if(clean(row.operationKey)==='C') { const replacement=operatorParts(row,true); place(value,179,2,replacement.country); place(value,181,15,normalizedText(replacement.number,15)); place(value,196,40,normalizedText(row.replacementOperatorName,40)); }
+    }
+    return value.join('');
+  };
+  return [header.join(''),...ordinary.map(record),...rectifications.map(record)].join('\r\n');
+}
+
+function export296(company:any, year:number, calculation:any, declarationNumber:string) {
+  const details=[...(calculation.details||[])], v=fieldMap(calculation), header=Array(500).fill(' ');
+  place(header,1,1,'1'); place(header,2,3,'296'); place(header,5,4,String(year)); place(header,9,9,normalizedText(company.nif_cif,9)); place(header,18,40,normalizedText(company.razon_social,40)); place(header,58,1,'T');
+  place(header,59,9,numeric(String(company.telefono||'').replace(/\D/g,'').slice(-9),9,false,0)); place(header,68,40,normalizedText(company.razon_social,40)); place(header,108,13,numeric(declarationNumber,13,false,0)); place(header,123,13,numeric(0,13,false,0)); place(header,136,9,numeric(details.length,9,false,0)); place(header,145,15,signedAmount(v.BASE,15)); place(header,160,15,numeric(v.RETENCIONES,15)); place(header,175,15,numeric(v.INGRESADO,15));
+  const date8=(value:any)=>{const match=clean(value).match(/^(\d{4})-(\d{2})-(\d{2})/); return match?`${match[3]}${match[2]}${match[1]}`:'00000000';};
+  const record=(row:any,index:number)=>{
+    const value=Array(500).fill(' '), country=normalizedText(row.country,2).toUpperCase(), domestic=clean(row.spanishTaxId)||(country==='ES'?clean(row.recipientTaxId):''), foreign=clean(row.foreignTaxId)||(country!=='ES'?clean(row.recipientTaxId):'');
+    const base=money(row.withholdingBase), withholding=money(row.withholdingAmount), inferredRate=base?money(Math.abs(withholding/base)*100):0, rate=row.withholdingRate!==undefined&&row.withholdingRate!==null&&row.withholdingRate!==''?Number(row.withholdingRate):inferredRate;
+    place(value,1,1,'2'); place(value,2,3,'296'); place(value,5,4,String(year)); place(value,9,9,normalizedText(company.nif_cif,9)); place(value,18,9,normalizedText(domestic,9)); place(value,27,9,normalizedText(row.representativeTaxId,9)); place(value,36,1,normalizedText(row.personalityKey,1)); place(value,37,40,normalizedText(row.recipientName,40)); place(value,77,8,normalizedText(row.recordOrder||String(index+1).padStart(8,'0'),8)); place(value,85,6,normalizedText(row.bic,6));
+    place(value,91,8,date8(row.paymentDate||row.operationDate)); place(value,99,1,normalizedText(row.nature,1)); place(value,100,2,numeric(row.incomeKey,2,false,0)); place(value,102,2,numeric(row.subkey||row.exemptionCode,2,false,0)); place(value,104,13,signedAmount(base,13)); place(value,117,4,numeric(rate,4,false,2)); place(value,121,13,numeric(withholding,13)); place(value,134,1,numeric(row.mediatorCode,1,false,0)); place(value,135,1,numeric(row.issuerCodeType,1,false,0)); place(value,136,12,normalizedText(row.issuerCode,12)); place(value,148,1,numeric(row.paymentRole,1,false,0)); place(value,149,1,normalizedText(row.accountCodeType,1)); place(value,150,20,normalizedText(row.accountCode,20)); place(value,170,1,booleanValue(row.pendingAccrual)?'X':' '); place(value,171,4,numeric(row.accrualYear,4,false,0)); place(value,175,8,date8(row.loanStartDate)); place(value,183,8,date8(row.loanEndDate)); place(value,191,12,numeric(row.lenderRemuneration,12)); place(value,203,12,numeric(row.loanCompensation,12)); place(value,215,12,numeric(row.loanGuarantees,12));
+    place(value,227,50,normalizedText(row.address,50)); place(value,277,40,normalizedText(row.addressComplement,40)); place(value,317,30,normalizedText(row.city,30)); place(value,347,30,normalizedText(row.region,30)); place(value,377,10,normalizedText(row.postalCode,10)); place(value,387,2,country); place(value,389,13,numeric(row.passedOnAccountPayment,13)); place(value,402,9,normalizedText(row.previousPayerTaxId,9)); place(value,411,1,booleanValue(row.specialWithholdingProcedure)?'X':' '); place(value,412,1,normalizedText(row.marketKey,1)); place(value,413,20,normalizedText(row.lei,20)); place(value,433,20,normalizedText(foreign,20)); place(value,453,8,date8(row.birthDate)); place(value,461,35,normalizedText(row.birthCity,35)); place(value,496,2,normalizedText(row.birthCountry,2)); place(value,498,2,country);
+    return value.join('');
+  };
+  return [header.join(''),...details.map(record)].join('\r\n');
+}
+
 function export303(company: any, profile: any, year: number, period: string, calculation: any) {
   const o=calculation.operations||{}, values=fieldMap(calculation), rates=new Map((o.rates||[]).map((r:any)=>[Number(r.rate),r]));
   const simplified=o.simplified||{active:false,details:[],agriculture:[],other:[],fields:{},result:0};
@@ -2426,13 +2510,15 @@ function exportGuidedHandoff(model: string, company: any, year: number, period: 
 
 function transferLayoutErrors(model: string, content: string) {
   const records = content.split('\r\n');
-  if (['111','115','123','130','303'].includes(model)) {
+  if (['111','115','123','130','131','216','303'].includes(model)) {
     const errors: string[] = [];
     const pageLayouts: Record<string, Array<[string, number]>> = {
       '111': [['01000',1000]],
       '115': [['01000',500]],
       '123': [['01000',600]],
       '130': [['01000',600]],
+      '131': [['01000',831]],
+      '216': [['01000',600]],
       '303': [['01000',1581],['03000',1017]],
     };
     let previousIndex = -1;
@@ -2451,6 +2537,16 @@ function transferLayoutErrors(model: string, content: string) {
     const expectedEnd = envelope ? `</T${model}0${envelope[1]}${envelope[2]}0000>` : '';
     if (!envelope || !content.endsWith(expectedEnd)) errors.push(`La envolvente del modelo ${model} no tiene apertura y cierre coherentes.`);
     if (content.includes('NaN') || content.includes('undefined')) errors.push(`El fichero del modelo ${model} contiene valores técnicos inválidos.`);
+    if(model==='131'&&extracted['01000']){
+      const p1=extracted['01000'], dpaPages=[...content.matchAll(/<T131DPA00>[\s\S]*?<\/T131DPA00>/g)].map(match=>match[0]);
+      if(dpaPages.length>5) errors.push('El modelo 131 supera el máximo de cinco actividades detalladas en la liquidación.');
+      if(dpaPages.some(value=>value.length!==598)) errors.push('Cada página DPA del modelo 131 debe tener exactamente 598 posiciones.');
+      const activityStarts=[110,153,196,239,282], activityCount=activityStarts.filter(position=>clean(p1.slice(position-1,position+3))).length;
+      if(activityCount!==dpaPages.length) errors.push('El número de actividades de la liquidación 131 no coincide con sus páginas DPA.');
+      const sum=(positions:number[])=>money(positions.reduce((total,position)=>total+readFixedNumber(p1,position,17,2,true),0));
+      if(Math.abs(sum([114,157,200,243,286])-readFixedNumber(p1,325,17,2,true))>0.01||Math.abs(sum([136,179,222,265,308])-readFixedNumber(p1,342,17,2,true))>0.01) errors.push('Los rendimientos o pagos de las actividades 131 no cuadran con las casillas 01 y 02.');
+      if(readFixedNumber(p1,325,17,2,true)!==0&&!dpaPages.length) errors.push('El 131 contiene rendimiento por módulos sin fichas DPA de actividad.');
+    }
     if (model === '303' && extracted['01000'] && extracted['03000']) {
       const p1 = extracted['01000'], p3 = extracted['03000'];
       const read = (source:string, position:number, signed=false) => readFixedNumber(source,position,17,2,signed);
@@ -2528,11 +2624,41 @@ function transferLayoutErrors(model: string, content: string) {
     if(special&&expenseRecords.length) errors.push('Un declarante de naturaleza especial S no puede incluir registros del anexo de gastos 193.');
     return errors;
   }
+  if(model==='296'){
+    const errors=records.length<2?['El 296 debe incluir cabecera y al menos un perceptor.']:[];
+    if(!records.every(record=>record.length===500)) errors.push('Todos los registros del 296 deben tener exactamente 500 posiciones.');
+    if(!records[0]?.startsWith('1296')) errors.push('La cabecera del 296 no tiene el identificador oficial esperado.');
+    if(records.slice(1).some(record=>!record.startsWith('2296'))) errors.push('Hay registros de perceptor 296 con identificador inválido.');
+    const details=records.slice(1), headerCount=Number(records[0]?.slice(135,144)||0), headerBase=readFixedNumber(records[0]||'',145,15,2,true), headerWithholding=readFixedNumber(records[0]||'',160,15), headerDeposited=readFixedNumber(records[0]||'',175,15);
+    const detailBase=money(details.reduce((sum,record)=>sum+readFixedNumber(record,104,13,2,true),0));
+    const detailWithholding=money(details.reduce((sum,record)=>sum+readFixedNumber(record,121,13),0));
+    const detailDeposited=money(details.reduce((sum,record)=>{const key=Number(record.slice(99,101)||0),role=record[147];return sum+((key>=3||role==='1')?readFixedNumber(record,121,13):0);},0));
+    if(headerCount!==details.length) errors.push('El total de perceptores de la cabecera 296 no coincide con los registros tipo 2.');
+    if(Math.abs(headerBase-detailBase)>0.01||Math.abs(headerWithholding-detailWithholding)>0.01||Math.abs(headerDeposited-detailDeposited)>0.01) errors.push('Los totales de base, retenciones o importe ingresado del 296 no cuadran con sus perceptores.');
+    return errors;
+  }
   if (model === '347') {
     const errors = records.length < 2 ? ['El 347 debe incluir cabecera y al menos un declarado.'] : [];
     if (!records.every(record => record.length === 500)) errors.push('Todos los registros del 347 deben tener exactamente 500 posiciones.');
     if (!records[0]?.startsWith('1347')) errors.push('La cabecera del 347 no tiene el identificador oficial esperado.');
     if (records.slice(1).some(record => !record.startsWith('2347') || record[75] !== 'D')) errors.push('Hay registros de declarado 347 con tipo de hoja inválido.');
+    return errors;
+  }
+  if (model === '349') {
+    const errors=records.length<2?['El 349 debe incluir cabecera y al menos un operador o rectificación.']:[];
+    if(!records.every(record=>record.length===500)) errors.push('Todos los registros del 349 deben tener exactamente 500 posiciones.');
+    if(!records[0]?.startsWith('1349')) errors.push('La cabecera del 349 no tiene el identificador oficial esperado.');
+    if(records.slice(1).some(record=>!record.startsWith('2349')||!'AEMHTSIRDC'.includes(record[132]))) errors.push('Hay registros de operador 349 con identificador o clave inválida.');
+    const ordinary=records.slice(1).filter(record=>record.slice(146,178).trim()==='');
+    const rectifications=records.slice(1).filter(record=>record.slice(146,178).trim()!=='');
+    const decimal=(value:string)=>money(Number(value||0)/100);
+    const headerOrdinaryCount=Number(records[0]?.slice(137,146)||0), headerRectificationCount=Number(records[0]?.slice(161,170)||0);
+    const headerOrdinaryAmount=decimal(records[0]?.slice(146,161)||''), headerRectificationAmount=decimal(records[0]?.slice(170,185)||'');
+    const ordinaryAmount=money(ordinary.reduce((sum,record)=>sum+decimal(record.slice(133,146)),0));
+    const rectificationAmount=money(rectifications.reduce((sum,record)=>sum+decimal(record.slice(152,165)),0));
+    if(headerOrdinaryCount!==ordinary.length||headerRectificationCount!==rectifications.length) errors.push('Los totales de registros normales o rectificaciones de la cabecera 349 no cuadran.');
+    if(Math.abs(headerOrdinaryAmount-ordinaryAmount)>0.01||Math.abs(headerRectificationAmount-rectificationAmount)>0.01) errors.push('Los importes de la cabecera 349 no cuadran con sus registros tipo 2.');
+    if(rectifications.some(record=>!/^\d{4}$/.test(record.slice(146,150))||!(/^([1-4])T$/.test(record.slice(150,152))||/^(0[1-9]|1[0-2])$/.test(record.slice(150,152))))) errors.push('Hay rectificaciones 349 sin ejercicio o período original válido.');
     return errors;
   }
   if (model === '415') {
@@ -2598,17 +2724,19 @@ function pageFromFiledText(raw: string, model: string, pageCode = '01000') {
 }
 
 function parseFiledText(model: string, raw: string) {
-  if (!raw || !['111','115','123','130','180','190','193','303','347','390','415'].includes(model)) return null;
-  if (['180','190','193','347'].includes(model)) {
+  if (!raw || !['111','115','123','130','131','180','190','193','216','296','303','347','349','390','415'].includes(model)) return null;
+  if (['180','190','193','296','347','349'].includes(model)) {
     const header=clean(raw).replace(/^\uFEFF/,'').split(/\r?\n/)[0]||'';
     if(header.length!==500||!header.startsWith(`1${model}`)) return null;
     const boxes:Record<string,number>={DECLARADOS:Number(header.slice(135,144)||0)};
     if(model==='180'){boxes.BASE=readFixedNumber(header,145,16,2,true);boxes.RETENCIONES=readFixedNumber(header,161,15);}
     if(model==='190'){boxes.PERCEPCIONES=readFixedNumber(header,145,16,2,true);boxes.RETENCIONES=readFixedNumber(header,161,15);}
     if(model==='193'){boxes.BASE=readFixedNumber(header,145,15);boxes.RETENCIONES=readFixedNumber(header,160,15);boxes.INGRESADO=readFixedNumber(header,175,15);}
+    if(model==='296'){boxes.PERCEPTORES=Number(header.slice(135,144)||0);boxes.BASE=readFixedNumber(header,145,15,2,true);boxes.RETENCIONES=readFixedNumber(header,160,15);boxes.INGRESADO=readFixedNumber(header,175,15);}
     if(model==='347'){boxes.IMPORTE=readFixedNumber(header,145,16,2,true);boxes.INMUEBLES=readFixedNumber(header,170,16,2,true);}
+    if(model==='349'){boxes.OPERADORES=Number(header.slice(137,146)||0);boxes.OPERACIONES=readFixedNumber(header,147,15);boxes.RECTIFICACIONES_NUMERO=Number(header.slice(161,170)||0);boxes.RECTIFICACIONES=readFixedNumber(header,171,15);}
     boxes.RESULTADO=0;
-    return {model,nif:clean(header.slice(8,17)).toUpperCase(),year:Number(header.slice(4,8)),period:'Anual',boxes};
+    return {model,nif:clean(header.slice(8,17)).toUpperCase(),year:Number(header.slice(4,8)),period:model==='349'?clean(header.slice(135,137)):'Anual',boxes};
   }
   if(model==='415'){
     const header=clean(raw).replace(/^\uFEFF/,'').split(/\r?\n/)[0]||'';
@@ -2642,6 +2770,16 @@ function parseFiledText(model: string, raw: string) {
     const positions: Record<string, number> = {'01':109,'02':126,'03':143,'04':160,'05':177,'06':194,'07':211,'08':228,'09':245,'10':262,'11':279,'12':296,'13':313,'14':330,'15':347,'16':364,'17':381,'18':398,'19':415};
     const signed = new Set(['03','07','11','14','17','19']);
     for (const [code, position] of Object.entries(positions)) read(code,position,17,2,signed.has(code));
+  } else if(model==='131'){
+    const positions:Record<string,number>={'01':325,'02':342,'03':390,'04':407,'05':488,'06':505,'07':522,'08':539,'09':562,'10':579,'11':596,'12':624,'13':641,'14':658,'15':675};
+    for(const [code,position] of Object.entries(positions)) read(code,position,17,2,true);
+    boxes.RESULTADO=boxes['15'];
+  } else if (model === '216') {
+    const integerPositions:Record<string,number>={'05':109,'06':126,'07':143,'14':262,'15':279,'16':296};
+    const amountPositions:Record<string,number>={'08':160,'09':177,'10':194,'11':211,'12':228,'13':245,'17':313,'18':330,'19':347,'20':364,'21':381};
+    for(const [code,position] of Object.entries(integerPositions)) read(code,position,17,0);
+    for(const [code,position] of Object.entries(amountPositions)) read(code,position,17);
+    boxes.RESULTADO=boxes['21'];
   } else if (model === '303') {
     read('27',696,17,2,true); read('28',713,17); read('29',730,17); read('45',1002,17,2,true); read('46',1019,17,2,true);
     boxes.DEVENGADO = boxes['27']; boxes.DEDUCIBLE_BASE = boxes['28']; boxes.DEDUCIBLE = boxes['29'];
@@ -2794,17 +2932,21 @@ Deno.serve(async (req) => {
     if(action==='catalog') return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),recommendedExtensions:[],sources:SOURCES});
     if(action==='self_test') {
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
-      const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'07',value:1},{code:'08',value:100},{code:'09',value:15},{code:'28',value:30},{code:'30',value:30},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20},{code:'110',value:0},{code:'78',value:0},{code:'87',value:0}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,rawResult:21,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
+      const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'07',value:1},{code:'08',value:100},{code:'09',value:15},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20},{code:'21',value:21},{code:'28',value:30},{code:'30',value:30},{code:'110',value:0},{code:'78',value:0},{code:'87',value:0}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,rawResult:21,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
+      const sample131={result:200,fields:[{code:'01',value:10000},{code:'02',value:200},{code:'03',value:0},{code:'04',value:0},{code:'05',value:0},{code:'06',value:0},{code:'07',value:200},{code:'08',value:0},{code:'09',value:0},{code:'10',value:200},{code:'11',value:0},{code:'12',value:0},{code:'13',value:200},{code:'14',value:0},{code:'15',value:200}],details:[{recordKey:'M131:test',iaeCode:'722',netYield:10000,paymentRate:2,quarterPayment:200,module1Units:1,module1Amount:10000,ownerHours:1800,quarterDays:90,specialDataConfirmed:true}],adjustmentsSnapshot:{noBaseRate:2,agricultureRate:2,previousYearNet:13000}};
       const thirdParties={result:0,details:[{recordKey:'ThirdParty:B87654321|B|C0|I0|E0',taxId:'B87654321',name:'CLIENTE PRUEBA',country:'ES',provinceCode:'38',operationKey:'B',total:3500,ordinaryTotal:1800,totalAccordingToOperation:3500,quarters:{T1:575,T2:575,T3:575,T4:75},rentQuarters:{T1:300,T2:300,T3:300,T4:300},transferQuarters:{T1:125,T2:125,T3:125,T4:125},cashAmount:7000,cashYear:'2024',propertyTransferAmount:500,propertyRentAmount:1200,cashAccounting:false,cashAccountingAnnualAmount:0,reverseCharge:false,exemptArticle13:false,representativeTaxId:'',properties:[{amount:1200,cadastralUnavailable:false,cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',numberQualifier:'',block:'',portal:'',stair:'',floor:'',door:'',complement:'',locality:'SANTA CRUZ DE TENERIFE',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',provinceCode:'38',postalCode:'38001'}]}]};
       const annual180={result:0,details:[{id:'invoice-test',taxId:'B87654321',name:'ARRENDADOR PRUEBA',base:12000,withholding:2280,manual:{representativeTaxId:'',recipientProvinceCode:'38',modality:'1',withholdingRate:19,accrualYear:'0000',propertySituation:'1',cadastralReference:'1234567CS7413S0001AB',roadType:'CL',roadName:'PRUEBA',numberingType:'NUM',houseNumber:'1',municipality:'SANTA CRUZ DE TENERIFE',municipalityCode:'38038',propertyProvinceCode:'38',postalCode:'38001'}}]};
       const annual190={result:0,details:[{taxId:'12345678Z',name:'TRABAJADOR PRUEBA',provinceCode:'38',key:'A',subkey:'',base:24000,withholding:2400,manual:{representativeTaxId:'',accrualYear:'',birthYear:'1990',familySituation:'3',spouseTaxId:'',disability:'0',contractType:'1',ceutaMelilla:false,mobility:false,reductions:0,deductibleExpenses:1524,compensatoryPensions:0,childSupport:0}}]};
       const annual193={result:0,declaration:{manual:{declarantNatureSpecial:true,expenseAnnexNotApplicable:true,specialDataConfirmed:true}},details:[{recordKey:'Annual193:Invoice:test',taxId:'B87654321',name:'PERCEPTOR PRUEBA',provinceCode:'38',perceptionKey:'C',nature:'12',base:1000,withholding:190,manual:{representativeTaxId:'',provinceCode:'38',recipientMediator:false,keyCode:'',issuerCode:'',perceptionKey:'C',nature:'12',paymentRole:'',accountCodeType:'',accountCode:'',pending:false,accrualYear:'',perceptionType:'1',perceptionAmount:1000,reductions:0,retentionBase:1000,retentionRate:19,penalties:0,isin:'',loanStartDate:'',loanEndDate:'',loanCompensation:0,loanGuarantees:0,stateWithholding:0,navarraWithholding:0,alavaWithholding:0,gipuzkoaWithholding:0,bizkaiaWithholding:0,ceutaPalmaCode:'0',previousPayerTaxId:'',accrualDate:'',marketKey:''}}]};
-      const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
-      const expected:any={111:1000,115:500,123:600,130:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
+      const info296={result:0,fields:[{code:'BASE',value:1000},{code:'RETENCIONES',value:190},{code:'INGRESADO',value:190}],details:[{recordKey:'M296:test',recipientTaxId:'FR12345678901',foreignTaxId:'FR12345678901',recipientName:'PERCEPTOR UE',country:'FR',personalityKey:'J',incomeKey:'19',subkey:'01',nature:'D',paymentDate:'2025-12-31',withholdingBase:1000,withholdingRate:19,withholdingAmount:190,address:'1 RUE DE TEST',city:'PARIS',postalCode:'75001'}]};
+      const info349={result:0,details:[{recordKey:'M349:FR|12345678901|E|O',country:'FR',operatorTaxId:'FR12345678901',operatorName:'CLIENTE UE',operationKey:'E',amount:1500,rectification:false},{recordKey:'M349:DE|123456789|S|R',country:'DE',operatorTaxId:'DE123456789',operatorName:'CLIENTE RECTIFICADO',operationKey:'S',rectification:true,rectificationAmount:900,originalAmount:1000,originalAmountProvided:true,originalYear:'2025',originalPeriod:'4T'}]};
+      const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),131:export131(company,2026,'1T',sample131),216:export216(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
+      const expected:any={111:1000,115:500,123:600,130:600,131:1429,216:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); const layoutErrors=transferLayoutErrors(model,wrapped); return {model,length:wrapped.length,layoutErrors,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`),valid:layoutErrors.length===0}});
       const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record190Content=export190(company,2025,annual190,'1901234567890'); const record190=record190Content.split('\r\n');
       const record193Content=export193(company,2025,annual193,'1931234567890'); const record193=record193Content.split('\r\n');
+      const record296Content=export296(company,2025,info296,'2961234567890'); const record296=record296Content.split('\r\n');
       const model190SubkeySample:any={A:'',B:'01',C:'01',D:'',E:'01',F:'01',G:'01',H:'01',I:'01',J:'',K:'01',L:'29'};
       const annual190Full={result:0,details:'ABCDEFGHIJKL'.split('').map((key:string,index:number)=>({taxId:'12345678Z',name:`PERCEPTOR ${key}`,provinceCode:'38',key,subkey:model190SubkeySample[key],base:100+index,withholding:key==='E'?15:10,manual:{representativeTaxId:'',inKindValue:key==='A'?250:0,accountPayment:key==='E'?5:0,passedOnAccountPayment:0,accrualYear:'',birthYear:'1990',familySituation:'3',spouseTaxId:'',disability:'0',contractType:key==='A'?'1':'0',householdHolder:key==='L'?'1':'0',ceutaPalmaCode:'0',mobility:false,reductions:0,deductibleExpenses:0,compensatoryPensions:0,childSupport:0,incapacityCash:0,incapacityWithholding:0,incapacityInKindValue:0,incapacityAccountPayment:0,incapacityPassedOnAccountPayment:0,stateWithholding:key==='E'?20:0,navarraWithholding:0,alavaWithholding:0,gipuzkoaWithholding:0,bizkaiaWithholding:0,childhoodSupplementCode:key==='L'?'2':'0',startupSharesExcess:false,fundManagementIncome:false,benefitTypesB01:key==='B'?'10000':'00000'}}))};
       const record190FullContent=export190(company,2025,annual190Full,'1901234567891'); const record190Full=record190FullContent.split('\r\n');
@@ -2813,13 +2955,16 @@ Deno.serve(async (req) => {
       const simplified303Calculation=calculateIndirectTax({year:2026,period:'4T',profile:{},activities:[{indirectTaxRegime:'simplificado'}],taxLines:[],invoicePayments:[],filings:[],declarables:[{id:'d303-simplified',modeloCodigo:'303',recordKey:'Simplified303:test',reviewStatus:'validado_asesor',payload:{activityType:'other',iaeCode:'722',auxIndicator:'1',module1Units:1,module1Amount:1000,currentOutputQuota:1000,advancePercentage:4,quarterAdvance:40,currentInputQuota:100,seasonalIndex:1,minimumQuotaPercentage:30,minimumQuota:300,annualDerivedQuota:900,fixedAssetsDeductibleQuota:50,specialDataConfirmed:true}}],warnings:[],blockers:[]},bounds(2026,'4T'),'iva',false,{previousCompensationBalance:0,simplifiedPreviousQuarterAdvances:300});
       const simplified303Content=export303(company,profile,2026,'4T',simplified303Calculation); const simplified303Wrapped=wrap('303',2026,'4T',simplified303Content,'B12345678');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
+      const record349Content=export349(company,2026,'1T',info349,'3491234567890'); const record349=record349Content.split('\r\n');
       const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
       const model390Content=wrap('390',2025,'0A',export390(company,profile,[],2025,standard,[]),'B12345678');
       const transferChecks=[
         {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'190',records:record190.length,recordLengths:record190.map(line=>line.length),layoutErrors:transferLayoutErrors('190',record190Content),valid:record190.length===2&&record190.every(line=>line.length===500)&&record190[1].startsWith('2190')&&record190[1][77]==='A'&&transferLayoutErrors('190',record190Content).length===0},
         {model:'193',records:record193.length,recordLengths:record193.map(line=>line.length),layoutErrors:transferLayoutErrors('193',record193Content),valid:record193.length===2&&record193.every(line=>line.length===500)&&record193[1].startsWith('2193')&&record193[1][91]==='C'&&record193[0][234]==='S'&&transferLayoutErrors('193',record193Content).length===0},
+        {model:'296',records:record296.length,recordLengths:record296.map(line=>line.length),layoutErrors:transferLayoutErrors('296',record296Content),valid:record296.length===2&&record296.every(line=>line.length===500)&&record296[1].startsWith('2296')&&record296[1][35]==='J'&&record296[1].slice(497,499)==='FR'&&transferLayoutErrors('296',record296Content).length===0},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
+        {model:'349',records:record349.length,recordLengths:record349.map(line=>line.length),layoutErrors:transferLayoutErrors('349',record349Content),valid:record349.length===3&&record349.every(line=>line.length===500)&&record349[1].startsWith('2349')&&record349[1][132]==='E'&&record349[2].slice(146,152)==='20254T'&&transferLayoutErrors('349',record349Content).length===0},
         {model:'390',records:9,recordLengths:Object.values(MODEL390_LAYOUT).map((layout:any)=>layout.length),layoutErrors:transferLayoutErrors('390',model390Content),valid:model390Content.includes('<T39001000>')&&model390Content.includes('</T39008000>')&&transferLayoutErrors('390',model390Content).length===0},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),layoutErrors:transferLayoutErrors('415',import415Content),valid:import415.length===3&&import415[0].length===246&&import415[1].length===356&&import415[2].length===309&&import415[1].startsWith('2415')&&import415[2].startsWith('3415')&&import415[1].slice(113,128)==='000000000700000'&&import415[1].slice(160,164)==='2024'&&transferLayoutErrors('415',import415Content).length===0},
       ];
@@ -2828,6 +2973,7 @@ Deno.serve(async (req) => {
       const handoff421=exportAtcHandoff('421',company,2026,'1T',{result:21,fields:standard.fields},{blockers:[],warnings:[]},'self-test');
       const handoffCheck={model:'417/420/421/425 handoff',valid:[handoff417,handoff420,handoff421].every(content=>content.includes('PASO_FINAL')&&content.split('\r\n').length>8)&&handoff417.includes('DEVENGADO_21_BASE')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff421.includes('"421"')};
       const annualCoverageChecks={
+        model131ActivityDpa:samples['131'].includes('<T131DPA00>')&&samples['131'].slice(113,130)===numeric(10000,17,true)&&transferLayoutErrors('131',wrap('131',2026,'1T',samples['131'],'B12345678')).length===0,
         model190AllKeys:record190Full.length===13&&record190Full.slice(1).map((line:string)=>line[77]).join('')==='ABCDEFGHIJKL'&&record190Full.every((line:string)=>line.length===500)&&transferLayoutErrors('190',record190FullContent).length===0,
         model190InKindAndForal:record190Full[1].slice(108,121)===numeric(250,13)&&record190Full[2].slice(389,394)==='10000'&&record190Full[5].slice(322,335)===numeric(20,13),
         model193ExpenseAnnex:record193Expense.length===3&&record193Expense.every((line:string)=>line.length===500)&&record193Expense[0].slice(219,234)===numeric(321.45,15)&&record193Expense[2].slice(194,207)===numeric(321.45,13)&&record193Expense[0][234]===' '&&transferLayoutErrors('193',record193ExpenseContent).length===0,
@@ -2840,7 +2986,7 @@ Deno.serve(async (req) => {
       try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
       try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
       authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
-      const parsed130=parseFiledText('130',samples['130']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
+      const parsed130=parseFiledText('130',samples['130']); const parsed131=parseFiledText('131',samples['131']); const parsed216=parseFiledText('216',samples['216']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed296=parseFiledText('296',record296Content); const parsed349=parseFiledText('349',record349Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
       const prior130=previous130FromFilings({year:2026,period:'3T',filings:[
         {id:'130-q1',modeloCodigo:'130',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20',casillasPresentadas:{'07':120,'15':0,'16':20,'19':-30}},
         {id:'130-q2',modeloCodigo:'130',ejercicio:2026,periodo:'2T',estadoPresentacion:'presentado',fechaPresentacion:'2026-07-20',casillasPresentadas:{'07':50,'15':10,'16':0,'19':40}},
@@ -2850,8 +2996,8 @@ Deno.serve(async (req) => {
       const carrySelection=selectIndirectTaxLines({year:2026,period:'2T',profile:{},filings:[{id:'303-q1',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20'}],taxLines:[lateReceivedLine]},bounds(2026,'2T'),'iva',false);
       const lateOutputItems=lateItemsAfterFiling({taxLines:[{id:'tax-line-output',sourceId:'InvoiceTaxLine:tax-line-output',date:'2026-03-10',created_date:'2026-04-25',taxKind:'iva',quota:42,invoice:{id:'invoice-output',tipo:'emitida',numero_factura:'E-LATE-1'}}],invoices:[],invoicePayments:[],payrolls:[],entries:[]},'303',2026,'1T',{fechaPresentacion:'2026-04-20'});
       const historyChecks={
-        parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
-        annualRoundTrip:parsed190?.year===2025&&money(parsed190?.boxes?.RETENCIONES)===2400&&parsed390?.year===2025&&money(parsed390?.boxes?.RESULTADO)===21&&parsed415?.year===2025&&money(parsed415?.boxes?.IMPORTE_B)===3500,
+        parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&parsed131?.model==='131'&&money(parsed131?.boxes?.['15'])===200&&parsed216?.model==='216'&&parsed216?.period==='1T'&&money(parsed216?.boxes?.['21'])===21&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
+        annualRoundTrip:parsed190?.year===2025&&money(parsed190?.boxes?.RETENCIONES)===2400&&parsed296?.year===2025&&money(parsed296?.boxes?.RETENCIONES)===190&&parsed349?.year===2026&&parsed349?.period==='1T'&&money(parsed349?.boxes?.OPERACIONES)===1500&&money(parsed349?.boxes?.RECTIFICACIONES)===900&&parsed390?.year===2025&&money(parsed390?.boxes?.RESULTADO)===21&&parsed415?.year===2025&&money(parsed415?.boxes?.IMPORTE_B)===3500,
         cumulative130:prior130.complete&&prior130.negativeComplete&&prior130.amount===150&&prior130.negativeAmount===20&&prior130.filings.length===2,
         compensationWallet303:prior303.complete&&prior303.amount===60,
         lateDeduction:carrySelection.lines.length===1&&carrySelection.carry.length===1&&carrySelection.carry[0].targetPeriod==='2T'&&carrySelection.review.length===0,
@@ -2940,7 +3086,7 @@ Deno.serve(async (req) => {
         corporateModels:fieldMap(result200)['RDO_CONTABLE']===4000&&fieldMap(result200)['BASE']===4000&&result200.result===750&&result202.result===1400,
         model232ExplicitOnly:fieldMap(result232)['REGISTROS']===1&&fieldMap(result232)['VINCULADAS']===4000,
         model417Sii:result417.result===7&&fieldMap(result417)['DEVENGADO']===7,
-        guidedOnly:['349','131','216','296','417','421','200','202','232'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
+        exportModes:['131','216','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421','200','202','232'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
       };
       const profileRegressionChecks={
         autonomoIva:fieldMap(result130Q2)['01']===1500,
@@ -3212,7 +3358,7 @@ Deno.serve(async (req) => {
       return Response.json({ok:true,deletedId:recordId});
     }
     if(action==='upsert_declarable') {
-      if(!['180','190','193','216','232','296','303','347','349','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado no está habilitado para este modelo.'},{status:400});
+      if(!['131','180','190','193','216','232','296','303','347','349','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado no está habilitado para este modelo.'},{status:400});
       const recordKey=clean(body.recordKey); if(!recordKey) return Response.json({error:'recordKey es obligatorio.'},{status:400});
       const sourceId=clean(body.sourceId); const sourceType=clean(body.sourceType)||'manual'; const input=body.payload||{};
       const allowed180=['representativeTaxId','recipientProvinceCode','modality','withholdingRate','accrualYear','propertySituation','cadastralReference','roadType','roadName','numberingType','houseNumber','numberQualifier','block','portal','stair','floor','door','complement','locality','municipality','municipalityCode','propertyProvinceCode','postalCode'];
@@ -3221,7 +3367,7 @@ Deno.serve(async (req) => {
         : model==='190' ? sanitize190Payload(input)
           : model==='193' ? (recordKey==='Annual193:Declarant'?sanitize193DeclarationPayload(input):recordKey.startsWith('Annual193:Expense:')?sanitize193ExpensePayload(input):sanitize193Payload(input))
             : model==='303' ? sanitize303SimplifiedPayload(input)
-              : ['216','232','296','349'].includes(model) ? sanitizeGenericDeclarable(model,input)
+              : ['131','216','232','296','349'].includes(model) ? sanitizeGenericDeclarable(model,input)
               : sanitizeThirdPartyPayload(input);
       const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role); const reviewRequested=body.reviewStatus==='validado_asesor';
       const reviewStatus=reviewRequested&&canReview?'validado_asesor':'pendiente_revision'; const recordPayload:any={companyId,modeloCodigo:model,ejercicio:year,recordKey,sourceType,sourceId,payload,reviewStatus,notes:clean(body.notes)};
@@ -3246,7 +3392,7 @@ Deno.serve(async (req) => {
     const adjustments=frozenDraft?Object.fromEntries((Array.isArray(frozenDraft.ajustesManuales)?frozenDraft.ajustesManuales:[]).map((item:any)=>[item.field,item.value])):body.adjustments||{};
     const calculation=frozenDraft?frozenDraft.resumen.calculation:calculate(model,data,b,adjustments);
     if(!frozenDraft) applyModelValidation(model,data,calculation);
-    if(['111','115','123','130','303','390'].includes(model)&&!clean(Deno.env.get('TAXEA_DEVELOPER_NIF'))) warnings.push('No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
+    if(['111','115','123','130','131','216','303','390'].includes(model)&&!clean(Deno.env.get('TAXEA_DEVELOPER_NIF'))) warnings.push('No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
     const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[]));
     const sourceHash=frozenDraft?clean(frozenDraft.sourceHash||frozenDraft.resumen?.source?.hash):await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
     const history=frozenDraft?(frozenDraft.resumen?.history||null):filingComparison(data,model,year,period,calculation);
@@ -3297,9 +3443,15 @@ Deno.serve(async (req) => {
       } else if(model==='193') {
         content=export193(company,year,calculation,sequentialDeclarationNumber('193'));
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_193.txt`; extension='txt'; format='Diseño de registro AEAT modelo 193 con anexo de gastos cuando proceda';
+      } else if(model==='296') {
+        content=export296(company,year,calculation,sequentialDeclarationNumber('296'));
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_296.txt`; extension='txt'; format='Diseño de registro AEAT modelo 296';
       } else if(model==='347') {
         content=export347(company,year,calculation,sequentialDeclarationNumber('347'));
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_347.txt`; extension='txt'; format='Diseño de registro AEAT modelo 347';
+      } else if(model==='349') {
+        content=export349(company,year,period,calculation,sequentialDeclarationNumber('349'));
+        filename=`${clean(company.nif_cif).toUpperCase()}_${year}_${period}_349.txt`; extension='txt'; format='Diseño lógico AEAT modelo 349';
       } else if(model==='415') {
         content=export415Import(company,year,calculation);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_415_importacion.txt`; extension='txt'; format='Soporte de importación oficial programa ATC 415';
@@ -3308,7 +3460,7 @@ Deno.serve(async (req) => {
         content=wrap(model,year,'0A',export390(company,profile,activities,year,calculation,filings),developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.390`; extension='390'; format='Diseño de registro AEAT modelo 390';
       } else {
         const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF'));
-        const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
+        const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130,'131':export131,'216':export216}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
         content=wrap(model,year,period,pages,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`; extension=model; format='Diseño de registro AEAT';
       }
       const layoutErrors=transferLayoutErrors(model,content);
