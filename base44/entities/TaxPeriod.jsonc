@@ -64,6 +64,45 @@
     },
     "notas": {
       "type": "string"
+    },
+    "closureStatus": {
+      "type": "string",
+      "enum": [
+        "open",
+        "review_ready",
+        "closed",
+        "reopened"
+      ],
+      "default": "open"
+    },
+    "closedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closedBy": {
+      "type": "string"
+    },
+    "closureDraftId": {
+      "type": "string"
+    },
+    "closureSnapshotHash": {
+      "type": "string"
+    },
+    "closureChecks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "reopenedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reopenedBy": {
+      "type": "string"
+    },
+    "reopenReason": {
+      "type": "string"
     }
   },
   "required": [
