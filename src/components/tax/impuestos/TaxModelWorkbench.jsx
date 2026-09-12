@@ -10,20 +10,68 @@ const PERIODS = {
   anual: ['Anual'],
   trimestral: ['1T', '2T', '3T', '4T'],
   mensual: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
+  sociedades: ['1P', '2P', '3P'],
 };
 
 const MODEL_130_ADJUSTMENTS = [
+  ['additionalComputableIncome', 'Ingresos fiscales adicionales acumulados'],
+  ['nonComputableAccountingIncome', 'Ingresos contables no computables acumulados'],
+  ['additionalDeductibleExpenses', 'Gastos fiscales adicionales acumulados'],
+  ['nonDeductibleAccountingExpenses', 'Gastos contables no deducibles acumulados'],
+  ['sectionOnePercentage', 'Porcentaje casilla 04 (20%, 8% o superior)'],
   ['previousPayments', 'Pagos fraccionados anteriores (casilla 05)'],
   ['withholdings', 'Retenciones soportadas acumuladas (casilla 06)'],
+  ['previousYearNetIncome', 'Rendimiento neto del ejercicio anterior'],
   ['article110Reduction', 'Minoración art. 110.3 RIRPF (casilla 13)'],
   ['priorNegativeResults', 'Resultados negativos anteriores (casilla 15)'],
   ['housingDeduction', 'Deducción vivienda habitual (casilla 16)'],
-  ['previousSamePeriodResult', 'Resultado previo de la misma autoliquidación'],
+  ['previousSamePeriodResult', 'Resultado previo de la misma autoliquidación (casilla 18)'],
   ['agricultureRevenue', 'Ingresos agrícolas/ganaderos del trimestre'],
+  ['agriculturePercentage', 'Porcentaje casilla 09 (2%, 0,8% o superior)'],
   ['agricultureWithholdings', 'Retenciones agrícolas/ganaderas'],
 ];
 
-const INDIRECT_TAX_MODELS = ['303', '420'];
+const INDIRECT_TAX_MODELS = ['303', '417', '420'];
+const ADJUSTMENT_MODELS = ['130', '131', '200', '202', '216', '303', '417', '420', '421'];
+
+const STRUCTURED_ADJUSTMENTS = {
+  '131': {
+    title: 'Datos-base y liquidación del modelo 131',
+    help: 'Los módulos no se deducen de las facturas. Informa los rendimientos calculados por actividad con la Orden anual; Taxea aplica y traza las casillas 01 a 15.',
+    fields: [
+      ['modulesNetYield','Rendimiento neto por módulos · casilla 01','number'],['salariedEmployees','Unidades de personal asalariado','number'],['modulesPaymentRate','Porcentaje de pago por módulos','number'],['modulesQuarterPayment','Pago por módulos ya calculado · casilla 02','number'],
+      ['noBaseDataRevenue','Ingresos sin datos-base · casilla 03','number'],['noBaseDataRate','Porcentaje casilla 04 (mínimo 2%)','number'],['agricultureRevenue','Ingresos agrarios · casilla 05','number'],['agricultureRate','Porcentaje casilla 06 (mínimo 2%)','number'],
+      ['withholdings','Retenciones · casilla 08','number'],['previousYearNetIncome','Rendimiento neto del ejercicio anterior','number'],['article110Reduction','Minoración coordinada 130/131 · casilla 09','number'],['priorNegativeResults','Negativos anteriores · casilla 11','number'],
+      ['housingDeduction','Deducción vivienda · casilla 12','number'],['previousSamePeriodResult','Ingresado previamente · casilla 14','number'],['youngFarmerReduction','Reducción 25% agricultor joven confirmada','checkbox'],
+    ],
+  },
+  '200': {
+    title: 'Conciliación contable-fiscal del modelo 200',
+    help: 'Parte del cierre contable. Los ajustes, BIN, tipo, deducciones, retenciones y pagos fraccionados necesitan soporte y revisión; el resultado se traslada después a Sociedades WEB.',
+    fields: [['taxableIncreases','Ajustes extracontables positivos','number'],['taxableDecreases','Ajustes extracontables negativos','number'],['taxLossCarryforward','BIN a compensar','number'],['taxRate','Tipo de gravamen (%)','number'],['taxCredits','Bonificaciones y deducciones','number'],['withholdings','Retenciones e ingresos a cuenta','number'],['instalmentPayments','Pagos fraccionados 202','number'],['previousSamePeriodResult','Resultado previo complementaria','number']],
+  },
+  '202': {
+    title: 'Modalidad y magnitudes del modelo 202',
+    help: 'Confirma la modalidad censal: artículo 40.2 (cuota del último período vencido) o 40.3 (base acumulada de 3, 9 u 11 meses).',
+    fields: [['method','Modalidad','select',[['','Seleccionar'],['40_2','Artículo 40.2 LIS'],['40_3','Artículo 40.3 LIS']]],['previousCorporateTaxQuota','Cuota del último período (40.2)','number'],['currentTaxableBase','Base imponible acumulada (40.3)','number'],['paymentPercentage','Porcentaje 40.3 (%)','number'],['bonuses','Bonificaciones','number'],['withholdings','Retenciones','number'],['previousInstalmentPayments','Pagos anteriores del ejercicio','number'],['minimumPayment','Pago mínimo aplicable','number']],
+  },
+  '216': {
+    title: 'Ajuste de autoliquidación del modelo 216', help: 'Los perceptores se introducen abajo de forma individual. Usa este campo únicamente para una complementaria del mismo período.',
+    fields: [['previousSamePeriodResult','Resultado ingresado anteriormente · casilla 20','number']],
+  },
+  '421': {
+    title: 'Módulos y regularización del modelo 421',
+    help: 'Las cuotas anuales por actividad y los porcentajes proceden de la Orden canaria aplicable. En 4T se recalculan con los datos reales del ejercicio.',
+    fields: [['annualActivityQuota1','Cuota anual actividad 1','number'],['annualActivityQuota2','Cuota anual actividad 2','number'],['annualActivityQuota3','Cuota anual actividad 3','number'],['annualActivityQuota4','Cuota anual actividad 4','number'],['annualActivityQuota5','Cuota anual actividad 5','number'],['quarterAdvance','Ingreso a cuenta · casilla 06','number'],['currentInputQuota','Cuotas soportadas corrientes · casilla 08','number'],['minimumQuotaRate','Porcentaje cuota mínima','number'],['seasonalIndex','Índice de temporada','number'],['previousQuarterAdvances','Ingresos anteriores · casilla 10','number'],['fixedAssetAndReverseChargeOutput','Activos fijos e ISP · casilla 12','number'],['propertyRentalOutput','Arrendamientos · casilla 13','number'],['outputRectificationsDecrease','Rectificaciones minoradoras · casilla 14','number'],['fixedAssetInputQuota','IGIC soportado activos fijos · casilla 15','number'],['rentalAndZeroRateInputQuota','IGIC soportado alquiler/tipo cero · casilla 16','number'],['previousCompensationBalance','Saldo a compensar · casilla 17','number'],['previousSamePeriodResult','Resultado previo · casilla 18','number']],
+  },
+};
+
+const DECLARABLE_SCHEMAS = {
+  '216': [['recipientTaxId','NIF/identificador perceptor','text'],['recipientName','Nombre o razón social','text'],['country','País ISO','text'],['incomeKey','Clave de renta','text'],['nature','Naturaleza','text'],['paymentDate','Fecha de pago','date'],['accruedAmount','Importe íntegro','number'],['withholdingBase','Base de retención','number'],['withholdingAmount','Retención','number'],['exemptionCode','Código exención','text'],['treatyCode','Convenio','text'],['dividendOrEquityIncome','Dividendo/participación','checkbox'],['notSubjectToWithholding','Exceptuada de retención','checkbox']],
+  '296': [['recipientTaxId','NIF/identificador perceptor','text'],['recipientName','Nombre o razón social','text'],['country','País ISO','text'],['incomeKey','Clave de renta','text'],['nature','Naturaleza','text'],['paymentDate','Fecha de pago','date'],['accruedAmount','Importe íntegro','number'],['withholdingBase','Base de retención','number'],['withholdingAmount','Retención','number'],['exemptionCode','Código exención','text'],['treatyCode','Convenio','text']],
+  '349': [['operatorTaxId','NIF-IVA operador','text'],['operatorName','Nombre o razón social','text'],['country','País ISO','text'],['operationKey','Clave A/E/I/S/T/H/M','text'],['operationDate','Fecha de operación','date'],['amount','Importe','number'],['rectificationAmount','Rectificación','number'],['originalYear','Ejercicio original','text'],['originalPeriod','Período original','text']],
+  '232': [['relatedPartyTaxId','NIF parte vinculada','text'],['relatedPartyName','Nombre o razón social','text'],['country','País ISO','text'],['relationType','Tipo de vinculación','text'],['operationType','Tipo de operación','text'],['valuationMethod','Método de valoración','text'],['incomePayment','Ingreso o pago','select',[['income','Ingreso'],['payment','Pago']]],['operationDate','Fecha de operación','date'],['category','Bloque','select',[['related','Operaciones vinculadas'],['patent_box','Patent box'],['tax_haven','Territorio no cooperativo']]],['amount','Importe sin IVA/IGIC','number']],
+};
 
 const MODEL_180_FIELDS = [
   ['recipientProvinceCode', 'Provincia perceptor (2 dígitos)', 'text'],
@@ -61,14 +109,26 @@ const PROPERTY_FIELDS = [
   ['complement', 'Complemento'], ['locality', 'Localidad'], ['municipality', 'Municipio'], ['municipalityCode', 'Código INE municipio'], ['provinceCode', 'Provincia'], ['postalCode', 'Código postal'],
 ];
 
+function apiErrorPayload(error) {
+  return /** @type {any} */ (error)?.response?.data || {};
+}
+
+function apiErrorMessage(error, fallback) {
+  const detail = /** @type {any} */ (error);
+  return detail?.response?.data?.error || detail?.message || fallback;
+}
+
 
 function formatMoney(value) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
 }
 
 function periodsFor(definition, fiscalProfile) {
+  if (Array.isArray(definition.periodOptions) && definition.periodOptions.length) return definition.periodOptions;
   if (definition.frequency === 'anual') return PERIODS.anual;
-  if (definition.code === '130' || definition.code === '420') return PERIODS.trimestral;
+  if (definition.code === '202') return PERIODS.sociedades;
+  if (definition.frequency === 'mensual') return PERIODS.mensual;
+  if (['130', '131', '420', '421'].includes(definition.code)) return PERIODS.trimestral;
   if (definition.frequency.includes('mensual') && (fiscalProfile?.isLargeCompany || fiscalProfile?.isREDEME || fiscalProfile?.usesSII)) return PERIODS.mensual;
   return PERIODS.trimestral;
 }
@@ -119,9 +179,9 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const [hash, upload] = await Promise.all([fileSha256(file), base44.integrations.Core.UploadFile({ file })]);
       let rawContent = '';
-      let extracted = {};
+      let extracted = /** @type {any} */ ({});
       if (isPdf) {
-        const response = await base44.integrations.Core.ExtractDataFromUploadedFile({
+        const response = /** @type {any} */ (await base44.integrations.Core.ExtractDataFromUploadedFile({
           file_url: upload.file_url,
           json_schema: {
             type: 'object',
@@ -131,7 +191,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
               fields: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, label: { type: 'string' }, value: { type: 'number' } } } },
             },
           },
-        });
+        }));
         extracted = response?.output || response || {};
       } else {
         rawContent = await file.text();
@@ -148,7 +208,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
       if (data.errors?.length) setError(data.errors.join(' '));
       if (data.warnings?.length) setNotice(data.warnings.join(' '));
     } catch (caught) {
-      setError(caught?.response?.data?.error || caught?.message || 'No se pudo analizar el modelo presentado.');
+      setError(apiErrorMessage(caught, 'No se pudo analizar el modelo presentado.'));
     } finally { setWorking(false); }
   }
 
@@ -166,7 +226,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
       setNotice(response.data?.alreadyImported ? 'Este modelo ya estaba guardado; no se creó un duplicado.' : 'Modelo presentado guardado. Los períodos posteriores ya pueden usar su arrastre.');
       onImported?.();
     } catch (caught) {
-      const payload = caught?.response?.data;
+      const payload = apiErrorPayload(caught);
       setError(payload?.blockers?.join(' ') || payload?.error || caught?.message || 'No se pudo guardar el modelo presentado.');
     } finally { setWorking(false); }
   }
@@ -482,8 +542,44 @@ function ThirdPartyEditor({ modelCode, details, values, onChange, onPropertyChan
 }
 
 
+function StructuredAdjustmentPanel({ modelCode, values, onChange }) {
+  const config = STRUCTURED_ADJUSTMENTS[modelCode];
+  if (!config) return null;
+  return <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
+    <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" /><div className="min-w-0 flex-1">
+      <h3 className="text-sm font-semibold text-slate-800">{config.title}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{config.help}</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">{config.fields.map(([key, label, type, options]) => <label key={key} className={type === 'checkbox' ? 'flex items-center gap-2 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-700' : 'text-xs font-medium text-slate-600'}>
+        {type === 'checkbox' ? <><input type="checkbox" checked={values[key] === true} onChange={event => onChange(key, event.target.checked)} />{label}</> : <>{label}{type === 'select' ? <select value={values[key] ?? ''} onChange={event => onChange(key, event.target.value || undefined)} className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800">{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select> : <input type="number" step="0.01" value={values[key] ?? ''} onChange={event => onChange(key, event.target.value === '' ? undefined : Number(event.target.value))} className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-cyan-300" />}</>}
+      </label>)}</div>
+    </div></div>
+  </section>;
+}
+
+function DeclarableRecordsEditor({ modelCode, details = [], onSave, onDelete, saving, canReview }) {
+  const schema = DECLARABLE_SCHEMAS[modelCode];
+  const [draft, setDraft] = useState(/** @type {Record<string, any>} */ ({}));
+  useEffect(() => setDraft({}), [modelCode]);
+  if (!schema) return null;
+  const startEdit = detail => setDraft({ ...Object.fromEntries(schema.map(([key]) => [key, detail[key] ?? ''])), recordId: detail.recordId, recordKey: detail.recordKey });
+  const reset = () => setDraft({});
+  const submit = () => {
+    const recordKey = draft.recordKey || `M${modelCode}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    onSave({ recordKey, recordId: draft.recordId, payload: Object.fromEntries(schema.map(([key]) => [key, draft[key]]).filter(([, value]) => value !== '' && value !== undefined && value !== null)), reviewStatus: canReview ? 'validado_asesor' : 'pendiente_revision' });
+    reset();
+  };
+  return <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-slate-800">Registros individualizados del modelo {modelCode}</h3><p className="mt-1 text-xs leading-5 text-slate-600">Añade o corrige solo datos respaldados por factura, contrato, certificado de residencia o documentación societaria. El asesor puede validarlos.</p></div>{draft.recordKey && <Button type="button" size="sm" variant="outline" onClick={reset}><X className="mr-1 h-3.5 w-3.5" />Cancelar edición</Button>}</div>
+    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">{schema.map(([key, label, type, options]) => <label key={key} className={type === 'checkbox' ? 'flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs text-slate-700' : 'text-xs font-medium text-slate-600'}>
+      {type === 'checkbox' ? <><input type="checkbox" checked={draft[key] === true} onChange={event => setDraft(current => ({ ...current, [key]: event.target.checked }))} />{label}</> : <>{label}{type === 'select' ? <select value={draft[key] ?? ''} onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm">{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select> : <input type={type} step={type === 'number' ? '0.01' : undefined} value={draft[key] ?? ''} onChange={event => setDraft(current => ({ ...current, [key]: type === 'number' ? (event.target.value === '' ? '' : Number(event.target.value)) : event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-violet-200 bg-white px-3 text-sm" />}</>}
+    </label>)}</div>
+    <div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" size="sm" className="bg-violet-700 hover:bg-violet-800" onClick={submit} disabled={saving}><Plus className="mr-1 h-4 w-4" />{draft.recordKey ? 'Guardar cambios' : 'Añadir registro'}</Button><span className="text-[11px] text-slate-500">{canReview ? 'Se guardará como validado por asesor.' : 'Se guardará pendiente de revisión.'}</span></div>
+    {!!details.length && <div className="mt-4 overflow-x-auto rounded-xl border border-violet-100 bg-white"><table className="w-full text-xs"><thead className="bg-violet-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Registro</th><th className="px-3 py-2 text-left">Contraparte</th><th className="px-3 py-2 text-right">Importe</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead><tbody>{details.map((detail, index) => <tr key={detail.recordKey || detail.sourceId || index} className="border-t border-violet-50"><td className="px-3 py-2 font-mono">{detail.recordKey || detail.operationKey || index + 1}</td><td className="px-3 py-2">{detail.recipientName || detail.operatorName || detail.relatedPartyName || 'Propuesto desde documentos'}</td><td className="px-3 py-2 text-right">{formatMoney(detail.amount ?? detail.accruedAmount ?? detail.withholdingBase)}</td><td className="px-3 py-2"><div className="flex justify-end gap-1">{detail.recordId && <Button type="button" size="sm" variant="outline" onClick={() => startEdit(detail)}>Editar</Button>}{detail.recordId && <Button type="button" size="sm" variant="outline" className="text-red-700" onClick={() => onDelete(detail)} disabled={saving}><Trash2 className="h-3.5 w-3.5" /></Button>}</div></td></tr>)}</tbody></table></div>}
+  </section>;
+}
+
 function StatusBadge({ model }) {
   if (model.exportMode === 'atc_guided_packet') return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado ATC</span>;
+  if (model.handoffExport) return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado {model.authority}</span>;
   if (model.exportMode === 'atc_program_import') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Importable en ATC</span>;
   if (model.officialExport) return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Diseño AEAT</span>;
   if (model.authority === 'ATC') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Programa ATC</span>;
@@ -491,7 +587,7 @@ function StatusBadge({ model }) {
 }
 
 const SOURCE_LABELS = {
-  Invoice: 'Factura', InvoiceTaxLine: 'Línea fiscal', InvoicePayment: 'Pago', PayrollExtraction: 'Nómina', JournalEntryLine: 'Apunte contable', TaxFiling: 'Modelo presentado', ManualAdjustment: 'Ajuste manual',
+  Invoice: 'Factura', InvoiceTaxLine: 'Línea fiscal', InvoicePayment: 'Pago', PayrollExtraction: 'Nómina', JournalEntryLine: 'Apunte contable', TaxFiling: 'Modelo presentado', TaxDeclarableRecord: 'Registro fiscal manual', ManualAdjustment: 'Ajuste manual',
 };
 
 function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage }) {
@@ -518,7 +614,7 @@ function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage }) {
         </section>}
 
         {loading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
-          : error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error?.response?.data?.error || error?.message || 'No se pudo cargar la trazabilidad.'}</div>
+          : error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{apiErrorMessage(error, 'No se pudo cargar la trazabilidad.')}</div>
             : <>
               <section className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">Fuentes directas</p><p className="mt-1 text-xl font-bold text-slate-900">{trace?.sourceCount ?? field.sourceIds?.length ?? 0}</p></div>
@@ -564,16 +660,19 @@ export default function TaxModelWorkbench({ initialSelection }) {
   const [modelCode, setModelCode] = useState(initialSelection?.modelCode || '303');
   const [year, setYear] = useState(Number(initialSelection?.year) || new Date().getFullYear());
   const [period, setPeriod] = useState(initialSelection?.period || '1T');
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(/** @type {any} */ (null));
   const [actionError, setActionError] = useState('');
-  const [lastExportInfo, setLastExportInfo] = useState(null);
+  const [lastExportInfo, setLastExportInfo] = useState(/** @type {any} */ (null));
   const [lastSaveInfo, setLastSaveInfo] = useState('');
-  const [adjustments, setAdjustments] = useState({});
-  const [annualRecordEdits, setAnnualRecordEdits] = useState({});
-  const [annual190RecordEdits, setAnnual190RecordEdits] = useState({});
-  const [annual193RecordEdits, setAnnual193RecordEdits] = useState({});
-  const [thirdPartyRecordEdits, setThirdPartyRecordEdits] = useState({});
-  const [selectedField, setSelectedField] = useState(null);
+  const [adjustments, setAdjustments] = useState(/** @type {Record<string, any>} */ ({}));
+  const [annualRecordEdits, setAnnualRecordEdits] = useState(/** @type {Record<string, any>} */ ({}));
+  const [annual190RecordEdits, setAnnual190RecordEdits] = useState(/** @type {Record<string, any>} */ ({}));
+  const [annual193RecordEdits, setAnnual193RecordEdits] = useState(/** @type {Record<string, any>} */ ({}));
+  const [thirdPartyRecordEdits, setThirdPartyRecordEdits] = useState(/** @type {Record<string, any>} */ ({}));
+  const [periodCloseInfo, setPeriodCloseInfo] = useState(/** @type {any} */ (null));
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+  const [selectedField, setSelectedField] = useState(/** @type {any} */ (null));
   const [tracePage, setTracePage] = useState(1);
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -597,7 +696,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
     queryFn: async () => (await base44.functions.invoke('taxModelOperations', {
       action: 'field_trace', companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period,
       draftId: result?.draft?.id || undefined, fieldCode: selectedField.code, fieldLabel: selectedField.label, fieldSection: selectedField.section, page: tracePage, pageSize: 25,
-      adjustments: modelCode === '130' || INDIRECT_TAX_MODELS.includes(modelCode) ? adjustments : {},
+      adjustments: ADJUSTMENT_MODELS.includes(modelCode) ? adjustments : {},
     })).data,
     enabled: !!companyId && !!result && !!selectedField,
   });
@@ -609,6 +708,9 @@ export default function TaxModelWorkbench({ initialSelection }) {
     setLastExportInfo(null);
     setLastSaveInfo('');
     setAdjustments({});
+    setPeriodCloseInfo(null);
+    setConfirmClose(false);
+    setReopenReason('');
     setSelectedField(null);
     setTracePage(1);
   }, [modelCode, year, definition?.frequency, periodOptions]);
@@ -638,14 +740,15 @@ export default function TaxModelWorkbench({ initialSelection }) {
   }, [modelCode, result?.source?.hash]);
 
   const invoke = useMutation({
-    mutationFn: async ({ action, ...extra }) => {
+    mutationFn: async (/** @type {any} */ variables) => {
+      const { action, ...extra } = variables;
       const response = await base44.functions.invoke('taxModelOperations', {
         action,
         companyId,
         modeloCodigo: modelCode,
         ejercicio: year,
         periodo: period,
-        adjustments: modelCode === '130' || INDIRECT_TAX_MODELS.includes(modelCode) ? adjustments : {},
+        adjustments: ADJUSTMENT_MODELS.includes(modelCode) ? adjustments : {},
         ...extra,
       });
       return response.data;
@@ -668,7 +771,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
       }
     },
     onError: error => {
-      const payload = error?.response?.data;
+      const payload = apiErrorPayload(error);
       const messages = payload?.blockers?.length ? payload.blockers.join(' ') : payload?.error || error?.message || 'No se pudo completar la operación.';
       setActionError(messages);
     },
@@ -680,15 +783,36 @@ export default function TaxModelWorkbench({ initialSelection }) {
   }, [companyId, definition?.code, initialSelection?.draftId, initialSelection?.requestId]);
 
   const saveDeclarable = useMutation({
-    mutationFn: async ({ detail, reviewStatus, targetModel = modelCode }) => (await base44.functions.invoke('taxModelOperations', {
+    mutationFn: async (/** @type {any} */ variables) => {
+      const { detail, reviewStatus, targetModel = modelCode } = variables;
+      return (await base44.functions.invoke('taxModelOperations', {
       action: 'upsert_declarable', companyId, modeloCodigo: targetModel, ejercicio: year, periodo: 'Anual',
       recordKey: detail.recordKey,
       sourceType: targetModel === '180' ? 'Invoice' : ['190', '193'].includes(targetModel) ? detail.sourceType : 'ThirdPartyAggregate',
       sourceId: targetModel === '180' ? detail.id : ['190', '193'].includes(targetModel) ? (detail.sourceIds || []).join('|') : (detail.invoices || []).join('|'),
       payload: targetModel === '180' ? (annualRecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '190' ? (annual190RecordEdits[detail.recordKey] || detail.manual || {}) : targetModel === '193' ? (annual193RecordEdits[detail.recordKey] || detail.manual || {}) : (thirdPartyRecordEdits[detail.recordKey] || detail.manual || {}), reviewStatus,
-    })).data,
+      })).data;
+    },
     onSuccess: () => { setActionError(''); invoke.mutate({ action: 'save_draft' }); },
-    onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo guardar la ficha anual.'),
+    onError: error => setActionError(apiErrorMessage(error, 'No se pudo guardar la ficha anual.')),
+  });
+  const structuredRecord = useMutation({
+    mutationFn: async (/** @type {any} */ variables) => {
+      const { action = 'upsert_declarable', ...payload } = variables;
+      return (await base44.functions.invoke('taxModelOperations', {
+        action, companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period, ...payload,
+      })).data;
+    },
+    onSuccess: () => { setActionError(''); invoke.mutate({ action: 'save_draft' }); },
+    onError: error => setActionError(apiErrorMessage(error, 'No se pudo guardar el registro declarable.')),
+  });
+  const periodClose = useMutation({
+    mutationFn: async (/** @type {any} */ variables) => {
+      const { action, ...extra } = variables;
+      return (await base44.functions.invoke('taxModelOperations', { action, companyId, modeloCodigo: modelCode, ejercicio: year, periodo: period, ...extra })).data;
+    },
+    onSuccess: data => { setActionError(''); setPeriodCloseInfo(data); setConfirmClose(false); if (data.period?.closureStatus === 'reopened') setReopenReason(''); },
+    onError: error => setActionError(apiErrorMessage(error, 'No se pudo completar el cierre fiscal.')),
   });
   const canReviewAnnual = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const updateAnnualRecord = (recordKey, key, value) => setAnnualRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), [key]: value } }));
@@ -703,6 +827,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
   });
   const addThirdPartyProperty = recordKey => setThirdPartyRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), properties: [...(current[recordKey]?.properties || []), { amount: '', cadastralUnavailable: false, numberingType: 'NUM' }] } }));
   const removeThirdPartyProperty = (recordKey, propertyIndex) => setThirdPartyRecordEdits(current => ({ ...current, [recordKey]: { ...(current[recordKey] || {}), properties: (current[recordKey]?.properties || []).filter((_, index) => index !== propertyIndex) } }));
+  const updateStructuredAdjustment = (key, value) => { setAdjustments(current => ({ ...current, [key]: value })); setResult(null); };
 
   if (!companyId) return <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa para preparar sus modelos.</div>;
 
@@ -774,13 +899,15 @@ export default function TaxModelWorkbench({ initialSelection }) {
 
           <FiledReturnImport key={`${companyId}-${modelCode}-${year}-${period}`} companyId={companyId} modelCode={modelCode} year={year} period={period} onImported={() => invoke.mutate({ action: 'save_draft' })} />
 
+          <StructuredAdjustmentPanel modelCode={modelCode} values={adjustments} onChange={updateStructuredAdjustment} />
+
           {modelCode === '130' && (
             <section className="rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
               <div className="flex items-start gap-3">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-slate-800">Ajustes fiscales revisables del modelo 130</h3>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">La contabilidad calcula ingresos y gastos acumulados. Confirma los ajustes y pagos anteriores cuando proceda; cualquier dato pendiente aparecerá como recomendación, sin impedir la exportación.</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">Las casillas 01 y 02 son acumuladas desde el 1 de enero y parten de los asientos, no solo de las bases de las facturas del trimestre. La casilla 06 reconoce cada retención al cobrarse, también en cobros parciales; la 18 solo corresponde a una complementaria del mismo ejercicio y período. Confirma la conciliación contable-fiscal, los pagos anteriores y cualquier beneficio territorial antes de aprobar el borrador.</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     {MODEL_130_ADJUSTMENTS.map(([key, label]) => (
                       <label key={key} className="text-xs font-medium text-slate-600">
@@ -795,6 +922,12 @@ export default function TaxModelWorkbench({ initialSelection }) {
                       </label>
                     ))}
                   </div>
+                  {profile?.irpfEstimation === 'directa_simplificada' && (
+                    <div className="mt-3 grid gap-3 rounded-xl border border-cyan-200 bg-white/80 p-3 md:grid-cols-[minmax(0,1fr)_180px]">
+                      <label className="flex items-start gap-2 text-xs leading-5 text-slate-700"><input className="mt-1" type="checkbox" checked={adjustments.applyDifficultJustificationExpenses === true} onChange={event => { setAdjustments(current => ({ ...current, applyDifficultJustificationExpenses: event.target.checked })); setResult(null); }} /><span><strong>Aplicar provisiones y gastos de difícil justificación.</strong> Confirma que procede y que no se aplica la reducción incompatible para autónomos económicamente dependientes o con único cliente no vinculado.</span></label>
+                      <label className="text-xs font-medium text-slate-600">Porcentaje aplicable<select value={adjustments.difficultJustificationRate || 5} onChange={event => { setAdjustments(current => ({ ...current, difficultJustificationRate: Number(event.target.value) })); setResult(null); }} className="mt-1 h-9 w-full rounded-lg border border-cyan-200 bg-white px-3 text-sm text-slate-800"><option value={5}>5% general</option><option value={10}>10% Ceuta 2026</option></select></label>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -820,6 +953,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
           {modelCode === '190' && result && <Annual190Editor details={result.calculation?.details} values={annual190RecordEdits} onChange={updateAnnual190Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '190' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {modelCode === '193' && result && <Annual193Editor details={result.calculation?.details} declaration={result.calculation?.declaration} values={annual193RecordEdits} onChange={updateAnnual193Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '193' })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {['347', '415'].includes(modelCode) && result && <ThirdPartyEditor modelCode={modelCode} details={result.calculation?.details} values={thirdPartyRecordEdits} onChange={updateThirdPartyRecord} onPropertyChange={updateThirdPartyProperty} onAddProperty={addThirdPartyProperty} onRemoveProperty={removeThirdPartyProperty} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: modelCode })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
+          {DECLARABLE_SCHEMAS[modelCode] && <DeclarableRecordsEditor modelCode={modelCode} details={result?.calculation?.details || []} onSave={payload => structuredRecord.mutate(payload)} onDelete={detail => structuredRecord.mutate({ action: 'delete_declarable', recordId: detail.recordId })} saving={structuredRecord.isPending || invoke.isPending} canReview={canReviewAnnual} />}
 
           {!result ? (
             <div className="grid gap-4 md:grid-cols-3">
@@ -830,7 +964,14 @@ export default function TaxModelWorkbench({ initialSelection }) {
           ) : (
             <>
               {result.draft && <div className="flex flex-col gap-2 rounded-2xl border border-cyan-200 bg-gradient-to-r from-cyan-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><Save className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" /><div><p className="text-sm font-semibold text-slate-800">Borrador v{result.draft.version} guardado</p><p className="mt-0.5 text-xs text-slate-500">{result.frozen ? 'Estás trabajando sobre la fotografía guardada; no se ha recalculado.' : result.alreadySaved ? 'Coincide con una versión existente y no se ha duplicado.' : 'La versión conserva casillas, fuentes, ajustes y recomendaciones.'}</p></div></div><span className="font-mono text-[11px] text-slate-400">{(result.draft.snapshotHash || result.source?.hash || '').slice(0, 16)}…</span></div>}
+              {result.draft && <section className="rounded-2xl border border-slate-200 bg-white p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><h3 className="text-sm font-semibold text-slate-800">Cierre fiscal del período</h3><p className="mt-1 text-xs leading-5 text-slate-500">Fija una versión concreta para revisión y evita que cambios posteriores alteren el cierre. Cerrar no equivale a presentar.</p></div><Button type="button" size="sm" variant="outline" onClick={() => periodClose.mutate({ action: 'preview_period_close' })} disabled={periodClose.isPending}>{periodClose.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FileSearch className="mr-1 h-3.5 w-3.5" />}Revisar cierre</Button></div>
+                {periodCloseInfo && <div className="mt-3 space-y-3"><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{(periodCloseInfo.checks || []).map(check => <div key={check.code} className={`rounded-lg border p-3 text-xs ${check.status === 'ok' ? 'border-emerald-200 bg-emerald-50' : check.status === 'required' ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50'}`}><p className="font-semibold text-slate-800">{check.label}</p><p className="mt-1 leading-4 text-slate-600">{check.detail}</p></div>)}</div>
+                  {(periodCloseInfo.period?.closureStatus === 'closed' || periodCloseInfo.periodRow?.closureStatus === 'closed') ? <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-end"><label className="flex-1 text-xs text-slate-700">Motivo de reapertura<input value={reopenReason} onChange={event => setReopenReason(event.target.value)} className="mt-1 h-9 w-full rounded border border-amber-200 bg-white px-3" placeholder="Ej.: factura recibida incorporada después del cierre" /></label><Button type="button" size="sm" variant="outline" onClick={() => periodClose.mutate({ action: 'reopen_period', confirmReopen: true, reason: reopenReason })} disabled={periodClose.isPending || reopenReason.trim().length < 8}>Reabrir con trazabilidad</Button></div> : <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={confirmClose} onChange={event => setConfirmClose(event.target.checked)} />Confirmo cerrar sobre el borrador v{periodCloseInfo.latestDraft?.version || result.draft.version}</label><Button type="button" size="sm" onClick={() => periodClose.mutate({ action: 'close_period', confirmClose: true })} disabled={!confirmClose || !periodCloseInfo.canClose || periodClose.isPending}>Cerrar período</Button></div>}
+                </div>}
+              </section>}
               <HistoryAndCarryforwardPanel result={result} modelCode={modelCode} />
+
+              {result.period?.policy && <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4"><div className="flex items-start gap-3"><FileSearch className="mt-0.5 h-4 w-4 shrink-0 text-indigo-700" /><div><p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Regla temporal aplicada</p><h3 className="mt-1 text-sm font-semibold text-slate-900">{result.period.policy.label}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{result.period.policy.rule}</p>{result.period.policy.basis === 'acumulado_ejercicio' && <p className="mt-2 text-xs font-medium text-indigo-800">El selector identifica el cierre del cálculo. No limita las casillas 01 y 02 al trimestre aislado.</p>}</div></div></section>}
 
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs font-medium text-slate-500">Resultado</p><p className={`mt-2 text-2xl font-bold ${Number(result.calculation?.result) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{definition?.kind === 'informative' ? 'Informativo' : formatMoney(result.calculation?.result)}</p></div>
@@ -870,9 +1011,9 @@ export default function TaxModelWorkbench({ initialSelection }) {
               <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar nueva versión si cambió</Button>
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review', draftId: result.draft?.id })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>
-                {definition?.exportMode === 'atc_guided_packet' && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff', draftId: result.draft?.id })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso ATC</Button>}
+                {definition?.handoffExport && <Button variant="outline" className="gap-2 border-cyan-300 text-cyan-800 hover:bg-cyan-50" onClick={() => invoke.mutate({ action: 'export_handoff', draftId: result.draft?.id })} disabled={invoke.isPending}><Download className="h-4 w-4" />Descargar traspaso {definition.authority}</Button>}
                 {definition?.officialExport && <Button className="gap-2 bg-emerald-700 hover:bg-emerald-800" onClick={() => invoke.mutate({ action: 'export', draftId: result.draft?.id })} disabled={invoke.isPending}><Download className="h-4 w-4" />{definition?.exportMode === 'atc_program_import' ? 'Exportar para programa ATC' : 'Exportar para AEAT'}</Button>}
-                {!definition?.officialExport && <p className="flex items-center text-xs text-slate-500">El traspaso ayuda a cumplimentar; el .dec presentable se genera y valida siempre en el programa oficial de la ATC.</p>}
+                {!definition?.officialExport && <p className="flex items-center text-xs text-slate-500">El traspaso es un paquete de trabajo, no un fichero presentable. Completa y valida la declaración en la sede o programa oficial de {definition?.authority}.</p>}
               </div>
             </>
           )}
