@@ -29,10 +29,13 @@ let sequence = 0;
 const records = {
   Company: [{ id: 'company-test', nif_cif: 'B12345678', razon_social: 'TAXEA QA', owner_email: 'qa@taxea.test', usuarios_autorizados: [] }],
   FiscalProfile: [{ id: 'profile-1', company_id: 'company-test', active: true, profileStatus: 'validado_asesor', mainTerritory: 'peninsula_baleares', taxAuthority: 'aeat', indirectTaxDefault: 'iva' }],
-  FiscalActivity: [], Invoice: [], InvoiceTaxLine: [], InvoicePayment: [], PayrollExtraction: [], Employee: [], JournalEntry: [], JournalEntryLine: [], TaxDeclarableRecord: [],
+  FiscalActivity: [],
+  Invoice: [{ id: 'invoice-trace', company_id: 'company-test', numero_factura: 'R-TRACE', fecha_emision: '2026-01-10', proveedor_nombre: 'PROVEEDOR QA', proveedor_nif: 'B87654321', concepto: 'Servicio QA', base_imponible: 100, cuota_iva: 21, total_factura: 121, tipo: 'recibida', fiscal_review_status: 'validado' }],
+  InvoiceTaxLine: [{ id: 'tax-line-trace', companyId: 'company-test', invoiceId: 'invoice-trace', lineNumber: 1, operationDate: '2026-01-10', taxKind: 'iva', rate: 21, base: 100, quota: 21, deductibleQuota: 21, operationType: 'subject_taxed', regime: 'general', reviewStatus: 'validado' }],
+  InvoicePayment: [], PayrollExtraction: [], Employee: [], JournalEntry: [], JournalEntryLine: [], TaxDeclarableRecord: [],
   TaxDraft: [
     { id: 'draft-old', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', version: 1, estado: 'borrador', snapshotHash: 'old', resumen: { calculation: { result: 10 }, source: { hash: 'source-old', count: 1 } }, errores: [], validaciones: [], created_date: '2026-04-01T10:00:00Z', updated_date: '2026-04-01T10:00:00Z' },
-    { id: 'draft-latest', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', version: 2, estado: 'revisado', snapshotHash: 'latest', resumen: { calculation: { result: 12 }, source: { hash: 'source-latest', count: 2 } }, errores: [], validaciones: [], created_date: '2026-04-02T10:00:00Z', updated_date: '2026-04-02T10:00:00Z' },
+    { id: 'draft-latest', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', version: 2, estado: 'revisado', snapshotHash: 'latest', engineVersion: 'taxea-modelos-2026.09.12-v13', resumen: { definition: { code: '303', name: 'Autoliquidación IVA' }, calculation: { result: 12, fields: [{ code: 'DEDUCIBLE', label: 'Total cuota deducible', value: 21, section: 'Deducciones', formula: 'Suma de cuotas deducibles.', sourceIds: ['InvoiceTaxLine:tax-line-trace'] }, { code: 'DEVENGADO', label: 'Total cuota devengada', value: 33, section: 'Liquidación', sourceIds: [] }], operations: { rates: [], outputQuota: 33, deductibleBase: 100, deductibleQuota: 21, rawResult: 12, intraBase: 0, intraQuota: 0, reverseBase: 0, reverseQuota: 0, intraSupplies: 0, exports: 0, nonSubject: 0 } }, source: { hash: 'source-latest', count: 1, ids: ['InvoiceTaxLine:tax-line-trace'] } }, ajustesManuales: [{ field: 'previousCompensationBalance', value: 0 }], errores: [], validaciones: [], created_date: '2026-04-02T10:00:00Z', updated_date: '2026-04-02T10:00:00Z' },
   ],
   TaxFiling: [{ id: 'filing-1', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', estadoPresentacion: 'presentado', snapshotVersion: 1, tipoDeclaracion: 'original', importeFinal: 12, resultadoDestino: 'a_ingresar', snapshotHash: 'filing-hash', revisionImportacion: 'validado_estructura', fechaPresentacion: '2026-04-20', fechaImportacion: '2026-04-20T12:00:00Z' }],
   TaxPeriod: [{ id: 'period-1', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', estado: 'presentado' }],
@@ -98,6 +101,9 @@ const firstSave = await invoke({ action: 'save_draft', companyId: 'company-test'
 const secondSave = await invoke({ action: 'save_draft', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const advisoryCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const advisoryExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
+const openedDraft = await invoke({ action: 'open_draft', companyId: 'company-test', draftId: 'draft-latest' });
+const fieldTrace = await invoke({ action: 'field_trace', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest', fieldCode: 'DEDUCIBLE', fieldLabel: 'Total cuota deducible', fieldSection: 'Deducciones', page: 1, pageSize: 25 });
+const frozenExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest' });
 
 const workflowChecks = {
   workspaceLoads: workspace.response.ok && workspace.payload.latestDrafts?.length === 1 && workspace.payload.latestFilings?.length === 1,
@@ -110,6 +116,9 @@ const workflowChecks = {
   evidenceConflictBlocked: evidenceConflict.response.status === 409,
   draftVersionCreated: firstSave.response.ok && firstSave.payload.alreadySaved === false && firstSave.payload.draft?.version === 1,
   duplicateDraftAvoided: secondSave.response.ok && secondSave.payload.alreadySaved === true && secondSave.payload.draft?.id === firstSave.payload.draft?.id,
+  savedDraftCanBeReopened: openedDraft.response.ok && openedDraft.payload.frozen === true && openedDraft.payload.draft?.id === 'draft-latest' && openedDraft.payload.calculation?.fields?.[0]?.code === 'DEDUCIBLE' && openedDraft.payload.adjustments?.previousCompensationBalance === 0,
+  savedBoxHasSourceTrace: fieldTrace.response.ok && fieldTrace.payload.frozen === true && fieldTrace.payload.field?.code === 'DEDUCIBLE' && fieldTrace.payload.sources?.[0]?.invoiceId === 'invoice-trace' && fieldTrace.payload.sources?.[0]?.invoiceNumber === 'R-TRACE' && fieldTrace.payload.unresolvedCount === 0,
+  savedDraftExportsFrozenSnapshot: frozenExport.response.ok && frozenExport.payload.frozen === true && frozenExport.payload.draft?.id === 'draft-latest' && frozenExport.payload.calculation?.result === 12 && frozenExport.payload.file?.contentBase64?.length > 0,
   recommendationsDoNotBlockExport: advisoryCalculation.response.ok
     && advisoryCalculation.payload.validation?.recommendations?.length > 0
     && advisoryCalculation.payload.validation?.blockers?.length === 0
@@ -117,7 +126,8 @@ const workflowChecks = {
     && advisoryExport.response.ok
     && advisoryExport.payload.file?.contentBase64?.length > 0,
 };
-const output = { ...selfTest.payload, workflowChecks, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
+const diagnostics = { frozenExport: { status: frozenExport.response.status, error: frozenExport.payload?.error, blockers: frozenExport.payload?.blockers, frozen: frozenExport.payload?.frozen, draftId: frozenExport.payload?.draft?.id, result: frozenExport.payload?.calculation?.result, fileLength: frozenExport.payload?.file?.contentBase64?.length || 0 } };
+const output = { ...selfTest.payload, workflowChecks, diagnostics, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
 console.log(JSON.stringify(output, null, 2));
 if (!output.ok) process.exitCode = 1;
 
