@@ -64,7 +64,7 @@ export default function BorradoresTab({ onOpenModel }) {
     {actionError && <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{actionError}</div>}
     {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
       : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
-      : rows.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><FilePen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Todavía no hay borradores guardados</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">Calcula el modelo en “Modelos y periodos” y pulsa “Guardar versión”. Aquí aparecerá la fotografía exacta del cálculo.</p></div>
+      : rows.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><FilePen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Todavía no hay borradores guardados</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">Pulsa “Calcular y guardar borrador” en “Modelos y periodos”. Aquí aparecerá automáticamente la fotografía exacta del cálculo.</p></div>
       : <div className="space-y-3">{rows.map(draft => {
         const status = statusPill(DRAFT_STATUS[draft.estado], draft.estado);
         const isLatest = workspace.data?.latestDrafts?.some(item => item.id === draft.id);
@@ -84,7 +84,7 @@ export default function BorradoresTab({ onOpenModel }) {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-            <Button size="sm" variant="outline" className="gap-2" onClick={() => onOpenModel?.({ modelCode: draft.modeloCodigo, year: draft.ejercicio, period: draft.periodo })}><ArrowRight className="h-3.5 w-3.5" />Abrir modelo</Button>
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => onOpenModel?.({ modelCode: draft.modeloCodigo, year: draft.ejercicio, period: draft.periodo, draftId: draft.id })}><ArrowRight className="h-3.5 w-3.5" />Abrir borrador</Button>
             {isLatest && draft.estado === 'borrador' && <Button size="sm" variant="outline" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'en_revision' })} disabled={updateStatus.isPending}>Enviar a revisión</Button>}
             {isLatest && reviewer && draft.estado === 'en_revision' && <Button size="sm" variant="outline" className="border-cyan-300 text-cyan-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'revisado' })} disabled={updateStatus.isPending}><ShieldCheck className="mr-1 h-3.5 w-3.5" />Marcar revisado</Button>}
             {isLatest && reviewer && draft.estado === 'revisado' && <Button size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={() => updateStatus.mutate({ draftId: draft.id, status: 'aprobado' })} disabled={updateStatus.isPending}>Aprobar</Button>}
