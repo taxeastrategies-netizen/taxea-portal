@@ -8,6 +8,7 @@
     "modeloCodigo": {
       "type": "string",
       "enum": [
+        "131",
         "180",
         "190",
         "193",
