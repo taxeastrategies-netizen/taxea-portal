@@ -66,6 +66,12 @@ const entity = name => ({
     records[name][index] = { ...records[name][index], ...payload, updated_date: new Date().toISOString() };
     return records[name][index];
   },
+  async delete(id) {
+    const index = records[name].findIndex(item => item.id === id);
+    if (index < 0) throw new Error(`${name} ${id} no existe`);
+    records[name].splice(index, 1);
+    return { id };
+  },
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
 const testClient = { auth: { me: async () => ({ id: 'taxea-self-test', email: 'qa@taxea.test', role: 'admin', company_id: 'company-test' }) }, asServiceRole: { entities } };
@@ -104,6 +110,14 @@ const advisoryExport = await invoke({ action: 'export', companyId: 'company-test
 const openedDraft = await invoke({ action: 'open_draft', companyId: 'company-test', draftId: 'draft-latest' });
 const fieldTrace = await invoke({ action: 'field_trace', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest', fieldCode: 'DEDUCIBLE', fieldLabel: 'Total cuota deducible', fieldSection: 'Deducciones', page: 1, pageSize: 25 });
 const frozenExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest' });
+const exactDownload = await invoke({ action: 'download_official_file', companyId: 'company-test', fileId: frozenExport.payload.file?.id });
+const catalog = await invoke({ action: 'catalog' });
+const historicalDryRun = await invoke({ action: 'historical_fiscal_dry_run', companyId: 'company-test', ejercicio: 2026 });
+const periodClosePreview = await invoke({ action: 'preview_period_close', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T' });
+const periodClose = await invoke({ action: 'close_period', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', confirmClose: true });
+const periodReopen = await invoke({ action: 'reopen_period', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', confirmReopen: true, reason: 'Nueva documentación recibida' });
+const declarableSave = await invoke({ action: 'upsert_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordKey: 'QA-NR-1', payload: { recipientTaxId: 'X1234567L', recipientName: 'PERCEPTOR QA', country: 'FR', incomeKey: '02', accruedAmount: 1000, withholdingBase: 1000, withholdingAmount: 190, paymentDate: '2026-02-01' } });
+const declarableDelete = await invoke({ action: 'delete_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordId: declarableSave.payload.record?.id });
 
 const workflowChecks = {
   workspaceLoads: workspace.response.ok && workspace.payload.latestDrafts?.length === 1 && workspace.payload.latestFilings?.length === 1,
@@ -119,6 +133,32 @@ const workflowChecks = {
   savedDraftCanBeReopened: openedDraft.response.ok && openedDraft.payload.frozen === true && openedDraft.payload.draft?.id === 'draft-latest' && openedDraft.payload.calculation?.fields?.[0]?.code === 'DEDUCIBLE' && openedDraft.payload.adjustments?.previousCompensationBalance === 0,
   savedBoxHasSourceTrace: fieldTrace.response.ok && fieldTrace.payload.frozen === true && fieldTrace.payload.field?.code === 'DEDUCIBLE' && fieldTrace.payload.sources?.[0]?.invoiceId === 'invoice-trace' && fieldTrace.payload.sources?.[0]?.invoiceNumber === 'R-TRACE' && fieldTrace.payload.unresolvedCount === 0,
   savedDraftExportsFrozenSnapshot: frozenExport.response.ok && frozenExport.payload.frozen === true && frozenExport.payload.draft?.id === 'draft-latest' && frozenExport.payload.calculation?.result === 12 && frozenExport.payload.file?.contentBase64?.length > 0,
+  exactExportCanBeRedownloaded: exactDownload.response.ok
+    && exactDownload.payload.file?.contentBase64 === frozenExport.payload.file?.contentBase64
+    && exactDownload.payload.file?.hash === frozenExport.payload.file?.hash
+    && exactDownload.payload.file?.immutable === true,
+  fullCatalogAvailable: catalog.response.ok
+    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.12-v15'
+    && catalog.payload.models?.length === 22
+    && ['349', '131', '216', '296', '417', '421', '200', '202', '232'].every(model => catalog.payload.models.some(item => item.code === model)),
+  historicalAuditIsReadOnly: historicalDryRun.response.ok
+    && historicalDryRun.payload.dryRun === true
+    && historicalDryRun.payload.writeOperations === 0
+    && historicalDryRun.payload.stats?.invoices === 1,
+  periodClosePreviewed: periodClosePreview.response.ok
+    && periodClosePreview.payload.canClose === true
+    && periodClosePreview.payload.latestDraft?.id === 'draft-latest',
+  periodClosedWithoutPresentationSideEffect: periodClose.response.ok
+    && periodClose.payload.period?.closureStatus === 'closed'
+    && periodClose.payload.period?.closureDraftId === 'draft-latest',
+  periodReopenedWithAuditTrail: periodReopen.response.ok
+    && periodReopen.payload.period?.closureStatus === 'reopened'
+    && periodReopen.payload.period?.reopenReason === 'Nueva documentación recibida',
+  declarableCrudWorks: declarableSave.response.ok
+    && declarableSave.payload.record?.modeloCodigo === '216'
+    && declarableDelete.response.ok
+    && declarableDelete.payload.deletedId === declarableSave.payload.record?.id
+    && records.TaxDeclarableRecord.length === 0,
   recommendationsDoNotBlockExport: advisoryCalculation.response.ok
     && advisoryCalculation.payload.validation?.recommendations?.length > 0
     && advisoryCalculation.payload.validation?.blockers?.length === 0
