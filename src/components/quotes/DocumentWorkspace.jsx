@@ -61,24 +61,6 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
     try {
       const estadoConvertido = isQuote ? 'convertido_factura' : 'convertida_factura';
       const sourceType = isQuote ? 'presupuesto' : 'proforma';
-      const existingSource = await base44.entities.Invoice.filter({
-        company_id: company.id,
-        source_document_id: doc.id,
-      });
-      if ((existingSource || []).some(invoice => !invoice.anulada)) {
-        await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
-        setShowConvertDialog(false);
-        onRefresh?.();
-        return;
-      }
-      const duplicateNumber = await base44.entities.Invoice.filter({
-        company_id: company.id,
-        numero_factura: cleanNumber,
-      });
-      if ((duplicateNumber || []).some(invoice => !invoice.anulada)) {
-        setConvertError('Ya existe una factura activa con ese número. Usa otra numeración.');
-        return;
-      }
       const base = Number(doc.base_imponible) || 0;
       const parsedTaxRate = Number(doc.tipo_impuesto);
       const taxRate = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
@@ -87,57 +69,53 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
       const parsedRetentionRate = Number(doc.retencion_irpf);
       const retentionRate = Number.isFinite(parsedRetentionRate) ? parsedRetentionRate : 0;
       const retentionAmount = base * retentionRate / 100;
-      const date = new Date(`${invoiceDate}T12:00:00`);
-      const createdInvoice = await base44.entities.Invoice.create({
+      const response = await base44.functions.invoke('invoiceOperations', {
+        action: 'create_invoice',
         company_id: company.id,
-        numero_factura: cleanNumber,
-        fecha_emision: invoiceDate,
-        fecha_operacion: invoiceDate,
-        cliente_nombre: doc.cliente_nombre,
-        cliente_nif: doc.cliente_nif,
-        cliente_email: doc.cliente_email,
-        cliente_direccion: doc.cliente_direccion,
-        concepto: doc.concepto || '',
-        base_imponible: base,
-        tipo_iva: taxRate,
-        cuota_iva: taxAmount,
-        retencion_irpf: retentionRate,
-        importe_retencion: retentionAmount,
-        total_factura: Number(doc.total) || base + taxAmount - retentionAmount,
-        forma_pago: doc.forma_pago,
-        coletilla_fiscal: doc.coletilla_fiscal,
-        tipo: 'emitida',
-        estado_cobro: 'pendiente',
-        estado_contable: 'pendiente',
-        anio: date.getFullYear(),
-        trimestre: ['T1', 'T2', 'T3', 'T4'][Math.floor(date.getMonth() / 3)],
-        subido_por: user?.email,
-        origin: sourceType,
-        source_document_type: sourceType,
-        source_document_id: doc.id,
+        idempotency_key: `source:${sourceType}:${doc.id}`,
+        invoice: {
+          numero_factura: cleanNumber,
+          fecha_emision: invoiceDate,
+          fecha_operacion: invoiceDate,
+          cliente_nombre: doc.cliente_nombre,
+          cliente_nif: doc.cliente_nif,
+          cliente_email: doc.cliente_email,
+          cliente_direccion: doc.cliente_direccion,
+          concepto: doc.concepto || '',
+          base_imponible: base,
+          tipo_iva: taxRate,
+          cuota_iva: taxAmount,
+          retencion_irpf: retentionRate,
+          importe_retencion: retentionAmount,
+          total_factura: Number(doc.total) || base + taxAmount - retentionAmount,
+          forma_pago: doc.forma_pago,
+          coletilla_fiscal: doc.coletilla_fiscal,
+          tipo: 'emitida',
+          origin: sourceType,
+          source_document_type: sourceType,
+          source_document_id: doc.id,
+          source_system: 'taxea_portal',
+          source_record_id: doc.id,
+        },
       });
+      const result = response?.data || response;
+      if (!result?.ok || !result?.invoice) throw new Error(result?.error || 'No se pudo crear la factura.');
+      const createdInvoice = result.invoice;
       await base44.functions.invoke('syncInvoiceContacts', {
         action: 'sync_invoice',
         invoiceId: createdInvoice.id,
       }).catch(error => console.error('[DocumentWorkspace] Contact sync failed:', error));
-      await base44.functions.invoke('accountingOperations', {
-        action: 'post_invoice',
-        companyId: company.id,
-        invoiceId: createdInvoice.id,
-        status: 'confirmado',
-      }).catch(async error => {
-        console.error('[DocumentWorkspace] Accounting posting failed:', error);
-        await base44.entities.Invoice.update(createdInvoice.id, {
-          estado_contable: 'requiere_correccion',
-          accounting_review_status: 'requiere_correccion',
-        }).catch(() => {});
-      });
       await base44.entities[entityName].update(doc.id, { estado: estadoConvertido });
+      if (result.accounting_warning) {
+        setConvertError(`Factura creada y documento convertido, pero requiere revisión contable: ${result.accounting_warning}`);
+        onRefresh?.();
+        return;
+      }
       setShowConvertDialog(false);
       onRefresh?.();
     } catch (error) {
       console.error('Error convirtiendo documento:', error);
-      setConvertError('No se pudo crear la factura. No se ha marcado el documento como convertido.');
+      setConvertError(error?.response?.data?.error || error?.message || 'No se pudo crear la factura. No se ha marcado el documento como convertido.');
     } finally {
       setConverting(false);
     }
