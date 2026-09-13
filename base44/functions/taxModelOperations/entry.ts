@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.12-v21';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.13-v22';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -13,7 +13,7 @@ const DEFINITIONS: Record<string, any> = {
   '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Taxea propone automáticamente nóminas A y profesionales G y permite completar manualmente todas las claves A-L, subclaves, percepciones en especie, incapacidad y distribución foral del diseño 2025.' },
   '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Incluye registros de perceptor y, cuando proceda, el anexo de relación de gastos del artículo 26.1.a LIRPF conforme al diseño 2025.' },
   '200': { name: 'Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'anual', kind: 'corporate_tax', design: 'Sociedades WEB y diseño de registro AEAT 2025', designYear: '2025', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'El modelo 200 no se obtiene solo de facturas: requiere cierre contable, balances, ajustes extracontables, bases negativas, deducciones y régimen societario. Taxea prepara la conciliación contable-fiscal; la presentación debe completarse y validarse en Sociedades WEB.' },
-  '202': { name: 'Pago fraccionado del Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'abril/octubre/diciembre', kind: 'corporate_tax_payment', design: 'Diseño de registro AEAT 2026', designYear: '2026', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', periods: ['1P', '2P', '3P'], designWarning: 'La base depende de la modalidad del artículo 40.2 o 40.3 LIS y de magnitudes societarias confirmadas. Taxea no infiere la modalidad únicamente por las facturas.' },
+  '202': { name: 'Pago fraccionado del Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'abril/octubre/diciembre', kind: 'corporate_tax_payment', design: 'DR202e25 v1.3 · 2025 y siguientes · actualización 14-07-2026', designYear: '2025+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', periods: ['1P', '2P', '3P'], designWarning: 'La base depende de la modalidad del artículo 40.2 o 40.3 LIS y de magnitudes societarias confirmadas. Taxea genera las páginas oficiales 01 y 02, pero no infiere la modalidad, el tipo ni los ajustes societarios únicamente por las facturas.' },
   '216': { name: 'Retenciones e ingresos a cuenta de no residentes', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'non_resident_withholding', design: 'Diseño de registro AEAT modelo 216 · versión 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'Incluye rentas IRNR satisfechas a no residentes, también determinadas rentas exentas o exceptuadas de retención. Cada perceptor debe documentarse con país, clave de renta y motivo de exención o convenio; el fichero oficial contiene la autoliquidación agregada.' },
   '232': { name: 'Operaciones vinculadas y territorios no cooperativos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Formulario modelo 232 AEAT', designYear: '2025+', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'La obligación y los umbrales dependen de la vinculación, el tipo y conjunto de operaciones, patent box y territorios no cooperativos. Solo se incorporan registros expresamente clasificados y revisados.' },
   '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 296 · ejercicio 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', designWarning: 'Taxea concilia los perceptores del 216 y genera los registros tipo 1 y 2 de 500 posiciones. Personalidad, naturaleza, subclave, residencia, fecha de devengo y supuestos especiales deben confirmarse; los anexos A, B o F se señalan como revisión específica cuando procedan.' },
@@ -40,7 +40,8 @@ const SOURCES = [
   { title: 'AEAT - Ayuda del modelo 296', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/declaraciones-informativas-ayuda-tecnica/modelos-291-347/modelo-296-formulario.html' },
   { title: 'AEAT - Diseños de registro, modelos 200 a 299', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-200-299.html' },
   { title: 'AEAT - Manual práctico de Sociedades 2025', url: 'https://sede.agenciatributaria.gob.es/Sede/Ayuda/25Manual/200.shtml' },
-  { title: 'AEAT - Instrucciones del modelo 202', url: 'https://sede.agenciatributaria.gob.es/static_files/Sede/Procedimiento_ayuda/GE00/202_instrucciones.pdf' },
+  { title: 'AEAT - Instrucciones del modelo 202, período 2025 y siguientes', url: 'https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/impuesto-sobre-sociedades/modelo-202-is-i_____resencia-territorio-fraccionado_/instrucciones.html' },
+  { title: 'AEAT - Diseños de registro, modelos 200 a 299', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-200-299.html' },
   { title: 'AEAT - Instrucciones del modelo 232', url: 'https://sede.agenciatributaria.gob.es/static_files/Sede/Procedimiento_ayuda/GI43/Instrucciones_Modelo_232.pdf' },
   { title: 'AEAT - Instrucciones y diseño del modelo 349', url: 'https://sede.agenciatributaria.gob.es/static_files/Sede/Procedimiento_ayuda/GI28/instr_mod_349.pdf' },
   { title: 'AEAT - Diseños de registro, modelos 300 a 399', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-300-399.html' },
@@ -588,6 +589,27 @@ function provinceCode(value: unknown) {
 
 function validSpanishTaxId(value: unknown) {
   return /^[A-Z0-9]{9}$/.test(canonical(value).replace(/\s/g, ''));
+}
+
+function validDeveloperSpanishTaxId(value: unknown) {
+  const taxId=canonical(value).replace(/\s/g,'');
+  const letters='TRWAGMYFPDXBNJZSQVHLCKE';
+  if(/^\d{8}[A-Z]$/.test(taxId)) return letters[Number(taxId.slice(0,8))%23]===taxId[8];
+  if(/^[XYZ]\d{7}[A-Z]$/.test(taxId)) return letters[Number(`${{X:'0',Y:'1',Z:'2'}[taxId[0]]}${taxId.slice(1,8)}`)%23]===taxId[8];
+  const cif=taxId.match(/^([ABCDEFGHJNPQRSUVW])(\d{7})([0-9A-J])$/);
+  if(!cif) return false;
+  const digits=cif[2].split('').map(Number);
+  const odd=digits.filter((_,index)=>index%2===0).reduce((sum,digit)=>{const doubled=digit*2;return sum+Math.floor(doubled/10)+doubled%10;},0);
+  const even=digits.filter((_,index)=>index%2===1).reduce((sum,digit)=>sum+digit,0);
+  const control=(10-(odd+even)%10)%10, letter='JABCDEFGHI'[control], supplied=cif[3];
+  if('ABEH'.includes(cif[1])) return supplied===String(control);
+  if('PQSW'.includes(cif[1])) return supplied===letter;
+  return supplied===String(control)||supplied===letter;
+}
+
+function developerTaxIdStatus() {
+  const raw=canonical(Deno.env.get('TAXEA_DEVELOPER_NIF')).replace(/\s/g,'');
+  return { configured: !!raw, valid: !!raw && validDeveloperSpanishTaxId(raw), value: raw && validDeveloperSpanishTaxId(raw) ? raw : '' };
 }
 
 function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[], blockers: string[]) {
@@ -1731,29 +1753,81 @@ function calculate202(data: any, _b: any, adjustments: any) {
   const method = clean(adjustments.method);
   const fields: any[] = [];
   const source = (key: string) => adjustments?.[key] === undefined || adjustments?.[key] === null || adjustments?.[key] === '' ? [] : [`ManualAdjustment:${key}`];
-  let base = 0, gross = 0;
+  const value = (key: string) => money(adjustments?.[key]);
+  const add = (code: string, label: string, amount: number, keys: string[], section: string, formula = '') => addField(fields, code, label, money(amount), unique(keys.flatMap(source)), section, formula ? { formula } : undefined);
+  let result = 0;
   if (method === '40_2') {
-    base = Math.max(0, money(adjustments.previousCorporateTaxQuota));
-    gross = money(base * 0.18);
+    const box01 = Math.max(0, value('previousCorporateTaxQuota'));
+    const box02 = Math.max(0, value('previousSamePeriodResult'));
+    const box03 = money(Math.max(0, box01 * 0.18 - box02));
+    add('01', 'Base del pago fraccionado', box01, ['previousCorporateTaxQuota'], 'Modalidad art. 40.2 LIS');
+    add('02', 'Resultado de la declaración anterior complementada', box02, ['previousSamePeriodResult'], 'Modalidad art. 40.2 LIS');
+    add('03', 'Cantidad a ingresar', box03, ['previousCorporateTaxQuota','previousSamePeriodResult'], 'Modalidad art. 40.2 LIS', '[01] × 18% − [02], con mínimo cero.');
+    result = box03;
   } else if (method === '40_3') {
-    base = money(adjustments.currentTaxableBase);
-    const rate = Math.max(0, Number(adjustments.paymentPercentage || 0));
-    gross = money(Math.max(0, base) * rate / 100);
+    const box04 = adjustments.accountingResult === undefined || adjustments.accountingResult === '' ? value('currentTaxableBase') : value('accountingResult');
+    const box05 = Math.max(0, value('corporateTaxIncrease'));
+    const box06 = Math.max(0, value('corporateTaxDecrease'));
+    const box67 = Math.max(0, value('complementaryTaxIncrease'));
+    const box37 = Math.max(0, value('amortizationReversalDecrease'));
+    const box07 = Math.max(0, value('otherTaxIncreases'));
+    const box08 = Math.max(0, value('otherTaxDecreases'));
+    const box38 = money(box05 + box67 + box07);
+    const box39 = money(box06 + box37 + box08);
+    const calculatedBase13 = money(box04 + box38 - box39);
+    const directBase = adjustments.currentTaxableBase === undefined || adjustments.currentTaxableBase === '' ? calculatedBase13 : value('currentTaxableBase');
+    const box13 = [box05,box06,box67,box37,box07,box08].some(amount => amount !== 0) || adjustments.accountingResult !== undefined ? calculatedBase13 : directBase;
+    const box44 = Math.max(0, value('capitalizationReserveCarryforward'));
+    const box14 = Math.max(0, value('taxLossCarryforward'));
+    const box45 = Math.max(0, value('equalizationReserveIncrease'));
+    const box46 = Math.max(0, value('equalizationReserveDecrease'));
+    const box16 = money(Math.max(0, box13 - box44 - box14 + box45 - box46));
+    const box17 = Math.max(0, Number(adjustments.paymentPercentage || 0));
+    const box47 = value('cooperativeArticle1112Quota');
+    const box40 = Math.max(0, value('cooperativeNegativeQuota'));
+    const box48 = Math.max(0, value('equalizationReserveQuotaIncrease'));
+    const box49 = Math.max(0, value('equalizationReserveQuotaDecrease'));
+    const box18 = money(Math.max(0, box16 * box17 / 100 + box47 - box40 + box48 - box49));
+    const specialBases = ['multipleRateBase1','multipleRateBase2','multipleRateBase3','multipleRateBase4'].map(value);
+    const specialRates = ['multipleRatePercentage1','multipleRatePercentage2','multipleRatePercentage3','multipleRatePercentage4'].map(key => Math.max(0, Number(adjustments?.[key] || 0)));
+    const specialQuotas = specialBases.map((base, index) => money(base * specialRates[index] / 100));
+    const box19 = money(specialBases.reduce((sum, amount) => sum + amount, 0));
+    const box50 = Math.max(0, value('multipleRateCooperativeArticle1112Quota'));
+    const box42 = Math.max(0, value('multipleRateCooperativeNegativeQuota'));
+    const box51 = Math.max(0, value('multipleRateEqualizationQuotaIncrease'));
+    const box52 = Math.max(0, value('multipleRateEqualizationQuotaDecrease'));
+    const box26 = money(Math.max(0, specialQuotas.reduce((sum, amount) => sum + amount, 0) + box50 - box42 + box51 - box52));
+    const usesMultipleRates = specialBases.some(amount => amount !== 0) || specialRates.some(rate => rate !== 0);
+    const box27 = Math.max(0, value('bonuses'));
+    const box28 = Math.max(0, value('withholdings'));
+    const box29 = adjustments.commonTerritoryPercentage === undefined || adjustments.commonTerritoryPercentage === '' ? 100 : Math.max(0, Math.min(100, Number(adjustments.commonTerritoryPercentage)));
+    const box30 = Math.max(0, value('previousInstalmentPayments'));
+    const box31 = Math.max(0, value('previousSamePeriodResult'));
+    const box32 = money(Math.max(0, ((usesMultipleRates ? box26 : box18) - box27 - box28) * box29 / 100 - box30 - box31));
+    const box33 = Math.max(0, value('minimumPayment'));
+    const box34 = money(Math.max(box32, box33));
+    const official: Array<[string,string,number,string[],string]> = [
+      ['04','Resultado contable después del IS e IC',box04,['accountingResult','currentTaxableBase'],'Base imponible'],
+      ['05','Corrección por IS · aumentos',box05,['corporateTaxIncrease'],'Base imponible'],['06','Corrección por IS · disminuciones',box06,['corporateTaxDecrease'],'Base imponible'],['67','Corrección por impuesto complementario · aumentos',box67,['complementaryTaxIncrease'],'Base imponible'],['37','Reversión límite de amortización · disminuciones',box37,['amortizationReversalDecrease'],'Base imponible'],['07','Resto de correcciones · aumentos',box07,['otherTaxIncreases'],'Base imponible'],['08','Resto de correcciones · disminuciones',box08,['otherTaxDecreases'],'Base imponible'],
+      ['38','Total correcciones · aumentos',box38,['corporateTaxIncrease','complementaryTaxIncrease','otherTaxIncreases'],'Base imponible'],['39','Total correcciones · disminuciones',box39,['corporateTaxDecrease','amortizationReversalDecrease','otherTaxDecreases'],'Base imponible'],['13','Base imponible previa',box13,['accountingResult','currentTaxableBase','corporateTaxIncrease','corporateTaxDecrease','complementaryTaxIncrease','amortizationReversalDecrease','otherTaxIncreases','otherTaxDecreases'],'Base imponible'],['44','Remanente reserva de capitalización',box44,['capitalizationReserveCarryforward'],'Base imponible'],['14','BIN compensadas',box14,['taxLossCarryforward'],'Base imponible'],['45','Reserva de nivelación · aumentos',box45,['equalizationReserveIncrease'],'Base imponible'],['46','Reserva de nivelación · disminuciones',box46,['equalizationReserveDecrease'],'Base imponible'],
+      ['16','Base del pago fraccionado',box16,['currentTaxableBase','capitalizationReserveCarryforward','taxLossCarryforward','equalizationReserveIncrease','equalizationReserveDecrease'],'Caso general'],['17','Porcentaje aplicable',box17,['paymentPercentage'],'Caso general'],['47','Dotaciones art. 11.12 LIS · cooperativas',box47,['cooperativeArticle1112Quota'],'Caso general'],['40','Compensación cuotas negativas · cooperativas',box40,['cooperativeNegativeQuota'],'Caso general'],['48','Reserva de nivelación convertida en cuota · aumentos',box48,['equalizationReserveQuotaIncrease'],'Caso general'],['49','Reserva de nivelación convertida en cuota · disminuciones',box49,['equalizationReserveQuotaDecrease'],'Caso general'],['18','Resultado previo',box18,['paymentPercentage'],'Caso general'],
+      ['19','Base del pago fraccionado · varios tipos',box19,['multipleRateBase1','multipleRateBase2','multipleRateBase3','multipleRateBase4'],'Varios tipos'],['20','Base a tipo 1',specialBases[0],['multipleRateBase1'],'Varios tipos'],['21','Porcentaje tipo 1',specialRates[0],['multipleRatePercentage1'],'Varios tipos'],['22','Cuota tipo 1',specialQuotas[0],['multipleRateBase1','multipleRatePercentage1'],'Varios tipos'],['23','Base a tipo 2',specialBases[1],['multipleRateBase2'],'Varios tipos'],['24','Porcentaje tipo 2',specialRates[1],['multipleRatePercentage2'],'Varios tipos'],['25','Cuota tipo 2',specialQuotas[1],['multipleRateBase2','multipleRatePercentage2'],'Varios tipos'],['61','Base a tipo 3',specialBases[2],['multipleRateBase3'],'Varios tipos'],['62','Porcentaje tipo 3',specialRates[2],['multipleRatePercentage3'],'Varios tipos'],['63','Cuota tipo 3',specialQuotas[2],['multipleRateBase3','multipleRatePercentage3'],'Varios tipos'],['64','Base a tipo 4',specialBases[3],['multipleRateBase4'],'Varios tipos'],['65','Porcentaje tipo 4',specialRates[3],['multipleRatePercentage4'],'Varios tipos'],['66','Cuota tipo 4',specialQuotas[3],['multipleRateBase4','multipleRatePercentage4'],'Varios tipos'],['50','Dotaciones art. 11.12 · varios tipos',box50,['multipleRateCooperativeArticle1112Quota'],'Varios tipos'],['42','Compensación cuotas negativas · varios tipos',box42,['multipleRateCooperativeNegativeQuota'],'Varios tipos'],['51','Reserva nivelación cuota · aumentos',box51,['multipleRateEqualizationQuotaIncrease'],'Varios tipos'],['52','Reserva nivelación cuota · disminuciones',box52,['multipleRateEqualizationQuotaDecrease'],'Varios tipos'],['26','Resultado previo · varios tipos',box26,[],'Varios tipos'],
+      ['27','Bonificaciones',box27,['bonuses'],'Liquidación'],['28','Retenciones e ingresos a cuenta',box28,['withholdings'],'Liquidación'],['29','Volumen de operaciones en territorio común (%)',box29,['commonTerritoryPercentage'],'Liquidación'],['30','Pagos fraccionados anteriores',box30,['previousInstalmentPayments'],'Liquidación'],['31','Resultado de declaración anterior complementada',box31,['previousSamePeriodResult'],'Liquidación'],['32','Resultado',box32,[],'Liquidación'],['33','Mínimo a ingresar',box33,['minimumPayment'],'Liquidación'],['34','Cantidad a ingresar',box34,[],'Liquidación'],
+    ];
+    for (const [code,label,amount,keys,section] of official) add(code,label,amount,keys,section);
+    result = box34;
+    if (usesMultipleRates && Math.abs(box19 - box16) > 0.01) data.warnings.push('La suma de bases por tipo [19] no coincide con la base general calculada [16]; revisa el reparto por tipos.');
+    if (!usesMultipleRates && !(box17 > 0)) data.warnings.push('Falta el porcentaje aplicable de la modalidad del artículo 40.3 LIS.');
+    if (clean(adjustments.foralRegimeCode) && (adjustments.commonTerritoryPercentage === undefined || adjustments.commonTerritoryPercentage === '')) data.warnings.push('La entidad marca normativa foral: confirma el porcentaje de operaciones en territorio común de la casilla 29.');
   }
-  const bonuses = Math.max(0, money(adjustments.bonuses)), withholdings = Math.max(0, money(adjustments.withholdings)), previousPayments = Math.max(0, money(adjustments.previousInstalmentPayments)), minimumPayment = Math.max(0, money(adjustments.minimumPayment));
-  const calculated = money(gross - bonuses - withholdings - previousPayments);
-  const result = money(Math.max(calculated, minimumPayment));
   addField(fields, 'MODALIDAD', method === '40_2' ? 402 : method === '40_3' ? 403 : 0, source('method'), 'Modalidad', { displayValue: method || 'pendiente' });
-  addField(fields, 'BASE', method === '40_2' ? 'Cuota del último período impositivo' : 'Base imponible acumulada', base, method === '40_2' ? source('previousCorporateTaxQuota') : source('currentTaxableBase'), 'Cálculo');
-  addField(fields, 'PAGO_PREVIO', 'Pago fraccionado antes de minoraciones', gross, unique([...source('previousCorporateTaxQuota'),...source('currentTaxableBase'),...source('paymentPercentage')]), 'Cálculo');
-  addField(fields, 'BONIFICACIONES', 'Bonificaciones', bonuses, source('bonuses'), 'Minoraciones');
-  addField(fields, 'RETENCIONES', 'Retenciones e ingresos a cuenta', withholdings, source('withholdings'), 'Minoraciones');
-  addField(fields, 'PAGOS_ANT', 'Pagos fraccionados anteriores del ejercicio', previousPayments, source('previousInstalmentPayments'), 'Minoraciones');
-  addField(fields, 'MINIMO', 'Pago mínimo confirmado, si procede', minimumPayment, source('minimumPayment'), 'Pago mínimo');
   addField(fields, 'RESULTADO', 'Resultado del pago fraccionado', result, [], 'Liquidación');
   if (!['40_2','40_3'].includes(method)) data.warnings.push('Selecciona y documenta la modalidad del artículo 40.2 o 40.3 LIS.');
-  if (method === '40_3' && !(Number(adjustments.paymentPercentage) > 0)) data.warnings.push('Falta el porcentaje aplicable de la modalidad del artículo 40.3 LIS.');
-  return { fields, result, details: [{ type: 'pago_fraccionado_sociedades', method, manualDataRequired: true }] };
+  if (!clean(adjustments.cnae || data.company?.cnae)) data.warnings.push('Falta confirmar el CNAE-2025 de la actividad principal para el modelo 202 de 2026 y siguientes.');
+  if ((booleanValue(adjustments.complementaryDeclaration) || money(adjustments.previousSamePeriodResult) > 0) && !clean(adjustments.previousReceiptNumber)) data.warnings.push('La declaración complementaria requiere el número de justificante anterior.');
+  if (clean(adjustments.iban) && !/^ES\d{22}$/.test(clean(adjustments.iban).replace(/\s+/g,'').toUpperCase())) data.warnings.push('El IBAN de domiciliación del modelo 202 debe ser español y contener 24 caracteres.');
+  if (booleanValue(adjustments.additionalInfo) && !clean(adjustments.sociedadesReference)) data.warnings.push('La comunicación de datos adicionales requiere el Número de Referencia de Sociedades (NRS).');
+  return { fields, result, details: [{ type: 'pago_fraccionado_sociedades', method, officialDesign: 'DR202e25-v1.3', manualDataRequired: true }], adjustmentsSnapshot: adjustments };
 }
 
 function calculate232(data: any, b: any) {
@@ -2162,6 +2236,39 @@ function export216(company: any, year: number, period: string, calculation: any)
   return p.join('');
 }
 
+function aeatDate(value: unknown, fallbackYear: number) {
+  const raw = clean(value);
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}${iso[2]}${iso[1]}`;
+  const digits = raw.replace(/\D/g, '');
+  return digits.length === 8 ? digits : `0101${fallbackYear}`;
+}
+
+function export202(company: any, year: number, period: string, calculation: any) {
+  const v=fieldMap(calculation), a=calculation.adjustmentsSnapshot||{};
+  const p1=page(700,689,'</T20201000>'), p2=page(900,889,'</T20202000>');
+  const iban=clean(a.iban).replace(/\s+/g,'').toUpperCase();
+  const paymentType=clean(a.declarationPaymentType).toUpperCase();
+  const declaration=['I','U','G','N'].includes(paymentType)?paymentType:iban?'U':declarationType(calculation.result);
+  const modality=clean(a.method)==='40_2'?'A':clean(a.method)==='40_3'?'B':'';
+  place(p1,1,11,'<T20201000>'); place(p1,13,1,declaration); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,60,normalizedText(company.razon_social||company.nombre_comercial,60)); place(p1,83,20,normalizedText(a.taxpayerFirstName,20));
+  place(p1,103,1,normalizedText(a.foralRegimeCode,1)); place(p1,104,4,String(year)); place(p1,108,2,period); place(p1,110,8,aeatDate(a.fiscalPeriodStart,year)); place(p1,118,4,leftPaddedText(String(a.cnae||company.cnae||'').replace(/\D/g,''),4,'0'));
+  const flags:Array<[number,string]>=[[122,'nonProfitRegime'],[123,'socimiRegime'],[124,'ventureCapitalRegime'],[125,'tonnageRegime'],[126,'smallCompanyIncentives'],[127,'turnoverOverSixMillion'],[128,'protectedCooperative'],[129,'specialCircumstances'],[130,'turnoverUnderOneMillion'],[131,'multipleTaxRates']];
+  flags.forEach(([position,key])=>place(p1,position,1,booleanValue(a[key])?'X':' '));
+  place(p1,132,15,normalizedText(a.corporateTaxRateText||a.corporateTaxRate,15)); place(p1,147,1,numeric(a.turnoverBand,1,false,0)); place(p1,148,1,modality);
+  const p1Amounts:Array<[string,number,boolean]>=[['01',149,false],['02',166,false],['03',183,false],['04',200,true],['05',217,false],['06',234,false],['67',251,false],['37',268,false],['07',285,false],['08',302,false],['38',319,false],['39',336,false],['13',353,true],['44',370,false],['14',387,false],['45',404,false],['46',421,false]];
+  p1Amounts.forEach(([code,position,signed])=>place(p1,position,17,numeric(v[code],17,signed)));
+  place(p2,1,11,'<T20202000>');
+  const p2Amounts:Array<[string,number,boolean,number]>=[['16',13,false,17],['17',30,false,5],['47',35,true,17],['40',52,false,17],['48',69,false,17],['49',86,false,17],['18',103,false,17],['19',120,false,17],['20',137,true,17],['21',154,false,5],['22',159,true,17],['23',176,true,17],['24',193,false,5],['25',198,true,17],['61',215,true,17],['62',232,false,5],['63',237,true,17],['64',254,true,17],['65',271,false,5],['66',276,true,17],['50',293,false,17],['42',310,false,17],['51',327,false,17],['52',344,false,17],['26',361,false,17],['27',378,false,17],['28',395,false,17],['29',412,false,5],['30',417,false,17],['31',434,false,17],['32',451,false,17],['33',468,false,17],['34',485,false,17]];
+  p2Amounts.forEach(([code,position,signed,length])=>place(p2,position,length,numeric(v[code],length,signed)));
+  const additionalValues:Array<[number,string]>=[[525,'excludedDebtRestructuringIncome'],[542,'integratedDebtRestructuringIncome'],[559,'integratedDebtRestructuringQuota'],[576,'reversalImpairmentIncome'],[593,'canaryInvestmentReserveAmount'],[610,'canaryArticle26BonusAmount'],[627,'zecExcludedAmount'],[644,'ceutaMelillaReductionAmount'],[661,'capitalIncreaseCreditCompensationExcludedAmount'],[678,'partiallyExemptIncomeAmount'],[695,'article34BonusAmount']];
+  const additionalInfo=booleanValue(a.additionalInfo)||clean(a.sociedadesReference)||additionalValues.some(([,key])=>money(a[key])!==0);
+  place(p2,502,1,additionalInfo?'X':' '); place(p2,503,22,normalizedText(a.sociedadesReference,22)); additionalValues.forEach(([position,key])=>place(p2,position,17,numeric(a[key],17)));
+  const complementary=booleanValue(a.complementaryDeclaration)||money(v['02'])>0||money(v['31'])>0;
+  place(p2,712,1,complementary?'X':' '); place(p2,713,13,normalizedText(a.previousReceiptNumber,13)); place(p2,726,34,normalizedText(iban,34));
+  return p1.join('')+p2.join('');
+}
+
 function export349(company: any, year: number, period: string, calculation: any, declarationNumber: string) {
   const details=[...(calculation.details||[])];
   const ordinary=details.filter((row:any)=>!booleanValue(row.rectification));
@@ -2510,7 +2617,7 @@ function exportGuidedHandoff(model: string, company: any, year: number, period: 
 
 function transferLayoutErrors(model: string, content: string) {
   const records = content.split('\r\n');
-  if (['111','115','123','130','131','216','303'].includes(model)) {
+  if (['111','115','123','130','131','202','216','303'].includes(model)) {
     const errors: string[] = [];
     const pageLayouts: Record<string, Array<[string, number]>> = {
       '111': [['01000',1000]],
@@ -2518,6 +2625,7 @@ function transferLayoutErrors(model: string, content: string) {
       '123': [['01000',600]],
       '130': [['01000',600]],
       '131': [['01000',831]],
+      '202': [['01000',700],['02000',900]],
       '216': [['01000',600]],
       '303': [['01000',1581],['03000',1017]],
     };
@@ -2546,6 +2654,26 @@ function transferLayoutErrors(model: string, content: string) {
       const sum=(positions:number[])=>money(positions.reduce((total,position)=>total+readFixedNumber(p1,position,17,2,true),0));
       if(Math.abs(sum([114,157,200,243,286])-readFixedNumber(p1,325,17,2,true))>0.01||Math.abs(sum([136,179,222,265,308])-readFixedNumber(p1,342,17,2,true))>0.01) errors.push('Los rendimientos o pagos de las actividades 131 no cuadran con las casillas 01 y 02.');
       if(readFixedNumber(p1,325,17,2,true)!==0&&!dpaPages.length) errors.push('El 131 contiene rendimiento por módulos sin fichas DPA de actividad.');
+    }
+    if(model==='202'&&extracted['01000']&&extracted['02000']){
+      const p1=extracted['01000'], p2=extracted['02000'];
+      const amount=(source:string,position:number,signed=false)=>readFixedNumber(source,position,17,2,signed);
+      const percentage=(source:string,position:number)=>readFixedNumber(source,position,5,2,false);
+      const modality=p1[147];
+      if(!['A','B'].includes(modality)) errors.push('El modelo 202 no identifica la modalidad A (40.2) o B (40.3).');
+      if(modality==='A'&&Math.abs(amount(p1,183)-money(Math.max(0,amount(p1,149)*0.18-amount(p1,166))))>0.01) errors.push('La casilla 03 del modelo 202 no cuadra con el 18% de la casilla 01 menos la casilla 02.');
+      if(modality==='B'){
+        if(Math.abs(amount(p1,319)-money(amount(p1,217)+amount(p1,251)+amount(p1,285)))>0.01||Math.abs(amount(p1,336)-money(amount(p1,234)+amount(p1,268)+amount(p1,302)))>0.01) errors.push('Los totales de correcciones 38/39 del modelo 202 no cuadran.');
+        if(Math.abs(amount(p1,353,true)-money(amount(p1,200,true)+amount(p1,319)-amount(p1,336)))>0.01) errors.push('La base imponible previa 13 del modelo 202 no cuadra.');
+        const result18=money(Math.max(0,amount(p2,13)*percentage(p2,30)/100+amount(p2,35,true)-amount(p2,52)+amount(p2,69)-amount(p2,86)));
+        if(Math.abs(amount(p2,103)-result18)>0.01) errors.push('El resultado previo 18 del modelo 202 no cuadra.');
+        const result26=money(Math.max(0,amount(p2,159,true)+amount(p2,198,true)+amount(p2,237,true)+amount(p2,276,true)+amount(p2,293)-amount(p2,310)+amount(p2,327)-amount(p2,344)));
+        if(Math.abs(amount(p2,361)-result26)>0.01) errors.push('El resultado previo 26 del modelo 202 no cuadra.');
+        const prior=(amount(p2,120)>0||[137,176,215,254].some(position=>amount(p2,position,true)!==0))?amount(p2,361):amount(p2,103);
+        const result32=money(Math.max(0,(prior-amount(p2,378)-amount(p2,395))*percentage(p2,412)/100-amount(p2,417)-amount(p2,434)));
+        if(Math.abs(amount(p2,451)-result32)>0.01) errors.push('El resultado 32 del modelo 202 no cuadra.');
+        if(Math.abs(amount(p2,485)-money(Math.max(amount(p2,451),amount(p2,468))))>0.01) errors.push('La cantidad a ingresar 34 del modelo 202 no coincide con el mayor de 32 y 33.');
+      }
     }
     if (model === '303' && extracted['01000'] && extracted['03000']) {
       const p1 = extracted['01000'], p3 = extracted['03000'];
@@ -2724,7 +2852,7 @@ function pageFromFiledText(raw: string, model: string, pageCode = '01000') {
 }
 
 function parseFiledText(model: string, raw: string) {
-  if (!raw || !['111','115','123','130','131','180','190','193','216','296','303','347','349','390','415'].includes(model)) return null;
+  if (!raw || !['111','115','123','130','131','180','190','193','202','216','296','303','347','349','390','415'].includes(model)) return null;
   if (['180','190','193','296','347','349'].includes(model)) {
     const header=clean(raw).replace(/^\uFEFF/,'').split(/\r?\n/)[0]||'';
     if(header.length!==500||!header.startsWith(`1${model}`)) return null;
@@ -2774,6 +2902,14 @@ function parseFiledText(model: string, raw: string) {
     const positions:Record<string,number>={'01':325,'02':342,'03':390,'04':407,'05':488,'06':505,'07':522,'08':539,'09':562,'10':579,'11':596,'12':624,'13':641,'14':658,'15':675};
     for(const [code,position] of Object.entries(positions)) read(code,position,17,2,true);
     boxes.RESULTADO=boxes['15'];
+  } else if(model==='202'){
+    const p1Positions:Record<string,[number,boolean]>={'01':[149,false],'02':[166,false],'03':[183,false],'04':[200,true],'05':[217,false],'06':[234,false],'67':[251,false],'37':[268,false],'07':[285,false],'08':[302,false],'38':[319,false],'39':[336,false],'13':[353,true],'44':[370,false],'14':[387,false],'45':[404,false],'46':[421,false]};
+    for(const [code,[position,signed]] of Object.entries(p1Positions)) read(code,position,17,2,signed);
+    const resultPage=pageFromFiledText(raw,model,'02000'); if(!resultPage.startsWith('<T20202000>')) return null;
+    const p2Amounts:Record<string,[number,boolean]>={'16':[13,false],'47':[35,true],'40':[52,false],'48':[69,false],'49':[86,false],'18':[103,false],'19':[120,false],'20':[137,true],'22':[159,true],'23':[176,true],'25':[198,true],'61':[215,true],'63':[237,true],'64':[254,true],'66':[276,true],'50':[293,false],'42':[310,false],'51':[327,false],'52':[344,false],'26':[361,false],'27':[378,false],'28':[395,false],'30':[417,false],'31':[434,false],'32':[451,false],'33':[468,false],'34':[485,false]};
+    for(const [code,[position,signed]] of Object.entries(p2Amounts)) boxes[code]=readFixedNumber(resultPage,position,17,2,signed);
+    for(const [code,position] of Object.entries({17:30,21:154,24:193,62:232,65:271,29:412})) boxes[code]=readFixedNumber(resultPage,Number(position),5,2,false);
+    boxes.MODALIDAD=source[147]==='A'?402:source[147]==='B'?403:0; boxes.RESULTADO=source[147]==='A'?boxes['03']:boxes['34'];
   } else if (model === '216') {
     const integerPositions:Record<string,number>={'05':109,'06':126,'07':143,'14':262,'15':279,'16':296};
     const amountPositions:Record<string,number>={'08':160,'09':177,'10':194,'11':211,'12':228,'13':245,'17':313,'18':330,'19':347,'20':364,'21':381};
@@ -2788,7 +2924,7 @@ function parseFiledText(model: string, raw: string) {
     const readResult = (code: string, position: number, length = 17, signed = false) => { boxes[code] = readFixedNumber(resultPage, position, length, 2, signed); };
     readResult('64',199,17,true); readResult('66',221,17,true); readResult('77',238); readResult('110',255); readResult('78',272); readResult('87',289); readResult('69',340,17,true); readResult('70',357); readResult('109',374); readResult('112',391); readResult('71',408,17,true); boxes.RESULTADO = boxes['71'];
   }
-  return { model, nif: clean(source.slice(13,22)).toUpperCase(), year: Number(source.slice(102,106)), period: clean(source.slice(106,108)), boxes };
+  return { model, nif: clean(source.slice(13,22)).toUpperCase(), year: Number(source.slice(model==='202'?103:102,model==='202'?107:106)), period: clean(source.slice(model==='202'?107:106,model==='202'?109:108)), boxes };
 }
 
 function normalizeFiledImport(body: any, company: any, model: string, year: number, period: string) {
@@ -2929,7 +3065,7 @@ Deno.serve(async (req) => {
     const base44=createClientFromRequest(req); const user=await base44.auth.me();
     if(!user) return Response.json({error:'Unauthorized'},{status:401});
     const body=await req.json().catch(()=>({})); const action=clean(body.action||'catalog');
-    if(action==='catalog') return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),recommendedExtensions:[],sources:SOURCES});
+    if(action==='catalog') { const developer=developerTaxIdStatus(); return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),readiness:{developerTaxIdConfigured:developer.configured,developerTaxIdValid:developer.valid},recommendedExtensions:[],sources:SOURCES}); }
     if(action==='self_test') {
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
       const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'07',value:1},{code:'08',value:100},{code:'09',value:15},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20},{code:'21',value:21},{code:'28',value:30},{code:'30',value:30},{code:'110',value:0},{code:'78',value:0},{code:'87',value:0}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,rawResult:21,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
@@ -2940,9 +3076,10 @@ Deno.serve(async (req) => {
       const annual193={result:0,declaration:{manual:{declarantNatureSpecial:true,expenseAnnexNotApplicable:true,specialDataConfirmed:true}},details:[{recordKey:'Annual193:Invoice:test',taxId:'B87654321',name:'PERCEPTOR PRUEBA',provinceCode:'38',perceptionKey:'C',nature:'12',base:1000,withholding:190,manual:{representativeTaxId:'',provinceCode:'38',recipientMediator:false,keyCode:'',issuerCode:'',perceptionKey:'C',nature:'12',paymentRole:'',accountCodeType:'',accountCode:'',pending:false,accrualYear:'',perceptionType:'1',perceptionAmount:1000,reductions:0,retentionBase:1000,retentionRate:19,penalties:0,isin:'',loanStartDate:'',loanEndDate:'',loanCompensation:0,loanGuarantees:0,stateWithholding:0,navarraWithholding:0,alavaWithholding:0,gipuzkoaWithholding:0,bizkaiaWithholding:0,ceutaPalmaCode:'0',previousPayerTaxId:'',accrualDate:'',marketKey:''}}]};
       const info296={result:0,fields:[{code:'BASE',value:1000},{code:'RETENCIONES',value:190},{code:'INGRESADO',value:190}],details:[{recordKey:'M296:test',recipientTaxId:'FR12345678901',foreignTaxId:'FR12345678901',recipientName:'PERCEPTOR UE',country:'FR',personalityKey:'J',incomeKey:'19',subkey:'01',nature:'D',paymentDate:'2025-12-31',withholdingBase:1000,withholdingRate:19,withholdingAmount:190,address:'1 RUE DE TEST',city:'PARIS',postalCode:'75001'}]};
       const info349={result:0,details:[{recordKey:'M349:FR|12345678901|E|O',country:'FR',operatorTaxId:'FR12345678901',operatorName:'CLIENTE UE',operationKey:'E',amount:1500,rectification:false},{recordKey:'M349:DE|123456789|S|R',country:'DE',operatorTaxId:'DE123456789',operatorName:'CLIENTE RECTIFICADO',operationKey:'S',rectification:true,rectificationAmount:900,originalAmount:1000,originalAmountProvided:true,originalYear:'2025',originalPeriod:'4T'}]};
-      const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),131:export131(company,2026,'1T',sample131),216:export216(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
-      const expected:any={111:1000,115:500,123:600,130:600,131:1429,216:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
-      const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const wrapped=wrap(model,2026,'1T',content,'B12345678'); const layoutErrors=transferLayoutErrors(model,wrapped); return {model,length:wrapped.length,layoutErrors,validEnvelope:wrapped.startsWith(`<T${model}020261T0000>`)&&wrapped.endsWith(`</T${model}020261T0000>`),valid:layoutErrors.length===0}});
+      const sample202=calculate202({company:{...company,cnae:'6920'},warnings:[],blockers:[]},bounds(2026,'2P'),{method:'40_3',cnae:'6920',fiscalPeriodStart:'2026-01-01',currentTaxableBase:10000,paymentPercentage:17,withholdings:100,previousInstalmentPayments:200,commonTerritoryPercentage:100});
+      const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),131:export131(company,2026,'1T',sample131),202:export202(company,2026,'2P',sample202),216:export216(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
+      const expected:any={111:1000,115:500,123:600,130:600,131:1429,202:1600,216:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
+      const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const testPeriod=model==='202'?'2P':'1T'; const wrapped=wrap(model,2026,testPeriod,content,'B12345678'); const layoutErrors=transferLayoutErrors(model,wrapped); return {model,length:wrapped.length,layoutErrors,validEnvelope:wrapped.startsWith(`<T${model}02026${testPeriod}0000>`)&&wrapped.endsWith(`</T${model}02026${testPeriod}0000>`),valid:layoutErrors.length===0}});
       const record180=export180(company,2025,annual180,'1801234567890').split('\r\n');
       const record190Content=export190(company,2025,annual190,'1901234567890'); const record190=record190Content.split('\r\n');
       const record193Content=export193(company,2025,annual193,'1931234567890'); const record193=record193Content.split('\r\n');
@@ -2963,6 +3100,7 @@ Deno.serve(async (req) => {
         {model:'190',records:record190.length,recordLengths:record190.map(line=>line.length),layoutErrors:transferLayoutErrors('190',record190Content),valid:record190.length===2&&record190.every(line=>line.length===500)&&record190[1].startsWith('2190')&&record190[1][77]==='A'&&transferLayoutErrors('190',record190Content).length===0},
         {model:'193',records:record193.length,recordLengths:record193.map(line=>line.length),layoutErrors:transferLayoutErrors('193',record193Content),valid:record193.length===2&&record193.every(line=>line.length===500)&&record193[1].startsWith('2193')&&record193[1][91]==='C'&&record193[0][234]==='S'&&transferLayoutErrors('193',record193Content).length===0},
         {model:'296',records:record296.length,recordLengths:record296.map(line=>line.length),layoutErrors:transferLayoutErrors('296',record296Content),valid:record296.length===2&&record296.every(line=>line.length===500)&&record296[1].startsWith('2296')&&record296[1][35]==='J'&&record296[1].slice(497,499)==='FR'&&transferLayoutErrors('296',record296Content).length===0},
+        {model:'202',records:2,recordLengths:[700,900],layoutErrors:transferLayoutErrors('202',wrap('202',2026,'2P',samples['202'],'B12345678')),valid:samples['202'].length===1600&&samples['202'].startsWith('<T20201000>')&&samples['202'].includes('<T20202000>')&&samples['202'].slice(147,148)==='B'&&transferLayoutErrors('202',wrap('202',2026,'2P',samples['202'],'B12345678')).length===0},
         {model:'347',records:record347.length,recordLengths:record347.map(line=>line.length),valid:record347.length===2&&record347.every(line=>line.length===500)&&record347[1][75]==='D'},
         {model:'349',records:record349.length,recordLengths:record349.map(line=>line.length),layoutErrors:transferLayoutErrors('349',record349Content),valid:record349.length===3&&record349.every(line=>line.length===500)&&record349[1].startsWith('2349')&&record349[1][132]==='E'&&record349[2].slice(146,152)==='20254T'&&transferLayoutErrors('349',record349Content).length===0},
         {model:'390',records:9,recordLengths:Object.values(MODEL390_LAYOUT).map((layout:any)=>layout.length),layoutErrors:transferLayoutErrors('390',model390Content),valid:model390Content.includes('<T39001000>')&&model390Content.includes('</T39008000>')&&transferLayoutErrors('390',model390Content).length===0},
@@ -2980,13 +3118,14 @@ Deno.serve(async (req) => {
         model303SimplifiedPages:simplified303Content.length===4498&&simplified303Content[110]==='1'&&simplified303Content.includes('<T30302000>')&&fieldMap(simplified303Calculation)['58']===550&&transferLayoutErrors('303',simplified303Wrapped).length===0,
       };
       const accessCompany={id:'company-test',owner_email:'owner@example.test',usuarios_autorizados:['authorized@example.test']};
-      const authorizationCheck:any={model:'legacy user authorization',owner:false,authorized:false,directCompany:false,crossCompanyDenied:false};
+      const authorizationCheck:any={model:'legacy user authorization',owner:false,authorized:false,directCompany:false,crossCompanyDenied:false,developerIdentityValidation:false};
       try{authorize({role:'user',email:'owner@example.test'},'company-test',accessCompany);authorizationCheck.owner=true;}catch{}
       try{authorize({role:'user',email:'authorized@example.test'},'company-test',accessCompany);authorizationCheck.authorized=true;}catch{}
       try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
       try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
-      authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied;
-      const parsed130=parseFiledText('130',samples['130']); const parsed131=parseFiledText('131',samples['131']); const parsed216=parseFiledText('216',samples['216']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed296=parseFiledText('296',record296Content); const parsed349=parseFiledText('349',record349Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
+      authorizationCheck.developerIdentityValidation=validDeveloperSpanishTaxId('12345678Z')&&validDeveloperSpanishTaxId('B12345674')&&!validDeveloperSpanishTaxId('B12345678');
+      authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied&&authorizationCheck.developerIdentityValidation;
+      const parsed130=parseFiledText('130',samples['130']); const parsed131=parseFiledText('131',samples['131']); const parsed202=parseFiledText('202',samples['202']); const parsed216=parseFiledText('216',samples['216']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed296=parseFiledText('296',record296Content); const parsed349=parseFiledText('349',record349Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
       const prior130=previous130FromFilings({year:2026,period:'3T',filings:[
         {id:'130-q1',modeloCodigo:'130',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20',casillasPresentadas:{'07':120,'15':0,'16':20,'19':-30}},
         {id:'130-q2',modeloCodigo:'130',ejercicio:2026,periodo:'2T',estadoPresentacion:'presentado',fechaPresentacion:'2026-07-20',casillasPresentadas:{'07':50,'15':10,'16':0,'19':40}},
@@ -2996,7 +3135,7 @@ Deno.serve(async (req) => {
       const carrySelection=selectIndirectTaxLines({year:2026,period:'2T',profile:{},filings:[{id:'303-q1',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20'}],taxLines:[lateReceivedLine]},bounds(2026,'2T'),'iva',false);
       const lateOutputItems=lateItemsAfterFiling({taxLines:[{id:'tax-line-output',sourceId:'InvoiceTaxLine:tax-line-output',date:'2026-03-10',created_date:'2026-04-25',taxKind:'iva',quota:42,invoice:{id:'invoice-output',tipo:'emitida',numero_factura:'E-LATE-1'}}],invoices:[],invoicePayments:[],payrolls:[],entries:[]},'303',2026,'1T',{fechaPresentacion:'2026-04-20'});
       const historyChecks={
-        parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&parsed131?.model==='131'&&money(parsed131?.boxes?.['15'])===200&&parsed216?.model==='216'&&parsed216?.period==='1T'&&money(parsed216?.boxes?.['21'])===21&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
+        parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&parsed131?.model==='131'&&money(parsed131?.boxes?.['15'])===200&&parsed202?.model==='202'&&parsed202?.year===2026&&parsed202?.period==='2P'&&money(parsed202?.boxes?.['34'])===1400&&parsed216?.model==='216'&&parsed216?.period==='1T'&&money(parsed216?.boxes?.['21'])===21&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
         annualRoundTrip:parsed190?.year===2025&&money(parsed190?.boxes?.RETENCIONES)===2400&&parsed296?.year===2025&&money(parsed296?.boxes?.RETENCIONES)===190&&parsed349?.year===2026&&parsed349?.period==='1T'&&money(parsed349?.boxes?.OPERACIONES)===1500&&money(parsed349?.boxes?.RECTIFICACIONES)===900&&parsed390?.year===2025&&money(parsed390?.boxes?.RESULTADO)===21&&parsed415?.year===2025&&money(parsed415?.boxes?.IMPORTE_B)===3500,
         cumulative130:prior130.complete&&prior130.negativeComplete&&prior130.amount===150&&prior130.negativeAmount===20&&prior130.filings.length===2,
         compensationWallet303:prior303.complete&&prior303.amount===60,
@@ -3086,7 +3225,7 @@ Deno.serve(async (req) => {
         corporateModels:fieldMap(result200)['RDO_CONTABLE']===4000&&fieldMap(result200)['BASE']===4000&&result200.result===750&&result202.result===1400,
         model232ExplicitOnly:fieldMap(result232)['REGISTROS']===1&&fieldMap(result232)['VINCULADAS']===4000,
         model417Sii:result417.result===7&&fieldMap(result417)['DEVENGADO']===7,
-        exportModes:['131','216','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421','200','202','232'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
+        exportModes:['131','202','216','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421','200','232'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
       };
       const profileRegressionChecks={
         autonomoIva:fieldMap(result130Q2)['01']===1500,
@@ -3445,7 +3584,7 @@ Deno.serve(async (req) => {
     const adjustments=frozenDraft?Object.fromEntries((Array.isArray(frozenDraft.ajustesManuales)?frozenDraft.ajustesManuales:[]).map((item:any)=>[item.field,item.value])):body.adjustments||{};
     const calculation=frozenDraft?frozenDraft.resumen.calculation:calculate(model,data,b,adjustments);
     if(!frozenDraft) applyModelValidation(model,data,calculation);
-    if(['111','115','123','130','131','216','303','390'].includes(model)&&!clean(Deno.env.get('TAXEA_DEVELOPER_NIF'))) warnings.push('No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
+    if(['111','115','123','130','131','202','216','303','390'].includes(model)&&!developerTaxIdStatus().valid) warnings.push(developerTaxIdStatus().configured?'TAXEA_DEVELOPER_NIF no tiene un NIF español válido. Taxea exportará el bloque auxiliar en blanco hasta corregir el secreto.':'No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
     const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[]));
     const sourceHash=frozenDraft?clean(frozenDraft.sourceHash||frozenDraft.resumen?.source?.hash):await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
     const history=frozenDraft?(frozenDraft.resumen?.history||null):filingComparison(data,model,year,period,calculation);
@@ -3509,11 +3648,11 @@ Deno.serve(async (req) => {
         content=export415Import(company,year,calculation);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_415_importacion.txt`; extension='txt'; format='Soporte de importación oficial programa ATC 415';
       } else if(model==='390') {
-        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF'));
+        const developerTaxId=developerTaxIdStatus().value;
         content=wrap(model,year,'0A',export390(company,profile,activities,year,calculation,filings),developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.390`; extension='390'; format='Diseño de registro AEAT modelo 390';
       } else {
-        const developerTaxId=clean(Deno.env.get('TAXEA_DEVELOPER_NIF'));
-        const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130,'131':export131,'216':export216}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
+        const developerTaxId=developerTaxIdStatus().value;
+        const exporters:any={'111':export111,'115':export115,'123':export123,'130':export130,'131':export131,'202':export202,'216':export216}; const pages=model==='303'?export303(company,profile,year,period,calculation):exporters[model](company,year,period,calculation);
         content=wrap(model,year,period,pages,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}${period}.${model}`; extension=model; format='Diseño de registro AEAT';
       }
       const layoutErrors=transferLayoutErrors(model,content);
@@ -3534,4 +3673,5 @@ Deno.serve(async (req) => {
     return Response.json({error:'Acción no soportada.'},{status:400});
   } catch(error){const status=Number((error as any)?.status)||500; return Response.json({error:(error as Error).message||'Error interno'},{status});}
 });
+
 
