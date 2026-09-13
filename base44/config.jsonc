@@ -1,6 +1,5 @@
 {
   "name": "Taxea Portal",
-  "description": "Portal privado de gestión fiscal, contable y financiera de Taxea Strategies",
   "site": {
     "installCommand": "npm install",
     "buildCommand": "npm run build",
