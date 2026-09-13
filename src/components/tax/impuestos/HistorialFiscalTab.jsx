@@ -10,6 +10,8 @@ const EVENT = {
   filing: { label: 'Presentación', icon: FileCheck2, color: 'bg-emerald-100 text-emerald-700' },
   file: { label: 'Fichero', icon: FileDown, color: 'bg-violet-100 text-violet-700' },
 };
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo cargar el historial fiscal.';
 
 function Metric({ label, value }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold text-slate-900">{value}</p></div>;
@@ -37,7 +39,7 @@ export default function HistorialFiscalTab({ onOpenModel }) {
     <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row"><select value={type} onChange={event => setType(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todos los eventos</option><option value="draft">Borradores</option><option value="filing">Presentaciones</option><option value="file">Ficheros</option></select><select value={model} onChange={event => setModel(event.target.value)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="all">Todos los modelos</option>{models.map(value => <option key={value} value={value}>Modelo {value}</option>)}</select></div>
 
     {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
-      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{errorMessage(workspace.error)}</div>
       : events.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><History className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Sin actividad fiscal con estos filtros</p><p className="mt-1 text-xs text-slate-500">El historial se alimenta automáticamente al guardar versiones, generar ficheros o importar presentaciones.</p></div>
       : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="divide-y divide-slate-100">{events.map(event => {
         const cfg = EVENT[event.type] || EVENT.draft;
@@ -53,4 +55,3 @@ export default function HistorialFiscalTab({ onOpenModel }) {
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">El historial muestra evidencia operativa interna. Una presentación queda acreditada por su snapshot, justificante, CSV o fichero oficial; un borrador o una descarga no son prueba de presentación.</div>
   </div>;
 }
-
