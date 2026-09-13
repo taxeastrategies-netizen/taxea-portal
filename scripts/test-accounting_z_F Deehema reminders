@@ -1,0 +1,10 @@
+Resolve-Path: 
+Line |
+   2 |  $p=(Resolve-Path -LiteralPath 'scripts/test-accounting_z_F Deehema re …
+     |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot find path 'scripts/test-accounting_z_F Deehema reminders' because it does not exist.
+MethodInvocationException: 
+Line |
+   2 |  … ng_z_F Deehema reminders').Path;$c=[IO.File]::ReadAllText($p);[Consol …
+     |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "ReadAllText" with "1" argument(s): "The value cannot be an empty string. (Parameter 'path')"
