@@ -18,7 +18,7 @@ export function detectUploadSource(captureMethod, isAdmin, deviceType) {
   return 'desktop_upload';
 }
 
-export function buildAuditEntry({ user, action, prevStatus, newStatus, detail }) {
+export function buildAuditEntry({ user, action, prevStatus = '', newStatus = '', detail = '' }) {
   const ts = new Date().toISOString();
   const email = user?.email || 'sistema';
   const role = user?.role || 'user';
