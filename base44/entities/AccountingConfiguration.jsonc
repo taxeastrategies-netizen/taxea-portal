@@ -69,6 +69,47 @@
       ],
       "default": "interno_simplificado"
     },
+    "accountingFramework": {
+      "type": "string",
+      "enum": [
+        "pgc_normal",
+        "pgc_pymes"
+      ],
+      "default": "pgc_pymes"
+    },
+    "annualAccountsModel": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "abreviado",
+        "pyme"
+      ],
+      "default": "pyme"
+    },
+    "microenterpriseCriteria": {
+      "type": "boolean",
+      "default": false
+    },
+    "frameworkEffectiveFrom": {
+      "type": "integer"
+    },
+    "frameworkMinimumUntil": {
+      "type": "integer"
+    },
+    "frameworkReviewStatus": {
+      "type": "string",
+      "enum": [
+        "pendiente_asesor",
+        "validado_asesor"
+      ],
+      "default": "pendiente_asesor"
+    },
+    "frameworkReviewReason": {
+      "type": "string"
+    },
+    "eligibilityEvidenceJson": {
+      "type": "string"
+    },
     "baseCurrency": {
       "type": "string",
       "default": "EUR"
