@@ -56,4 +56,3 @@ export default function ConfiguracionFiscal() {
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">Guardar el perfil no presenta impuestos ni modifica documentos históricos. Los cambios afectan a nuevas propuestas y a los cálculos que se vuelvan a ejecutar; las declaraciones ya presentadas permanecen bloqueadas como snapshots.</div>
   </div>;
 }
-
