@@ -6,8 +6,8 @@
  * @param {Array} items - Array of items to process
  * @param {Function} worker - async (item, index) => result
  * @param {Object} opts
- * @param {number} opts.concurrency - max parallel workers (default 5)
- * @param {Function} opts.onItemComplete - (index, { ok, result, error }) => void
+ * @param {number} [opts.concurrency] - max parallel workers (default 5)
+ * @param {Function} [opts.onItemComplete] - (index, { ok, result, error }) => void
  * @returns {Promise<{ succeeded: number, failed: number, errors: Array }>}
  */
 export async function runBatch(items, worker, opts = {}) {
