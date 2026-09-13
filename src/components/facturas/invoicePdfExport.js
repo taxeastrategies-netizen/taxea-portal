@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
 
+/** @type {[number, number, number]} */
 const BRAND = [185, 28, 28]; // #b91c1c
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 
