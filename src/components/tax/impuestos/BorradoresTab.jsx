@@ -11,6 +11,8 @@ function Metric({ label, value, tone = 'slate' }) {
   const tones = { slate: 'text-slate-900', amber: 'text-amber-700', red: 'text-red-700', emerald: 'text-emerald-700' };
   return <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">{label}</p><p className={`mt-1 text-2xl font-bold ${tones[tone]}`}>{value}</p></div>;
 }
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo actualizar el borrador.';
 
 export default function BorradoresTab({ onOpenModel }) {
   const { user } = useAuth();
@@ -25,12 +27,12 @@ export default function BorradoresTab({ onOpenModel }) {
   const reviewer = isReviewer(user);
 
   const rows = useMemo(() => [...(showVersions ? workspace.data?.drafts || [] : workspace.data?.latestDrafts || [])]
-    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)), [showVersions, workspace.data]);
+    .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()), [showVersions, workspace.data]);
 
   const updateStatus = useMutation({
-    mutationFn: async ({ draftId, status }) => (await base44.functions.invoke('taxModelOperations', { action: 'update_draft_status', companyId, draftId, status })).data,
+    mutationFn: async (/** @type {{draftId: string, status: string}} */ { draftId, status }) => (await base44.functions.invoke('taxModelOperations', { action: 'update_draft_status', companyId, draftId, status })).data,
     onSuccess: async () => { setActionError(''); await queryClient.invalidateQueries({ queryKey: taxWorkspaceKey(companyId, year) }); },
-    onError: error => setActionError(error?.response?.data?.error || error?.message || 'No se pudo actualizar el borrador.'),
+    onError: error => setActionError(errorMessage(error)),
   });
 
   if (!companyId) return <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">Selecciona una empresa.</div>;
@@ -63,7 +65,7 @@ export default function BorradoresTab({ onOpenModel }) {
 
     {actionError && <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{actionError}</div>}
     {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
-      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{errorMessage(workspace.error)}</div>
       : rows.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center"><FilePen className="mx-auto h-10 w-10 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">Todavía no hay borradores guardados</p><p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-slate-500">Pulsa “Calcular y guardar borrador” en “Modelos y periodos”. Aquí aparecerá automáticamente la fotografía exacta del cálculo.</p></div>
       : <div className="space-y-3">{rows.map(draft => {
         const status = statusPill(DRAFT_STATUS[draft.estado], draft.estado);
@@ -94,4 +96,3 @@ export default function BorradoresTab({ onOpenModel }) {
       })}</div>}
   </div>;
 }
-
