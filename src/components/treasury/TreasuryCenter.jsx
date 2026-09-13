@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
 import { motion } from 'framer-motion';
 import { Plus, Building2, LayoutGrid, ArrowLeftRight, Layers, CalendarDays, Banknote, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -59,7 +60,6 @@ export default function TreasuryCenter({ company }) {
   const [transactions, setTransactions] = useState([]);
   const [events, setEvents] = useState([]);
   const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
   const [obligations, setObligations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showConnect, setShowConnect] = useState(false);
@@ -73,11 +73,10 @@ export default function TreasuryCenter({ company }) {
     if (!companyId) return;
     setLoading(true);
     try {
-      const [bankResponse, evs, invs, exps, obls] = await Promise.all([
+      const [bankResponse, evs, financialData, obls] = await Promise.all([
         base44.functions.invoke('openBanking', { action: 'treasury_snapshot', company_id: companyId }),
         base44.entities.TreasuryEvent.filter({ company_id: companyId }),
-        base44.entities.Invoice.filter({ company_id: companyId }),
-        base44.entities.Expense.filter({ company_id: companyId }),
+        fetchCompanyFinancials(companyId),
         base44.entities.TaxObligation.filter({ company_id: companyId }),
       ]);
       const bankData = bankResponse?.data ?? bankResponse;
@@ -85,8 +84,7 @@ export default function TreasuryCenter({ company }) {
       setAccounts(bankData.accounts || []);
       setTransactions(bankData.transactions || []);
       setEvents(evs || []);
-      setInvoices(invs || []);
-      setExpenses(exps || []);
+      setInvoices(financialData.invoices);
       setObligations(obls || []);
     } catch (error) {
       setBankNotice({ type: 'error', text: readableBankError(error, 'No se pudieron cargar los datos de tesorería.') });
@@ -362,7 +360,7 @@ export default function TreasuryCenter({ company }) {
       )}
 
       {reconTx && (
-        <ReconciliationPanel transaction={reconTx} invoices={invoices} expenses={expenses}
+        <ReconciliationPanel transaction={reconTx} invoices={invoices}
           onClose={() => setReconTx(null)} onReconciled={loadData} />
       )}
     </div>
