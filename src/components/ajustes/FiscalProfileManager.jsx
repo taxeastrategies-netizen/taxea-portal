@@ -22,7 +22,9 @@ const emptyProfile = (company) => ({
   mainTerritory: String(company?.tipo_impuesto || '').toLowerCase() === 'igic' ? 'canarias' : 'peninsula_baleares',
   taxAuthority: String(company?.tipo_impuesto || '').toLowerCase() === 'igic' ? 'atc' : 'aeat', filingFrequency: 'trimestral',
   indirectTaxDefault: String(company?.tipo_impuesto || '').toLowerCase() === 'igic' ? 'igic' : 'iva', defaultVatRate: 21, defaultIgicRate: 7,
-  subjectToIRPF: false, irpfEstimation: 'no_aplica', retainedIncomePercent: 0, model130ExemptionConfirmed: false,
+  subjectToIRPF: false, irpfEstimation: 'no_aplica', irpfImputationMethod: 'accrual', irpfImputationMethodConfirmed: false,
+  irpfCashMethodEffectiveFrom: '', irpfCashMethodMinimumUntil: '', retainedIncomePercent: 0, model130ExemptionConfirmed: false,
+  model130TerritorialRelief: 'none', model130TerritorialReliefConfirmed: false,
   repepStatus: 'no_aplica', profileStatus: 'pendiente_revision', censusValidationSource: 'pendiente_confirmar', active: true,
 });
 const emptyActivity = (profile) => ({
@@ -33,7 +35,7 @@ const emptyActivity = (profile) => ({
   exemptionKey: '', exemptionLegalBasis: '', newProfessionalRateConfirmed: false, hasIntraCommunityOperations: false,
 });
 
-export default function FiscalProfileManager({ company, onChanged }) {
+export default function FiscalProfileManager({ company, onChanged = undefined }) {
   const companyId = company?.id;
   const queryClient = useQueryClient();
   const [profileDraft, setProfileDraft] = useState(null);
@@ -103,8 +105,13 @@ export default function FiscalProfileManager({ company, onChanged }) {
       <div className="grid gap-3 md:grid-cols-4">
         <Check checked={profile.subjectToIRPF} onChange={v=>set('subjectToIRPF',v)} label="Sujeto a IRPF" />
         <Field label="Metodo"><Select value={profile.irpfEstimation || 'no_aplica'} onValueChange={v=>set('irpfEstimation',v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[['no_aplica','No aplica'],['directa_normal','Directa normal'],['directa_simplificada','Directa simplificada'],['objetiva_modulos','Estimacion objetiva / modulos']].map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></Field>
+        <Field label="Imputacion temporal IRPF"><Select value={profile.irpfImputationMethod || 'accrual'} onValueChange={v=>set('irpfImputationMethod',v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="accrual">Devengo</SelectItem><SelectItem value="cash">Cobros y pagos</SelectItem></SelectContent></Select></Field>
+        <Check checked={profile.irpfImputationMethodConfirmed} onChange={v=>set('irpfImputationMethodConfirmed',v)} label="Criterio IRPF validado" />
+        {profile.irpfImputationMethod === 'cash' && <><Field label="Cobros/pagos efectivo desde"><Input type="date" value={profile.irpfCashMethodEffectiveFrom||''} onChange={e=>set('irpfCashMethodEffectiveFrom',e.target.value)} /></Field><Field label="Permanencia minima hasta"><Input type="date" value={profile.irpfCashMethodMinimumUntil||''} onChange={e=>set('irpfCashMethodMinimumUntil',e.target.value)} /></Field></>}
         <Field label="Ingresos sometidos a retencion (%)"><Input type="number" min="0" max="100" value={profile.retainedIncomePercent ?? 0} onChange={e=>set('retainedIncomePercent',Number(e.target.value))} /></Field>
         <Check checked={profile.model130ExemptionConfirmed} onChange={v=>set('model130ExemptionConfirmed',v)} label="Exclusion 130 revisada" />
+        <Field label="Beneficio territorial modelo 130"><Select value={profile.model130TerritorialRelief || 'none'} onValueChange={v=>set('model130TerritorialRelief',v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[['none','No aplica'],['ceuta','Ceuta'],['melilla','Melilla'],['la_palma_2026','La Palma, 3T/4T de 2026'],['mixed','Actividades con y sin derecho']].map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></Field>
+        <Check checked={profile.model130TerritorialReliefConfirmed} onChange={v=>set('model130TerritorialReliefConfirmed',v)} label="Beneficio territorial validado" />
       </div>
     </section>
 
@@ -151,5 +158,4 @@ export default function FiscalProfileManager({ company, onChanged }) {
 
 function Field({ label, children }) { return <div className="space-y-1"><Label className="text-xs">{label}</Label>{children}</div>; }
 function Check({ checked, onChange, label }) { return <label className="flex items-center gap-2 text-xs"><Checkbox checked={Boolean(checked)} onCheckedChange={value=>onChange(value===true)} /><span>{label}</span></label>; }
-
 
