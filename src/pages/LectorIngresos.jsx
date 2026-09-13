@@ -130,7 +130,7 @@ export default function LectorIngresos() {
   const [toast, setToast] = useState(null);
   const [validatingAll, setValidatingAll] = useState(false);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
-  const [fiscalContext, setFiscalContext] = useState({});
+  const [fiscalContext, setFiscalContext] = useState(/** @type {any} */ ({}));
 
   useEffect(() => {
     if (!company?.id) return;
