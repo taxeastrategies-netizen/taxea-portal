@@ -13,6 +13,7 @@ const frontendFiles = filesUnder(path.resolve('src')).filter(file => /\.(?:js|js
 const protectedEntities = [
   'Invoice', 'Expense', 'InvoicePayment', 'BankAccount', 'BankTransaction', 'TreasuryEvent',
   'JournalEntry', 'JournalEntryLine', 'InvoiceTaxLine', 'AccountingAccount', 'AccountingConfiguration', 'AccountingFiscalYear',
+  'AccountingAsset', 'AmortizationScheduleLine',
   'TaxDraft', 'TaxFiling', 'TaxOfficialFile', 'TaxPeriod', 'TaxDeclarableRecord', 'TaxSubmission', 'TaxModel',
 ];
 const protectedPattern = protectedEntities.join('|');
@@ -29,11 +30,20 @@ assert.deepEqual(violations, [], `Persisten escrituras financieras o fiscales di
 function parseJsonc(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''));
 }
+
+function isPrivilegedWriteRule(rule) {
+  if (rule?.user_condition?.role === 'admin') return true;
+  if (!Array.isArray(rule?.$or) || rule.$or.length === 0) return false;
+  return rule.$or.every(branch => ['admin', 'super_admin'].includes(branch?.user_condition?.role));
+}
+
 for (const entity of protectedEntities) {
   const schema = parseJsonc(path.resolve(`base44/entities/${entity}.jsonc`));
   for (const operation of ['create', 'update', 'delete']) {
-    assert.equal(schema.rls?.[operation]?.user_condition?.role, 'admin', `${entity}.${operation} debe quedar cerrado al backend.`);
+    assert.equal(isPrivilegedWriteRule(schema.rls?.[operation]), true, `${entity}.${operation} debe quedar cerrado al backend.`);
   }
+  assert.notEqual(schema.rls?.read, true, `${entity}.read no puede ser público.`);
+  assert.equal(JSON.stringify(schema.rls || {}).includes('"user.role"'), false, `${entity} usa una condición RLS de rol no soportada.`);
 }
 
 const invoiceBackend = fs.readFileSync(path.resolve('base44/functions/invoiceOperations/entry.ts'), 'utf8');
