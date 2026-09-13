@@ -6,6 +6,8 @@ import { useCompanyContext } from '@/lib/useCompanyContext';
 import { useTaxWorkspace } from './useTaxWorkspace';
 
 const CATEGORY_LABEL = { configuracion: 'Configuración', borrador: 'Borrador', presentacion: 'Presentación', incidencia: 'Incidencia fiscal', fichero: 'Fichero' };
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo cargar el centro de validaciones.';
 
 function Metric({ label, value, tone }) {
   const color = tone === 'red' ? 'text-red-700' : tone === 'amber' ? 'text-amber-700' : 'text-emerald-700';
@@ -42,7 +44,7 @@ export default function ErroresValidacionesTab({ onOpenModel, onOpenConfig }) {
     </div>
 
     {workspace.isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-cyan-600" /></div>
-      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{workspace.error?.response?.data?.error || workspace.error?.message}</div>
+      : workspace.isError ? <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{errorMessage(workspace.error)}</div>
       : issues.length === 0 ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-14 text-center"><CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" /><p className="mt-3 font-semibold text-emerald-900">No hay incidencias con estos filtros</p><p className="mt-1 text-xs text-emerald-700">La validación acredita coherencia interna de los datos disponibles; no sustituye la revisión profesional ni la aceptación administrativa.</p></div>
       : <div className="space-y-3">{issues.map(issue => {
         return <article key={issue.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
@@ -53,4 +55,3 @@ export default function ErroresValidacionesTab({ onOpenModel, onOpenConfig }) {
     <div className="flex gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-xs leading-5 text-cyan-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><p>Las recomendaciones se resuelven corrigiendo su fuente —perfil, factura, nómina, asiento, borrador o modelo importado—, pero no inmovilizan el borrador ni el fichero. La Administración conserva sus controles de aceptación.</p></div>
   </div>;
 }
-
