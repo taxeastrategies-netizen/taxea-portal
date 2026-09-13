@@ -164,4 +164,3 @@ export function buildFinancialSummary(invoices = [], expenses = []) {
     ...reconciled.sourceTruth,
   };
 }
-
