@@ -7,6 +7,8 @@ const APP_ID = Deno.env.get("BASE44_APP_ID");
 
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido.' }, { status: 405 });
+    if (!STRIPE_SECRET || !WEBHOOK_SECRET) return Response.json({ error: 'Webhook no configurado.' }, { status: 503 });
     const signature = req.headers.get("stripe-signature");
     if (!signature) return Response.json({ error: 'Firma ausente' }, { status: 400 });
 
@@ -428,3 +430,4 @@ async function sendAdminEmail(base44, subject, body) {
     console.error('Error enviando email admin:', err);
   }
 }
+
