@@ -9,7 +9,10 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "typecheck:tax-accounting": "node scripts/typecheck-tax-accounting.mjs",
+    "preview": "vite preview",
+    "test:tax-accounting-phase0": "node scripts/test-tax-accounting-certification.mjs && node scripts/test-certification-runtime.mjs && node scripts/test-accounting-boundary-runtime.mjs && node scripts/test-tax-model-selftest.mjs && node scripts/verify-tax-accounting-boundaries.mjs",
+    "test:tax-accounting-phase1": "npm run test:tax-accounting-phase0 && node scripts/test-financial-source-truth.mjs && node scripts/test-invoice-create-runtime.mjs && node scripts/test-manual-financial-runtime.mjs && node scripts/test-financial-mutation-boundaries.mjs"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.48",
