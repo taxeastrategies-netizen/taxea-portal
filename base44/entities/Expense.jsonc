@@ -59,6 +59,14 @@
     "total": {
       "type": "number"
     },
+    "importe_retencion": {
+      "type": "number",
+      "default": 0
+    },
+    "treasury_account_code": {
+      "type": "string",
+      "description": "Subcuenta de caja o banco usada en el asiento del registro manual."
+    },
     "trimestre": {
       "type": "string",
       "enum": [
@@ -101,6 +109,57 @@
     },
     "anulada_por": {
       "type": "string"
+    },
+    "document_number": {
+      "type": "string"
+    },
+    "tax_id": {
+      "type": "string"
+    },
+    "record_kind": {
+      "type": "string",
+      "enum": [
+        "manual_non_invoice",
+        "legacy",
+        "ticket",
+        "other_support"
+      ],
+      "default": "manual_non_invoice"
+    },
+    "canonical_event_key": {
+      "type": "string",
+      "description": "Clave idempotente del registro manual en el n\u00facleo financiero."
+    },
+    "canonical_invoice_id": {
+      "type": "string",
+      "description": "Factura can\u00f3nica equivalente cuando el registro legacy era una proyecci\u00f3n duplicada."
+    },
+    "linked_journal_entry_id": {
+      "type": "string"
+    },
+    "accounting_review_status": {
+      "type": "string",
+      "enum": [
+        "pendiente_revision",
+        "validado_contabilizado",
+        "requiere_correccion",
+        "asiento_anulado"
+      ],
+      "default": "pendiente_revision"
+    },
+    "source_system": {
+      "type": "string",
+      "default": "taxea_portal"
+    },
+    "source_record_id": {
+      "type": "string"
+    },
+    "source_hash": {
+      "type": "string"
+    },
+    "lifecycle_version": {
+      "type": "integer",
+      "default": 1
     }
   },
   "required": [
@@ -111,16 +170,22 @@
   ],
   "rls": {
     "create": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "data.company_id": "{{user.data.company_id}}"
     },
     "update": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
