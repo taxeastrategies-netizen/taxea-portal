@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   FileText, BookOpen, PenLine, LayoutList, ArrowUpCircle,
-  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark, CalendarClock, Boxes, AlertCircle, Loader2, ShieldCheck
+  ArrowDownCircle, Receipt, TrendingUp, BarChart2, Settings2, Landmark, CalendarClock, Boxes, AlertCircle, Loader2, ShieldCheck, BadgeCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { base44 } from '@/api/base44Client';
@@ -22,6 +22,7 @@ import AccountingControlCenter from './AccountingControlCenter';
 import PeriodosContables from './PeriodosContables';
 import ActivosContables from './ActivosContables';
 import FiscalProfileManager from '@/components/ajustes/FiscalProfileManager';
+import AccountingCertification from './AccountingCertification';
 
 const TABS = [
   { id: 'facturas', label: 'Facturas pendientes', icon: FileText },
@@ -38,6 +39,7 @@ const TABS = [
   { id: 'balance', label: 'Balance y PyG', icon: BarChart2 },
   { id: 'periodos', label: 'Ejercicios y cierre', icon: CalendarClock },
   { id: 'config', label: 'Config. contable', icon: Settings2 },
+  { id: 'certificacion', label: 'Certificación', icon: BadgeCheck },
 ];
 
 export default function ContabilidadModule() {
@@ -136,13 +138,14 @@ export default function ContabilidadModule() {
         {activeTab === 'emitidas' && <LibroRegistroEmitidas companyId={companyId} />}
         {activeTab === 'recibidas' && <LibroRegistroRecibidas companyId={companyId} />}
         {activeTab === 'iva' && <IVAResumen companyId={companyId} />}
-        {activeTab === 'fiscal' && <FiscalProfileManager company={company} user={user} />}
+        {activeTab === 'fiscal' && <FiscalProfileManager company={company} />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
         {activeTab === 'activos' && <ActivosContables companyId={companyId} />}
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
         {activeTab === 'balance' && <BalancePyG companyId={companyId} />}
         {activeTab === 'periodos' && <PeriodosContables companyId={companyId} />}
         {activeTab === 'config' && <ConfigContable companyId={companyId} />}
+        {activeTab === 'certificacion' && <AccountingCertification companyId={companyId} />}
       </div>
     </div>
   );
