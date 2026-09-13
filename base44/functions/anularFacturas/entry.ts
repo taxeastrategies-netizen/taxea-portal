@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
-import { SCHEMA_VERSION, canonical8, createJournalEntry } from '../accountingOperations/accountingEngine.ts';
+import { SCHEMA_VERSION, canonical8, createJournalEntry } from './accountingEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
