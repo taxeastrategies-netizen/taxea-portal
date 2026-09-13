@@ -1,4 +1,5 @@
 import { getWithholdingAmount, roundMoney } from './accountingUtils';
+import { reconcileFinancialSources } from './financialSourceTruth';
 
 /**
  * Financial Core - Capa de calculo financiero unificada
@@ -91,10 +92,11 @@ export function classifyInvoices(invoices) {
  */
 export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   const { year, quarter } = options;
-  
+  const sourceTruth = reconcileFinancialSources(invoices, expenses);
+
   // Filtrar activas primero
-  const activeInvs = activeInvoices(invoices);
-  const activeExps = activeExpenses(expenses);
+  const activeInvs = activeInvoices(sourceTruth.invoices);
+  const activeExps = activeExpenses(sourceTruth.expenses);
   
   // Filtrar por periodo
   const periodInvs = filterByPeriod(activeInvs, { year, quarter });
@@ -104,29 +106,39 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   const emitidas = periodInvs.filter(i => i.tipo === 'emitida');
   const recibidas = periodInvs.filter(i => i.tipo === 'recibida');
   const gastos = periodExps.filter(e => e.tipo === 'gasto');
+  const ingresosManual = periodExps.filter(e => e.tipo === 'ingreso');
   
   // ── Totales (usando total_factura para facturas, total para expenses) ──
-  const totalIngresos = emitidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+  const totalIngresosFacturas = emitidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+  const totalIngresosManual = ingresosManual.reduce((s, e) => s + (e.total || 0), 0);
+  const totalIngresos = totalIngresosFacturas + totalIngresosManual;
   const totalGastosFacturas = recibidas.reduce((s, i) => s + (i.total_factura || 0), 0);
   const totalGastosExpense = gastos.reduce((s, e) => s + (e.total || 0), 0);
   const totalGastos = totalGastosFacturas + totalGastosExpense;
   
   // ── Bases imponibles ──
-  const baseIngresos = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
+  const baseIngresosFacturas = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
+  const baseIngresosManual = ingresosManual.reduce((s, e) => s + (e.base_imponible || 0), 0);
+  const baseIngresos = baseIngresosFacturas + baseIngresosManual;
   const baseGastosFacturas = recibidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
   const baseGastosExpense = gastos.reduce((s, e) => s + (e.base_imponible || 0), 0);
   const baseGastos = baseGastosFacturas + baseGastosExpense;
   
   // ── IVA/IGIC ──
-  const ivaRepercutido = emitidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
+  const ivaRepercutido = emitidas.reduce((s, i) => s + (i.cuota_iva || 0), 0)
+    + ingresosManual.reduce((s, e) => s + (e.cuota_impuesto || 0), 0);
   const ivaSoportadoFacturas = recibidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
   const ivaSoportadoExpense = gastos.reduce((s, e) => s + (e.cuota_impuesto || 0), 0);
   const ivaSoportado = ivaSoportadoFacturas + ivaSoportadoExpense;
   const ivaNeto = ivaRepercutido - ivaSoportado;
   
   // ── Retenciones IRPF ──
-  const retencionIngresos = emitidas.reduce((s, i) => s + getWithholdingAmount(i), 0);
-  const retencionGastos = recibidas.reduce((s, i) => s + getWithholdingAmount(i), 0);
+  const manualWithholding = record => Number(record.importe_retencion)
+    || roundMoney((Number(record.base_imponible) || 0) * (Number(record.retencion_irpf) || 0) / 100);
+  const retencionIngresos = emitidas.reduce((s, i) => s + getWithholdingAmount(i), 0)
+    + ingresosManual.reduce((s, e) => s + manualWithholding(e), 0);
+  const retencionGastos = recibidas.reduce((s, i) => s + getWithholdingAmount(i), 0)
+    + gastos.reduce((s, e) => s + manualWithholding(e), 0);
   
   // ── Resultado ──
   const resultado = totalIngresos - totalGastos;
@@ -170,12 +182,14 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
   const numFacturasEmitidas = emitidas.length;
   const numFacturasRecibidas = recibidas.length;
   const numGastos = gastos.length;
-  const numAnuladas = (invoices || []).filter(i => i.anulada).length;
+  const numAnuladas = sourceTruth.invoices.filter(i => i.anulada).length;
   
   // ── Datos crudos filtrados para que las pantallas puedan usarlos ──
   return {
     // Totales principales (total con impuestos)
     totalIngresos,
+    totalIngresosFacturas,
+    totalIngresosManual,
     totalGastos,
     totalGastosFacturas,
     totalGastosExpense,
@@ -184,6 +198,8 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
     
     // Bases imponibles
     baseIngresos,
+    baseIngresosFacturas,
+    baseIngresosManual,
     baseGastos,
     baseGastosFacturas,
     baseGastosExpense,
@@ -219,11 +235,13 @@ export function calculateFinancialKPIs(invoices, expenses, options = {}) {
     emitidas,
     recibidas,
     gastos,
+    ingresosManual,
     activeInvoices: periodInvs,
     activeExpenses: periodExps,
     
     // Metadatos
     criteria: { year: year || 'all', quarter: quarter || 'all', excludeAnulada: true },
+    sourceTruth: sourceTruth.sourceTruth,
   };
 }
 
@@ -240,14 +258,23 @@ export function calculateMonthlyData(invoices, expenses, year) {
   
   const data = MONTHS.map(m => ({ month: m, ingresos: 0, gastos: 0 }));
   
-  activeInvoices(invoices).filter(i => i.tipo === 'emitida').forEach(i => {
+  const sourceTruth = reconcileFinancialSources(invoices, expenses);
+
+  activeExpenses(sourceTruth.expenses).filter(e => e.tipo === 'ingreso').forEach(e => {
+    const d = new Date(e.fecha || e.created_date);
+    if (!isNaN(d) && d.getFullYear() === y) {
+      data[d.getMonth()].ingresos += Number(e.total) || 0;
+    }
+  });
+
+  activeInvoices(sourceTruth.invoices).filter(i => i.tipo === 'emitida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
       data[d.getMonth()].ingresos += Number(i.total_factura) || 0;
     }
   });
   
-  activeExpenses(expenses).filter(e => e.tipo === 'gasto').forEach(e => {
+  activeExpenses(sourceTruth.expenses).filter(e => e.tipo === 'gasto').forEach(e => {
     const d = new Date(e.fecha || e.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
       data[d.getMonth()].gastos += Number(e.total) || 0;
@@ -255,7 +282,7 @@ export function calculateMonthlyData(invoices, expenses, year) {
   });
   
   // Anadir gastos de facturas recibidas
-  activeInvoices(invoices).filter(i => i.tipo === 'recibida').forEach(i => {
+  activeInvoices(sourceTruth.invoices).filter(i => i.tipo === 'recibida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
     if (!isNaN(d) && d.getFullYear() === y) {
       data[d.getMonth()].gastos += Number(i.total_factura) || 0;
