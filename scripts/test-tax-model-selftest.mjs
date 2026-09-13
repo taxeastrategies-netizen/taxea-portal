@@ -170,4 +170,3 @@ const diagnostics = { frozenExport: { status: frozenExport.response.status, erro
 const output = { ...selfTest.payload, workflowChecks, diagnostics, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
 console.log(JSON.stringify(output, null, 2));
 if (!output.ok) process.exitCode = 1;
-
