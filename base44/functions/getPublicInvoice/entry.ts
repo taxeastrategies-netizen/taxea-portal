@@ -4,33 +4,39 @@ const pick = (source, keys) => Object.fromEntries(
   keys.filter(key => source?.[key] !== undefined).map(key => [key, source[key]])
 );
 
+const publicJson = (body, init = {}) => Response.json(body, {
+  ...init,
+  headers: { 'Cache-Control': 'no-store, max-age=0', Pragma: 'no-cache', 'X-Content-Type-Options': 'nosniff', ...(init.headers || {}) },
+});
+
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return publicJson({ error: 'Método no permitido.' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const token = String(body.token || '').trim();
 
     if (!/^[a-f0-9]{64}$/i.test(token)) {
-      return Response.json({ error: 'Enlace no válido.' }, { status: 400 });
+      return publicJson({ error: 'Enlace no válido.' }, { status: 400 });
     }
 
     const records = await base44.asServiceRole.entities.Invoice.filter({ public_token: token }, '-created_date', 2);
     const invoice = records?.[0];
     if (!invoice || records.length !== 1) {
-      return Response.json({ error: 'Factura no encontrada.' }, { status: 404 });
+      return publicJson({ error: 'Factura no encontrada.' }, { status: 404 });
     }
     if (invoice.anulada) {
-      return Response.json({ error: 'Esta factura ha sido anulada.' }, { status: 410 });
+      return publicJson({ error: 'Esta factura ha sido anulada.' }, { status: 410 });
     }
     if (invoice.public_token_revoked_at) {
-      return Response.json({ error: 'Este enlace ha sido revocado.' }, { status: 410 });
+      return publicJson({ error: 'Este enlace ha sido revocado.' }, { status: 410 });
     }
     if (invoice.public_token_expires_at && new Date(invoice.public_token_expires_at) < new Date()) {
-      return Response.json({ error: 'Este enlace ha caducado.' }, { status: 410 });
+      return publicJson({ error: 'Este enlace ha caducado.' }, { status: 410 });
     }
 
     const company = await base44.asServiceRole.entities.Company.get(invoice.company_id);
-    if (!company) return Response.json({ error: 'Emisor no encontrado.' }, { status: 404 });
+    if (!company) return publicJson({ error: 'Emisor no encontrado.' }, { status: 404 });
 
     const logs = await base44.asServiceRole.entities.InvoiceEmailLog.filter({
       invoice_id: invoice.id,
@@ -82,9 +88,10 @@ Deno.serve(async (req) => {
       'email', 'telefono', 'logo_url', 'datos_bancarios', 'tipo_impuesto',
     ]);
 
-    return Response.json({ ok: true, invoice: publicInvoice, company: publicCompany });
+    return publicJson({ ok: true, invoice: publicInvoice, company: publicCompany });
   } catch (error) {
     console.error('[getPublicInvoice]', error);
-    return Response.json({ error: 'No se pudo abrir la factura.' }, { status: 500 });
+    return publicJson({ error: 'No se pudo abrir la factura.' }, { status: 500 });
   }
 });
+
