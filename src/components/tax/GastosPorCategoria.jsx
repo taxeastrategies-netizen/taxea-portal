@@ -110,7 +110,7 @@ export default function GastosPorCategoria({ invoices }) {
                     fontSize: 11,
                   }}
                   formatter={(v, _, props) => [
-                    `${fmt(v)} € (${total > 0 ? ((v / total) * 100).toFixed(1) : 0}%)`,
+                    `${fmt(v)} € (${total > 0 ? ((Number(v) / total) * 100).toFixed(1) : 0}%)`,
                     props.payload.label,
                   ]}
                 />
