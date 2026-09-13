@@ -23,7 +23,7 @@ const businessError = (message, status = 409, details = {}) => Response.json({
   error: message,
   error_status: status,
   ...details,
-});
+}, { status });
 const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 const isPrivateFileUri = (value) => /^private\/[A-Za-z0-9/_\-.]+$/.test(String(value || ''))
   && !String(value).includes('..');
@@ -36,6 +36,115 @@ const isSafeHttpsUrl = (value) => {
   }
 };
 
+const roleOf = user => cleanText(user?.role || user?.data?.role, 80).toLowerCase();
+const normalizeKeyPart = value => cleanText(value, 240)
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .replace(/[^A-Z0-9]/g, '');
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(String(value || ''));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function authorizeCompany(base44, user, requestedCompanyId) {
+  const companyId = cleanText(requestedCompanyId || user?.data?.company_id || user?.company_id, 120);
+  if (!companyId) throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
+  const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
+  if (!company) throw Object.assign(new Error('Empresa no encontrada.'), { status: 404 });
+  const email = cleanText(user?.email, 240).toLowerCase();
+  const authorizedEmails = Array.isArray(company.usuarios_autorizados)
+    ? company.usuarios_autorizados.map(value => cleanText(value, 240).toLowerCase())
+    : [];
+  const allowed = ['admin', 'super_admin'].includes(roleOf(user))
+    || cleanText(user?.data?.company_id || user?.company_id, 120) === companyId
+    || (email && cleanText(company.owner_email, 240).toLowerCase() === email)
+    || (email && authorizedEmails.includes(email));
+  if (!allowed) throw Object.assign(new Error('No tienes permiso para operar en esta empresa.'), { status: 403 });
+  return { company, companyId };
+}
+
+function invoiceCreationPayload(input, companyId, user) {
+  const type = input?.tipo === 'recibida' ? 'recibida' : 'emitida';
+  const number = cleanText(input?.numero_factura, 120);
+  const issueDate = cleanText(input?.fecha_emision, 10);
+  const receiptDate = cleanText(input?.fecha_recepcion, 10);
+  if (!number) throw Object.assign(new Error('El número de factura es obligatorio.'), { status: 400 });
+  if (!isIsoDate(issueDate)) throw Object.assign(new Error('La fecha de emisión no es válida.'), { status: 400 });
+  if (type === 'recibida' && !isIsoDate(receiptDate)) {
+    throw Object.assign(new Error('La fecha real de recepción es obligatoria en facturas recibidas.'), { status: 400 });
+  }
+  const base = asMoney(Number(input?.base_imponible));
+  const taxRate = Number(input?.tipo_iva || 0);
+  const withholdingRate = Number(input?.retencion_irpf || 0);
+  const rectifying = input?.es_rectificativa === true;
+  if (!Number.isFinite(base) || (!rectifying && base < 0)) throw Object.assign(new Error('La base imponible no es válida.'), { status: 400 });
+  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) throw Object.assign(new Error('El tipo de impuesto no es válido.'), { status: 400 });
+  if (!Number.isFinite(withholdingRate) || withholdingRate < 0 || withholdingRate > 100) throw Object.assign(new Error('La retención no es válida.'), { status: 400 });
+  const taxAmount = input?.cuota_iva === null || input?.cuota_iva === undefined
+    ? asMoney(base * taxRate / 100)
+    : asMoney(input.cuota_iva);
+  const withholdingAmount = input?.importe_retencion === null || input?.importe_retencion === undefined
+    ? asMoney(base * withholdingRate / 100)
+    : asMoney(input.importe_retencion);
+  if (!Number.isFinite(taxAmount) || !Number.isFinite(withholdingAmount)) {
+    throw Object.assign(new Error('Las cuotas de impuesto y retención deben ser importes válidos.'), { status: 400 });
+  }
+  const calculatedTotal = asMoney(base + taxAmount - withholdingAmount);
+  const total = input?.total_factura === null || input?.total_factura === undefined
+    ? calculatedTotal
+    : asMoney(input.total_factura);
+  if (!Number.isFinite(total) || Math.abs(total - calculatedTotal) > 0.02) {
+    throw Object.assign(new Error('El total no coincide con base, impuesto y retención.'), { status: 400 });
+  }
+  const month = Number(issueDate.slice(5, 7));
+  const quarter = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
+  const canonicalDocumentKey = [companyId, type, normalizeKeyPart(number), issueDate, total.toFixed(2)].join('|');
+  const allowed = [
+    'fecha_vencimiento', 'fecha_operacion', 'cliente_nombre', 'cliente_nif', 'cliente_email', 'cliente_telefono',
+    'cliente_direccion', 'cliente_codigo_postal', 'cliente_ciudad', 'cliente_provincia', 'cliente_pais',
+    'proveedor_nombre', 'proveedor_nif', 'proveedor_email', 'proveedor_telefono', 'proveedor_direccion',
+    'proveedor_codigo_postal', 'proveedor_ciudad', 'proveedor_provincia', 'proveedor_pais', 'concepto',
+    'categoria_gasto', 'fiscal_treatment', 'fiscal_activity_id', 'deductible_tax_amount',
+    'non_deductible_tax_amount', 'moneda', 'exchange_rate', 'forma_pago', 'coletilla_fiscal',
+    'source_document_type', 'source_document_id', 'es_rectificativa', 'factura_rectificada', 'ocr_document_id',
+    'indirect_tax_kind', 'origin', 'source_system', 'source_record_id',
+  ];
+  const payload = {};
+  for (const field of allowed) {
+    if (input?.[field] !== undefined && input?.[field] !== null) payload[field] = input[field];
+  }
+  return {
+    ...payload,
+    company_id: companyId,
+    numero_factura: number,
+    fecha_emision: issueDate,
+    fecha_operacion: cleanText(input?.fecha_operacion, 10) || issueDate,
+    ...(type === 'recibida' ? { fecha_recepcion: receiptDate } : {}),
+    tipo: type,
+    base_imponible: base,
+    tipo_iva: taxRate,
+    cuota_iva: taxAmount,
+    retencion_irpf: withholdingRate,
+    importe_retencion: withholdingAmount,
+    total_factura: total,
+    importe_pagado: 0,
+    importe_pendiente: Math.abs(total),
+    estado_cobro: input?.estado_cobro === 'vencida' ? 'vencida' : 'pendiente',
+    estado_contable: 'pendiente',
+    accounting_review_status: 'pendiente_revision',
+    anio: Number(issueDate.slice(0, 4)),
+    trimestre: quarter,
+    subido_por: user?.email || '',
+    origin: cleanText(input?.origin, 80) || 'manual',
+    source_system: cleanText(input?.source_system, 100) || 'taxea_portal',
+    canonical_document_key: canonicalDocumentKey,
+    lifecycle_version: 1,
+  };
+}
+
 function secureToken() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -43,14 +152,7 @@ function secureToken() {
 }
 
 async function getOwnedInvoice(base44, user, invoiceId, requestedCompanyId) {
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-  const companyId = requestedCompanyId || user.data?.company_id;
-  if (!companyId) {
-    throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
-  }
-  if (!isAdmin && requestedCompanyId && requestedCompanyId !== user.data?.company_id) {
-    throw Object.assign(new Error('La empresa indicada no coincide con la empresa activa.'), { status: 403 });
-  }
+  const { companyId } = await authorizeCompany(base44, user, requestedCompanyId);
   if (!invoiceId) throw Object.assign(new Error('invoice_id es obligatorio.'), { status: 400 });
   const invoice = await base44.asServiceRole.entities.Invoice.get(invoiceId).catch(() => null);
   if (!invoice) throw Object.assign(new Error('Factura no encontrada.'), { status: 404 });
@@ -178,7 +280,87 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = cleanText(body.action, 80);
     currentAction = action;
+
+    if (action === 'create_invoice') {
+      const { companyId } = await authorizeCompany(base44, user, body.company_id);
+      const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
+      const sourceHash = await sha256(JSON.stringify(payload));
+      const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
+      const previous = await base44.asServiceRole.entities.Invoice.filter({
+        company_id: companyId,
+        creation_idempotency_key: idempotencyKey,
+      }, '-created_date', 2);
+      let createdInvoice = previous?.[0] || null;
+      if (createdInvoice && (
+        (createdInvoice.source_hash && createdInvoice.source_hash !== sourceHash)
+        || (!createdInvoice.source_hash && createdInvoice.canonical_document_key !== payload.canonical_document_key)
+      )) {
+        return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes. Abre una nueva factura.' }, { status: 409 });
+      }
+      if (!createdInvoice) {
+        const sameNumber = await base44.asServiceRole.entities.Invoice.filter({
+          company_id: companyId,
+          numero_factura: payload.numero_factura,
+        }, '-created_date', 20);
+        if ((sameNumber || []).some(candidate => !candidate.anulada)) {
+          return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
+        }
+        createdInvoice = await base44.asServiceRole.entities.Invoice.create({
+          ...payload,
+          creation_idempotency_key: idempotencyKey,
+          source_hash: sourceHash,
+        });
+      }
+      let accounting = null;
+      let accountingWarning = '';
+      try {
+        accounting = await postInvoice(base44.asServiceRole, companyId, createdInvoice, user.email, { status: 'confirmado' });
+        createdInvoice = await base44.asServiceRole.entities.Invoice.get(createdInvoice.id);
+      } catch (error) {
+        accountingWarning = error?.message || 'La factura requiere revisión contable.';
+        await base44.asServiceRole.entities.Invoice.update(createdInvoice.id, {
+          estado_contable: 'requiere_correccion',
+          accounting_review_status: 'requiere_correccion',
+          accounting_migration_hold: true,
+          accounting_migration_hold_reason: accountingWarning,
+        });
+      }
+      await recordTimeline(base44, {
+        invoice_id: createdInvoice.id,
+        company_id: companyId,
+        event_type: previous?.[0] ? 'creacion_reintentada' : 'factura_creada',
+        event_label: previous?.[0]
+          ? 'Creación recuperada de forma idempotente'
+          : (payload.tipo === 'recibida' ? 'Factura recibida registrada' : 'Factura emitida registrada'),
+        event_detail: `${payload.numero_factura} · ${payload.total_factura.toFixed(2)} ${payload.moneda || 'EUR'}`,
+        created_at: new Date().toISOString(),
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+      return Response.json({
+        ok: true,
+        duplicate: Boolean(previous?.[0]),
+        invoice: createdInvoice,
+        journal_entry: accounting?.entry || null,
+        accounting_warning: accountingWarning || null,
+        source_truth_version: 'financial-source-truth-v1',
+      });
+    }
+
     const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
+
+    if (action === 'mark_accounting_review') {
+      if (!['admin', 'super_admin'].includes(roleOf(user))) {
+        return Response.json({ error: 'Solo administración puede cambiar el estado de revisión contable.' }, { status: 403 });
+      }
+      if (invoice.anulada) return Response.json({ error: 'La factura está anulada.' }, { status: 409 });
+      const saved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+        estado_contable: 'en_revision',
+        accounting_review_status: 'pendiente_revision',
+        lifecycle_version: Number(invoice.lifecycle_version || 1) + 1,
+      });
+      return Response.json({ ok: true, invoice: saved });
+    }
 
     if (action === 'create_public_link') {
       if (invoice.anulada) {
