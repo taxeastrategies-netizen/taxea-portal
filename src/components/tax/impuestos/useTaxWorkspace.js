@@ -54,4 +54,3 @@ export function statusPill(config, fallback) {
 export function isReviewer(user) {
   return ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
 }
-
