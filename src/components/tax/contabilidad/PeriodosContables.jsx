@@ -13,6 +13,8 @@ const invokeAccounting = async (payload) => {
   if (data.error || data.success === false) throw new Error(data.error || 'La operación contable no se pudo completar.');
   return data;
 };
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo completar la operación.';
 
 export default function PeriodosContables({ companyId }) {
   const currentYear = new Date().getFullYear();
@@ -34,14 +36,14 @@ export default function PeriodosContables({ companyId }) {
   const selected = useMemo(() => (query.data?.periods || []).find(item => Number(item.year) === Number(year)), [query.data, year]);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['accounting-periods', companyId] });
   const mutation = useMutation({
-    mutationFn: async (payload) => invokeAccounting({ companyId, ...payload }),
+    mutationFn: async (/** @type {Record<string, any>} */ payload) => invokeAccounting({ companyId, ...payload }),
     onSuccess: (data) => {
       setActionError('');
       if (data.preview) setPreview(data.preview);
       refresh();
     },
     onError: (error) => {
-      const message = error?.response?.data?.error || error?.message || 'No se pudo completar la operación.';
+      const message = errorMessage(error);
       setActionError(message);
       toast.error(message);
     },
