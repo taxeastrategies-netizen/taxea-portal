@@ -19,6 +19,8 @@ import FinancialIntelligenceAI from './FinancialIntelligenceAI';
 import CompanyScoring from './CompanyScoring';
 import MnAAnalytics from './MnAAnalytics';
 import ExecutiveCommentary from './ExecutiveCommentary';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
 
 const TABS = [
   { id: 'dashboard',   label: 'Centro',             icon: BarChart2,   color: 'text-slate-600' },
@@ -52,16 +54,15 @@ export default function ReportingCenter() {
   const loadData = async () => {
     if (!companyId) { setLoading(false); return; }
     setLoading(true);
-    const [inv, exp, obl, dbs, banks, txs] = await Promise.all([
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
+    const [financialData, obl, dbs, banks, txs] = await Promise.all([
+      fetchCompanyFinancials(companyId, { year: new Date().getFullYear() }),
       base44.entities.TaxObligation.filter({ company_id: companyId }),
       base44.entities.DebtInstrument.filter({ company_id: companyId }),
       base44.entities.BankAccount.filter({ company_id: companyId }),
       base44.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 500),
     ]);
-    setInvoices(inv || []);
-    setExpenses(exp || []);
+    setInvoices(financialData.invoices);
+    setExpenses(financialData.expenses);
     setObligations(obl || []);
     setDebts(dbs || []);
     setBankAccounts(banks || []);
@@ -72,10 +73,9 @@ export default function ReportingCenter() {
   useEffect(() => { loadData(); }, [companyId]);
 
   const financials = useMemo(() => {
-    const ingresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const gastosInv = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const gastosExp = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
-    const gastoTotal = gastosInv + gastosExp;
+    const canonical = calculateFinancialKPIs(invoices, expenses);
+    const ingresos = canonical.totalIngresos;
+    const gastoTotal = canonical.totalGastos;
     const beneficio = ingresos - gastoTotal;
     const margen = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
     const ebitda = beneficio + gastoTotal * 0.05;
@@ -83,16 +83,22 @@ export default function ReportingCenter() {
     const cashTotal = bankAccounts.reduce((s, b) => s + (b.saldo_disponible || 0), 0);
     const burnRate = gastoTotal / 12;
     const runway = burnRate > 0 ? cashTotal / burnRate : null;
-    const cobrosPendientes = invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'pendiente').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const pagosPendientes = invoices.filter(i => i.tipo === 'recibida' && i.estado_cobro === 'pendiente').reduce((s, i) => s + (i.total_factura || 0), 0);
+    const cobrosPendientes = canonical.cobrosPendientes;
+    const pagosPendientes = canonical.pagosPendientes;
     const workingCapital = cobrosPendientes - pagosPendientes;
     const cuotasMensuales = debts.filter(d => d.estado === 'activo' && d.periodicidad === 'mensual').reduce((s, d) => s + (d.cuota || 0), 0);
     const interesesAnuales = debts.filter(d => d.estado === 'activo').reduce((s, d) => {
       const cap = d.capital_pendiente || d.importe_inicial || 0;
       return s + cap * ((d.tin || 0) / 100);
     }, 0);
-    const dso = invoices.filter(i => i.tipo === 'emitida').length > 0 ? 45 : 0;
-    const dpo = invoices.filter(i => i.tipo === 'recibida').length > 0 ? 38 : 0;
+    const now = new Date();
+    const elapsedDays = Math.max(1, Math.ceil((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000));
+    const dso = canonical.totalIngresosFacturas > 0
+      ? Math.round((cobrosPendientes / canonical.totalIngresosFacturas) * elapsedDays)
+      : null;
+    const dpo = canonical.totalGastosFacturas > 0
+      ? Math.round((pagosPendientes / canonical.totalGastosFacturas) * elapsedDays)
+      : null;
     return {
       ingresos, gastoTotal, beneficio, margen, ebitda, deudaTotal,
       cashTotal, burnRate, runway, cobrosPendientes, pagosPendientes,
