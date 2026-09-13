@@ -7,6 +7,7 @@ import { Settings, ChevronRight, Send } from 'lucide-react';
 import { getPeriodosDelModelo } from './aeatDeadlines';
 import { Button } from '@/components/ui/button';
 import PresentarModeloFlow from './PresentarModeloFlow';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
 
 const ESTADO_CONFIG = {
   sin_datos:            { label: 'Pendiente',   color: 'text-gray-500',  dot: 'bg-gray-400' },
@@ -180,7 +181,7 @@ export default function ImpuestosPanel({ onGoToConfig }) {
 
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', companyId],
-    queryFn: () => base44.entities.Invoice.filter({ company_id: companyId }),
+    queryFn: async () => (await fetchCompanyFinancials(companyId, { year: currentYear })).invoices,
     enabled: !!companyId,
   });
 
