@@ -1314,6 +1314,291 @@ async function ensureAccountingReady(svc, companyId, userEmail) {
   };
 }
 
+const MANUAL_CATEGORIES = new Set(Object.keys(DEFAULT_CATEGORY_MAPPINGS));
+const MANUAL_INCOME_MAPPINGS = {
+  ventas_servicios: '70500000',
+  alquiler: '75200000',
+  gastos_financieros: '76900000',
+  otros: '70500000',
+};
+
+function manualRecordError(message, status = 400) {
+  const error = new Error(message) as Error & { status: number };
+  error.status = status;
+  return error;
+}
+
+function cleanManualText(value, max = 500) {
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+function validIsoDate(value) {
+  const text = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const parsed = new Date(`${text}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text;
+}
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(String(value || ''));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function normalizeManualFinancialRecord(raw, companyId, userEmail, existing = null) {
+  const tipo = cleanManualText(raw?.tipo || existing?.tipo, 20).toLowerCase();
+  if (!['ingreso', 'gasto'].includes(tipo)) throw manualRecordError('El tipo debe ser ingreso o gasto.');
+  const fecha = cleanManualText(raw?.fecha || existing?.fecha, 10);
+  if (!validIsoDate(fecha)) throw manualRecordError('La fecha del registro no es válida.');
+  const concepto = cleanManualText(raw?.concepto ?? existing?.concepto, 500);
+  if (!concepto) throw manualRecordError('El concepto es obligatorio.');
+  const categoria = cleanManualText(raw?.categoria || existing?.categoria || 'otros', 40);
+  if (!MANUAL_CATEGORIES.has(categoria)) throw manualRecordError('La categoría contable no es válida.');
+
+  const rawBase = Number(raw?.base_imponible ?? existing?.base_imponible);
+  const taxRate = Number(raw?.tipo_impuesto ?? existing?.tipo_impuesto ?? 0);
+  const retentionRate = Number(raw?.retencion_irpf ?? existing?.retencion_irpf ?? 0);
+  if (!Number.isFinite(rawBase) || rawBase < 0) throw manualRecordError('La base imponible no es válida.');
+  const base = money(rawBase);
+  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) throw manualRecordError('El tipo de impuesto no es válido.');
+  if (!Number.isFinite(retentionRate) || retentionRate < 0 || retentionRate > 100) throw manualRecordError('El porcentaje de retención no es válido.');
+  const calculatedTax = money(base * taxRate / 100);
+  const suppliedTax = raw?.cuota_impuesto ?? existing?.cuota_impuesto;
+  const rawTax = suppliedTax == null || suppliedTax === '' ? calculatedTax : Number(suppliedTax);
+  if (!Number.isFinite(rawTax)) throw manualRecordError('La cuota de impuesto no es válida.');
+  const tax = money(rawTax);
+  if (tax < 0 || Math.abs(tax - calculatedTax) > 0.02) {
+    throw manualRecordError('La cuota de impuesto no coincide con la base y el tipo indicados.');
+  }
+  const calculatedRetention = money(base * retentionRate / 100);
+  const suppliedRetention = raw?.importe_retencion ?? existing?.importe_retencion;
+  const rawRetention = suppliedRetention == null || suppliedRetention === '' ? calculatedRetention : Number(suppliedRetention);
+  if (!Number.isFinite(rawRetention)) throw manualRecordError('El importe de retención no es válido.');
+  const retention = money(rawRetention);
+  if (retention < 0 || Math.abs(retention - calculatedRetention) > 0.02) {
+    throw manualRecordError('La retención no coincide con la base y el porcentaje indicados.');
+  }
+  const expectedTotal = money(base + tax - retention);
+  const rawTotal = Number(raw?.total ?? existing?.total);
+  if (!Number.isFinite(rawTotal)) throw manualRecordError('El total no es válido.');
+  const total = money(rawTotal);
+  if (total <= 0 || Math.abs(total - expectedTotal) > 0.02) {
+    throw manualRecordError('El total debe coincidir con base más impuesto menos retención.');
+  }
+
+  const treasuryAccountCode = canonical8(raw?.treasury_account_code || existing?.treasury_account_code || '57000000');
+  if (treasuryAccountCode !== '57000000' && !/^572\d{5}$/.test(treasuryAccountCode)) {
+    throw manualRecordError('La contrapartida de tesorería debe ser Caja (570) o una subcuenta bancaria 572.');
+  }
+  const date = new Date(`${fecha}T00:00:00.000Z`);
+  const month = date.getUTCMonth() + 1;
+  const payload = {
+    company_id: companyId,
+    tipo,
+    fecha,
+    proveedor_cliente: cleanManualText(raw?.proveedor_cliente ?? existing?.proveedor_cliente, 240),
+    concepto,
+    categoria,
+    base_imponible: base,
+    tipo_impuesto: taxRate,
+    cuota_impuesto: tax,
+    retencion_irpf: retentionRate,
+    retencion_tipo: cleanManualText(raw?.retencion_tipo ?? existing?.retencion_tipo, 80),
+    importe_retencion: retention,
+    total,
+    anio: date.getUTCFullYear(),
+    trimestre: month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4',
+    treasury_account_code: treasuryAccountCode,
+    document_number: cleanManualText(raw?.document_number ?? existing?.document_number, 100),
+    tax_id: cleanManualText(raw?.tax_id ?? existing?.tax_id, 40).toUpperCase(),
+    record_kind: 'manual_non_invoice',
+    source_system: 'taxea_portal',
+    subido_por: existing?.subido_por || userEmail,
+    anulada: false,
+  };
+  payload.source_hash = await sha256(JSON.stringify([
+    payload.tipo, payload.fecha, payload.document_number, payload.tax_id, payload.proveedor_cliente,
+    payload.concepto, payload.categoria, payload.base_imponible, payload.tipo_impuesto,
+    payload.cuota_impuesto, payload.retencion_irpf, payload.importe_retencion, payload.total,
+    payload.treasury_account_code,
+  ]));
+  return payload;
+}
+
+async function manualResultAccount(svc, companyId, record) {
+  const fallbackCode = record.tipo === 'ingreso'
+    ? (MANUAL_INCOME_MAPPINGS[record.categoria] || '70500000')
+    : (DEFAULT_CATEGORY_MAPPINGS[record.categoria] || '62900000');
+  let code = fallbackCode;
+  const configurations = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 1);
+  try {
+    const parsed = JSON.parse(configurations?.[0]?.mappingsJson || '{}');
+    if (Array.isArray(parsed)) {
+      const match = parsed.find(item => item?.categoria === record.categoria && (!item?.tipo || item.tipo === record.tipo));
+      if (match?.cuenta) code = canonical8(match.cuenta);
+    } else if (parsed?.[record.categoria]) {
+      const configured = typeof parsed[record.categoria] === 'string' ? parsed[record.categoria] : parsed[record.categoria]?.cuenta;
+      if (configured) code = canonical8(configured);
+    }
+  } catch (error) {
+    console.warn('[accountingOperations] Mapeo manual no aplicable:', error.message);
+  }
+  if ((record.tipo === 'ingreso' && !code.startsWith('7')) || (record.tipo === 'gasto' && !code.startsWith('6'))) {
+    code = fallbackCode;
+  }
+  return await ensureAccount(
+    svc,
+    companyId,
+    code,
+    record.tipo === 'ingreso' ? 'Ingresos de explotación' : 'Gastos de explotación',
+    record.tipo,
+  );
+}
+
+async function postManualFinancialRecord(svc, company, record, userEmail) {
+  const companyId = company.id;
+  await seedOperationalPgc(svc, companyId);
+  const lifecycleVersion = Math.max(1, Number(record.lifecycle_version || 1));
+  const postingKey = `manual-financial:${record.id}:v${lifecycleVersion}:${SCHEMA_VERSION}`;
+  const duplicates = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 10);
+  const activeDuplicate = (duplicates || []).find(entry => entry.status !== 'anulado');
+  if (activeDuplicate) return { entry: activeDuplicate, alreadyPosted: true };
+
+  const resultAccount = await manualResultAccount(svc, companyId, record);
+  const treasuryCode = canonical8(record.treasury_account_code || '57000000');
+  const treasury = await ensureAccount(
+    svc,
+    companyId,
+    treasuryCode,
+    treasuryCode === '57000000' ? 'Caja, euros' : 'Bancos e instituciones de crédito c/c vista, euros',
+    'banco',
+  );
+  const rawTaxKind = cleanManualText(company.tipo_impuesto || 'iva', 20).toLowerCase();
+  const taxKind = rawTaxKind === 'igic' ? 'igic' : rawTaxKind === 'no_aplica' ? 'no_aplica' : 'iva';
+  const tax = money(record.cuota_impuesto);
+  const retention = money(record.importe_retencion);
+  const taxCode = taxKind === 'igic'
+    ? (record.tipo === 'ingreso' ? '47770000' : '47270000')
+    : (record.tipo === 'ingreso' ? '47700000' : '47200000');
+  const taxAccount = tax > 0 && taxKind !== 'no_aplica'
+    ? await ensureAccount(svc, companyId, taxCode, taxKind === 'igic' ? 'Hacienda Pública, IGIC' : 'Hacienda Pública, IVA', 'impuesto')
+    : null;
+  const retentionCode = record.tipo === 'ingreso' ? '47300000' : '47510000';
+  const retentionAccount = retention > 0
+    ? await ensureAccount(svc, companyId, retentionCode, 'Hacienda Pública, retenciones', 'impuesto')
+    : null;
+  const description = record.concepto || `Registro manual ${record.id}`;
+  const line = (account, debit, credit, sourceLineType) => ({
+    accountCode: account.code,
+    accountName: account.name,
+    description,
+    debit: money(debit),
+    credit: money(credit),
+    sourceLineType,
+    taxCode: sourceLineType === 'impuesto' ? taxKind : '',
+  });
+  const lines = record.tipo === 'ingreso'
+    ? [
+        line(treasury, record.total, 0, 'banco'),
+        ...(retentionAccount ? [line(retentionAccount, retention, 0, 'retencion')] : []),
+        line(resultAccount, 0, record.base_imponible, 'ingreso'),
+        ...(taxAccount ? [line(taxAccount, 0, tax, 'impuesto')] : []),
+      ]
+    : [
+        line(resultAccount, record.base_imponible, 0, 'gasto'),
+        ...(taxAccount ? [line(taxAccount, tax, 0, 'impuesto')] : []),
+        line(treasury, 0, record.total, 'banco'),
+        ...(retentionAccount ? [line(retentionAccount, 0, retention, 'retencion')] : []),
+      ];
+  const created = await createJournalEntry(svc, companyId, {
+    date: record.fecha,
+    description,
+    type: record.tipo,
+    source: 'manual',
+    sourceEvent: 'manual_financial_record',
+    documentId: record.id,
+    postingKey,
+    status: 'confirmado',
+    lines,
+  }, userEmail);
+  return { ...created, alreadyPosted: false };
+}
+
+async function voidManualFinancialRecord(svc, companyId, record, userEmail, reason, reversalDate) {
+  if (record.anulada) return { record, alreadyAnnulled: true, reversalEntryId: '' };
+  let reversalEntryId = '';
+  if (record.linked_journal_entry_id) {
+    const entry = await svc.entities.JournalEntry.get(record.linked_journal_entry_id).catch(() => null);
+    if (entry && entry.companyId === companyId) {
+      const lines = await resolveEntryLines(svc, companyId, entry);
+      if (entry.status === 'confirmado') {
+        if (entry.reversalEntryId) {
+          const existing = await svc.entities.JournalEntry.get(entry.reversalEntryId).catch(() => null);
+          reversalEntryId = existing?.id || '';
+        }
+        if (!reversalEntryId) {
+          if (!lines.length) throw manualRecordError('El asiento confirmado no tiene líneas para crear su reversión.', 409);
+          const postingKey = `reversal:${entry.id}:${SCHEMA_VERSION}`;
+          const duplicates = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 10);
+          let reversal = (duplicates || []).find(candidate => candidate.status !== 'anulado') || null;
+          if (!reversal) {
+            const created = await createJournalEntry(svc, companyId, {
+              date: reversalDate,
+              description: `Reversión ${entry.entryNumber || ''}: ${reason}`.trim(),
+              type: 'ajuste',
+              source: 'sistema',
+              sourceEvent: 'manual_financial_record_reversal',
+              documentId: record.id,
+              postingKey,
+              status: 'confirmado',
+              lines: lines.map(item => ({
+                accountCode: canonical8(item.accountCode || item.subcuenta),
+                accountName: item.accountName || '',
+                description: `Reversión: ${item.description || record.concepto || reason}`,
+                debit: money(item.credit || item.haberE),
+                credit: money(item.debit || item.debeE),
+                taxCode: item.taxCode || '',
+                sourceLineType: item.sourceLineType || 'ajuste',
+              })),
+            }, userEmail);
+            reversal = created.entry;
+          }
+          reversalEntryId = reversal.id;
+          await svc.entities.JournalEntry.update(entry.id, {
+            reversalEntryId,
+            annulledAt: new Date().toISOString(),
+            annulledBy: userEmail,
+            annulmentReason: reason,
+            validationStatus: 'REVERTIDO',
+          });
+        }
+      } else if (entry.status !== 'anulado') {
+        const now = new Date().toISOString();
+        await svc.entities.JournalEntry.update(entry.id, {
+          status: 'anulado',
+          annulledAt: now,
+          annulledBy: userEmail,
+          annulmentReason: reason,
+          validationStatus: 'ANULADO',
+        });
+        for (const item of lines) {
+          await svc.entities.JournalEntryLine.update(item.id, { entryStatus: 'anulado', validationStatus: 'ANULADO' });
+        }
+      }
+    }
+  }
+  const saved = await svc.entities.Expense.update(record.id, {
+    anulada: true,
+    fecha_anulacion: new Date().toISOString(),
+    motivo_anulacion: reason,
+    anulada_por: userEmail,
+    estado: 'rechazado',
+    accounting_review_status: 'asiento_anulado',
+    lifecycle_version: Number(record.lifecycle_version || 1) + 1,
+  });
+  return { record: saved, alreadyAnnulled: false, reversalEntryId };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -1324,14 +1609,154 @@ Deno.serve(async (req) => {
     const action = body.action;
     const companyId = body.companyId || user.data?.company_id;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    if (!companyId || (!isAdmin && user.data?.company_id !== companyId)) {
+    if (!companyId) {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = base44.asServiceRole;
+    const company = await svc.entities.Company.get(companyId).catch(() => null);
+    if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+    const userEmail = String(user.email || '').trim().toLowerCase();
+    const assignedCompanyId = String(user.data?.company_id || user.company_id || '').trim();
+    const ownerEmail = String(company.owner_email || '').trim().toLowerCase();
+    const authorizedEmails = Array.isArray(company.usuarios_autorizados)
+      ? company.usuarios_autorizados.map(email => String(email || '').trim().toLowerCase())
+      : [];
+    const hasCompanyAccess = isAdmin
+      || assignedCompanyId === companyId
+      || (userEmail && ownerEmail === userEmail)
+      || (userEmail && authorizedEmails.includes(userEmail));
+    if (!hasCompanyAccess) {
+      return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
+    }
 
     if (action === 'ensure_accounting_ready') {
       const result = await ensureAccountingReady(svc, companyId, user.email);
       return Response.json({ success: true, schemaVersion: SCHEMA_VERSION, result });
+    }
+
+    if (action === 'create_manual_financial_record') {
+      const idempotencyKey = cleanManualText(body.idempotencyKey, 160);
+      if (!idempotencyKey) return Response.json({ error: 'La clave de idempotencia es obligatoria.' }, { status: 400 });
+      const payload = await normalizeManualFinancialRecord(body.record || {}, companyId, user.email);
+      const previous = await svc.entities.Expense.filter({ company_id: companyId, canonical_event_key: idempotencyKey }, '-created_date', 10);
+      const existing = previous?.[0] || null;
+      if (existing) {
+        if (existing.source_hash && existing.source_hash !== payload.source_hash) {
+          return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes. Abre un nuevo registro.' }, { status: 409 });
+        }
+        return Response.json({ success: true, idempotent: true, record: existing, journalEntryId: existing.linked_journal_entry_id || '' });
+      }
+      let record = await svc.entities.Expense.create({
+        ...payload,
+        canonical_event_key: idempotencyKey,
+        estado: 'pendiente',
+        accounting_review_status: 'pendiente_revision',
+        lifecycle_version: 1,
+      });
+      record = await svc.entities.Expense.update(record.id, { source_record_id: record.id });
+      let posting = null;
+      let accountingWarning = '';
+      try {
+        posting = await postManualFinancialRecord(svc, company, record, user.email);
+        record = await svc.entities.Expense.update(record.id, {
+          linked_journal_entry_id: posting.entry.id,
+          estado: 'contabilizado',
+          accounting_review_status: 'validado_contabilizado',
+        });
+      } catch (error) {
+        accountingWarning = error.message || 'No se pudo crear el asiento contable.';
+        record = await svc.entities.Expense.update(record.id, {
+          estado: 'en_revision',
+          accounting_review_status: 'requiere_correccion',
+        });
+      }
+      return Response.json({
+        success: true,
+        idempotent: false,
+        record,
+        journalEntryId: posting?.entry?.id || '',
+        accountingWarning: accountingWarning || null,
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+
+    if (action === 'update_manual_financial_record') {
+      const expenseId = cleanManualText(body.expenseId, 160);
+      const current = expenseId ? await svc.entities.Expense.get(expenseId).catch(() => null) : null;
+      if (!current || current.company_id !== companyId) return Response.json({ error: 'Registro manual no encontrado en esta empresa.' }, { status: 404 });
+      if (current.anulada) return Response.json({ error: 'Un registro anulado no se puede editar.' }, { status: 409 });
+      if (current.canonical_invoice_id) return Response.json({ error: 'Este registro está vinculado a una factura canónica y no se puede editar por separado.' }, { status: 409 });
+      if (current.linked_journal_entry_id) {
+        const linked = await svc.entities.JournalEntry.get(current.linked_journal_entry_id).catch(() => null);
+        if (linked && linked.companyId === companyId && linked.status !== 'anulado') {
+          return Response.json({ error: 'El registro ya tiene un asiento activo. Anúlalo y crea uno nuevo para conservar la trazabilidad.' }, { status: 409 });
+        }
+      }
+      const payload = await normalizeManualFinancialRecord(body.record || {}, companyId, user.email, current);
+      let record = await svc.entities.Expense.update(current.id, {
+        ...payload,
+        estado: 'pendiente',
+        accounting_review_status: 'pendiente_revision',
+        lifecycle_version: Number(current.lifecycle_version || 1) + 1,
+      });
+      let posting = null;
+      let accountingWarning = '';
+      try {
+        posting = await postManualFinancialRecord(svc, company, record, user.email);
+        record = await svc.entities.Expense.update(record.id, {
+          linked_journal_entry_id: posting.entry.id,
+          estado: 'contabilizado',
+          accounting_review_status: 'validado_contabilizado',
+        });
+      } catch (error) {
+        accountingWarning = error.message || 'No se pudo crear el asiento contable.';
+        record = await svc.entities.Expense.update(record.id, {
+          estado: 'en_revision',
+          accounting_review_status: 'requiere_correccion',
+        });
+      }
+      return Response.json({
+        success: true,
+        record,
+        journalEntryId: posting?.entry?.id || '',
+        accountingWarning: accountingWarning || null,
+        schemaVersion: SCHEMA_VERSION,
+      });
+    }
+
+    if (action === 'void_manual_financial_record') {
+      const expenseId = cleanManualText(body.expenseId, 160);
+      const record = expenseId ? await svc.entities.Expense.get(expenseId).catch(() => null) : null;
+      if (!record || record.company_id !== companyId) return Response.json({ error: 'Registro manual no encontrado en esta empresa.' }, { status: 404 });
+      const reason = cleanManualText(body.reason, 500);
+      if (!reason) return Response.json({ error: 'El motivo de anulación es obligatorio.' }, { status: 400 });
+      const reversalDate = cleanManualText(body.date || new Date().toISOString().slice(0, 10), 10);
+      if (!validIsoDate(reversalDate)) return Response.json({ error: 'La fecha de reversión no es válida.' }, { status: 400 });
+      const result = await voidManualFinancialRecord(svc, companyId, record, user.email, reason, reversalDate);
+      return Response.json({ success: true, ...result, schemaVersion: SCHEMA_VERSION });
+    }
+
+    if (action === 'reject_invoice_accounting') {
+      const invoiceId = String(body.invoiceId || '').trim();
+      if (!invoiceId) return Response.json({ error: 'invoiceId es obligatorio.' }, { status: 400 });
+      const invoice = await svc.entities.Invoice.get(invoiceId).catch(() => null);
+      if (!invoice || invoice.company_id !== companyId) return Response.json({ error: 'Factura no encontrada en esta empresa.' }, { status: 404 });
+      if (invoice.anulada) return Response.json({ error: 'Una factura anulada no puede cambiar de estado contable.' }, { status: 409 });
+      if (invoice.linked_journal_entry_id) {
+        const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id).catch(() => null);
+        if (entry && entry.companyId === companyId && entry.status !== 'anulado') {
+          return Response.json({ error: 'La factura tiene un asiento activo. Anula el asiento o la factura mediante el flujo trazable antes de rechazarla.' }, { status: 409 });
+        }
+      }
+      const reason = String(body.reason || 'Rechazada para revisión contable desde Facturas pendientes').trim().slice(0, 500);
+      const alreadyRejected = invoice.estado_contable === 'rechazada' && invoice.accounting_migration_hold === true;
+      const saved = alreadyRejected ? invoice : await svc.entities.Invoice.update(invoice.id, {
+        estado_contable: 'rechazada',
+        accounting_review_status: 'requiere_correccion',
+        accounting_migration_hold: true,
+        accounting_migration_hold_reason: reason,
+      });
+      return Response.json({ success: true, idempotent: alreadyRejected, invoice: saved });
     }
 
     if (action === 'periods_overview') {
@@ -2415,6 +2840,10 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Acción no válida.' }, { status: 400 });
   } catch (error) {
     console.error('[accountingOperations]', error);
-    return Response.json({ error: error.message || 'Error interno' }, { status: 500 });
+    const status = Number(error?.status);
+    return Response.json(
+      { error: error.message || 'Error interno' },
+      { status: Number.isInteger(status) && status >= 400 && status < 600 ? status : 500 },
+    );
   }
 });
