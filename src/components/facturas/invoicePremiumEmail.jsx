@@ -292,9 +292,13 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
       catch { return d; }
     };
 
+    /** @type {[number, number, number]} */
     const red = [185, 28, 28];
+    /** @type {[number, number, number]} */
     const dark = [15, 23, 42];
+    /** @type {[number, number, number]} */
     const muted = [100, 116, 139];
+    /** @type {[number, number, number]} */
     const light = [241, 245, 249];
 
     const M = 15; // margen izquierdo
@@ -403,6 +407,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     // Totales (derecha)
     const totX = M + W / 2;
     const totW = W / 2;
+    /** @param {[number, number, number]} [colorArr] */
     const addTotRow = (label, value, bold = false, colorArr = dark) => {
       doc.setFontSize(8).setTextColor(...muted).setFont(undefined, 'normal');
       doc.text(label, totX, Y);
@@ -443,8 +448,19 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
     const { file_url } = await base44Client.integrations.Core.UploadFile({ file });
 
-    // Guardar en la factura
-    await base44Client.entities.Invoice.update(invoice.id, { archivo_url: file_url });
+    // Vincular el PDF mediante el backend para mantener la frontera de mutación
+    // y la trazabilidad de la factura en un único flujo autorizado.
+    const linked = await base44Client.functions.invoke('invoiceOperations', {
+      action: 'set_primary_pdf',
+      company_id: invoice.company_id,
+      invoice_id: invoice.id,
+      file_url,
+      filename: fileName,
+      mime_type: 'application/pdf',
+      size_bytes: pdfBlob.size,
+    });
+    const linkedResult = linked?.data || linked;
+    if (!linkedResult?.ok) throw new Error(linkedResult?.error || 'No se pudo vincular el PDF a la factura.');
 
     return { ok: true, pdfUrl: file_url, fileName };
   } catch (e) {
