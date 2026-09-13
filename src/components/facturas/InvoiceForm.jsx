@@ -30,13 +30,13 @@ const COLETILLAS = [
 ];
 
 function fmt(n) {
-  return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function calcTotals(base, taxPct, retentionPct) {
-  const b = parseFloat(base) || 0;
-  const cuota = b * (parseFloat(taxPct) || 0) / 100;
-  const retencionImporte = b * (parseFloat(retentionPct) || 0) / 100;
+  const b = Number(base) || 0;
+  const cuota = b * (Number(taxPct) || 0) / 100;
+  const retencionImporte = b * (Number(retentionPct) || 0) / 100;
   const total = b + cuota - retencionImporte;
   return { cuota, retencionImporte, total };
 }
@@ -81,15 +81,17 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     forma_pago: 'Transferencia bancaria',
     coletilla_fiscal: '',
     comentarios: '',
+    moneda: 'EUR',
   });
 
   const [form, setForm] = useState(getEmpty());
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState(/** @type {any} */ ({}));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [customRetention, setCustomRetention] = useState(false);
   const [useCustomColetilla, setUseCustomColetilla] = useState(false);
   const loadedRef = useRef(false);
+  const creationKeyRef = useRef('');
   const [favoriteNotes, setFavoriteNotes] = useState([]);
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [recurring, setRecurring] = useState(getDefaultRecurring());
@@ -117,15 +119,16 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
 
   useEffect(() => {
     const run = async () => {
-    if (!open) { loadedRef.current = false; return; }
+    if (!open) { loadedRef.current = false; creationKeyRef.current = ''; return; }
     if (editing && !loadedRef.current) {
       loadedRef.current = true;
-      setForm({ ...getEmpty(), ...editing, aplica_retencion: (parseFloat(editing.retencion_irpf) || 0) > 0 });
-      setCustomRetention(!RETENTION_RATES.includes(parseFloat(editing.retencion_irpf)));
-      setUseCustomColetilla(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal));
+      setForm({ ...getEmpty(), ...editing, aplica_retencion: (Number(editing.retencion_irpf) || 0) > 0 });
+      setCustomRetention(!RETENTION_RATES.includes(Number(editing.retencion_irpf)));
+      setUseCustomColetilla(Boolean(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal)));
       setRecurring(getDefaultRecurring());
     } else if (!editing && !loadedRef.current) {
       loadedRef.current = true;
+      creationKeyRef.current = globalThis.crypto?.randomUUID?.() || `invoice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setForm(getEmpty());
       setRecurring(getDefaultRecurring());
     }
@@ -147,9 +150,9 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (!form.fecha_emision) e.fecha_emision = 'Obligatorio';
     if (form.tipo === 'recibida' && !form.fecha_recepcion) e.fecha_recepcion = 'Obligatorio para asignar la deducción al período correcto';
     if (form.tipo === 'recibida' && form.fecha_recepcion && form.fecha_emision && form.fecha_recepcion < form.fecha_emision) e.fecha_recepcion = 'No puede ser anterior a la fecha de emisión';
-    if (form.base_imponible === '' || isNaN(parseFloat(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
-    else if (parseFloat(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
-    if (form.aplica_retencion && (form.retencion_irpf === '' || isNaN(parseFloat(form.retencion_irpf)))) {
+    if (form.base_imponible === '' || isNaN(Number(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
+    else if (Number(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
+    if (form.aplica_retencion && (String(form.retencion_irpf) === '' || isNaN(Number(form.retencion_irpf)))) {
       e.retencion_irpf = 'Introduce el porcentaje';
     }
     setErrors(e);
@@ -167,10 +170,10 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     const payload = {
       ...form,
       company_id: company.id,
-      base_imponible: parseFloat(form.base_imponible) || 0,
-      tipo_iva: parseFloat(form.tipo_iva) || 0,
+      base_imponible: Number(form.base_imponible) || 0,
+      tipo_iva: Number(form.tipo_iva) || 0,
       cuota_iva: cuota,
-      retencion_irpf: form.aplica_retencion ? (parseFloat(form.retencion_irpf) || 0) : 0,
+      retencion_irpf: form.aplica_retencion ? (Number(form.retencion_irpf) || 0) : 0,
       importe_retencion: form.aplica_retencion ? retencionImporte : 0,
       total_factura: total,
       anio: year,
@@ -183,37 +186,31 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         setSaveError('Las facturas definitivas no se editan. Anula la factura y emite una nueva o rectificativa.');
         return;
       } else {
-        const duplicates = await base44.entities.Invoice.filter({
+        const response = await base44.functions.invoke('invoiceOperations', {
+          action: 'create_invoice',
           company_id: company.id,
-          numero_factura: payload.numero_factura.trim(),
+          idempotency_key: creationKeyRef.current,
+          invoice: { ...payload, numero_factura: payload.numero_factura.trim() },
         });
-        if ((duplicates || []).some(invoice => !invoice.anulada)) {
-          setSaveError('Ya existe una factura activa con ese número. Usa otra numeración.');
-          return;
-        }
-        const createdInvoice = await base44.entities.Invoice.create({ ...payload, numero_factura: payload.numero_factura.trim() });
+        const result = response?.data || response;
+        if (!result?.ok || !result?.invoice) throw new Error(result?.error || 'No se pudo crear la factura.');
+        const createdInvoice = result.invoice;
         await base44.functions.invoke('syncInvoiceContacts', {
           action: 'sync_invoice',
           invoiceId: createdInvoice.id,
         }).catch(error => console.error('[InvoiceForm] Contact sync failed:', error));
-        await base44.functions.invoke('accountingOperations', {
-          action: 'post_invoice',
-          companyId: company.id,
-          invoiceId: createdInvoice.id,
-          status: 'confirmado',
-        }).catch(async error => {
-          console.error('[InvoiceForm] Accounting posting failed:', error);
-          await base44.entities.Invoice.update(createdInvoice.id, {
-            estado_contable: 'requiere_correccion',
-            accounting_review_status: 'requiere_correccion',
-          }).catch(() => {});
-        });
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `Nueva factura: ${payload.numero_factura}`,
           descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${payload.cliente_nombre || ''} · ${fmt(total)} €`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
+
+        if (result.accounting_warning) {
+          setSaveError(`La factura se guardó, pero necesita revisión contable: ${result.accounting_warning}`);
+          onSaved?.();
+          return;
+        }
 
         // Create recurring template if enabled and invoice is "emitida"
         if (recurring.enabled && payload.tipo === 'emitida') {
@@ -237,8 +234,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             dueDayOfMonth: recurring.dueDayOfMonth,
             invoiceType: 'emitida',
             concept: payload.concepto,
-            baseAmount: parseFloat(payload.base_imponible) || 0,
-            taxRate: parseFloat(payload.tipo_iva) || 0,
+            baseAmount: Number(payload.base_imponible) || 0,
+            taxRate: Number(payload.tipo_iva) || 0,
             taxType: taxType.toLowerCase(),
             retentionRate: payload.retencion_irpf || 0,
             totalAmount: total,
@@ -256,8 +253,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       }
       onSaved?.();
       onOpenChange(false);
-    } catch {
-      setSaveError('No se pudo guardar la factura. Inténtalo de nuevo.');
+    } catch (error) {
+      setSaveError(error?.response?.data?.error || error?.message || 'No se pudo guardar la factura. Inténtalo de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -376,7 +373,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               </div>
               <div className="space-y-1.5">
                 <Label>% {taxType}</Label>
-                <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(parseFloat(v))}>
+                <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {taxRates.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
@@ -403,7 +400,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                     <Label>% Retención *</Label>
                     {!customRetention ? (
                       <Select value={String(form.retencion_irpf)}
-                        onValueChange={v => { if (v === 'otro') setCustomRetention(true); else set('retencion_irpf')(parseFloat(v)); }}>
+                        onValueChange={v => { if (v === 'otro') setCustomRetention(true); else set('retencion_irpf')(Number(v)); }}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {RETENTION_RATES.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
@@ -435,7 +432,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Base imponible</span>
-                  <span className="font-medium">{fmt(parseFloat(form.base_imponible) || 0)} €</span>
+                  <span className="font-medium">{fmt(Number(form.base_imponible) || 0)} €</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{taxType} {form.tipo_iva} %</span>
@@ -559,4 +556,3 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     </Dialog>
   );
 }
-
