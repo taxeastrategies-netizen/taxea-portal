@@ -7,6 +7,8 @@ import { ArrowRight, Search, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const fmt = n => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo calcular el mayor.';
 
 export default function MayoresTab({ companyId }) {
   const [search, setSearch] = useState('');
@@ -29,7 +31,7 @@ export default function MayoresTab({ companyId }) {
   const filtered = useMemo(() => accounts.filter(account => !search || account.code.includes(search) || account.name.toLowerCase().includes(search.toLowerCase())), [accounts, search]);
 
   if (query.isLoading && !query.data) return <div className="p-10 text-center text-sm text-muted-foreground">Calculando mayores...</div>;
-  if (query.isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">No se pudo calcular el mayor. {query.error?.response?.data?.error || query.error?.message}</div>;
+  if (query.isError) return <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{errorMessage(query.error)}</div>;
   if (!accounts.length) return <div className="bg-card border border-border rounded-xl p-16 text-center space-y-3"><TrendingUp className="w-10 h-10 text-muted-foreground/40 mx-auto" /><p className="font-semibold">No hay mayores para este ejercicio</p><p className="text-sm text-muted-foreground">Confirma asientos o cambia a la vista provisional para revisar la importación.</p></div>;
 
   return (
