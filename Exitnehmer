@@ -1,0 +1,10 @@
+Resolve-Path: 
+Line |
+   2 |  $p=(Resolve-Path -LiteralPath ' Exitnehmer').Path;$c=[IO.File]::ReadA …
+     |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot find path ' Exitnehmer' because it does not exist.
+MethodInvocationException: 
+Line |
+   2 |  … LiteralPath ' Exitnehmer').Path;$c=[IO.File]::ReadAllText($p);[Consol …
+     |                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "ReadAllText" with "1" argument(s): "The value cannot be an empty string. (Parameter 'path')"
