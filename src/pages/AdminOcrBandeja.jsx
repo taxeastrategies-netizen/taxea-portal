@@ -799,4 +799,3 @@ function RejectDialog({ doc, onClose, onConfirm }) {
     </Dialog>
   );
 }
-
