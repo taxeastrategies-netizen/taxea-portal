@@ -45,7 +45,7 @@ export default function ObligacionesFiscales() {
   const companyId = company?.id;
   const currentYear = new Date().getFullYear();
   const [fiscalYear, setFiscalYear] = useState(currentYear);
-  const [bundle, setBundle] = useState({ items: [], documents: [], unlinkedDocuments: [], models: [], sources: [] });
+  const [bundle, setBundle] = useState(/** @type {any} */ ({ items: [], documents: [], unlinkedDocuments: [], models: [], sources: [] }));
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState('proximos');
