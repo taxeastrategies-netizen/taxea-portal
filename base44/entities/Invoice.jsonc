@@ -286,6 +286,28 @@
       "type": "string",
       "default": "manual"
     },
+    "creation_idempotency_key": {
+      "type": "string",
+      "description": "Clave estable de creaci\u00f3n para impedir facturas duplicadas por reintentos de red o doble clic."
+    },
+    "canonical_document_key": {
+      "type": "string",
+      "description": "Huella normalizada por empresa, tipo, n\u00famero, fecha e importe usada por el n\u00facleo financiero."
+    },
+    "source_system": {
+      "type": "string",
+      "default": "taxea_portal"
+    },
+    "source_record_id": {
+      "type": "string"
+    },
+    "source_hash": {
+      "type": "string"
+    },
+    "lifecycle_version": {
+      "type": "integer",
+      "default": 1
+    },
     "source_document_type": {
       "type": "string",
       "enum": [
@@ -377,16 +399,22 @@
   ],
   "rls": {
     "create": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "data.company_id": "{{user.data.company_id}}"
     },
     "update": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
