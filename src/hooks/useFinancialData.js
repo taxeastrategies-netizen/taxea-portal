@@ -24,6 +24,16 @@ export function useFinancialData(companyId, options = {}) {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
   const [treasury, setTreasury] = useState(EMPTY_TREASURY);
+  const [sourceTruth, setSourceTruth] = useState({
+    version: 'financial-source-truth-v1',
+    canonicalInvoiceCount: 0,
+    rawExpenseCount: 0,
+    includedManualRecordCount: 0,
+    suppressedDuplicateCount: 0,
+    reviewCandidateCount: 0,
+    duplicate_links: [],
+    review_candidates: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastSync, setLastSync] = useState(null);
@@ -54,6 +64,7 @@ export function useFinancialData(companyId, options = {}) {
       if (!mountedRef.current || requestId !== requestIdRef.current) return;
       setInvoices(finData?.invoices || []);
       setExpenses(finData?.expenses || []);
+      setSourceTruth(current => ({ ...current, ...(finData?.source_truth || {}) }));
       setBankAccounts(bankData?.accounts || []);
       setBankTransactions(bankData?.transactions || []);
       setTreasury({
@@ -122,7 +133,7 @@ export function useFinancialData(companyId, options = {}) {
     return () => window.removeEventListener('financials:refresh', onRefresh);
   }, [fetch, autoRefresh]);
 
-  return { invoices, expenses, bankAccounts, bankTransactions, treasury, loading, error, lastSync, refresh };
+  return { invoices, expenses, bankAccounts, bankTransactions, treasury, sourceTruth, loading, error, lastSync, refresh };
 }
 
 export function triggerFinancialRefresh() {
