@@ -22,7 +22,7 @@ const statusConfig = {
   convertido_factura: { label: 'Convertido', class: 'bg-teal-50 text-teal-700 border-teal-200' },
 };
 
-export default function StatusBadge({ status, className }) {
+export default function StatusBadge({ status, className = '' }) {
   const config = statusConfig[status] || { label: status, class: 'bg-slate-50 text-slate-600 border-slate-200' };
   return (
     <span className={cn(
