@@ -107,6 +107,7 @@ const firstSave = await invoke({ action: 'save_draft', companyId: 'company-test'
 const secondSave = await invoke({ action: 'save_draft', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const advisoryCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const advisoryExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
+const model202Export = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '202', ejercicio: 2026, periodo: '2P', adjustments: { method: '40_3', fiscalPeriodStart: '2026-01-01', cnae: '6920', currentTaxableBase: 10000, paymentPercentage: 17, withholdings: 100, previousInstalmentPayments: 200, commonTerritoryPercentage: 100 } });
 const openedDraft = await invoke({ action: 'open_draft', companyId: 'company-test', draftId: 'draft-latest' });
 const fieldTrace = await invoke({ action: 'field_trace', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest', fieldCode: 'DEDUCIBLE', fieldLabel: 'Total cuota deducible', fieldSection: 'Deducciones', page: 1, pageSize: 25 });
 const frozenExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest' });
@@ -118,6 +119,7 @@ const periodClose = await invoke({ action: 'close_period', companyId: 'company-t
 const periodReopen = await invoke({ action: 'reopen_period', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', confirmReopen: true, reason: 'Nueva documentación recibida' });
 const declarableSave = await invoke({ action: 'upsert_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordKey: 'QA-NR-1', payload: { recipientTaxId: 'X1234567L', recipientName: 'PERCEPTOR QA', country: 'FR', incomeKey: '02', accruedAmount: 1000, withholdingBase: 1000, withholdingAmount: 190, paymentDate: '2026-02-01' } });
 const declarableDelete = await invoke({ action: 'delete_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordId: declarableSave.payload.record?.id });
+const model202Content = model202Export.payload.file?.contentBase64 ? Buffer.from(model202Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
 
 const workflowChecks = {
   workspaceLoads: workspace.response.ok && workspace.payload.latestDrafts?.length === 1 && workspace.payload.latestFilings?.length === 1,
@@ -138,7 +140,7 @@ const workflowChecks = {
     && exactDownload.payload.file?.hash === frozenExport.payload.file?.hash
     && exactDownload.payload.file?.immutable === true,
   fullCatalogAvailable: catalog.response.ok
-    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.12-v21'
+    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.13-v22'
     && catalog.payload.models?.length === 22
     && ['349', '131', '216', '296', '417', '421', '200', '202', '232'].every(model => catalog.payload.models.some(item => item.code === model)),
   historicalAuditIsReadOnly: historicalDryRun.response.ok
@@ -165,8 +167,20 @@ const workflowChecks = {
     && advisoryCalculation.payload.validation?.canExport === true
     && advisoryExport.response.ok
     && advisoryExport.payload.file?.contentBase64?.length > 0,
+  model202OfficialExport: model202Export.response.ok
+    && model202Export.payload.definition?.officialExport === true
+    && model202Export.payload.definition?.exportMode === 'aeat_official_record'
+    && model202Export.payload.calculation?.result === 1400
+    && model202Export.payload.file?.extension === '202'
+    && model202Export.payload.file?.filename === 'B1234567820262P.202'
+    && model202Content.length === 1946
+    && model202Content.startsWith('<T202020262P0000>')
+    && model202Content.includes('<T20201000>')
+    && model202Content.includes('<T20202000>')
+    && model202Content.endsWith('</T202020262P0000>'),
 };
 const diagnostics = { frozenExport: { status: frozenExport.response.status, error: frozenExport.payload?.error, blockers: frozenExport.payload?.blockers, frozen: frozenExport.payload?.frozen, draftId: frozenExport.payload?.draft?.id, result: frozenExport.payload?.calculation?.result, fileLength: frozenExport.payload?.file?.contentBase64?.length || 0 } };
 const output = { ...selfTest.payload, workflowChecks, diagnostics, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
 console.log(JSON.stringify(output, null, 2));
 if (!output.ok) process.exitCode = 1;
+
