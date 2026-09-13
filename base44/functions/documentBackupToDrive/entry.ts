@@ -3,6 +3,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const REQUIRED_EMAIL = 'taxeastrategies@gmail.com';
+const BACKUP_APP_ID = '6a00fec50cc522a74ddde4b2';
+const BACKUP_MEDIA_HOST = 'media.base44.com';
+const BACKUP_FILE_PREFIX = `/files/public/${BACKUP_APP_ID}/`;
+const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024;
+const BACKUP_DOWNLOAD_TIMEOUT_MS = 20_000;
 
 // ── Helpers ──
 
@@ -13,6 +18,41 @@ function sanitizeName(name) {
     .replace(/\s+/g, ' ')
     .trim()
     .substring(0, 100);
+}
+
+function validateBackupFileUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch {
+    throw new Error('La URL del documento no es válida.');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) {
+    throw new Error('La URL del documento debe usar HTTPS sin credenciales ni puerto personalizado.');
+  }
+  if (url.hostname.toLowerCase() !== BACKUP_MEDIA_HOST || !url.pathname.startsWith(BACKUP_FILE_PREFIX)) {
+    throw new Error('El documento no pertenece al almacenamiento autorizado de Taxea Portal.');
+  }
+  url.hash = '';
+  return url.toString();
+}
+
+async function downloadBackupFile(value) {
+  const fileUrl = validateBackupFileUrl(value);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BACKUP_DOWNLOAD_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(fileUrl, { redirect: 'error', signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const declaredLength = Number(response.headers.get('content-length') || 0);
+  if (declaredLength > MAX_BACKUP_FILE_BYTES) throw new Error('El documento supera el límite de 50 MB.');
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_BACKUP_FILE_BYTES) throw new Error('El documento supera el límite de 50 MB.');
+  return new Uint8Array(arrayBuffer);
 }
 
 function getCanaryDate() {
@@ -369,9 +409,7 @@ Deno.serve(async (req) => {
         // Download file from storage
         let contentBytes;
         try {
-          const dlRes = await fetch(fileUrl);
-          if (!dlRes.ok) throw new Error(`HTTP ${dlRes.status}`);
-          contentBytes = new Uint8Array(await dlRes.arrayBuffer());
+          contentBytes = await downloadBackupFile(fileUrl);
         } catch (e) {
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
@@ -602,3 +640,4 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
