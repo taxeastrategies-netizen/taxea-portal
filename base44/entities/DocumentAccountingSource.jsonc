@@ -88,6 +88,12 @@
     },
     "accountingSchemaVersion": {
       "type": "string"
+    },
+    "accountingOperationId": {
+      "type": "string"
+    },
+    "operationKey": {
+      "type": "string"
     }
   },
   "required": [
