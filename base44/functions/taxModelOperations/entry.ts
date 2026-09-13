@@ -242,7 +242,7 @@ function sourceFingerprint(values: unknown[]) {
 
 function authorize(user: any, companyId: string, company: any) {
   const role = clean(user?.role).toLowerCase();
-  if (['admin', 'super_admin', 'advisor', 'asesor'].includes(role)) return;
+  if (['admin', 'super_admin'].includes(role)) return;
   const ownCompanyId = clean(user?.data?.company_id || user?.company_id);
   const userEmail = clean(user?.email).toLowerCase();
   const ownerEmail = clean(company?.owner_email).toLowerCase();
@@ -3481,5 +3481,4 @@ Deno.serve(async (req) => {
     return Response.json({error:'Acción no soportada.'},{status:400});
   } catch(error){const status=Number((error as any)?.status)||500; return Response.json({error:(error as Error).message||'Error interno'},{status});}
 });
-
 
