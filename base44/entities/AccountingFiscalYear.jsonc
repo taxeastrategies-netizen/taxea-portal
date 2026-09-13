@@ -38,6 +38,27 @@
       ],
       "default": "interno_simplificado"
     },
+    "accountingFramework": {
+      "type": "string",
+      "enum": [
+        "pgc_normal",
+        "pgc_pymes"
+      ],
+      "default": "pgc_pymes"
+    },
+    "annualAccountsModel": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "abreviado",
+        "pyme"
+      ],
+      "default": "pyme"
+    },
+    "microenterpriseCriteria": {
+      "type": "boolean",
+      "default": false
+    },
     "previousYearId": {
       "type": "string"
     },
@@ -66,6 +87,19 @@
     },
     "reopenReason": {
       "type": "string"
+    },
+    "closeSequence": {
+      "type": "integer",
+      "default": 0
+    },
+    "reopenAuditLogId": {
+      "type": "string"
+    },
+    "reopenReversalEntryIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "notes": {
       "type": "string"
