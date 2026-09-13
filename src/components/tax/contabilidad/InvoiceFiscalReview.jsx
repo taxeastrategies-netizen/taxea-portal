@@ -22,11 +22,11 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [bundle, setBundle] = useState(null);
-  const [catalog, setCatalog] = useState(null);
-  const [evaluation, setEvaluation] = useState(null);
+  const [bundle, setBundle] = useState(/** @type {any} */ (null));
+  const [catalog, setCatalog] = useState(/** @type {any} */ (null));
+  const [evaluation, setEvaluation] = useState(/** @type {any} */ (null));
   const [error, setError] = useState('');
-  const [form, setForm] = useState({});
+  const [form, setForm] = useState(/** @type {Record<string, any>} */ ({}));
 
   const activeActivities = useMemo(() => (bundle?.activities || []).filter(item => item.active !== false), [bundle]);
   const selectedActivity = activeActivities.find(item => item.id === form.activityId) || activeActivities[0];
@@ -196,5 +196,4 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
     </>
   );
 }
-
 
