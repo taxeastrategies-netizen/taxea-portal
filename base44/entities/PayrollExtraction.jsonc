@@ -32,6 +32,11 @@
     "period_label": {
       "type": "string"
     },
+    "payment_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha efectiva de abono de la n\u00f3mina. Determina el per\u00edodo del modelo 111; si falta, el motor usa el per\u00edodo de n\u00f3mina como aproximaci\u00f3n y lo advierte."
+    },
     "worked_days": {
       "type": "number"
     },
