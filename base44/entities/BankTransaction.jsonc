@@ -159,6 +159,9 @@
     "es_demo": {
       "type": "boolean",
       "default": false
+    },
+    "accounting_operation_id": {
+      "type": "string"
     }
   },
   "required": [
@@ -170,16 +173,22 @@
   ],
   "rls": {
     "create": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "data.company_id": "{{user.data.company_id}}"
     },
     "update": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
