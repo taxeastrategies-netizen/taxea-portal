@@ -20,6 +20,8 @@ const ESTADO_CFG = {
 };
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo completar la operación.';
 
 export default function FacturasPendientes() {
   const { company } = useOutletContext() || {};
@@ -49,12 +51,25 @@ export default function FacturasPendientes() {
   });
 
   const markRechazada = useMutation({
-    mutationFn: (id) => base44.entities.Invoice.update(id, { estado_contable: 'rechazada' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] }),
+    mutationFn: async (/** @type {string} */ id) => {
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: 'reject_invoice_accounting',
+        companyId: company?.id,
+        invoiceId: id,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.success) throw new Error(payload?.error || 'No se pudo rechazar la factura.');
+      return payload;
+    },
+    onSuccess: () => {
+      setSyncMessage('Factura apartada de la contabilización automática y marcada para revisión.');
+      qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });
+    },
+    onError: (mutationError) => setSyncMessage(errorMessage(mutationError)),
   });
 
   const anularFactura = useMutation({
-    mutationFn: async ({ id, motivo }) => {
+    mutationFn: async (/** @type {{id: string, motivo: string}} */ { id, motivo }) => {
       return base44.functions.invoke('anularFacturas', {
         invoiceIds: [id],
         motivo,
@@ -144,7 +159,7 @@ export default function FacturasPendientes() {
   if (isError) return (
     <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
       <p className="font-medium text-red-700">No se pudo abrir la contabilidad</p>
-      <p className="mt-1 text-sm text-red-600">{error?.response?.data?.error || error?.message || 'Error al cargar las facturas.'}</p>
+      <p className="mt-1 text-sm text-red-600">{errorMessage(error)}</p>
       <Button className="mt-4" variant="outline" onClick={() => refetch()}>Reintentar</Button>
     </div>
   );
