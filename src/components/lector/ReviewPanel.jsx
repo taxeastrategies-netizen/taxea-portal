@@ -254,4 +254,3 @@ function F({ label, children, col2 }) {
     </div>
   );
 }
-
