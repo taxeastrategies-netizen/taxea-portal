@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -34,8 +34,11 @@ const CATEGORIAS = [
 const EMPTY = {
   tipo: 'gasto', fecha: '', proveedor_cliente: '', concepto: '',
   categoria: 'otros', base_imponible: '', tipo_impuesto: 21,
-  cuota_impuesto: '', total: '', estado: 'pendiente'
+  cuota_impuesto: '', retencion_irpf: 0, importe_retencion: 0,
+  total: '', estado: 'pendiente', treasury_account_code: '57000000'
 };
+
+const newMutationKey = () => `manual-financial:${Date.now()}:${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}`;
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,7 +51,7 @@ export default function IngresosGastos() {
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterCategoria, setFilterCategoria] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
-  const { invoices, expenses, loading: finLoading, error: finError, refresh } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
+  const { invoices, expenses, sourceTruth, loading: finLoading, error: finError, refresh } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -56,7 +59,9 @@ export default function IngresosGastos() {
   const [formError, setFormError] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [operationNotice, setOperationNotice] = useState('');
   const [page, setPage] = useState(1);
+  const mutationKeyRef = useRef(newMutationKey());
 
   useEffect(() => {
     setPage(1);
@@ -121,15 +126,26 @@ export default function IngresosGastos() {
         trimestre,
         estado: editing?.estado || 'pendiente',
       };
-      if (editing?.id) await base44.entities.Expense.update(editing.id, payload);
-      else await base44.entities.Expense.create({ ...payload, subido_por: user?.email, anulada: false });
+      const response = await base44.functions.invoke('accountingOperations', {
+        action: editing?.id ? 'update_manual_financial_record' : 'create_manual_financial_record',
+        companyId: company.id,
+        expenseId: editing?.id,
+        idempotencyKey: mutationKeyRef.current,
+        record: payload,
+      });
+      const result = response?.data || response;
+      if (!result?.success || !result?.record) throw new Error(result?.error || 'No se pudo guardar el registro.');
+      setOperationNotice(result.accountingWarning
+        ? `El registro se guardó y quedó pendiente de revisión contable: ${result.accountingWarning}`
+        : 'Registro guardado y contabilizado correctamente.');
       setShowForm(false);
       setEditing(null);
       setForm(EMPTY);
+      mutationKeyRef.current = newMutationKey();
       triggerFinancialRefresh();
     } catch (error) {
       console.error('Error guardando registro:', error);
-      setFormError('No se pudo guardar el registro. Revisa los datos e inténtalo de nuevo.');
+      setFormError(error?.response?.data?.error || error?.message || 'No se pudo guardar el registro. Revisa los datos e inténtalo de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -143,11 +159,11 @@ export default function IngresosGastos() {
         companyId: company?.id,
       });
     } else {
-      await base44.entities.Expense.update(item.id, {
-        anulada: true,
-        fecha_anulacion: new Date().toISOString(),
-        motivo_anulacion: 'Anulación desde Ingresos y Gastos',
-        anulada_por: user?.email,
+      await base44.functions.invoke('accountingOperations', {
+        action: 'void_manual_financial_record',
+        companyId: company?.id,
+        expenseId: item.id,
+        reason: 'Anulación desde Ingresos y Gastos',
       });
     }
     setSelected(s => { const n = new Set(s); n.delete(item.id); return n; });
@@ -165,12 +181,11 @@ export default function IngresosGastos() {
         companyId: company?.id,
       });
     }
-    const annulledAt = new Date().toISOString();
-    await Promise.all(expenseIds.map(id => base44.entities.Expense.update(id, {
-      anulada: true,
-      fecha_anulacion: annulledAt,
-      motivo_anulacion: 'Anulación múltiple desde Ingresos y Gastos',
-      anulada_por: user?.email,
+    await Promise.all(expenseIds.map(expenseId => base44.functions.invoke('accountingOperations', {
+      action: 'void_manual_financial_record',
+      companyId: company?.id,
+      expenseId,
+      reason: 'Anulación múltiple desde Ingresos y Gastos',
     })));
     setSelected(new Set());
     setConfirmDelete(null);
@@ -256,10 +271,22 @@ export default function IngresosGastos() {
           <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
         </Select>
-        <Button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
+        <Button onClick={() => { setEditing(null); setForm(EMPTY); setFormError(''); mutationKeyRef.current = newMutationKey(); setShowForm(true); }} className="bg-teal hover:bg-teal-dark h-9">
           <Plus className="w-4 h-4 mr-1.5" /> Nuevo registro
         </Button>
       </PageHeader>
+
+      {(operationNotice || sourceTruth?.suppressedDuplicateCount > 0 || sourceTruth?.reviewCandidateCount > 0) && (
+        <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {operationNotice && <p>{operationNotice}</p>}
+          {sourceTruth?.suppressedDuplicateCount > 0 && (
+            <p>{sourceTruth.suppressedDuplicateCount} proyección{sourceTruth.suppressedDuplicateCount === 1 ? '' : 'es'} legacy duplicada{sourceTruth.suppressedDuplicateCount === 1 ? '' : 's'} se ha{sourceTruth.suppressedDuplicateCount === 1 ? '' : 'n'} excluido del cálculo sin borrar datos.</p>
+          )}
+          {sourceTruth?.reviewCandidateCount > 0 && (
+            <p>{sourceTruth.reviewCandidateCount} posible{sourceTruth.reviewCandidateCount === 1 ? '' : 's'} coincidencia{sourceTruth.reviewCandidateCount === 1 ? '' : 's'} necesita{sourceTruth.reviewCandidateCount === 1 ? '' : 'n'} revisión; permanece{sourceTruth.reviewCandidateCount === 1 ? '' : 'n'} incluida{sourceTruth.reviewCandidateCount === 1 ? '' : 's'}.</p>
+          )}
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
@@ -413,8 +440,10 @@ export default function IngresosGastos() {
                                 <Eye className="w-3.5 h-3.5 mr-1.5" /> Abrir factura definitiva
                               </Link>
                             </DropdownMenuItem>
+                          ) : item.linked_journal_entry_id ? (
+                            <DropdownMenuItem disabled>Contabilizado: anula para corregir</DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setFormError(''); setShowForm(true); }}>Editar registro manual</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setEditing(item); setForm({ ...item }); setFormError(''); mutationKeyRef.current = newMutationKey(); setShowForm(true); }}>Editar registro manual</DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={() => exportPDF([item])}>
                             <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
@@ -459,7 +488,7 @@ export default function IngresosGastos() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); } }}>
+      <Dialog open={showForm} onOpenChange={v => { setShowForm(v); if (!v) { setEditing(null); setForm(EMPTY); setFormError(''); mutationKeyRef.current = newMutationKey(); } }}>
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Editar registro' : 'Nuevo registro'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 mt-2">
@@ -497,14 +526,14 @@ export default function IngresosGastos() {
               <Input type="number" step="0.01" value={form.base_imponible}
                 onChange={e => {
                   const base = parseFloat(e.target.value) || 0;
-                  const cuota = base * (parseFloat(form.tipo_impuesto) || 0) / 100;
+                  const cuota = base * (Number(form.tipo_impuesto) || 0) / 100;
                   setForm(f => ({ ...f, base_imponible: e.target.value, cuota_impuesto: cuota.toFixed(2), total: (base + cuota).toFixed(2) }));
                 }} />
             </div>
             <div className="space-y-1.5">
               <Label>Tipo impuesto (%)</Label>
               <Select value={String(form.tipo_impuesto)} onValueChange={v => {
-                const base = parseFloat(form.base_imponible) || 0;
+                const base = Number(form.base_imponible) || 0;
                 const cuota = base * parseFloat(v) / 100;
                 setForm(f => ({ ...f, tipo_impuesto: parseFloat(v), cuota_impuesto: cuota.toFixed(2), total: (base + cuota).toFixed(2) }));
               }}>
