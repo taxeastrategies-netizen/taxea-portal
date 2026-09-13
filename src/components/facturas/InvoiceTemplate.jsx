@@ -22,6 +22,7 @@ export default function InvoiceTemplate({ invoice, company }) {
   const retencionImporte = base * retencionPct / 100;
   const total = parseFloat(invoice?.total_factura) || (base + cuota - retencionImporte);
 
+  /** @type {Record<string, import('react').CSSProperties>} */
   const s = {
     page: {
       background: '#fff',
