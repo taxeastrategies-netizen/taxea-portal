@@ -14,6 +14,8 @@ import DebtSimulator from './DebtSimulator';
 import DebtAlerts from './DebtAlerts';
 import DebtFormModal from './DebtFormModal';
 import DebtOCR from './DebtOCR';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
 
 const TABS = [
   { id: 'overview',    label: 'Resumen',          icon: Layers },
@@ -42,14 +44,13 @@ export default function DebtCenter() {
   const loadData = async () => {
     if (!companyId) { setLoading(false); return; }
     setLoading(true);
-    const [dbs, inv, exp] = await Promise.all([
+    const [dbs, financialData] = await Promise.all([
       base44.entities.DebtInstrument.filter({ company_id: companyId }),
-      base44.entities.Invoice.filter({ company_id: companyId }),
-      base44.entities.Expense.filter({ company_id: companyId }),
+      fetchCompanyFinancials(companyId),
     ]);
     setDebts(dbs || []);
-    setInvoices(inv || []);
-    setExpenses(exp || []);
+    setInvoices(financialData.invoices);
+    setExpenses(financialData.expenses);
     setLoading(false);
   };
 
@@ -69,8 +70,9 @@ export default function DebtCenter() {
     const lineasCredito = active.filter(d => d.tipo === 'linea_credito' || d.tipo === 'poliza');
     const limiteTotal = lineasCredito.reduce((s, d) => s + (d.limite_credito || 0), 0);
     const dispuestoTotal = lineasCredito.reduce((s, d) => s + (d.dispuesto || 0), 0);
-    const ingresos = invoices.filter(i => i.tipo === 'emitida').reduce((s, i) => s + (i.total_factura || 0), 0);
-    const gastos = expenses.filter(e => e.tipo === 'gasto').reduce((s, e) => s + (e.total || 0), 0);
+    const financial = calculateFinancialKPIs(invoices, expenses);
+    const ingresos = financial.totalIngresos;
+    const gastos = financial.totalGastos;
     const ebitda = Math.max(0, ingresos - gastos * 0.85);
 
     const now = new Date();
