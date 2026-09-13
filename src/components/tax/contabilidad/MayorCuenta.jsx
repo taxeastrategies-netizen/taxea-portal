@@ -30,7 +30,7 @@ export default function MayorCuenta({ account, companyId, onClose }) {
       .filter(line => entryMap.has(line.journalEntryId))
       .map(line => ({ ...line, entryDate: line.entryDate || entryMap.get(line.journalEntryId)?.date }));
     const sorted = confirmed.sort((a, b) => {
-      const dateDiff = new Date(a.entryDate || 0) - new Date(b.entryDate || 0);
+      const dateDiff = new Date(a.entryDate || 0).getTime() - new Date(b.entryDate || 0).getTime();
       return dateDiff || Number(a.lineNumber || 0) - Number(b.lineNumber || 0);
     });
     let balance = Number(account.openingDebit || 0) - Number(account.openingCredit || 0);
