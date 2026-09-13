@@ -35,7 +35,7 @@ const STATUS_CFG = {
   desconectado:        { icon: WifiOff,     color: 'text-slate-400',   bg: 'bg-slate-50 border-slate-200',     label: 'Desconectado' },
 };
 
-export default function BankCard({ account, companyId, onViewMovements, onDisconnect, onRefresh, delay = 0 }) {
+export default function BankCard({ account, companyId, onViewMovements, onRefresh, delay = 0 }) {
   const [showDetail, setShowDetail] = useState(false);
   const [showCSV, setShowCSV] = useState(false);
   const [syncing, setSyncing] = useState(false);
