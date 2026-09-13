@@ -107,7 +107,12 @@ export default function Facturas() {
   const openNew = () => setShowForm(true);
 
   const updateEstado = async (id, field, value) => {
-    await base44.entities.Invoice.update(id, { [field]: value });
+    if (field !== 'estado_contable' || value !== 'en_revision') return;
+    await base44.functions.invoke('invoiceOperations', {
+      action: 'mark_accounting_review',
+      company_id: company?.id,
+      invoice_id: id,
+    });
     loadInvoices();
     triggerFinancialRefresh();
   };
