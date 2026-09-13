@@ -1,0 +1,4 @@
+{
+  "name": "migrateAccountingToPgc8",
+  "entry": "entry.ts"
+}

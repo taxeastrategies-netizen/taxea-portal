@@ -35,10 +35,18 @@ function AddEventForm({ companyId, accounts, onSaved, onClose }) {
   const handleSave = async () => {
     if (!form.concepto || !form.importe || !form.fecha_prevista) return;
     setLoading(true);
-    await base44.entities.TreasuryEvent.create({ ...form, company_id: companyId, importe: parseFloat(form.importe) });
-    setLoading(false);
-    onSaved();
-    onClose();
+    try {
+      await base44.functions.invoke('openBanking', {
+        action: 'create_treasury_event',
+        company_id: companyId,
+        ...form,
+        importe: parseFloat(form.importe),
+      });
+      onSaved();
+      onClose();
+    } finally {
+      setLoading(false);
+    }
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm p-4">

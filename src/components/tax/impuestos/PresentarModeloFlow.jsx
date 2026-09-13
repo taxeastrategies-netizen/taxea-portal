@@ -95,8 +95,10 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
 
   // ── Registrar estado final
   const registrarSubmission = useMutation({
-    mutationFn: (data) => base44.entities.TaxSubmission.create(data),
-    onSuccess: (sub) => {
+    mutationFn: (data) => base44.functions.invoke('taxModelOperations', data),
+    onSuccess: (response) => {
+      const sub = response?.data?.submission;
+      if (!sub) throw new Error('No se recibió la confirmación del registro fiscal.');
       setSubmissionResult(sub);
       qc.invalidateQueries({ queryKey: ['taxFilings', companyId] });
       qc.invalidateQueries({ queryKey: ['taxSubmissions', companyId] });
@@ -116,8 +118,11 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
     a.download = fichero.nombreFichero;
     a.click();
     URL.revokeObjectURL(url);
-    // Mark as downloaded
-    base44.entities.TaxOfficialFile.update(fichero.id, { estado: 'descargado' });
+    base44.functions.invoke('taxModelOperations', {
+      action: 'mark_official_file_downloaded',
+      companyId,
+      fileId: fichero.id,
+    }).catch(() => null);
   }
 
   function abrirSede() {
@@ -126,21 +131,17 @@ export default function PresentarModeloFlow({ modelo, companyId, clienteNif, cli
 
   function confirmarPresentacion() {
     registrarSubmission.mutate({
+      action: 'record_submission',
       companyId,
-      clienteNif,
       modeloCodigo: modelo,
       ejercicio,
       periodo,
-      administracion,
       viaPresentacion: viaSeleccionada,
-      taxOfficialFileId: fichero?.id || null,
-      usuarioPresentador: 'asesor',
-      fechaEnvio: new Date().toISOString(),
-      estado: viaSeleccionada === 'presentacion_manual_externa' && (justificanteNum || csvCode) ? 'presentado' : 'pendiente',
+      fileId: fichero?.id || '',
       numeroJustificante: justificanteNum || null,
       csv: csvCode || null,
       importeFinal: parseFloat(resumen?.resultado || 0),
-      confirmacionExplicitaUsuario: true,
+      confirmation: true,
     });
   }
 

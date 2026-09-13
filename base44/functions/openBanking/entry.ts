@@ -1,5 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
-import { postBankReconciliation } from './accountingEngine.ts';
+import {
+  buildInvoicePosting,
+  commitJournalEntry,
+  ensureBankPostingAccount,
+  postBankReconciliation,
+  postInvoice,
+  updatePostingOperation,
+} from './accountingEngine.ts';
 
 const API_ROOT = 'https://api.enablebanking.com';
 const DEFAULT_COUNTRY = 'ES';
@@ -430,17 +437,70 @@ function reconciliationSignal(invoice: any, transaction: any, contact: any) {
   };
 }
 
+function paymentVisible(payment: any, operationById: Map<string, any>) {
+  if (payment.operation_status && payment.operation_status !== 'committed') return false;
+  const operationId = clean(payment.accounting_operation_id, 120);
+  return !operationId || operationById.get(operationId)?.status === 'committed';
+}
+
+async function reserveAutomaticPayment(base44: any, companyId: string, invoice: any, payload: any) {
+  const svc = base44.asServiceRole;
+  const existing = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id, idempotency_key: payload.idempotency_key }, 'created_at', 20);
+  if (existing?.[0]) return { payment: existing[0], alreadyExisted: true };
+  const candidate = await svc.entities.InvoicePayment.create({ ...payload, operation_status: 'preparing' });
+  await sleep(50);
+  const contenders = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id, idempotency_key: payload.idempotency_key }, 'created_at', 20);
+  const winner = [...(contenders || [])].sort((left: any, right: any) => String(left.created_at || left.created_date || '').localeCompare(String(right.created_at || right.created_date || '')) || String(left.id).localeCompare(String(right.id)))[0];
+  if (winner?.id !== candidate.id) {
+    await svc.entities.InvoicePayment.delete(candidate.id).catch(() => null);
+    return { payment: winner, alreadyExisted: true };
+  }
+  const allReservations = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'created_at', MAX_LIST);
+  const total = asMoney(Math.abs(Number(invoice.total_factura || 0)));
+  let accumulated = 0;
+  const accepted = new Set<string>();
+  for (const reservation of [...(allReservations || [])].sort((left: any, right: any) => String(left.created_at || left.created_date || '').localeCompare(String(right.created_at || right.created_date || '')) || String(left.id).localeCompare(String(right.id)))) {
+    const next = asMoney(accumulated + Math.abs(Number(reservation.amount) || 0));
+    if (next <= total + 0.01) { accepted.add(reservation.id); accumulated = next; }
+  }
+  if (!accepted.has(candidate.id)) {
+    await svc.entities.InvoicePayment.delete(candidate.id).catch(() => null);
+    throw new Error('Otra operación ha reservado ya el importe pendiente de la factura.');
+  }
+  return { payment: candidate, alreadyExisted: false };
+}
+
+async function repairInvoicePaymentTotals(base44: any, companyId: string, invoice: any) {
+  const payments = await base44.asServiceRole.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, '-payment_date', MAX_LIST);
+  const operationIds = [...new Set((payments || []).map((payment: any) => clean(payment.accounting_operation_id, 120)).filter(Boolean))];
+  const operations = await Promise.all(operationIds.map(id => base44.asServiceRole.entities.AccountingPostingOperation.get(id).catch(() => null)));
+  const operationById = new Map(operations.filter(operation => operation?.companyId === companyId).map(operation => [operation.id, operation]));
+  const visible = (payments || []).filter((payment: any) => paymentVisible(payment, operationById));
+  const total = asMoney(Math.abs(Number(invoice.total_factura || 0)));
+  const paid = asMoney(visible.reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount || 0)), 0));
+  const outstanding = asMoney(Math.max(0, total - paid));
+  await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+    estado_cobro: outstanding <= 0.01 ? 'cobrada' : paid > 0.01 ? 'parcial' : 'pendiente',
+    importe_pagado: paid,
+    importe_pendiente: outstanding,
+    ultimo_pago_at: visible.sort((left: any, right: any) => String(right.created_at || '').localeCompare(String(left.created_at || '')))[0]?.created_at || null,
+  });
+  return { paid, outstanding };
+}
+
 async function autoReconcileCompany(base44: any, companyId: string, actor: string) {
-  const [accounts, transactions, invoices, payments, contacts] = await Promise.all([
+  const [accounts, transactions, invoices, payments, contacts, postingOperations] = await Promise.all([
     base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId }, '-created_date', MAX_LIST),
     base44.asServiceRole.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', MAX_LIST),
     base44.asServiceRole.entities.Invoice.filter({ company_id: companyId }, '-fecha_emision', MAX_LIST),
     base44.asServiceRole.entities.InvoicePayment.filter({ company_id: companyId }, '-payment_date', MAX_LIST),
     base44.asServiceRole.entities.Contact.filter({ company_id: companyId }, '-created_date', MAX_LIST),
+    base44.asServiceRole.entities.AccountingPostingOperation.filter({ companyId }, '-startedAt', MAX_LIST),
   ]);
+  const operationById = new Map((postingOperations || []).map((operation: any) => [operation.id, operation]));
   const activeAccountIds = new Set((accounts || []).filter((account: any) => account.activa !== false).map((account: any) => account.id));
   const paymentsByInvoice = new Map<string, number>();
-  for (const payment of payments || []) {
+  for (const payment of (payments || []).filter((item: any) => paymentVisible(item, operationById))) {
     paymentsByInvoice.set(payment.invoice_id, asMoney((paymentsByInvoice.get(payment.invoice_id) || 0) + Math.abs(Number(payment.amount || 0))));
   }
   const contactsByTaxId = new Map<string, any>();
@@ -505,65 +565,92 @@ async function autoReconcileCompany(base44: any, companyId: string, actor: strin
   let amount = 0;
   let issued = 0;
   let received = 0;
+  const issues: any[] = [];
   for (const match of safeMatches) {
     const previousPayment = await base44.asServiceRole.entities.InvoicePayment.filter({
       company_id: companyId,
       invoice_id: match.invoice.id,
       bank_transaction_id: match.transaction.id,
     }, '-created_at', 1);
-    if (previousPayment?.[0]) continue;
+    if (previousPayment?.[0] && paymentVisible(previousPayment[0], operationById)) continue;
     const currentTransaction = await base44.asServiceRole.entities.BankTransaction.get(match.transaction.id).catch(() => null);
     const currentInvoice = await base44.asServiceRole.entities.Invoice.get(match.invoice.id).catch(() => null);
     if (!currentTransaction || currentTransaction.entidad_id || !currentInvoice || currentInvoice.anulada || currentInvoice.estado_cobro === 'cobrada') continue;
     const currentPayments = await base44.asServiceRole.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: currentInvoice.id }, '-payment_date', MAX_LIST);
-    const alreadyPaid = asMoney((currentPayments || []).reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount || 0)), 0));
+    const alreadyPaid = asMoney((currentPayments || []).filter((payment: any) => paymentVisible(payment, operationById)).reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount || 0)), 0));
     const currentOutstanding = asMoney(Math.max(0, Math.abs(Number(currentInvoice.total_factura || 0)) - alreadyPaid));
     const paymentAmount = asMoney(Math.abs(Number(currentTransaction.importe || 0)));
     if (currentOutstanding <= 0.01 || Math.abs(currentOutstanding - paymentAmount) > 0.01) continue;
     const now = new Date().toISOString();
     const currency = clean(currentTransaction.moneda || currentInvoice.moneda || 'EUR', 8).toUpperCase();
     const note = `Conciliación automática de alta confianza: importe, sentido, moneda, fecha y ${match.signal.reason}.`;
-    await base44.asServiceRole.entities.InvoicePayment.create({
-      company_id: companyId,
-      invoice_id: currentInvoice.id,
-      amount: paymentAmount,
-      currency,
-      payment_date: currentTransaction.fecha_operacion,
-      method: 'transferencia',
-      reference: clean(currentTransaction.referencia || currentTransaction.concepto, 160),
-      notes: note,
-      origin: 'bank_reconciliation',
-      bank_transaction_id: currentTransaction.id,
-      idempotency_key: `bank:${currentTransaction.id}`,
-      created_at: now,
-      created_by: actor,
-    });
-    await base44.asServiceRole.entities.BankTransaction.update(currentTransaction.id, {
-      estado_conciliacion: 'conciliada_auto',
-      confianza_conciliacion: 'alta',
-      entidad_tipo: 'invoice',
-      entidad_id: currentInvoice.id,
-      contacto_id: match.contact?.id || currentTransaction.contacto_id || null,
-      notas: clean(`${currentTransaction.notas ? `${currentTransaction.notas}\n` : ''}${note} Factura ${currentInvoice.numero_factura}.`, 2000),
-    });
-    const paid = asMoney(alreadyPaid + paymentAmount);
-    const outstanding = asMoney(Math.max(0, Math.abs(Number(currentInvoice.total_factura || 0)) - paid));
-    await base44.asServiceRole.entities.Invoice.update(currentInvoice.id, {
-      estado_cobro: outstanding <= 0.01 ? 'cobrada' : 'parcial',
-      importe_pagado: paid,
-      importe_pendiente: outstanding,
-      ultimo_pago_at: now,
-    });
-    await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
-      invoice_id: currentInvoice.id,
-      company_id: companyId,
-      event_type: 'conciliacion_bancaria',
-      event_label: 'Factura conciliada automáticamente',
-      event_detail: `${paymentAmount.toFixed(2)} ${currency} · ${clean(currentTransaction.concepto, 120)} · ${match.signal.reason}`,
-      created_at: now,
-      created_by: actor,
-      origin: 'automatizacion',
-    }).catch(error => console.warn('[openBanking] reconciliation timeline skipped:', publicError(error)));
+    let reservation: any;
+    try {
+      reservation = previousPayment?.[0]
+        ? { payment: previousPayment[0], alreadyExisted: true }
+        : await reserveAutomaticPayment(base44, companyId, currentInvoice, {
+          company_id: companyId, invoice_id: currentInvoice.id, amount: paymentAmount, currency,
+          payment_date: currentTransaction.fecha_operacion, method: 'transferencia',
+          reference: clean(currentTransaction.referencia || currentTransaction.concepto, 160), notes: note,
+          origin: 'bank_reconciliation', bank_transaction_id: currentTransaction.id,
+          idempotency_key: `bank:${currentTransaction.id}`, created_at: now, created_by: actor,
+        });
+    } catch (error) {
+      issues.push({ invoice_id: currentInvoice.id, bank_transaction_id: currentTransaction.id, error: publicError(error) });
+      continue;
+    }
+    let bankPosting: any = null;
+    try {
+      await postInvoice(base44.asServiceRole, companyId, currentInvoice, actor, { status: 'confirmado' });
+      const postedInvoice = await base44.asServiceRole.entities.Invoice.get(currentInvoice.id);
+      const proposal = await buildInvoicePosting(base44.asServiceRole, companyId, postedInvoice);
+      let counterparty = postedInvoice.counterparty_account_id
+        ? await base44.asServiceRole.entities.AccountingAccount.get(postedInvoice.counterparty_account_id).catch(() => null)
+        : null;
+      counterparty = counterparty || proposal.counterparty?.account;
+      if (!counterparty || counterparty.companyId !== companyId) throw new Error('No se pudo resolver la subcuenta del cliente o proveedor.');
+      const physicalBank = (accounts || []).find((account: any) => account.id === currentTransaction.bank_account_id);
+      const bankLedger = await ensureBankPostingAccount(base44.asServiceRole, companyId, physicalBank);
+      bankPosting = await postBankReconciliation(base44.asServiceRole, companyId, currentTransaction, bankLedger, counterparty, actor, {
+        documentId: currentInvoice.id,
+        description: `${currentInvoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${currentInvoice.numero_factura || ''}`.trim(),
+        counterpartyLineType: 'tercero', status: 'confirmado', deferCommit: true,
+      });
+      if (!bankPosting.operation?.id) throw new Error('No se pudo reservar la unidad contable de conciliación.');
+      const stagedPayment = await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, {
+        journal_entry_id: bankPosting.entry.id,
+        accounting_operation_id: bankPosting.operation.id,
+        operation_status: 'preparing',
+      });
+      await updatePostingOperation(base44.asServiceRole, bankPosting.operation, { paymentId: stagedPayment.id, bankTransactionId: currentTransaction.id, stage: 'linked_records_staged' });
+      const committed = await commitJournalEntry(base44.asServiceRole, companyId, bankPosting.entry, actor);
+      await base44.asServiceRole.entities.InvoicePayment.update(stagedPayment.id, { journal_entry_id: committed.entry.id, operation_status: 'committed' });
+      const committedOperation = await updatePostingOperation(base44.asServiceRole, bankPosting.operation, { status: 'committed', stage: 'bank_link_pending', journalEntryId: committed.entry.id, paymentId: stagedPayment.id, bankTransactionId: currentTransaction.id, committedAt: now, lastError: '' });
+      operationById.set(committedOperation.id, committedOperation);
+      await repairInvoicePaymentTotals(base44, companyId, currentInvoice);
+      await base44.asServiceRole.entities.BankTransaction.update(currentTransaction.id, {
+        estado_conciliacion: 'conciliada_auto', confianza_conciliacion: 'alta', entidad_tipo: 'invoice', entidad_id: currentInvoice.id,
+        contacto_id: match.contact?.id || currentTransaction.contacto_id || null,
+        journal_entry_id: committed.entry.id, accounting_account_id: counterparty.id, accounting_account_code: counterparty.code,
+        accounting_operation_id: committedOperation.id, reconciled_at: now, reconciled_by: actor,
+        notas: clean(`${currentTransaction.notas ? `${currentTransaction.notas}\n` : ''}${note} Factura ${currentInvoice.numero_factura}.`, 2000),
+      });
+      await updatePostingOperation(base44.asServiceRole, committedOperation, { stage: 'committed' }).catch(() => null);
+      await base44.asServiceRole.entities.InvoiceTimelineEvent.create({
+        invoice_id: currentInvoice.id, company_id: companyId, event_type: 'conciliacion_bancaria', event_label: 'Factura conciliada automáticamente',
+        event_detail: `${paymentAmount.toFixed(2)} ${currency} · ${clean(currentTransaction.concepto, 120)} · ${match.signal.reason}`,
+        created_at: now, created_by: actor, origin: 'automatizacion',
+      }).catch(error => console.warn('[openBanking] reconciliation timeline skipped:', publicError(error)));
+    } catch (error) {
+      await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, { operation_status: 'recovery_required' }).catch(() => null);
+      if (bankPosting?.operation) {
+        const recoveredOperation = await updatePostingOperation(base44.asServiceRole, bankPosting.operation, { status: 'recovery_required', stage: 'auto_reconciliation_failed', lastError: publicError(error) }).catch(() => null);
+        if (recoveredOperation) operationById.set(recoveredOperation.id, recoveredOperation);
+      }
+      await repairInvoicePaymentTotals(base44, companyId, currentInvoice).catch(() => null);
+      issues.push({ invoice_id: currentInvoice.id, bank_transaction_id: currentTransaction.id, error: publicError(error) });
+      continue;
+    }
     reconciled += 1;
     amount = asMoney(amount + paymentAmount);
     if (currentInvoice.tipo === 'recibida') received += 1;
@@ -577,6 +664,7 @@ async function autoReconcileCompany(base44: any, companyId: string, actor: strin
     remaining_invoices: Math.max(0, eligibleInvoices.length - reconciled),
     reviewed_invoices: eligibleInvoices.length,
     criteria_version: 'exact-v2-party-evidence',
+    issues,
   };
 }
 
@@ -825,26 +913,34 @@ Deno.serve(async (request) => {
           description: clean(body.description, 500) || clean(transaction.concepto, 500) || 'Conciliación bancaria',
           counterpartyLineType: counterpartyAccount.type === 'ingreso' ? 'ingreso' : counterpartyAccount.type === 'gasto' ? 'gasto' : 'ajuste',
           status: 'confirmado',
+          deferCommit: true,
         },
       );
+      if (!posting.operation?.id) return Response.json({ error: 'No se pudo reservar la unidad contable de conciliación.' }, { status: 409 });
       const now = new Date().toISOString();
-      await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, {
-        accounting_account_id: bankLedger.id,
-        accounting_account_code: bankLedger.code,
-      });
-      await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
-        estado_conciliacion: 'conciliada_manual',
-        confianza_conciliacion: 'alta',
-        entidad_tipo: 'accounting_account',
-        entidad_id: counterpartyAccount.id,
-        journal_entry_id: posting.entry.id,
-        accounting_account_id: counterpartyAccount.id,
-        accounting_account_code: counterpartyAccount.code,
-        reconciled_at: now,
-        reconciled_by: user.email,
-        notas: `${clean(transaction.notas, 1400)}${transaction.notas ? '\n' : ''}Conciliado con ${counterpartyAccount.code} ${counterpartyAccount.name} por ${user.email}.`,
-      });
-      return Response.json({ ok: true, transaction_id: transaction.id, journal_entry: posting.entry, account: { id: counterpartyAccount.id, code: counterpartyAccount.code, name: counterpartyAccount.name } });
+      try {
+        const committed = await commitJournalEntry(base44.asServiceRole, companyId, posting.entry, user.email);
+        const committedOperation = await updatePostingOperation(base44.asServiceRole, posting.operation, { status: 'committed', stage: 'bank_link_pending', journalEntryId: committed.entry.id, bankTransactionId: transaction.id, committedAt: now, lastError: '' });
+        await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, { accounting_account_id: bankLedger.id, accounting_account_code: bankLedger.code });
+        await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
+          estado_conciliacion: 'conciliada_manual',
+          confianza_conciliacion: 'alta',
+          entidad_tipo: 'accounting_account',
+          entidad_id: counterpartyAccount.id,
+          journal_entry_id: committed.entry.id,
+          accounting_account_id: counterpartyAccount.id,
+          accounting_account_code: counterpartyAccount.code,
+          accounting_operation_id: committedOperation.id,
+          reconciled_at: now,
+          reconciled_by: user.email,
+          notas: `${clean(transaction.notas, 1400)}${transaction.notas ? '\n' : ''}Conciliado con ${counterpartyAccount.code} ${counterpartyAccount.name} por ${user.email}.`,
+        });
+        await updatePostingOperation(base44.asServiceRole, committedOperation, { stage: 'committed' }).catch(() => null);
+        return Response.json({ ok: true, transaction_id: transaction.id, journal_entry: committed.entry, account: { id: counterpartyAccount.id, code: counterpartyAccount.code, name: counterpartyAccount.name } });
+      } catch (error) {
+        await updatePostingOperation(base44.asServiceRole, posting.operation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: publicError(error) }).catch(() => null);
+        throw error;
+      }
     }
 
     if (action === 'treasury_snapshot') {
@@ -888,6 +984,54 @@ Deno.serve(async (request) => {
     if (action === 'auto_reconcile') {
       const result = await autoReconcileCompany(base44, companyId, user.full_name || user.email || 'Usuario');
       return Response.json({ ok: true, ...result });
+    }
+
+    if (action === 'create_csv_account') {
+      const bankName = clean(body.nombre_banco, 160);
+      const iban = clean(body.iban, 50).replace(/\s+/g, '').toUpperCase();
+      const holder = clean(body.titular, 180);
+      const openingBalance = Number(body.saldo_inicial || 0);
+      if (!bankName) return Response.json({ error: 'Indica el nombre del banco.' }, { status: 400 });
+      if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban)) return Response.json({ error: 'El IBAN no tiene un formato válido.' }, { status: 400 });
+      if (!Number.isFinite(openingBalance)) return Response.json({ error: 'El saldo inicial no es válido.' }, { status: 400 });
+      const existing = iban
+        ? (await base44.asServiceRole.entities.BankAccount.filter({ company_id: companyId, iban }, '-created_date', 10)).find((item: any) => item.activa !== false)
+        : null;
+      if (existing) return Response.json({ ok: true, already_exists: true, account: existing });
+      const account = await base44.asServiceRole.entities.BankAccount.create({
+        company_id: companyId,
+        nombre_banco: bankName,
+        proveedor: 'otro',
+        tipo_banco: 'otro',
+        iban,
+        ultimos_4: iban.slice(-4),
+        titular: holder,
+        moneda: 'EUR',
+        saldo_disponible: openingBalance,
+        saldo_contable: openingBalance,
+        estado_conexion: 'pendiente',
+        origen_datos: 'csv',
+        activa: true,
+        notas: `Cuenta CSV creada por ${user.email}. Pendiente de importar y validar movimientos.`,
+      });
+      return Response.json({ ok: true, already_exists: false, account });
+    }
+
+    if (action === 'create_treasury_event') {
+      const type = clean(body.tipo, 40);
+      const concept = clean(body.concepto, 300);
+      const amount = Number(body.importe);
+      const expectedDate = clean(body.fecha_prevista, 10);
+      const priority = clean(body.prioridad, 30) || 'normal';
+      if (!['cobro_previsto','pago_previsto','transferencia_interna','impuesto','nomina','cuota_prestamo','inversion','retirada_socio','otro'].includes(type)) return Response.json({ error: 'Tipo de previsión no admitido.' }, { status: 400 });
+      if (!concept) return Response.json({ error: 'Indica el concepto de la previsión.' }, { status: 400 });
+      if (!Number.isFinite(amount) || amount <= 0) return Response.json({ error: 'El importe previsto debe ser mayor que cero.' }, { status: 400 });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(expectedDate)) return Response.json({ error: 'La fecha prevista no es válida.' }, { status: 400 });
+      if (!['urgente','normal','diferible','estrategico'].includes(priority)) return Response.json({ error: 'Prioridad no admitida.' }, { status: 400 });
+      const bankAccountId = clean(body.bank_account_id, 120);
+      if (bankAccountId) await ownedAccount(base44, companyId, bankAccountId);
+      const event = await base44.asServiceRole.entities.TreasuryEvent.create({ company_id: companyId, tipo: type, concepto: concept, importe: amount, fecha_prevista: expectedDate, prioridad: priority, recurrente: body.recurrente === true, bank_account_id: bankAccountId, moneda: 'EUR', estado: 'pendiente', notas: `Previsión creada por ${user.email}.` });
+      return Response.json({ ok: true, event });
     }
 
     const token = await providerToken();

@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
     if (clean(body.action || 'summary') !== 'summary') return Response.json({ error: 'Accion no soportada.' }, { status: 400 });
     const svc = base44.asServiceRole;
     await authorize(svc, user, companyId);
-    const [accounting, invoices, payments, expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications] = await Promise.all([
+    const [accounting, invoices, rawPayments, expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications, postingOperations] = await Promise.all([
       accountingData(svc, companyId, { year, includeBusinessData: false }),
       fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 100000),
       safeFetch(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 100000),
@@ -263,7 +263,14 @@ Deno.serve(async (req) => {
       safeFetch(svc.entities.FiscalError, { company_id: companyId }, 'created_date', 100000),
       safeFetch(svc.entities.Document, { company_id: companyId }, 'created_date', 100000),
       user.email ? safeFetch(svc.entities.Notification, { company_id: companyId, destinatario_email: user.email }, '-created_date', 1000) : Promise.resolve([]),
+      safeFetch(svc.entities.AccountingPostingOperation, { companyId }, '-created_date', 100000),
     ]);
+    const operationById = new Map((postingOperations || []).map(operation => [operation.id, operation]));
+    const payments = (rawPayments || []).filter(payment => {
+      if (payment.operation_status && payment.operation_status !== 'committed') return false;
+      const operationId = clean(payment.accounting_operation_id);
+      return !operationId || operationById.get(operationId)?.status === 'committed';
+    });
     const financialSources = reconcileFinancialSources(invoices, expenses);
     return Response.json({
       success: true,

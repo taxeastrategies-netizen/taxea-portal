@@ -128,11 +128,11 @@
     },
     "canonical_event_key": {
       "type": "string",
-      "description": "Clave idempotente del registro manual en el n\u00facleo financiero."
+      "description": "Clave idempotente del registro manual en el núcleo financiero."
     },
     "canonical_invoice_id": {
       "type": "string",
-      "description": "Factura can\u00f3nica equivalente cuando el registro legacy era una proyecci\u00f3n duplicada."
+      "description": "Factura canónica equivalente cuando el registro legacy era una proyección duplicada."
     },
     "linked_journal_entry_id": {
       "type": "string"

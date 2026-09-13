@@ -17,28 +17,17 @@ export default function MayorCuenta({ account, companyId, onClose }) {
   const load = async () => {
     setLoading(true);
     if (!companyId) return;
-    const [data, entries] = await Promise.all([
-      base44.entities.JournalEntryLine.filter(
-        { companyId, accountCode: account.code },
-        'lineNumber',
-        2000
-      ).catch(() => []),
-      base44.entities.JournalEntry.filter({ companyId, status: 'confirmado' }, 'date', 2000).catch(() => []),
-    ]);
-    const entryMap = new Map((entries || []).map(entry => [entry.id, entry]));
-    const confirmed = (data || [])
-      .filter(line => entryMap.has(line.journalEntryId))
-      .map(line => ({ ...line, entryDate: line.entryDate || entryMap.get(line.journalEntryId)?.date }));
-    const sorted = confirmed.sort((a, b) => {
-      const dateDiff = new Date(a.entryDate || 0).getTime() - new Date(b.entryDate || 0).getTime();
-      return dateDiff || Number(a.lineNumber || 0) - Number(b.lineNumber || 0);
+    const response = await base44.functions.invoke('accountingOperations', {
+      action: 'ledger', companyId, year: new Date().getFullYear(), scope: 'confirmed', accountCode: account.code,
     });
-    let balance = Number(account.openingDebit || 0) - Number(account.openingCredit || 0);
-    const withBalance = sorted.map(l => {
-      balance += Number(l.debit || 0) - Number(l.credit || 0);
-      return { ...l, runningBalance: balance };
-    });
-    setLines(withBalance);
+    const movements = (response?.data || response)?.ledger?.movements || [];
+    const opening = Number(account.openingDebit || 0) - Number(account.openingCredit || 0);
+    setLines(movements.map(item => ({
+      ...item,
+      journalEntryId: item.entryId,
+      entryDate: item.date,
+      runningBalance: Number(item.runningBalance || 0) + opening,
+    })));
     setLoading(false);
   };
 

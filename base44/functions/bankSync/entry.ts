@@ -155,7 +155,7 @@ async function syncRevolut(accessToken, bank_account_id, company_id, base44, sta
   if (!txRes.ok) throw new Error(`Revolut transactions error: ${txRes.status}`);
   const revTxs = await txRes.json();
 
-  const existing = await base44.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
+  const existing = await base44.asServiceRole.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
 
   const normalized = revTxs
     .filter(t => t.state === 'completed' && t.legs && t.legs.length > 0)
@@ -180,9 +180,9 @@ async function syncRevolut(accessToken, bank_account_id, company_id, base44, sta
     })
     .filter(tx => tx.fecha_operacion && !isDuplicate(tx, existing));
 
-  if (normalized.length > 0) await base44.entities.BankTransaction.bulkCreate(normalized);
+  if (normalized.length > 0) await base44.asServiceRole.entities.BankTransaction.bulkCreate(normalized);
 
-  await base44.entities.BankAccount.update(bank_account_id, {
+  await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
     saldo_disponible: balance,
     saldo_contable: balance,
     estado_conexion: 'conectado',
@@ -217,7 +217,7 @@ async function syncWise(apiToken, bank_account_id, company_id, base44) {
     { headers }
   );
 
-  const existing = await base44.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
+  const existing = await base44.asServiceRole.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
   let normalized = [];
 
   if (txRes.ok) {
@@ -239,10 +239,10 @@ async function syncWise(apiToken, bank_account_id, company_id, base44) {
       }))
       .filter(tx => tx.fecha_operacion && !isDuplicate(tx, existing));
 
-    if (normalized.length > 0) await base44.entities.BankTransaction.bulkCreate(normalized);
+    if (normalized.length > 0) await base44.asServiceRole.entities.BankTransaction.bulkCreate(normalized);
   }
 
-  await base44.entities.BankAccount.update(bank_account_id, {
+  await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
     saldo_disponible: balance,
     saldo_contable: balance,
     estado_conexion: 'conectado',
@@ -274,7 +274,7 @@ async function syncQonto(login, secretKey, bank_account_id, company_id, base44) 
   if (!txRes.ok) throw new Error(`Qonto transactions error: ${txRes.status}`);
   const txData = await txRes.json();
 
-  const existing = await base44.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
+  const existing = await base44.asServiceRole.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
 
   const normalized = (txData.transactions || [])
     .filter(t => t.status === 'completed')
@@ -296,9 +296,9 @@ async function syncQonto(login, secretKey, bank_account_id, company_id, base44) 
     })
     .filter(tx => tx.fecha_operacion && !isDuplicate(tx, existing));
 
-  if (normalized.length > 0) await base44.entities.BankTransaction.bulkCreate(normalized);
+  if (normalized.length > 0) await base44.asServiceRole.entities.BankTransaction.bulkCreate(normalized);
 
-  await base44.entities.BankAccount.update(bank_account_id, {
+  await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
     saldo_disponible: balance,
     saldo_contable: balance,
     iban: ibanQonto,
@@ -342,7 +342,7 @@ async function syncGoCardless(requisitionId, bank_account_id, company_id, base44
   if (!txRes.ok) throw new Error(`GoCardless transactions error: ${txRes.status}`);
   const txData = await txRes.json();
 
-  const existing = await base44.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
+  const existing = await base44.asServiceRole.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
   const allTxs = [
     ...(txData.transactions?.booked || []).map(t => ({ ...t, _status: 'booked' })),
     ...(txData.transactions?.pending || []).map(t => ({ ...t, _status: 'pending' })),
@@ -367,9 +367,9 @@ async function syncGoCardless(requisitionId, bank_account_id, company_id, base44
     };
   }).filter(tx => tx.fecha_operacion && !isDuplicate(tx, existing));
 
-  if (normalized.length > 0) await base44.entities.BankTransaction.bulkCreate(normalized);
+  if (normalized.length > 0) await base44.asServiceRole.entities.BankTransaction.bulkCreate(normalized);
 
-  await base44.entities.BankAccount.update(bank_account_id, {
+  await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
     saldo_disponible: balance,
     saldo_contable: balance,
     estado_conexion: 'conectado',
@@ -476,7 +476,7 @@ Deno.serve(async (req) => {
         proveedor_api: proveedor, iniciado_por: user.email,
       });
 
-      await base44.entities.BankAccount.update(bank_account_id, { estado_conexion: 'sincronizando' });
+      await base44.asServiceRole.entities.BankAccount.update(bank_account_id, { estado_conexion: 'sincronizando' });
 
       let result;
 
@@ -506,7 +506,7 @@ Deno.serve(async (req) => {
       if (syncLog) {
         await base44.entities.BankSyncLog.update(syncLog.id, { estado: 'error', error_detalle: err.message });
       }
-      await base44.entities.BankAccount.update(bank_account_id, { estado_conexion: 'error' });
+      await base44.asServiceRole.entities.BankAccount.update(bank_account_id, { estado_conexion: 'error' });
       return Response.json({ error: err.message }, { status: 500 });
     }
   }
@@ -526,7 +526,7 @@ Deno.serve(async (req) => {
     }
     const result = await createGoCardlessRequisition(institution_id, redirectUrl, company_id);
     // Guardar requisition_id en la cuenta para futura sincronización
-    await base44.entities.BankAccount.update(bank_account_id, {
+    await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
       proveedor_integracion: result.requisition_id,
       estado_conexion: 'pendiente',
     });
@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
 
     const headers = parseCSVLine(lines[0]);
     const format = detectCSVFormat(headers);
-    const existing = await base44.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
+    const existing = await base44.asServiceRole.entities.BankTransaction.filter({ bank_account_id }, '-fecha_operacion', 500);
 
     const parsed = [];
     const errors = [];
@@ -566,10 +566,10 @@ Deno.serve(async (req) => {
 
     const nuevos = parsed.filter(tx => !isDuplicate(tx, existing));
     const duplicados = parsed.length - nuevos.length;
-    if (nuevos.length > 0) await base44.entities.BankTransaction.bulkCreate(nuevos);
+    if (nuevos.length > 0) await base44.asServiceRole.entities.BankTransaction.bulkCreate(nuevos);
 
     const lastWithSaldo = [...nuevos].reverse().find(t => t.saldo_posterior !== null);
-    await base44.entities.BankAccount.update(bank_account_id, {
+    await base44.asServiceRole.entities.BankAccount.update(bank_account_id, {
       ...(lastWithSaldo?.saldo_posterior ? { saldo_disponible: lastWithSaldo.saldo_posterior, saldo_contable: lastWithSaldo.saldo_posterior } : {}),
       fecha_ultima_sync: new Date().toISOString(),
       estado_conexion: 'conectado',
@@ -603,7 +603,7 @@ Deno.serve(async (req) => {
         fecha_revocacion: new Date().toISOString(), motivo_revocacion: body.motivo || 'Revocado por usuario',
       });
     }
-    await base44.entities.BankAccount.update(bank_account_id, { estado_conexion: 'desconectado' });
+    await base44.asServiceRole.entities.BankAccount.update(bank_account_id, { estado_conexion: 'desconectado' });
     return Response.json({ ok: true, consents_revoked: consents.length });
   }
 

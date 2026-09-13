@@ -2,14 +2,19 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import {
   SCHEMA_VERSION,
   assertAccountingDateOpen,
+  bankCurrency,
   buildInvoicePosting,
   canonical8,
+  commitJournalEntry,
   createJournalEntry,
   ensureAccount,
+  ensureBankPostingAccount,
   isCanonical8,
   postBankReconciliation,
   postInvoice,
   seedOperationalPgc,
+  stableBankIdentity,
+  updatePostingOperation,
 } from './accountingEngine.ts';
 import {
   accountingData,
@@ -23,6 +28,7 @@ import {
   closingPreview,
   executeClosing,
   listFiscalYears,
+  reopenFiscalYear,
   saveFiscalYear,
   setPeriodLock,
 } from './accountingPeriodEngine.ts';
@@ -35,75 +41,6 @@ async function resolveEntryLines(svc, companyId, entry) {
     lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5000);
   }
   return lines || [];
-}
-
-const normalizeBankIban = (value) => String(value || '').replace(/\s+/g, '').toUpperCase();
-const bankCurrency = (bankAccount) => String(bankAccount?.moneda || bankAccount?.currency || 'EUR').trim().toUpperCase();
-const stableBankIdentity = (bankAccount) => {
-  const currency = bankCurrency(bankAccount);
-  const iban = normalizeBankIban(bankAccount?.iban);
-  if (iban) return `iban:${iban}:${currency}`;
-  const providerAccountId = String(bankAccount?.provider_account_id || '').trim();
-  if (providerAccountId) return `provider:${providerAccountId}:${currency}`;
-  return '';
-};
-
-async function linkBankPostingAccount(svc, bankAccount, account, identityKey) {
-  await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: account.id, accounting_account_code: account.code });
-  const updates = {};
-  if (identityKey && account.bankIdentityKey !== identityKey) updates.bankIdentityKey = identityKey;
-  if (account.bankAccountId !== bankAccount.id) updates.bankAccountId = bankAccount.id;
-  if (account.bankCurrency !== bankCurrency(bankAccount)) updates.bankCurrency = bankCurrency(bankAccount);
-  if (Object.keys(updates).length) await svc.entities.AccountingAccount.update(account.id, updates);
-  return { ...account, ...updates };
-}
-
-async function ensureBankPostingAccount(svc, companyId, bankAccount) {
-  if (!bankAccount || bankAccount.company_id !== companyId) throw new Error('La cuenta bancaria no pertenece a la empresa.');
-  const identityKey = stableBankIdentity(bankAccount);
-  if (bankAccount.accounting_account_id) {
-    const linked = await svc.entities.AccountingAccount.get(bankAccount.accounting_account_id).catch(() => null);
-    if (linked && linked.companyId === companyId && linked.status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked, identityKey);
-  }
-  if (bankAccount.accounting_account_code) {
-    const linked = await svc.entities.AccountingAccount.filter({ companyId, code: bankAccount.accounting_account_code }, '-created_date', 1);
-    if (linked?.[0] && linked[0].status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked[0], identityKey);
-  }
-  if (identityKey) {
-    const byIdentity = await svc.entities.AccountingAccount.filter({ companyId, bankIdentityKey: identityKey }, '-created_date', 10);
-    const reusable = byIdentity?.find(item => item.status !== 'inactiva');
-    if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
-
-    const peerBanks = await fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000);
-    for (const peer of peerBanks) {
-      if (peer.id === bankAccount.id || stableBankIdentity(peer) !== identityKey) continue;
-      let peerAccount = null;
-      if (peer.accounting_account_id) peerAccount = await svc.entities.AccountingAccount.get(peer.accounting_account_id).catch(() => null);
-      if (!peerAccount && peer.accounting_account_code) {
-        const rows = await svc.entities.AccountingAccount.filter({ companyId, code: peer.accounting_account_code }, '-created_date', 1);
-        peerAccount = rows?.[0] || null;
-      }
-      if (peerAccount && peerAccount.companyId === companyId && peerAccount.status !== 'inactiva') {
-        return await linkBankPostingAccount(svc, bankAccount, peerAccount, identityKey);
-      }
-    }
-  }
-
-  const accounts = await fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000);
-  if (identityKey) {
-    const reusable = accounts.find(item => item.bankIdentityKey === identityKey && item.status !== 'inactiva');
-    if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
-  }
-  const used = new Set(accounts.map(account => String(account.code || '')));
-  let code = '';
-  for (let sequence = 1; sequence <= 9999; sequence += 1) {
-    const candidate = `5720${String(sequence).padStart(4, '0')}`;
-    if (!used.has(candidate)) { code = candidate; break; }
-  }
-  if (!code) throw new Error('No quedan subcuentas bancarias disponibles en el grupo 5720.');
-  const suffix = bankAccount.ultimos_4 ? ` · ${bankAccount.ultimos_4}` : '';
-  const account = await ensureAccount(svc, companyId, code, `${bankAccount.nombre_banco || 'Banco'}${suffix} · ${bankCurrency(bankAccount)}`, 'banco');
-  return await linkBankPostingAccount(svc, bankAccount, account, identityKey);
 }
 
 async function buildAccountingConfigurationDiagnostics(svc, companyId, configuration) {
@@ -134,7 +71,14 @@ async function buildAccountingConfigurationDiagnostics(svc, companyId, configura
   const orphanBankLedgers = activeAccounts.filter(account => account.type === 'banco' && /^5720/.test(String(account.code || '')) && account.code !== '57200000' && !referencedLedgerIds.has(account.id));
   const currentYear = new Date().getUTCFullYear();
   const currentPeriod = periods.find(period => Number(period.year) === currentYear) || null;
-  const scoreParts = [invalidMappingCodes.length === 0, unmappedCategories.length === 0, connectedBanks.length === mappedBanks.length, orphanBankLedgers.length === 0, Boolean(currentPeriod)];
+  const framework = configuration?.accountingFramework || (configuration?.accountingModel === 'normal' ? 'pgc_normal' : 'pgc_pymes');
+  const microenterpriseCriteria = configuration?.microenterpriseCriteria === true;
+  const frameworkIssues = [];
+  if (!['pgc_normal', 'pgc_pymes'].includes(framework)) frameworkIssues.push('marco contable no válido');
+  if (microenterpriseCriteria && framework !== 'pgc_pymes') frameworkIssues.push('los criterios de microempresa solo pueden aplicarse junto con PGC PYMES');
+  if (String(configuration?.baseCurrency || 'EUR').toUpperCase() !== 'EUR') frameworkIssues.push('el motor actual exige moneda funcional EUR');
+  if (configuration?.frameworkReviewStatus !== 'validado_asesor') frameworkIssues.push('marco contable pendiente de validación por asesor');
+  const scoreParts = [invalidMappingCodes.length === 0, unmappedCategories.length === 0, connectedBanks.length === mappedBanks.length, orphanBankLedgers.length === 0, Boolean(currentPeriod), frameworkIssues.length === 0];
   return {
     generatedAt: new Date().toISOString(),
     readinessScore: Math.round((scoreParts.filter(Boolean).length / scoreParts.length) * 100),
@@ -142,6 +86,16 @@ async function buildAccountingConfigurationDiagnostics(svc, companyId, configura
     categories: { used: usedCategories, unmapped: unmappedCategories },
     banking: { active: connectedBanks.length, connected: connectedBanks.length, mapped: mappedBanks.length, pendingConnections: activeBanks.length - connectedBanks.length, orphanLedgerCodes: orphanBankLedgers.map(account => account.code) },
     periods: { total: periods.length, currentYearConfigured: Boolean(currentPeriod), currentYearStatus: currentPeriod?.status || 'sin_configurar' },
+    framework: {
+      code: framework,
+      label: framework === 'pgc_normal' ? 'Plan General de Contabilidad' : 'Plan General de Contabilidad de PYMES',
+      annualAccountsModel: configuration?.annualAccountsModel || (framework === 'pgc_normal' ? 'normal' : 'pyme'),
+      microenterpriseCriteria,
+      effectiveFrom: Number(configuration?.frameworkEffectiveFrom || currentYear),
+      minimumUntil: Number(configuration?.frameworkMinimumUntil || 0) || null,
+      reviewStatus: configuration?.frameworkReviewStatus || 'pendiente_asesor',
+      issues: frameworkIssues,
+    },
   };
 }
 
@@ -279,7 +233,7 @@ function buildDuplicateAudit(invoices, entries, accounts = []) {
   );
 
   const entryById = new Map();
-  for (const entry of entries || []) {
+  for (const entry of activeEntries) {
     entryById.set(entry.id, entry);
     if (entry.importKey) entryById.set(entry.importKey, entry);
   }
@@ -334,7 +288,7 @@ function buildDuplicateAudit(invoices, entries, accounts = []) {
   };
 }
 
-async function postPendingBankBatch(svc, companyId, transactions, bankById, entries, userEmail) {
+async function postPendingBankBatch(svc, companyId, transactions, bankById, userEmail) {
   const result = { posted: 0, alreadyPosted: 0, repairedLinks: 0, issues: [] };
   if (!transactions.length) return result;
 
@@ -391,15 +345,47 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
       continue;
     }
     const bankAccount = bankPostingById.get(transaction.bank_account_id);
-    await svc.entities.BankTransaction.update(transaction.id, {
-      journal_entry_id: existing.id,
-      accounting_account_id: bankAccount.id,
-      accounting_account_code: bankAccount.code,
-      entidad_tipo: 'accounting_account',
-      entidad_id: pendingAccount.id,
-      estado_conciliacion: 'revisar',
-      confianza_conciliacion: 'baja',
-    });
+    let operation = null;
+    try {
+      if (existing.accountingOperationId) {
+        operation = await svc.entities.AccountingPostingOperation.get(existing.accountingOperationId).catch(() => null);
+        if (operation?.companyId !== companyId) operation = null;
+      }
+      if (operation && operation.status !== 'committed') {
+        operation = await updatePostingOperation(svc, operation, {
+          status: 'committed',
+          stage: 'bank_link_pending',
+          journalEntryId: existing.id,
+          bankTransactionId: transaction.id,
+          committedAt: operation.committedAt || new Date().toISOString(),
+          lastError: '',
+        });
+      }
+      await svc.entities.BankTransaction.update(transaction.id, {
+        journal_entry_id: existing.id,
+        accounting_account_id: bankAccount.id,
+        accounting_account_code: bankAccount.code,
+        accounting_operation_id: operation?.id || existing.accountingOperationId || transaction.accounting_operation_id || '',
+        entidad_tipo: 'accounting_account',
+        entidad_id: pendingAccount.id,
+        estado_conciliacion: 'revisar',
+        confianza_conciliacion: 'baja',
+      });
+      if (operation) await updatePostingOperation(svc, operation, { stage: 'committed' }).catch(() => null);
+    } catch (error) {
+      if (operation) {
+        await updatePostingOperation(svc, operation, {
+          status: 'recovery_required',
+          stage: 'bank_link_failed',
+          lastError: String(error?.message || error),
+        }).catch(() => null);
+      }
+      result.issues.push({
+        transactionId: transaction.id,
+        reason: error?.message || 'No se pudo recuperar el enlace contable del movimiento bancario.',
+      });
+      continue;
+    }
     result.alreadyPosted += 1;
     result.repairedLinks += 1;
   }
@@ -413,49 +399,35 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
     const wave = postable.slice(start, start + waveSize);
     const outcomes = await Promise.all(wave.map(async (transaction) => {
       const bankAccount = bankPostingById.get(transaction.bank_account_id);
-      const amount = money(Math.abs(transaction.importe));
       const concept = transaction.concepto || transaction.referencia || transaction.id;
-      const posting = await createJournalEntry(svc, companyId, {
-        date: transaction.fecha_operacion,
-        description: 'Movimiento bancario pendiente de aplicar · ' + concept,
-        type: 'cobro',
-        source: 'conciliacion',
-        sourceEvent: 'bank_unmatched_incoming',
+      const posting = await postBankReconciliation(svc, companyId, transaction, bankAccount, pendingAccount, userEmail, {
         documentId: transaction.id,
-        postingKey: 'bank:' + transaction.id + ':' + SCHEMA_VERSION,
+        description: 'Movimiento bancario pendiente de aplicar · ' + concept,
+        counterpartyLineType: 'ajuste',
         status: 'confirmado',
-        lines: [
-          {
-            accountId: bankAccount.id,
-            accountCode: bankAccount.code,
-            accountName: bankAccount.name,
-            description: concept,
-            debit: amount,
-            credit: 0,
-            sourceLineType: 'banco',
-          },
-          {
-            accountId: pendingAccount.id,
-            accountCode: pendingAccount.code,
-            accountName: pendingAccount.name,
-            description: concept,
-            debit: 0,
-            credit: amount,
-            sourceLineType: 'ajuste',
-          },
-        ],
-      }, userEmail);
-      await svc.entities.BankTransaction.update(transaction.id, {
-        journal_entry_id: posting.entry.id,
-        accounting_account_id: bankAccount.id,
-        accounting_account_code: bankAccount.code,
-        entidad_tipo: 'accounting_account',
-        entidad_id: pendingAccount.id,
-        estado_conciliacion: 'revisar',
-        confianza_conciliacion: 'baja',
-        notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
+        deferCommit: true,
       });
-      return posting;
+      if (!posting.operation?.id) throw new Error('No se pudo reservar la unidad contable bancaria.');
+      try {
+        const committed = await commitJournalEntry(svc, companyId, posting.entry, userEmail);
+        const committedOperation = await updatePostingOperation(svc, posting.operation, { status: 'committed', stage: 'bank_link_pending', journalEntryId: committed.entry.id, bankTransactionId: transaction.id, committedAt: new Date().toISOString(), lastError: '' });
+        await svc.entities.BankTransaction.update(transaction.id, {
+          journal_entry_id: committed.entry.id,
+          accounting_account_id: bankAccount.id,
+          accounting_account_code: bankAccount.code,
+          accounting_operation_id: committedOperation.id,
+          entidad_tipo: 'accounting_account',
+          entidad_id: pendingAccount.id,
+          estado_conciliacion: 'revisar',
+          confianza_conciliacion: 'baja',
+          notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
+        });
+        await updatePostingOperation(svc, committedOperation, { stage: 'committed' }).catch(() => null);
+        return { ...posting, entry: committed.entry, operation: committedOperation };
+      } catch (error) {
+        await updatePostingOperation(svc, posting.operation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: String(error?.message || error) }).catch(() => null);
+        throw error;
+      }
     }).map(promise => promise.then(
       posting => ({ ok: true, posting }),
       error => ({ ok: false, error }),
@@ -475,124 +447,6 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, entr
   }
   return result;
 
-  const nextSequenceByYear = new Map();
-  for (const transaction of postable) {
-    const year = new Date(transaction.fecha_operacion).getFullYear();
-    if (nextSequenceByYear.has(year)) continue;
-    const maximum = (entries || [])
-      .filter(entry => entry.ejercicio === year && entry.status !== 'anulado')
-      .reduce((current, entry) => {
-        const match = String(entry.entryNumber || '').match(/(\d+)$/);
-        return Math.max(current, match ? Number(match[1]) : 0);
-      }, 0);
-    nextSequenceByYear.set(year, maximum + 1);
-  }
-
-  const now = new Date().toISOString();
-  const entryPayloads = postable.map((transaction) => {
-    const year = new Date(transaction.fecha_operacion).getFullYear();
-    const sequence = nextSequenceByYear.get(year);
-    nextSequenceByYear.set(year, sequence + 1);
-    const amount = money(Math.abs(transaction.importe));
-    const concept = transaction.concepto || transaction.referencia || transaction.id;
-    return {
-      companyId,
-      entryNumber: String(year) + '-' + String(sequence).padStart(6, '0'),
-      date: transaction.fecha_operacion,
-      ejercicio: year,
-      type: transaction.tipo === 'entrada' ? 'cobro' : 'pago',
-      description: 'Movimiento bancario pendiente de aplicar · ' + concept,
-      documentId: transaction.id,
-      ocrDocumentId: '',
-      source: 'conciliacion',
-      status: 'confirmado',
-      totalDebit: amount,
-      totalCredit: amount,
-      isBalanced: true,
-      confirmedAt: now,
-      confirmedBy: userEmail || '',
-      validationStatus: 'CONFIRMADO',
-      postingKey: 'bank:' + transaction.id + ':' + SCHEMA_VERSION,
-      accountingSchemaVersion: SCHEMA_VERSION,
-    };
-  });
-
-  const createdEntries = await svc.entities.JournalEntry.bulkCreate(entryPayloads);
-  try {
-    const createdByKey = new Map((createdEntries || []).map(entry => [entry.postingKey, entry]));
-    const linePayloads = [];
-    const transactionUpdates = [];
-    const note = 'Clasificación contable provisional automática en 55500000. Pendiente de aplicar a factura o cuenta definitiva.';
-
-    for (const transaction of postable) {
-      const postingKey = 'bank:' + transaction.id + ':' + SCHEMA_VERSION;
-      const entry = createdByKey.get(postingKey);
-      if (!entry) throw new Error('No se pudo recuperar el asiento bancario recién creado.');
-      const bankAccount = bankPostingById.get(transaction.bank_account_id);
-      const amount = money(Math.abs(transaction.importe));
-      const description = entry.description;
-      const year = entry.ejercicio;
-      const line = (account, debit, credit, sourceLineType, lineNumber) => ({
-        journalEntryId: entry.id,
-        companyId,
-        lineNumber,
-        accountId: account.id,
-        accountCode: account.code,
-        accountName: account.name,
-        description,
-        debit: money(debit),
-        credit: money(credit),
-        taxCode: '',
-        counterpartyAccountId: '',
-        counterpartyAccountCode: '',
-        documentId: transaction.id,
-        bankTransactionId: transaction.id,
-        isReconciled: false,
-        reconciledAt: null,
-        entryStatus: 'confirmado',
-        entryDate: transaction.fecha_operacion,
-        ejercicio: year,
-        subcuenta: account.code,
-        cuenta4: account.code.slice(0, 4),
-        cuenta3: account.code.slice(0, 3),
-        grupo: account.code.slice(0, 1),
-        sourceLineType,
-        validationStatus: 'CONFIRMADO',
-        accountingSchemaVersion: SCHEMA_VERSION,
-      });
-      if (transaction.tipo === 'entrada') {
-        linePayloads.push(line(bankAccount, amount, 0, 'banco', 1));
-        linePayloads.push(line(pendingAccount, 0, amount, 'ajuste', 2));
-      } else {
-        linePayloads.push(line(pendingAccount, amount, 0, 'ajuste', 1));
-        linePayloads.push(line(bankAccount, 0, amount, 'banco', 2));
-      }
-      transactionUpdates.push({
-        id: transaction.id,
-        journal_entry_id: entry.id,
-        accounting_account_id: bankAccount.id,
-        accounting_account_code: bankAccount.code,
-        entidad_tipo: 'accounting_account',
-        entidad_id: pendingAccount.id,
-        estado_conciliacion: 'revisar',
-        confianza_conciliacion: 'baja',
-        notas: ((transaction.notas ? transaction.notas + '\n' : '') + note).slice(0, 2000),
-      });
-    }
-
-    await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
-    await svc.entities.BankTransaction.bulkUpdate(transactionUpdates);
-    result.posted = transactionUpdates.length;
-    return result;
-  } catch (error) {
-    await svc.entities.JournalEntry.bulkUpdate((createdEntries || []).map(entry => ({
-      id: entry.id,
-      status: 'anulado',
-      validationStatus: 'ERROR_CREACION_LINEAS',
-      notes: 'Error creando lote bancario: ' + (error.message || 'error desconocido'),
-    }))).catch(() => null);
-    throw error;
-  }
 }
 
 const excludedBankStates = new Set(['duplicada', 'descartada', 'movimiento_interno']);
@@ -611,12 +465,13 @@ const validBankTransaction = (transaction) =>
   && money(Math.abs(transaction.importe)) > 0;
 
 async function loadBankReconciliationOverview(svc, companyId) {
-  const [bankAccounts, transactions, accounts, entries, lines] = await Promise.all([
+  const [bankAccounts, transactions, accounts, entries, lines, postingOperations] = await Promise.all([
     fetchAll(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
     fetchAll(svc.entities.BankTransaction, { company_id: companyId }, '-fecha_operacion', 100000),
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     fetchAll(svc.entities.JournalEntry, { companyId }, '-date', 100000),
     fetchAll(svc.entities.JournalEntryLine, { companyId }, 'journalEntryId', 100000),
+    fetchAll(svc.entities.AccountingPostingOperation, { companyId }, 'created_date', 100000),
   ]);
   const activeBanks = (bankAccounts || []).filter(account =>
     account.activa !== false
@@ -624,9 +479,10 @@ async function loadBankReconciliationOverview(svc, companyId) {
     && account.origen_datos === 'open_banking'
     && account.provider_account_id
   );
-  const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado');
+  const operationById = new Map((postingOperations || []).map(operation => [operation.id, operation]));
+  const activeEntries = (entries || []).filter(entry => entry.status !== 'anulado' && (!entry.accountingOperationId || operationById.get(entry.accountingOperationId)?.status === 'committed'));
   const entryById = new Map();
-  for (const entry of entries || []) {
+  for (const entry of activeEntries) {
     entryById.set(entry.id, entry);
     if (entry.importKey) entryById.set(entry.importKey, entry);
   }
@@ -1786,6 +1642,15 @@ Deno.serve(async (req) => {
         return Response.json({ error: error.message || 'No se pudo cerrar el ejercicio.' }, { status: 409 });
       }
     }
+    if (action === 'reopen_fiscal_year') {
+      try {
+        if (body.apply !== true) return Response.json({ error: 'La reapertura exige confirmación expresa.' }, { status: 400 });
+        const result = await reopenFiscalYear(svc, companyId, body, user.email);
+        return Response.json({ success: true, mode: 'apply', result, periods: await listFiscalYears(svc, companyId) });
+      } catch (error) {
+        return Response.json({ error: error.message || 'No se pudo reabrir el ejercicio.' }, { status: 409 });
+      }
+    }
 
     if (action === 'get_accounting_configuration' || action === 'save_accounting_configuration') {
       const rows = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 10);
@@ -1816,8 +1681,37 @@ Deno.serve(async (req) => {
       }
       payload.mappingsJson = JSON.stringify(mappings);
       payload.accountDigits = 8;
-      payload.accountingModel = body.accountingModel || existing?.accountingModel || 'interno_simplificado';
+      const currentYear = new Date().getUTCFullYear();
+      const accountingFramework = String(body.accountingFramework || existing?.accountingFramework || (body.accountingModel === 'normal' ? 'pgc_normal' : 'pgc_pymes'));
+      if (!['pgc_normal', 'pgc_pymes'].includes(accountingFramework)) throw new Error('Selecciona PGC normal o PGC PYMES.');
+      const microenterpriseCriteria = Object.prototype.hasOwnProperty.call(body, 'microenterpriseCriteria')
+        ? body.microenterpriseCriteria === true
+        : existing?.microenterpriseCriteria === true;
+      if (microenterpriseCriteria && accountingFramework !== 'pgc_pymes') throw new Error('Los criterios específicos de microempresa solo pueden aplicarse conjuntamente con PGC PYMES.');
+      const annualAccountsModel = String(body.annualAccountsModel || existing?.annualAccountsModel || (accountingFramework === 'pgc_normal' ? 'normal' : 'pyme'));
+      if (!['normal', 'abreviado', 'pyme'].includes(annualAccountsModel)) throw new Error('El modelo de cuentas anuales no es válido.');
+      if (accountingFramework === 'pgc_normal' && annualAccountsModel === 'pyme') throw new Error('El modelo PYME exige aplicar PGC PYMES.');
+      if (accountingFramework === 'pgc_pymes' && annualAccountsModel === 'normal') throw new Error('El PGC PYMES debe usar el modelo de cuentas anuales PYME o, cuando proceda, abreviado.');
+      const effectiveFrom = Number(body.frameworkEffectiveFrom || existing?.frameworkEffectiveFrom || currentYear);
+      if (!Number.isInteger(effectiveFrom) || effectiveFrom < 2008 || effectiveFrom > currentYear + 1) throw new Error('El ejercicio de inicio del marco contable no es válido.');
+      const changesFramework = Boolean(existing && (existing.accountingFramework || 'pgc_pymes') !== accountingFramework);
+      const changesMicroCriteria = Boolean(existing && Boolean(existing.microenterpriseCriteria) !== microenterpriseCriteria);
+      const lockedUntil = Number(existing?.frameworkMinimumUntil || 0);
+      if ((changesFramework || changesMicroCriteria) && lockedUntil && currentYear <= lockedUntil && !String(body.frameworkReviewReason || '').trim()) {
+        throw new Error(`El criterio elegido tiene permanencia mínima hasta ${lockedUntil}. Indica y documenta el motivo legal del cambio.`);
+      }
+      payload.accountingFramework = accountingFramework;
+      payload.annualAccountsModel = annualAccountsModel;
+      payload.microenterpriseCriteria = microenterpriseCriteria;
+      payload.frameworkEffectiveFrom = effectiveFrom;
+      payload.frameworkMinimumUntil = effectiveFrom + 2;
+      payload.frameworkReviewStatus = body.frameworkReviewStatus === 'validado_asesor' ? 'validado_asesor' : 'pendiente_asesor';
+      payload.frameworkReviewReason = String(body.frameworkReviewReason || '').trim().slice(0, 1000);
+      payload.eligibilityEvidenceJson = String(body.eligibilityEvidenceJson || existing?.eligibilityEvidenceJson || '{}');
+      try { JSON.parse(payload.eligibilityEvidenceJson); } catch { throw new Error('La evidencia de elegibilidad debe contener JSON válido.'); }
+      payload.accountingModel = accountingFramework === 'pgc_normal' ? annualAccountsModel : 'pyme';
       payload.baseCurrency = String(body.baseCurrency || existing?.baseCurrency || 'EUR').toUpperCase();
+      if (payload.baseCurrency !== 'EUR') throw new Error('Taxea todavía no admite una moneda funcional distinta del euro. Puedes registrar operaciones en divisa con tipo de cambio, pero la moneda funcional debe ser EUR.');
       payload.unmatchedOutgoingMode = body.unmatchedOutgoingMode || existing?.unmatchedOutgoingMode || 'revision';
       payload.autoSeedAccounts = body.autoSeedAccounts === true;
       payload.accountingSchemaVersion = SCHEMA_VERSION;
@@ -2323,15 +2217,28 @@ Deno.serve(async (req) => {
               companyId,
               bankById.get(transaction.bank_account_id),
             );
-            await svc.entities.BankTransaction.update(transaction.id, {
-              journal_entry_id: existing.id,
-              accounting_account_id: bankPostingAccount.id,
-              accounting_account_code: bankPostingAccount.code,
-              entidad_tipo: 'accounting_account',
-              entidad_id: pendingAccount.id,
-              estado_conciliacion: 'revisar',
-              confianza_conciliacion: 'baja',
-            });
+            const operation = existing.accountingOperationId
+              ? await svc.entities.AccountingPostingOperation.get(existing.accountingOperationId).catch(() => null)
+              : null;
+            let committedOperation = operation;
+            try {
+              if (operation && operation.status !== 'committed') committedOperation = await updatePostingOperation(svc, operation, { status: 'committed', stage: 'bank_link_pending', journalEntryId: existing.id, bankTransactionId: transaction.id, committedAt: new Date().toISOString(), lastError: '' });
+              await svc.entities.BankTransaction.update(transaction.id, {
+                journal_entry_id: existing.id,
+                accounting_account_id: bankPostingAccount.id,
+                accounting_account_code: bankPostingAccount.code,
+                accounting_operation_id: committedOperation?.id || '',
+                entidad_tipo: 'accounting_account',
+                entidad_id: pendingAccount.id,
+                estado_conciliacion: 'revisar',
+                confianza_conciliacion: 'baja',
+              });
+              if (committedOperation) await updatePostingOperation(svc, committedOperation, { stage: 'committed' }).catch(() => null);
+            } catch (error) {
+              if (committedOperation) await updatePostingOperation(svc, committedOperation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: String(error?.message || error) }).catch(() => null);
+              result.issues.push({ transactionId: transaction.id, reason: error?.message || 'error_reparando_enlace_bancario' });
+              continue;
+            }
             result.repairedLinks += 1;
           }
           continue;
@@ -2344,43 +2251,9 @@ Deno.serve(async (req) => {
           result.issues.push({ transactionId: transaction.id, reason: 'movimiento_bancario_incompleto' });
           continue;
         }
-        if (transaction.tipo === 'salida') {
-          result.issues.push({
-            transactionId: transaction.id,
-            reason: 'salida_pendiente_de_cuenta_contable',
-            message: 'Las salidas sin documento no se contabilizan en 555. Selecciona una cuenta de contrapartida.',
-          });
-          continue;
-        }
         result.ready += 1;
         result.readyTransactionIds.push(transaction.id);
         if (!apply) continue;
-        if (apply) continue;
-        try {
-          if (!pendingAccount) pendingAccount = await ensureAccount(svc, companyId, '55500000', 'Partidas pendientes de aplicación', 'pasivo');
-          const physicalBank = bankById.get(transaction.bank_account_id);
-          const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, physicalBank);
-          const posting = await postBankReconciliation(svc, companyId, transaction, bankPostingAccount, pendingAccount, user.email, {
-            documentId: transaction.id,
-            description: `Movimiento bancario pendiente de aplicar · ${transaction.concepto || transaction.referencia || transaction.id}`,
-            counterpartyLineType: 'ajuste',
-            status: 'confirmado',
-          });
-          const note = 'Clasificación contable provisional automática en 55500000. Pendiente de aplicar a factura o cuenta definitiva.';
-          await svc.entities.BankTransaction.update(transaction.id, {
-            journal_entry_id: posting.entry.id,
-            accounting_account_id: bankPostingAccount.id,
-            accounting_account_code: bankPostingAccount.code,
-            entidad_tipo: 'accounting_account',
-            entidad_id: pendingAccount.id,
-            estado_conciliacion: 'revisar',
-            confianza_conciliacion: 'baja',
-            notas: `${transaction.notas ? `${transaction.notas}\n` : ''}${note}`.slice(0, 2000),
-          });
-          if (posting.alreadyPosted) result.alreadyPosted += 1; else result.posted += 1;
-        } catch (error) {
-          result.issues.push({ transactionId: transaction.id, reason: error.message || 'error_contabilizacion_555' });
-        }
       }
       if (apply && result.readyTransactionIds.length) {
         const readyIds = new Set(result.readyTransactionIds);
@@ -2390,7 +2263,6 @@ Deno.serve(async (req) => {
             companyId,
             page.filter(transaction => readyIds.has(transaction.id)),
             bankById,
-            entries,
             user.email,
           );
           result.posted += batch.posted;
@@ -2415,10 +2287,45 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === 'start_accounting_batch') {
+      const jobType = String(body.jobType || '');
+      if (!['sync_invoices', 'sync_payments', 'accounting_quality_scan'].includes(jobType)) return Response.json({ error: 'Tipo de proceso contable no válido.' }, { status: 400 });
+      const requestedKey = String(body.jobKey || `${jobType}:${companyId}:${crypto.randomUUID()}`).trim().slice(0, 240);
+      const previous = await svc.entities.AccountingBatchJob.filter({ companyId, jobKey: requestedKey }, '-createdAt', 1);
+      if (previous?.[0]) return Response.json({ success: true, idempotent: true, job: previous[0] });
+      const job = await svc.entities.AccountingBatchJob.create({
+        companyId,
+        jobKey: requestedKey,
+        jobType,
+        status: 'queued',
+        cursor: 0,
+        batchSize: Math.min(25, Math.max(1, Number(body.batchSize) || 10)),
+        total: 0,
+        processed: 0,
+        created: 0,
+        alreadyLinked: 0,
+        issues: 0,
+        errorsJson: '[]',
+        requestedBy: user.email || '',
+        createdAt: new Date().toISOString(),
+        schemaVersion: SCHEMA_VERSION,
+      });
+      return Response.json({ success: true, idempotent: false, job });
+    }
+
+    if (action === 'accounting_batch_status') {
+      const job = body.jobId ? await svc.entities.AccountingBatchJob.get(String(body.jobId)).catch(() => null) : null;
+      if (!job || job.companyId !== companyId) return Response.json({ error: 'Proceso contable no encontrado.' }, { status: 404 });
+      return Response.json({ success: true, job });
+    }
+
     if (action === 'sync_invoices') {
       const apply = body.apply === true;
-      const offset = Math.max(0, Number(body.offset) || 0);
-      const batchSize = apply ? Math.min(25, Math.max(1, Number(body.batchSize) || 3)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
+      const job = body.jobId ? await svc.entities.AccountingBatchJob.get(String(body.jobId)).catch(() => null) : null;
+      if (body.jobId && (!job || job.companyId !== companyId || job.jobType !== 'sync_invoices')) return Response.json({ error: 'Proceso de facturas no válido para esta empresa.' }, { status: 404 });
+      const offset = Math.max(0, Number(job?.cursor ?? body.offset) || 0);
+      const batchSize = apply ? Math.min(25, Math.max(1, Number(job?.batchSize ?? body.batchSize) || 3)) : Math.min(5000, Math.max(1, Number(body.batchSize) || 5000));
+      if (job && !['completed', 'completed_with_issues', 'cancelled'].includes(job.status)) await svc.entities.AccountingBatchJob.update(job.id, { status: 'running', startedAt: job.startedAt || new Date().toISOString(), heartbeatAt: new Date().toISOString() });
       const [invoices, entries] = await Promise.all([
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.JournalEntry, { companyId }, 'created_date', 100000),
@@ -2472,13 +2379,33 @@ Deno.serve(async (req) => {
         }
       }
       const nextOffset = offset + page.length;
+      if (job) {
+        const issueCount = Number(job.issues || 0) + result.issues.length;
+        let priorErrors = [];
+        try { priorErrors = JSON.parse(job.errorsJson || '[]'); } catch { priorErrors = []; }
+        await svc.entities.AccountingBatchJob.update(job.id, {
+          status: nextOffset >= active.length ? (issueCount ? 'completed_with_issues' : 'completed') : 'running',
+          cursor: nextOffset,
+          total: active.length,
+          processed: Number(job.processed || 0) + result.scanned,
+          created: Number(job.created || 0) + result.posted,
+          alreadyLinked: Number(job.alreadyLinked || 0) + result.alreadyLinked + result.repairedLinks,
+          issues: issueCount,
+          errorsJson: JSON.stringify([...priorErrors, ...result.issues].slice(-200)),
+          heartbeatAt: new Date().toISOString(),
+          completedAt: nextOffset >= active.length ? new Date().toISOString() : null,
+        });
+      }
       return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: active.length, offset, nextOffset, done: nextOffset >= active.length, result, schemaVersion: SCHEMA_VERSION });
     }
 
     if (action === 'sync_payments') {
       const apply = body.apply === true;
-      const offset = Math.max(0, Number(body.offset) || 0);
-      const batchSize = apply ? Math.min(10, Math.max(1, Number(body.batchSize) || 3)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
+      const job = body.jobId ? await svc.entities.AccountingBatchJob.get(String(body.jobId)).catch(() => null) : null;
+      if (body.jobId && (!job || job.companyId !== companyId || job.jobType !== 'sync_payments')) return Response.json({ error: 'Proceso de pagos no válido para esta empresa.' }, { status: 404 });
+      const offset = Math.max(0, Number(job?.cursor ?? body.offset) || 0);
+      const batchSize = apply ? Math.min(10, Math.max(1, Number(job?.batchSize ?? body.batchSize) || 3)) : Math.min(500, Math.max(1, Number(body.batchSize) || 500));
+      if (job && !['completed', 'completed_with_issues', 'cancelled'].includes(job.status)) await svc.entities.AccountingBatchJob.update(job.id, { status: 'running', startedAt: job.startedAt || new Date().toISOString(), heartbeatAt: new Date().toISOString() });
       const [payments, invoices, transactions, bankAccounts, entries, accounts] = await Promise.all([
         fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000),
         fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000),
@@ -2559,6 +2486,23 @@ Deno.serve(async (req) => {
         }
       }
       const nextOffset = offset + page.length;
+      if (job) {
+        const issueCount = Number(job.issues || 0) + result.issues.length;
+        let priorErrors = [];
+        try { priorErrors = JSON.parse(job.errorsJson || '[]'); } catch { priorErrors = []; }
+        await svc.entities.AccountingBatchJob.update(job.id, {
+          status: nextOffset >= activePayments.length ? (issueCount ? 'completed_with_issues' : 'completed') : 'running',
+          cursor: nextOffset,
+          total: activePayments.length,
+          processed: Number(job.processed || 0) + result.scanned,
+          created: Number(job.created || 0) + result.posted,
+          alreadyLinked: Number(job.alreadyLinked || 0) + result.alreadyLinked + result.repairedLinks,
+          issues: issueCount,
+          errorsJson: JSON.stringify([...priorErrors, ...result.issues].slice(-200)),
+          heartbeatAt: new Date().toISOString(),
+          completedAt: nextOffset >= activePayments.length ? new Date().toISOString() : null,
+        });
+      }
       return Response.json({ success: true, mode: apply ? 'apply' : 'dry_run', total: activePayments.length, offset, nextOffset, done: nextOffset >= activePayments.length, result, schemaVersion: SCHEMA_VERSION });
     }
 

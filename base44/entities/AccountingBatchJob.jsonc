@@ -2,119 +2,42 @@
   "name": "AccountingBatchJob",
   "type": "object",
   "properties": {
-    "companyId": {
-      "type": "string"
-    },
-    "jobKey": {
-      "type": "string"
-    },
+    "companyId": { "type": "string" },
+    "jobKey": { "type": "string" },
     "jobType": {
       "type": "string",
-      "enum": [
-        "sync_invoices",
-        "sync_payments",
-        "accounting_quality_scan"
-      ]
+      "enum": ["sync_invoices", "sync_payments", "accounting_quality_scan"]
     },
     "status": {
       "type": "string",
-      "enum": [
-        "queued",
-        "running",
-        "completed",
-        "completed_with_issues",
-        "failed",
-        "cancelled"
-      ],
+      "enum": ["queued", "running", "completed", "completed_with_issues", "failed", "cancelled"],
       "default": "queued"
     },
-    "cursor": {
-      "type": "integer",
-      "default": 0
-    },
-    "batchSize": {
-      "type": "integer",
-      "default": 100
-    },
-    "total": {
-      "type": "integer",
-      "default": 0
-    },
-    "processed": {
-      "type": "integer",
-      "default": 0
-    },
-    "created": {
-      "type": "integer",
-      "default": 0
-    },
-    "alreadyLinked": {
-      "type": "integer",
-      "default": 0
-    },
-    "issues": {
-      "type": "integer",
-      "default": 0
-    },
-    "errorsJson": {
-      "type": "string"
-    },
-    "requestedBy": {
-      "type": "string"
-    },
-    "createdAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "startedAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "heartbeatAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "completedAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "schemaVersion": {
-      "type": "string"
-    }
+    "cursor": { "type": "integer", "default": 0 },
+    "batchSize": { "type": "integer", "default": 100 },
+    "total": { "type": "integer", "default": 0 },
+    "processed": { "type": "integer", "default": 0 },
+    "created": { "type": "integer", "default": 0 },
+    "alreadyLinked": { "type": "integer", "default": 0 },
+    "issues": { "type": "integer", "default": 0 },
+    "errorsJson": { "type": "string" },
+    "requestedBy": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "heartbeatAt": { "type": "string", "format": "date-time" },
+    "completedAt": { "type": "string", "format": "date-time" },
+    "schemaVersion": { "type": "string" }
   },
-  "required": [
-    "companyId",
-    "jobKey",
-    "jobType",
-    "status"
-  ],
+  "required": ["companyId", "jobKey", "jobType", "status"],
   "rls": {
-    "create": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
-        {
-          "data.companyId": "{{user.data.company_id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
+        { "data.companyId": "{{user.data.company_id}}" },
+        { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

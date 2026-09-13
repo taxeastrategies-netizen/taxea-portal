@@ -44,6 +44,12 @@ export default function ConfigContable({ companyId }) {
   const [initializing, setInitializing] = useState(false);
   const [error, setError] = useState('');
   const [diagnostics, setDiagnostics] = useState(null);
+  const [framework, setFramework] = useState('pgc_pymes');
+  const [annualAccountsModel, setAnnualAccountsModel] = useState('pyme');
+  const [microenterpriseCriteria, setMicroenterpriseCriteria] = useState(false);
+  const [frameworkReviewStatus, setFrameworkReviewStatus] = useState('pendiente_asesor');
+  const [frameworkReviewReason, setFrameworkReviewReason] = useState('');
+  const [frameworkEffectiveFrom, setFrameworkEffectiveFrom] = useState(new Date().getFullYear());
   const [refreshSeq, setRefreshSeq] = useState(0);
 
   useEffect(() => {
@@ -56,6 +62,13 @@ export default function ConfigContable({ companyId }) {
         if (!active) return;
         setDiagnostics(response?.data?.diagnostics || null);
         if (!record) return;
+        const nextFramework = record.accountingFramework || (record.accountingModel === 'normal' ? 'pgc_normal' : 'pgc_pymes');
+        setFramework(nextFramework);
+        setAnnualAccountsModel(record.annualAccountsModel || (nextFramework === 'pgc_normal' ? 'normal' : 'pyme'));
+        setMicroenterpriseCriteria(record.microenterpriseCriteria === true);
+        setFrameworkReviewStatus(record.frameworkReviewStatus || 'pendiente_asesor');
+        setFrameworkReviewReason(record.frameworkReviewReason || '');
+        setFrameworkEffectiveFrom(Number(record.frameworkEffectiveFrom || new Date().getFullYear()));
         try {
           const parsed = JSON.parse(record.mappingsJson || '[]');
           if (Array.isArray(parsed) && parsed.length) {
@@ -97,7 +110,13 @@ export default function ConfigContable({ companyId }) {
         action: 'save_accounting_configuration',
         companyId,
         mappingsJson: JSON.stringify(mappings),
-        accountingModel: 'interno_simplificado',
+        accountingFramework: framework,
+        annualAccountsModel,
+        microenterpriseCriteria,
+        frameworkEffectiveFrom: Number(frameworkEffectiveFrom),
+        frameworkReviewStatus,
+        frameworkReviewReason,
+        eligibilityEvidenceJson: JSON.stringify({ source: 'configuracion_contable', reviewedAt: new Date().toISOString() }),
         baseCurrency: 'EUR',
         unmatchedOutgoingMode: 'revision',
       });
@@ -163,6 +182,49 @@ export default function ConfigContable({ companyId }) {
           )}
         </div>
       )}
+
+      <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+        <div>
+          <p className="text-sm font-semibold">Marco contable aplicable</p>
+          <p className="mt-1 text-xs text-muted-foreground">Elige el marco completo de la empresa. Los criterios de microempresa son una opción conjunta dentro del PGC PYMES, no un tercer plan contable.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium">Plan contable</label>
+            <Select value={framework} onValueChange={value => { setFramework(value); setAnnualAccountsModel(value === 'pgc_normal' ? 'normal' : 'pyme'); if (value === 'pgc_normal') setMicroenterpriseCriteria(false); setSaved(false); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="pgc_pymes">PGC PYMES</SelectItem><SelectItem value="pgc_normal">PGC normal</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">Cuentas anuales</label>
+            <Select value={annualAccountsModel} onValueChange={value => { setAnnualAccountsModel(value); setSaved(false); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>{framework === 'pgc_normal' ? <><SelectItem value="normal">Normal</SelectItem><SelectItem value="abreviado">Abreviado</SelectItem></> : <><SelectItem value="pyme">PYME</SelectItem><SelectItem value="abreviado">Abreviado</SelectItem></>}</SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">Inicio de aplicación</label>
+            <Input type="number" min="2008" max={new Date().getFullYear() + 1} value={frameworkEffectiveFrom} onChange={event => { setFrameworkEffectiveFrom(event.target.value); setSaved(false); }} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium">Revisión</label>
+            <Select value={frameworkReviewStatus} onValueChange={value => { setFrameworkReviewStatus(value); setSaved(false); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="pendiente_asesor">Pendiente de asesor</SelectItem><SelectItem value="validado_asesor">Validado por asesor</SelectItem></SelectContent>
+            </Select>
+          </div>
+        </div>
+        <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs">
+          <input type="checkbox" className="mt-0.5" checked={microenterpriseCriteria} disabled={framework !== 'pgc_pymes'} onChange={event => { setMicroenterpriseCriteria(event.target.checked); setSaved(false); }} />
+          <span><strong>Aplicar conjuntamente los criterios específicos de microempresa.</strong><br /><span className="text-muted-foreground">Solo si la empresa cumple los límites y exclusiones legales; afecta, en particular, al arrendamiento financiero y al impuesto sobre beneficios y exige permanencia mínima.</span></span>
+        </label>
+        <div>
+          <label className="mb-1 block text-xs font-medium">Motivo o evidencia de revisión</label>
+          <Input value={frameworkReviewReason} onChange={event => { setFrameworkReviewReason(event.target.value); setSaved(false); }} placeholder="Ej. límites verificados con cuentas cerradas y estructura del grupo revisada" />
+        </div>
+        {diagnostics?.framework?.issues?.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Pendiente: {diagnostics.framework.issues.join(' · ')}</div>}
+      </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-start gap-2 text-xs text-blue-800">
         <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />

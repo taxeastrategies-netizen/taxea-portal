@@ -10,7 +10,13 @@ function filesUnder(root) {
 }
 
 const frontendFiles = filesUnder(path.resolve('src')).filter(file => /\.(?:js|jsx|ts|tsx)$/.test(file));
-const directMutation = /entities(?:\.(?:Invoice|Expense)|\[['"](?:Invoice|Expense)['"]\])\.(?:create|update|delete|bulkCreate|bulkUpdate|bulkDelete)\s*\(/g;
+const protectedEntities = [
+  'Invoice', 'Expense', 'InvoicePayment', 'BankAccount', 'BankTransaction', 'TreasuryEvent',
+  'JournalEntry', 'JournalEntryLine', 'InvoiceTaxLine', 'AccountingAccount', 'AccountingConfiguration', 'AccountingFiscalYear',
+  'TaxDraft', 'TaxFiling', 'TaxOfficialFile', 'TaxPeriod', 'TaxDeclarableRecord', 'TaxSubmission', 'TaxModel',
+];
+const protectedPattern = protectedEntities.join('|');
+const directMutation = new RegExp(`entities(?:\\.(?:${protectedPattern})|\\[['"](?:${protectedPattern})['"]\\])\\.(?:create|update|delete|bulkCreate|bulkUpdate|bulkDelete)\\s*\\(`, 'g');
 const violations = [];
 for (const file of frontendFiles) {
   const source = fs.readFileSync(file, 'utf8');
@@ -18,12 +24,12 @@ for (const file of frontendFiles) {
     violations.push(`${path.relative(process.cwd(), file)}:${source.slice(0, match.index).split('\n').length}:${match[0]}`);
   }
 }
-assert.deepEqual(violations, [], `Persisten escrituras directas de Invoice/Expense:\n${violations.join('\n')}`);
+assert.deepEqual(violations, [], `Persisten escrituras financieras o fiscales directas desde la interfaz:\n${violations.join('\n')}`);
 
 function parseJsonc(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, ''));
 }
-for (const entity of ['Invoice', 'Expense']) {
+for (const entity of protectedEntities) {
   const schema = parseJsonc(path.resolve(`base44/entities/${entity}.jsonc`));
   for (const operation of ['create', 'update', 'delete']) {
     assert.equal(schema.rls?.[operation]?.user_condition?.role, 'admin', `${entity}.${operation} debe quedar cerrado al backend.`);
@@ -50,7 +56,7 @@ assert.match(accountingBackend, /manual_financial_record_reversal/);
 console.log(JSON.stringify({
   ok: true,
   assertions: {
-    noDirectFrontendInvoiceOrExpenseMutations: true,
+    noDirectFrontendFinancialOrTaxMutations: protectedEntities.length,
     rlsWritesRestrictedToBackend: true,
     invoiceCreationIsIdempotent: true,
     pdfLinkUsesBackendBoundary: true,

@@ -2,77 +2,28 @@
   "name": "AccountingAuditLog",
   "type": "object",
   "properties": {
-    "companyId": {
-      "type": "string"
-    },
-    "eventType": {
-      "type": "string"
-    },
-    "eventKey": {
-      "type": "string"
-    },
-    "fiscalYear": {
-      "type": "integer"
-    },
-    "reason": {
-      "type": "string"
-    },
-    "actor": {
-      "type": "string"
-    },
-    "occurredAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "beforeJson": {
-      "type": "string"
-    },
-    "afterJson": {
-      "type": "string"
-    },
-    "relatedEntryIds": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
-    "schemaVersion": {
-      "type": "string"
-    }
+    "companyId": { "type": "string" },
+    "eventType": { "type": "string" },
+    "eventKey": { "type": "string" },
+    "fiscalYear": { "type": "integer" },
+    "reason": { "type": "string" },
+    "actor": { "type": "string" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "beforeJson": { "type": "string" },
+    "afterJson": { "type": "string" },
+    "relatedEntryIds": { "type": "array", "items": { "type": "string" } },
+    "schemaVersion": { "type": "string" }
   },
-  "required": [
-    "companyId",
-    "eventType",
-    "eventKey",
-    "occurredAt"
-  ],
+  "required": ["companyId", "eventType", "eventKey", "occurredAt"],
   "rls": {
-    "create": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "$or": [
-        {
-          "data.companyId": "{{user.data.company_id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
+        { "data.companyId": "{{user.data.company_id}}" },
+        { "user_condition": { "role": "admin" } }
       ]
     },
-    "update": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

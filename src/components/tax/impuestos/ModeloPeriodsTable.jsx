@@ -18,13 +18,8 @@ export default function ModeloPeriodsTable({ modeloCodigo, companyId, year, esta
 
   const createPeriod = useMutation({
     mutationFn: (periodo) => {
-      const dl = getDeadlines(modeloCodigo, periodo, year);
-      return base44.entities.TaxPeriod.create({
-        companyId, modeloCodigo, ejercicio: year, periodo,
-        estado: 'sin_datos',
-        fechaInicio: null,
-        fechaFin: null,
-        fechaLimiteInterna: dl?.limiteInterno || dl?.presentacion || null,
+      return base44.functions.invoke('taxModelOperations', {
+        action: 'ensure_period', companyId, modeloCodigo, ejercicio: year, periodo,
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['taxPeriods'] }),

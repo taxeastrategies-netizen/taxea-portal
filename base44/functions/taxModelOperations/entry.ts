@@ -3113,6 +3113,57 @@ Deno.serve(async (req) => {
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
 
+    if(action==='ensure_period') {
+      if(!TARGET_MODELS.includes(model)||!year) return Response.json({error:'modeloCodigo y ejercicio son obligatorios.'},{status:400});
+      const periodError=periodValidationError(model,period); if(periodError) return Response.json({error:periodError},{status:400});
+      const existingAll=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',100);
+      const existing=(existingAll||[]).find((item:any)=>normalizedPeriod(item.periodo)===period);
+      if(existing) return Response.json({ok:true,alreadyExisted:true,period:existing});
+      const range=bounds(year,period);
+      const saved=await svc.entities.TaxPeriod.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,fechaInicio:range.start,fechaFin:range.end,estado:'sin_datos',closureStatus:'open',notas:'Período creado desde el motor fiscal; sin cálculo ni presentación.'});
+      return Response.json({ok:true,alreadyExisted:false,period:saved});
+    }
+
+    if(action==='update_model_config') {
+      const modelId=clean(body.modelId); if(!modelId) return Response.json({error:'modelId es obligatorio.'},{status:400});
+      const taxModel=await svc.entities.TaxModel.get(modelId); if(!taxModel||taxModel.companyId!==companyId) return Response.json({error:'Modelo fiscal no encontrado.'},{status:404});
+      const update:any={};
+      if(body.fuenteValidacion!==undefined) {
+        const value=clean(body.fuenteValidacion); if(!['certificado_censal','criterio_asesor','alta_manual','pendiente_confirmar'].includes(value)) return Response.json({error:'Fuente de validación no admitida.'},{status:400});
+        update.fuenteValidacion=value;
+      }
+      if(body.periodicidad!==undefined) {
+        const value=clean(body.periodicidad); if(!['trimestral','mensual','anual','ocasional','segun_modelo'].includes(value)) return Response.json({error:'Periodicidad no admitida.'},{status:400});
+        update.periodicidad=value;
+      }
+      if(!Object.keys(update).length) return Response.json({error:'No hay cambios válidos que guardar.'},{status:400});
+      const saved=await svc.entities.TaxModel.update(taxModel.id,update);
+      return Response.json({ok:true,model:saved});
+    }
+
+    if(action==='mark_official_file_downloaded') {
+      const fileId=clean(body.fileId); if(!fileId) return Response.json({error:'fileId es obligatorio.'},{status:400});
+      const file=await svc.entities.TaxOfficialFile.get(fileId); if(!file||file.companyId!==companyId) return Response.json({error:'Fichero fiscal no encontrado.'},{status:404});
+      const saved=file.estado==='descargado'?file:await svc.entities.TaxOfficialFile.update(file.id,{estado:'descargado'});
+      return Response.json({ok:true,file:saved});
+    }
+
+    if(action==='record_submission') {
+      if(!TARGET_MODELS.includes(model)||!year) return Response.json({error:'modeloCodigo y ejercicio son obligatorios.'},{status:400});
+      const periodError=periodValidationError(model,period); if(periodError) return Response.json({error:periodError},{status:400});
+      if(body.confirmation!==true) return Response.json({error:'Confirma expresamente el registro de la presentación.'},{status:400});
+      const fileId=clean(body.fileId); let file:any=null;
+      if(fileId) {
+        file=await svc.entities.TaxOfficialFile.get(fileId);
+        if(!file||file.companyId!==companyId||clean(file.modeloCodigo)!==model||Number(file.ejercicio)!==year||normalizedPeriod(file.periodo)!==period) return Response.json({error:'El fichero no corresponde a este modelo, empresa y período.'},{status:409});
+      }
+      const numeroJustificante=clean(body.numeroJustificante); const csv=clean(body.csv);
+      const via=clean(body.viaPresentacion)||'fichero_oficial_sede';
+      if(!['conector_directo','fichero_oficial_sede','flujo_asistido','exportacion_a3','presentacion_manual_externa'].includes(via)) return Response.json({error:'Vía de presentación no admitida.'},{status:400});
+      const submission=await svc.entities.TaxSubmission.create({companyId,clienteNif:clean(company.nif_cif),modeloCodigo:model,ejercicio:year,periodo:period,administracion:DEFINITIONS[model].authority,viaPresentacion:via,taxOfficialFileId:file?.id||'',usuarioPresentador:user.email,fechaEnvio:new Date().toISOString(),estado:numeroJustificante||csv?'presentado':'pendiente',numeroJustificante,csv,importeFinal:money(body.importeFinal),confirmacionExplicitaUsuario:true,notas:clean(body.notas)});
+      return Response.json({ok:true,submission});
+    }
+
     if(action==='download_official_file') {
       const fileId=clean(body.fileId); if(!fileId) return Response.json({error:'fileId es obligatorio.'},{status:400});
       const file=await svc.entities.TaxOfficialFile.get(fileId);
@@ -3244,9 +3295,11 @@ Deno.serve(async (req) => {
       const periodError=periodValidationError(model,period);
       if(periodError) return Response.json({error:periodError},{status:400});
     }
-    const [profiles,activities,invoices,rawTaxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings]=await Promise.all([
-      listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.Employee,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}), listAll(svc.entities.TaxFiling,{companyId}),
+    const [profiles,activities,invoices,rawTaxLines,rawInvoicePayments,payrolls,employees,entries,entryLines,declarables,filings,postingOperations]=await Promise.all([
+      listAll(svc.entities.FiscalProfile,{company_id:companyId}), listAll(svc.entities.FiscalActivity,{company_id:companyId}), listAll(svc.entities.Invoice,{company_id:companyId}), listAll(svc.entities.InvoiceTaxLine,{companyId}), listAll(svc.entities.InvoicePayment,{company_id:companyId}), listAll(svc.entities.PayrollExtraction,{company_id:companyId}), listAll(svc.entities.Employee,{company_id:companyId}), listAll(svc.entities.JournalEntry,{companyId}), listAll(svc.entities.JournalEntryLine,{companyId}), listAll(svc.entities.TaxDeclarableRecord,{companyId,ejercicio:year}), listAll(svc.entities.TaxFiling,{companyId}), listAll(svc.entities.AccountingPostingOperation,{companyId}),
     ]);
+    const postingOperationById=new Map((postingOperations||[]).map((operation:any)=>[operation.id,operation]));
+    const invoicePayments=(rawInvoicePayments||[]).filter((payment:any)=>{if(payment.operation_status&&payment.operation_status!=='committed')return false;const operationId=clean(payment.accounting_operation_id);return !operationId||postingOperationById.get(operationId)?.status==='committed';});
     const profile=profiles.find((p:any)=>p.active!==false)||profiles[0]||null; const blockers:string[]=[]; const warnings:string[]=[];
     if(!company.nif_cif) blockers.push('La empresa no tiene NIF/CIF configurado.');
     else if(!validSpanishTaxId(company.nif_cif)) blockers.push('El NIF/CIF de la empresa no tiene nueve caracteres válidos para los diseños oficiales.');

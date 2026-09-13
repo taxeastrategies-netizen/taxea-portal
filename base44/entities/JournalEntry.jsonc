@@ -183,6 +183,16 @@
     },
     "numberReservationId": {
       "type": "string"
+    },
+    "accountingOperationId": {
+      "type": "string"
+    },
+    "reversalOfEntryId": {
+      "type": "string"
+    },
+    "immutableSince": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [

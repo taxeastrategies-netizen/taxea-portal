@@ -4,6 +4,16 @@ export const SCHEMA_VERSION = 'pgc8-v1';
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value) => String(value || '').trim();
 const normalizeTaxId = (value) => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+const stableJson = (value) => {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  return JSON.stringify(value ?? null);
+};
+const sha256 = async (value) => {
+  const bytes = new TextEncoder().encode(String(value));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+};
 export const canonical8 = (value) => {
   const digits = clean(value).replace(/\D/g, '');
   if (!digits || digits.length > 8) throw new Error(`La cuenta ${value || 'vacía'} no es válida.`);
@@ -139,6 +149,76 @@ export async function seedOperationalPgc(svc, companyId) {
     }
   }
   return { total: Object.keys(ACCOUNT_DEFS).length, created: created.length };
+}
+
+const normalizeBankIban = value => clean(value).replace(/\s+/g, '').toUpperCase();
+export const bankCurrency = bankAccount => clean(bankAccount?.moneda || bankAccount?.currency || 'EUR').toUpperCase();
+export const stableBankIdentity = bankAccount => {
+  const currency = bankCurrency(bankAccount);
+  const iban = normalizeBankIban(bankAccount?.iban);
+  if (iban) return `iban:${iban}:${currency}`;
+  const providerAccountId = clean(bankAccount?.provider_account_id);
+  return providerAccountId ? `provider:${providerAccountId}:${currency}` : '';
+};
+
+async function linkBankPostingAccount(svc, bankAccount, account, identityKey) {
+  await svc.entities.BankAccount.update(bankAccount.id, { accounting_account_id: account.id, accounting_account_code: account.code });
+  const updates = {};
+  if (identityKey && account.bankIdentityKey !== identityKey) updates.bankIdentityKey = identityKey;
+  if (account.bankAccountId !== bankAccount.id) updates.bankAccountId = bankAccount.id;
+  if (account.bankCurrency !== bankCurrency(bankAccount)) updates.bankCurrency = bankCurrency(bankAccount);
+  if (Object.keys(updates).length) await svc.entities.AccountingAccount.update(account.id, updates);
+  return { ...account, ...updates };
+}
+
+export async function ensureBankPostingAccount(svc, companyId, bankAccount) {
+  if (!bankAccount || bankAccount.company_id !== companyId) throw new Error('La cuenta bancaria no pertenece a la empresa.');
+  const identityKey = stableBankIdentity(bankAccount);
+  if (bankAccount.accounting_account_id) {
+    const linked = await svc.entities.AccountingAccount.get(bankAccount.accounting_account_id).catch(() => null);
+    if (linked && linked.companyId === companyId && linked.status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked, identityKey);
+  }
+  if (bankAccount.accounting_account_code) {
+    const linked = await svc.entities.AccountingAccount.filter({ companyId, code: bankAccount.accounting_account_code }, '-created_date', 1);
+    if (linked?.[0] && linked[0].status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, linked[0], identityKey);
+  }
+  if (identityKey) {
+    const byIdentity = await svc.entities.AccountingAccount.filter({ companyId, bankIdentityKey: identityKey }, '-created_date', 10);
+    const reusable = byIdentity?.find(item => item.status !== 'inactiva');
+    if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
+    const peerBanks = await svc.entities.BankAccount.filter({ company_id: companyId }, 'created_date', 5000);
+    for (const peer of peerBanks || []) {
+      if (peer.id === bankAccount.id || stableBankIdentity(peer) !== identityKey) continue;
+      let peerAccount = peer.accounting_account_id ? await svc.entities.AccountingAccount.get(peer.accounting_account_id).catch(() => null) : null;
+      if (!peerAccount && peer.accounting_account_code) {
+        const rows = await svc.entities.AccountingAccount.filter({ companyId, code: peer.accounting_account_code }, '-created_date', 1);
+        peerAccount = rows?.[0] || null;
+      }
+      if (peerAccount && peerAccount.companyId === companyId && peerAccount.status !== 'inactiva') return await linkBankPostingAccount(svc, bankAccount, peerAccount, identityKey);
+    }
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const accounts = await svc.entities.AccountingAccount.filter({ companyId }, 'code', 5000);
+    if (identityKey) {
+      const reusable = (accounts || []).find(item => item.bankIdentityKey === identityKey && item.status !== 'inactiva');
+      if (reusable) return await linkBankPostingAccount(svc, bankAccount, reusable, identityKey);
+    }
+    const used = new Set((accounts || []).map(account => clean(account.code)));
+    let code = '';
+    for (let sequence = 1; sequence <= 9999; sequence += 1) {
+      const candidate = `5720${String(sequence).padStart(4, '0')}`;
+      if (!used.has(candidate)) { code = candidate; break; }
+    }
+    if (!code) throw new Error('No quedan subcuentas bancarias disponibles en el grupo 5720.');
+    const suffix = bankAccount.ultimos_4 ? ` · ${bankAccount.ultimos_4}` : '';
+    const account = await ensureAccount(svc, companyId, code, `${bankAccount.nombre_banco || 'Banco'}${suffix} · ${bankCurrency(bankAccount)}`, 'banco', {
+      bankIdentityKey: identityKey,
+      bankAccountId: bankAccount.id,
+      bankCurrency: bankCurrency(bankAccount),
+    });
+    if (!identityKey || !account.bankIdentityKey || account.bankIdentityKey === identityKey) return await linkBankPostingAccount(svc, bankAccount, account, identityKey);
+  }
+  throw new Error('No se pudo reservar una subcuenta 572 única para la cuenta bancaria.');
 }
 
 async function nextCounterpartyCode(svc, companyId, prefix) {
@@ -343,7 +423,7 @@ export async function assertAccountingDateOpen(svc, companyId, date, options = {
   const periods = await svc.entities.AccountingFiscalYear.filter({ companyId, year }, '-created_date', 5);
   const period = periods?.[0];
   if (!period) return { year, period: null };
-  if (period.status === 'cerrado') throw new Error(`El ejercicio ${year} está cerrado.`);
+  if (period.status === 'cerrado' && !(options.systemOverride && options.reopeningOverride)) throw new Error(`El ejercicio ${year} está cerrado.`);
   if (!options.systemOverride && period.lockedThroughDate && String(date) <= String(period.lockedThroughDate)) {
     throw new Error(`El período está bloqueado hasta ${period.lockedThroughDate}.`);
   }
@@ -393,6 +473,106 @@ async function reserveEntryNumber(svc, companyId, year, series = 'GENERAL') {
   throw new Error('No se pudo reservar un número de asiento único. Inténtalo de nuevo.');
 }
 
+async function beginPostingOperation(svc, companyId, payload, userEmail) {
+  const operationKey = clean(payload.postingKey);
+  if (!operationKey || !svc.entities.AccountingPostingOperation) return null;
+  const payloadHash = await sha256(stableJson({
+    date: payload.date,
+    type: payload.type || 'manual',
+    source: payload.source || 'manual',
+    documentId: payload.documentId || '',
+    postingKey: operationKey,
+    currency: payload.currency || 'EUR',
+    fxRate: Number(payload.fxRate || 1),
+    lines: (payload.lines || []).map(line => ({
+      accountCode: canonical8(line.accountCode || line.cuenta),
+      debit: money(line.debit ?? line.debe),
+      credit: money(line.credit ?? line.haber),
+      bankTransactionId: line.bankTransactionId || '',
+    })),
+  }));
+  const existingRows = await svc.entities.AccountingPostingOperation.filter({ companyId, operationKey }, 'created_date', 50);
+  const existing = [...(existingRows || [])]
+    .filter(item => item.status !== 'superseded')
+    .sort((a, b) => String(a.created_date || a.startedAt || '').localeCompare(String(b.created_date || b.startedAt || '')) || String(a.id).localeCompare(String(b.id)))[0];
+  if (existing) {
+    if (existing.payloadHash !== payloadHash) throw new Error('La clave contable ya se utilizó con un contenido diferente. La operación se ha bloqueado para evitar duplicados.');
+    if (existing.status !== 'committed') {
+      return await svc.entities.AccountingPostingOperation.update(existing.id, {
+        status: 'preparing',
+        stage: 'retry',
+        attempts: Number(existing.attempts || 1) + 1,
+        heartbeatAt: new Date().toISOString(),
+        lastError: '',
+      });
+    }
+    return existing;
+  }
+  const now = new Date().toISOString();
+  const candidate = await svc.entities.AccountingPostingOperation.create({
+    companyId,
+    operationKey,
+    operationType: clean(payload.operationType || payload.sourceEvent || payload.type || 'journal_entry'),
+    payloadHash,
+    status: 'preparing',
+    stage: 'reserved',
+    attempts: 1,
+    startedAt: now,
+    heartbeatAt: now,
+    actor: userEmail || '',
+    schemaVersion: SCHEMA_VERSION,
+  });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const contenders = await svc.entities.AccountingPostingOperation.filter({ companyId, operationKey }, 'created_date', 50);
+  const winner = [...(contenders || [])]
+    .filter(item => item.status !== 'superseded')
+    .sort((a, b) => String(a.created_date || a.startedAt || '').localeCompare(String(b.created_date || b.startedAt || '')) || String(a.id).localeCompare(String(b.id)))[0];
+  if (winner?.id !== candidate.id) {
+    await svc.entities.AccountingPostingOperation.update(candidate.id, { status: 'superseded', stage: 'lost_reservation' }).catch(() => null);
+    if (winner?.payloadHash !== payloadHash) throw new Error('Se detectó una colisión de idempotencia con datos diferentes.');
+    return winner;
+  }
+  return candidate;
+}
+
+export async function updatePostingOperation(svc, operation, patch) {
+  if (!operation?.id || !svc.entities.AccountingPostingOperation) return operation || null;
+  return await svc.entities.AccountingPostingOperation.update(operation.id, {
+    ...patch,
+    heartbeatAt: new Date().toISOString(),
+  });
+}
+
+export async function commitJournalEntry(svc, companyId, entry, userEmail) {
+  if (!entry || entry.companyId !== companyId) throw new Error('El asiento que se intenta confirmar no pertenece a la empresa.');
+  const lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+  const totals = validateLines((lines || []).map(item => ({
+    ...item,
+    accountCode: canonical8(item.accountCode || item.subcuenta),
+    debit: money(item.debit ?? item.debeE),
+    credit: money(item.credit ?? item.haberE),
+  })));
+  const now = new Date().toISOString();
+  if (entry.status !== 'confirmado') {
+    await svc.entities.JournalEntryLine.bulkUpdate((lines || []).map(item => ({
+      id: item.id,
+      entryStatus: 'confirmado',
+      validationStatus: 'CONFIRMADO',
+    })));
+    entry = await svc.entities.JournalEntry.update(entry.id, {
+      status: 'confirmado',
+      confirmedAt: now,
+      confirmedBy: userEmail || '',
+      immutableSince: now,
+      totalDebit: totals.debit,
+      totalCredit: totals.credit,
+      isBalanced: true,
+      validationStatus: 'CONFIRMADO',
+    });
+  }
+  return { entry, lines };
+}
+
 export async function createJournalEntry(svc, companyId, payload, userEmail) {
   const normalized = [];
   for (const item of payload.lines || []) {
@@ -410,7 +590,10 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   }
   const totals = validateLines(normalized);
   const date = payload.date;
-  const { year } = await assertAccountingDateOpen(svc, companyId, date, { systemOverride: payload.systemOverride === true && payload.source === 'sistema' });
+  const { year } = await assertAccountingDateOpen(svc, companyId, date, {
+    systemOverride: payload.systemOverride === true && payload.source === 'sistema',
+    reopeningOverride: payload.reopeningOverride === true && payload.sourceEvent === 'reopen_fiscal_year',
+  });
   const series = clean(payload.series || 'GENERAL').toUpperCase();
   const currency = clean(payload.currency || 'EUR').toUpperCase();
   const fxRate = Number(payload.fxRate || 1);
@@ -418,10 +601,30 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0)) {
     throw new Error('Indica un tipo de cambio válido para contabilizar una operación en divisa distinta de EUR.');
   }
+  const operation = await beginPostingOperation(svc, companyId, payload, userEmail);
+  if (payload.postingKey) {
+    const existingRows = await svc.entities.JournalEntry.filter({ companyId, postingKey: payload.postingKey }, '-created_date', 10);
+    const existing = (existingRows || []).find(item => item.status !== 'anulado');
+    if (existing) {
+      const lines = await requireHealthyPosting(svc, companyId, existing, 'Operación contable idempotente');
+      if (operation && operation.journalEntryId !== existing.id) await updatePostingOperation(svc, operation, {
+        journalEntryId: existing.id,
+        stage: existing.status === 'confirmado'
+          ? (payload.deferCommit === true ? 'journal_committed_linkage_pending' : 'committed')
+          : 'journal_staged',
+      });
+      if (existing.status === 'confirmado' && payload.deferCommit !== true && operation?.status !== 'committed') {
+        await updatePostingOperation(svc, operation, { status: 'committed', stage: 'committed', committedAt: new Date().toISOString() });
+      }
+      return { alreadyPosted: true, entry: existing, lines, operation };
+    }
+  }
   const reserved = await reserveEntryNumber(svc, companyId, year, series);
   const now = new Date().toISOString();
-  const status = payload.status || 'confirmado';
+  const targetStatus = payload.status || 'confirmado';
+  const status = targetStatus === 'confirmado' ? 'borrador' : targetStatus;
   let entry;
+  let rows = [];
   try {
     entry = await svc.entities.JournalEntry.create({
       companyId,
@@ -440,9 +643,9 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
       totalDebit: totals.debit,
       totalCredit: totals.credit,
       isBalanced: true,
-      confirmedAt: status === 'confirmado' ? now : null,
-      confirmedBy: status === 'confirmado' ? userEmail : '',
-      validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
+      confirmedAt: null,
+      confirmedBy: '',
+      validationStatus: targetStatus === 'confirmado' ? 'UNIDAD_EN_PREPARACION' : 'BORRADOR_PENDIENTE_REVISION',
       postingKey: payload.postingKey || '',
       currency,
       fxRate,
@@ -450,6 +653,8 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
       costCenterId: payload.costCenterId || '',
       projectId: payload.projectId || '',
       accountingSchemaVersion: SCHEMA_VERSION,
+      accountingOperationId: operation?.id || '',
+      reversalOfEntryId: payload.reversalOfEntryId || '',
     });
     const linePayloads = normalized.map((item, index) => ({
       journalEntryId: entry.id,
@@ -482,27 +687,52 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
       originalCredit: item.originalCredit == null ? null : money(item.originalCredit),
       costCenterId: item.costCenterId || payload.costCenterId || '',
       projectId: item.projectId || payload.projectId || '',
-      validationStatus: status === 'confirmado' ? 'CONFIRMADO' : 'BORRADOR_PENDIENTE_REVISION',
+      validationStatus: targetStatus === 'confirmado' ? 'UNIDAD_EN_PREPARACION' : 'BORRADOR_PENDIENTE_REVISION',
       accountingSchemaVersion: SCHEMA_VERSION,
+      accountingOperationId: operation?.id || '',
     }));
-    const rows = await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
+    rows = await svc.entities.JournalEntryLine.bulkCreate(linePayloads);
     await svc.entities.AccountingEntryNumberReservation.update(reserved.reservation.id, {
       status: 'usado',
       journalEntryId: entry.id,
       usedAt: new Date().toISOString(),
     });
-    return { entry, lines: rows };
+    if (operation) await updatePostingOperation(svc, operation, { journalEntryId: entry.id, documentId: payload.documentId || '', stage: 'journal_staged' });
+    if (targetStatus === 'confirmado' && payload.deferCommit !== true) {
+      const committed = await commitJournalEntry(svc, companyId, entry, userEmail);
+      entry = committed.entry;
+      rows = committed.lines;
+      if (operation) await updatePostingOperation(svc, operation, { status: 'committed', stage: 'committed', committedAt: new Date().toISOString() });
+    }
+    return { entry, lines: rows, operation };
   } catch (error) {
+    let cleanupComplete = true;
+    let rowsToCleanup = rows || [];
     if (entry?.id) {
-      await svc.entities.JournalEntry.delete(entry.id).catch(async () => {
+      const persistedRows = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000).catch(() => []);
+      rowsToCleanup = [...new Map([...(rows || []), ...(persistedRows || [])].map(row => [row.id, row])).values()];
+    }
+    for (const row of rowsToCleanup) {
+      const removed = await svc.entities.JournalEntryLine.delete(row.id).then(() => true).catch(() => false);
+      cleanupComplete = cleanupComplete && removed;
+    }
+    if (entry?.id) {
+      const removed = await svc.entities.JournalEntry.delete(entry.id).then(() => true).catch(async () => {
         await svc.entities.JournalEntry.update(entry.id, {
           status: 'pendiente_revision',
           validationStatus: 'ERROR_CREACION_LINEAS',
           notes: `Error atómico creando líneas: ${error.message}`,
         }).catch(() => null);
+        return false;
       });
+      cleanupComplete = cleanupComplete && removed;
     }
     await svc.entities.AccountingEntryNumberReservation.delete(reserved.reservation.id).catch(() => null);
+    if (operation) await updatePostingOperation(svc, operation, {
+      status: cleanupComplete ? 'failed' : 'recovery_required',
+      stage: cleanupComplete ? 'rolled_back' : 'cleanup_incomplete',
+      lastError: String(error?.message || error),
+    }).catch(() => null);
     throw error;
   }
 }
@@ -547,7 +777,6 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     if (!(lines || []).some(item => item.accountId === counterpartyAccount.id)) {
       throw new Error('El asiento bancario existente utiliza otra contrapartida.');
     }
-    return { alreadyPosted: true, entry: duplicate[0], lines };
   }
   const now = new Date().toISOString();
   const description = clean(options.description || transaction.concepto || 'Conciliación bancaria');
@@ -568,14 +797,16 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     reconciledAt: now,
     sourceLineType,
   });
-  return await createJournalEntry(svc, companyId, {
+  const result = await createJournalEntry(svc, companyId, {
     date: transaction.fecha_operacion,
     description,
     type: incoming ? 'cobro' : 'pago',
     source: 'conciliacion',
     documentId: options.documentId || transaction.id,
     postingKey,
+    operationType: 'bank_reconciliation',
     status: options.status || 'confirmado',
+    deferCommit: options.deferCommit === true,
     currency,
     fxRate,
     originalAmount: currency === 'EUR' ? null : originalAmount,
@@ -583,20 +814,38 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
       ? [line(bankAccount, amount, 0, 'banco'), line(counterpartyAccount, 0, amount, options.counterpartyLineType || 'ajuste')]
       : [line(counterpartyAccount, amount, 0, options.counterpartyLineType || 'ajuste'), line(bankAccount, 0, amount, 'banco')],
   }, userEmail);
+  if (result.operation) {
+    result.operation = await updatePostingOperation(svc, result.operation, {
+      bankTransactionId: transaction.id,
+      documentId: options.documentId || transaction.id,
+      stage: options.deferCommit === true ? 'journal_staged' : 'committed',
+    });
+  }
+  return result;
 }
 
 export async function postInvoice(svc, companyId, invoice, userEmail, options = {}) {
   if (invoice.anulada) throw new Error('No se puede contabilizar una factura anulada.');
   if (invoice.linked_journal_entry_id) {
     const linked = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id).catch(() => null);
-    if (linked && linked.companyId === companyId && linked.status !== 'anulado') {
+    if (linked && linked.companyId === companyId && linked.status === 'confirmado') {
       await requireHealthyPosting(svc, companyId, linked, 'Contabilización de factura');
+      if (invoice.estado_contable !== 'contabilizada' || invoice.accounting_review_status !== 'validada_contabilizada') {
+        await svc.entities.Invoice.update(invoice.id, {
+          estado_contable: 'contabilizada',
+          accounting_review_status: 'validada_contabilizada',
+          linked_journal_entry_id: linked.id,
+          fecha_contabilizacion: linked.confirmedAt || new Date().toISOString(),
+          confirmado_por: linked.confirmedBy || userEmail || '',
+          accounting_schema_version: SCHEMA_VERSION,
+        });
+      }
       return { alreadyPosted: true, entry: linked };
     }
   }
   const postingKey = `invoice:${invoice.id}:${SCHEMA_VERSION}`;
   const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
-  if (duplicate?.[0]) {
+  if (duplicate?.[0]?.status === 'confirmado') {
     await requireHealthyPosting(svc, companyId, duplicate[0], 'Contabilización de factura');
     await svc.entities.Invoice.update(invoice.id, {
       linked_journal_entry_id: duplicate[0].id,
@@ -632,28 +881,32 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     ocrDocumentId: options.ocrDocumentId || invoice.ocr_document_id || '',
     postingKey,
     status: options.status || 'confirmado',
+    deferCommit: true,
+    operationType: 'invoice_posting',
     currency,
     fxRate,
     originalAmount: currency === 'EUR' ? null : money(invoice.total_factura),
     lines: proposal.lines,
   }, userEmail);
+  const operation = created.operation || null;
   const now = new Date().toISOString();
-  await svc.entities.Invoice.update(invoice.id, {
-    estado_contable: created.entry.status === 'confirmado' ? 'contabilizada' : 'asiento_propuesto',
+  try {
+    await svc.entities.Invoice.update(invoice.id, {
+    estado_contable: 'asiento_propuesto',
     linked_journal_entry_id: created.entry.id,
-    fecha_contabilizacion: created.entry.status === 'confirmado' ? now : null,
-    confirmado_por: created.entry.status === 'confirmado' ? userEmail : '',
+    fecha_contabilizacion: null,
+    confirmado_por: '',
     counterparty_account_id: proposal.counterparty?.account?.id || '',
     counterparty_account_code: proposal.counterparty?.account?.code || '',
     revenue_expense_account_id: proposal.resultAccount?.id || '',
     revenue_expense_account_code: proposal.resultAccount?.code || '',
     indirect_tax_kind: proposal.taxKind || invoice.indirect_tax_kind || '',
     accounting_schema_version: SCHEMA_VERSION,
-    accounting_review_status: created.entry.status === 'confirmado' ? 'validada_contabilizada' : 'pendiente_revision',
+    accounting_review_status: 'unidad_en_preparacion',
   });
-  try {
-    const existingTaxLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
-    if (!existingTaxLines?.length) {
+  if (operation) await updatePostingOperation(svc, operation, { stage: 'invoice_staged', documentId: invoice.id });
+  const existingTaxLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+  if (!existingTaxLines?.length) {
       const deductibleQuota = invoice.tipo === 'recibida'
         ? money(invoice.deductible_tax_amount != null ? invoice.deductible_tax_amount : proposal.tax)
         : money(proposal.tax);
@@ -679,13 +932,12 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
         source: invoice.origin === 'ocr' ? 'ocr' : 'sistema',
         reviewStatus: invoice.tipo_iva != null ? 'validado' : 'pendiente_revision',
         schemaVersion: SCHEMA_VERSION,
+        accountingOperationId: operation?.id || '',
       });
-    }
-  } catch (error) {
-    console.warn('[accountingEngine] InvoiceTaxLine:', error.message);
   }
-  try {
-    await svc.entities.DocumentAccountingSource.create({
+  if (operation) await updatePostingOperation(svc, operation, { stage: 'tax_detail_staged' });
+  const existingSources = await svc.entities.DocumentAccountingSource.filter({ companyId, operationKey: postingKey }, '-created_date', 5);
+  if (!existingSources?.length) await svc.entities.DocumentAccountingSource.create({
       companyId,
       documentType: invoice.tipo === 'emitida' ? 'factura_emitida' : 'factura_recibida',
       documentNumber: invoice.numero_factura,
@@ -705,11 +957,43 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       counterpartyAccountCode: proposal.counterparty?.account?.code || '',
       resultAccountCode: proposal.resultAccount?.code || '',
       accountingSchemaVersion: SCHEMA_VERSION,
+      accountingOperationId: operation?.id || '',
+      operationKey: postingKey,
       evidence: invoice.archivo_url || '',
     });
-  } catch (error) {
-    console.warn('[accountingEngine] DocumentAccountingSource:', error.message);
+  if (operation) await updatePostingOperation(svc, operation, { stage: 'source_evidence_staged' });
+  let committed = created;
+  if ((options.status || 'confirmado') === 'confirmado') {
+    committed = await commitJournalEntry(svc, companyId, created.entry, userEmail);
+    await svc.entities.Invoice.update(invoice.id, {
+      estado_contable: 'contabilizada',
+      linked_journal_entry_id: committed.entry.id,
+      fecha_contabilizacion: committed.entry.confirmedAt || now,
+      confirmado_por: userEmail || '',
+      accounting_review_status: 'validada_contabilizada',
+      accounting_schema_version: SCHEMA_VERSION,
+    });
+    if (operation) await updatePostingOperation(svc, operation, {
+      status: 'committed',
+      stage: 'committed',
+      journalEntryId: committed.entry.id,
+      committedAt: new Date().toISOString(),
+    });
   }
-  return { ...created, proposal };
+    return { ...committed, operation, proposal };
+  } catch (error) {
+    if (operation) await updatePostingOperation(svc, operation, {
+      status: 'recovery_required',
+      stage: 'invoice_posting_failed',
+      journalEntryId: created.entry.id,
+      documentId: invoice.id,
+      lastError: String(error?.message || error),
+    }).catch(() => null);
+    await svc.entities.Invoice.update(invoice.id, {
+      estado_contable: 'requiere_correccion',
+      accounting_review_status: 'requiere_correccion',
+      linked_journal_entry_id: created.entry.id,
+    }).catch(() => null);
+    throw error;
+  }
 }
-

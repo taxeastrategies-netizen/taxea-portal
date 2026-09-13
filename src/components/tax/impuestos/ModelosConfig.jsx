@@ -18,7 +18,12 @@ export default function ModelosConfig() {
   });
 
   const updateModel = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.TaxModel.update(id, data),
+    mutationFn: ({ id, data }) => base44.functions.invoke('taxModelOperations', {
+      action: 'update_model_config',
+      companyId,
+      modelId: id,
+      ...data,
+    }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['taxModels', companyId] }),
   });
 

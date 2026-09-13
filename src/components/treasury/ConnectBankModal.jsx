@@ -100,20 +100,16 @@ export default function ConnectBankModal({ companyId, onClose, onConnected }) {
     setError('');
     try {
       const iban = csvForm.iban.replace(/\s/g, '');
-      const account = await base44.entities.BankAccount.create({
+      const response = await base44.functions.invoke('openBanking', {
+        action: 'create_csv_account',
         company_id: companyId,
         nombre_banco: csvForm.nombre_banco.trim(),
-        proveedor: 'otro',
-        tipo_banco: 'otro',
         iban,
-        ultimos_4: iban.slice(-4),
         titular: csvForm.titular.trim(),
-        moneda: 'EUR',
-        saldo_disponible: Number(csvForm.saldo) || 0,
-        saldo_contable: Number(csvForm.saldo) || 0,
-        estado_conexion: 'pendiente',
-        origen_datos: 'csv',
+        saldo_inicial: Number(csvForm.saldo) || 0,
       });
+      const account = unwrap(response)?.account;
+      if (!account) throw new Error('No se recibió la cuenta bancaria creada.');
       onConnected?.(account);
     } catch (caught) {
       setError(errorMessage(caught, 'No se pudo añadir la cuenta manual.'));

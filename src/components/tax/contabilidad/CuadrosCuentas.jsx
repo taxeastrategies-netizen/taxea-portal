@@ -40,8 +40,7 @@ function inferType(code) {
 
 export default function CuadrosCuentas({ companyId, user }) {
   const [accounts, setAccounts] = useState([]);
-  const [lines, setLines] = useState([]);
-  const [confirmedIds, setConfirmedIds] = useState(new Set());
+  const [ledgerAccounts, setLedgerAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -55,19 +54,12 @@ export default function CuadrosCuentas({ companyId, user }) {
   const load = async () => {
     if (!companyId) return;
     setLoading(true);
-    const [accs, lns, entries] = await Promise.all([
-      base44.entities.AccountingAccount.filter({ companyId }, 'code', 1000).catch(() => []),
-      base44.entities.JournalEntryLine.filter({ companyId }, '-created_date', 5000).catch(() => []),
-      base44.entities.JournalEntry.filter({ companyId }, '-date', 2000).catch(() => []),
+    const [accs, ledgerResponse] = await Promise.all([
+      base44.entities.AccountingAccount.filter({ companyId }, 'code', 5000).catch(() => []),
+      base44.functions.invoke('accountingOperations', { action: 'ledger', companyId, year: new Date().getFullYear(), scope: 'confirmed' }).catch(() => null),
     ]);
-
-    // Confirmed = entries with status confirmado OR contabilizada (some may use different value)
-    const confirmed = (entries || []).filter(e => e.status === 'confirmado' || e.status === 'contabilizada');
-    const ids = new Set(confirmed.map(e => e.id));
-
     setAccounts(accs || []);
-    setLines(lns || []);
-    setConfirmedIds(ids);
+    setLedgerAccounts((ledgerResponse?.data || ledgerResponse)?.ledger?.accounts || []);
     setLoading(false);
   };
 
@@ -98,55 +90,42 @@ export default function CuadrosCuentas({ companyId, user }) {
     }
   };
 
-  // Build combined account list: real AccountingAccount records + synthesized from journal lines
+  // El saldo procede del motor único del mayor, que pagina y valida los asientos en servidor.
   const accountsWithBalances = useMemo(() => {
-    // Confirmed lines (by journal entry status)
-    const confirmedLines = lines.filter(l => confirmedIds.has(l.journalEntryId));
-    // ALL lines for activity count (includes drafts)
-    const allLinesByCode = {};
-    lines.forEach(l => {
-      if (!l.accountCode) return;
-      if (!allLinesByCode[l.accountCode]) allLinesByCode[l.accountCode] = [];
-      allLinesByCode[l.accountCode].push(l);
-    });
-
-    // Start with real AccountingAccount entities
+    const ledgerByCode = new Map(ledgerAccounts.map(account => [account.code, account]));
     const result = {};
     accounts.forEach(acc => {
-      const accLines = confirmedLines.filter(l => l.accountCode === acc.code);
-      const debe = accLines.reduce((s, l) => s + Number(l.debit || 0), 0) + Number(acc.openingDebit || 0);
-      const haber = accLines.reduce((s, l) => s + Number(l.credit || 0), 0) + Number(acc.openingCredit || 0);
+      const ledger = ledgerByCode.get(acc.code) || {};
+      const debe = Number(ledger.debit || 0) + Number(acc.openingDebit || 0);
+      const haber = Number(ledger.credit || 0) + Number(acc.openingCredit || 0);
       result[acc.code] = {
         ...acc,
         debe, haber, saldo: debe - haber,
-        movCount: (allLinesByCode[acc.code] || []).length,
+        movCount: Number(ledger.movements || 0),
         isVirtual: false,
       };
     });
-
-    // Synthesize accounts from journal lines that don't have an AccountingAccount record
     const usedCodes = new Set(Object.keys(result));
-    Object.entries(allLinesByCode).forEach(([code, codeLines]) => {
+    ledgerAccounts.forEach(ledger => {
+      const code = ledger.code;
       if (usedCodes.has(code)) return;
-      const confirmed = codeLines.filter(l => confirmedIds.has(l.journalEntryId));
-      const debe = confirmed.reduce((s, l) => s + Number(l.debit || 0), 0);
-      const haber = confirmed.reduce((s, l) => s + Number(l.credit || 0), 0);
-      const sample = codeLines[0];
+      const debe = Number(ledger.debit || 0);
+      const haber = Number(ledger.credit || 0);
       result[code] = {
         id: `virtual_${code}`,
         code,
-        name: sample.accountName || code,
-        type: inferType(code),
+        name: ledger.name || code,
+        type: ledger.type || inferType(code),
         group: code.charAt(0),
         status: 'activa',
         debe, haber, saldo: debe - haber,
-        movCount: codeLines.length,
+        movCount: Number(ledger.movements || 0),
         isVirtual: true,
       };
     });
 
     return Object.values(result);
-  }, [accounts, lines, confirmedIds]);
+  }, [accounts, ledgerAccounts]);
 
   const filtered = accountsWithBalances.filter(a => {
     const matchSearch = !search || a.code?.includes(search) || a.name?.toLowerCase().includes(search.toLowerCase());

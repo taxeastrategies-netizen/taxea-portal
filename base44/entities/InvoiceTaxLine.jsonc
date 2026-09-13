@@ -18,7 +18,7 @@
     "receiptDate": {
       "type": "string",
       "format": "date",
-      "description": "Fecha acreditada de recepci\u00f3n del justificante. Si falta, el motor solo puede usar la fecha de alta como aproximaci\u00f3n y lo advierte."
+      "description": "Fecha acreditada de recepción del justificante. Si falta, el motor solo puede usar la fecha de alta como aproximación y lo advierte."
     },
     "taxKind": {
       "type": "string",
@@ -54,7 +54,7 @@
         "administrative_resolution",
         "deduction_adjustment"
       ],
-      "description": "Clasificaci\u00f3n anual del IVA soportado para los apartados de deducciones del modelo 390. Si falta, el motor propone una categor\u00eda y emite una recomendaci\u00f3n revisable."
+      "description": "Clasificación anual del IVA soportado para los apartados de deducciones del modelo 390. Si falta, el motor propone una categoría y emite una recomendación revisable."
     },
     "deductionYear": {
       "type": "number",
@@ -62,7 +62,7 @@
     },
     "deductionPeriod": {
       "type": "string",
-      "description": "Per\u00edodo de autoliquidaci\u00f3n en el que se ejerce la deducci\u00f3n (1T-4T o 01-12)."
+      "description": "Período de autoliquidación en el que se ejerce la deducción (1T-4T o 01-12)."
     },
     "deductionAssignmentSource": {
       "type": "string",
@@ -175,6 +175,9 @@
     "schemaVersion": {
       "type": "string",
       "default": "pgc8-v1"
+    },
+    "accountingOperationId": {
+      "type": "string"
     }
   },
   "required": [

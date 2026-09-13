@@ -26,10 +26,12 @@ const build = await esbuild.build({
         contents: `
           export const SCHEMA_VERSION = 'pgc8-v1';
           export const buildInvoicePosting = (...args) => globalThis.__buildInvoicePosting(...args);
+          export const commitJournalEntry = (...args) => globalThis.__commitJournalEntry(...args);
           export const createJournalEntry = (...args) => globalThis.__createJournalEntry(...args);
           export const postBankReconciliation = (...args) => globalThis.__postBankReconciliation(...args);
           export const postInvoice = (...args) => globalThis.__postInvoice(...args);
           export const seedOperationalPgc = (...args) => globalThis.__seedOperationalPgc(...args);
+          export const updatePostingOperation = (...args) => globalThis.__updatePostingOperation(...args);
         `,
       }));
     },
@@ -82,6 +84,8 @@ const context = vm.createContext({
   __base44TestClient: testClient,
   __buildInvoicePosting: async () => ({ counterparty: { account: {} } }),
   __createJournalEntry: async () => ({ entry: { id: 'unused' } }),
+  __commitJournalEntry: async (_svc, _companyId, entryRow) => ({ entry: entryRow, lines: [] }),
+  __updatePostingOperation: async (_svc, operation) => operation,
   __postBankReconciliation: async () => ({ entry: { id: 'unused' } }),
   __seedOperationalPgc: async () => ({ created: 0 }),
   __postInvoice: async (_svc, companyId, invoice) => {

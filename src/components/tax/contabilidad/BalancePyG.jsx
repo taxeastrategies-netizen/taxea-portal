@@ -119,9 +119,11 @@ export default function BalancePyG({ companyId }) {
           ['Cuentas con movimiento', report.accounts.length],
           ['Asientos excluidos', report.excludedEntries],
           ['Asientos en revisión', report.pendingEntriesInYear],
-          ['Modelo', 'PGC interno'],
+          ['Modelo', report.model === 'pgc_normal' ? 'PGC normal' : `PGC PYMES${report.microenterpriseCriteria ? ' · micro' : ''}`],
         ].map(([label, value]) => <div key={label} className="rounded-xl border border-border bg-card p-3"><p className="text-[11px] text-muted-foreground">{label}</p><p className="font-mono text-lg font-bold mt-1">{value}</p></div>)}
       </div>
+
+      {report.frameworkReviewStatus !== 'validado_asesor' && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">El marco contable está pendiente de validación por asesor. Los cálculos son operativos y no deben utilizarse como cuentas anuales definitivas.</div>}
 
       {comparative && (
         <div className="rounded-xl border border-border bg-card p-4">

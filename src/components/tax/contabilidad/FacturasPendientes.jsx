@@ -133,16 +133,24 @@ export default function FacturasPendientes() {
       }
       if (!readyInvoiceIds.length) { setSyncMessage(issues ? `${issues} facturas requieren completar datos o revisión contable.` : 'Todas las facturas ya tienen asiento.'); return; }
       if (!window.confirm(`Se crearán ${readyInvoiceIds.length} asientos contables confirmados. ${issues ? `${issues} facturas quedarán pendientes de revisión. ` : ''}La operación es idempotente y no duplica facturas ya enlazadas. ¿Continuar?`)) { setSyncMessage('Sin cambios.'); return; }
+      const started = await base44.functions.invoke('accountingOperations', {
+        action: 'start_accounting_batch', companyId: company.id, jobType: 'sync_invoices',
+        jobKey: `sync_invoices:${company.id}:${new Date().toISOString()}`, batchSize: 10,
+      });
+      const job = (started?.data || started)?.job;
+      if (!job?.id) throw new Error('No se pudo iniciar el proceso contable recuperable.');
       let posted = 0;
       let failures = 0;
-      for (let index = 0; index < readyInvoiceIds.length; index += 3) {
-        const invoiceIds = readyInvoiceIds.slice(index, index + 3);
-        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, invoiceIds, apply: true, offset: 0, batchSize: 3 });
+      let processed = 0;
+      let applyDone = false;
+      while (!applyDone) {
+        const response = await base44.functions.invoke('accountingOperations', { action: 'sync_invoices', companyId: company.id, jobId: job.id, apply: true });
         const data = response?.data || response;
         posted += data.result?.posted || 0;
         failures += data.result?.issues?.length || 0;
-        setSyncMessage(`Contabilizando... ${Math.min(index + invoiceIds.length, readyInvoiceIds.length)}/${readyInvoiceIds.length}`);
-        if (index + invoiceIds.length < readyInvoiceIds.length) await new Promise(resolve => window.setTimeout(resolve, 1500));
+        processed = data.nextOffset || processed;
+        applyDone = Boolean(data.done);
+        setSyncMessage(`Contabilizando de forma recuperable... ${Math.min(processed, data.total || processed)}/${data.total || processed}`);
       }
       setSyncMessage(`${posted} asientos creados${failures ? ` · ${failures} facturas requieren revisión` : ''}.`);
       qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });

@@ -101,17 +101,11 @@
     "fecha_prevista"
   ],
   "rls": {
-    "create": {
-      "data.company_id": "{{user.data.company_id}}"
-    },
+    "create": { "user_condition": { "role": "admin" } },
     "read": {
       "data.company_id": "{{user.data.company_id}}"
     },
-    "update": {
-      "data.company_id": "{{user.data.company_id}}"
-    },
-    "delete": {
-      "data.company_id": "{{user.data.company_id}}"
-    }
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
   }
 }

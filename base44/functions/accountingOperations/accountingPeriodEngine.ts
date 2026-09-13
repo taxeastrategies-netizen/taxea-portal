@@ -1,4 +1,4 @@
-import { createJournalEntry, ensureAccount, SCHEMA_VERSION } from './accountingEngine.ts';
+import { canonical8, createJournalEntry, ensureAccount, SCHEMA_VERSION } from './accountingEngine.ts';
 import { fetchAll } from './accountingReportEngine.ts';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -24,12 +24,16 @@ export async function saveFiscalYear(svc, companyId, body, userEmail) {
     throw new Error('El ejercicio debe empezar y terminar dentro del año indicado.');
   }
   const existing = await findPeriod(svc, companyId, year);
+  const configurations = await svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 1);
+  const configuration = configurations?.[0] || null;
   const payload = {
     companyId,
     year,
     startDate,
     endDate,
     accountingModel: body.accountingModel || existing?.accountingModel || 'interno_simplificado',
+    accountingFramework: body.accountingFramework || existing?.accountingFramework || configuration?.accountingFramework || 'pgc_pymes',
+    annualAccountsModel: body.annualAccountsModel || existing?.annualAccountsModel || configuration?.annualAccountsModel || 'pyme',
     notes: String(body.notes || existing?.notes || ''),
     schemaVersion: SCHEMA_VERSION,
     updatedBy: userEmail,
@@ -175,6 +179,60 @@ async function existingByKey(svc, companyId, postingKey) {
   return rows?.find(item => item.status !== 'anulado') || null;
 }
 
+async function recordAccountingAudit(svc, companyId, eventType, eventKey, year, reason, userEmail, before, after, relatedEntryIds = []) {
+  const duplicate = await svc.entities.AccountingAuditLog.filter({ companyId, eventKey }, '-occurredAt', 1);
+  if (duplicate?.[0]) return duplicate[0];
+  return await svc.entities.AccountingAuditLog.create({
+    companyId,
+    eventType,
+    eventKey,
+    fiscalYear: Number(year),
+    reason: String(reason || ''),
+    actor: userEmail || '',
+    occurredAt: new Date().toISOString(),
+    beforeJson: JSON.stringify(before || {}),
+    afterJson: JSON.stringify(after || {}),
+    relatedEntryIds: relatedEntryIds.filter(Boolean),
+    schemaVersion: SCHEMA_VERSION,
+  });
+}
+
+async function reverseSystemEntry(svc, companyId, entryId, date, reason, userEmail, year, cycle) {
+  if (!entryId) return null;
+  const original = await svc.entities.JournalEntry.get(entryId).catch(() => null);
+  if (!original || original.companyId !== companyId || original.status !== 'confirmado') throw new Error('No se encontró un asiento confirmado del cierre que deba revertirse.');
+  const postingKey = `reopen:${companyId}:${year}:${cycle}:${original.id}:${SCHEMA_VERSION}`;
+  const existing = await existingByKey(svc, companyId, postingKey);
+  if (existing) return existing;
+  let lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: original.id }, 'lineNumber', 5000);
+  if ((!lines || !lines.length) && original.importKey) lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: original.importKey }, 'lineNumber', 5000);
+  if (!lines || lines.length < 2) throw new Error(`El asiento ${original.entryNumber || original.id} no tiene líneas suficientes para revertirse.`);
+  const reversed = await createJournalEntry(svc, companyId, {
+    date,
+    description: `Reapertura ${year}: reversión ${original.entryNumber || ''} · ${reason}`,
+    type: 'ajuste',
+    source: 'sistema',
+    sourceEvent: 'reopen_fiscal_year',
+    postingKey,
+    status: 'confirmado',
+    systemOverride: true,
+    reopeningOverride: true,
+    reversalOfEntryId: original.id,
+    lines: lines.map(line => ({
+      accountCode: canonical8(line.accountCode || line.subcuenta),
+      accountName: line.accountName || '',
+      description: `Reapertura: ${line.description || original.description || reason}`,
+      debit: money(line.credit ?? line.haberE),
+      credit: money(line.debit ?? line.debeE),
+      taxCode: line.taxCode || '',
+      counterpartyAccountId: line.counterpartyAccountId || '',
+      counterpartyAccountCode: line.counterpartyAccountCode || '',
+      sourceLineType: line.sourceLineType || 'ajuste',
+    })),
+  }, userEmail);
+  return reversed.entry;
+}
+
 export async function executeClosing(svc, companyId, body, userEmail) {
   const year = Number(body.year);
   if (String(body.confirmation || '').trim().toUpperCase() !== `CERRAR ${year}`) {
@@ -186,7 +244,8 @@ export async function executeClosing(svc, companyId, body, userEmail) {
   const modelBefore = await yearModel(svc, companyId, year);
   const accountByCode = new Map(modelBefore.accounts.map(account => [account.code, account]));
   const resultAccount = await ensureAccount(svc, companyId, '12900000', 'Resultado del ejercicio', 'patrimonio');
-  const regularizationKey = `regularization:${companyId}:${year}:${SCHEMA_VERSION}`;
+  const cycle = Number(period.closeSequence || 0) + 1;
+  const regularizationKey = `regularization:${companyId}:${year}:${cycle}:${SCHEMA_VERSION}`;
   let regularization = await existingByKey(svc, companyId, regularizationKey);
   if (!regularization) {
     const lines = [];
@@ -211,7 +270,7 @@ export async function executeClosing(svc, companyId, body, userEmail) {
     }
   }
   const modelAfter = await yearModel(svc, companyId, year);
-  const closingKey = `closing:${companyId}:${year}:${SCHEMA_VERSION}`;
+  const closingKey = `closing:${companyId}:${year}:${cycle}:${SCHEMA_VERSION}`;
   let closing = await existingByKey(svc, companyId, closingKey);
   let closingLines = [];
   if (!closing) {
@@ -231,7 +290,7 @@ export async function executeClosing(svc, companyId, body, userEmail) {
   const nextYear = year + 1;
   let nextPeriod = await findPeriod(svc, companyId, nextYear);
   if (!nextPeriod) nextPeriod = await saveFiscalYear(svc, companyId, { year: nextYear }, userEmail);
-  const openingKey = `opening:${companyId}:${nextYear}:${SCHEMA_VERSION}`;
+  const openingKey = `opening:${companyId}:${nextYear}:from-${year}:${cycle}:${SCHEMA_VERSION}`;
   let opening = await existingByKey(svc, companyId, openingKey);
   if (!opening && closingLines.length >= 2) {
     opening = (await createJournalEntry(svc, companyId, {
@@ -240,9 +299,49 @@ export async function executeClosing(svc, companyId, body, userEmail) {
     }, userEmail)).entry;
   }
   await svc.entities.AccountingFiscalYear.update(period.id, {
-    status: 'cerrado', lockedThroughDate: period.endDate, regularizationEntryId: regularization?.id || '', closingEntryId: closing?.id || '', closedAt: new Date().toISOString(), closedBy: userEmail,
+    status: 'cerrado', lockedThroughDate: period.endDate, regularizationEntryId: regularization?.id || '', closingEntryId: closing?.id || '', closedAt: new Date().toISOString(), closedBy: userEmail, closeSequence: cycle,
   });
   if (opening?.id) await svc.entities.AccountingFiscalYear.update(nextPeriod.id, { openingEntryId: opening.id, previousYearId: period.id });
-  return { year, regularizationEntryId: regularization?.id || '', closingEntryId: closing?.id || '', openingEntryId: opening?.id || '', idempotent: Boolean(await existingByKey(svc, companyId, closingKey)) };
+  await recordAccountingAudit(svc, companyId, 'fiscal_year_closed', `close:${companyId}:${year}:${cycle}`, year, body.reason || 'Cierre confirmado', userEmail, period, { status: 'cerrado', cycle }, [regularization?.id, closing?.id, opening?.id]);
+  return { year, cycle, regularizationEntryId: regularization?.id || '', closingEntryId: closing?.id || '', openingEntryId: opening?.id || '', idempotent: false };
+}
+
+export async function reopenFiscalYear(svc, companyId, body, userEmail) {
+  const year = Number(body.year);
+  const reason = String(body.reason || '').trim();
+  if (!reason) throw new Error('Indica el motivo documentado de la reapertura.');
+  if (String(body.confirmation || '').trim().toUpperCase() !== `REABRIR ${year}`) throw new Error(`Escribe REABRIR ${year} para confirmar la reapertura.`);
+  const period = await findPeriod(svc, companyId, year);
+  if (!period) throw new Error('El ejercicio no está configurado.');
+  if (period.status !== 'cerrado') return { year, alreadyOpen: true, reversalEntryIds: period.reopenReversalEntryIds || [] };
+  const cycle = Number(period.closeSequence || 1);
+  const nextPeriod = await findPeriod(svc, companyId, year + 1);
+  if (!nextPeriod) throw new Error('No se encontró el ejercicio siguiente generado por el cierre.');
+  const nextEntries = await fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: year + 1 }, 'date', 100000);
+  const allowed = new Set([nextPeriod.openingEntryId, ...(nextPeriod.reopenReversalEntryIds || [])].filter(Boolean));
+  const subsequentActivity = nextEntries.filter(entry => entry.status === 'confirmado' && !allowed.has(entry.id) && entry.reversalOfEntryId !== nextPeriod.openingEntryId);
+  if (subsequentActivity.length) throw new Error(`No se puede reabrir: el ejercicio ${year + 1} ya tiene ${subsequentActivity.length} asientos confirmados posteriores a la apertura.`);
+  const reversalEntries = [];
+  const openingReversal = await reverseSystemEntry(svc, companyId, nextPeriod.openingEntryId, nextPeriod.startDate, reason, userEmail, year, cycle);
+  if (openingReversal) reversalEntries.push(openingReversal);
+  const closingReversal = await reverseSystemEntry(svc, companyId, period.closingEntryId, period.endDate, reason, userEmail, year, cycle);
+  if (closingReversal) reversalEntries.push(closingReversal);
+  const regularizationReversal = await reverseSystemEntry(svc, companyId, period.regularizationEntryId, period.endDate, reason, userEmail, year, cycle);
+  if (regularizationReversal) reversalEntries.push(regularizationReversal);
+  const now = new Date().toISOString();
+  const reversalEntryIds = reversalEntries.map(entry => entry.id);
+  const reopened = await svc.entities.AccountingFiscalYear.update(period.id, {
+    status: 'abierto',
+    lockedThroughDate: null,
+    reopenedAt: now,
+    reopenedBy: userEmail || '',
+    reopenReason: reason,
+    reopenReversalEntryIds: reversalEntryIds,
+  });
+  await svc.entities.AccountingFiscalYear.update(nextPeriod.id, {
+    reopenReversalEntryIds: [...new Set([...(nextPeriod.reopenReversalEntryIds || []), openingReversal?.id].filter(Boolean))],
+  });
+  await recordAccountingAudit(svc, companyId, 'fiscal_year_reopened', `reopen:${companyId}:${year}:${cycle}`, year, reason, userEmail, period, reopened, reversalEntryIds);
+  return { year, cycle, reversalEntryIds, period: reopened };
 }
 

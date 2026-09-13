@@ -40,19 +40,12 @@
     },
     "accountingFramework": {
       "type": "string",
-      "enum": [
-        "pgc_normal",
-        "pgc_pymes"
-      ],
+      "enum": ["pgc_normal", "pgc_pymes"],
       "default": "pgc_pymes"
     },
     "annualAccountsModel": {
       "type": "string",
-      "enum": [
-        "normal",
-        "abreviado",
-        "pyme"
-      ],
+      "enum": ["normal", "abreviado", "pyme"],
       "default": "pyme"
     },
     "microenterpriseCriteria": {
@@ -97,9 +90,7 @@
     },
     "reopenReversalEntryIds": {
       "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "items": { "type": "string" }
     },
     "notes": {
       "type": "string"

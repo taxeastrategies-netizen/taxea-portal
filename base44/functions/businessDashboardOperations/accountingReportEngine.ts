@@ -115,7 +115,7 @@ export async function accountingData(svc, companyId, options = {}) {
   const selectedYear = Number(options.year) || null;
   const entryQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
   const lineQuery = selectedYear ? { companyId, ejercicio: selectedYear } : { companyId };
-  const [entries, lines, accounts, invoices, payments] = await Promise.all([
+  const [entries, lines, accounts, invoices, payments, configurations, operations] = await Promise.all([
     selectedYear
       ? Promise.all([fetchAll(svc.entities.JournalEntry, entryQuery, 'entryNumber'), fetchAll(svc.entities.JournalEntry, { companyId, ejercicio: selectedYear - 1 }, 'entryNumber')]).then(pages => [...new Map(pages.flat().map(row => [row.id, row])).values()])
       : fetchAll(svc.entities.JournalEntry, entryQuery, 'entryNumber'),
@@ -125,6 +125,8 @@ export async function accountingData(svc, companyId, options = {}) {
     fetchAll(svc.entities.AccountingAccount, { companyId }, 'code', 10000),
     options.includeBusinessData ? fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
     options.includeBusinessData ? fetchAll(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 10000) : Promise.resolve([]),
+    svc.entities.AccountingConfiguration.filter({ companyId }, '-created_date', 1),
+    fetchAll(svc.entities.AccountingPostingOperation, { companyId }, '-created_date', 100000),
   ]);
   const resolved = resolveModel(entries, lines);
   const accountByCode = new Map(accounts.map(account => [account.code, account]));
@@ -132,7 +134,13 @@ export async function accountingData(svc, companyId, options = {}) {
     ? await svc.entities.JournalEntry.filter({ companyId }, '-date', 5000, 0, ['ejercicio', 'date'])
     : entries;
   const availableYears = [...new Set((yearHeaders || []).map(yearOf).filter(Boolean))].sort((a, b) => b - a);
-  return { entries, lines, accounts, invoices, payments, accountByCode, availableYears, businessDataIncluded: Boolean(options.includeBusinessData), ...resolved };
+  const operationById = new Map((operations || []).map(operation => [operation.id, operation]));
+  const visiblePayments = (payments || []).filter(payment => {
+    if (payment.operation_status && payment.operation_status !== 'committed') return false;
+    const operationId = String(payment.accounting_operation_id || '').trim();
+    return !operationId || operationById.get(operationId)?.status === 'committed';
+  });
+  return { entries, lines, accounts, invoices, payments: visiblePayments, pendingPayments: (payments || []).filter(payment => !visiblePayments.some(item => item.id === payment.id)), configuration: configurations?.[0] || null, operations, operationById, accountByCode, availableYears, businessDataIncluded: Boolean(options.includeBusinessData), ...resolved };
 }
 
 export function accountingQuality(data) {
@@ -164,6 +172,7 @@ export function accountingQuality(data) {
     brokenInvoiceLinks: data.businessDataIncluded ? brokenInvoiceLinks.length : null,
     payments: data.businessDataIncluded ? data.payments.length : null,
     paymentsWithEntry: data.businessDataIncluded ? data.payments.filter(payment => payment.journal_entry_id && entryByKey.has(payment.journal_entry_id)).length : null,
+    interruptedPostingUnits: (data.operations || []).filter(operation => ['preparing', 'recovery_required', 'failed'].includes(operation.status)).length,
   };
 }
 
@@ -171,6 +180,7 @@ export function buildReports(data, { year, scope = 'confirmed', withoutComparati
   const selectedYear = Number(year) || new Date().getFullYear();
   const eligible = data.entries.filter(entry => {
     if (yearOf(entry) !== selectedYear || entry.status === 'anulado') return false;
+    if (entry.accountingOperationId && data.operationById?.get(entry.accountingOperationId)?.status !== 'committed') return false;
     return scope === 'provisional' ? ['confirmado', 'pendiente_revision'].includes(entry.status) : entry.status === 'confirmado';
   });
   const validEntries = [];
@@ -234,8 +244,11 @@ export function buildReports(data, { year, scope = 'confirmed', withoutComparati
     pendingEntriesInYear: data.entries.filter(e => yearOf(e) === selectedYear && ['borrador', 'pendiente_revision'].includes(e.status)).length,
     accounts,
     trialBalance: { debit: trialDebit, credit: trialCredit, difference: round2(trialDebit - trialCredit) },
-    model: 'interno_simplificado_pgc',
-    modelNotice: 'Presentación interna basada en epígrafes PGC. No sustituye los modelos oficiales de depósito ni la memoria.',
+    model: data.configuration?.accountingFramework || 'pgc_pymes',
+    annualAccountsModel: data.configuration?.annualAccountsModel || 'pyme',
+    microenterpriseCriteria: data.configuration?.microenterpriseCriteria === true,
+    frameworkReviewStatus: data.configuration?.frameworkReviewStatus || 'pendiente_asesor',
+    modelNotice: 'Estados operativos basados en el marco contable configurado. No sustituyen por sí solos las cuentas anuales, el ECPN, el EFE ni la memoria que resulten exigibles.',
     profitAndLoss: { income, expenses, incomeSections: groupPresentation(income), expenseSections: groupPresentation(expenses), totalIncome, totalExpenses, result },
     balanceSheet: { assets, liabilities, equity, assetSections: groupPresentation(assets), liabilitySections: groupPresentation(liabilities), equitySections: groupPresentation(equity), totalAssets, totalLiabilities, totalEquityBeforeResult, result, totalEquity, difference: balanceDifference },
   };
@@ -276,6 +289,7 @@ export function buildLedger(data, { year, scope = 'confirmed', accountCode = '' 
   for (const [entryId, rows] of data.linesByEntry.entries()) {
     const entry = entryById.get(entryId);
     if (!entry || yearOf(entry) !== report.year || !eligibleStatuses.has(entry.status)) continue;
+    if (entry.accountingOperationId && data.operationById?.get(entry.accountingOperationId)?.status !== 'committed') continue;
     if (!entryIntegrity(entry, rows).balanced) continue;
     for (const line of rows) if (String(line.accountCode || line.subcuenta) === String(accountCode)) movements.push({
       id: line.id, date: line.entryDate || entry.date, entryId: entry.id, entryNumber: entry.entryNumber,
@@ -287,5 +301,4 @@ export function buildLedger(data, { year, scope = 'confirmed', accountCode = '' 
   let runningBalance = 0;
   return { year: report.year, years: report.years, scope, accounts: report.accounts, accountCode, movements: movements.map(m => ({ ...m, runningBalance: runningBalance = round2(runningBalance + m.debit - m.credit) })) };
 }
-
 

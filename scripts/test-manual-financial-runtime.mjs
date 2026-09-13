@@ -29,12 +29,17 @@ const build = await esbuild.build({
           export const canonical8 = value => { const digits=String(value||'').replace(/\\D/g,''); if(!digits||digits.length>8) throw new Error('Cuenta no válida'); return digits.padEnd(8,'0'); };
           export const isCanonical8 = value => /^\\d{8}$/.test(String(value||''));
           export const assertAccountingDateOpen = async () => ({ year: 2026 });
+          export const bankCurrency = () => 'EUR';
+          export const stableBankIdentity = () => '';
           export const buildInvoicePosting = async () => ({});
+          export const commitJournalEntry = async (_svc, _companyId, entry) => ({ entry, lines: [] });
           export const createJournalEntry = (...args) => globalThis.__createJournalEntry(...args);
           export const ensureAccount = (...args) => globalThis.__ensureAccount(...args);
+          export const ensureBankPostingAccount = async () => ({ id: 'bank-ledger', companyId: 'company-a', code: '57200000', name: 'Banco', type: 'banco', status: 'activa' });
           export const postBankReconciliation = async () => ({});
           export const postInvoice = async () => ({});
           export const seedOperationalPgc = async () => ({ created: 0 });
+          export const updatePostingOperation = async (_svc, operation, patch) => ({ ...operation, ...patch });
         `,
       }));
       builder.onLoad({ filter: /^accounting-report$/, namespace: 'taxea-test' }, () => ({
@@ -54,6 +59,7 @@ const build = await esbuild.build({
           export const closingPreview = async () => ({});
           export const executeClosing = async () => ({});
           export const listFiscalYears = async () => [];
+          export const reopenFiscalYear = async () => ({});
           export const saveFiscalYear = async () => ({});
           export const setPeriodLock = async () => ({});
         `,

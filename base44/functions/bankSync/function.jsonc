@@ -1,0 +1,4 @@
+{
+  "name": "bankSync",
+  "entry": "entry.ts"
+}

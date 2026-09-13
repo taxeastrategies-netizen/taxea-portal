@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { buildInvoicePosting, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION } from './accountingEngine.ts';
+import { buildInvoicePosting, commitJournalEntry, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -170,12 +170,29 @@ async function listPayments(base44, companyId, invoiceId) {
   );
 }
 
+async function visiblePayments(base44, companyId, payments) {
+  const operationIds = [...new Set((payments || []).map(payment => cleanText(payment.accounting_operation_id, 120)).filter(Boolean))];
+  const operations = await Promise.all(operationIds.map(id => base44.asServiceRole.entities.AccountingPostingOperation.get(id).catch(() => null)));
+  const operationById = new Map(operations.filter(operation => operation?.companyId === companyId).map(operation => [operation.id, operation]));
+  const visible = (payments || []).filter(payment => {
+    const operationId = cleanText(payment.accounting_operation_id, 120);
+    if (payment.operation_status && payment.operation_status !== 'committed') return false;
+    if (!operationId) return true;
+    return payment.operation_status === 'committed' && operationById.get(operationId)?.status === 'committed';
+  });
+  return {
+    visible,
+    pending: (payments || []).filter(payment => !visible.some(item => item.id === payment.id)),
+  };
+}
+
 async function refreshInvoicePaymentState(base44, invoice, companyId) {
-  const payments = await listPayments(base44, companyId, invoice.id);
+  const allPayments = await listPayments(base44, companyId, invoice.id);
+  const { visible: payments, pending } = await visiblePayments(base44, companyId, allPayments);
   const total = asMoney(Math.abs(Number(invoice.total_factura) || 0));
   // Conserva facturas históricas marcadas como cobradas/pagadas antes de existir
   // el nuevo registro detallado de pagos. No se reabre ninguna factura legado.
-  const legacySettled = (payments || []).length === 0 && invoice.estado_cobro === 'cobrada';
+  const legacySettled = (allPayments || []).length === 0 && invoice.estado_cobro === 'cobrada';
   const paid = legacySettled
     ? total
     : asMoney((payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
@@ -195,7 +212,8 @@ async function refreshInvoicePaymentState(base44, invoice, companyId) {
     importe_pendiente: outstanding,
     ultimo_pago_at: lastPayment?.created_at || null,
   });
-  return { payments, paid, outstanding, estado_cobro: estado };
+  const pendingAmount = asMoney((pending || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
+  return { payments, paid, outstanding, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount };
 }
 
 async function recordTimeline(base44, data) {
@@ -229,6 +247,7 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
       description: `${invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${invoice.numero_factura}`,
       counterpartyLineType: 'tercero',
       status: 'confirmado',
+      deferCommit: true,
     },
   );
   await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, {
@@ -249,8 +268,6 @@ async function prepareManualPaymentAccounting(base44, companyId, invoice, amount
   const counterparty = proposal.counterparty?.account;
   if (!ledger || !counterparty) throw Object.assign(new Error('No se pudieron resolver las cuentas de tesorería y tercero.'), { status: 409 });
   const postingKey = `payment:${invoice.id}:${idempotencyKey}:${SCHEMA_VERSION}`;
-  const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
-  if (duplicate?.[0]) return { invoicePosting, paymentPosting: { alreadyPosted: true, entry: duplicate[0] } };
   const isCreditNote = Number(invoice.total_factura) < 0;
   const incoming = (invoice.tipo === 'emitida' && !isCreditNote) || (invoice.tipo === 'recibida' && isCreditNote);
   const description = `${incoming ? 'Cobro' : 'Pago'} factura ${invoice.numero_factura || ''}`.trim();
@@ -263,11 +280,105 @@ async function prepareManualPaymentAccounting(base44, companyId, invoice, amount
     documentId: invoice.id,
     postingKey,
     status: 'confirmado',
+    deferCommit: true,
+    operationType: 'invoice_payment',
     lines: incoming
       ? [line(ledger, amount, 0, 'banco'), line(counterparty, 0, amount, 'tercero')]
       : [line(counterparty, amount, 0, 'tercero'), line(ledger, 0, amount, 'banco')],
   }, user.email);
   return { invoicePosting, paymentPosting };
+}
+
+async function reserveInvoicePayment(base44, companyId, invoice, payload) {
+  const svc = base44.asServiceRole;
+  const existing = await svc.entities.InvoicePayment.filter({
+    company_id: companyId,
+    invoice_id: invoice.id,
+    idempotency_key: payload.idempotency_key,
+  }, 'created_at', 20);
+  if (existing?.[0]) return { payment: existing[0], alreadyExisted: true };
+  const candidate = await svc.entities.InvoicePayment.create({ ...payload, operation_status: 'preparing' });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const contenders = await svc.entities.InvoicePayment.filter({
+    company_id: companyId,
+    invoice_id: invoice.id,
+    idempotency_key: payload.idempotency_key,
+  }, 'created_at', 20);
+  const winner = [...(contenders || [])].sort((a, b) => String(a.created_at || a.created_date || '').localeCompare(String(b.created_at || b.created_date || '')) || String(a.id).localeCompare(String(b.id)))[0];
+  if (winner?.id !== candidate.id) {
+    await svc.entities.InvoicePayment.delete(candidate.id).catch(() => null);
+    return { payment: winner, alreadyExisted: true };
+  }
+  const allReservations = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'created_at', 500);
+  const total = asMoney(Math.abs(Number(invoice.total_factura) || 0));
+  let accumulated = 0;
+  const accepted = new Set();
+  for (const reservation of [...(allReservations || [])].sort((a, b) => String(a.created_at || a.created_date || '').localeCompare(String(b.created_at || b.created_date || '')) || String(a.id).localeCompare(String(b.id)))) {
+    const next = asMoney(accumulated + Math.abs(Number(reservation.amount) || 0));
+    if (next <= total + MONEY_EPSILON) {
+      accepted.add(reservation.id);
+      accumulated = next;
+    }
+  }
+  if (!accepted.has(candidate.id)) {
+    await svc.entities.InvoicePayment.delete(candidate.id).catch(() => null);
+    throw Object.assign(new Error(`El pago supera el importe todavía disponible (${Math.max(0, total - accumulated).toFixed(2)} EUR).`), { status: 409 });
+  }
+  return { payment: candidate, alreadyExisted: false };
+}
+
+async function commitPaymentPostingUnit(base44, companyId, payment, paymentPosting, user, transaction = null, transactionPatch = null) {
+  const svc = base44.asServiceRole;
+  const operation = paymentPosting?.operation;
+  if (!operation?.id) throw Object.assign(new Error('No se pudo reservar la operación contable del pago.'), { status: 409 });
+  try {
+    await updatePostingOperation(svc, operation, {
+      paymentId: payment.id,
+      bankTransactionId: transaction?.id || '',
+      stage: 'linked_records_staged',
+    });
+    const committed = await commitJournalEntry(svc, companyId, paymentPosting.entry, user.email);
+    const savedPayment = await svc.entities.InvoicePayment.update(payment.id, {
+      journal_entry_id: committed.entry.id,
+      accounting_operation_id: operation.id,
+      operation_status: 'committed',
+    });
+    const committedOperation = await updatePostingOperation(svc, operation, {
+      status: 'committed',
+      stage: transaction ? 'bank_link_pending' : 'committed',
+      journalEntryId: committed.entry.id,
+      paymentId: savedPayment.id,
+      bankTransactionId: transaction?.id || '',
+      committedAt: new Date().toISOString(),
+      lastError: '',
+    });
+    if (transaction && transactionPatch) {
+      try {
+        await svc.entities.BankTransaction.update(transaction.id, {
+          ...transactionPatch,
+          accounting_operation_id: committedOperation.id,
+        });
+      } catch (error) {
+        await svc.entities.InvoicePayment.update(savedPayment.id, { operation_status: 'recovery_required' }).catch(() => null);
+        await updatePostingOperation(svc, committedOperation, {
+          status: 'recovery_required',
+          stage: 'bank_link_failed',
+          lastError: String(error?.message || error),
+        }).catch(() => null);
+        throw error;
+      }
+      await updatePostingOperation(svc, committedOperation, { stage: 'committed' }).catch(() => null);
+    }
+    return { payment: savedPayment, entry: committed.entry, operation: committedOperation };
+  } catch (error) {
+    await svc.entities.InvoicePayment.update(payment.id, { operation_status: 'recovery_required' }).catch(() => null);
+    await updatePostingOperation(svc, operation, {
+      status: 'recovery_required',
+      stage: 'linked_unit_failed',
+      lastError: String(error?.message || error),
+    }).catch(() => null);
+    throw error;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -515,48 +626,53 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         idempotency_key: idempotencyKey,
       }, '-created_at', 1);
-      if (duplicate?.[0]) {
-        const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, Number(duplicate[0].amount), duplicate[0].payment_date, duplicate[0].method || method, idempotencyKey, user);
-        if (!duplicate[0].journal_entry_id) await base44.asServiceRole.entities.InvoicePayment.update(duplicate[0].id, { journal_entry_id: accounting.paymentPosting.entry.id });
-        const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-        return Response.json({ ok: true, duplicate: true, payment: { ...duplicate[0], journal_entry_id: accounting.paymentPosting.entry.id }, journal_entry: accounting.paymentPosting.entry, ...state });
-      }
-
+      const existingPayment = duplicate?.[0] || null;
+      const effectiveAmount = existingPayment ? asMoney(Math.abs(Number(existingPayment.amount) || 0)) : amount;
+      const effectiveDate = existingPayment?.payment_date || paymentDate;
+      const effectiveMethod = existingPayment?.method || method;
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
-      if (amount - current.outstanding > MONEY_EPSILON) {
+      const wasAlreadyVisible = existingPayment ? current.payments.some(payment => payment.id === existingPayment.id) : false;
+      if (!existingPayment && effectiveAmount - current.outstanding > MONEY_EPSILON) {
         return Response.json({
           error: `El pago supera el importe pendiente (${current.outstanding.toFixed(2)} EUR).`,
           outstanding: current.outstanding,
         }, { status: 409 });
       }
-      const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user);
-      const payment = await base44.asServiceRole.entities.InvoicePayment.create({
+      const reservation = existingPayment ? { payment: existingPayment, alreadyExisted: true } : await reserveInvoicePayment(base44, companyId, invoice, {
         company_id: companyId,
         invoice_id: invoice.id,
-        amount,
+        amount: effectiveAmount,
         currency: invoice.moneda || 'EUR',
-        payment_date: paymentDate,
-        method,
+        payment_date: effectiveDate,
+        method: effectiveMethod,
         reference: cleanText(body.reference, 160),
         notes: cleanText(body.notes),
         origin: 'manual',
-        journal_entry_id: accounting.paymentPosting.entry.id,
         idempotency_key: idempotencyKey,
         created_at: new Date().toISOString(),
         created_by: user.full_name || user.email || 'Usuario',
       });
-      const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-      await recordTimeline(base44, {
-        invoice_id: invoice.id,
-        company_id: companyId,
-        event_type: invoice.tipo === 'recibida' ? 'pago_registrado' : 'cobro_registrado',
-        event_label: invoice.tipo === 'recibida' ? 'Pago registrado' : 'Cobro registrado',
-        event_detail: `${amount.toFixed(2)} ${invoice.moneda || 'EUR'} · ${method}${body.reference ? ` · Ref. ${cleanText(body.reference, 80)}` : ''}`,
-        created_at: new Date().toISOString(),
-        created_by: user.full_name || user.email || 'Usuario',
-        origin: 'manual',
+      const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, effectiveAmount, effectiveDate, effectiveMethod, idempotencyKey, user);
+      const stagedPayment = await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, {
+        accounting_operation_id: accounting.paymentPosting.operation?.id || '',
+        operation_status: 'preparing',
+        journal_entry_id: accounting.paymentPosting.entry.id,
       });
-      return Response.json({ ok: true, payment, journal_entry: accounting.paymentPosting.entry, invoice_posting: accounting.invoicePosting.entry, ...state });
+      const completed = await commitPaymentPostingUnit(base44, companyId, stagedPayment, accounting.paymentPosting, user);
+      const state = await refreshInvoicePaymentState(base44, invoice, companyId);
+      if (!wasAlreadyVisible) {
+        await recordTimeline(base44, {
+          invoice_id: invoice.id,
+          company_id: companyId,
+          event_type: invoice.tipo === 'recibida' ? 'pago_registrado' : 'cobro_registrado',
+          event_label: invoice.tipo === 'recibida' ? 'Pago registrado' : 'Cobro registrado',
+          event_detail: `${effectiveAmount.toFixed(2)} ${invoice.moneda || 'EUR'} · ${effectiveMethod}${body.reference ? ` · Ref. ${cleanText(body.reference, 80)}` : ''}`,
+          created_at: new Date().toISOString(),
+          created_by: user.full_name || user.email || 'Usuario',
+          origin: 'manual',
+        });
+      }
+      return Response.json({ ok: true, duplicate: reservation.alreadyExisted, payment: completed.payment, journal_entry: completed.entry, invoice_posting: accounting.invoicePosting.entry, ...state });
     }
 
     if (action === 'list_reconciliation_candidates') {
@@ -644,45 +760,19 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         bank_transaction_id: transaction.id,
       }, '-created_at', 1);
-      if (previousPayment?.[0]) {
-        const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
-          base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
-        );
-        // Repara de forma idempotente una operación que hubiera guardado el pago
-        // pero se hubiera interrumpido antes de enlazar el movimiento.
-        await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
-          estado_conciliacion: 'conciliada_manual',
-          confianza_conciliacion: 'alta',
-          entidad_tipo: 'invoice',
-          entidad_id: invoice.id,
-        });
-        if (!previousPayment[0].journal_entry_id) {
-          await base44.asServiceRole.entities.InvoicePayment.update(previousPayment[0].id, { journal_entry_id: bankPosting.entry.id });
-        }
-        await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
-          journal_entry_id: bankPosting.entry.id,
-          accounting_account_id: counterpartyAccount.id,
-          accounting_account_code: counterpartyAccount.code,
-          reconciled_at: new Date().toISOString(),
-          reconciled_by: user.email,
-        });
-        const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-        return Response.json({ ok: true, duplicate: true, payment: previousPayment[0], journal_entry: bankPosting.entry, invoice_posting: posting.entry, ...state });
-      }
+      const existingPayment = previousPayment?.[0] || null;
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
-      const amount = asMoney(Math.abs(Number(transaction.importe) || 0));
+      const wasAlreadyVisible = existingPayment ? current.payments.some(payment => payment.id === existingPayment.id) : false;
+      const amount = existingPayment ? asMoney(Math.abs(Number(existingPayment.amount) || 0)) : asMoney(Math.abs(Number(transaction.importe) || 0));
       if (amount <= 0) return businessError('El movimiento no tiene un importe válido.', 409);
-      if (amount - current.outstanding > MONEY_EPSILON) {
+      if (!existingPayment && amount - current.outstanding > MONEY_EPSILON) {
         return businessError(
           `El movimiento (${amount.toFixed(2)} EUR) supera el pendiente (${current.outstanding.toFixed(2)} EUR). No se concilia automáticamente.`,
           409,
         );
       }
-      const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
-        base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
-      );
       const now = new Date().toISOString();
-      const payment = await base44.asServiceRole.entities.InvoicePayment.create({
+      const reservation = existingPayment ? { payment: existingPayment, alreadyExisted: true } : await reserveInvoicePayment(base44, companyId, invoice, {
         company_id: companyId,
         invoice_id: invoice.id,
         amount,
@@ -693,12 +783,19 @@ Deno.serve(async (req) => {
         notes: 'Registrado mediante conciliación bancaria manual.',
         origin: 'bank_reconciliation',
         bank_transaction_id: transaction.id,
-        journal_entry_id: bankPosting.entry.id,
         idempotency_key: `bank:${transaction.id}`,
         created_at: now,
         created_by: user.full_name || user.email || 'Usuario',
       });
-      await base44.asServiceRole.entities.BankTransaction.update(transaction.id, {
+      const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
+        base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
+      );
+      const stagedPayment = await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, {
+        accounting_operation_id: bankPosting.operation?.id || '',
+        operation_status: 'preparing',
+        journal_entry_id: bankPosting.entry.id,
+      });
+      const transactionPatch = {
         estado_conciliacion: 'conciliada_manual',
         confianza_conciliacion: 'alta',
         entidad_tipo: 'invoice',
@@ -710,19 +807,22 @@ Deno.serve(async (req) => {
         reconciled_by: user.email,
         contacto_id: transaction.contacto_id || null,
         notas: cleanText(`${transaction.notas ? `${transaction.notas}\n` : ''}Conciliado con factura ${invoice.numero_factura}.`, MAX_TEXT),
-      });
+      };
+      const completed = await commitPaymentPostingUnit(base44, companyId, stagedPayment, bankPosting, user, transaction, transactionPatch);
       const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-      await recordTimeline(base44, {
-        invoice_id: invoice.id,
-        company_id: companyId,
-        event_type: 'conciliacion_bancaria',
-        event_label: 'Factura conciliada',
-        event_detail: `${amount.toFixed(2)} ${transaction.moneda || invoice.moneda || 'EUR'} · ${cleanText(transaction.concepto, 120)}`,
-        created_at: now,
-        created_by: user.full_name || user.email || 'Usuario',
-        origin: 'manual',
-      });
-      return Response.json({ ok: true, payment, transaction_id: transaction.id, journal_entry: bankPosting.entry, invoice_posting: posting.entry, ...state });
+      if (!wasAlreadyVisible) {
+        await recordTimeline(base44, {
+          invoice_id: invoice.id,
+          company_id: companyId,
+          event_type: 'conciliacion_bancaria',
+          event_label: 'Factura conciliada',
+          event_detail: `${amount.toFixed(2)} ${transaction.moneda || invoice.moneda || 'EUR'} · ${cleanText(transaction.concepto, 120)}`,
+          created_at: now,
+          created_by: user.full_name || user.email || 'Usuario',
+          origin: 'manual',
+        });
+      }
+      return Response.json({ ok: true, duplicate: reservation.alreadyExisted, payment: completed.payment, transaction_id: transaction.id, journal_entry: completed.entry, invoice_posting: posting.entry, ...state });
     }
 
     return Response.json({ error: 'Acción no soportada.' }, { status: 400 });

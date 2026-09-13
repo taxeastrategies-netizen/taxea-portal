@@ -71,19 +71,12 @@
     },
     "accountingFramework": {
       "type": "string",
-      "enum": [
-        "pgc_normal",
-        "pgc_pymes"
-      ],
+      "enum": ["pgc_normal", "pgc_pymes"],
       "default": "pgc_pymes"
     },
     "annualAccountsModel": {
       "type": "string",
-      "enum": [
-        "normal",
-        "abreviado",
-        "pyme"
-      ],
+      "enum": ["normal", "abreviado", "pyme"],
       "default": "pyme"
     },
     "microenterpriseCriteria": {
@@ -98,10 +91,7 @@
     },
     "frameworkReviewStatus": {
       "type": "string",
-      "enum": [
-        "pendiente_asesor",
-        "validado_asesor"
-      ],
+      "enum": ["pendiente_asesor", "validado_asesor"],
       "default": "pendiente_asesor"
     },
     "frameworkReviewReason": {

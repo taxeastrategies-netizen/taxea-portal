@@ -67,12 +67,7 @@
     },
     "closureStatus": {
       "type": "string",
-      "enum": [
-        "open",
-        "review_ready",
-        "closed",
-        "reopened"
-      ],
+      "enum": ["open", "review_ready", "closed", "reopened"],
       "default": "open"
     },
     "closedAt": {
@@ -90,9 +85,7 @@
     },
     "closureChecks": {
       "type": "array",
-      "items": {
-        "type": "object"
-      }
+      "items": { "type": "object" }
     },
     "reopenedAt": {
       "type": "string",
@@ -113,31 +106,19 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "user_condition": { "role": "admin" }
     },
     "read": {
       "$or": [
-        {
-          "data.companyId": "{{user.data.company_id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
+        { "data.companyId": "{{user.data.company_id}}" },
+        { "user_condition": { "role": "admin" } }
       ]
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "user_condition": { "role": "admin" }
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "user_condition": { "role": "admin" }
     }
   }
 }

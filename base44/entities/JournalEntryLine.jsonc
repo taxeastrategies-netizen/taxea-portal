@@ -200,6 +200,9 @@
     },
     "matchedAt": {
       "type": "string"
+    },
+    "accountingOperationId": {
+      "type": "string"
     }
   },
   "required": [

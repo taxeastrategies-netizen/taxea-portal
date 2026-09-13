@@ -22,6 +22,8 @@ export default function PeriodosContables({ companyId }) {
   const [lockDate, setLockDate] = useState(`${currentYear}-12-31`);
   const [unlockReason, setUnlockReason] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [reopenConfirmation, setReopenConfirmation] = useState('');
+  const [reopenReason, setReopenReason] = useState('');
   const [preview, setPreview] = useState(null);
   const [actionError, setActionError] = useState('');
   const queryClient = useQueryClient();
@@ -62,6 +64,13 @@ export default function PeriodosContables({ companyId }) {
     setConfirmation('');
     setPreview(null);
   };
+  const reopenYear = async () => {
+    await mutation.mutateAsync({ action: 'reopen_fiscal_year', year: Number(year), confirmation: reopenConfirmation, reason: reopenReason, apply: true });
+    toast.success(`Ejercicio ${year} reabierto mediante contraasientos auditables.`);
+    setReopenConfirmation('');
+    setReopenReason('');
+    setPreview(null);
+  };
   const availableYears = useMemo(() => [...new Set([
     currentYear - 2,
     currentYear - 1,
@@ -74,6 +83,8 @@ export default function PeriodosContables({ companyId }) {
     setLockDate(`${nextYear}-12-31`);
     setPreview(null);
     setActionError('');
+    setReopenConfirmation('');
+    setReopenReason('');
   };
 
   if (!companyId) return <div className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">Selecciona una empresa.</div>;
@@ -126,6 +137,13 @@ export default function PeriodosContables({ companyId }) {
               {(preview.blockers || []).map(item => <p className="mt-1" key={item}>• {item}</p>)}
             </div>}
             {preview?.canClose && <div className="space-y-2"><Input placeholder={`Escribe CERRAR ${year}`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><Button variant="destructive" onClick={closeYear} disabled={mutation.isPending || confirmation.trim().toUpperCase() !== `CERRAR ${year}`}>Cerrar ejercicio</Button></div>}
+            {selected.status === 'cerrado' && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-900">Reapertura auditada</p>
+              <p className="text-[11px] text-amber-800">No borra ni reescribe asientos confirmados. Revierte apertura, cierre y regularización con nuevos contraasientos. Se bloqueará si el ejercicio siguiente ya tiene actividad.</p>
+              <Input placeholder="Motivo documentado obligatorio" value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} />
+              <Input placeholder={`Escribe REABRIR ${year}`} value={reopenConfirmation} onChange={(event) => setReopenConfirmation(event.target.value)} />
+              <Button variant="outline" onClick={reopenYear} disabled={mutation.isPending || !reopenReason.trim() || reopenConfirmation.trim().toUpperCase() !== `REABRIR ${year}`}><UnlockKeyhole className="mr-2 h-4 w-4" />Reabrir con contraasientos</Button>
+            </div>}
           </div>
         </div>
       )}
