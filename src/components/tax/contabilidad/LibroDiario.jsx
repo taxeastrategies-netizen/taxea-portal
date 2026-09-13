@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 import JournalEntryForm from './JournalEntryForm';
 
 const fmt = n => Number(n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** @param {any} value */
+const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo completar la operación.';
 const STATUS_CFG = {
   confirmado: { label: 'Confirmado', icon: CheckCircle, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
   pendiente_revision: { label: 'Pdte. revisión', icon: Clock, color: 'text-amber-600 bg-amber-50 border-amber-200' },
@@ -43,13 +45,13 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
 
   const confirmEntry = async entry => {
     try { await base44.functions.invoke('accountingOperations', { action: 'confirm', companyId, entryId: entry.id }); refresh(); }
-    catch (error) { alert(error?.response?.data?.error || error?.message || 'No se pudo confirmar el asiento.'); }
+    catch (error) { alert(errorMessage(error)); }
   };
   const annulEntry = async entry => {
     const reason = prompt(entry.status === 'confirmado' ? 'Motivo de reversión del asiento:' : 'Motivo de anulación del asiento:');
     if (!reason?.trim()) return;
     try { await base44.functions.invoke('accountingOperations', { action: 'annul', companyId, entryId: entry.id, reason: reason.trim() }); refresh(); }
-    catch (error) { alert(error?.response?.data?.error || error?.message || 'No se pudo anular el asiento.'); }
+    catch (error) { alert(errorMessage(error)); }
   };
 
   const duplicateEntry = async entry => {
@@ -63,7 +65,7 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
       if (response.data?.error) throw new Error(response.data.error);
       refresh();
     } catch (error) {
-      alert(error?.response?.data?.error || error?.message || 'No se pudo duplicar el asiento.');
+      alert(errorMessage(error));
     }
   };
   return <div className="space-y-4">
@@ -81,7 +83,7 @@ export default function LibroDiario({ companyId, user, initialSource = 'all' }) 
     </div>
     {quality && (quality.entriesWithoutLines > 0 || quality.unbalancedEntries > 0 || quality.unresolvedLines > 0) && <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"><AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />Control de integridad: {quality.entriesWithoutLines} asientos sin líneas, {quality.unbalancedEntries} descuadrados y {quality.unresolvedLines} líneas históricas sin cabecera. Se mantienen fuera de estados contables.</div>}
     <div className="rounded-xl border border-border bg-card overflow-hidden">
-      {query.isLoading ? <div className="p-12 text-center text-sm text-muted-foreground">Cargando diario...</div> : query.isError ? <div className="p-6 text-sm text-red-700">{query.error?.response?.data?.error || query.error?.message}</div> : !entries.length ? <div className="p-12 text-center space-y-2"><BookOpen className="w-9 h-9 mx-auto text-muted-foreground/40" /><p className="font-semibold">No hay asientos con estos filtros</p></div> : <div className="divide-y divide-border">{entries.map(entry => <div key={entry.id}>
+      {query.isLoading ? <div className="p-12 text-center text-sm text-muted-foreground">Cargando diario...</div> : query.isError ? <div className="p-6 text-sm text-red-700">{errorMessage(query.error)}</div> : !entries.length ? <div className="p-12 text-center space-y-2"><BookOpen className="w-9 h-9 mx-auto text-muted-foreground/40" /><p className="font-semibold">No hay asientos con estos filtros</p></div> : <div className="divide-y divide-border">{entries.map(entry => <div key={entry.id}>
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/20 cursor-pointer" onClick={() => setExpanded(expanded === entry.id ? '' : entry.id)}>
           <div className="flex-1 min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs font-semibold text-primary">{entry.entryNumber || '—'}</span><span className="text-sm font-medium truncate">{entry.description}</span><StatusBadge status={entry.status} />{entry.reversalEntryId && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700">Revertido</span>}{!entry.isBalanced && <AlertTriangle className="w-3.5 h-3.5 text-red-500" />}</div><p className="text-[11px] text-muted-foreground mt-0.5">{entry.date || '—'} · {entry.type || 'manual'} · {entry.source || 'manual'}{entry.documentId ? ` · doc. ${entry.documentId.slice(-8)}` : ''}</p></div>
           <div className="text-right text-xs font-mono"><p>D {fmt(entry.totalDebit)}</p><p>H {fmt(entry.totalCredit)}</p></div>
