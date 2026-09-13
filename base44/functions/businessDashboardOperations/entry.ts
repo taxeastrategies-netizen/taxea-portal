@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { accountingData, buildReports, fetchAll } from './accountingReportEngine.ts';
+import { reconcileFinancialSources } from './financialSourceTruth.js';
 
 const clean = (value: unknown) => String(value ?? '').trim();
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -13,11 +14,20 @@ const outstanding = (invoice: any) => {
   return Math.max(0, money(Number(invoice?.total_factura || invoice?.total || 0) - Number(invoice?.importe_pagado || 0)));
 };
 
-function authorize(user: any, companyId: string) {
-  if (privileged(user)) return;
-  if (clean(user?.data?.company_id) !== companyId) {
-    throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
-  }
+async function authorize(svc: any, user: any, companyId: string) {
+  const company = await svc.entities.Company.get(companyId).catch(() => null);
+  if (!company) throw Object.assign(new Error('Empresa no encontrada.'), { status: 404 });
+  const role = roleOf(user);
+  const email = clean(user?.email).toLowerCase();
+  const authorizedEmails = Array.isArray(company.usuarios_autorizados)
+    ? company.usuarios_autorizados.map((value: unknown) => clean(value).toLowerCase())
+    : [];
+  const allowed = ['admin', 'super_admin'].includes(role)
+    || clean(user?.data?.company_id || user?.company_id) === companyId
+    || (email && clean(company.owner_email).toLowerCase() === email)
+    || (email && authorizedEmails.includes(email));
+  if (!allowed) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
+  return company;
 }
 
 async function safeFetch(entity: any, query: any, sort = '-created_date', max = 100000) {
@@ -233,9 +243,9 @@ Deno.serve(async (req) => {
     const year = Number(body.year || new Date().getUTCFullYear());
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
     if (year < 2000 || year > 2100) return Response.json({ error: 'Ejercicio no valido.' }, { status: 400 });
-    authorize(user, companyId);
     if (clean(body.action || 'summary') !== 'summary') return Response.json({ error: 'Accion no soportada.' }, { status: 400 });
     const svc = base44.asServiceRole;
+    await authorize(svc, user, companyId);
     const [accounting, invoices, payments, expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications] = await Promise.all([
       accountingData(svc, companyId, { year, includeBusinessData: false }),
       fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 100000),
@@ -254,7 +264,13 @@ Deno.serve(async (req) => {
       safeFetch(svc.entities.Document, { company_id: companyId }, 'created_date', 100000),
       user.email ? safeFetch(svc.entities.Notification, { company_id: companyId, destinatario_email: user.email }, '-created_date', 1000) : Promise.resolve([]),
     ]);
-    return Response.json({ success: true, companyId, ...buildBusinessSummary({ accounting, invoices, payments, expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications }, year, user) });
+    const financialSources = reconcileFinancialSources(invoices, expenses);
+    return Response.json({
+      success: true,
+      companyId,
+      sourceTruth: financialSources.sourceTruth,
+      ...buildBusinessSummary({ accounting, invoices: financialSources.invoices, payments, expenses: financialSources.expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications }, year, user),
+    });
   } catch (error) {
     console.error('[businessDashboardOperations]', error?.message || error);
     return Response.json({ error: error?.message || 'No se pudo construir el dashboard.' }, { status: error?.status || 500 });
