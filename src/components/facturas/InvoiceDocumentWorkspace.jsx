@@ -503,8 +503,6 @@ export default function InvoiceDocumentWorkspace({
           <InvoiceOperationalSidePanel
             invoice={invoice}
             company={company}
-            user={user}
-            isAdmin={isAdmin}
             onClose={onClose}
             onSend={onSend}
             onRefresh={onRefresh}
