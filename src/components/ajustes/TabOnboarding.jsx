@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
 import { CheckCircle2, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
 
 const STEPS = [
   { id: 'perfil', label: 'Completar perfil de empresa', desc: 'Razón social, NIF y dirección fiscal', path: '/ajustes', check: (c) => !!(c?.razon_social && c?.nif_cif && c?.direccion_fiscal) },
@@ -20,12 +20,9 @@ export default function TabOnboarding({ company }) {
 
   useEffect(() => {
     if (!company) return;
-    Promise.all([
-      base44.entities.Invoice.filter({ company_id: company.id }),
-      base44.entities.Expense.filter({ company_id: company.id }),
-    ]).then(([inv, exp]) => {
-      setInvoiceCount(inv.length);
-      setExpenseCount(exp.length);
+    fetchCompanyFinancials(company.id).then(({ invoices, expenses }) => {
+      setInvoiceCount(invoices.length);
+      setExpenseCount(expenses.length);
     });
   }, [company]);
 
