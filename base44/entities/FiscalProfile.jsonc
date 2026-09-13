@@ -110,6 +110,26 @@
       ],
       "default": "no_aplica"
     },
+    "irpfImputationMethod": {
+      "type": "string",
+      "enum": [
+        "accrual",
+        "cash"
+      ],
+      "default": "accrual"
+    },
+    "irpfImputationMethodConfirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "irpfCashMethodEffectiveFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "irpfCashMethodMinimumUntil": {
+      "type": "string",
+      "format": "date"
+    },
     "defaultWithholdingRate": {
       "type": "number",
       "default": 0
@@ -131,6 +151,21 @@
       "default": 0
     },
     "model130ExemptionConfirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "model130TerritorialRelief": {
+      "type": "string",
+      "enum": [
+        "none",
+        "ceuta",
+        "melilla",
+        "la_palma_2026",
+        "mixed"
+      ],
+      "default": "none"
+    },
+    "model130TerritorialReliefConfirmed": {
       "type": "boolean",
       "default": false
     },
