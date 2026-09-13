@@ -69,9 +69,9 @@ export default function TaxDashboard({ onNavigate }) {
     // Check for next obligation
     const proxObl = oblPendientes
       .filter(o => o.fecha_limite && new Date(o.fecha_limite) > now)
-      .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))[0];
+      .sort((a, b) => new Date(a.fecha_limite).getTime() - new Date(b.fecha_limite).getTime())[0];
     if (proxObl) {
-      const dias = Math.ceil((new Date(proxObl.fecha_limite) - now) / 86400000);
+      const dias = Math.ceil((new Date(proxObl.fecha_limite).getTime() - now.getTime()) / 86400000);
       if (dias <= 15) staticAlerts.push({ tipo: 'amarillo', texto: `Próximo vencimiento fiscal en ${dias} días: ${proxObl.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' ')}.`, accion: 'obligaciones' });
     }
 
@@ -97,7 +97,7 @@ export default function TaxDashboard({ onNavigate }) {
     const factPendientes = monthKPIs.emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const oblPendientes = obligations.filter(o => !['finalizado','presentado','pagado','domiciliado'].includes(o.estado));
     const proxObl = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) > new Date())
-      .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))[0];
+      .sort((a, b) => new Date(a.fecha_limite).getTime() - new Date(b.fecha_limite).getTime())[0];
 
     const quotesPendientes = quotes.filter(q => ['pendiente','enviado','borrador'].includes(q.estado) || !q.estado);
     return {
@@ -163,7 +163,7 @@ export default function TaxDashboard({ onNavigate }) {
       ...expenses.slice(0, 10).map(e => ({ tipo: 'gasto', label: e.concepto || 'Gasto', sub: `${e.proveedor_cliente || '—'} · ${e.total?.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, date: new Date(e.created_date), color: 'text-red-500', bg: 'bg-red-50', icon: TrendingDown })),
       ...obligations.slice(0, 5).map(o => ({ tipo: 'obligacion', label: o.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' '), sub: `${o.periodo || ''} · ${o.estado}`, date: new Date(o.created_date), color: 'text-amber-500', bg: 'bg-amber-50', icon: Calendar })),
     ];
-    return items.sort((a, b) => b.date - a.date).slice(0, 8);
+    return items.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 8);
   }, [invoices, expenses, obligations]);
 
   if (loadingCompany || loading || finLoading) return (
@@ -466,7 +466,7 @@ export default function TaxDashboard({ onNavigate }) {
               const now = new Date();
               const isOk = ['finalizado','presentado','pagado','domiciliado'].includes(obl.estado);
               const isVencida = !isOk && obl.fecha_limite && new Date(obl.fecha_limite) < now;
-              const isProxima = !isOk && !isVencida && obl.fecha_limite && (new Date(obl.fecha_limite) - now) / 86400000 <= 15;
+              const isProxima = !isOk && !isVencida && obl.fecha_limite && (new Date(obl.fecha_limite).getTime() - now.getTime()) / 86400000 <= 15;
               return (
                 <div key={obl.id} className="flex items-center gap-2.5 py-1.5 px-3 rounded-lg border border-border/60 bg-secondary/20">
                   {isOk ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" /> :
@@ -520,7 +520,7 @@ export default function TaxDashboard({ onNavigate }) {
   );
 }
 
-function KPICard({ label, value, icon: Icon, color, bg, alert, onClick }) {
+function KPICard({ label, value, icon: Icon, color, bg, alert = false, onClick }) {
   return (
     <div
       onClick={onClick}
