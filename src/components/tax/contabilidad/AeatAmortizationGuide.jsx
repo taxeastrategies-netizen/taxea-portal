@@ -61,7 +61,7 @@ export default function AeatAmortizationGuide({ onSelect }) {
   const [table, setTable] = useState('lis');
   const [search, setSearch] = useState('');
   const rows = table === 'lis' ? LIS_ROWS : EDS_ROWS;
-  const visible = useMemo(() => rows.filter((row) => row[1].toLowerCase().includes(search.toLowerCase())), [rows, search]);
+  const visible = useMemo(() => rows.filter((row) => String(row[1]).toLowerCase().includes(search.toLowerCase())), [rows, search]);
 
   return (
     <details className="rounded-xl border border-border bg-card">
