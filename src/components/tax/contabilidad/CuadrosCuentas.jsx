@@ -299,7 +299,7 @@ export default function CuadrosCuentas({ companyId, user }) {
       </div>
 
       {selectedAccount && <MayorCuenta account={selectedAccount} companyId={companyId} onClose={() => setSelectedAccount(null)} />}
-      {showNewEntry && <JournalEntryForm open accounts={accounts} companyId={companyId} user={user} onClose={() => setShowNewEntry(false)} onSaved={load} />}
+      {showNewEntry && <JournalEntryForm open accounts={accounts} companyId={companyId} onClose={() => setShowNewEntry(false)} onSaved={load} />}
     </div>
   );
 }
