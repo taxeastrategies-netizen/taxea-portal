@@ -1,6 +1,31 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import * as XLSX from 'npm:xlsx@0.18.5';
 
+const IMPORT_APP_ID = '6a00fec50cc522a74ddde4b2';
+const IMPORT_MEDIA_HOST = 'media.base44.com';
+const IMPORT_FILE_PREFIX = `/files/public/${IMPORT_APP_ID}/`;
+const MAX_IMPORT_BYTES = 30 * 1024 * 1024;
+
+function validateImportFileUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value || ''));
+  } catch {
+    throw new Error('La URL del fichero contable no es válida.');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) {
+    throw new Error('La URL del fichero contable debe usar HTTPS sin credenciales ni puerto personalizado.');
+  }
+  if (url.hostname.toLowerCase() !== IMPORT_MEDIA_HOST) {
+    throw new Error('El fichero contable debe proceder del almacenamiento autorizado de Taxea Portal.');
+  }
+  if (!url.pathname.startsWith(IMPORT_FILE_PREFIX) || !url.pathname.toLowerCase().endsWith('.xlsx')) {
+    throw new Error('La ruta del fichero contable no pertenece a esta aplicación o no es un Excel XLSX.');
+  }
+  url.hash = '';
+  return url.toString();
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -15,10 +40,31 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'file_url and companyId required' }, { status: 400 });
     }
 
-    // Fetch and parse the Excel file
-    const resp = await fetch(file_url);
+    let importFileUrl;
+    try {
+      importFileUrl = validateImportFileUrl(file_url);
+    } catch (error) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+
+    // Fetch only from the app's fixed media origin. Redirects stay disabled to prevent SSRF bypasses.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    let resp;
+    try {
+      resp = await fetch(importFileUrl, { redirect: 'error', signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!resp.ok) throw new Error(`Failed to fetch file: ${resp.status}`);
+    const declaredLength = Number(resp.headers.get('content-length') || 0);
+    if (declaredLength > MAX_IMPORT_BYTES) {
+      return Response.json({ error: 'El fichero contable supera el límite de 30 MB.' }, { status: 413 });
+    }
     const arrayBuffer = await resp.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMPORT_BYTES) {
+      return Response.json({ error: 'El fichero contable supera el límite de 30 MB.' }, { status: 413 });
+    }
     const workbook = XLSX.read(new Uint8Array(arrayBuffer), { cellDates: true });
 
     const batch = `imp_${new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')}`;
