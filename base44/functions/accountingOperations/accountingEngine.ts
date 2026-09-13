@@ -712,4 +712,3 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   }
   return { ...created, proposal };
 }
-
