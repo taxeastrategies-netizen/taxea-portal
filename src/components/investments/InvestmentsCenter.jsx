@@ -12,6 +12,8 @@ import PartnerDashboard from './PartnerDashboard';
 import TreasuryYield from './TreasuryYield';
 import InvestSimulator from './InvestSimulator';
 import AdminInvestConsole from './AdminInvestConsole';
+import { fetchCompanyFinancials } from '@/lib/financialDataService';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
 
 const TABS = [
   { id: 'liquidez',   label: 'Exceso liquidez',     icon: Zap },
@@ -36,20 +38,22 @@ export default function InvestmentsCenter() {
   const [clicks, setClicks] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     setLoading(true);
-    const [pts, cls, banks, inv] = await Promise.all([
+    const [pts, cls, banks, financialData] = await Promise.all([
       base44.entities.InvestmentPartner.list('-orden', 100),
       base44.entities.ReferralClick.list('-created_date', 500),
       companyId ? base44.entities.BankAccount.filter({ company_id: companyId }) : Promise.resolve([]),
-      companyId ? base44.entities.Invoice.filter({ company_id: companyId }) : Promise.resolve([]),
+      companyId ? fetchCompanyFinancials(companyId) : Promise.resolve({ invoices: [], expenses: [] }),
     ]);
     setPartners(pts || []);
     setClicks(cls || []);
     setBankAccounts(banks || []);
-    setInvoices(inv || []);
+    setInvoices(financialData.invoices || []);
+    setExpenses(financialData.expenses || []);
     setLoading(false);
   };
 
@@ -57,11 +61,11 @@ export default function InvestmentsCenter() {
 
   const liquidez = useMemo(() => {
     const saldo = bankAccounts.reduce((s, b) => s + (b.saldo_disponible || 0), 0);
-    const gastosM = invoices.filter(i => i.tipo === 'recibida').reduce((s, i) => s + (i.total_factura || 0), 0) / 12;
+    const gastosM = calculateFinancialKPIs(invoices, expenses).totalGastos / 12;
     const minOperativa = gastosM * 3;
     const exceso = Math.max(0, saldo - minOperativa);
     return { saldo, minOperativa, exceso, gastosM };
-  }, [bankAccounts, invoices]);
+  }, [bankAccounts, invoices, expenses]);
 
   const affiliateKpis = useMemo(() => {
     const totalClicks = clicks.filter(c => c.tipo_evento === 'click').length;
