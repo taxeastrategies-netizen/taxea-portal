@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-const RULESET = 'taxea-fiscal-es-2026.09.09-v1';
+const RULESET = 'taxea-fiscal-es-2026.09.12-v2';
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? '').trim();
 const clamp = (value: unknown, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
@@ -90,6 +90,7 @@ const MODEL_CATALOG = [
   ['115', 'Retenciones por alquiler urbano', 'AEAT', 'trimestral'], ['180', 'Resumen anual modelo 115', 'AEAT', 'anual'],
   ['123', 'Retenciones de capital mobiliario y otras rentas', 'AEAT', 'trimestral'], ['193', 'Resumen anual modelo 123', 'AEAT', 'anual'],
   ['200', 'Impuesto sobre Sociedades', 'AEAT', 'anual'], ['202', 'Pago fraccionado Impuesto sobre Sociedades', 'AEAT', 'segun_modelo'],
+  ['232', 'Operaciones vinculadas y paraísos fiscales', 'AEAT', 'anual'],
   ['210', 'IRNR sin establecimiento permanente', 'AEAT', 'segun_modelo'], ['216', 'Retenciones IRNR', 'AEAT', 'trimestral'], ['296', 'Resumen anual modelo 216', 'AEAT', 'anual'],
   ['400', 'Declaracion censal IGIC', 'ATC', 'segun_modelo'], ['412', 'Autoliquidacion ocasional IGIC', 'ATC', 'ocasional'],
   ['414', 'Solicitud de devolucion IGIC a no establecidos', 'ATC', 'segun_modelo'],
@@ -100,11 +101,17 @@ const MODEL_CATALOG = [
   ['424', 'IGIC comerciantes minoristas', 'ATC', 'segun_modelo'], ['425', 'Resumen anual IGIC', 'ATC', 'anual'],
 ];
 
-function authorize(user: any, companyId: string) {
+function authorize(user: any, companyId: string, company: any) {
   const role = clean(user?.role).toLowerCase();
-  const own = clean(user?.data?.company_id);
-  if (['admin', 'super_admin', 'advisor', 'asesor'].includes(role)) return;
-  if (!own || own !== companyId) throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
+  const own = clean(user?.data?.company_id || user?.company_id);
+  if (['admin', 'super_admin'].includes(role)) return;
+  const email = clean(user?.email).toLowerCase();
+  const owner = clean(company?.owner_email).toLowerCase();
+  const authorized = Array.isArray(company?.usuarios_autorizados)
+    ? company.usuarios_autorizados.map((value: unknown) => clean(value).toLowerCase())
+    : [];
+  if (own === companyId || (email && owner === email) || (email && authorized.includes(email))) return;
+  throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
 
 function recommendedObligations(profile: any, activities: any[]) {
@@ -241,8 +248,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
-    authorize(user, companyId);
     const svc = base44.asServiceRole;
+    const company = await svc.entities.Company.get(companyId).catch(() => null);
+    if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+    authorize(user, companyId, company);
     const action = clean(body.action || 'bundle');
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
@@ -262,7 +271,7 @@ Deno.serve(async (req) => {
 
     if (action === 'save_profile') {
       const data = body.profile || {};
-      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes'];
+      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes'];
       const payload: any = { company_id: companyId, active: data.active !== false, ruleSetVersion: RULESET, reviewedAt: new Date().toISOString(), reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
       if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
@@ -333,5 +342,4 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.message || 'Error fiscal interno.' }, { status: error?.status || 500 });
   }
 });
-
 
