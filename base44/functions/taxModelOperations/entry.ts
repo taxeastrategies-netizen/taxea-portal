@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { MODEL200_LAYOUT } from './model200Layout.ts';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.13-v23';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.13-v24';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -12,10 +13,10 @@ const DEFINITIONS: Record<string, any> = {
   '180': { name: 'Resumen anual de arrendamientos urbanos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAP/1732/2014 - diseño vigente ejercicio 2023+', designYear: '2023+', officialExport: true, exportMode: 'aeat_record_design' },
   '190': { name: 'Resumen anual de trabajo y actividades económicas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Taxea propone automáticamente nóminas A y profesionales G y permite completar manualmente todas las claves A-L, subclaves, percepciones en especie, incapacidad y distribución foral del diseño 2025.' },
   '193': { name: 'Resumen anual de capital mobiliario y otras rentas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1430/2025', designYear: '2025', officialExport: true, exportMode: 'aeat_record_design', designWarning: 'Incluye registros de perceptor y, cuando proceda, el anexo de relación de gastos del artículo 26.1.a LIRPF conforme al diseño 2025.' },
-  '200': { name: 'Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'anual', kind: 'corporate_tax', design: 'Sociedades WEB y diseño de registro AEAT 2025', designYear: '2025', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'El modelo 200 no se obtiene solo de facturas: requiere cierre contable, balances, ajustes extracontables, bases negativas, deducciones y régimen societario. Taxea prepara la conciliación contable-fiscal; la presentación debe completarse y validarse en Sociedades WEB.' },
+  '200': { name: 'Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'anual', kind: 'corporate_tax', design: 'DR200e25 v1.02 · actualización 19-06-2026', designYear: '2025', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'El modelo 200 no se obtiene solo de facturas: requiere cierre contable, balances, ajustes extracontables, BIN, deducciones y régimen societario. Taxea genera el diseño oficial 2025 únicamente después de confirmar el mapa de casillas y páginas aplicable.' },
   '202': { name: 'Pago fraccionado del Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'abril/octubre/diciembre', kind: 'corporate_tax_payment', design: 'DR202e25 v1.3 · 2025 y siguientes · actualización 14-07-2026', designYear: '2025+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', periods: ['1P', '2P', '3P'], designWarning: 'La base depende de la modalidad del artículo 40.2 o 40.3 LIS y de magnitudes societarias confirmadas. Taxea genera las páginas oficiales 01 y 02, pero no infiere la modalidad, el tipo ni los ajustes societarios únicamente por las facturas.' },
   '216': { name: 'Retenciones e ingresos a cuenta de no residentes', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'non_resident_withholding', design: 'Diseño de registro AEAT modelo 216 · versión 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'Incluye rentas IRNR satisfechas a no residentes, también determinadas rentas exentas o exceptuadas de retención. Cada perceptor debe documentarse con país, clave de renta y motivo de exención o convenio; el fichero oficial contiene la autoliquidación agregada.' },
-  '232': { name: 'Operaciones vinculadas y territorios no cooperativos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Formulario modelo 232 AEAT', designYear: '2025+', officialExport: false, handoffExport: true, exportMode: 'aeat_guided_packet', designWarning: 'La obligación y los umbrales dependen de la vinculación, el tipo y conjunto de operaciones, patent box y territorios no cooperativos. Solo se incorporan registros expresamente clasificados y revisados.' },
+  '232': { name: 'Operaciones vinculadas y territorios no cooperativos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 232 v1.4', designYear: '2016+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'La obligación y los umbrales dependen de la vinculación, el tipo y conjunto de operaciones, patent box y territorios no cooperativos. El fichero oficial solo incorpora registros expresamente clasificados y revisados.' },
   '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 296 · ejercicio 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', designWarning: 'Taxea concilia los perceptores del 216 y genera los registros tipo 1 y 2 de 500 posiciones. Personalidad, naturaleza, subclave, residencia, fecha de devengo y supuestos especiales deben confirmarse; los anexos A, B o F se señalan como revisión específica cuando procedan.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true, designWarning: 'Taxea genera las páginas 1 y 3 y, cuando existen actividades de IVA simplificado revisadas, las páginas 2 necesarias del diseño 2026. Las magnitudes de módulos deben proceder de la Orden anual y quedar confirmadas; el régimen especial del grupo de entidades se declara mediante 322/353, no mediante 303.' },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
@@ -215,8 +216,8 @@ const GENERIC_DECLARABLE_FIELDS: Record<string, { text: string[]; numeric: strin
     numeric: ['amount','rectificationAmount','originalAmount'], boolean: ['rectification','specialDataConfirmed'],
   },
   '232': {
-    text: ['relatedPartyTaxId','relatedPartyName','country','relationType','operationType','valuationMethod','incomePayment','operationDate','category','collectiveOperationId'],
-    numeric: ['amount','netAmount'], boolean: ['sameValuationMethod','specialDataConfirmed'],
+    text: ['relatedPartyTaxId','relatedPartyName','country','countryOrProvinceCode','entityTypeKey','relationType','operationType','valuationMethod','incomePayment','operationDate','category','collectiveOperationId','operationDescription','holdingType'],
+    numeric: ['amount','netAmount','acquisitionValue','participationRate'], boolean: ['sameValuationMethod','specialDataConfirmed'],
   },
 };
 
@@ -1726,7 +1727,8 @@ function calculate200(data: any, b: any, adjustments: any) {
   const credits = Math.max(0, money(adjustments.taxCredits));
   const netTax = money(Math.max(0, grossTax - credits));
   const withholdings = Math.max(0, money(adjustments.withholdings));
-  const payments = Math.max(0, money(adjustments.instalmentPayments));
+  const splitPayments=[money(adjustments.instalmentPayment1),money(adjustments.instalmentPayment2),money(adjustments.instalmentPayment3)];
+  const payments = Math.max(0, splitPayments.some(amount=>amount!==0)?money(splitPayments.reduce((sum,amount)=>sum+amount,0)):money(adjustments.instalmentPayments));
   const previous = Math.max(0, money(adjustments.previousSamePeriodResult));
   const result = money(netTax - withholdings - payments - previous);
   const fields: any[] = [], revenueIds = revenueLines.map((line: any) => `JournalEntryLine:${line.id}`), expenseIds = expenseLines.map((line: any) => `JournalEntryLine:${line.id}`);
@@ -1745,8 +1747,11 @@ function calculate200(data: any, b: any, adjustments: any) {
   addField(fields, 'RESULTADO', 'Resultado de la conciliación para Sociedades WEB', result, [], 'Liquidación');
   if (!lines.length) data.warnings.push('No hay asientos confirmados y cuadrados del período para iniciar la conciliación del modelo 200.');
   if (!taxRate) data.warnings.push('Falta confirmar el tipo efectivo aplicable del Impuesto sobre Sociedades.');
-  data.warnings.push('El borrador 200 es una conciliación de control: deben completarse balance, pérdidas y ganancias, estados patrimoniales y páginas específicas en Sociedades WEB.');
-  return { fields, result, details: [{ type: 'conciliacion_sociedades', accountingRevenue, accountingExpense, entries: validEntries.size, manualDataRequired: true }] };
+  if(!/^\d{4}$/.test(clean(adjustments.cnae||data.company?.cnae))) data.warnings.push('Falta confirmar el CNAE-2025 de cuatro dígitos del modelo 200.');
+  if(!booleanValue(adjustments.officialDataReviewed)) data.warnings.push('El mapa de páginas y casillas del modelo 200 todavía no está marcado como revisado por el asesor.');
+  if(clean(adjustments.statementDiscriminator||'0')!=='0'&&!clean(adjustments.model200PageCodesText)) data.warnings.push('Las entidades con formato contable especial deben indicar expresamente las páginas aplicables de su discriminante.');
+  data.warnings.push('El fichero 200 exige revisar balance, pérdidas y ganancias, estados patrimoniales, conciliación y anexos aplicables antes de exportarlo.');
+  return { fields, result, details: [{ type: 'conciliacion_sociedades', accountingRevenue, accountingExpense, entries: validEntries.size, manualDataRequired: true }], adjustmentsSnapshot: adjustments };
 }
 
 function calculate202(data: any, _b: any, adjustments: any) {
@@ -1830,16 +1835,28 @@ function calculate202(data: any, _b: any, adjustments: any) {
   return { fields, result, details: [{ type: 'pago_fraccionado_sociedades', method, officialDesign: 'DR202e25-v1.3', manualDataRequired: true }], adjustmentsSnapshot: adjustments };
 }
 
-function calculate232(data: any, b: any) {
+function calculate232(data: any, b: any, adjustments: any) {
   const records = declarableRows(data, '232', b, true), fields: any[] = [], ids = records.map(manualSourceId);
-  const groups = ['related','patent_box','tax_haven'].map(category => ({ category, rows: records.filter((record: any) => clean(record.payload?.category || 'related') === category) }));
+  const groups = ['related','patent_box','tax_haven','tax_haven_holding'].map(category => ({ category, rows: records.filter((record: any) => clean(record.payload?.category || 'related') === category) }));
   addField(fields, 'REGISTROS', 'Operaciones individualizadas', records.length, ids, 'Resumen');
   addField(fields, 'VINCULADAS', 'Importe de operaciones vinculadas', groups[0].rows.reduce((sum: number, record: any) => sum + money(record.payload?.amount), 0), groups[0].rows.map(manualSourceId), 'Operaciones vinculadas');
   addField(fields, 'PATENT_BOX', 'Importe de reducción por cesión de intangibles', groups[1].rows.reduce((sum: number, record: any) => sum + money(record.payload?.amount), 0), groups[1].rows.map(manualSourceId), 'Patent box');
   addField(fields, 'PARAISOS', 'Importe de operaciones con territorios no cooperativos', groups[2].rows.reduce((sum: number, record: any) => sum + money(record.payload?.amount), 0), groups[2].rows.map(manualSourceId), 'Territorios no cooperativos');
+  addField(fields, 'TENENCIAS', 'Valor de adquisición de tenencias en territorios no cooperativos', groups[3].rows.reduce((sum: number, record: any) => sum + money(record.payload?.acquisitionValue ?? record.payload?.amount), 0), groups[3].rows.map(manualSourceId), 'Tenencia de valores');
   if (!records.length) data.warnings.push('No hay operaciones clasificadas expresamente para el modelo 232. No se infieren vinculaciones societarias a partir de facturas ordinarias.');
-  if (records.some((record: any) => !clean(record.payload?.relatedPartyTaxId) || !clean(record.payload?.operationType) || !clean(record.payload?.valuationMethod))) data.warnings.push('Hay operaciones del 232 sin identificación de la parte, tipo de operación o método de valoración.');
-  return { fields, result: 0, details: records.map((record: any) => ({ recordId: record.id, recordKey: record.recordKey, sourceId: manualSourceId(record), reviewStatus: record.reviewStatus, ...(record.payload || {}) })) };
+  const missing = records.filter((record: any) => {
+    const payload=record.payload||{}, category=clean(payload.category||'related');
+    if(record.reviewStatus!=='validado_asesor'||!booleanValue(payload.specialDataConfirmed)) return true;
+    if(category==='related') return !clean(payload.relatedPartyTaxId)||!clean(payload.relatedPartyName)||!clean(payload.entityTypeKey)||!clean(payload.relationType)||!clean(payload.countryOrProvinceCode)||!clean(payload.operationType)||!clean(payload.incomePayment)||!clean(payload.valuationMethod)||!money(payload.amount);
+    if(category==='patent_box') return !clean(payload.relatedPartyTaxId)||!clean(payload.relatedPartyName)||!clean(payload.entityTypeKey)||!clean(payload.relationType)||!clean(payload.countryOrProvinceCode)||!money(payload.amount);
+    if(category==='tax_haven') return !clean(payload.operationDescription)||!clean(payload.relatedPartyName)||!clean(payload.entityTypeKey)||!clean(payload.countryOrProvinceCode)||!money(payload.amount);
+    if(category==='tax_haven_holding') return !clean(payload.holdingType)||!clean(payload.relatedPartyName)||!clean(payload.countryOrProvinceCode)||!money(payload.acquisitionValue??payload.amount);
+    return true;
+  });
+  if (missing.length) data.warnings.push(`${missing.length} registro(s) del 232 necesitan completar los códigos oficiales y validación del asesor.`);
+  if(!/^\d{4}$/.test(clean(adjustments?.cnae||data.company?.cnae))) data.warnings.push('Falta confirmar el CNAE de cuatro dígitos del modelo 232.');
+  if(!clean(adjustments?.fiscalPeriodStart)||!clean(adjustments?.fiscalPeriodEnd)) data.warnings.push('Confirma las fechas de inicio y fin del período impositivo del modelo 232.');
+  return { fields, result: 0, details: records.map((record: any) => ({ recordId: record.id, recordKey: record.recordKey, sourceId: manualSourceId(record), reviewStatus: record.reviewStatus, ...(record.payload || {}) })), adjustmentsSnapshot: adjustments };
 }
 
 function applyModelValidation(model: string, data: any, calculation: any) {
@@ -2138,7 +2155,7 @@ function calculate(model: string, data: any, b: any, adjustments: any) {
   if (model === '200') return calculate200(data, b, adjustments);
   if (model === '202') return calculate202(data, b, adjustments);
   if (model === '216') return calculate216(data, b, adjustments);
-  if (model === '232') return calculate232(data, b);
+  if (model === '232') return calculate232(data, b, adjustments);
   if (model === '296') return calculate296(data, b);
   if (model === '303') return calculateIndirectTax(data, b, 'iva', false, adjustments);
   if (model === '349') return calculate349(data, b);
@@ -2267,6 +2284,122 @@ function export202(company: any, year: number, period: string, calculation: any)
   const complementary=booleanValue(a.complementaryDeclaration)||money(v['02'])>0||money(v['31'])>0;
   place(p2,712,1,complementary?'X':' '); place(p2,713,13,normalizedText(a.previousReceiptNumber,13)); place(p2,726,34,normalizedText(iban,34));
   return p1.join('')+p2.join('');
+}
+
+function officialAuxHeader(model: string, discriminator: string, year: number, period: string, developerTaxId: string) {
+  const buffer=' '.repeat(328).split('');
+  place(buffer,1,17,`<T${model}${discriminator}${year}${period}0000>`);
+  place(buffer,18,5,'<AUX>');
+  place(buffer,93,4,'TX24');
+  if(developerTaxId) place(buffer,101,9,normalizedText(developerTaxId,9));
+  place(buffer,323,6,'</AUX>');
+  return buffer.join('');
+}
+
+function splitChunks<T>(values: T[], size: number) {
+  const result:T[][]=[];
+  for(let index=0;index<values.length;index+=size) result.push(values.slice(index,index+size));
+  return result;
+}
+
+function parsedModel200Boxes(value: unknown) {
+  const result:Record<string,number>={};
+  for(const rawLine of clean(value).split(/[\r\n;]+/)) {
+    const line=rawLine.trim(); if(!line) continue;
+    const match=line.match(/^([0-9A-Z]{5})[.:]([0-9]{5})\s*=\s*(-?\d+(?:[.,]\d+)?)$/i);
+    if(!match) throw Object.assign(new Error(`Casilla 200 no válida: "${line}". Usa PAGINA.CASILLA=IMPORTE, por ejemplo 14000.00552=12500,00.`),{status:422});
+    result[`${match[1].toUpperCase()}.${match[2]}`]=Number(match[3].replace(',','.'));
+  }
+  return result;
+}
+
+function parsedModel200TextFields(value: unknown) {
+  const result:Array<{pageCode:string,position:number,length:number,value:string}>=[];
+  for(const rawLine of clean(value).split(/[\r\n]+/)) {
+    const line=rawLine.trim(); if(!line) continue;
+    const match=line.match(/^([0-9A-Z]{5})[.:](\d+)[.:](\d+)\s*=\s*(.*)$/i);
+    if(!match) throw Object.assign(new Error(`Campo 200 no válido: "${line}". Usa PAGINA.POSICION.LONGITUD=VALOR.`),{status:422});
+    result.push({pageCode:match[1].toUpperCase(),position:Number(match[2]),length:Number(match[3]),value:match[4]});
+  }
+  return result;
+}
+
+function model200AutomaticBoxes(calculation:any) {
+  const values=fieldMap(calculation), adjustments=calculation.adjustmentsSnapshot||{};
+  const payment1=money(adjustments.instalmentPayment1), payment2=money(adjustments.instalmentPayment2), payment3=money(adjustments.instalmentPayment3);
+  const totalPayments=[payment1,payment2,payment3].some(value=>value!==0)?money(payment1+payment2+payment3):money(values.PAGOS_FRACC);
+  const differential=money(values.CUOTA_LIQUIDA-values.RETENCIONES-totalPayments);
+  return {
+    '08000.00500':values.RDO_CONTABLE,'09000.00500':values.RDO_CONTABLE,'12000.00500':values.RDO_CONTABLE,
+    '14000.00550':values.BASE_PREVIA,'14000.00547':values.BIN_COMP,'14000.00552':values.BASE,'14000.00562':values.CUOTA_INTEGRA,
+    '14B00.00592':values.CUOTA_LIQUIDA,'14B00.01766':values.RETENCIONES,'14B00.00601':payment1,'14B00.00603':payment2,'14B00.00605':payment3||(!payment1&&!payment2?totalPayments:0),'14B00.00611':differential,'14B00.01586':values.RESULTADO,'14B00.00621':values.RESULTADO,
+    'DID00.00552':values.BASE,'DID00.00562':values.CUOTA_INTEGRA,'DID00.01586':values.RESULTADO,'DID00.00621':values.RESULTADO,
+  };
+}
+
+function export200(company:any, year:number, calculation:any, developerTaxId:string) {
+  if(year!==2025) throw Object.assign(new Error('El diseño oficial disponible del modelo 200 corresponde al ejercicio 2025. No se genera un fichero con diseño de otro ejercicio.'),{status:422});
+  const adjustments=calculation.adjustmentsSnapshot||{}, discriminator=clean(adjustments.statementDiscriminator||'0').toUpperCase();
+  if(!['0','A','E','I','G'].includes(discriminator)) throw Object.assign(new Error('Discriminante 200 no válido. Usa 0, A, E, I o G según el tipo de entidad.'),{status:422});
+  const layoutByCode=new Map(MODEL200_LAYOUT.map((item:any)=>[item.code,item]));
+  const defaultPages=['01000','01B00','02000','02B00','03000','04000','05000','06000','07000','08000','09000','10000','11000','12000','13000','14000','14B00','DID00'];
+  const requested=clean(adjustments.model200PageCodesText).toUpperCase().split(/[\s,;]+/).filter(Boolean);
+  const customBoxes=parsedModel200Boxes(adjustments.model200OfficialBoxesText), customText=parsedModel200TextFields(adjustments.model200OfficialTextFieldsText);
+  const required=new Set<string>(requested.length?requested:defaultPages);
+  required.add('01000'); required.add('DID00');
+  Object.keys(customBoxes).forEach(key=>required.add(key.split('.')[0])); customText.forEach(field=>required.add(field.pageCode));
+  const unknown=[...required].filter(code=>!layoutByCode.has(code));
+  if(unknown.length) throw Object.assign(new Error(`Páginas 200 no reconocidas en DR200e25: ${unknown.join(', ')}.`),{status:422});
+  if(discriminator!=='0'&&!requested.length) throw Object.assign(new Error('Las entidades aseguradoras, de crédito, inversión colectiva o garantía recíproca deben indicar expresamente sus páginas oficiales 200.'),{status:422});
+  const boxValues={...model200AutomaticBoxes(calculation),...customBoxes};
+  const startDate=aeatDate(adjustments.fiscalPeriodStart||`${year}-01-01`,year), endDate=aeatDate(adjustments.fiscalPeriodEnd||`${year}-12-31`,year);
+  const pageValues=MODEL200_LAYOUT.filter((layout:any)=>required.has(layout.code)).map((layout:any)=>{
+    const endMarker=`</T200${layout.code}>`, buffer=page(layout.length,layout.length-endMarker.length+1,endMarker);
+    place(buffer,1,11,`<T200${layout.code}>`);
+    for(const definition of layout.boxes) {
+      const key=`${layout.code}.${definition.code}`;
+      if(Object.prototype.hasOwnProperty.call(boxValues,key)) place(buffer,definition.position,definition.length,numeric(boxValues[key],definition.length,definition.signed,definition.decimals));
+    }
+    if(layout.code==='01000') {
+      const result=money(calculation.result), requestedDeclaration=clean(adjustments.declarationType).toUpperCase(), declaration=requestedDeclaration||(result>0?'I':result<0?'D':'N');
+      place(buffer,13,1,declaration); place(buffer,14,9,normalizedText(company.nif_cif,9)); place(buffer,23,80,normalizedText(company.razon_social||company.nombre_comercial,80)); place(buffer,103,4,String(year)); place(buffer,107,2,'0A');
+      place(buffer,109,4,startDate.slice(4)); place(buffer,113,2,startDate.slice(2,4)); place(buffer,115,2,startDate.slice(0,2)); place(buffer,117,4,endDate.slice(4)); place(buffer,121,2,endDate.slice(2,4)); place(buffer,123,2,endDate.slice(0,2));
+      place(buffer,125,1,numeric(adjustments.exerciseType||1,1,false,0)); place(buffer,126,4,leftPaddedText(String(adjustments.cnae||company.cnae||'').replace(/\D/g,''),4,'0')); place(buffer,131,9,normalizedText(adjustments.contactPhone1,9)); place(buffer,140,9,normalizedText(adjustments.contactPhone2,9));
+      if(booleanValue(adjustments.rectifyingDeclaration)){place(buffer,149,1,'1');place(buffer,150,13,leftPaddedText(adjustments.previousReceiptNumber,13,'0'));place(buffer,163,1,booleanValue(adjustments.administrativeDiscrepancy)?'0':'1');place(buffer,164,1,booleanValue(adjustments.administrativeDiscrepancy)?'1':'0');}
+    }
+    if(layout.code==='DID00') {
+      place(buffer,14,4,String(year)); place(buffer,18,1,numeric(adjustments.exerciseType||1,1,false,0)); place(buffer,19,2,'0A'); place(buffer,21,2,startDate.slice(0,2)); place(buffer,23,2,startDate.slice(2,4)); place(buffer,25,2,startDate.slice(6)); place(buffer,27,2,endDate.slice(0,2)); place(buffer,29,2,endDate.slice(2,4)); place(buffer,31,2,endDate.slice(6)); place(buffer,33,9,normalizedText(company.nif_cif,9)); place(buffer,42,80,normalizedText(company.razon_social||company.nombre_comercial,80));
+      const iban=clean(adjustments.iban).replace(/\s+/g,'').toUpperCase(); if(iban){place(buffer,242,1,'1');place(buffer,243,34,normalizedText(iban,34));}
+    }
+    customText.filter(field=>field.pageCode===layout.code).forEach(field=>{
+      if(field.position<13||field.position+field.length-1>layout.length-endMarker.length) throw Object.assign(new Error(`El campo manual ${field.pageCode}.${field.position}.${field.length} invade el identificador o cierre de página.`),{status:422});
+      place(buffer,field.position,field.length,normalizedText(field.value,field.length));
+    });
+    return buffer.join('');
+  });
+  return officialAuxHeader('200',discriminator,year,'0A',developerTaxId)+pageValues.join('')+`</T200${discriminator}${year}0A0000>`;
+}
+
+function export232(company:any, year:number, calculation:any, developerTaxId:string) {
+  const adjustments=calculation.adjustmentsSnapshot||{}, details=calculation.details||[];
+  const related=details.filter((row:any)=>clean(row.category||'related')==='related'), patent=details.filter((row:any)=>clean(row.category)==='patent_box');
+  const haven=details.filter((row:any)=>clean(row.category)==='tax_haven'), holdings=details.filter((row:any)=>clean(row.category)==='tax_haven_holding');
+  const page1Count=Math.max(1,Math.ceil(related.length/5),Math.ceil(patent.length/3));
+  const startDate=aeatDate(adjustments.fiscalPeriodStart||`${year}-01-01`,year), endDate=aeatDate(adjustments.fiscalPeriodEnd||`${year}-12-31`,year);
+  const normalizedEntity=(value:unknown)=>['F','J','O'].includes(clean(value).toUpperCase())?clean(value).toUpperCase():'';
+  const normalizedCode=(value:unknown,allowed:string[])=>allowed.includes(clean(value).toUpperCase())?clean(value).toUpperCase():'';
+  const page1=Array.from({length:page1Count},(_,pageIndex)=>{
+    const buffer=page(1500,1489,'</T23201000>'); place(buffer,1,11,'<T23201000>'); if(pageIndex)place(buffer,12,1,'C');
+    place(buffer,14,9,normalizedText(company.nif_cif,9)); place(buffer,23,60,normalizedText(company.razon_social||company.nombre_comercial,60)); place(buffer,103,4,String(year)); place(buffer,107,2,'0A'); place(buffer,109,1,numeric(adjustments.exerciseType||1,1,false,0)); place(buffer,110,8,startDate); place(buffer,118,8,endDate); place(buffer,126,4,leftPaddedText(String(adjustments.cnae||company.cnae||'').replace(/\D/g,''),4,'0'));
+    const correction=clean(adjustments.declarationCorrectionType).toUpperCase(); if(['S','C'].includes(correction)){place(buffer,130,1,correction);place(buffer,131,13,leftPaddedText(adjustments.previousReceiptNumber,13,'0'));}
+    place(buffer,749,15,normalizedText(adjustments.parentTaxId,15)); place(buffer,764,60,normalizedText(adjustments.parentName,60));
+    related.slice(pageIndex*5,pageIndex*5+5).forEach((row:any,index:number)=>{const start=144+index*121;place(buffer,start,15,normalizedText(row.relatedPartyTaxId,15));place(buffer,start+15,1,normalizedEntity(row.entityTypeKey));place(buffer,start+16,60,normalizedText(row.relatedPartyName,60));place(buffer,start+96,1,normalizedCode(row.relationType,['A','B','C','D','E','F','G','H']));place(buffer,start+97,2,normalizedText(row.countryOrProvinceCode||row.country,2));place(buffer,start+99,2,normalizedCode(row.operationType,['01','02','03','04','05','06','07','08','09','10','11']));place(buffer,start+101,1,clean(row.incomePayment)==='income'?'I':clean(row.incomePayment)==='payment'?'P':normalizedCode(row.incomePayment,['I','P']));place(buffer,start+102,2,normalizedCode(row.valuationMethod,['1A','1B','1C','1D','1E']));place(buffer,start+104,17,numeric(row.amount,17));});
+    patent.slice(pageIndex*3,pageIndex*3+3).forEach((row:any,index:number)=>{const start=824+index*116;place(buffer,start,15,normalizedText(row.relatedPartyTaxId,15));place(buffer,start+15,1,normalizedEntity(row.entityTypeKey));place(buffer,start+16,60,normalizedText(row.relatedPartyName,60));place(buffer,start+96,2,normalizedText(row.countryOrProvinceCode||row.country,2));place(buffer,start+98,1,normalizedCode(row.relationType,['A','B','C','D','E','F','G','H']));place(buffer,start+99,17,numeric(row.amount,17));});
+    return buffer.join('');
+  }).join('');
+  const page2Count=Math.max(Math.ceil(haven.length/12),Math.ceil(holdings.length/12));
+  const page2=Array.from({length:page2Count},(_,pageIndex)=>{const buffer=page(3500,3489,'</T23202000>');place(buffer,1,11,'<T23202000>');if(pageIndex)place(buffer,12,1,'C');haven.slice(pageIndex*12,pageIndex*12+12).forEach((row:any,index:number)=>{const start=13+index*150;place(buffer,start,50,normalizedText(row.operationDescription,50));place(buffer,start+50,60,normalizedText(row.relatedPartyName,60));place(buffer,start+130,1,normalizedEntity(row.entityTypeKey));place(buffer,start+131,2,normalizedText(row.countryOrProvinceCode||row.country,2));place(buffer,start+133,17,numeric(row.amount,17));});holdings.slice(pageIndex*12,pageIndex*12+12).forEach((row:any,index:number)=>{const start=1813+index*105;place(buffer,start,1,normalizedCode(row.holdingType,['A','B','C']));place(buffer,start+1,60,normalizedText(row.relatedPartyName,60));place(buffer,start+81,2,normalizedText(row.countryOrProvinceCode||row.country,2));place(buffer,start+83,17,numeric(row.acquisitionValue??row.amount,17));place(buffer,start+100,5,numeric(row.participationRate,5,false,2));});return buffer.join('');}).join('');
+  return officialAuxHeader('232','0',year,'0A',developerTaxId)+page1+page2+`</T2320${year}0A0000>`;
 }
 
 function export349(company: any, year: number, period: string, calculation: any, declarationNumber: string) {
@@ -2700,6 +2833,42 @@ function transferLayoutErrors(model: string, content: string) {
     }
     return errors;
   }
+  if(model==='200') {
+    const errors:string[]=[], envelope=content.match(/^<T200([0AEIG])(\d{4})0A0000><AUX>/), expectedEnd=envelope?`</T200${envelope[1]}${envelope[2]}0A0000>`:'';
+    if(!envelope||!content.endsWith(expectedEnd)) errors.push('La envolvente del modelo 200 no tiene apertura, discriminante y cierre coherentes.');
+    if(content.slice(322,328)!=='</AUX>') errors.push('El bloque auxiliar del modelo 200 no ocupa las 328 posiciones oficiales.');
+    if(content.includes('NaN')||content.includes('undefined')) errors.push('El fichero del modelo 200 contiene valores técnicos inválidos.');
+    const encountered:Array<{code:string,start:number,value:string}>=[]; const pattern=/<T200([0-9A-Z]{5})>/g; let match:RegExpExecArray|null;
+    while((match=pattern.exec(content))){const code=match[1], endMarker=`</T200${code}>`, end=content.indexOf(endMarker,match.index);if(end<0){errors.push(`La página ${code} del modelo 200 no tiene cierre.`);break;}encountered.push({code,start:match.index,value:content.slice(match.index,end+endMarker.length)});pattern.lastIndex=end+endMarker.length;}
+    const layoutIndex=new Map(MODEL200_LAYOUT.map((layout:any,index:number)=>[layout.code,{layout,index}])); let previous=-1;
+    for(const item of encountered){const definition:any=layoutIndex.get(item.code);if(!definition){errors.push(`La página ${item.code} no pertenece al diseño DR200e25.`);continue;}if(definition.index<previous)errors.push(`La página ${item.code} está fuera del orden oficial.`);previous=definition.index;if(item.value.length!==definition.layout.length)errors.push(`La página ${item.code} del modelo 200 debe tener exactamente ${definition.layout.length} posiciones.`);}
+    if(!encountered.some(item=>item.code==='01000'))errors.push('Falta la página de identificación 01000 del modelo 200.');
+    if(!encountered.some(item=>item.code==='DID00'))errors.push('Falta la página de ingreso/devolución DID00 del modelo 200.');
+    const page01=encountered.find(item=>item.code==='01000')?.value, did=encountered.find(item=>item.code==='DID00')?.value;
+    if(page01&&envelope&&(page01.slice(102,106)!==envelope[2]||page01.slice(106,108)!=='0A'))errors.push('El ejercicio o período de la página 01000 del modelo 200 no coincide con su envolvente.');
+    if(did&&envelope&&(did.slice(13,17)!==envelope[2]||did.slice(18,20)!=='0A'))errors.push('El ejercicio o período de la página DID00 del modelo 200 no coincide con su envolvente.');
+    const readBox=(pageCode:string,boxCode:string)=>{const item=encountered.find(page=>page.code===pageCode),layout:any=(layoutIndex.get(pageCode) as any)?.layout,definition=layout?.boxes.find((box:any)=>box.code===boxCode);return item&&definition?readFixedNumber(item.value,definition.position,definition.length,definition.decimals,definition.signed):0;};
+    if(encountered.some(item=>item.code==='14000')&&encountered.some(item=>item.code==='DID00')){for(const box of ['00552','00562'])if(Math.abs(readBox('14000',box)-readBox('DID00',box))>0.01)errors.push(`La casilla ${box} no coincide entre liquidación y DID del modelo 200.`);}
+    if(encountered.some(item=>item.code==='14B00')&&encountered.some(item=>item.code==='DID00')){for(const box of ['01586','00621'])if(Math.abs(readBox('14B00',box)-readBox('DID00',box))>0.01)errors.push(`La casilla ${box} no coincide entre liquidación y DID del modelo 200.`);}
+    return errors;
+  }
+  if(model==='232') {
+    const errors:string[]=[], envelope=content.match(/^<T2320(\d{4})0A0000><AUX>/), expectedEnd=envelope?`</T2320${envelope[1]}0A0000>`:'';
+    if(!envelope||!content.endsWith(expectedEnd))errors.push('La envolvente del modelo 232 no tiene apertura y cierre coherentes.');
+    if(content.slice(322,328)!=='</AUX>')errors.push('El bloque auxiliar del modelo 232 no ocupa las 328 posiciones oficiales.');
+    if(content.includes('NaN')||content.includes('undefined'))errors.push('El fichero del modelo 232 contiene valores técnicos inválidos.');
+    const page1=[...content.matchAll(/<T23201000>[\s\S]*?<\/T23201000>/g)].map(item=>item[0]), page2=[...content.matchAll(/<T23202000>[\s\S]*?<\/T23202000>/g)].map(item=>item[0]);
+    if(!page1.length)errors.push('El modelo 232 debe contener al menos una página 01.');
+    if(page1.some(page=>page.length!==1500))errors.push('Cada página 01 del modelo 232 debe tener exactamente 1.500 posiciones.');
+    if(page2.some(page=>page.length!==3500))errors.push('Cada página 02 del modelo 232 debe tener exactamente 3.500 posiciones.');
+    if(page1.some((page,index)=>(index===0?page[11]!==' ':page[11]!=='C')))errors.push('Los indicadores de páginas complementarias 01 del modelo 232 no son coherentes.');
+    if(page2.some((page,index)=>(index===0?page[11]!==' ':page[11]!=='C')))errors.push('Los indicadores de páginas complementarias 02 del modelo 232 no son coherentes.');
+    const firstPage2=content.indexOf('<T23202000>'),lastPage1=content.lastIndexOf('<T23201000>');if(firstPage2>=0&&firstPage2<lastPage1)errors.push('Las páginas 02 del modelo 232 deben situarse después de todas las páginas 01.');
+    if(page1[0]&&envelope&&(page1[0].slice(102,106)!==envelope[1]||page1[0].slice(106,108)!=='0A'))errors.push('El ejercicio o período de la página 01 del modelo 232 no coincide con su envolvente.');
+    for(const value of page1){for(let index=0;index<5;index+=1){const start=143+index*121,taxId=clean(value.slice(start,start+15));if(taxId&&(!['F','J','O'].includes(value[start+15])||!'ABCDEFGH'.includes(value[start+96])||!/^\d{2}$/.test(value.slice(start+99,start+101))||!['I','P'].includes(value[start+101])||!/^1[A-E]$/.test(value.slice(start+102,start+104))))errors.push(`Hay un registro de operación vinculada 232 con códigos oficiales incompletos en la página ${index+1}.`);}for(let index=0;index<3;index+=1){const start=823+index*116,taxId=clean(value.slice(start,start+15));if(taxId&&(!['F','J','O'].includes(value[start+15])||!'ABCDEFGH'.includes(value[start+98])))errors.push('Hay un registro patent box 232 con códigos oficiales incompletos.');}}
+    for(const value of page2){for(let index=0;index<12;index+=1){const start=12+index*150,name=clean(value.slice(start+50,start+110));if(name&&!['F','J','O'].includes(value[start+130]))errors.push('Hay una operación con territorio no cooperativo sin tipo F/J/O válido.');const holdingStart=1812+index*105,holdingName=clean(value.slice(holdingStart+1,holdingStart+61));if(holdingName&&!['A','B','C'].includes(value[holdingStart]))errors.push('Hay una tenencia en territorio no cooperativo sin tipo A/B/C válido.');}}
+    return unique(errors);
+  }
   if (model === '390') {
     const errors: string[] = [];
     const envelope = content.match(/^<T3900(\d{4})0A0000>/);
@@ -3084,6 +3253,8 @@ Deno.serve(async (req) => {
       const info296={result:0,fields:[{code:'BASE',value:1000},{code:'RETENCIONES',value:190},{code:'INGRESADO',value:190}],details:[{recordKey:'M296:test',recipientTaxId:'FR12345678901',foreignTaxId:'FR12345678901',recipientName:'PERCEPTOR UE',country:'FR',personalityKey:'J',incomeKey:'19',subkey:'01',nature:'D',paymentDate:'2025-12-31',withholdingBase:1000,withholdingRate:19,withholdingAmount:190,address:'1 RUE DE TEST',city:'PARIS',postalCode:'75001'}]};
       const info349={result:0,details:[{recordKey:'M349:FR|12345678901|E|O',country:'FR',operatorTaxId:'FR12345678901',operatorName:'CLIENTE UE',operationKey:'E',amount:1500,rectification:false},{recordKey:'M349:DE|123456789|S|R',country:'DE',operatorTaxId:'DE123456789',operatorName:'CLIENTE RECTIFICADO',operationKey:'S',rectification:true,rectificationAmount:900,originalAmount:1000,originalAmountProvided:true,originalYear:'2025',originalPeriod:'4T'}]};
       const sample202=calculate202({company:{...company,cnae:'6920'},warnings:[],blockers:[]},bounds(2026,'1P'),{method:'40_3',cnae:'6920',fiscalPeriodStart:'2026-01-01',corporateTaxRateText:'25',currentTaxableBase:10000,paymentPercentage:17,withholdings:100,previousInstalmentPayments:200,commonTerritoryPercentage:100});
+      const sample200={result:750,fields:[{code:'RDO_CONTABLE',value:4000},{code:'BASE_PREVIA',value:4500},{code:'BIN_COMP',value:500},{code:'BASE',value:4000},{code:'CUOTA_INTEGRA',value:1000},{code:'CUOTA_LIQUIDA',value:900},{code:'RETENCIONES',value:50},{code:'PAGOS_FRACC',value:100},{code:'RESULTADO',value:750}],adjustmentsSnapshot:{cnae:'6920',fiscalPeriodStart:'2025-01-01',fiscalPeriodEnd:'2025-12-31',taxRate:25,instalmentPayment3:100,officialDataReviewed:true}};
+      const sample232={result:0,fields:[{code:'REGISTROS',value:1},{code:'VINCULADAS',value:4000}],details:[{recordKey:'M232:test',category:'related',relatedPartyTaxId:'B87654321',relatedPartyName:'ENTIDAD VINCULADA',entityTypeKey:'J',countryOrProvinceCode:'38',relationType:'A',operationType:'06',incomePayment:'I',valuationMethod:'1A',amount:4000,specialDataConfirmed:true}],adjustmentsSnapshot:{cnae:'6920',fiscalPeriodStart:'2025-01-01',fiscalPeriodEnd:'2025-12-31',exerciseType:'1'}};
       const samples:any={111:export111(company,2026,'1T',standard),115:export115(company,2026,'1T',standard),123:export123(company,2026,'1T',standard),130:export130(company,2026,'1T',standard),131:export131(company,2026,'1T',sample131),202:export202(company,2026,'1P',sample202),216:export216(company,2026,'1T',standard),303:export303(company,profile,2026,'1T',standard)};
       const expected:any={111:1000,115:500,123:600,130:600,131:1429,202:1600,216:600,303:2598}; const checks=Object.entries(samples).map(([model,content]:any)=>({model,length:content.length,expected:expected[model],validLength:content.length===expected[model],hasEndMarker:content.includes(`</T${model}0`),hasNaN:content.includes('NaN')}));
       const wrappedChecks=Object.entries(samples).map(([model,content]:any)=>{const testPeriod=model==='202'?'1P':'1T'; const wrapped=wrap(model,2026,testPeriod,content,'B12345678'); const layoutErrors=transferLayoutErrors(model,wrapped); return {model,length:wrapped.length,layoutErrors,validEnvelope:wrapped.startsWith(`<T${model}02026${testPeriod}0000>`)&&wrapped.endsWith(`</T${model}02026${testPeriod}0000>`),valid:layoutErrors.length===0}});
@@ -3102,6 +3273,8 @@ Deno.serve(async (req) => {
       const record349Content=export349(company,2026,'1T',info349,'3491234567890'); const record349=record349Content.split('\r\n');
       const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
       const model390Content=wrap('390',2025,'0A',export390(company,profile,[],2025,standard,[]),'B12345678');
+      const model200Content=export200(company,2025,sample200,'B12345678');
+      const model232Content=export232(company,2025,sample232,'B12345678');
       const transferChecks=[
         {model:'180',records:record180.length,recordLengths:record180.map(line=>line.length),valid:record180.length===2&&record180.every(line=>line.length===500)&&record180[1].startsWith('2180')},
         {model:'190',records:record190.length,recordLengths:record190.map(line=>line.length),layoutErrors:transferLayoutErrors('190',record190Content),valid:record190.length===2&&record190.every(line=>line.length===500)&&record190[1].startsWith('2190')&&record190[1][77]==='A'&&transferLayoutErrors('190',record190Content).length===0},
@@ -3112,11 +3285,14 @@ Deno.serve(async (req) => {
         {model:'349',records:record349.length,recordLengths:record349.map(line=>line.length),layoutErrors:transferLayoutErrors('349',record349Content),valid:record349.length===3&&record349.every(line=>line.length===500)&&record349[1].startsWith('2349')&&record349[1][132]==='E'&&record349[2].slice(146,152)==='20254T'&&transferLayoutErrors('349',record349Content).length===0},
         {model:'390',records:9,recordLengths:Object.values(MODEL390_LAYOUT).map((layout:any)=>layout.length),layoutErrors:transferLayoutErrors('390',model390Content),valid:model390Content.includes('<T39001000>')&&model390Content.includes('</T39008000>')&&transferLayoutErrors('390',model390Content).length===0},
         {model:'415',records:import415.length,recordLengths:import415.map(line=>line.length),layoutErrors:transferLayoutErrors('415',import415Content),valid:import415.length===3&&import415[0].length===246&&import415[1].length===356&&import415[2].length===309&&import415[1].startsWith('2415')&&import415[2].startsWith('3415')&&import415[1].slice(113,128)==='000000000700000'&&import415[1].slice(160,164)==='2024'&&transferLayoutErrors('415',import415Content).length===0},
+        {model:'200',records:18,recordLengths:MODEL200_LAYOUT.filter((layout:any)=>model200Content.includes(`<T200${layout.code}>`)).map((layout:any)=>layout.length),layoutErrors:transferLayoutErrors('200',model200Content),valid:model200Content.startsWith('<T200020250A0000><AUX>')&&model200Content.includes('<T20001000>')&&model200Content.includes('<T200DID00>')&&model200Content.endsWith('</T200020250A0000>')&&transferLayoutErrors('200',model200Content).length===0},
+        {model:'232',records:1,recordLengths:[1500],layoutErrors:transferLayoutErrors('232',model232Content),valid:model232Content.startsWith('<T232020250A0000><AUX>')&&model232Content.includes('<T23201000>')&&model232Content.endsWith('</T232020250A0000>')&&transferLayoutErrors('232',model232Content).length===0},
       ];
       const handoff417=exportAtcHandoff('417',company,2026,'01',standard,{blockers:[],warnings:[]},'self-test');
       const handoff420=exportAtcHandoff('420',company,2026,'1T',standard,{blockers:[],warnings:[]},'self-test');
       const handoff421=exportAtcHandoff('421',company,2026,'1T',{result:21,fields:standard.fields},{blockers:[],warnings:[]},'self-test');
-      const handoffCheck={model:'417/420/421/425 handoff',valid:[handoff417,handoff420,handoff421].every(content=>content.includes('PASO_FINAL')&&content.split('\r\n').length>8)&&handoff417.includes('DEVENGADO_21_BASE')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff421.includes('"421"')};
+      const handoff425=exportAtcHandoff('425',company,2025,'Anual',standard,{blockers:[],warnings:[]},'self-test');
+      const handoffCheck={model:'417/420/421/425 handoff',valid:[handoff417,handoff420,handoff421,handoff425].every(content=>content.includes('PASO_FINAL')&&content.split('\r\n').length>8)&&handoff417.includes('DEVENGADO_21_BASE')&&handoff420.includes('DEVENGADO_21_BASE')&&handoff421.includes('"421"')&&handoff425.includes('"425"')};
       const annualCoverageChecks={
         model131ActivityDpa:samples['131'].includes('<T131DPA00>')&&samples['131'].slice(113,130)===numeric(10000,17,true)&&transferLayoutErrors('131',wrap('131',2026,'1T',samples['131'],'B12345678')).length===0,
         model190AllKeys:record190Full.length===13&&record190Full.slice(1).map((line:string)=>line[77]).join('')==='ABCDEFGHIJKL'&&record190Full.every((line:string)=>line.length===500)&&transferLayoutErrors('190',record190FullContent).length===0,
@@ -3221,7 +3397,7 @@ Deno.serve(async (req) => {
       const result421=calculate421({...extensionBase,warnings:[],blockers:[],period:'4T'},bounds(2026,'4T'),{annualActivityQuota1:1000,currentInputQuota:400,minimumQuotaRate:30,previousQuarterAdvances:300,fixedAssetAndReverseChargeOutput:20,previousCompensationBalance:10});
       const result200=calculate200({...extensionBase,warnings:[],blockers:[],entries:[{id:'je200',date:'2026-06-30',status:'confirmado',isBalanced:true}],entryLines:[{id:'jl7',journalEntryId:'je200',accountCode:'705000',credit:10000,debit:0},{id:'jl6',journalEntryId:'je200',accountCode:'629000',debit:6000,credit:0}]},bounds(2026,'Anual'),{taxableIncreases:1000,taxableDecreases:500,taxLossCarryforward:500,taxRate:25,taxCredits:100,withholdings:50,instalmentPayments:100});
       const result202=calculate202({...extensionBase,warnings:[],blockers:[],period:'2P'},bounds(2026,'2P'),{method:'40_3',currentTaxableBase:10000,paymentPercentage:17,withholdings:100,previousInstalmentPayments:200});
-      const result232=calculate232({...extensionBase,warnings:[],blockers:[],declarables:[{id:'d232',modeloCodigo:'232',recordKey:'r232',payload:{relatedPartyTaxId:'B00000001',relatedPartyName:'VINCULADA',country:'ES',relationType:'socio',operationType:'servicios',valuationMethod:'precio_libre_comparable',category:'related',amount:4000}}]},bounds(2026,'Anual'));
+      const result232=calculate232({...extensionBase,warnings:[],blockers:[],declarables:[{id:'d232',modeloCodigo:'232',recordKey:'r232',reviewStatus:'validado_asesor',payload:{relatedPartyTaxId:'B00000001',relatedPartyName:'VINCULADA',entityTypeKey:'J',countryOrProvinceCode:'38',relationType:'A',operationType:'06',incomePayment:'I',valuationMethod:'1A',category:'related',amount:4000,specialDataConfirmed:true}}]},bounds(2026,'Anual'),{cnae:'6920'});
       const result417=calculateIndirectTax({...extensionBase,warnings:[],blockers:[],period:'01',profile:{usesSII:true},taxLines:[{id:'tl417',sourceId:'InvoiceTaxLine:tl417',date:'2026-01-10',taxKind:'igic',rate:7,base:100,quota:7,deductibleQuota:0,operationType:'subject_taxed',reviewStatus:'validado',invoice:{id:'inv417',tipo:'emitida',numero_factura:'IGIC-1'}}]},bounds(2026,'01'),'igic',false,{previousCompensationBalance:0},'417');
       const extensionChecks={
         catalogHasAllNine:['349','131','216','296','417','421','200','202','232'].every(code=>TARGET_MODELS.includes(code)&&!!DEFINITIONS[code]),
@@ -3234,7 +3410,7 @@ Deno.serve(async (req) => {
         corporateModels:fieldMap(result200)['RDO_CONTABLE']===4000&&fieldMap(result200)['BASE']===4000&&result200.result===750&&result202.result===1400,
         model232ExplicitOnly:fieldMap(result232)['REGISTROS']===1&&fieldMap(result232)['VINCULADAS']===4000,
         model417Sii:result417.result===7&&fieldMap(result417)['DEVENGADO']===7,
-        exportModes:['131','202','216','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421','200','232'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
+        exportModes:['131','200','202','216','232','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
       };
       const profileRegressionChecks={
         autonomoIva:fieldMap(result130Q2)['01']===1500,
@@ -3593,7 +3769,7 @@ Deno.serve(async (req) => {
     const adjustments=frozenDraft?Object.fromEntries((Array.isArray(frozenDraft.ajustesManuales)?frozenDraft.ajustesManuales:[]).map((item:any)=>[item.field,item.value])):body.adjustments||{};
     const calculation=frozenDraft?frozenDraft.resumen.calculation:calculate(model,data,b,adjustments);
     if(!frozenDraft) applyModelValidation(model,data,calculation);
-    if(['111','115','123','130','131','202','216','303','390'].includes(model)&&!developerTaxIdStatus().valid) warnings.push(developerTaxIdStatus().configured?'TAXEA_DEVELOPER_NIF no tiene un NIF español válido. Taxea exportará el bloque auxiliar en blanco hasta corregir el secreto.':'No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
+    if(['111','115','123','130','131','200','202','216','232','303','390'].includes(model)&&!developerTaxIdStatus().valid) warnings.push(developerTaxIdStatus().configured?'TAXEA_DEVELOPER_NIF no tiene un NIF español válido. Taxea exportará el bloque auxiliar en blanco hasta corregir el secreto.':'No está informado TAXEA_DEVELOPER_NIF. Taxea exportará el bloque auxiliar en blanco; valida el fichero en la sede AEAT antes de presentarlo.');
     const sourceIds=unique((calculation.fields||[]).flatMap((f:any)=>f.sourceIds||[]));
     const sourceHash=frozenDraft?clean(frozenDraft.sourceHash||frozenDraft.resumen?.source?.hash):await sha256(JSON.stringify({model,year,period,sourceIds,adjustments,values:(calculation.fields||[]).map((f:any)=>[f.code,f.value])}));
     const history=frozenDraft?(frozenDraft.resumen?.history||null):filingComparison(data,model,year,period,calculation);
@@ -3656,6 +3832,12 @@ Deno.serve(async (req) => {
       } else if(model==='415') {
         content=export415Import(company,year,calculation);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_415_importacion.txt`; extension='txt'; format='Soporte de importación oficial programa ATC 415';
+      } else if(model==='200') {
+        const developerTaxId=developerTaxIdStatus().value;
+        content=export200(company,year,calculation,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.200`; extension='200'; format='Diseño de registro AEAT modelo 200 DR200e25 v1.02';
+      } else if(model==='232') {
+        const developerTaxId=developerTaxIdStatus().value;
+        content=export232(company,year,calculation,developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.232`; extension='232'; format='Diseño de registro AEAT modelo 232 v1.4';
       } else if(model==='390') {
         const developerTaxId=developerTaxIdStatus().value;
         content=wrap(model,year,'0A',export390(company,profile,activities,year,calculation,filings),developerTaxId); filename=`${clean(company.nif_cif).toUpperCase()}${year}0A.390`; extension='390'; format='Diseño de registro AEAT modelo 390';
