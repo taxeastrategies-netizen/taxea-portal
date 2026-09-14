@@ -1,11 +1,45 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
-import { webcrypto } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import * as esbuild from 'esbuild';
 
 const entry = path.resolve('base44/functions/taxModelOperations/entry.ts');
-const source = fs.readFileSync(entry, 'utf8');
+const originalSource = fs.readFileSync(entry, 'utf8');
+const fixtureCaptureNeedle = 'const ok=checks.every';
+const fixtureCapture = `
+      const qaCompany={...company,nif_cif:'B12345674',razon_social:'ENTIDAD PRUEBA TAXEA'};
+      const qa202Calculation=calculate202({company:{...qaCompany,cnae:'6920'},warnings:[],blockers:[]},bounds(2026,'1P'),{method:'40_3',cnae:'6920',fiscalPeriodStart:'2026-01-01',corporateTaxRateText:'25',currentTaxableBase:10000,paymentPercentage:17,withholdings:100,previousInstalmentPayments:200,commonTerritoryPercentage:100});
+      globalThis.__taxeaFixtureMatrix={
+        '111':wrap('111',2026,'1T',export111(qaCompany,2026,'1T',standard),'12345678Z'),
+        '115':wrap('115',2026,'1T',export115(qaCompany,2026,'1T',standard),'12345678Z'),
+        '123':wrap('123',2026,'1T',export123(qaCompany,2026,'1T',standard),'12345678Z'),
+        '130':wrap('130',2026,'1T',export130(qaCompany,2026,'1T',standard),'12345678Z'),
+        '131':wrap('131',2026,'1T',export131(qaCompany,2026,'1T',sample131),'12345678Z'),
+        '180':export180(qaCompany,2025,annual180,'1801234567890'),
+        '190':export190(qaCompany,2025,annual190Full,'1901234567891'),
+        '193':export193(qaCompany,2025,annual193Expense,'1931234567891'),
+        '202':wrap('202',2026,'1P',export202(qaCompany,2026,'1P',qa202Calculation),'12345678Z'),
+        '216':wrap('216',2026,'1T',export216(qaCompany,2026,'1T',standard),'12345678Z'),
+        '296':export296(qaCompany,2025,info296,'2961234567890'),
+        '303':wrap('303',2026,'1T',export303(qaCompany,profile,2026,'1T',standard),'12345678Z'),
+        '347':export347(qaCompany,2025,thirdParties,'3471234567890'),
+        '349':export349(qaCompany,2026,'1T',info349,'3491234567890'),
+        '390':wrap('390',2025,'0A',export390(qaCompany,profile,[],2025,standard,[]),'12345678Z'),
+        '415':export415Import(qaCompany,2025,thirdParties),
+        '200':export200(qaCompany,2025,sample200,'12345678Z'),
+        '232':export232(qaCompany,2025,sample232,'12345678Z'),
+        '417-guided':exportAtcHandoff('417',qaCompany,2026,'01',result417,{blockers:[],warnings:[]},'qa-fixture'),
+        '420-guided':exportAtcHandoff('420',qaCompany,2026,'1T',standard,{blockers:[],warnings:[]},'qa-fixture'),
+        '421-guided':exportAtcHandoff('421',qaCompany,2026,'4T',result421,{blockers:[],warnings:[]},'qa-fixture'),
+        '425-guided':exportAtcHandoff('425',qaCompany,2025,'Anual',standard,{blockers:[],warnings:[]},'qa-fixture'),
+      };
+      `;
+let source = originalSource;
+if (process.env.TAXEA_FIXTURE_MATRIX_DIR) {
+  if (!source.includes(fixtureCaptureNeedle)) throw new Error('No se encontró el punto de captura de las muestras fiscales.');
+  source = source.replace(fixtureCaptureNeedle, `${fixtureCapture}${fixtureCaptureNeedle}`);
+}
 const build = await esbuild.build({
   stdin: { contents: source, loader: 'ts', resolveDir: path.dirname(entry), sourcefile: entry },
   bundle: true,
@@ -27,7 +61,7 @@ const build = await esbuild.build({
 let handler;
 let sequence = 0;
 const records = {
-  Company: [{ id: 'company-test', nif_cif: 'B12345674', razon_social: 'TAXEA QA', owner_email: 'qa@taxea.test', usuarios_autorizados: [] }],
+  Company: [{ id: 'company-test', nif_cif: 'B12345674', razon_social: 'ENTIDAD PRUEBA TAXEA', owner_email: 'qa@taxea.test', usuarios_autorizados: [] }],
   FiscalProfile: [{ id: 'profile-1', company_id: 'company-test', active: true, profileStatus: 'validado_asesor', mainTerritory: 'peninsula_baleares', taxAuthority: 'aeat', indirectTaxDefault: 'iva' }],
   FiscalActivity: [],
   Invoice: [{ id: 'invoice-trace', company_id: 'company-test', numero_factura: 'R-TRACE', fecha_emision: '2026-01-10', proveedor_nombre: 'PROVEEDOR QA', proveedor_nif: 'B87654321', concepto: 'Servicio QA', base_imponible: 100, cuota_iva: 21, total_factura: 121, tipo: 'recibida', fiscal_review_status: 'validado' }],
@@ -108,6 +142,9 @@ const secondSave = await invoke({ action: 'save_draft', companyId: 'company-test
 const advisoryCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const advisoryExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', adjustments: {} });
 const model202Export = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '202', ejercicio: 2026, periodo: '1P', adjustments: { method: '40_3', fiscalPeriodStart: '2026-01-01', cnae: '6920', corporateTaxRateText: '25', currentTaxableBase: 10000, paymentPercentage: 17, withholdings: 100, previousInstalmentPayments: 200, commonTerritoryPercentage: 100 } });
+const model200Export = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '200', ejercicio: 2025, periodo: 'Anual', adjustments: { cnae: '6920', fiscalPeriodStart: '2025-01-01', fiscalPeriodEnd: '2025-12-31', taxRate: 25, officialDataReviewed: true } });
+const model232Record = await invoke({ action: 'upsert_declarable', companyId: 'company-test', modeloCodigo: '232', ejercicio: 2025, periodo: 'Anual', recordKey: 'M232:QA', reviewStatus: 'validado_asesor', payload: { category: 'related', relatedPartyTaxId: 'B87654321', relatedPartyName: 'ENTIDAD VINCULADA QA', entityTypeKey: 'J', countryOrProvinceCode: '38', relationType: 'A', operationType: '06', incomePayment: 'I', valuationMethod: '1A', amount: 4000, specialDataConfirmed: true } });
+const model232Export = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '232', ejercicio: 2025, periodo: 'Anual', adjustments: { cnae: '6920', fiscalPeriodStart: '2025-01-01', fiscalPeriodEnd: '2025-12-31', exerciseType: '1' } });
 const openedDraft = await invoke({ action: 'open_draft', companyId: 'company-test', draftId: 'draft-latest' });
 const fieldTrace = await invoke({ action: 'field_trace', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest', fieldCode: 'DEDUCIBLE', fieldLabel: 'Total cuota deducible', fieldSection: 'Deducciones', page: 1, pageSize: 25 });
 const frozenExport = await invoke({ action: 'export', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', draftId: 'draft-latest' });
@@ -121,6 +158,8 @@ const declarableSave = await invoke({ action: 'upsert_declarable', companyId: 'c
 const declarableDelete = await invoke({ action: 'delete_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordId: declarableSave.payload.record?.id });
 const model202Content = model202Export.payload.file?.contentBase64 ? Buffer.from(model202Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
 const model202PageStart = model202Content.indexOf('<T20201000>');
+const model200Content = model200Export.payload.file?.contentBase64 ? Buffer.from(model200Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
+const model232Content = model232Export.payload.file?.contentBase64 ? Buffer.from(model232Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
 
 const workflowChecks = {
   workspaceLoads: workspace.response.ok && workspace.payload.latestDrafts?.length === 1 && workspace.payload.latestFilings?.length === 1,
@@ -141,7 +180,7 @@ const workflowChecks = {
     && exactDownload.payload.file?.hash === frozenExport.payload.file?.hash
     && exactDownload.payload.file?.immutable === true,
   fullCatalogAvailable: catalog.response.ok
-    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.13-v23'
+    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.13-v24'
     && catalog.payload.models?.length === 22
     && ['349', '131', '216', '296', '417', '421', '200', '202', '232'].every(model => catalog.payload.models.some(item => item.code === model)),
   historicalAuditIsReadOnly: historicalDryRun.response.ok
@@ -161,7 +200,7 @@ const workflowChecks = {
     && declarableSave.payload.record?.modeloCodigo === '216'
     && declarableDelete.response.ok
     && declarableDelete.payload.deletedId === declarableSave.payload.record?.id
-    && records.TaxDeclarableRecord.length === 0,
+    && records.TaxDeclarableRecord.every(item => item.modeloCodigo !== '216'),
   recommendationsDoNotBlockExport: advisoryCalculation.response.ok
     && advisoryCalculation.payload.validation?.recommendations?.length > 0
     && advisoryCalculation.payload.validation?.blockers?.length === 0
@@ -181,11 +220,53 @@ const workflowChecks = {
     && model202PageStart >= 0
     && model202Content.slice(model202PageStart + 131, model202PageStart + 146).trim() === '25'
     && model202Content.endsWith('</T202020261P0000>'),
+  model200OfficialExport: model200Export.response.ok
+    && model200Export.payload.definition?.officialExport === true
+    && model200Export.payload.definition?.exportMode === 'aeat_official_record'
+    && model200Export.payload.file?.filename === 'B1234567420250A.200'
+    && model200Content.startsWith('<T200020250A0000><AUX>')
+    && model200Content.includes('<T20001000>')
+    && model200Content.includes('<T20014000>')
+    && model200Content.includes('<T200DID00>')
+    && model200Content.endsWith('</T200020250A0000>'),
+  model232OfficialExport: model232Record.response.ok
+    && model232Export.response.ok
+    && model232Export.payload.definition?.officialExport === true
+    && model232Export.payload.definition?.exportMode === 'aeat_official_record'
+    && model232Export.payload.file?.filename === 'B1234567420250A.232'
+    && model232Content.startsWith('<T232020250A0000><AUX>')
+    && model232Content.includes('<T23201000>')
+    && model232Content.endsWith('</T232020250A0000>'),
 };
 const diagnostics = { frozenExport: { status: frozenExport.response.status, error: frozenExport.payload?.error, blockers: frozenExport.payload?.blockers, frozen: frozenExport.payload?.frozen, draftId: frozenExport.payload?.draft?.id, result: frozenExport.payload?.calculation?.result, fileLength: frozenExport.payload?.file?.contentBase64?.length || 0 } };
 const output = { ...selfTest.payload, workflowChecks, diagnostics, ok: selfTest.response.ok && selfTest.payload.ok && Object.values(workflowChecks).every(Boolean) };
 if (process.env.TAXEA_MODEL202_FIXTURE_PATH) {
   fs.writeFileSync(path.resolve(process.env.TAXEA_MODEL202_FIXTURE_PATH), model202Content, 'utf8');
+}
+if (process.env.TAXEA_FIXTURE_MATRIX_DIR) {
+  const outputDirectory = path.resolve(process.env.TAXEA_FIXTURE_MATRIX_DIR);
+  fs.mkdirSync(outputDirectory, { recursive: true });
+  const filenames = {
+    '111': 'B1234567420261T.111', '115': 'B1234567420261T.115', '123': 'B1234567420261T.123',
+    '130': 'B1234567420261T.130', '131': 'B1234567420261T.131', '180': 'B1234567420250A.180',
+    '190': 'B1234567420250A.190', '193': 'B1234567420250A.193', '202': 'B1234567420261P.202',
+    '216': 'B1234567420261T.216', '296': 'B1234567420250A.296', '303': 'B1234567420261T.303',
+    '347': 'B1234567420250A.347', '349': 'B1234567420261T.349', '390': 'B1234567420250A.390',
+    '415': 'B1234567420250A_415_ATC.txt', '200': 'B1234567420250A.200',
+    '232': 'B1234567420250A.232', '417-guided': 'B12345674202601_417_GUIADO.csv',
+    '420-guided': 'B1234567420261T_420_GUIADO.csv', '421-guided': 'B1234567420264T_421_GUIADO.csv',
+    '425-guided': 'B123456742025_425_GUIADO.csv',
+  };
+  const matrix = context.__taxeaFixtureMatrix || {};
+  const manifest = [];
+  for (const [model, content] of Object.entries(matrix)) {
+    const filename = filenames[model];
+    if (!filename || typeof content !== 'string' || !content.length) throw new Error(`Muestra no generada para ${model}.`);
+    const target = path.join(outputDirectory, filename);
+    fs.writeFileSync(target, content, 'utf8');
+    manifest.push({ model, filename, bytes: Buffer.byteLength(content, 'utf8'), characters: content.length, sha256: createHash('sha256').update(content, 'utf8').digest('hex').toUpperCase() });
+  }
+  fs.writeFileSync(path.join(outputDirectory, 'manifest.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), synthetic: true, engineVersion: selfTest.payload.engineVersion, fixtures: manifest }, null, 2)}\n`, 'utf8');
 }
 console.log(JSON.stringify(output, null, 2));
 if (!output.ok) process.exitCode = 1;
