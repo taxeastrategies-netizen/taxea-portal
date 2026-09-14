@@ -2361,7 +2361,7 @@ function export200(company:any, year:number, calculation:any, developerTaxId:str
       if(Object.prototype.hasOwnProperty.call(boxValues,key)) place(buffer,definition.position,definition.length,numeric(boxValues[key],definition.length,definition.signed,definition.decimals));
     }
     if(layout.code==='01000') {
-      const result=money(calculation.result), requestedDeclaration=clean(adjustments.declarationType).toUpperCase(), declaration=requestedDeclaration||(result>0?'I':result<0?'D':'N');
+      const result=money(calculation.result), requestedDeclaration=clean(adjustments.declarationType).toUpperCase(), declaration=['I','D','N'].includes(requestedDeclaration)?requestedDeclaration:(result>0?'I':result<0?'D':'N');
       place(buffer,13,1,declaration); place(buffer,14,9,normalizedText(company.nif_cif,9)); place(buffer,23,80,normalizedText(company.razon_social||company.nombre_comercial,80)); place(buffer,103,4,String(year)); place(buffer,107,2,'0A');
       place(buffer,109,4,startDate.slice(4)); place(buffer,113,2,startDate.slice(2,4)); place(buffer,115,2,startDate.slice(0,2)); place(buffer,117,4,endDate.slice(4)); place(buffer,121,2,endDate.slice(2,4)); place(buffer,123,2,endDate.slice(0,2));
       place(buffer,125,1,numeric(adjustments.exerciseType||1,1,false,0)); place(buffer,126,4,leftPaddedText(String(adjustments.cnae||company.cnae||'').replace(/\D/g,''),4,'0')); place(buffer,131,9,normalizedText(adjustments.contactPhone1,9)); place(buffer,140,9,normalizedText(adjustments.contactPhone2,9));
