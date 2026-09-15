@@ -350,15 +350,38 @@ function periodPolicy(model: string, year: number, periodInput: string) {
 }
 
 const FILED_STATUSES = new Set(['presentado', 'subsanado']);
+const INCREMENTAL_INFORMATIVE_MODELS = new Set(['180', '190', '193', '232', '296', '347', '349', '415']);
 
 function filingDate(filing: any) {
   return clean(filing?.fechaPresentacion || filing?.fechaImportacion || filing?.updated_date || filing?.created_date).slice(0, 10);
 }
 
+function effectiveFiledVersion(rows: any[], model: string) {
+  const versions = [...rows].sort((a: any, b: any) => Number(a.snapshotVersion || 0) - Number(b.snapshotVersion || 0) || `${filingDate(a)}|${a.created_date || ''}`.localeCompare(`${filingDate(b)}|${b.created_date || ''}`));
+  const latest = versions[versions.length - 1] || null;
+  if (!latest || !INCREMENTAL_INFORMATIVE_MODELS.has(model) || versions.length === 1) return latest;
+  let boxes: Record<string, number> = {}, sourceIds: string[] = [], result = 0, activeIds: string[] = [], hasBase = false;
+  for (const version of versions) {
+    const type = clean(version.tipoDeclaracion || 'original').toLowerCase();
+    if (type === 'original' || type === 'sustitutiva') {
+      boxes = boxMap(version.casillasPresentadas);
+      sourceIds = Array.isArray(version.sourceIdsPresentados) ? version.sourceIdsPresentados.map(clean).filter(Boolean) : [];
+      result = money(version.importeFinal);
+      activeIds = [version.id];
+      hasBase = true;
+    } else if (type === 'complementaria') {
+      for (const [code, amount] of Object.entries(boxMap(version.casillasPresentadas))) boxes[code] = money((boxes[code] || 0) + amount);
+      sourceIds = unique([...sourceIds, ...(Array.isArray(version.sourceIdsPresentados) ? version.sourceIdsPresentados.map(clean).filter(Boolean) : [])]);
+      result = money(result + money(version.importeFinal));
+      activeIds.push(version.id);
+    }
+  }
+  return { ...latest, casillasPresentadas: boxes, sourceIdsPresentados: sourceIds, importeFinal: result,
+    effectiveCorrectionScope: 'original_mas_complementarias_o_sustitutiva', activeVersionIds: activeIds, correctionIncomplete: !hasBase };
+}
+
 function latestFiling(filings: any[], model: string, year: number, period: string) {
-  return filings
-    .filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === Number(year) && normalizedPeriod(row.periodo) === normalizedPeriod(period) && FILED_STATUSES.has(clean(row.estadoPresentacion)))
-    .sort((a: any, b: any) => `${filingDate(b)}|${String(b.snapshotVersion || 0).padStart(6, '0')}|${b.created_date || ''}`.localeCompare(`${filingDate(a)}|${String(a.snapshotVersion || 0).padStart(6, '0')}|${a.created_date || ''}`))[0] || null;
+  return effectiveFiledVersion(filings.filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === Number(year) && normalizedPeriod(row.periodo) === normalizedPeriod(period) && FILED_STATUSES.has(clean(row.estadoPresentacion))), model);
 }
 
 function boxMap(value: any) {
