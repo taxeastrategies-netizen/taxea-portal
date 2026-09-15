@@ -3638,6 +3638,7 @@ Deno.serve(async (req) => {
       if(!profile) addIssue('warning','CFG-PERFIL','Falta el perfil fiscal maestro de la empresa.',{category:'configuracion'});
       else if(profile.profileStatus!=='validado_asesor') addIssue('warning','CFG-REVISION','El perfil fiscal no consta validado por un asesor.',{category:'configuracion',sourceId:profile.id});
       if(activeModels.length===0) addIssue('warning','CFG-OBLIGACIONES','No hay obligaciones fiscales activas y sincronizadas.',{category:'configuracion'});
+      for(const filing of filingByKey.values()) if(filing.correctionIncomplete) addIssue('warning','CORRECCION-SIN-ORIGINAL','Existe una complementaria histórica sin declaración original importada. La reconstrucción de importes presentados no es fiable hasta recuperar la versión inicial.',{category:'presentacion',sourceId:filing.id,modeloCodigo:filing.modeloCodigo,ejercicio:filing.ejercicio,periodo:filing.periodo});
       for(const draft of latestDrafts) {
         for(const issue of draft.recommendations) addIssue('warning','BORRADOR-RECOMENDACION',issue.message,{category:'borrador',sourceId:draft.id,modeloCodigo:draft.modeloCodigo,ejercicio:draft.ejercicio,periodo:draft.periodo});
       }
@@ -3782,7 +3783,7 @@ Deno.serve(async (req) => {
         : await sha256(JSON.stringify({companyId,model,year,period,boxes:normalized.preview.boxes,result:normalized.preview.result,resultDisposition:normalized.preview.resultDisposition,justification:normalized.preview.justificationNumber,date:normalized.preview.presentationDate}));
       const duplicate=(filings||[]).find((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period&&([row.hashFicheroImportado,row.snapshotHash].map(clean).includes(snapshotHash)||(normalized.preview.justificationNumber&&clean(row.numeroJustificante)===normalized.preview.justificationNumber)));
       if(duplicate) return Response.json({ok:true,alreadyImported:true,filing:duplicate,preview:normalized.preview,warnings:unique([...normalized.warnings,'Este mismo modelo ya estaba importado; no se ha creado un duplicado.'])});
-      const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period);
+      const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period&&FILED_STATUSES.has(clean(row.estadoPresentacion)));
       const previous=previousVersions.sort((a:any,z:any)=>Number(z.snapshotVersion||0)-Number(a.snapshotVersion||0))[0]||null;
       if(previous&&normalized.preview.declarationType==='original') return Response.json({error:'Ya existe una declaración original para este período.',blockers:['Si el fichero corresponde a una corrección posterior, selecciónalo como complementaria, rectificativa o sustitutiva e indica el justificante anterior.']},{status:409});
       if(!previous&&normalized.preview.declarationType!=='original') return Response.json({error:'Importa primero la declaración original de este período: una corrección aislada no permite reconstruir el histórico presentado.'},{status:422});
