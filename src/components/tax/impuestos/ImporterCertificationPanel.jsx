@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { formatDate, isReviewer } from './useTaxWorkspace';
 
 const key = (companyId, year) => ['tax-importer-evidence', companyId, Number(year)];
-const eligible = file => file.hasStoredContent && /^[a-f0-9]{64}$/i.test(file.hash || '')
+const eligible = file => file.immutable === true && file.hasStoredContent && /^[a-f0-9]{64}$/i.test(file.hash || '')
   && !/traspaso revisable|borrador técnico de revisión/i.test(file.formato || '');
 
 export default function ImporterCertificationPanel({ companyId, year, officialFiles }) {
