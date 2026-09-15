@@ -16,7 +16,23 @@ const invokeAccounting = async (payload) => {
 /** @param {any} value */
 const errorMessage = value => value?.response?.data?.error || value?.message || 'No se pudo completar la operación.';
 
-export default function PeriodosContables({ companyId }) {
+// Cada control procede de la prevalidación del servidor; esta guía no cambia saldos ni asientos.
+const CLOSING_CHECKS = [
+  { id: 'fecha', label: 'Ejercicio finalizado', passed: p => p.closeDateReached, detail: p => p.period?.endDate || '', tab: null },
+  { id: 'asientos', label: 'Asientos revisados', passed: p => p.pendingEntries === 0, detail: p => `${p.pendingEntries || 0} pendientes`, tab: 'diario' },
+  { id: 'cuadre', label: 'Asientos cuadrados', passed: p => p.unbalancedEntries === 0, detail: p => `${p.unbalancedEntries || 0} descuadrados`, tab: 'diario' },
+  { id: 'apuntes', label: 'Apuntes enlazados', passed: p => p.unresolvedLines === 0, detail: p => `${p.unresolvedLines || 0} huérfanos`, tab: 'diario' },
+  { id: 'facturas', label: 'Facturas contabilizadas', passed: p => p.pendingInvoices === 0, detail: p => `${p.pendingInvoices || 0} pendientes`, tab: 'facturas' },
+  { id: '555', label: 'Partidas 555 clasificadas', passed: p => Math.abs(Number(p.pending555Balance || 0)) <= 0.01, detail: p => `${Number(p.pending555Balance || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, tab: 'conciliacion' },
+  { id: 'banco', label: 'Banco conciliado', passed: p => p.unreconciledBankTransactions === 0, detail: p => `${p.unreconciledBankTransactions || 0} movimientos`, tab: 'conciliacion' },
+  { id: 'perfil', label: 'Perfil fiscal validado', passed: p => p.fiscalProfileValidated, detail: p => p.fiscalProfileValidated ? 'Validado por asesor' : 'Sin validar', tab: 'fiscal' },
+  { id: 'actividad', label: 'Actividad fiscal activa', passed: p => Number(p.fiscalActivities || 0) > 0, detail: p => `${p.fiscalActivities || 0} actividades`, tab: 'fiscal' },
+  { id: 'desglose', label: 'Facturas con desglose fiscal', passed: p => p.legacyFiscalInvoices === 0, detail: p => `${p.legacyFiscalInvoices || 0} sin desglose`, tab: 'iva' },
+  { id: 'lineas_fiscales', label: 'Líneas fiscales revisadas', passed: p => p.pendingFiscalLines === 0, detail: p => `${p.pendingFiscalLines || 0} pendientes`, tab: 'iva' },
+  { id: 'divisa', label: 'Divisas valoradas en EUR', passed: p => p.currencyIssues === 0, detail: p => `${p.currencyIssues || 0} incidencias`, tab: 'diario' },
+];
+
+export default function PeriodosContables({ companyId, onNavigate }) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [lockDate, setLockDate] = useState(`${currentYear}-12-31`);
@@ -39,9 +55,10 @@ export default function PeriodosContables({ companyId }) {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['accounting-periods', companyId] });
   const mutation = useMutation({
     mutationFn: async (/** @type {Record<string, any>} */ payload) => invokeAccounting({ companyId, ...payload }),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setActionError('');
-      if (data.preview) setPreview(data.preview);
+      // Un bloqueo, configuración o reapertura invalida la prevalidación anterior.
+      setPreview(variables.action === 'closing_preview' ? data.preview || null : null);
       refresh();
     },
     onError: (error) => {
@@ -55,8 +72,7 @@ export default function PeriodosContables({ companyId }) {
     toast.success(`Ejercicio ${year} configurado.`);
   };
   const runPreview = async () => {
-    const data = await mutation.mutateAsync({ action: 'closing_preview', year: Number(year) });
-    setPreview(data.preview);
+    await mutation.mutateAsync({ action: 'closing_preview', year: Number(year) });
   };
   const closeYear = async () => {
     await mutation.mutateAsync({ action: 'closing_execute', year: Number(year), confirmation, apply: true });
@@ -134,7 +150,17 @@ export default function PeriodosContables({ companyId }) {
             {preview && <div className={`rounded-lg border p-3 text-xs ${preview.canClose ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
               <div className="flex items-center gap-2 font-medium">{preview.canClose ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <AlertTriangle className="h-4 w-4 text-amber-500" />}{preview.canClose ? 'Prevalidación superada' : 'Cierre bloqueado'}</div>
               <p className="mt-2">Resultado previo: {Number(preview.resultBeforeTax || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</p>
-              {(preview.blockers || []).map(item => <p className="mt-1" key={item}>• {item}</p>)}
+              <p className="mt-2 text-muted-foreground">Controles del servidor: revisa cada incidencia en su apartado antes de repetir el análisis. Ningún control modifica la contabilidad automáticamente.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {CLOSING_CHECKS.map(check => {
+                  const passed = Boolean(check.passed(preview));
+                  return <div key={check.id} className={`rounded-md border px-3 py-2 ${passed ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-amber-500/25 bg-amber-500/5'}`}>
+                    <div className="flex items-center gap-2 font-medium">{passed ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />}{check.label}</div>
+                    <div className="mt-1 flex items-center justify-between gap-2"><span className="text-muted-foreground">{check.detail(preview)}</span>{!passed && check.tab && onNavigate && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onNavigate(check.tab)}>Revisar</Button>}</div>
+                  </div>;
+                })}
+              </div>
+              {(preview.blockers || []).length > 0 && <details className="mt-3"><summary className="cursor-pointer font-medium">Ver motivos exactos del motor ({preview.blockers.length})</summary>{preview.blockers.map(item => <p className="mt-1" key={item}>• {item}</p>)}</details>
             </div>}
             {preview?.canClose && <div className="space-y-2"><Input placeholder={`Escribe CERRAR ${year}`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><Button variant="destructive" onClick={closeYear} disabled={mutation.isPending || confirmation.trim().toUpperCase() !== `CERRAR ${year}`}>Cerrar ejercicio</Button></div>}
             {selected.status === 'cerrado' && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
