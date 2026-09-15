@@ -209,7 +209,7 @@ const GENERIC_DECLARABLE_FIELDS: Record<string, { text: string[]; numeric: strin
   },
   '296': {
     text: ['recipientTaxId','spanishTaxId','foreignTaxId','recipientName','country','incomeKey','subkey','nature','exemptionCode','treatyCode','paymentDate','operationDate','representativeTaxId','personalityKey','provinceCode','incomeGroup','recordOrder','mediatorCode','bic','issuerCodeType','issuerCode','paymentRole','accountCodeType','accountCode','accrualYear','loanStartDate','loanEndDate','previousPayerTaxId','marketKey','lei','address','addressComplement','city','region','postalCode','birthDate','birthCity','birthCountry'],
-    numeric: ['accruedAmount','withholdingBase','withholdingRate','withholdingAmount','lenderRemuneration','loanCompensation','loanGuarantees','passedOnAccountPayment'], boolean: ['notSubjectToWithholding','dividendOrEquityIncome','recipientMediator','pendingAccrual','specialWithholdingProcedure','requiresSpecialAnnex','specialDataConfirmed'],
+    numeric: ['accruedAmount','withholdingBase','withholdingRate','withholdingAmount','lenderRemuneration','loanCompensation','loanGuarantees','passedOnAccountPayment','stateWithholding','navarraWithholding','alavaWithholding','gipuzkoaWithholding','bizkaiaWithholding'], boolean: ['notSubjectToWithholding','dividendOrEquityIncome','recipientMediator','pendingAccrual','specialWithholdingProcedure','requiresSpecialAnnex','foralSplitConfirmed','specialDataConfirmed'],
   },
   '349': {
     text: ['operatorTaxId','operatorName','country','operationKey','operationDate','originalYear','originalPeriod','originalOperatorTaxId','replacementOperatorTaxId','replacementOperatorName'],
