@@ -49,7 +49,8 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
     onError: err => setError((/** @type {any} */ (err))?.response?.data?.error || err?.message || 'No se pudo revisar la evidencia.'),
   });
   const rows = evidence.data?.rows || [];
-  const latest = new Map(rows.map(item => [item.taxOfficialFileId, item]));
+  const latest = new Map();
+  for (const item of rows) if (!latest.has(item.taxOfficialFileId)) latest.set(item.taxOfficialFileId, item);
   const pending = files.filter(file => !latest.has(file.id)).length;
   return <section className="rounded-2xl border border-cyan-200 bg-white p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Certificación del importador oficial</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">La prueba queda enlazada al fichero exacto, su SHA-256 y versión de diseño. Aceptación de importación no es presentación. Los paquetes de traspaso guiado no se certifican como ficheros oficiales.</p></div><div className="rounded-full bg-cyan-50 px-3 py-1 text-xs text-cyan-800">{pending} fichero(s) sin prueba</div></div>
