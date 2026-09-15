@@ -3454,6 +3454,8 @@ Deno.serve(async (req) => {
         model232ExplicitOnly:fieldMap(result232)['REGISTROS']===1&&fieldMap(result232)['VINCULADAS']===4000,
         model417Sii:result417.result===7&&fieldMap(result417)['DEVENGADO']===7,
         exportModes:['131','200','202','216','232','296','349'].every(code=>DEFINITIONS[code].officialExport===true&&DEFINITIONS[code].handoffExport===false)&&['417','421'].every(code=>DEFINITIONS[code].handoffExport===true&&DEFINITIONS[code].officialExport===false),
+        filedCorrectionPolicy:allowedFiledDeclarationTypes('303',2026,'1T').join('|')==='original|rectificativa'&&allowedFiledDeclarationTypes('200',2024,'Anual').join('|')==='original|rectificativa'&&allowedFiledDeclarationTypes('111',2026,'1T').join('|')==='original|complementaria'&&allowedFiledDeclarationTypes('190',2026,'Anual').join('|')==='original|complementaria|sustitutiva'&&allowedFiledDeclarationTypes('415',2026,'Anual').includes('sustitutiva'),
+        unrecognizedFiledSource:(()=>{const sample=normalizeFiledImport({rawContent:'NO ES UN REGISTRO',fileName:'prueba.111',presentationDate:'2026-04-20',presentedBoxes:{'01':1},declarationType:'sustitutiva'},company,'111',2026,'1T');return sample.preview.source==='fichero_no_reconocido'&&sample.errors.some((message:string)=>message.includes('sustitutiva'))&&sample.warnings.some((message:string)=>message.includes('no se reconoció'));})(),
       };
       const profileRegressionChecks={
         autonomoIva:fieldMap(result130Q2)['01']===1500,
