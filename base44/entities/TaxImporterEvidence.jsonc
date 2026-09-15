@@ -60,6 +60,13 @@
         "revisada"
       ],
       "default": "pendiente"
+    },
+    "revisadoPor": {
+      "type": "string"
+    },
+    "fechaRevision": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [
