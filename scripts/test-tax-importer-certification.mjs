@@ -22,6 +22,7 @@ const records = {
     { id: 'bad-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Diseño de registro AEAT', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: 'a'.repeat(64) },
     { id: 'wrong-authority-qa', companyId: 'company-qa', modeloCodigo: '415', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Soporte ATC', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
     { id: 'mutable-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Diseño de registro AEAT', contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
+    { id: 'unsupported-qa', companyId: 'company-qa', modeloCodigo: '425', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Diseño de registro AEAT', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
   ],
   TaxImporterEvidence: [],
 };
@@ -53,6 +54,7 @@ checks.push((await call({ ...base, fileId: 'guided-qa' })).status === 409);
 checks.push((await call({ ...base, fileId: 'bad-qa' })).status === 409);
 checks.push((await call({ ...base, fileId: 'wrong-authority-qa' })).status === 409);
 checks.push((await call({ ...base, fileId: 'mutable-qa' })).status === 409);
+checks.push((await call({ ...base, fileId: 'unsupported-qa' })).status === 409);
 const accepted = await call(base);
 checks.push(accepted.status === 200 && accepted.data.record.fileHashSha256 === sha && writes === 1);
 const duplicate = await call(base);
