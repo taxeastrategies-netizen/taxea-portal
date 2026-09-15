@@ -160,7 +160,7 @@ export default function PeriodosContables({ companyId, onNavigate }) {
                   </div>;
                 })}
               </div>
-              {(preview.blockers || []).length > 0 && <details className="mt-3"><summary className="cursor-pointer font-medium">Ver motivos exactos del motor ({preview.blockers.length})</summary>{preview.blockers.map(item => <p className="mt-1" key={item}>• {item}</p>)}</details>
+              {(preview.blockers || []).length > 0 && <details className="mt-3"><summary className="cursor-pointer font-medium">Ver motivos exactos del motor ({preview.blockers.length})</summary>{preview.blockers.map(item => <p className="mt-1" key={item}>• {item}</p>)}</details>}
             </div>}
             {preview?.canClose && <div className="space-y-2"><Input placeholder={`Escribe CERRAR ${year}`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><Button variant="destructive" onClick={closeYear} disabled={mutation.isPending || confirmation.trim().toUpperCase() !== `CERRAR ${year}`}>Cerrar ejercicio</Button></div>}
             {selected.status === 'cerrado' && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
