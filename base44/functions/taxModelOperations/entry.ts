@@ -3752,6 +3752,7 @@ Deno.serve(async (req) => {
         ? previousVersions.find((row:any)=>clean(row.numeroJustificante)===normalized.preview.previousJustificationNumber)
         : previous;
       if(previous&&normalized.preview.declarationType!=='original'&&!linkedPrevious) return Response.json({error:'El justificante anterior no coincide con ninguna versión importada de este período.'},{status:422});
+      if(normalized.preview.declarationType!=='original'&&normalized.preview.justificationNumber&&normalized.preview.justificationNumber===normalized.preview.previousJustificationNumber) return Response.json({error:'La nueva declaración debe tener un justificante distinto del anterior.'},{status:422});
       const filing=await svc.entities.TaxFiling.create({
         companyId,modeloCodigo:model,ejercicio:year,periodo:period,estadoPresentacion:'presentado',via:'presentacion_manual',
         fechaPresentacion:normalized.preview.presentationDate,fechaImportacion:new Date().toISOString(),importadoPor:user.email,
@@ -3760,7 +3761,7 @@ Deno.serve(async (req) => {
         numeroJustificante:normalized.preview.justificationNumber,csv:clean(body.csv),importeFinal:normalized.preview.result,resultadoDestino:normalized.preview.resultDisposition,
         ficheroPresentadoUrl:normalized.preview.fileUrl,nombreFicheroImportado:normalized.preview.fileName,hashFicheroImportado:snapshotHash,
         fuenteImportacion:normalized.preview.source,casillasPresentadas:normalized.preview.boxes,sourceIdsPresentados:Array.isArray(body.sourceIdsPresentados)?unique(body.sourceIdsPresentados.map(clean).filter(Boolean)):[],
-        snapshotBloqueado:true,revisionImportacion:normalized.preview.source==='fichero_oficial'?'validado_estructura':'revisado_usuario',
+        snapshotBloqueado:true,revisionImportacion:normalized.preview.source==='fichero_oficial'?'validado_estructura':normalized.preview.source==='pdf_ocr_revisado'?'revisado_usuario':'pendiente_revision',
         avisosImportacion:unique(normalized.warnings),snapshotHash,analisisArrastre:{engineVersion:ENGINE_VERSION,importedAsImmutableSnapshot:true},confirmadoPorUsuario:true,usuarioPresentador:user.email,notas:clean(body.notes),
       });
       const allPeriodRows=await svc.entities.TaxPeriod.filter({companyId,modeloCodigo:model,ejercicio:year},'-created_date',100);
