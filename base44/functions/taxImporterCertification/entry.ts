@@ -4,6 +4,7 @@ const clean = (value: unknown) => String(value ?? '').trim();
 const lower = (value: unknown) => clean(value).toLowerCase();
 const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEWER_ROLES = new Set(['admin', 'super_admin', 'advisor', 'asesor']);
+const CERTIFIABLE_MODELS = new Set(['111','115','123','130','131','180','190','193','200','202','216','232','296','303','347','349','390','415']);
 
 function companyAccess(user: any, company: any) {
   const role = lower(user?.role);
@@ -17,8 +18,13 @@ function companyAccess(user: any, company: any) {
 
 function eligibleFile(file: any) {
   const format = lower(file?.formato);
-  return Boolean(file?.immutable === true && clean(file?.contentBase64) && SHA256.test(lower(file?.hash))
-    && !format.includes('traspaso revisable') && !format.includes('borrador técnico de revisión'));
+  const model = clean(file?.modeloCodigo);
+  const authority = clean(file?.administracion);
+  const officialFormat = model === '415'
+    ? authority === 'ATC' && format.startsWith('soporte de importación oficial programa atc 415')
+    : authority === 'AEAT' && (format.startsWith('diseño de registro aeat') || format.startsWith('diseño lógico aeat'));
+  return Boolean(CERTIFIABLE_MODELS.has(model) && officialFormat && file?.immutable === true
+    && clean(file?.contentBase64) && SHA256.test(lower(file?.hash)));
 }
 
 function validEvidence(body: any) {
@@ -59,7 +65,7 @@ Deno.serve(async (req) => {
     const action = clean(body.action || 'list');
 
     if (action === 'self_test') {
-      const sample = { immutable: true, contentBase64: 'YQ==', hash: 'a'.repeat(64), formato: 'Diseño de registro AEAT' };
+      const sample = { modeloCodigo: '190', administracion: 'AEAT', immutable: true, contentBase64: 'YQ==', hash: 'a'.repeat(64), formato: 'Diseño de registro AEAT' };
       return Response.json({ ok: true, checks: {
         officialOnly: eligibleFile(sample) && !eligibleFile({ ...sample, formato: 'Paquete de traspaso revisable ATC' }),
         evidenceRequired: validEvidence({ resultado: 'aceptado', respuestaImportador: 'Fichero aceptado', evidenceUrl: 'https://example.test/evidence.pdf', fechaPrueba: new Date().toISOString() })
