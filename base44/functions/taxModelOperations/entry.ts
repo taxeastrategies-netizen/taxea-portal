@@ -1630,7 +1630,14 @@ function calculate296(data: any, b: any) {
   if (!records.length) data.warnings.push('No hay perceptores IRNR individualizados para el resumen anual 296.');
   if (records.some((record: any) => !clean(record.payload?.recipientTaxId) || !clean(record.payload?.country) || !clean(record.payload?.incomeKey))) data.warnings.push('Hay registros del 296 sin identificación, país o clave de renta completa.');
   if(records.some((record:any)=>!['F','J'].includes(clean(record.payload?.personalityKey))||!['D','E'].includes(clean(record.payload?.nature))||!/^\d{2}$/.test(clean(record.payload?.subkey||record.payload?.exemptionCode))||!/^\d{4}-\d{2}-\d{2}$/.test(clean(record.payload?.paymentDate||record.payload?.operationDate)))) data.warnings.push('Hay perceptores del 296 sin personalidad F/J, naturaleza D/E, subclave o fecha de devengo confirmadas.');
-  if(records.some((record:any)=>booleanValue(record.payload?.requiresSpecialAnnex))) data.warnings.push('Hay perceptores que requieren revisar y completar un anexo especial A, B o F del modelo 296 en la AEAT.');
+  const foralRows=records.filter((record:any)=>booleanValue(record.payload?.foralSplitConfirmed));
+  for(const record of foralRows){
+    const payload=record.payload||{};
+    const split=money(['stateWithholding','navarraWithholding','alavaWithholding','gipuzkoaWithholding','bizkaiaWithholding'].reduce((total:number,key:string)=>total+money(payload[key]),0));
+    if(Math.abs(split-money(payload.withholdingAmount))>0.01) data.warnings.push(`El anexo F del perceptor ${clean(payload.recipientName)||record.recordKey} no cuadra con la retención total; corrige el reparto antes de exportar.`);
+  }
+  if(records.some((record:any)=>booleanValue(record.payload?.requiresSpecialAnnex)&&!booleanValue(record.payload?.foralSplitConfirmed))) data.warnings.push('Revisa los anexos A/B del 296 cuando procedan: se remiten después del modelo 210 y no se incluyen en el fichero ordinario de enero.');
+  if(records.some((record:any)=>['1','2','01','02'].includes(clean(record.payload?.incomeKey))&&['2','3'].includes(clean(record.payload?.paymentRole))&&clean(record.payload?.mediatorCode)==='2')) data.warnings.push('Hay pagos a mediadores extranjeros susceptibles de anexos A/B del 296 tras solicitar devolución por modelo 210; coteja beneficiarios, certificados y justificantes.');
   if(records.some((record:any)=>['1','2','01','02'].includes(clean(record.payload?.incomeKey))&&!clean(record.payload?.paymentRole))) data.warnings.push('Para las claves de renta 1 y 2 del 296 debe confirmarse el papel del pagador para calcular el total ingresado de la cabecera.');
   return { fields, result: 0, details: records.map((record: any) => ({ recordId: record.modeloCodigo === '296' ? record.id : undefined, recordKey: record.recordKey, sourceId: manualSourceId(record), sourceModel: record.modeloCodigo, reviewStatus: record.reviewStatus, ...(record.payload || {}) })) };
 }
