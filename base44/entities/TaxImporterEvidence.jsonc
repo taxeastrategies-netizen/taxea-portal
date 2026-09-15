@@ -1,0 +1,106 @@
+{
+  "name": "TaxImporterEvidence",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "taxOfficialFileId": {
+      "type": "string"
+    },
+    "modeloCodigo": {
+      "type": "string"
+    },
+    "ejercicio": {
+      "type": "number"
+    },
+    "periodo": {
+      "type": "string"
+    },
+    "administracion": {
+      "type": "string"
+    },
+    "nombreFichero": {
+      "type": "string"
+    },
+    "versionDiseno": {
+      "type": "string"
+    },
+    "fileHashSha256": {
+      "type": "string"
+    },
+    "resultado": {
+      "type": "string",
+      "enum": [
+        "aceptado",
+        "rechazado"
+      ]
+    },
+    "fechaPrueba": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "respuestaImportador": {
+      "type": "string"
+    },
+    "evidenceUrl": {
+      "type": "string"
+    },
+    "registradoPor": {
+      "type": "string"
+    },
+    "fechaRegistro": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revisionAsesor": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "revisada"
+      ],
+      "default": "pendiente"
+    }
+  },
+  "required": [
+    "companyId",
+    "taxOfficialFileId",
+    "modeloCodigo",
+    "ejercicio",
+    "periodo",
+    "fileHashSha256",
+    "resultado",
+    "fechaPrueba",
+    "respuestaImportador",
+    "evidenceUrl"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.companyId": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
