@@ -17,7 +17,7 @@ function companyAccess(user: any, company: any) {
 
 function eligibleFile(file: any) {
   const format = lower(file?.formato);
-  return Boolean(file?.immutable !== false && clean(file?.contentBase64) && SHA256.test(lower(file?.hash))
+  return Boolean(file?.immutable === true && clean(file?.contentBase64) && SHA256.test(lower(file?.hash))
     && !format.includes('traspaso revisable') && !format.includes('borrador técnico de revisión'));
 }
 
@@ -95,7 +95,9 @@ Deno.serve(async (req) => {
       if (!fileId) return Response.json({ error: 'Selecciona el fichero exacto.' }, { status: 400 });
       const file = await svc.entities.TaxOfficialFile.get(fileId).catch(() => null);
       if (!file || clean(file.companyId) !== companyId) return Response.json({ error: 'Fichero ajeno o inexistente.' }, { status: 404 });
-      if (!eligibleFile(file)) return Response.json({ error: 'Solo se certifican ficheros exactos con SHA-256; los traspasos guiados no son importaciones oficiales.' }, { status: 409 });
+      if (!eligibleFile(file)) return Response.json({ error: 'Solo se certifican ficheros inmutables exactos con SHA-256; los traspasos guiados no son importaciones oficiales.' }, { status: 409 });
+      const expectedAuthority = clean(file.modeloCodigo) === '415' ? 'ATC' : 'AEAT';
+      if (clean(file.administracion) !== expectedAuthority) return Response.json({ error: `El modelo ${file.modeloCodigo} debe certificarse en ${expectedAuthority}, no en ${file.administracion || 'un importador sin identificar'}.` }, { status: 409 });
       const hash = await contentHash(clean(file.contentBase64));
       if (hash !== lower(file.hash)) return Response.json({ error: 'El contenido conservado no coincide con la huella SHA-256 del fichero.' }, { status: 409 });
       const existing = await allRows(svc.entities.TaxImporterEvidence, { companyId, taxOfficialFileId: fileId });
@@ -119,6 +121,10 @@ Deno.serve(async (req) => {
       if (body.confirmation !== true) return Response.json({ error: 'Confirma la revisión.' }, { status: 400 });
       const row = await svc.entities.TaxImporterEvidence.get(clean(body.recordId)).catch(() => null);
       if (!row || clean(row.companyId) !== companyId) return Response.json({ error: 'Evidencia ajena o inexistente.' }, { status: 404 });
+      const originalFile = await svc.entities.TaxOfficialFile.get(clean(row.taxOfficialFileId)).catch(() => null);
+      if (!originalFile || clean(originalFile.companyId) !== companyId || !eligibleFile(originalFile)
+        || lower(originalFile.hash) !== lower(row.fileHashSha256)
+        || await contentHash(clean(originalFile.contentBase64)) !== lower(row.fileHashSha256)) return Response.json({ error: 'No se puede revisar: el fichero original ya no coincide con la evidencia conservada.' }, { status: 409 });
       if (row.revisionAsesor === 'revisada') return Response.json({ ok: true, alreadyExisted: true, record: row });
       const saved = await svc.entities.TaxImporterEvidence.update(row.id, {
         revisionAsesor: 'revisada', revisadoPor: clean(user.email), fechaRevision: new Date().toISOString(),
