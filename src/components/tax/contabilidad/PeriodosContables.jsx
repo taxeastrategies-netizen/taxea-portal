@@ -23,7 +23,7 @@ const CLOSING_CHECKS = [
   { id: 'cuadre', label: 'Asientos cuadrados', passed: p => p.unbalancedEntries === 0, detail: p => `${p.unbalancedEntries || 0} descuadrados`, tab: 'diario' },
   { id: 'apuntes', label: 'Apuntes enlazados', passed: p => p.unresolvedLines === 0, detail: p => `${p.unresolvedLines || 0} huérfanos`, tab: 'diario' },
   { id: 'facturas', label: 'Facturas contabilizadas', passed: p => p.pendingInvoices === 0, detail: p => `${p.pendingInvoices || 0} pendientes`, tab: 'facturas' },
-  { id: '555', label: 'Partidas 555 clasificadas', passed: p => Math.abs(Number(p.pending555Balance || 0)) <= 0.01, detail: p => `${Number(p.pending555Balance || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, tab: 'conciliacion' },
+  { id: '555', label: 'Partidas 555 clasificadas', passed: p => Number.isFinite(Number(p.pending555Balance)) && Math.abs(Number(p.pending555Balance)) <= 0.01, detail: p => `${Number(p.pending555Balance || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €`, tab: 'conciliacion' },
   { id: 'banco', label: 'Banco conciliado', passed: p => p.unreconciledBankTransactions === 0, detail: p => `${p.unreconciledBankTransactions || 0} movimientos`, tab: 'conciliacion' },
   { id: 'perfil', label: 'Perfil fiscal validado', passed: p => p.fiscalProfileValidated, detail: p => p.fiscalProfileValidated ? 'Validado por asesor' : 'Sin validar', tab: 'fiscal' },
   { id: 'actividad', label: 'Actividad fiscal activa', passed: p => Number(p.fiscalActivities || 0) > 0, detail: p => `${p.fiscalActivities || 0} actividades`, tab: 'fiscal' },
