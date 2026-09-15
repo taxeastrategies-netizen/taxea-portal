@@ -7,6 +7,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { formatDate, isReviewer } from './useTaxWorkspace';
 
 const key = (companyId, year) => ['tax-importer-evidence', companyId, Number(year)];
+const CORE_CIRCUITS = ['111','115','123','130','131','180','190','193','216','296','303','347','349','390','415'];
+const EXTENDED_CIRCUITS = ['200','202','232'];
 const eligible = file => file.immutable === true && file.hasStoredContent && /^[a-f0-9]{64}$/i.test(file.hash || '')
   && !/traspaso revisable|borrador técnico de revisión/i.test(file.formato || '');
 
