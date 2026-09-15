@@ -19,7 +19,9 @@ const records = {
   TaxOfficialFile: [
     { id: 'file-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', nombreFichero: 'synthetic.296', versionDiseno: '2024', formato: 'Diseño de registro AEAT', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
     { id: 'guided-qa', companyId: 'company-qa', modeloCodigo: '417', ejercicio: 2025, periodo: '01', formato: 'Paquete de traspaso revisable ATC', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
-    { id: 'bad-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', formato: 'Diseño de registro AEAT', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: 'a'.repeat(64) },
+    { id: 'bad-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Diseño de registro AEAT', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: 'a'.repeat(64) },
+    { id: 'wrong-authority-qa', companyId: 'company-qa', modeloCodigo: '415', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Soporte ATC', immutable: true, contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
+    { id: 'mutable-qa', companyId: 'company-qa', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', administracion: 'AEAT', formato: 'Diseño de registro AEAT', contentBase64: Buffer.from(payload).toString('base64'), hash: sha },
   ],
   TaxImporterEvidence: [],
 };
@@ -49,12 +51,18 @@ const base = { action: 'record', companyId: 'company-qa', fileId: 'file-qa', res
 checks.push((await call({ ...base, evidenceUrl: '' })).status === 400);
 checks.push((await call({ ...base, fileId: 'guided-qa' })).status === 409);
 checks.push((await call({ ...base, fileId: 'bad-qa' })).status === 409);
+checks.push((await call({ ...base, fileId: 'wrong-authority-qa' })).status === 409);
+checks.push((await call({ ...base, fileId: 'mutable-qa' })).status === 409);
 const accepted = await call(base);
 checks.push(accepted.status === 200 && accepted.data.record.fileHashSha256 === sha && writes === 1);
 const duplicate = await call(base);
 checks.push(duplicate.data.alreadyExisted === true && writes === 1);
 checks.push((await call({ action: 'review', companyId: 'company-qa', recordId: accepted.data.record.id, confirmation: true })).status === 403);
 user = { email: 'advisor@test.invalid', role: 'asesor', data: {} };
+const originalContent = records.TaxOfficialFile[0].contentBase64;
+records.TaxOfficialFile[0].contentBase64 = Buffer.from('alterado').toString('base64');
+checks.push((await call({ action: 'review', companyId: 'company-qa', recordId: accepted.data.record.id, confirmation: true })).status === 409 && writes === 1);
+records.TaxOfficialFile[0].contentBase64 = originalContent;
 const reviewed = await call({ action: 'review', companyId: 'company-qa', recordId: accepted.data.record.id, confirmation: true });
 checks.push(reviewed.status === 200 && reviewed.data.record.revisionAsesor === 'revisada' && writes === 2);
 const list = await call({ action: 'list', companyId: 'company-qa', ejercicio: 2025 });
