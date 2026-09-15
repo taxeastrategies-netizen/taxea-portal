@@ -39,7 +39,7 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
       })).data;
     },
     onSuccess: refresh,
-    onError: err => setError(err?.response?.data?.error || err?.message || 'No se pudo registrar la prueba.'),
+    onError: err => setError((/** @type {any} */ (err))?.response?.data?.error || err?.message || 'No se pudo registrar la prueba.'),
   });
   const review = useMutation({
     mutationFn: async recordId => (await base44.functions.invoke('taxImporterCertification', {
