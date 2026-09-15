@@ -46,7 +46,7 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
       action: 'review', companyId, recordId, confirmation: reviewConfirmId === recordId,
     })).data,
     onSuccess: async () => { setReviewConfirmId(''); await queryClient.invalidateQueries({ queryKey: key(companyId, year) }); },
-    onError: err => setError(err?.response?.data?.error || err?.message || 'No se pudo revisar la evidencia.'),
+    onError: err => setError((/** @type {any} */ (err))?.response?.data?.error || err?.message || 'No se pudo revisar la evidencia.'),
   });
   const rows = evidence.data?.rows || [];
   const latest = new Map(rows.map(item => [item.taxOfficialFileId, item]));
