@@ -64,8 +64,8 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
   const circuitStatus = code => {
     const samples = files.filter(file => file.modeloCodigo === code);
     const proofs = samples.map(file => latest.get(file.id)).filter(Boolean);
+    if (proofs.some(item => item.resultado === 'rechazado')) return ['Importador rechazó una muestra', 'text-red-700'];
     if (proofs.some(item => item.resultado === 'aceptado' && item.revisionAsesor === 'revisada')) return ['Muestra aceptada y revisada', 'text-emerald-700'];
-    if (proofs.some(item => item.resultado === 'rechazado')) return ['Importador rechazó muestra', 'text-red-700'];
     if (proofs.some(item => item.resultado === 'aceptado')) return ['Aceptación sin revisión', 'text-amber-700'];
     return samples.length ? ['Pendiente de importador', 'text-amber-700'] : ['Sin fichero de prueba', 'text-slate-500'];
   };
