@@ -2949,6 +2949,18 @@ function transferLayoutErrors(model: string, content: string) {
     const detailDeposited=money(details.reduce((sum,record)=>{const key=Number(record.slice(99,101)||0),role=record[147];return sum+((key>=3||role==='1')?readFixedNumber(record,121,13):0);},0));
     if(headerCount!==details.length) errors.push('El total de perceptores de la cabecera 296 no coincide con los registros tipo 2.');
     if(Math.abs(headerBase-detailBase)>0.01||Math.abs(headerWithholding-detailWithholding)>0.01||Math.abs(headerDeposited-detailDeposited)>0.01) errors.push('Los totales de base, retenciones o importe ingresado del 296 no cuadran con sus perceptores.');
+    if(records.slice(1).some(record=>![' ','F'].includes(record[499]))) errors.push('El 296 contiene un tipo de hoja no reconocido.');
+    const byOrder=new Map(details.map(record=>[record.slice(76,84),record]));
+    const fOrders=new Set<string>();
+    for(const sheet of annexF){
+      const order=sheet.slice(76,84), main=byOrder.get(order);
+      if(!main||sheet.slice(0,84)!==main.slice(0,84)||fOrders.has(order)) errors.push('El anexo F no enlaza unívocamente con su perceptor por el identificador 77-84.');
+      fOrders.add(order);
+      if(!/^\d{65}$/.test(sheet.slice(84,149))) errors.push('Los cinco importes del anexo F deben ser numéricos.');
+      const split=[85,98,111,124,137].reduce((sum,pos)=>sum+readFixedNumber(sheet,pos,13),0);
+      if(main&&Math.abs(money(split)-readFixedNumber(main,121,13))>0.01) errors.push('El desglose Estado/forales del anexo F no coincide con la retención total del perceptor.');
+      if(sheet.slice(149,499).trim()) errors.push('Las posiciones 150-499 del anexo F deben quedar en blanco.');
+    }
     return errors;
   }
   if (model === '347') {
