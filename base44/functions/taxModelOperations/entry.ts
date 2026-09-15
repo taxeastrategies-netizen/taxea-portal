@@ -2943,7 +2943,7 @@ function transferLayoutErrors(model: string, content: string) {
     if(!records.every(record=>record.length===500)) errors.push('Todos los registros del 296 deben tener exactamente 500 posiciones.');
     if(!records[0]?.startsWith('1296')) errors.push('La cabecera del 296 no tiene el identificador oficial esperado.');
     if(records.slice(1).some(record=>!record.startsWith('2296'))) errors.push('Hay registros de perceptor 296 con identificador inválido.');
-    const details=records.slice(1), headerCount=Number(records[0]?.slice(135,144)||0), headerBase=readFixedNumber(records[0]||'',145,15,2,true), headerWithholding=readFixedNumber(records[0]||'',160,15), headerDeposited=readFixedNumber(records[0]||'',175,15);
+    const details=records.slice(1).filter(record=>record[499]!=='F'), annexF=records.slice(1).filter(record=>record[499]==='F'), headerCount=Number(records[0]?.slice(135,144)||0), headerBase=readFixedNumber(records[0]||'',145,15,2,true), headerWithholding=readFixedNumber(records[0]||'',160,15), headerDeposited=readFixedNumber(records[0]||'',175,15);
     const detailBase=money(details.reduce((sum,record)=>sum+readFixedNumber(record,104,13,2,true),0));
     const detailWithholding=money(details.reduce((sum,record)=>sum+readFixedNumber(record,121,13),0));
     const detailDeposited=money(details.reduce((sum,record)=>{const key=Number(record.slice(99,101)||0),role=record[147];return sum+((key>=3||role==='1')?readFixedNumber(record,121,13):0);},0));
