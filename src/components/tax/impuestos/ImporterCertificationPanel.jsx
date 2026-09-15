@@ -9,8 +9,15 @@ import { formatDate, isReviewer } from './useTaxWorkspace';
 const key = (companyId, year) => ['tax-importer-evidence', companyId, Number(year)];
 const CORE_CIRCUITS = ['111','115','123','130','131','180','190','193','216','296','303','347','349','390','415'];
 const EXTENDED_CIRCUITS = ['200','202','232'];
-const eligible = file => file.immutable === true && file.hasStoredContent && /^[a-f0-9]{64}$/i.test(file.hash || '')
-  && !/traspaso revisable|borrador técnico de revisión/i.test(file.formato || '');
+const CERTIFIABLE_MODELS = new Set([...CORE_CIRCUITS, ...EXTENDED_CIRCUITS]);
+const eligible = file => {
+  const model = String(file.modeloCodigo || '');
+  const format = String(file.formato || '').toLowerCase();
+  const official = model === '415'
+    ? file.administracion === 'ATC' && format.startsWith('soporte de importación oficial programa atc 415')
+    : file.administracion === 'AEAT' && (format.startsWith('diseño de registro aeat') || format.startsWith('diseño lógico aeat'));
+  return CERTIFIABLE_MODELS.has(model) && official && file.immutable === true && file.hasStoredContent && /^[a-f0-9]{64}$/i.test(file.hash || '');
+};
 
 export default function ImporterCertificationPanel({ companyId, year, officialFiles }) {
   const { user } = useAuth();
