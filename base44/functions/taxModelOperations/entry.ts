@@ -3203,6 +3203,8 @@ function normalizeFiledImport(body: any, company: any, model: string, year: numb
   if (['303','420'].includes(model) && preview.result < 0 && preview.resultDisposition === 'a_devolver' && !['4T','12'].includes(period)) errors.push('La devolución del saldo requiere el último período del año o un supuesto especial revisado.');
   if (!preview.justificationNumber) warnings.push('No consta número de justificante o CSV; el histórico podrá guardarse, pero la trazabilidad administrativa queda incompleta.');
   if (!parsed) warnings.push('El fichero no se reconoció como diseño estructurado oficial. Las casillas proceden de OCR o entrada revisada y no quedan validadas por el parser.');
+  if (INCREMENTAL_INFORMATIVE_MODELS.has(model) && preview.declarationType === 'complementaria') warnings.push('En la complementaria informativa las casillas y los perceptores deben incluir únicamente los registros adicionales omitidos. Taxea los sumará al conjunto presentado anteriormente.');
+  if (INCREMENTAL_INFORMATIVE_MODELS.has(model) && preview.declarationType === 'sustitutiva') warnings.push('La sustitutiva reemplaza íntegramente los registros anteriores y normalmente requiere la baja previa de la declaración sustituida ante la Administración. Comprueba ambos justificantes.');
   return { preview, errors, warnings };
 }
 
@@ -3773,6 +3775,7 @@ Deno.serve(async (req) => {
       const previousVersions=(filings||[]).filter((row:any)=>row.modeloCodigo===model&&Number(row.ejercicio)===year&&normalizedPeriod(row.periodo)===period);
       const previous=previousVersions.sort((a:any,z:any)=>Number(z.snapshotVersion||0)-Number(a.snapshotVersion||0))[0]||null;
       if(previous&&normalized.preview.declarationType==='original') return Response.json({error:'Ya existe una declaración original para este período.',blockers:['Si el fichero corresponde a una corrección posterior, selecciónalo como complementaria, rectificativa o sustitutiva e indica el justificante anterior.']},{status:409});
+      if(!previous&&normalized.preview.declarationType!=='original') return Response.json({error:'Importa primero la declaración original de este período: una corrección aislada no permite reconstruir el histórico presentado.'},{status:422});
       const linkedPrevious=normalized.preview.previousJustificationNumber
         ? previousVersions.find((row:any)=>clean(row.numeroJustificante)===normalized.preview.previousJustificationNumber)
         : previous;
