@@ -3132,6 +3132,13 @@ function parseFiledText(model: string, raw: string) {
   return { model, nif: clean(source.slice(13,22)).toUpperCase(), year: Number(source.slice(model==='202'?103:102,model==='202'?107:106)), period: clean(source.slice(model==='202'?107:106,model==='202'?109:108)), boxes };
 }
 
+function allowedFiledDeclarationTypes(model: string, year: number, period: string) {
+  if (DEFINITIONS[model]?.kind === 'informative') return ['original', 'complementaria', 'sustitutiva'];
+  if (model === '303' && (year > 2024 || (year === 2024 && ['3T', '4T', '09', '10', '11', '12'].includes(period)))) return ['original', 'rectificativa'];
+  if (model === '200' && year >= 2024) return ['original', 'rectificativa'];
+  return ['original', 'complementaria'];
+}
+
 function normalizeFiledImport(body: any, company: any, model: string, year: number, period: string) {
   const extracted = body.extracted && typeof body.extracted === 'object' ? body.extracted : {};
   const parsed = parseFiledText(model, clean(body.rawContent));
@@ -3154,9 +3161,10 @@ function normalizeFiledImport(body: any, company: any, model: string, year: numb
     presentationDate: clean(body.presentationDate || extracted.fechaPresentacion || extracted.fecha_presentacion).slice(0,10),
     justificationNumber: clean(body.justificationNumber || extracted.numeroJustificante || extracted.numero_justificante || extracted.csv),
     previousJustificationNumber: clean(body.previousJustificationNumber || extracted.numeroJustificanteAnterior),
-    declarationType: ['original','complementaria','rectificativa','sustitutiva'].includes(clean(body.declarationType || extracted.tipoDeclaracion)) ? clean(body.declarationType || extracted.tipoDeclaracion) : 'original',
+    declarationType: clean(body.declarationType || extracted.tipoDeclaracion || 'original').toLowerCase(),
+    allowedDeclarationTypes: allowedFiledDeclarationTypes(model, year, period),
     boxes, result: normalizedResult, resultDisposition, fileUrl: clean(body.fileUrl), fileName: clean(body.fileName), fileHash: clean(body.fileHash).toLowerCase(),
-    source: parsed ? 'fichero_oficial' : clean(body.fileName).toLowerCase().endsWith('.pdf') ? 'pdf_ocr_revisado' : 'fichero_oficial',
+    source: parsed ? 'fichero_oficial' : clean(body.fileName).toLowerCase().endsWith('.pdf') ? 'pdf_ocr_revisado' : 'fichero_no_reconocido',
   };
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -3164,13 +3172,14 @@ function normalizeFiledImport(body: any, company: any, model: string, year: numb
   if (preview.year !== year) errors.push(`El documento parece corresponder al ejercicio ${preview.year}, no al ${year}.`);
   if (preview.period !== period) errors.push(`El documento parece corresponder al período ${preview.period}, no a ${period}.`);
   if (preview.nif && preview.companyNif && preview.nif !== preview.companyNif) errors.push('El NIF detectado no coincide con la empresa seleccionada.');
+  if (!preview.allowedDeclarationTypes.includes(preview.declarationType)) errors.push(`La declaración ${preview.declarationType} no corresponde al procedimiento de corrección del modelo ${model} y período ${period} ${year}.`);
   if (!preview.presentationDate) errors.push('Indica la fecha efectiva de presentación.');
   if (preview.presentationDate > new Date().toISOString().slice(0, 10)) errors.push('La fecha de presentación no puede estar en el futuro.');
   if (!Object.keys(preview.boxes).length) errors.push('No se han obtenido casillas. Revisa y añade al menos los importes principales del modelo presentado.');
   if (['303','420'].includes(model) && preview.result < 0 && !['a_compensar','a_devolver'].includes(preview.resultDisposition)) errors.push('Indica si el resultado negativo presentado quedó a compensar o se solicitó a devolver.');
   if (['303','420'].includes(model) && preview.result < 0 && preview.resultDisposition === 'a_devolver' && !['4T','12'].includes(period)) errors.push('La devolución del saldo requiere el último período del año o un supuesto especial revisado.');
   if (!preview.justificationNumber) warnings.push('No consta número de justificante o CSV; el histórico podrá guardarse, pero la trazabilidad administrativa queda incompleta.');
-  if (!parsed) warnings.push('Las casillas proceden de OCR o entrada revisada, no de un diseño de registro reconocido automáticamente.');
+  if (!parsed) warnings.push('El fichero no se reconoció como diseño estructurado oficial. Las casillas proceden de OCR o entrada revisada y no quedan validadas por el parser.');
   return { preview, errors, warnings };
 }
 
