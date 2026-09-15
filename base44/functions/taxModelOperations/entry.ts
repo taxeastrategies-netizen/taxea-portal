@@ -2443,7 +2443,17 @@ function export296(company:any, year:number, calculation:any, declarationNumber:
     place(value,227,50,normalizedText(row.address,50)); place(value,277,40,normalizedText(row.addressComplement,40)); place(value,317,30,normalizedText(row.city,30)); place(value,347,30,normalizedText(row.region,30)); place(value,377,10,normalizedText(row.postalCode,10)); place(value,387,2,country); place(value,389,13,numeric(row.passedOnAccountPayment,13)); place(value,402,9,normalizedText(row.previousPayerTaxId,9)); place(value,411,1,booleanValue(row.specialWithholdingProcedure)?'X':' '); place(value,412,1,normalizedText(row.marketKey,1)); place(value,413,20,normalizedText(row.lei,20)); place(value,433,20,normalizedText(foreign,20)); place(value,453,8,date8(row.birthDate)); place(value,461,35,normalizedText(row.birthCity,35)); place(value,496,2,normalizedText(row.birthCountry,2)); place(value,498,2,country);
     return value.join('');
   };
-  return [header.join(''),...details.map(record)].join('\r\n');
+  const ordinary=details.map(record);
+  const annexF=details.flatMap((row:any,index:number)=>{
+    if(!booleanValue(row.foralSplitConfirmed)) return [];
+    const sheet=Array(500).fill(' ');
+    place(sheet,1,84,ordinary[index].slice(0,84));
+    const split=[row.stateWithholding,row.navarraWithholding,row.alavaWithholding,row.gipuzkoaWithholding,row.bizkaiaWithholding];
+    split.forEach((amount:any,part:number)=>place(sheet,85+part*13,13,numeric(amount,13)));
+    place(sheet,500,1,'F');
+    return [sheet.join('')];
+  });
+  return [header.join(''),...ordinary,...annexF].join('\r\n');
 }
 
 function export303(company: any, profile: any, year: number, period: string, calculation: any) {
