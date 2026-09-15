@@ -359,7 +359,8 @@ function filingDate(filing: any) {
 function effectiveFiledVersion(rows: any[], model: string) {
   const versions = [...rows].sort((a: any, b: any) => Number(a.snapshotVersion || 0) - Number(b.snapshotVersion || 0) || `${filingDate(a)}|${a.created_date || ''}`.localeCompare(`${filingDate(b)}|${b.created_date || ''}`));
   const latest = versions[versions.length - 1] || null;
-  if (!latest || !INCREMENTAL_INFORMATIVE_MODELS.has(model) || versions.length === 1) return latest;
+  if (!latest || !INCREMENTAL_INFORMATIVE_MODELS.has(model)) return latest;
+  if (versions.length === 1) return clean(latest.tipoDeclaracion || 'original').toLowerCase() === 'complementaria' ? { ...latest, effectiveCorrectionScope: 'sin_original', activeVersionIds: [latest.id], correctionIncomplete: true } : latest;
   let boxes: Record<string, number> = {}, sourceIds: string[] = [], result = 0, activeIds: string[] = [], hasBase = false;
   for (const version of versions) {
     const type = clean(version.tipoDeclaracion || 'original').toLowerCase();
@@ -3289,7 +3290,7 @@ function filingComparison(data: any, model: string, year: number, period: string
   const current = fieldMap(calculation);
   const codes = unique([...Object.keys(presented), ...Object.keys(current)]);
   const differences = codes.map(code => ({ code, presented: money(presented[code]), current: money(current[code]), difference: money(current[code] - presented[code]) })).filter(row => Math.abs(row.difference) > 0.009);
-  return { presented: true, filing: { id: filing.id, date: filingDate(filing), justificationNumber: filing.numeroJustificante, declarationType: filing.tipoDeclaracion || 'original', resultDisposition: filing.resultadoDestino, snapshotVersion: filing.snapshotVersion || 1, result: money(filing.importeFinal), boxes: presented, fileUrl: filing.ficheroPresentadoUrl }, importedCount: (data.filings || []).filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === year).length, resultDifference: money(calculation.result - filing.importeFinal), differences, lateItems: lateItemsAfterFiling(data, model, year, period, filing), carryforward: calculation.carryforward || null };
+  return { presented: true, filing: { id: filing.id, date: filingDate(filing), justificationNumber: filing.numeroJustificante, declarationType: filing.tipoDeclaracion || 'original', resultDisposition: filing.resultadoDestino, snapshotVersion: filing.snapshotVersion || 1, result: money(filing.importeFinal), boxes: presented, fileUrl: filing.ficheroPresentadoUrl, effectiveCorrectionScope: filing.effectiveCorrectionScope || '', activeVersionIds: filing.activeVersionIds || [filing.id], correctionIncomplete: filing.correctionIncomplete === true }, importedCount: (data.filings || []).filter((row: any) => row.modeloCodigo === model && Number(row.ejercicio) === year).length, resultDifference: money(calculation.result - filing.importeFinal), differences, lateItems: lateItemsAfterFiling(data, model, year, period, filing), carryforward: calculation.carryforward || null };
 }
 
 function taxPeriodOutcome(model: string, value: number) {
@@ -3620,7 +3621,15 @@ Deno.serve(async (req) => {
         avisosImportacion:Array.isArray(item.avisosImportacion)?item.avisosImportacion:[],analisisArrastre:item.analisisArrastre||{},confirmadoPorUsuario:item.confirmadoPorUsuario===true,usuarioPresentador:item.usuarioPresentador||item.importadoPor||'',respuestaAdministracion:item.respuestaAdministracion||'',notas:item.notas||'',createdAt:item.created_date||item.fechaImportacion||'',
       }));
       const filingByKey=new Map<string,any>();
-      for(const item of [...filings].sort((a:any,b:any)=>(Number(b.snapshotVersion)-Number(a.snapshotVersion))||(new Date(b.fechaPresentacion||b.createdAt||0).getTime()-new Date(a.fechaPresentacion||a.createdAt||0).getTime()))) if(!filingByKey.has(periodKey(item))) filingByKey.set(periodKey(item),item);
+      const filingsByPeriod=new Map<string,any[]>();
+      for(const item of filingRows.filter((row:any)=>FILED_STATUSES.has(clean(row.estadoPresentacion)))) {
+        const key=periodKey(item); filingsByPeriod.set(key,[...(filingsByPeriod.get(key)||[]),item]);
+      }
+      for(const [key,versions] of filingsByPeriod) {
+        const effective=effectiveFiledVersion(versions,clean(versions[0]?.modeloCodigo));
+        const display=filings.find((item:any)=>item.id===effective?.id);
+        if(display) filingByKey.set(key,{...display,importeFinal:money(effective.importeFinal),effectiveCorrectionScope:effective.effectiveCorrectionScope||'',activeVersionIds:effective.activeVersionIds||[effective.id],correctionIncomplete:effective.correctionIncomplete===true});
+      }
       const profile=profileRows.find((item:any)=>item.active!==false)||profileRows[0]||null;
       const activeModels=modelRows.filter((item:any)=>item.activo!==false);
       const validationIssues:any[]=[];
