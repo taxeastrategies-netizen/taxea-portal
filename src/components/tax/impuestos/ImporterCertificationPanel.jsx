@@ -54,6 +54,14 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
   const latest = new Map();
   for (const item of rows) if (!latest.has(item.taxOfficialFileId)) latest.set(item.taxOfficialFileId, item);
   const pending = files.filter(file => !latest.has(file.id)).length;
+  const circuitStatus = code => {
+    const samples = files.filter(file => file.modeloCodigo === code);
+    const proofs = samples.map(file => latest.get(file.id)).filter(Boolean);
+    if (proofs.some(item => item.resultado === 'aceptado' && item.revisionAsesor === 'revisada')) return ['Muestra aceptada y revisada', 'text-emerald-700'];
+    if (proofs.some(item => item.resultado === 'rechazado')) return ['Importador rechazó muestra', 'text-red-700'];
+    if (proofs.some(item => item.resultado === 'aceptado')) return ['Aceptación sin revisión', 'text-amber-700'];
+    return samples.length ? ['Pendiente de importador', 'text-amber-700'] : ['Sin fichero de prueba', 'text-slate-500'];
+  };
   return <section className="rounded-2xl border border-cyan-200 bg-white p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-slate-900">Certificación del importador oficial</h3><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">La prueba queda enlazada al fichero exacto, su SHA-256 y versión de diseño. Aceptación de importación no es presentación. Los paquetes de traspaso guiado no se certifican como ficheros oficiales.</p></div><div className="rounded-full bg-cyan-50 px-3 py-1 text-xs text-cyan-800">{pending} fichero(s) sin prueba</div></div>
     {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</p>}
