@@ -1,5 +1,6 @@
 import { lazy } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Navigate, useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 
 const TaxDashboard = lazy(() => import('@/components/tax/TaxDashboard'));
 const Facturas = lazy(() => import('./Facturas'));
@@ -23,13 +24,15 @@ const AdvisorWorkspace = lazy(() => import('@/components/tax/advisor/AdvisorWork
 export default function TaxAccounting() {
   const { module } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isPlatformAdmin = ['admin', 'super_admin'].includes(String(user?.role || '').toLowerCase());
 
   const handleNavigate = (moduleId) => {
     navigate(`/tax-accounting/${moduleId}`);
   };
 
   switch (module) {
-    case 'asesoria': return <AdvisorWorkspace />;
+    case 'asesoria': return isPlatformAdmin ? <AdvisorWorkspace /> : <Navigate to="/tax-accounting/dashboard" replace />;
     case 'facturas': return <Facturas />;
     case 'ingresos-gastos': return <IngresosGastos />;
     case 'presupuestos': return <Presupuestos />;
