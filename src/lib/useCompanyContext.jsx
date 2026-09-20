@@ -19,8 +19,8 @@ export function useCompanyContext(user) {
     const imp = isAdminRole(user.role) ? getImpersonation() : null;
     // Cache key incluye el estado de impersonación para evitar devolver caché sin impersonar
     const assignedCompanyId = user.data?.company_id || '';
-    const cacheKey = imp?.clientEmail
-      ? `${user.email}::imp:${imp.clientEmail}`
+    const cacheKey = imp?.companyId || imp?.clientEmail
+      ? `${user.email}::imp:${imp.companyId || imp.clientEmail}`
       : `${user.email}::company:${assignedCompanyId || 'unassigned'}`;
     if (companyCache.has(cacheKey)) {
       setCompany(companyCache.get(cacheKey));
@@ -32,9 +32,10 @@ export function useCompanyContext(user) {
 
     try {
       if (isAdminRole(user.role)) {
-        if (imp?.clientEmail) {
-          const own = await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1);
-          const c = own?.[0] || null;
+        if (imp?.companyId || imp?.clientEmail) {
+          const c = imp?.companyId
+            ? await base44.entities.Company.get(imp.companyId).catch(() => null)
+            : (await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1))?.[0] || null;
           // Sincronizar company_id en el servidor para que la RLS permita acceso a entidades del cliente
           if (c && user.data?.company_id !== c.id) {
             try { await base44.auth.updateMe({ company_id: c.id }); } catch {}
@@ -102,7 +103,7 @@ export function useCompanyContext(user) {
       for (const key of companyCache.keys()) {
         if (key === user.email || key.startsWith(`${user.email}::`)) companyCache.delete(key);
       }
-      if (imp?.clientEmail) companyCache.delete(`${user.email}::imp:${imp.clientEmail}`);
+      if (imp?.companyId || imp?.clientEmail) companyCache.delete(`${user.email}::imp:${imp.companyId || imp.clientEmail}`);
     }
     // Small delay to allow the DB write to propagate
     setTimeout(() => loadCompany(), 300);
