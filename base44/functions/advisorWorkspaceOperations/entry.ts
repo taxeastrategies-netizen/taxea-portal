@@ -314,7 +314,6 @@ Deno.serve(async (req) => {
       return workload;
     }));
     rows.sort((a: any, b: any) => b.score - a.score || a.company.name.localeCompare(b.company.name));
-    const alerts = rows.flatMap((row: any) => row.alerts);
     return Response.json({
       ok: true, generatedAt: new Date().toISOString(), year,
       rows, pagination: { page: safePage, pageSize, total: filtered.length, totalPages },
