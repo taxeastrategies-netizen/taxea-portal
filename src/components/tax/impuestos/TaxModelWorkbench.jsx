@@ -128,6 +128,21 @@ const DECLARABLE_SCHEMAS = {
   ],
 };
 
+const MODEL_296_ANNEX_A_FIELDS = [
+  ['contributorPersonality','Personalidad del contribuyente','select',[['','Seleccionar'],['F','F · Persona física'],['J','J · Persona jurídica/entidad']]],
+  ['contributorSpanishTaxId','NIF español del contribuyente','text'],['contributorLei','LEI del contribuyente','text'],['contributorName','Nombre o razón social','text'],
+  ['netPayment','Pago neto tras retención','number'],['withholdingRate','Tipo de retención (%)','number'],['withholdingAmount','Retención reembolsada','number'],
+  ['address','Domicilio','text'],['addressComplement','Complemento de domicilio','text'],['city','Ciudad','text'],['region','Provincia o región','text'],['postalCode','Código postal','text'],['addressCountry','País del domicilio ISO','text'],
+  ['model210Receipt','Justificante del modelo 210 (13 dígitos)','text'],['foreignTaxId','Identificador fiscal extranjero','text'],
+  ['birthDate','Fecha de nacimiento','date'],['birthCity','Lugar de nacimiento','text'],['birthCountry','País de nacimiento ISO','text'],['residenceCountry','País de residencia ISO','text'],
+];
+
+const MODEL_296_ANNEX_B_FIELDS = [
+  ['securitiesAccount','Cuenta de valores','text'],['accountHolderLei','LEI del titular registral','text'],['accountHolderName','Titular registral de la cuenta','text'],
+  ['totalSecurities','Número total de valores','number'],['contributorSecurities','Valores del contribuyente','number'],['paymentDate','Fecha de pago','date'],
+  ['grossIncome','Rendimiento íntegro','number'],['withholdingAmount','Retención','number'],['withholdingRate','Tipo de retención (%)','number'],['model210PresentationDate','Fecha de presentación del 210','date'],
+];
+
 const MODEL_180_FIELDS = [
   ['recipientProvinceCode', 'Provincia perceptor (2 dígitos)', 'text'],
   ['cadastralReference', 'Referencia catastral', 'text'],
