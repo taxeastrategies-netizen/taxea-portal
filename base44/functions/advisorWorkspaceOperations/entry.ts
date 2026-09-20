@@ -65,6 +65,14 @@ async function accessContext(svc: any, user: any) {
   return { companies: visible.filter((company: any) => company?.activa !== false), clients, clientByEmail };
 }
 
+async function mapInBatches(items: any[], batchSize: number, mapper: (item: any) => Promise<any>) {
+  const results: any[] = [];
+  for (let index = 0; index < items.length; index += batchSize) {
+    results.push(...await Promise.all(items.slice(index, index + batchSize).map(mapper)));
+  }
+  return results;
+}
+
 function pushAlert(alerts: any[], companyId: string, input: any) {
   alerts.push({
     id: input.id || [companyId, input.category, input.sourceType, input.sourceId].map(clean).join(':'),
@@ -300,7 +308,7 @@ Deno.serve(async (req) => {
     const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
     const safePage = Math.min(page, totalPages);
     const selected = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-    const rows = await Promise.all(selected.map(async (company: any) => {
+    const rows = await mapInBatches(selected, 4, async (company: any) => {
       const client = context.clientByEmail.get(companyOwner(company));
       const workload = await companyWorkload(svc, company, client, year);
       const filteredAlerts = workload.alerts.filter((alert: any) => (severity === 'all' || alert.severity === severity) && (category === 'all' || alert.category === category));
@@ -312,7 +320,7 @@ Deno.serve(async (req) => {
       workload.alerts = filteredAlerts.slice(0, 100);
       workload.hiddenAlertCount = Math.max(0, filteredAlerts.length - workload.alerts.length);
       return workload;
-    }));
+    });
     rows.sort((a: any, b: any) => b.score - a.score || a.company.name.localeCompare(b.company.name));
     return Response.json({
       ok: true, generatedAt: new Date().toISOString(), year,
