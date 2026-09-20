@@ -156,6 +156,19 @@ const periodClose = await invoke({ action: 'close_period', companyId: 'company-t
 const periodReopen = await invoke({ action: 'reopen_period', companyId: 'company-test', modeloCodigo: '303', ejercicio: 2026, periodo: '1T', confirmReopen: true, reason: 'Nueva documentación recibida' });
 const declarableSave = await invoke({ action: 'upsert_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordKey: 'QA-NR-1', payload: { recipientTaxId: 'X1234567L', recipientName: 'PERCEPTOR QA', country: 'FR', incomeKey: '02', accruedAmount: 1000, withholdingBase: 1000, withholdingAmount: 190, paymentDate: '2026-02-01' } });
 const declarableDelete = await invoke({ action: 'delete_declarable', companyId: 'company-test', modeloCodigo: '216', ejercicio: 2026, periodo: '1T', recordId: declarableSave.payload.record?.id });
+records.TaxDeclarableRecord.push({ id: 'm296-parent', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, recordKey: 'M296:PARENT', reviewStatus: 'validado_asesor', payload: { recipientTaxId: 'FR12345678901', foreignTaxId: 'FR12345678901', recipientName: 'MEDIADOR EXTRANJERO QA', country: 'FR', personalityKey: 'J', incomeKey: '01', subkey: '01', nature: 'D', paymentDate: '2025-06-30', accruedAmount: 1000, withholdingBase: 1000, withholdingRate: 19, withholdingAmount: 190, paymentRole: '2', mediatorCode: '2', issuerCodeType: '2', issuerCode: 'ES0000000001', recordOrder: '00000001' } });
+records.TaxFiling.push({ id: 'filing-296', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', estadoPresentacion: 'presentado', snapshotVersion: 1, tipoDeclaracion: 'original', numeroJustificante: '2961234567890', snapshotHash: 'filing-296-hash', fechaPresentacion: '2026-01-30' });
+const annexAInput = { parentRecordOrder: '00000001', contributorPersonality: 'J', contributorLei: '529900T8BM49AURSDO55', contributorName: 'CONTRIBUYENTE QA', netPayment: 810, withholdingRate: 19, withholdingAmount: 190, address: '1 RUE QA', city: 'PARIS', postalCode: '75001', addressCountry: 'FR', model210Receipt: '2101234567890', foreignTaxId: 'FR-QA-001', residenceCountry: 'FR' };
+const annexA = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'A', reviewStatus: 'validado_asesor', payload: annexAInput });
+const annexB = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'B', reviewStatus: 'validado_asesor', payload: { linkedAnnexARecordId: annexA.payload.record?.id, securitiesAccount: 'ACCOUNT-QA-1', accountHolderLei: '529900T8BM49AURSDO55', accountHolderName: 'CUSTODIO QA', totalSecurities: 100, contributorSecurities: 100, paymentDate: '2025-06-30', grossIncome: 1000, withholdingAmount: 190, withholdingRate: 19, model210PresentationDate: '2026-03-10' } });
+const annexCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual' });
+const annexExport = await invoke({ action: 'export_296_annexes', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual' });
+const annexContent = annexExport.payload.file?.contentBase64 ? Buffer.from(annexExport.payload.file.contentBase64, 'base64').toString('utf8') : '';
+const annexRecords = annexContent.split(/\r?\n/).filter(Boolean);
+testClient.auth.me = async () => ({ id: 'taxea-user-test', email: 'qa@taxea.test', role: 'user', company_id: 'company-test' });
+const annexProtectedDelete = await invoke({ action: 'delete_declarable', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', recordId: annexA.payload.record?.id });
+const annexUserEdit = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'A', recordId: annexA.payload.record?.id, reviewStatus: 'validado_asesor', payload: annexAInput });
+testClient.auth.me = async () => ({ id: 'taxea-self-test', email: 'qa@taxea.test', role: 'admin', company_id: 'company-test' });
 const model202Content = model202Export.payload.file?.contentBase64 ? Buffer.from(model202Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
 const model202PageStart = model202Content.indexOf('<T20201000>');
 const model200Content = model200Export.payload.file?.contentBase64 ? Buffer.from(model200Export.payload.file.contentBase64, 'base64').toString('utf8') : '';
@@ -180,7 +193,7 @@ const workflowChecks = {
     && exactDownload.payload.file?.hash === frozenExport.payload.file?.hash
     && exactDownload.payload.file?.immutable === true,
   fullCatalogAvailable: catalog.response.ok
-    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.13-v24'
+    && catalog.payload.engineVersion === 'taxea-modelos-2026.09.20-v25'
     && catalog.payload.models?.length === 22
     && ['349', '131', '216', '296', '417', '421', '200', '202', '232'].every(model => catalog.payload.models.some(item => item.code === model)),
   historicalAuditIsReadOnly: historicalDryRun.response.ok
@@ -229,6 +242,21 @@ const workflowChecks = {
     && model200Content.includes('<T20014000>')
     && model200Content.includes('<T200DID00>')
     && model200Content.endsWith('</T200020250A0000>'),
+  model296AnnexABWorkflow: annexA.response.ok
+    && annexB.response.ok
+    && annexCalculation.response.ok
+    && annexCalculation.payload.calculation?.details?.length === 1
+    && annexCalculation.payload.calculation?.annexes?.ready === true
+    && annexExport.response.ok
+    && annexRecords.length === 2
+    && annexRecords.every(record => record.length === 500 && record.startsWith('2296'))
+    && annexRecords[0][499] === 'A'
+    && annexRecords[1][499] === 'B'
+    && annexRecords[0].slice(76, 84) === annexRecords[1].slice(76, 84)
+    && annexRecords[0].slice(416, 429) === annexRecords[1].slice(288, 301)
+    && annexProtectedDelete.response.status === 403
+    && annexUserEdit.response.ok
+    && annexUserEdit.payload.record?.reviewStatus === 'pendiente_revision',
   model232OfficialExport: model232Record.response.ok
     && model232Export.response.ok
     && model232Export.payload.definition?.officialExport === true
