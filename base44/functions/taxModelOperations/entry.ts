@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.13-v24';
+const ENGINE_VERSION = 'taxea-modelos-2026.09.20-v25';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -17,7 +17,7 @@ const DEFINITIONS: Record<string, any> = {
   '202': { name: 'Pago fraccionado del Impuesto sobre Sociedades', authority: 'AEAT', frequency: 'abril/octubre/diciembre', kind: 'corporate_tax_payment', design: 'DR202e25 v1.3 · 2025 y siguientes · actualización 14-07-2026', designYear: '2025+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', periods: ['1P', '2P', '3P'], designWarning: 'La base depende de la modalidad del artículo 40.2 o 40.3 LIS y de magnitudes societarias confirmadas. Taxea genera las páginas oficiales 01 y 02, pero no infiere la modalidad, el tipo ni los ajustes societarios únicamente por las facturas.' },
   '216': { name: 'Retenciones e ingresos a cuenta de no residentes', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'non_resident_withholding', design: 'Diseño de registro AEAT modelo 216 · versión 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'Incluye rentas IRNR satisfechas a no residentes, también determinadas rentas exentas o exceptuadas de retención. Cada perceptor debe documentarse con país, clave de renta y motivo de exención o convenio; el fichero oficial contiene la autoliquidación agregada.' },
   '232': { name: 'Operaciones vinculadas y territorios no cooperativos', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 232 v1.4', designYear: '2016+', officialExport: true, handoffExport: false, exportMode: 'aeat_official_record', designWarning: 'La obligación y los umbrales dependen de la vinculación, el tipo y conjunto de operaciones, patent box y territorios no cooperativos. El fichero oficial solo incorpora registros expresamente clasificados y revisados.' },
-  '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 296 · ejercicio 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', designWarning: 'Taxea concilia los perceptores del 216 y genera los registros tipo 1 y 2 de 500 posiciones. Personalidad, naturaleza, subclave, residencia, fecha de devengo y supuestos especiales deben confirmarse; los anexos A, B o F se señalan como revisión específica cuando procedan.' },
+  '296': { name: 'Resumen anual de rentas de no residentes', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'Diseño de registro AEAT modelo 296 · ejercicio 2024 vigente', designYear: '2024+', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', designWarning: 'Taxea genera el 296 ordinario y el anexo F dentro de su fichero anual. Los anexos A/B se preparan en un circuito posterior separado, enlazado por el identificador 77-84 a un perceptor ya presentado y por el justificante del modelo 210.' },
   '303': { name: 'Autoliquidación IVA', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'indirect_tax', design: 'DR303e26 v1.01', designYear: '2026+', officialExport: true, designWarning: 'Taxea genera las páginas 1 y 3 y, cuando existen actividades de IVA simplificado revisadas, las páginas 2 necesarias del diseño 2026. Las magnitudes de módulos deben proceder de la Orden anual y quedar confirmadas; el régimen especial del grupo de entidades se declara mediante 322/353, no mediante 303.' },
   '347': { name: 'Operaciones con terceras personas', authority: 'AEAT', frequency: 'anual', kind: 'informative', design: 'HAC/1431/2025', designYear: '2025+', officialExport: true, exportMode: 'aeat_record_design' },
   '349': { name: 'Operaciones intracomunitarias', authority: 'AEAT', frequency: 'trimestral/mensual', kind: 'informative', design: 'Diseño lógico AEAT modelo 349 vigente · registros de 500 posiciones', designYear: '2026', officialExport: true, handoffExport: false, exportMode: 'aeat_record_design', periodOptions: ['1T','2T','3T','4T','01','02','03','04','05','06','07','08','09','10','11','12'], designWarning: 'Taxea propone operaciones desde líneas fiscales intracomunitarias y genera registros normales y de rectificación. El NIF-IVA/VIES, la clave, el período y las bases anteriores de cada rectificación deben revisarse antes de importar en AEAT.' },
@@ -39,6 +39,8 @@ const SOURCES = [
   { title: 'AEAT - Contribuyentes en estimación objetiva y modelo 131', url: 'https://sede.agenciatributaria.gob.es/Sede/empresarios-individuales-profesionales/contribuyentes-modulos.html' },
   { title: 'AEAT - Instrucciones del modelo 216', url: 'https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/impuesto-sobre-renta-no-residentes/modelo-216-irnr______sos-cuenta-declaracion-ingreso_/instrucciones-modelo-216-presentacion-ejercicio-siguientes.html' },
   { title: 'AEAT - Ayuda del modelo 296', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/consultas-informaticas/declaraciones-informativas-ayuda-tecnica/modelos-291-347/modelo-296-formulario.html' },
+  { title: 'AEAT - Diseño oficial modelo 296 ejercicio 2024 (anexos A/B/F)', url: 'https://sede.agenciatributaria.gob.es/static_files/Sede/Disenyo_registro/DR_200_299/archivos_24/DR_296_2024.pdf' },
+  { title: 'AEAT - Nota informativa 193/296 actualizada diciembre 2025', url: 'https://sede.agenciatributaria.gob.es/static_files/Sede/Tema/Declaraciones_informativas/2024/Notas_informartivas/Nota_informativa_193-296.pdf' },
   { title: 'AEAT - Diseños de registro, modelos 200 a 299', url: 'https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-200-299.html' },
   { title: 'AEAT - Manual práctico de Sociedades 2025', url: 'https://sede.agenciatributaria.gob.es/Sede/Ayuda/25Manual/200.shtml' },
   { title: 'AEAT - Instrucciones del modelo 202, período 2025 y siguientes', url: 'https://sede.agenciatributaria.gob.es/Sede/todas-gestiones/impuestos-tasas/impuesto-sobre-sociedades/modelo-202-is-i_____resencia-territorio-fraccionado_/instrucciones.html' },
@@ -230,6 +232,70 @@ function sanitizeGenericDeclarable(model: string, input: any) {
   for (const key of schema.boolean) if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = booleanValue(input[key]);
   if (clean(input?.sourceFingerprint)) payload.sourceFingerprint = clean(input.sourceFingerprint);
   return payload;
+}
+
+function sanitize296AnnexPayload(input: any, annexType: string) {
+  const payload: any = { annexType };
+  const commonText = ['parentRecordOrder','linkedAnnexARecordId','contributorPersonality','contributorSpanishTaxId','contributorLei','contributorName','address','addressComplement','city','region','postalCode','addressCountry','model210Receipt','foreignTaxId','birthDate','birthCity','birthCountry','residenceCountry','securitiesAccount','accountHolderLei','accountHolderName','paymentDate','model210PresentationDate'];
+  for (const key of commonText) if (clean(input?.[key])) payload[key] = clean(input[key]).slice(0, 250);
+  for (const key of ['netPayment','withholdingRate','withholdingAmount','totalSecurities','contributorSecurities','grossIncome']) {
+    if (input?.[key] !== undefined && input?.[key] !== null && input?.[key] !== '') payload[key] = money(input[key]);
+  }
+  return payload;
+}
+
+function is296AnnexRecord(record: any) {
+  return ['A','B'].includes(clean(record?.payload?.annexType).toUpperCase());
+}
+
+function model296AnnexState(declarables: any[], ordinaryRecords: any[], filings: any[], year: number) {
+  const parentMap = new Map<string, any>();
+  ordinaryRecords.forEach((record: any, index: number) => {
+    const payload = record.payload || {};
+    const order = clean(payload.recordOrder || String(index + 1).padStart(8, '0')).slice(0, 8);
+    if (!order || parentMap.has(order)) return;
+    parentMap.set(order, { recordOrder: order, recipientTaxId: payload.spanishTaxId || payload.recipientTaxId || '', representativeTaxId: payload.representativeTaxId || '', personalityKey: payload.personalityKey || '', recipientName: payload.recipientName || '', isin: payload.issuerCode || '', accrualDate: payload.paymentDate || payload.operationDate || '', incomeKey: clean(payload.incomeKey), paymentRole: clean(payload.paymentRole), mediatorCode: clean(payload.mediatorCode) });
+  });
+  const eligibleParents = [...parentMap.values()].filter((parent: any) => ['1','2','01','02'].includes(parent.incomeKey) && ['2','3'].includes(parent.paymentRole) && parent.mediatorCode === '2');
+  const annexRows = declarables.filter((record: any) => clean(record.modeloCodigo) === '296' && is296AnnexRecord(record));
+  const aRecords = annexRows.filter((record: any) => clean(record.payload?.annexType).toUpperCase() === 'A').map((record: any) => ({ recordId: record.id, recordKey: record.recordKey, reviewStatus: record.reviewStatus, reviewedBy: record.reviewedBy || '', ...record.payload }));
+  const bRecords = annexRows.filter((record: any) => clean(record.payload?.annexType).toUpperCase() === 'B').map((record: any) => ({ recordId: record.id, recordKey: record.recordKey, reviewStatus: record.reviewStatus, reviewedBy: record.reviewedBy || '', ...record.payload }));
+  const errors: string[] = [];
+  const ordinaryFiled = filings.some((filing: any) => clean(filing.modeloCodigo) === '296' && Number(filing.ejercicio) === year && FILED_STATUSES.has(clean(filing.estadoPresentacion)));
+  const aById = new Map(aRecords.map((record: any) => [record.recordId, record]));
+  const usedB = new Set<string>();
+  for (const row of aRecords) {
+    const parent = parentMap.get(clean(row.parentRecordOrder));
+    if (!parent) errors.push(`Anexo A ${row.recordKey}: el identificador 77-84 no existe en los perceptores 296 del ejercicio.`);
+    else if (!eligibleParents.some((item: any) => item.recordOrder === parent.recordOrder)) errors.push(`Anexo A ${row.recordKey}: el perceptor no cumple clave 1/2, pago 2/3 y mediador extranjero 2.`);
+    if (!['F','J'].includes(clean(row.contributorPersonality).toUpperCase())) errors.push(`Anexo A ${row.recordKey}: falta personalidad F/J del contribuyente.`);
+    if (!clean(row.contributorName)) errors.push(`Anexo A ${row.recordKey}: falta nombre o razón social del contribuyente.`);
+    if (clean(row.contributorPersonality).toUpperCase() === 'J' && !clean(row.contributorLei)) errors.push(`Anexo A ${row.recordKey}: el LEI es obligatorio para persona jurídica.`);
+    if (clean(row.contributorPersonality).toUpperCase() === 'F' && (!/^\d{4}-\d{2}-\d{2}$/.test(clean(row.birthDate)) || !clean(row.birthCity) || !/^[A-Z]{2}$/i.test(clean(row.birthCountry)))) errors.push(`Anexo A ${row.recordKey}: completa fecha y lugar de nacimiento de la persona física.`);
+    if (!/^\d{13}$/.test(clean(row.model210Receipt))) errors.push(`Anexo A ${row.recordKey}: el justificante 210 debe tener 13 dígitos.`);
+    if (!/^[A-Z]{2}$/i.test(clean(row.residenceCountry)) || !/^[A-Z]{2}$/i.test(clean(row.addressCountry))) errors.push(`Anexo A ${row.recordKey}: faltan países ISO de residencia y domicilio.`);
+    if (!clean(parent?.isin) || clean(parent?.isin).length !== 12) errors.push(`Anexo A ${row.recordKey}: el perceptor padre no tiene un ISIN de 12 caracteres.`);
+    if (money(row.netPayment) < 0 && money(row.withholdingAmount) !== 0) errors.push(`Anexo A ${row.recordKey}: un pago neto negativo debe llevar retención cero.`);
+  }
+  for (const row of bRecords) {
+    const linked = aById.get(clean(row.linkedAnnexARecordId));
+    if (!linked) { errors.push(`Anexo B ${row.recordKey}: no está enlazado a un anexo A existente.`); continue; }
+    usedB.add(linked.recordId);
+    if (clean(row.parentRecordOrder) !== clean(linked.parentRecordOrder)) errors.push(`Anexo B ${row.recordKey}: el identificador no coincide con su anexo A.`);
+    if (clean(row.model210Receipt) !== clean(linked.model210Receipt)) errors.push(`Anexo B ${row.recordKey}: el justificante 210 no coincide con su anexo A.`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clean(row.paymentDate)) || !/^\d{4}-\d{2}-\d{2}$/.test(clean(row.model210PresentationDate))) errors.push(`Anexo B ${row.recordKey}: faltan fecha de pago o fecha de presentación 210.`);
+    if (!clean(row.accountHolderName)) errors.push(`Anexo B ${row.recordKey}: falta el titular registral de la cuenta de valores.`);
+    if (money(row.totalSecurities) < money(row.contributorSecurities) || money(row.contributorSecurities) < 0) errors.push(`Anexo B ${row.recordKey}: el número de títulos del contribuyente no puede superar el total de la cuenta.`);
+    if (Math.abs(money(row.grossIncome) - money(row.withholdingAmount) - money(linked.netPayment)) > 0.01) errors.push(`Anexo B ${row.recordKey}: bruto menos retención no coincide con el pago neto del anexo A.`);
+    const expectedRate = money(row.grossIncome) ? money(Math.abs(money(row.withholdingAmount) / money(row.grossIncome)) * 100) : 0;
+    if (money(row.grossIncome) && Math.abs(expectedRate - money(row.withholdingRate)) > 0.02) errors.push(`Anexo B ${row.recordKey}: el porcentaje de retención no cuadra con bruto y retención.`);
+  }
+  for (const row of aRecords) if (!usedB.has(row.recordId)) errors.push(`Anexo A ${row.recordKey}: falta su certificado de pago B asociado.`);
+  const duplicateB = new Set<string>();
+  for (const row of bRecords) { const key = `${clean(row.linkedAnnexARecordId)}|${clean(row.securitiesAccount)}|${clean(row.paymentDate)}`; if (duplicateB.has(key)) errors.push(`Anexo B duplicado para ${key}.`); duplicateB.add(key); }
+  const pendingReview = [...aRecords, ...bRecords].filter((record: any) => record.reviewStatus !== 'validado_asesor').length;
+  if (pendingReview) errors.push(`${pendingReview} registro(s) A/B están pendientes de validación por asesor.`);
+  return { ordinaryFiled, eligibleParents, aRecords, bRecords, errors: unique(errors), ready: ordinaryFiled && aRecords.length > 0 && bRecords.length > 0 && errors.length === 0 };
 }
 
 function sourceFingerprint(values: unknown[]) {
