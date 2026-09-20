@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { useCompanyContext } from '@/lib/useCompanyContext';
 import { AlertCircle, AlertTriangle, Calculator, CheckCircle2, ChevronLeft, ChevronRight, Download, ExternalLink, FileCheck2, FileJson, FileSearch, Loader2, Plus, RefreshCw, Save, ShieldCheck, Trash2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import TraceChainDrawer from '@/components/tax/TraceChainDrawer';
 
 const PERIODS = {
   anual: ['Anual'],
@@ -735,7 +736,7 @@ const SOURCE_LABELS = {
   Invoice: 'Factura', InvoiceTaxLine: 'Línea fiscal', InvoicePayment: 'Pago', PayrollExtraction: 'Nómina', JournalEntryLine: 'Apunte contable', TaxFiling: 'Modelo presentado', TaxDeclarableRecord: 'Registro fiscal manual', ManualAdjustment: 'Ajuste manual',
 };
 
-function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage }) {
+function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage, onTraceEntity }) {
   if (!field) return null;
   const sourceRows = trace?.sources || [];
   const totals = trace?.totals || {};
@@ -777,7 +778,7 @@ function FieldTraceDrawer({ field, trace, loading, error, onClose, onPage }) {
                   : sourceRows.map(source => <article key={source.sourceId} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{SOURCE_LABELS[source.type] || source.type}</span>{source.invoiceType && <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] text-cyan-700">{source.invoiceType}</span>}</div><h5 className="mt-2 font-semibold text-slate-900">{source.title}</h5><p className="mt-0.5 text-xs text-slate-500">{[source.date, source.subtitle, source.taxId].filter(Boolean).join(' · ')}</p>{source.concept && <p className="mt-2 text-xs leading-5 text-slate-600">{source.concept}</p>}</div>
-                      {source.invoiceId && <a href={`/facturas?factura=${encodeURIComponent(source.invoiceId)}`} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900">Abrir factura<ExternalLink className="h-3.5 w-3.5" /></a>}
+                      <div className="flex shrink-0 flex-wrap gap-2">{source.invoiceId && <a href={`/facturas?factura=${encodeURIComponent(source.invoiceId)}`} className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-700 hover:text-cyan-900">Abrir factura<ExternalLink className="h-3.5 w-3.5" /></a>}{['Invoice','InvoiceTaxLine','InvoicePayment','JournalEntryLine'].includes(source.type) && <button type="button" onClick={() => onTraceEntity?.(source)} className="inline-flex items-center gap-1 text-xs font-semibold text-violet-700 hover:text-violet-900"><FileSearch className="h-3.5 w-3.5" />Cadena completa</button>}</div>
                     </div>
                     <dl className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-4">
                       {source.base != null && <div><dt className="text-slate-400">Base</dt><dd className="font-medium text-slate-800">{formatMoney(source.base)}</dd></div>}
@@ -818,6 +819,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
   const [confirmClose, setConfirmClose] = useState(false);
   const [reopenReason, setReopenReason] = useState('');
   const [selectedField, setSelectedField] = useState(/** @type {any} */ (null));
+  const [entityTraceInput, setEntityTraceInput] = useState(/** @type {any} */ (null));
   const [tracePage, setTracePage] = useState(1);
 
   const { data: catalogResponse, isLoading: loadingCatalog } = useQuery({
@@ -978,7 +980,8 @@ export default function TaxModelWorkbench({ initialSelection }) {
 
   return (
     <div className="grid min-h-[690px] grid-cols-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[260px_minmax(0,1fr)]">
-      <FieldTraceDrawer field={selectedField} trace={fieldTrace.data} loading={fieldTrace.isLoading || fieldTrace.isFetching} error={fieldTrace.error} onClose={() => setSelectedField(null)} onPage={setTracePage} />
+      <FieldTraceDrawer field={selectedField} trace={fieldTrace.data} loading={fieldTrace.isLoading || fieldTrace.isFetching} error={fieldTrace.error} onClose={() => setSelectedField(null)} onPage={setTracePage} onTraceEntity={source => setEntityTraceInput({ companyId, entityType: source.type, entityId: source.id, title: source.title })} />
+      <TraceChainDrawer input={entityTraceInput} onClose={() => setEntityTraceInput(null)} />
       <aside className="border-b border-slate-200 bg-slate-950 lg:border-b-0 lg:border-r">
         <div className="border-b border-white/10 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Motor tributario</p>
