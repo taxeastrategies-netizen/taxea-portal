@@ -1,0 +1,100 @@
+{
+  "name": "FiscalProfileVersion",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "fiscal_profile_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer"
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date"
+    },
+    "effective_until": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "superseded"
+      ],
+      "default": "active"
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "snapshot_hash": {
+      "type": "string"
+    },
+    "change_summary": {
+      "type": "string"
+    },
+    "changed_by": {
+      "type": "string"
+    },
+    "changed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rule_set_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "fiscal_profile_id",
+    "version",
+    "snapshot",
+    "snapshot_hash",
+    "changed_by",
+    "changed_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "super_admin"
+      }
+    }
+  }
+}
