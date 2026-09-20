@@ -3933,8 +3933,35 @@ Deno.serve(async (req) => {
       const recordId=clean(body.recordId); if(!recordId) return Response.json({error:'recordId es obligatorio.'},{status:400});
       const record=await svc.entities.TaxDeclarableRecord.get(recordId);
       if(!record||record.companyId!==companyId||clean(record.modeloCodigo)!==model||Number(record.ejercicio)!==year) return Response.json({error:'Registro declarable no encontrado.'},{status:404});
+      const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role);
+      if(record.reviewStatus==='validado_asesor'&&!canReview) return Response.json({error:'Un registro validado por asesor solo puede eliminarlo un rol revisor. Puedes editarlo y quedará pendiente de una nueva revisión.'},{status:403});
       await svc.entities.TaxDeclarableRecord.delete(recordId);
       return Response.json({ok:true,deletedId:recordId});
+    }
+    if(action==='upsert_296_annex') {
+      if(model!=='296') return Response.json({error:'Los anexos A/B solo pertenecen al modelo 296.'},{status:400});
+      const annexType=clean(body.annexType).toUpperCase(); if(!['A','B'].includes(annexType)) return Response.json({error:'Indica anexo A o B.'},{status:400});
+      let payload=sanitize296AnnexPayload(body.payload||{},annexType);
+      const currentCalculation=calculate296({...data,warnings:[],blockers:[]},b); const currentState=currentCalculation.annexes;
+      if(annexType==='A') {
+        const parent=currentState.eligibleParents.find((item:any)=>clean(item.recordOrder)===clean(payload.parentRecordOrder));
+        if(!parent) return Response.json({error:'Selecciona un perceptor 296 elegible: clave 1/2, pago 2/3 y mediador extranjero 2.'},{status:422});
+        if(!['F','J'].includes(clean(payload.contributorPersonality).toUpperCase())||!clean(payload.contributorName)||!/^\d{13}$/.test(clean(payload.model210Receipt))) return Response.json({error:'Completa personalidad, nombre del contribuyente y justificante 210 de 13 dígitos.'},{status:422});
+      } else {
+        const linked=await svc.entities.TaxDeclarableRecord.get(clean(payload.linkedAnnexARecordId));
+        if(!linked||linked.companyId!==companyId||clean(linked.modeloCodigo)!=='296'||clean(linked.payload?.annexType).toUpperCase()!=='A') return Response.json({error:'Selecciona un anexo A válido para enlazar el certificado B.'},{status:422});
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(clean(payload.paymentDate))||!/^\d{4}-\d{2}-\d{2}$/.test(clean(payload.model210PresentationDate))||!clean(payload.accountHolderName)) return Response.json({error:'Completa fecha de pago, fecha de presentación 210 y titular registral.'},{status:422});
+        payload={...payload,parentRecordOrder:linked.payload.parentRecordOrder,model210Receipt:linked.payload.model210Receipt};
+      }
+      const role=clean(user?.role).toLowerCase(); const canReview=['admin','super_admin','advisor','asesor'].includes(role); const reviewStatus=body.reviewStatus==='validado_asesor'&&canReview?'validado_asesor':'pendiente_revision';
+      let existing:any=null; const recordId=clean(body.recordId);
+      if(recordId){existing=await svc.entities.TaxDeclarableRecord.get(recordId);if(!existing||existing.companyId!==companyId||clean(existing.modeloCodigo)!=='296'||Number(existing.ejercicio)!==year||clean(existing.payload?.annexType).toUpperCase()!==annexType)return Response.json({error:'Registro A/B no encontrado.'},{status:404});}
+      const suffix=sourceFingerprint([annexType,payload.parentRecordOrder,payload.model210Receipt,payload.contributorName,payload.linkedAnnexARecordId,payload.securitiesAccount]).split('-')[1];
+      const recordKey=existing?.recordKey||`M296Annex${annexType}:${clean(payload.parentRecordOrder)}:${suffix}`;
+      const recordPayload:any={companyId,modeloCodigo:'296',ejercicio:year,recordKey,sourceType:'Model210RefundAnnex',sourceId:clean(payload.model210Receipt),payload,reviewStatus,notes:clean(body.notes)};
+      if(reviewStatus==='validado_asesor'){recordPayload.reviewedBy=user.email;recordPayload.reviewedAt=new Date().toISOString();}else{recordPayload.reviewedBy='';recordPayload.reviewedAt='';}
+      const record=existing?await svc.entities.TaxDeclarableRecord.update(existing.id,recordPayload):await svc.entities.TaxDeclarableRecord.create(recordPayload);
+      return Response.json({ok:true,record});
     }
     if(action==='upsert_declarable') {
       if(!['131','180','190','193','216','232','296','303','347','349','415'].includes(model)) return Response.json({error:'El enriquecimiento manual estructurado no está habilitado para este modelo.'},{status:400});
