@@ -6,6 +6,8 @@
       "type": "string",
       "enum": [
         "user",
+        "advisor",
+        "asesor",
         "admin",
         "super_admin"
       ],
