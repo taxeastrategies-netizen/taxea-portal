@@ -67,19 +67,22 @@ const advisorRecords = {
   AccountingConfiguration: [{ id: 'cfg-a', companyId: 'company-a', frameworkReviewStatus: 'validated' }],
   AdvisorSavedView: [],
 };
-const advisor = await harness('base44/functions/advisorWorkspaceOperations/entry.ts', advisorRecords, { email: 'advisor@test.invalid', full_name: 'Asesor Test', role: 'advisor', data: {} });
-const advisorSelf = await advisor.call({ action: 'self_test' });
-const overview = await advisor.call({ action: 'overview', year: 2026 });
-const trace = await advisor.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
-const save = await advisor.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'critical' } });
-const saveAgain = await advisor.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'high' } });
-advisor.setUser({ email: 'admin@test.invalid', role: 'admin', data: {} });
-const assigned = await advisor.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
-const assignedAgain = await advisor.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
-advisor.setUser({ email: 'client-a@test.invalid', role: 'user', data: { company_id: 'company-a' } });
-const userOverview = await advisor.call({ action: 'overview', year: 2026 });
-const userTrace = await advisor.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
-const crossTrace = await advisor.call({ action: 'trace', companyId: 'company-b', entityType: 'Invoice', entityId: 'invoice-a' });
+const workspace = await harness('base44/functions/advisorWorkspaceOperations/entry.ts', advisorRecords, { email: 'admin@test.invalid', full_name: 'Admin Test', role: 'admin', data: {} });
+const workspaceSelf = await workspace.call({ action: 'self_test' });
+const overview = await workspace.call({ action: 'overview', year: 2026 });
+const trace = await workspace.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
+const save = await workspace.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'critical' } });
+const saveAgain = await workspace.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'high' } });
+const assigned = await workspace.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
+const assignedAgain = await workspace.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
+workspace.setUser({ email: 'advisor@test.invalid', role: 'advisor', data: {} });
+const advisorOverview = await workspace.call({ action: 'overview', year: 2026 });
+const advisorSavedViews = await workspace.call({ action: 'saved_views' });
+const advisorTrace = await workspace.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
+workspace.setUser({ email: 'client-a@test.invalid', role: 'user', data: { company_id: 'company-a' } });
+const userOverview = await workspace.call({ action: 'overview', year: 2026 });
+const userTrace = await workspace.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
+const crossTrace = await workspace.call({ action: 'trace', companyId: 'company-b', entityType: 'Invoice', entityId: 'invoice-a' });
 
 const fiscalRecords = {
   Company: [{ id: 'company-a', razon_social: 'Empresa A', owner_email: 'client-a@test.invalid', usuarios_autorizados: ['advisor@test.invalid'] }],
@@ -95,15 +98,23 @@ const fiscalBundle = await fiscal.call({ action: 'bundle', companyId: 'company-a
 
 const nodeTypes = new Set((trace.data.trace?.nodes || []).map(item => item.type));
 const advisorUi = fs.readFileSync('src/components/tax/advisor/AdvisorWorkspace.jsx', 'utf8');
+const sidebarUi = fs.readFileSync('src/components/layout/Sidebar.jsx', 'utf8');
+const taxAccountingUi = fs.readFileSync('src/pages/TaxAccounting.jsx', 'utf8');
 const profileUi = fs.readFileSync('src/components/ajustes/FiscalProfileManager.jsx', 'utf8');
 const modelUi = fs.readFileSync('src/components/tax/impuestos/TaxModelWorkbench.jsx', 'utf8');
 const invoiceUi = fs.readFileSync('src/components/facturas/InvoiceOperationalSidePanel.jsx', 'utf8');
 const checks = {
-  advisorSelfTest: advisorSelf.status === 200 && advisorSelf.data.ok,
-  advisorIsolation: overview.status === 200 && overview.data.rows.length === 1 && overview.data.rows[0].company.id === 'company-a',
+  workspaceSelfTest: workspaceSelf.status === 200 && workspaceSelf.data.ok,
+  adminPortfolioGlobal: overview.status === 200 && overview.data.rows.length === 2 && overview.data.scope === 'global_admin',
+  advisorNoPortfolio: advisorOverview.status === 403,
+  advisorNoSavedViews: advisorSavedViews.status === 403,
+  advisorAssignedTrace: advisorTrace.status === 200,
   completeTrace: trace.status === 200 && ['Invoice', 'InvoiceTaxLine', 'JournalEntry', 'JournalEntryLine', 'InvoicePayment', 'BankTransaction'].every(type => nodeTypes.has(type)),
   savedViewIdempotent: save.status === 200 && saveAgain.status === 200 && advisorRecords.AdvisorSavedView.length === 1 && advisorRecords.AdvisorSavedView[0].filters.severity === 'high',
-  advisorAssignmentIdempotent: assigned.status === 200 && assignedAgain.data.alreadyAssigned === true && advisorRecords.Company[1].usuarios_autorizados.filter(email => email === 'advisor2@test.invalid').length === 1,
+  adminAssignmentIdempotent: assigned.status === 200 && assignedAgain.data.alreadyAssigned === true && advisorRecords.Company[1].usuarios_autorizados.filter(email => email === 'advisor2@test.invalid').length === 1,
+  adminOnlyInboxNavigation: sidebarUi.includes("id: 'asesoria'") && sidebarUi.includes("path: '/tax-accounting/asesoria', adminOnly: true") && !sidebarUi.includes("path: '/tax-accounting/asesoria', reviewerOnly: true"),
+  directInboxRouteGuard: taxAccountingUi.includes("case 'asesoria': return isPlatformAdmin ? <AdvisorWorkspace /> : <Navigate to=\"/tax-accounting/dashboard\" replace />;"),
+  adminOnlyWorkspaceUi: advisorUi.includes("const ADMIN_ROLES = ['admin', 'super_admin'];"),
   normalUserNoPortfolio: userOverview.status === 403,
   normalUserOwnTrace: userTrace.status === 200,
   crossCompanyHidden: crossTrace.status === 404,
@@ -119,5 +130,5 @@ const checks = {
   responsiveHistoryTable: profileUi.includes('overflow-x-auto') && profileUi.includes('min-w-[680px]'),
   bidirectionalTraceUi: modelUi.includes('Cadena completa') && invoiceUi.includes('Trazabilidad completa'),
 };
-console.log(JSON.stringify({ ok: Object.values(checks).every(Boolean), checks, advisorWrites: advisor.writes.length, fiscalWrites: fiscal.writes.length }, null, 2));
+console.log(JSON.stringify({ ok: Object.values(checks).every(Boolean), checks, workspaceWrites: workspace.writes.length, fiscalWrites: fiscal.writes.length }, null, 2));
 if (!Object.values(checks).every(Boolean)) process.exitCode = 1;
