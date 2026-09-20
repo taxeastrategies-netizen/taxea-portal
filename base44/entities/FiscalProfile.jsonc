@@ -231,6 +231,20 @@
     "ruleSetVersion": {
       "type": "string"
     },
+    "effectiveFrom": {
+      "type": "string",
+      "format": "date"
+    },
+    "version": {
+      "type": "integer",
+      "default": 1
+    },
+    "contentHash": {
+      "type": "string"
+    },
+    "lastChangeReason": {
+      "type": "string"
+    },
     "reviewedAt": {
       "type": "string",
       "format": "date-time"
