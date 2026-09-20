@@ -908,9 +908,9 @@ export default function TaxModelWorkbench({ initialSelection }) {
         setAdjustments(data.adjustments || {});
         setLastSaveInfo(`Borrador v${data.draft?.version || ''} abierto como fotografía guardada. Sus importes no se han recalculado.`);
       }
-      if (['export', 'export_review', 'export_handoff'].includes(variables.action)) {
+      if (['export', 'export_review', 'export_handoff', 'export_296_annexes'].includes(variables.action)) {
         downloadBase64(data.file);
-        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff' });
+        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff', isAnnex296: variables.action === 'export_296_annexes' });
       }
     },
     onError: error => {
@@ -1101,6 +1101,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
           {modelCode === '193' && result && <Annual193Editor details={result.calculation?.details} declaration={result.calculation?.declaration} expenseDetails={result.calculation?.expenseDetails || []} values={annual193RecordEdits} onChange={updateAnnual193Record} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: '193' })} onSaveExpense={payload => structuredRecord.mutate(payload)} onDeleteExpense={detail => structuredRecord.mutate({ action: 'delete_declarable', recordId: detail.recordId })} saving={saveDeclarable.isPending || structuredRecord.isPending} canReview={canReviewAnnual} />}
           {['347', '415'].includes(modelCode) && result && <ThirdPartyEditor modelCode={modelCode} details={result.calculation?.details} values={thirdPartyRecordEdits} onChange={updateThirdPartyRecord} onPropertyChange={updateThirdPartyProperty} onAddProperty={addThirdPartyProperty} onRemoveProperty={removeThirdPartyProperty} onSave={(detail, reviewStatus) => saveDeclarable.mutate({ detail, reviewStatus, targetModel: modelCode })} saving={saveDeclarable.isPending} canReview={canReviewAnnual} />}
           {DECLARABLE_SCHEMAS[modelCode] && <DeclarableRecordsEditor modelCode={modelCode} details={modelCode === '190' ? (result?.calculation?.manualRecords || []) : modelCode === '303' ? (result?.calculation?.operations?.simplified?.details || []) : (result?.calculation?.details || [])} onSave={payload => structuredRecord.mutate(payload)} onDelete={detail => structuredRecord.mutate({ action: 'delete_declarable', recordId: detail.recordId })} saving={structuredRecord.isPending || invoke.isPending} canReview={canReviewAnnual} />}
+          {modelCode === '296' && result && <Model296AnnexABEditor state={result.calculation?.annexes || {}} onSave={payload => structuredRecord.mutate(payload)} onDelete={record => structuredRecord.mutate({ action: 'delete_declarable', recordId: record.recordId })} onExport={() => invoke.mutate({ action: 'export_296_annexes' })} saving={structuredRecord.isPending || invoke.isPending} canReview={canReviewAnnual} />}
 
           {!result ? (
             <div className="grid gap-4 md:grid-cols-3">
