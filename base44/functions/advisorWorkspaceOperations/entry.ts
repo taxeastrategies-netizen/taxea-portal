@@ -305,6 +305,10 @@ Deno.serve(async (req) => {
       const workload = await companyWorkload(svc, company, client, year);
       const filteredAlerts = workload.alerts.filter((alert: any) => (severity === 'all' || alert.severity === severity) && (category === 'all' || alert.category === category));
       workload.visibleAlertTotal = filteredAlerts.length;
+      workload.visibleSeverityCounts = {
+        critical: filteredAlerts.filter((item: any) => item.severity === 'critical').length,
+        high: filteredAlerts.filter((item: any) => item.severity === 'high').length,
+      };
       workload.alerts = filteredAlerts.slice(0, 100);
       workload.hiddenAlertCount = Math.max(0, filteredAlerts.length - workload.alerts.length);
       return workload;
@@ -316,8 +320,8 @@ Deno.serve(async (req) => {
       rows, pagination: { page: safePage, pageSize, total: filtered.length, totalPages },
       summary: {
         companies: filtered.length, loadedCompanies: rows.length, alerts: rows.reduce((sum: number, row: any) => sum + Number(row.visibleAlertTotal || 0), 0),
-        critical: alerts.filter((item: any) => item.severity === 'critical').length,
-        high: alerts.filter((item: any) => item.severity === 'high').length,
+        critical: rows.reduce((sum: number, row: any) => sum + Number(row.visibleSeverityCounts?.critical || 0), 0),
+        high: rows.reduce((sum: number, row: any) => sum + Number(row.visibleSeverityCounts?.high || 0), 0),
         suspense555: rows.reduce((sum: number, row: any) => sum + row.counts.suspense555, 0),
         invoicesWithoutTax: rows.reduce((sum: number, row: any) => sum + row.counts.invoicesWithoutTax, 0),
         pendingModels: rows.reduce((sum: number, row: any) => sum + row.counts.pendingModels, 0),
