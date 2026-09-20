@@ -9,6 +9,7 @@ const READY_INVOICE_STATES = new Set(['contabilizada', 'revisada']);
 const READY_DRAFT_STATES = new Set(['revisado', 'aprobado']);
 const READY_PERIOD_STATES = new Set(['revisado', 'listo_presentar', 'presentado', 'no_aplica']);
 const READY_OBLIGATION_STATES = new Set(['revisado', 'listo_presentar', 'presentado', 'domiciliado', 'pagado', 'finalizado', 'no_aplica']);
+const SEVERITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
 function roleOf(user: any) { return lower(user?.role); }
 function isAdminUser(user: any) { return GLOBAL_ROLES.has(roleOf(user)); }
@@ -71,7 +72,7 @@ async function mapInBatches(items: any[], batchSize: number, mapper: (item: any)
 }
 
 function pushAlert(alerts: any[], companyId: string, input: any) {
-  alerts.push({
+  const alert = {
     id: input.id || [companyId, input.category, input.sourceType, input.sourceId].map(clean).join(':'),
     companyId,
     severity: input.severity || 'medium',
@@ -82,7 +83,16 @@ function pushAlert(alerts: any[], companyId: string, input: any) {
     sourceId: input.sourceId || '',
     detectedAt: input.detectedAt || new Date().toISOString(),
     deepLink: input.deepLink || '/tax-accounting/dashboard',
-  });
+  };
+  const duplicateIndex = alerts.findIndex(item => item.id === alert.id);
+  if (duplicateIndex < 0) {
+    alerts.push(alert);
+    return;
+  }
+  const current = alerts[duplicateIndex];
+  if ((SEVERITY_RANK[alert.severity] || 0) >= (SEVERITY_RANK[current.severity] || 0)) {
+    alerts[duplicateIndex] = alert;
+  }
 }
 
 async function companyWorkload(svc: any, company: any, client: any, year: number) {
@@ -134,8 +144,7 @@ async function companyWorkload(svc: any, company: any, client: any, year: number
   for (const issue of fiscalErrors.filter((row: any) => OPEN_FISCAL_STATES.has(row.estado))) pushAlert(alerts, companyId, { severity: issue.severidad === 'critica' ? 'critical' : issue.severidad === 'alta' ? 'high' : 'medium', category: 'incident', title: issue.tipo || 'Incidencia fiscal', detail: issue.descripcion || issue.accion_recomendada || '', sourceType: issue.entidad_tipo || 'FiscalError', sourceId: issue.entidad_id || issue.id, detectedAt: issue.updated_date || issue.created_date, deepLink: '/tax-accounting/impuestos?tab=errores' });
   if (!configuration || configuration.frameworkReviewStatus !== 'validated') pushAlert(alerts, companyId, { severity: 'medium', category: 'configuration', title: 'Configuración contable pendiente', detail: 'Revisa marco PGC, ejercicio y cuentas por defecto.', sourceType: 'AccountingConfiguration', sourceId: configuration?.id || '', detectedAt: configuration?.updated_date, deepLink: '/tax-accounting/contabilidad' });
 
-  const rank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
-  alerts.sort((a, b) => (rank[b.severity] || 0) - (rank[a.severity] || 0) || clean(b.detectedAt).localeCompare(clean(a.detectedAt)));
+  alerts.sort((a, b) => (SEVERITY_RANK[b.severity] || 0) - (SEVERITY_RANK[a.severity] || 0) || clean(b.detectedAt).localeCompare(clean(a.detectedAt)));
   const counts = {
     critical: alerts.filter(item => item.severity === 'critical').length,
     high: alerts.filter(item => item.severity === 'high').length,
