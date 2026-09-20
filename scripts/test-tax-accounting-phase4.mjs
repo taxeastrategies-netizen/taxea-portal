@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -90,6 +91,10 @@ const validated = await fiscal.call({ action: 'save_profile', companyId: 'compan
 const fiscalBundle = await fiscal.call({ action: 'bundle', companyId: 'company-a' });
 
 const nodeTypes = new Set((trace.data.trace?.nodes || []).map(item => item.type));
+const advisorUi = fs.readFileSync('src/components/tax/advisor/AdvisorWorkspace.jsx', 'utf8');
+const profileUi = fs.readFileSync('src/components/ajustes/FiscalProfileManager.jsx', 'utf8');
+const modelUi = fs.readFileSync('src/components/tax/impuestos/TaxModelWorkbench.jsx', 'utf8');
+const invoiceUi = fs.readFileSync('src/components/facturas/InvoiceOperationalSidePanel.jsx', 'utf8');
 const checks = {
   advisorSelfTest: advisorSelf.status === 200 && advisorSelf.data.ok,
   advisorIsolation: overview.status === 200 && overview.data.rows.length === 1 && overview.data.rows[0].company.id === 'company-a',
@@ -103,6 +108,12 @@ const checks = {
   duplicateProfileNoVersion: duplicate.status === 200 && duplicate.data.versionCreated === false,
   advisorCanValidate: validated.status === 200 && validated.data.profile.profileStatus === 'validado_asesor',
   versionHistoryReturned: fiscalBundle.status === 200 && fiscalBundle.data.profileVersions.length === 2,
+  responsivePortfolio: advisorUi.includes('sm:flex-row') && advisorUi.includes('xl:grid-cols-6') && advisorUi.includes('pageSize'),
+  largeVolumeControls: advisorUi.includes('50 empresas') && advisorUi.includes('pagination.totalPages'),
+  savedFiltersAndExport: advisorUi.includes('saved_views') && advisorUi.includes('save_view') && advisorUi.includes('text/csv;charset=utf-8'),
+  liveRefresh: advisorUi.includes('refetchInterval: 60000') && advisorUi.includes('refetchOnWindowFocus: true'),
+  responsiveHistoryTable: profileUi.includes('overflow-x-auto') && profileUi.includes('min-w-[680px]'),
+  bidirectionalTraceUi: modelUi.includes('Cadena completa') && invoiceUi.includes('Trazabilidad completa'),
 };
 console.log(JSON.stringify({ ok: Object.values(checks).every(Boolean), checks, advisorWrites: advisor.writes.length, fiscalWrites: fiscal.writes.length }, null, 2));
 if (!Object.values(checks).every(Boolean)) process.exitCode = 1;
