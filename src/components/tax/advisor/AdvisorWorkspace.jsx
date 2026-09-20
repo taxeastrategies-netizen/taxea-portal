@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-const REVIEW_ROLES = ['admin', 'super_admin', 'advisor', 'asesor'];
+const ADMIN_ROLES = ['admin', 'super_admin'];
 const TRACEABLE = new Set(['Invoice', 'InvoiceTaxLine', 'JournalEntry', 'JournalEntryLine', 'InvoicePayment', 'BankTransaction']);
 const SEVERITY = {
   critical: { label: 'Crítica', badge: 'bg-red-100 text-red-800 border-red-200', dot: 'bg-red-600' },
@@ -99,7 +99,7 @@ export default function AdvisorWorkspace() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const role = String(user?.role || '').toLowerCase();
-  const canReview = REVIEW_ROLES.includes(role);
+  const canReview = ADMIN_ROLES.includes(role);
   const isPlatformAdmin = ['admin', 'super_admin'].includes(role);
   const currentYear = new Date().getFullYear();
   const [filters, setFilters] = useState({ year: currentYear, search: '', severity: 'all', category: 'all', page: 1, pageSize: 12 });
@@ -147,7 +147,7 @@ export default function AdvisorWorkspace() {
     tipo_origen: alert.sourceType, id_origen: alert.sourceId, detectado: alert.detectedAt,
   }))), [rows]);
 
-  if (!canReview) return <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><ShieldCheck className="mx-auto h-9 w-9 text-amber-700" /><h1 className="mt-3 text-lg font-bold text-slate-900">Bandeja reservada a asesoría</h1><p className="mt-2 text-sm leading-6 text-slate-600">Tu perfil de cliente mantiene acceso a su propia empresa. La vista multiempresa requiere asignación profesional explícita.</p></div>;
+  if (!canReview) return <div className="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center"><ShieldCheck className="mx-auto h-9 w-9 text-amber-700" /><h1 className="mt-3 text-lg font-bold text-slate-900">Bandeja exclusiva de administración</h1><p className="mt-2 text-sm leading-6 text-slate-600">Esta cartera multiempresa solo está disponible para el usuario administrador de Taxea Portal.</p></div>;
 
   const updateFilter = (key, value) => setFilters(current => ({ ...current, [key]: value, page: key === 'page' ? value : 1 }));
   const openCompanyPath = (row, path) => {
