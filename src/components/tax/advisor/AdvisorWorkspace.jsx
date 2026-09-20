@@ -100,7 +100,9 @@ export default function AdvisorWorkspace() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const canReview = REVIEW_ROLES.includes(String(user?.role || '').toLowerCase());
+  const role = String(user?.role || '').toLowerCase();
+  const canReview = REVIEW_ROLES.includes(role);
+  const isPlatformAdmin = ['admin', 'super_admin'].includes(role);
   const currentYear = new Date().getFullYear();
   const [filters, setFilters] = useState({ year: currentYear, search: '', severity: 'all', category: 'all', page: 1, pageSize: 12 });
   const [searchInput, setSearchInput] = useState('');
@@ -128,6 +130,11 @@ export default function AdvisorWorkspace() {
   const deleteView = useMutation({
     mutationFn: payload => invoke(payload),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['advisor-saved-views'] }); toast.success('Vista eliminada.'); },
+    onError: error => toast.error(error.message),
+  });
+  const assignAdvisor = useMutation({
+    mutationFn: payload => invoke(payload),
+    onSuccess: data => { overview.refetch(); toast.success(data.alreadyAssigned ? 'El asesor ya estaba autorizado.' : 'Asesor autorizado en la empresa.'); },
     onError: error => toast.error(error.message),
   });
 
@@ -195,7 +202,7 @@ export default function AdvisorWorkspace() {
             return <article key={row.company.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <button className="min-w-0 text-left" onClick={() => setExpandedCompany(open ? '' : row.company.id)}><div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-bold text-slate-900">{row.company.name}</h2><Badge variant="outline">{row.company.taxId || 'Sin NIF'}</Badge>{row.profile?.status === 'validado_asesor' ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Fiscal validado · v{row.profile.version || 1}</span> : <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Perfil fiscal pendiente</span>}</div><p className="mt-1 text-xs text-slate-500">{row.company.ownerEmail || 'Sin correo propietario'}{row.client?.internalOwner ? ` · Responsable: ${row.client.internalOwner}` : ''}</p></button>
-                <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">{row.counts.critical} críticas</span><span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{row.counts.high} altas</span><span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{row.alerts.length} visibles</span><Button size="sm" variant="outline" onClick={() => openCompanyPath(row, '/tax-accounting/impuestos?tab=configuracion')}>Configurar fiscal</Button><Button size="sm" onClick={() => openCompanyPath(row, '/tax-accounting/dashboard')}>Entrar en empresa</Button></div>
+                <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">{row.counts.critical} críticas</span><span className="rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{row.counts.high} altas</span><span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{row.alerts.length} visibles</span>{isPlatformAdmin && <Button size="sm" variant="outline" onClick={() => { const advisorEmail = window.prompt('Correo del asesor que podrá acceder a esta empresa:'); if (advisorEmail) assignAdvisor.mutate(/** @type {any} */ ({ action: 'assign_advisor', companyId: row.company.id, advisorEmail })); }}>Asignar asesor</Button>}<Button size="sm" variant="outline" onClick={() => openCompanyPath(row, '/tax-accounting/impuestos?tab=configuracion')}>Configurar fiscal</Button><Button size="sm" onClick={() => openCompanyPath(row, '/tax-accounting/dashboard')}>Entrar en empresa</Button></div>
               </div>
               {open && <div className="border-t border-slate-100 bg-slate-50/70 p-4"><div className="mb-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5"><div className="rounded-lg bg-white p-2"><span className="text-slate-400">Contabilidad</span><p className="font-bold">{row.counts.pendingAccounting}</p></div><div className="rounded-lg bg-white p-2"><span className="text-slate-400">Sin fiscal</span><p className="font-bold">{row.counts.invoicesWithoutTax}</p></div><div className="rounded-lg bg-white p-2"><span className="text-slate-400">555</span><p className="font-bold">{row.counts.suspense555}</p></div><div className="rounded-lg bg-white p-2"><span className="text-slate-400">Modelos</span><p className="font-bold">{row.counts.pendingModels}</p></div><div className="rounded-lg bg-white p-2"><span className="text-slate-400">Incidencias</span><p className="font-bold">{row.counts.incidents}</p></div></div><div className="space-y-2">{row.alerts.length ? row.alerts.map(alert => <AlertRow key={alert.id} alert={alert} onTrace={item => setTraceInput({ companyId: row.company.id, entityType: item.sourceType, entityId: item.sourceId, title: item.title })} onOpen={path => openCompanyPath(row, path)} />) : <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">Sin pendientes en los filtros seleccionados.</p>}</div></div>}
             </article>;
