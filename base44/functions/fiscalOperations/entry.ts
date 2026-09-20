@@ -114,6 +114,22 @@ function authorize(user: any, companyId: string, company: any) {
   throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
 
+function stable(value: any): any {
+  if (Array.isArray(value)) return value.map(stable);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
+  return value;
+}
+
+async function sha256(value: any) {
+  const bytes = new TextEncoder().encode(JSON.stringify(stable(value)));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
+}
+
+function canProfessionallyValidate(user: any) {
+  return ['admin', 'super_admin', 'advisor', 'asesor'].includes(clean(user?.role).toLowerCase());
+}
+
 function recommendedObligations(profile: any, activities: any[]) {
   const result = new Map<string, any>();
   const add = (code: string, reason: string, certainty: 'recommended' | 'review' = 'recommended') => {
@@ -256,27 +272,53 @@ Deno.serve(async (req) => {
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
-    const [profiles, activities, models] = await Promise.all([
+    const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
       svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000),
+      svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100),
     ]);
     const profile = profiles?.[0] || null;
 
     if (action === 'bundle') {
       const invoiceTaxLines=body.invoiceId?await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:clean(body.invoiceId)},'lineNumber',100):[];
-      return Response.json({ success: true, ruleSetVersion: RULESET, profile, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), sources: SOURCES });
+      return Response.json({ success: true, ruleSetVersion: RULESET, profile, profileVersions, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), sources: SOURCES });
     }
     if (action === 'evaluate') return Response.json({ success: true, evaluation: evaluate(profile, activities, body), ruleSetVersion: RULESET });
 
     if (action === 'save_profile') {
       const data = body.profile || {};
-      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes'];
-      const payload: any = { company_id: companyId, active: data.active !== false, ruleSetVersion: RULESET, reviewedAt: new Date().toISOString(), reviewedBy: user.email };
+      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
+      const now = new Date().toISOString();
+      const effectiveFrom = clean(data.effectiveFrom || profile?.effectiveFrom || now.slice(0, 10));
+      const changeSummary = clean(data.lastChangeReason || body.changeSummary || 'Actualización del perfil fiscal').slice(0, 1000);
+      const payload: any = { company_id: companyId, active: data.active !== false, ruleSetVersion: RULESET, effectiveFrom, lastChangeReason: changeSummary, reviewedAt: now, reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
+      if (payload.profileStatus === 'validado_asesor' && !canProfessionallyValidate(user)) payload.profileStatus = 'pendiente_revision';
       if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
+      const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key]]));
+      snapshot.ruleSetVersion = RULESET;
+      const contentHash = await sha256(snapshot);
+      const latestVersion = [...(profileVersions || [])].sort((a: any, b: any) => Number(b.version || 0) - Number(a.version || 0))[0] || null;
+      const version = latestVersion?.snapshot_hash === contentHash ? Number(latestVersion.version || 1) : Number(latestVersion?.version || 0) + 1;
+      payload.version = version;
+      payload.contentHash = contentHash;
       const saved = profile ? await svc.entities.FiscalProfile.update(profile.id, payload) : await svc.entities.FiscalProfile.create(payload);
-      return Response.json({ success: true, profile: saved, recommendations: recommendedObligations(saved, activities), ruleSetVersion: RULESET });
+      let versionRecord = latestVersion;
+      let versionCreated = false;
+      if (!latestVersion || latestVersion.snapshot_hash !== contentHash) {
+        for (const row of (profileVersions || []).filter((item: any) => item.status === 'active')) {
+          await svc.entities.FiscalProfileVersion.update(row.id, { status: 'superseded', effective_until: effectiveFrom, reviewed_at: now, reviewed_by: user.email });
+        }
+        versionRecord = await svc.entities.FiscalProfileVersion.create({
+          company_id: companyId, fiscal_profile_id: saved.id, version, effective_from: effectiveFrom, status: 'active',
+          snapshot, snapshot_hash: contentHash, change_summary: changeSummary, changed_by: user.email, changed_at: now,
+          reviewed_by: payload.profileStatus === 'validado_asesor' ? user.email : '', reviewed_at: payload.profileStatus === 'validado_asesor' ? now : undefined,
+          rule_set_version: RULESET,
+        });
+        versionCreated = true;
+      }
+      return Response.json({ success: true, profile: saved, profileVersion: versionRecord, versionCreated, recommendations: recommendedObligations(saved, activities), ruleSetVersion: RULESET });
     }
 
     if (action === 'save_activity') {
