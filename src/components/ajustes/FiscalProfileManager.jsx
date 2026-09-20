@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import iaeCatalog from '@/data/iaeCatalog.json';
-import { AlertTriangle, BookOpenCheck, ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, ChevronDown, ChevronUp, ExternalLink, History, Loader2, Plus, Save, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/lib/AuthContext';
 
 const unwrap = (response) => response?.data || response || {};
 const invoke = async (payload) => {
@@ -26,6 +27,7 @@ const emptyProfile = (company) => ({
   irpfCashMethodEffectiveFrom: '', irpfCashMethodMinimumUntil: '', retainedIncomePercent: 0, model130ExemptionConfirmed: false,
   model130TerritorialRelief: 'none', model130TerritorialReliefConfirmed: false,
   repepStatus: 'no_aplica', profileStatus: 'pendiente_revision', censusValidationSource: 'pendiente_confirmar', active: true,
+  effectiveFrom: new Date().toISOString().slice(0, 10), lastChangeReason: 'Configuración inicial del perfil fiscal',
 });
 const emptyActivity = (profile) => ({
   name: '', iaeCode: '', iaeActivityCode: '', startDate: '', territory: profile?.mainTerritory || 'peninsula_baleares',
@@ -36,8 +38,10 @@ const emptyActivity = (profile) => ({
 });
 
 export default function FiscalProfileManager({ company, onChanged = undefined }) {
+  const { user } = useAuth();
   const companyId = company?.id;
   const queryClient = useQueryClient();
+  const canValidate = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const [profileDraft, setProfileDraft] = useState(null);
   const [activityDraft, setActivityDraft] = useState(null);
   const [iaeSearch, setIaeSearch] = useState('');
@@ -47,6 +51,7 @@ export default function FiscalProfileManager({ company, onChanged = undefined })
   const catalog = useQuery({ queryKey: ['fiscal-catalog', companyId], enabled: Boolean(companyId), queryFn: () => invoke({ action: 'catalog', companyId }), staleTime: 60 * 60 * 1000 });
   const profile = profileDraft || bundle.data?.profile || emptyProfile(company);
   const activities = bundle.data?.activities || [];
+  const profileVersions = bundle.data?.profileVersions || [];
   const recommendations = bundle.data?.recommendations || [];
   const mutate = useMutation({
     mutationFn: invoke,
@@ -95,7 +100,9 @@ export default function FiscalProfileManager({ company, onChanged = undefined })
         <Field label="Territorio principal"><Select value={profile.mainTerritory || 'peninsula_baleares'} onValueChange={v => set('mainTerritory', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[['peninsula_baleares','Peninsula y Baleares - IVA'],['canarias','Canarias - IGIC'],['ceuta_melilla','Ceuta y Melilla'],['ue','Union Europea'],['no_ue','Fuera de la UE']].map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Impuesto indirecto principal"><Select value={profile.indirectTaxDefault || 'iva'} onValueChange={v => set('indirectTaxDefault', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[['iva','IVA'],['igic','IGIC'],['mixto','Mixto'],['no_aplica','No aplica']].map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></Field>
         <Field label="Validacion censal"><Select value={profile.censusValidationSource || 'pendiente_confirmar'} onValueChange={v => set('censusValidationSource', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{[['pendiente_confirmar','Pendiente de confirmar'],['modelo_036','Modelo 036'],['modelo_400','Modelo 400 ATC'],['certificado_censal','Certificado censal'],['criterio_asesor','Criterio del asesor']].map(([v,l])=><SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent></Select></Field>
-        <Field label="Estado del perfil"><Select value={profile.profileStatus || 'pendiente_revision'} onValueChange={v => set('profileStatus', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="incompleto">Incompleto</SelectItem><SelectItem value="pendiente_revision">Pendiente de revision</SelectItem><SelectItem value="validado_asesor">Validado por asesor</SelectItem></SelectContent></Select></Field>
+        <Field label="Estado del perfil"><Select value={profile.profileStatus || 'pendiente_revision'} onValueChange={v => set('profileStatus', v)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="incompleto">Incompleto</SelectItem><SelectItem value="pendiente_revision">Pendiente de revision</SelectItem><SelectItem value="validado_asesor" disabled={!canValidate}>Validado por asesor</SelectItem></SelectContent></Select>{!canValidate && <p className="text-[11px] text-muted-foreground">La validación final corresponde al asesor.</p>}</Field>
+        <Field label="Vigente desde"><Input type="date" value={profile.effectiveFrom || ''} onChange={e => set('effectiveFrom', e.target.value)} /></Field>
+        <Field label="Motivo del cambio"><Input value={profile.lastChangeReason || ''} onChange={e => set('lastChangeReason', e.target.value)} placeholder="Alta, cambio censal, nuevo régimen…" /></Field>
       </div>
       <div className="flex flex-wrap gap-5"><Check checked={profile.isLargeCompany} onChange={v=>set('isLargeCompany',v)} label="Gran empresa" /><Check checked={profile.isREDEME} onChange={v=>set('isREDEME',v)} label="REDEME" /><Check checked={profile.usesSII} onChange={v=>set('usesSII',v)} label="SII" /><Check checked={profile.usesVeriFactu} onChange={v=>set('usesVeriFactu',v)} label="VERI*FACTU" /></div>
     </section>
@@ -149,8 +156,13 @@ export default function FiscalProfileManager({ company, onChanged = undefined })
       <div className="rounded-xl border bg-muted/20 p-4"><p className="text-sm font-semibold">Añadir obligación confirmada manualmente</p><p className="mb-3 text-xs text-muted-foreground">Permite al cliente o asesor activar modelos adicionales sin eliminar los ya configurados.</p><div className="flex flex-col gap-2 sm:flex-row"><Select value={manualModelCode||undefined} onValueChange={setManualModelCode}><SelectTrigger className="flex-1"><SelectValue placeholder="Seleccionar modelo fiscal…" /></SelectTrigger><SelectContent>{(catalog.data?.models||[]).map(item=><SelectItem key={item.code} value={item.code}>Modelo {item.code} · {item.name}</SelectItem>)}</SelectContent></Select><Button variant="outline" disabled={!manualModelCode||mutate.isPending} onClick={async()=>{await mutate.mutateAsync({action:'save_manual_obligation',companyId,code:manualModelCode,active:true,reason:'Confirmado desde el perfil fiscal'});setManualModelCode('');toast.success('Obligación fiscal añadida con trazabilidad.')}}><Plus className="mr-2 h-4 w-4" />Añadir modelo</Button></div><div className="mt-3 flex flex-wrap gap-2">{(bundle.data?.models||[]).filter(item=>item.activo!==false).map(item=><Badge key={item.id||item.codigo} variant="outline">{item.codigo} · {item.administracion||''}</Badge>)}</div></div>
     </section>
 
+    <section className="rounded-xl border bg-card p-5 space-y-3">
+      <div className="flex items-center gap-2"><History className="h-4 w-4 text-primary" /><div><h4 className="font-semibold">5. Historial de vigencias</h4><p className="text-xs text-muted-foreground">Cada cambio material crea una versión inmutable. Guardar dos veces el mismo contenido no duplica versiones.</p></div></div>
+      {!profileVersions.length ? <p className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground">El historial comenzará al guardar esta configuración unificada.</p> : <div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[680px] text-xs"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="px-3 py-2 text-left">Versión</th><th className="px-3 py-2 text-left">Vigencia</th><th className="px-3 py-2 text-left">Estado</th><th className="px-3 py-2 text-left">Cambio</th><th className="px-3 py-2 text-left">Responsable</th></tr></thead><tbody>{profileVersions.map(item => <tr key={item.id} className="border-t"><td className="px-3 py-2 font-mono">v{item.version}</td><td className="px-3 py-2">{item.effective_from || '—'}{item.effective_until ? ` → ${item.effective_until}` : ' → actual'}</td><td className="px-3 py-2"><Badge variant={item.status === 'active' ? 'default' : 'secondary'}>{item.status === 'active' ? 'Activa' : 'Sustituida'}</Badge></td><td className="max-w-xs px-3 py-2">{item.change_summary || 'Actualización fiscal'}</td><td className="px-3 py-2">{item.changed_by || '—'}</td></tr>)}</tbody></table></div>}
+    </section>
+
     <section className="rounded-xl border bg-card p-5">
-      <button className="flex w-full items-center justify-between text-left" onClick={()=>setShowSources(!showSources)}><div><h4 className="font-semibold">5. Fuentes y control normativo</h4><p className="text-xs text-muted-foreground">Normas y guias oficiales usadas por el motor. Deben revisarse cuando cambie la normativa.</p></div>{showSources?<ChevronUp className="h-4 w-4"/>:<ChevronDown className="h-4 w-4"/>}</button>
+      <button className="flex w-full items-center justify-between text-left" onClick={()=>setShowSources(!showSources)}><div><h4 className="font-semibold">6. Fuentes y control normativo</h4><p className="text-xs text-muted-foreground">Normas y guias oficiales usadas por el motor. Deben revisarse cuando cambie la normativa.</p></div>{showSources?<ChevronUp className="h-4 w-4"/>:<ChevronDown className="h-4 w-4"/>}</button>
       {showSources&&<div className="mt-4 grid gap-2 md:grid-cols-2">{(bundle.data?.sources||[]).map(source=><a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border p-3 text-xs hover:bg-muted"><span>{source.title}</span><ExternalLink className="h-3 w-3"/></a>)}<a href={iaeCatalog.sourceFile} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border p-3 text-xs hover:bg-muted"><span>Fichero AEAT del catalogo IAE integrado</span><ExternalLink className="h-3 w-3"/></a></div>}
     </section>
   </div>;
