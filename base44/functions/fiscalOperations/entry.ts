@@ -131,7 +131,8 @@ async function sha256(value: any) {
 }
 
 function canProfessionallyValidate(user: any) {
-  return ['admin', 'super_admin', 'advisor', 'asesor'].includes(clean(user?.role).toLowerCase());
+  const role = clean(user?.role).toLowerCase();
+  return role === 'admin' || role === 'super_admin' || role === 'advisor' || role === 'asesor';
 }
 
 function recommendedObligations(profile: any, activities: any[]) {
