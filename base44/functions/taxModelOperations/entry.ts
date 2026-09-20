@@ -254,7 +254,7 @@ function model296AnnexState(declarables: any[], ordinaryRecords: any[], filings:
     const payload = record.payload || {};
     const order = clean(payload.recordOrder || String(index + 1).padStart(8, '0')).slice(0, 8);
     if (!order || parentMap.has(order)) return;
-    parentMap.set(order, { recordOrder: order, recipientTaxId: payload.spanishTaxId || payload.recipientTaxId || '', representativeTaxId: payload.representativeTaxId || '', personalityKey: payload.personalityKey || '', recipientName: payload.recipientName || '', isin: payload.issuerCode || '', accrualDate: payload.paymentDate || payload.operationDate || '', incomeKey: clean(payload.incomeKey), paymentRole: clean(payload.paymentRole), mediatorCode: clean(payload.mediatorCode) });
+    parentMap.set(order, { recordOrder: order, recipientTaxId: payload.spanishTaxId || (clean(payload.country).toUpperCase() === 'ES' ? payload.recipientTaxId : '') || '', representativeTaxId: payload.representativeTaxId || '', personalityKey: payload.personalityKey || '', recipientName: payload.recipientName || '', isin: payload.issuerCode || '', accrualDate: payload.paymentDate || payload.operationDate || '', incomeKey: clean(payload.incomeKey), paymentRole: clean(payload.paymentRole), mediatorCode: clean(payload.mediatorCode) });
   });
   const eligibleParents = [...parentMap.values()].filter((parent: any) => ['1','2','01','02'].includes(parent.incomeKey) && ['2','3'].includes(parent.paymentRole) && parent.mediatorCode === '2');
   const annexRows = declarables.filter((record: any) => clean(record.modeloCodigo) === '296' && is296AnnexRecord(record));
@@ -2560,6 +2560,7 @@ function export296(company:any, year:number, calculation:any, declarationNumber:
 }
 
 function export296AnnexAB(company: any, year: number, state: any) {
+  const optionalDate = (value: any) => /^\d{4}-\d{2}-\d{2}$/.test(clean(value)) ? `${clean(value).slice(8,10)}${clean(value).slice(5,7)}${clean(value).slice(0,4)}` : '00000000';
   const parentMap = new Map((state.eligibleParents || []).map((parent: any) => [clean(parent.recordOrder), parent]));
   const aById = new Map((state.aRecords || []).map((record: any) => [clean(record.recordId), record]));
   const aRecord = (row: any) => {
@@ -2567,7 +2568,7 @@ function export296AnnexAB(company: any, year: number, state: any) {
     const value = Array(500).fill(' ');
     place(value,1,1,'2'); place(value,2,3,'296'); place(value,5,4,String(year)); place(value,9,9,normalizedText(company.nif_cif,9)); place(value,18,9,normalizedText(parent.recipientTaxId,9)); place(value,27,9,normalizedText(parent.representativeTaxId,9)); place(value,36,1,normalizedText(parent.personalityKey,1)); place(value,37,40,normalizedText(parent.recipientName,40)); place(value,77,8,normalizedText(parent.recordOrder,8)); place(value,85,12,normalizedText(parent.isin,12)); place(value,97,8,aeatDate(parent.accrualDate,year));
     place(value,105,1,normalizedText(row.contributorPersonality,1)); place(value,106,9,normalizedText(row.contributorSpanishTaxId,9)); place(value,115,20,normalizedText(row.contributorLei,20)); place(value,135,40,normalizedText(row.contributorName,40)); place(value,175,13,signedAmount(row.netPayment,13)); place(value,188,4,numeric(row.withholdingRate,4,false,2)); place(value,192,13,numeric(row.withholdingAmount,13));
-    place(value,205,50,normalizedText(row.address,50)); place(value,255,90,normalizedText(row.addressComplement,90)); place(value,345,30,normalizedText(row.city,30)); place(value,375,30,normalizedText(row.region,30)); place(value,405,10,normalizedText(row.postalCode,10)); place(value,415,2,normalizedText(row.addressCountry,2)); place(value,417,13,leftPaddedText(row.model210Receipt,13,'0')); place(value,433,20,normalizedText(row.foreignTaxId,20)); place(value,453,8,aeatDate(row.birthDate,year)); place(value,461,35,normalizedText(row.birthCity,35)); place(value,496,2,normalizedText(row.birthCountry,2)); place(value,498,2,normalizedText(row.residenceCountry,2)); place(value,500,1,'A');
+    place(value,205,50,normalizedText(row.address,50)); place(value,255,90,normalizedText(row.addressComplement,90)); place(value,345,30,normalizedText(row.city,30)); place(value,375,30,normalizedText(row.region,30)); place(value,405,10,normalizedText(row.postalCode,10)); place(value,415,2,normalizedText(row.addressCountry,2)); place(value,417,13,leftPaddedText(row.model210Receipt,13,'0')); place(value,433,20,normalizedText(row.foreignTaxId,20)); place(value,453,8,optionalDate(row.birthDate)); place(value,461,35,normalizedText(row.birthCity,35)); place(value,496,2,normalizedText(row.birthCountry,2)); place(value,498,2,normalizedText(row.residenceCountry,2)); place(value,500,1,'A');
     return value.join('');
   };
   const bRecord = (row: any) => {
