@@ -227,7 +227,6 @@ Deno.serve(async (req) => {
 
     if (action === 'self_test') {
       const testUser = { email: 'advisor@test.invalid', full_name: 'Asesor Prueba', role: 'advisor' };
-      const clientMap = new Map([['client@test.invalid', { email: 'client@test.invalid', internalOwner: 'advisor@test.invalid' }]]);
       const checks = {
         reviewerRole: isReviewer(testUser),
         normalUserDenied: !isReviewer({ role: 'user' }),
