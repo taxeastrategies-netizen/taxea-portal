@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { getImpersonation } from '@/lib/impersonation';
 
 // Roles con acceso administrativo completo
-export const ADMIN_ROLES = ['admin', 'super_admin', 'advisor'];
+export const ADMIN_ROLES = ['admin', 'super_admin', 'advisor', 'asesor'];
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
 // Cache simple en memoria para evitar re-fetches innecesarios
