@@ -676,6 +676,50 @@ function DeclarableRecordsEditor({ modelCode, details = [], onSave, onDelete, sa
   </section>;
 }
 
+function Model296AnnexABEditor({ state = {}, onSave, onDelete, onExport, saving, canReview }) {
+  const [annexType, setAnnexType] = useState('A');
+  const [draft, setDraft] = useState({});
+  const fields = annexType === 'A' ? MODEL_296_ANNEX_A_FIELDS : MODEL_296_ANNEX_B_FIELDS;
+  const records = annexType === 'A' ? (state.aRecords || []) : (state.bRecords || []);
+  const reset = (nextType = annexType) => { setAnnexType(nextType); setDraft({}); };
+  const startEdit = record => {
+    const nextType = record.annexType || annexType;
+    const nextFields = nextType === 'A' ? MODEL_296_ANNEX_A_FIELDS : MODEL_296_ANNEX_B_FIELDS;
+    setAnnexType(nextType);
+    setDraft({ ...Object.fromEntries(nextFields.map(([key]) => [key, record[key] ?? ''])), parentRecordOrder: record.parentRecordOrder || '', linkedAnnexARecordId: record.linkedAnnexARecordId || '', recordId: record.recordId, recordKey: record.recordKey });
+  };
+  const submit = () => {
+    const linkPayload = annexType === 'A' ? { parentRecordOrder: draft.parentRecordOrder } : { linkedAnnexARecordId: draft.linkedAnnexARecordId };
+    onSave({ action: 'upsert_296_annex', annexType, recordId: draft.recordId, recordKey: draft.recordKey, reviewStatus: canReview ? 'validado_asesor' : 'pendiente_revision', payload: { ...linkPayload, ...Object.fromEntries(fields.map(([key]) => [key, draft[key]]).filter(([, value]) => value !== '' && value !== undefined && value !== null)) } });
+    setDraft({});
+  };
+  const linkMissing = annexType === 'A' ? !draft.parentRecordOrder : !draft.linkedAnnexARecordId;
+  return <section className="rounded-2xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50/80 to-white p-4">
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+      <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-semibold text-slate-900">Anexos A/B · devolución a no residentes</h3><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${state.ready ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{state.ready ? 'Listos para TGVI' : 'Pendientes de revisión'}</span></div><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">Circuito posterior al modelo 210: enlaza el anexo A con el perceptor del 296 ordinario y su anexo B. Ambos conservan el mismo identificador 77-84 y el justificante del 210.</p></div>
+      <Button type="button" size="sm" onClick={onExport} disabled={saving || !state.ready} className="shrink-0 bg-fuchsia-700 hover:bg-fuchsia-800"><Download className="mr-1.5 h-4 w-4" />Exportar anexos A/B</Button>
+    </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">296 ordinario presentado</p><p className={`mt-1 text-sm font-semibold ${state.ordinaryFiled ? 'text-emerald-700' : 'text-amber-700'}`}>{state.ordinaryFiled ? 'Sí' : 'No'}</p></div>
+      <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">Perceptores elegibles</p><p className="mt-1 text-sm font-semibold text-slate-900">{state.eligibleParents?.length || 0}</p></div>
+      <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">Anexos A</p><p className="mt-1 text-sm font-semibold text-slate-900">{state.aRecords?.length || 0}</p></div>
+      <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[11px] text-slate-500">Anexos B</p><p className="mt-1 text-sm font-semibold text-slate-900">{state.bRecords?.length || 0}</p></div>
+    </div>
+    {!!state.errors?.length && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-semibold text-amber-800">Revisión necesaria antes de exportar</p><ul className="mt-1 space-y-1 text-xs leading-5 text-amber-800">{state.errors.map((error, index) => <li key={index}>• {error}</li>)}</ul></div>}
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      {['A','B'].map(type => <Button key={type} type="button" size="sm" variant={annexType === type ? 'default' : 'outline'} onClick={() => reset(type)} className={annexType === type ? 'bg-fuchsia-700 hover:bg-fuchsia-800' : ''}>Anexo {type}</Button>)}
+      {draft.recordId && <Button type="button" size="sm" variant="ghost" onClick={() => reset()}><X className="mr-1 h-3.5 w-3.5" />Cancelar edición</Button>}
+    </div>
+    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {annexType === 'A' ? <label className="text-xs font-medium text-slate-600">Perceptor padre del 296<select value={draft.parentRecordOrder || ''} onChange={event => setDraft(current => ({ ...current, parentRecordOrder: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 bg-white px-3 text-sm"><option value="">Seleccionar identificador 77-84</option>{(state.eligibleParents || []).map(parent => <option key={parent.recordOrder} value={parent.recordOrder}>{parent.recordOrder} · {parent.recipientName}</option>)}</select></label>
+        : <label className="text-xs font-medium text-slate-600">Anexo A relacionado<select value={draft.linkedAnnexARecordId || ''} onChange={event => setDraft(current => ({ ...current, linkedAnnexARecordId: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 bg-white px-3 text-sm"><option value="">Seleccionar anexo A</option>{(state.aRecords || []).map(record => <option key={record.recordId} value={record.recordId}>{record.parentRecordOrder} · {record.contributorName}</option>)}</select></label>}
+      {fields.map(([key, label, type, options]) => <label key={key} className="text-xs font-medium text-slate-600">{label}{type === 'select' ? <select value={draft[key] ?? ''} onChange={event => setDraft(current => ({ ...current, [key]: event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 bg-white px-3 text-sm">{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select> : <input type={type} step={type === 'number' ? '0.01' : undefined} value={draft[key] ?? ''} onChange={event => setDraft(current => ({ ...current, [key]: type === 'number' ? (event.target.value === '' ? '' : Number(event.target.value)) : event.target.value }))} className="mt-1 h-9 w-full rounded-lg border border-fuchsia-200 bg-white px-3 text-sm" />}</label>)}
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" size="sm" onClick={submit} disabled={saving || linkMissing} className="bg-fuchsia-700 hover:bg-fuchsia-800"><Plus className="mr-1 h-4 w-4" />{draft.recordId ? 'Guardar cambios' : `Añadir anexo ${annexType}`}</Button><span className="text-[11px] text-slate-500">{canReview ? 'Se validará como asesor.' : 'Quedará pendiente de revisión por asesor.'}</span></div>
+    {!!records.length && <div className="mt-4 overflow-x-auto rounded-xl border border-fuchsia-100 bg-white"><table className="w-full text-xs"><thead className="bg-fuchsia-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Identificador</th><th className="px-3 py-2 text-left">Contribuyente / titular</th><th className="px-3 py-2 text-left">Estado</th><th className="px-3 py-2 text-right">Acciones</th></tr></thead><tbody>{records.map(record => <tr key={record.recordId} className="border-t border-fuchsia-50"><td className="px-3 py-2 font-mono">{record.parentRecordOrder}</td><td className="px-3 py-2">{record.contributorName || record.accountHolderName}</td><td className="px-3 py-2">{record.reviewStatus === 'validado_asesor' ? 'Validado por asesor' : 'Pendiente de revisión'}</td><td className="px-3 py-2"><div className="flex justify-end gap-1"><Button type="button" size="sm" variant="outline" onClick={() => startEdit(record)}>Editar</Button>{(canReview || record.reviewStatus !== 'validado_asesor') ? <Button type="button" size="sm" variant="outline" className="text-red-700" onClick={() => onDelete(record)} disabled={saving}><Trash2 className="h-3.5 w-3.5" /></Button> : <span className="self-center text-[10px] text-slate-400">Protegido</span>}</div></td></tr>)}</tbody></table></div>}
+  </section>;
+}
+
 function StatusBadge({ model }) {
   if (model.exportMode === 'atc_guided_packet') return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado ATC</span>;
   if (model.handoffExport) return <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 border border-cyan-200">Traspaso controlado {model.authority}</span>;
