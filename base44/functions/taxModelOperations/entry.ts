@@ -1700,7 +1700,8 @@ function calculate216(data: any, b: any, adjustments: any) {
 }
 
 function calculate296(data: any, b: any) {
-  const direct = declarableRows(data, '296', b, true);
+  const directAll = declarableRows(data, '296', b, true);
+  const direct = directAll.filter((record: any) => !is296AnnexRecord(record));
   const from216 = declarableRows(data, '216', b, true);
   const seen = new Set<string>();
   const records = [...direct, ...from216].filter((record: any) => {
@@ -1729,7 +1730,12 @@ function calculate296(data: any, b: any) {
   if(records.some((record:any)=>booleanValue(record.payload?.requiresSpecialAnnex)&&!booleanValue(record.payload?.foralSplitConfirmed))) data.warnings.push('Revisa los anexos A/B del 296 cuando procedan: se remiten después del modelo 210 y no se incluyen en el fichero ordinario de enero.');
   if(records.some((record:any)=>['1','2','01','02'].includes(clean(record.payload?.incomeKey))&&['2','3'].includes(clean(record.payload?.paymentRole))&&clean(record.payload?.mediatorCode)==='2')) data.warnings.push('Hay pagos a mediadores extranjeros susceptibles de anexos A/B del 296 tras solicitar devolución por modelo 210; coteja beneficiarios, certificados y justificantes.');
   if(records.some((record:any)=>['1','2','01','02'].includes(clean(record.payload?.incomeKey))&&!clean(record.payload?.paymentRole))) data.warnings.push('Para las claves de renta 1 y 2 del 296 debe confirmarse el papel del pagador para calcular el total ingresado de la cabecera.');
-  return { fields, result: 0, details: records.map((record: any) => ({ recordId: record.modeloCodigo === '296' ? record.id : undefined, recordKey: record.recordKey, sourceId: manualSourceId(record), sourceModel: record.modeloCodigo, reviewStatus: record.reviewStatus, ...(record.payload || {}) })) };
+  const annexes = model296AnnexState(data.declarables || [], records, data.filings || [], Number(data.year));
+  if (annexes.aRecords.length || annexes.bRecords.length) {
+    if (!annexes.ordinaryFiled) data.warnings.push('Los anexos A/B están preparados, pero solo pueden remitirse después de presentar el 296 ordinario del ejercicio.');
+    data.warnings.push(...annexes.errors);
+  }
+  return { fields, result: 0, annexes, details: records.map((record: any) => ({ recordId: record.modeloCodigo === '296' ? record.id : undefined, recordKey: record.recordKey, sourceId: manualSourceId(record), sourceModel: record.modeloCodigo, reviewStatus: record.reviewStatus, ...(record.payload || {}) })) };
 }
 
 function calculate349(data: any, b: any) {
