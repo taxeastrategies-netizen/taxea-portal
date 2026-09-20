@@ -189,7 +189,7 @@ export default function AdvisorWorkspace() {
 
     {overview.isLoading ? <div className="flex justify-center rounded-2xl border border-slate-200 bg-white py-24"><Loader2 className="h-8 w-8 animate-spin text-cyan-600" /></div>
       : overview.isError ? <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">{overview.error.message}</div>
-        : !rows.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center"><Filter className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No hay empresas en este filtro</p><p className="mt-1 text-xs text-slate-500">En perfiles de asesoría, confirma que la empresa tenga el asesor autorizado o asignado como responsable interno.</p></div>
+        : !rows.length ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-20 text-center"><Filter className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No hay empresas en este filtro</p><p className="mt-1 text-xs text-slate-500">En perfiles de asesoría, confirma que la empresa tenga el correo del asesor en usuarios autorizados.</p></div>
           : <section className="space-y-3">{rows.map(row => {
             const open = expandedCompany === row.company.id;
             return <article key={row.company.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
