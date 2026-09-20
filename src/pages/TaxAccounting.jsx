@@ -18,6 +18,7 @@ const LaborOcr = lazy(() => import('./LaborOcr'));
 const ContabilidadModule = lazy(() => import('@/components/tax/contabilidad/ContabilidadModule'));
 const ImpuestosModule = lazy(() => import('@/components/tax/impuestos/ImpuestosModule'));
 const RegistroMercantilModule = lazy(() => import('@/components/mercantil/RegistroMercantilModule'));
+const AdvisorWorkspace = lazy(() => import('@/components/tax/advisor/AdvisorWorkspace'));
 
 export default function TaxAccounting() {
   const { module } = useParams();
@@ -28,6 +29,7 @@ export default function TaxAccounting() {
   };
 
   switch (module) {
+    case 'asesoria': return <AdvisorWorkspace />;
     case 'facturas': return <Facturas />;
     case 'ingresos-gastos': return <IngresosGastos />;
     case 'presupuestos': return <Presupuestos />;
