@@ -247,6 +247,17 @@ Deno.serve(async (req) => {
       return Response.json({ ok: Object.values(checks).every(Boolean), checks });
     }
 
+    if (action === 'trace') {
+      const companyId = clean(body.companyId);
+      const company = await svc.entities.Company.get(companyId).catch(() => null);
+      if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+      const ownCompany = clean(user?.data?.company_id || user?.company_id) === companyId;
+      const owner = companyOwner(company) === lower(user.email);
+      const authorized = Array.isArray(company.usuarios_autorizados) && company.usuarios_autorizados.map(lower).includes(lower(user.email));
+      if (!GLOBAL_ROLES.has(roleOf(user)) && !ownCompany && !owner && !authorized) return Response.json({ error: 'Registro no encontrado en tu empresa.' }, { status: 404 });
+      return Response.json({ ok: true, trace: await buildTrace(svc, companyId, clean(body.entityType), clean(body.entityId)) });
+    }
+
     const context = await accessContext(svc, user);
 
     if (action === 'saved_views') {
@@ -267,11 +278,6 @@ Deno.serve(async (req) => {
       if (!row || lower(row.advisor_email) !== lower(user.email)) return Response.json({ error: 'Vista no encontrada.' }, { status: 404 });
       await svc.entities.AdvisorSavedView.delete(row.id);
       return Response.json({ ok: true });
-    }
-    if (action === 'trace') {
-      const companyId = clean(body.companyId);
-      requireCompanyAccess(user, companyId, context);
-      return Response.json({ ok: true, trace: await buildTrace(svc, companyId, clean(body.entityType), clean(body.entityId)) });
     }
     if (action !== 'overview') return Response.json({ error: 'Acción no soportada.' }, { status: 400 });
 
