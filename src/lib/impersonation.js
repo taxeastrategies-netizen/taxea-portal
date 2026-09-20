@@ -9,11 +9,12 @@ export function getImpersonation() {
   }
 }
 
-export function startImpersonation({ clientAccountId, clientName, clientEmail }) {
+export function startImpersonation({ clientAccountId, clientName, clientEmail, companyId }) {
   sessionStorage.setItem(KEY, JSON.stringify({
     clientAccountId,
     clientName,
     clientEmail,
+    companyId: companyId || '',
     startedAt: new Date().toISOString(),
   }));
 }
