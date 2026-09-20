@@ -7,6 +7,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import FiscalProfileManager from '@/components/ajustes/FiscalProfileManager';
 import FiscalTestSimulator from '@/components/ajustes/FiscalTestSimulator';
+import CounterpartyManager from '@/components/ajustes/CounterpartyManager';
+import FiscalRulesManager from '@/components/ajustes/FiscalRulesManager';
 import { useTaxWorkspace } from './useTaxWorkspace';
 
 function apiErrorMessage(error, fallback) {
@@ -49,6 +51,11 @@ export default function ConfiguracionFiscal() {
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex items-center gap-2"><SearchCheck className="h-4 w-4 text-indigo-700" /><h3 className="text-sm font-semibold text-slate-900">Reconstrucción histórica segura</h3></div><p className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">Analiza facturas, líneas fiscales, asientos, totales y duplicados del ejercicio. Es siempre una simulación: no modifica ni elimina documentos de usuarios.</p></div><div className="flex gap-2"><select value={auditYear} onChange={event => { setAuditYear(Number(event.target.value)); setAuditResult(null); }} className="h-9 rounded-lg border border-indigo-200 bg-white px-3 text-sm">{[currentYear-3,currentYear-2,currentYear-1,currentYear].map(value => <option key={value}>{value}</option>)}</select><Button type="button" size="sm" onClick={() => historicalAudit.mutate()} disabled={historicalAudit.isPending}>{historicalAudit.isPending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <SearchCheck className="mr-1 h-3.5 w-3.5" />}Analizar sin escribir</Button></div></div>
       {auditError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{auditError}</p>}
       {auditResult && <div className="mt-4"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{Object.entries(auditResult.stats || {}).map(([key,value]) => <div key={key} className="rounded-lg border border-indigo-100 bg-white p-3"><p className="text-[11px] text-slate-500">{key.replace(/([A-Z])/g,' $1')}</p><p className="mt-1 text-xl font-bold text-slate-900">{value}</p></div>)}</div><p className="mt-3 text-xs font-medium text-emerald-700">{auditResult.message}</p></div>}
+    </section>
+
+    <section className="grid gap-5 lg:grid-cols-2">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-semibold text-slate-900">Terceros y criterios recurrentes</h3><p className="mt-1 mb-4 text-xs text-slate-500">Tratamientos fiscales por cliente o proveedor, reutilizados en facturas y OCR.</p><CounterpartyManager companyId={companyId} /></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="text-sm font-semibold text-slate-900">Reglas fiscales personalizadas</h3><p className="mt-1 mb-4 text-xs text-slate-500">Excepciones trazadas para la empresa seleccionada.</p><FiscalRulesManager companyId={companyId} /></div>
     </section>
 
     <section className="space-y-3"><div><h3 className="text-sm font-semibold text-slate-900">Prueba controlada de reglas</h3><p className="mt-1 text-xs text-slate-500">Comprueba una factura hipotética contra el perfil antes de aplicar el criterio a documentos reales.</p></div><FiscalTestSimulator companyId={companyId} /></section>
