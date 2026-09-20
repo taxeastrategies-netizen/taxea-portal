@@ -23,7 +23,7 @@ const ROLE_LABELS = {
 
 const TAX_MODULES = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/tax-accounting/dashboard' },
-  { id: 'asesoria', label: 'Bandeja del asesor', icon: BriefcaseBusiness, path: '/tax-accounting/asesoria', reviewerOnly: true },
+  { id: 'asesoria', label: 'Bandeja del asesor', icon: BriefcaseBusiness, path: '/tax-accounting/asesoria', adminOnly: true },
   { id: 'facturas', label: 'Facturas', icon: FileText, path: '/tax-accounting/facturas' },
   { id: 'ingresos-gastos', label: 'Ingresos y Gastos', icon: TrendingUp, path: '/tax-accounting/ingresos-gastos' },
   { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
