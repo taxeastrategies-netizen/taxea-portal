@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Calculator, Settings, FilePen, Send, AlertTriangle, History } from 'lucide-react';
 import TaxModelWorkbench from './TaxModelWorkbench';
 import ConfiguracionFiscal from './ConfiguracionFiscal';
@@ -17,12 +18,24 @@ const TABS = [
 ];
 
 export default function ImpuestosModule() {
-  const [activeTab, setActiveTab] = useState('preparacion');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(TABS.some(tab => tab.id === requestedTab) ? requestedTab : 'preparacion');
   const [workbenchSelection, setWorkbenchSelection] = useState(null);
+  const selectTab = tabId => {
+    setActiveTab(tabId);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tabId);
+    setSearchParams(next, { replace: true });
+  };
+
+  useEffect(() => {
+    if (requestedTab && TABS.some(tab => tab.id === requestedTab) && requestedTab !== activeTab) setActiveTab(requestedTab);
+  }, [requestedTab]);
 
   const openModel = selection => {
     setWorkbenchSelection({ ...selection, requestId: Date.now() });
-    setActiveTab('preparacion');
+    selectTab('preparacion');
   };
 
   const renderTab = () => {
@@ -30,7 +43,7 @@ export default function ImpuestosModule() {
       case 'preparacion': return <TaxModelWorkbench initialSelection={workbenchSelection} />;
       case 'borradores': return <BorradoresTab onOpenModel={openModel} />;
       case 'presentaciones': return <PresentacionesTab onOpenModel={openModel} />;
-      case 'errores': return <ErroresValidacionesTab onOpenModel={openModel} onOpenConfig={() => setActiveTab('configuracion')} />;
+      case 'errores': return <ErroresValidacionesTab onOpenModel={openModel} onOpenConfig={() => selectTab('configuracion')} />;
       case 'configuracion': return <ConfiguracionFiscal />;
       case 'historial': return <HistorialFiscalTab onOpenModel={openModel} />;
       default: return <TaxModelWorkbench initialSelection={workbenchSelection} />;
@@ -53,7 +66,7 @@ export default function ImpuestosModule() {
           {TABS.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectTab(tab.id)}
               className={`flex items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${activeTab === tab.id ? 'border-primary bg-primary/5 text-primary' : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'}`}
             >
               <tab.icon className="h-3.5 w-3.5" />
