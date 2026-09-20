@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 const ROLE_CONFIG = {
   user:        { label: 'Usuario',       bg: 'bg-blue-50 border-blue-200',    text: 'text-blue-700' },
   admin:       { label: 'Administrador', bg: 'bg-amber-50 border-amber-200',  text: 'text-amber-700' },
+  advisor:     { label: 'Asesor',        bg: 'bg-cyan-50 border-cyan-200',    text: 'text-cyan-700' },
+  asesor:      { label: 'Asesor',        bg: 'bg-cyan-50 border-cyan-200',    text: 'text-cyan-700' },
   super_admin: { label: 'Super Admin',   bg: 'bg-yellow-50 border-yellow-200',text: 'text-yellow-700' },
 };
 
@@ -197,7 +199,7 @@ function ViewProfileModal({ targetUser, subscription, adminUser, onClose }) {
 function BlockUserModal({ targetUser, currentUser, onClose, onBlocked }) {
   const [blocking, setBlocking] = useState(false);
   const isSelf = targetUser.id === currentUser?.id;
-  const isAdminUser = ['admin', 'super_admin'].includes(targetUser.role);
+  const isAdminUser = ['admin', 'super_admin', 'advisor', 'asesor'].includes(targetUser.role);
   const isAlreadyBlocked = targetUser.status === 'bloqueado';
 
   const handleBlock = async () => {
@@ -274,7 +276,7 @@ function BlockUserModal({ targetUser, currentUser, onClose, onBlocked }) {
 function DeleteUserModal({ targetUser, currentUser, onClose, onDeleted }) {
   const [deleting, setDeleting] = useState(false);
   const isSelf = targetUser.id === currentUser?.id;
-  const isAdminUser = ['admin', 'super_admin'].includes(targetUser.role);
+  const isAdminUser = ['admin', 'super_admin', 'advisor', 'asesor'].includes(targetUser.role);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -497,8 +499,9 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
         </p>
         <div className="space-y-2">
           {[
-            { value: 'user',  label: 'Usuario',       desc: 'Acceso estándar, sin funciones de administración' },
-            { value: 'admin', label: 'Administrador', desc: 'Acceso completo y gestión de usuarios' },
+            { value: 'user',    label: 'Usuario',       desc: 'Acceso estándar limitado a su empresa' },
+            { value: 'advisor', label: 'Asesor',      desc: 'Acceso multiempresa solo a clientes autorizados, sin consola de administración' },
+            { value: 'admin',   label: 'Administrador', desc: 'Acceso completo y gestión de usuarios' },
           ].map(r => (
             <button key={r.value} onClick={() => !isSelf && setRole(r.value)} disabled={isSelf}
               className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
@@ -509,9 +512,9 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
             </button>
           ))}
         </div>
-        {role === 'admin' && role !== targetUser.role && (
+        {['admin', 'advisor'].includes(role) && role !== targetUser.role && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-            Estás asignando permisos de administración. Revisa que sea correcto.
+            Estás asignando un rol profesional con acceso ampliado. Revisa la autorización de cada empresa.
           </div>
         )}
       </div>
