@@ -68,12 +68,6 @@ async function accessContext(svc: any, user: any) {
   return { companies: visible.filter((company: any) => company?.activa !== false), clients, clientByEmail };
 }
 
-function requireCompanyAccess(user: any, companyId: string, context: any) {
-  const company = context.companies.find((item: any) => item.id === companyId);
-  if (!company) throw Object.assign(new Error('Empresa no encontrada o no asignada al asesor.'), { status: 404 });
-  return company;
-}
-
 function pushAlert(alerts: any[], companyId: string, input: any) {
   alerts.push({
     id: input.id || [companyId, input.category, input.sourceType, input.sourceId].map(clean).join(':'),
