@@ -3981,6 +3981,19 @@ Deno.serve(async (req) => {
       const existing=await svc.entities.TaxDeclarableRecord.filter({companyId,modeloCodigo:model,ejercicio:year,recordKey},'-created_date',1); const record=existing?.[0]?await svc.entities.TaxDeclarableRecord.update(existing[0].id,recordPayload):await svc.entities.TaxDeclarableRecord.create(recordPayload);
       return Response.json({ok:true,record});
     }
+    if(action==='export_296_annexes') {
+      if(model!=='296') return Response.json({error:'La exportación A/B solo está disponible para el modelo 296.'},{status:400});
+      const calculation=calculate296({...data,warnings:[],blockers:[]},b); const state=calculation.annexes;
+      if(!state.ordinaryFiled) return Response.json({error:'Primero debe constar presentado el modelo 296 ordinario del ejercicio. Importa o acredita su presentación antes de generar A/B.'},{status:422});
+      if(!state.aRecords.length||!state.bRecords.length) return Response.json({error:'Añade al menos una pareja completa de anexos A y B.'},{status:422});
+      if(state.errors.length) return Response.json({error:'Los anexos A/B necesitan revisión antes de exportar.',blockers:state.errors},{status:422});
+      const content=export296AnnexAB(company,year,state); const layoutErrors=validate296AnnexABContent(content);
+      if(layoutErrors.length) return Response.json({error:'El fichero A/B no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
+      const hash=await sha256(content); const contentBase64=encodeBase64(content); const filename=`${clean(company.nif_cif).toUpperCase()}_${year}_296_anexos_AB.txt`;
+      const sourceHash=await sha256(JSON.stringify({companyId,year,records:[...state.aRecords,...state.bRecords].map((row:any)=>[row.recordId,row.recordKey,row.reviewStatus,row.model210Receipt,row.parentRecordOrder])}));
+      const artifact=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',administracion:'AEAT',nombreFichero:filename,extension:'txt',formato:'Diseño de registro AEAT modelo 296 · anexos A/B posteriores al modelo 210',versionDiseno:DEFINITIONS['296'].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:'',taxDraftId:'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:[],resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,workflow:'modelo296_annex_ab_after_210',annexA:state.aRecords.length,annexB:state.bRecords.length})});
+      return Response.json({ok:true,engineVersion:ENGINE_VERSION,calculation:{...calculation,annexes:state},validation:{blockers:[],warnings:[],recommendations:[],technicalErrors:[],canExport:true,canExportOfficial:true,requiresReview:false},file:{id:artifact.id,filename,extension:'txt',format:artifact.formato,design:artifact.versionDiseno,hash,contentBase64,nextStep:'Importa estos registros A/B en el flujo complementario del modelo 296 después de las solicitudes de devolución 210. La aceptación definitiva corresponde a la AEAT.'}});
+    }
     if(action==='calculate_bundle') {
       const models=TARGET_MODELS.map(code=>{
         const modelPeriod=ANNUAL_MODELS.has(code)?'Anual':code==='202'?'1P':code==='417'?'01':'1T'; const modelBounds=bounds(year,modelPeriod); const modelData={...data,period:modelPeriod,blockers:[...blockers],warnings:[...warnings]}; const modelCalculation=calculate(code,modelData,modelBounds,{}); applyModelValidation(code,modelData,modelCalculation); const recommendations=unique([...modelData.blockers,...modelData.warnings]); return {code,fields:modelCalculation.fields?.length||0,details:modelCalculation.details?.length||0,result:money(modelCalculation.result),blockers:[],warnings:recommendations,recommendations,canExport:DEFINITIONS[code].officialExport||DEFINITIONS[code].handoffExport};
