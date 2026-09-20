@@ -303,7 +303,10 @@ Deno.serve(async (req) => {
     const rows = await Promise.all(selected.map(async (company: any) => {
       const client = context.clientByEmail.get(companyOwner(company));
       const workload = await companyWorkload(svc, company, client, year);
-      if (severity !== 'all' || category !== 'all') workload.alerts = workload.alerts.filter((alert: any) => (severity === 'all' || alert.severity === severity) && (category === 'all' || alert.category === category));
+      const filteredAlerts = workload.alerts.filter((alert: any) => (severity === 'all' || alert.severity === severity) && (category === 'all' || alert.category === category));
+      workload.visibleAlertTotal = filteredAlerts.length;
+      workload.alerts = filteredAlerts.slice(0, 100);
+      workload.hiddenAlertCount = Math.max(0, filteredAlerts.length - workload.alerts.length);
       return workload;
     }));
     rows.sort((a: any, b: any) => b.score - a.score || a.company.name.localeCompare(b.company.name));
@@ -312,7 +315,7 @@ Deno.serve(async (req) => {
       ok: true, generatedAt: new Date().toISOString(), year,
       rows, pagination: { page: safePage, pageSize, total: filtered.length, totalPages },
       summary: {
-        companies: filtered.length, loadedCompanies: rows.length, alerts: alerts.length,
+        companies: filtered.length, loadedCompanies: rows.length, alerts: rows.reduce((sum: number, row: any) => sum + Number(row.visibleAlertTotal || 0), 0),
         critical: alerts.filter((item: any) => item.severity === 'critical').length,
         high: alerts.filter((item: any) => item.severity === 'high').length,
         suspense555: rows.reduce((sum: number, row: any) => sum + row.counts.suspense555, 0),
