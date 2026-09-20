@@ -44,15 +44,12 @@ async function listAll(entity: any, filter: any = null, sort = '-created_date', 
   return rows.slice(0, maximum);
 }
 
-function explicitlyAssigned(user: any, company: any, clientByEmail: Map<string, any>) {
+function explicitlyAssigned(user: any, company: any) {
   const email = lower(user?.email);
   if (!email) return false;
   if (companyOwner(company) === email) return true;
   const authorized = Array.isArray(company?.usuarios_autorizados) ? company.usuarios_autorizados.map(lower) : [];
-  if (authorized.includes(email)) return true;
-  const client = clientByEmail.get(companyOwner(company));
-  const owner = lower(client?.internalOwner);
-  return !!owner && (owner === email || owner === lower(user?.full_name));
+  return authorized.includes(email);
 }
 
 async function accessContext(svc: any, user: any) {
@@ -64,7 +61,7 @@ async function accessContext(svc: any, user: any) {
   const clientByEmail = new Map(clients.map((item: any) => [accountEmail(item), item]));
   const visible = GLOBAL_ROLES.has(roleOf(user))
     ? companies
-    : companies.filter((company: any) => explicitlyAssigned(user, company, clientByEmail));
+    : companies.filter((company: any) => explicitlyAssigned(user, company));
   return { companies: visible.filter((company: any) => company?.activa !== false), clients, clientByEmail };
 }
 
@@ -234,9 +231,9 @@ Deno.serve(async (req) => {
       const checks = {
         reviewerRole: isReviewer(testUser),
         normalUserDenied: !isReviewer({ role: 'user' }),
-        assignedByCompany: explicitlyAssigned(testUser, { owner_email: 'x@test.invalid', usuarios_autorizados: ['advisor@test.invalid'] }, new Map()),
-        assignedByPortfolio: explicitlyAssigned(testUser, { owner_email: 'client@test.invalid' }, clientMap),
-        unrelatedDenied: !explicitlyAssigned(testUser, { owner_email: 'other@test.invalid', usuarios_autorizados: [] }, clientMap),
+        assignedByCompany: explicitlyAssigned(testUser, { owner_email: 'x@test.invalid', usuarios_autorizados: ['advisor@test.invalid'] }),
+        portfolioNameAloneDenied: !explicitlyAssigned(testUser, { owner_email: 'client@test.invalid' }),
+        unrelatedDenied: !explicitlyAssigned(testUser, { owner_email: 'other@test.invalid', usuarios_autorizados: [] }),
       };
       return Response.json({ ok: Object.values(checks).every(Boolean), checks });
     }
@@ -245,10 +242,13 @@ Deno.serve(async (req) => {
       const companyId = clean(body.companyId);
       const company = await svc.entities.Company.get(companyId).catch(() => null);
       if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+      const role = roleOf(user);
       const ownCompany = clean(user?.data?.company_id || user?.company_id) === companyId;
       const owner = companyOwner(company) === lower(user.email);
       const authorized = Array.isArray(company.usuarios_autorizados) && company.usuarios_autorizados.map(lower).includes(lower(user.email));
-      if (!GLOBAL_ROLES.has(roleOf(user)) && !ownCompany && !owner && !authorized) return Response.json({ error: 'Registro no encontrado en tu empresa.' }, { status: 404 });
+      const reviewerAssigned = ['advisor', 'asesor'].includes(role) && (owner || authorized);
+      const clientAssigned = !['advisor', 'asesor'].includes(role) && (ownCompany || owner || authorized);
+      if (!GLOBAL_ROLES.has(role) && !reviewerAssigned && !clientAssigned) return Response.json({ error: 'Registro no encontrado en tu empresa.' }, { status: 404 });
       return Response.json({ ok: true, trace: await buildTrace(svc, companyId, clean(body.entityType), clean(body.entityId)) });
     }
 
