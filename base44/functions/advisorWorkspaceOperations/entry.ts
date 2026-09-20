@@ -251,6 +251,19 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, trace: await buildTrace(svc, companyId, clean(body.entityType), clean(body.entityId)) });
     }
 
+    if (action === 'assign_advisor') {
+      if (!GLOBAL_ROLES.has(roleOf(user))) return Response.json({ error: 'Solo administración puede asignar asesores.' }, { status: 403 });
+      const companyId = clean(body.companyId);
+      const advisorEmail = lower(body.advisorEmail);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(advisorEmail)) return Response.json({ error: 'Indica un correo de asesor válido.' }, { status: 400 });
+      const company = await svc.entities.Company.get(companyId).catch(() => null);
+      if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+      const authorized = Array.isArray(company.usuarios_autorizados) ? company.usuarios_autorizados.map(lower).filter(Boolean) : [];
+      const next = [...new Set([...authorized, advisorEmail])];
+      const saved = next.length === authorized.length ? company : await svc.entities.Company.update(company.id, { usuarios_autorizados: next });
+      return Response.json({ ok: true, company: saved, alreadyAssigned: next.length === authorized.length });
+    }
+
     const context = await accessContext(svc, user);
 
     if (action === 'saved_views') {
