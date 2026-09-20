@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Building2, ChevronLeft, ChevronRight, Download, ExternalLink,
   FileSearch, Filter, Landmark, LayoutList, Loader2, RefreshCw, Save, Search,
@@ -98,7 +97,6 @@ function AlertRow({ alert, onTrace, onOpen }) {
 
 export default function AdvisorWorkspace() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const role = String(user?.role || '').toLowerCase();
   const canReview = REVIEW_ROLES.includes(role);
