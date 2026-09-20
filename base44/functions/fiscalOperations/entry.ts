@@ -110,6 +110,10 @@ function authorize(user: any, companyId: string, company: any) {
   const authorized = Array.isArray(company?.usuarios_autorizados)
     ? company.usuarios_autorizados.map((value: unknown) => clean(value).toLowerCase())
     : [];
+  if (['advisor', 'asesor'].includes(role)) {
+    if ((email && owner === email) || (email && authorized.includes(email))) return;
+    throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
+  }
   if (own === companyId || (email && owner === email) || (email && authorized.includes(email))) return;
   throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
