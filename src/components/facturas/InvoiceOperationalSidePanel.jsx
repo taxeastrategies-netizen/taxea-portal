@@ -10,7 +10,7 @@ import {
   X, Send, Copy, Link, MoreVertical, ChevronRight,
   FileText, CreditCard, Clock, Mail, Tag, Paperclip,
   BookOpen, ExternalLink, CheckCircle2, AlertTriangle, RefreshCw, Download,
-  Eye, RotateCcw, MessageSquare, History, Upload, Loader2, Trash2
+  Eye, RotateCcw, MessageSquare, History, Upload, Loader2, Trash2, FileSearch
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { generateInvoiceAccountingEntry } from './invoicePremiumEmail';
 import InvoicePaymentReconciliationModal from './InvoicePaymentReconciliationModal';
+import TraceChainDrawer from '@/components/tax/TraceChainDrawer';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const fmt = (n) => typeof n === 'number'
@@ -145,6 +146,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [traceOpen, setTraceOpen] = useState(false);
   const attachmentInputRef = useRef(null);
 
   useEffect(() => {
@@ -344,6 +346,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={copyPortalLink}>Copiar enlace portal</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTraceOpen(true)}><FileSearch className="mr-2 h-3.5 w-3.5" />Trazabilidad completa</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <button onClick={onClose} className="p-1.5 rounded hover:bg-secondary text-muted-foreground">
@@ -787,6 +790,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
       </div>
 
       <MessagePreviewDialog message={selectedMessage} onClose={() => setSelectedMessage(null)} />
+      <TraceChainDrawer input={traceOpen ? { companyId: company?.id || invoice.company_id, entityType: 'Invoice', entityId: invoice.id, title: `Factura ${invoice.numero_factura || ''}` } : null} onClose={() => setTraceOpen(false)} />
 
       <InvoicePaymentReconciliationModal
         open={Boolean(actionMode)}
