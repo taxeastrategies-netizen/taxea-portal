@@ -3,7 +3,6 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 const clean = (value: unknown) => String(value ?? '').trim();
 const lower = (value: unknown) => clean(value).toLowerCase();
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
-const REVIEW_ROLES = new Set(['admin', 'super_admin', 'advisor', 'asesor']);
 const GLOBAL_ROLES = new Set(['admin', 'super_admin']);
 const OPEN_FISCAL_STATES = new Set(['detectado', 'en_revision', 'pendiente_cliente']);
 const READY_INVOICE_STATES = new Set(['contabilizada', 'revisada']);
@@ -12,7 +11,7 @@ const READY_PERIOD_STATES = new Set(['revisado', 'listo_presentar', 'presentado'
 const READY_OBLIGATION_STATES = new Set(['revisado', 'listo_presentar', 'presentado', 'domiciliado', 'pagado', 'finalizado', 'no_aplica']);
 
 function roleOf(user: any) { return lower(user?.role); }
-function isReviewer(user: any) { return REVIEW_ROLES.has(roleOf(user)); }
+function isAdminUser(user: any) { return GLOBAL_ROLES.has(roleOf(user)); }
 function isoDate(value: unknown) { return clean(value).slice(0, 10); }
 function yearOf(value: unknown) { return Number(isoDate(value).slice(0, 4)) || 0; }
 function daysUntil(value: unknown) {
@@ -53,15 +52,13 @@ function explicitlyAssigned(user: any, company: any) {
 }
 
 async function accessContext(svc: any, user: any) {
-  if (!isReviewer(user)) throw Object.assign(new Error('La bandeja multiempresa está reservada a asesoría y administración.'), { status: 403 });
+  if (!isAdminUser(user)) throw Object.assign(new Error('La bandeja multiempresa está reservada exclusivamente a administración.'), { status: 403 });
   const [companies, clients] = await Promise.all([
     listAll(svc.entities.Company, null, '-updated_date', 5000),
     listAll(svc.entities.ClientAccount, null, '-updated_date', 5000),
   ]);
   const clientByEmail = new Map(clients.map((item: any) => [accountEmail(item), item]));
-  const visible = GLOBAL_ROLES.has(roleOf(user))
-    ? companies
-    : companies.filter((company: any) => explicitlyAssigned(user, company));
+  const visible = companies;
   return { companies: visible.filter((company: any) => company?.activa !== false), clients, clientByEmail };
 }
 
@@ -234,13 +231,15 @@ Deno.serve(async (req) => {
     const svc = base44.asServiceRole;
 
     if (action === 'self_test') {
-      const testUser = { email: 'advisor@test.invalid', full_name: 'Asesor Prueba', role: 'advisor' };
+      const adminUser = { email: 'admin@test.invalid', full_name: 'Admin Prueba', role: 'admin' };
+      const advisorUser = { email: 'advisor@test.invalid', full_name: 'Asesor Prueba', role: 'advisor' };
       const checks = {
-        reviewerRole: isReviewer(testUser),
-        normalUserDenied: !isReviewer({ role: 'user' }),
-        assignedByCompany: explicitlyAssigned(testUser, { owner_email: 'x@test.invalid', usuarios_autorizados: ['advisor@test.invalid'] }),
-        portfolioNameAloneDenied: !explicitlyAssigned(testUser, { owner_email: 'client@test.invalid' }),
-        unrelatedDenied: !explicitlyAssigned(testUser, { owner_email: 'other@test.invalid', usuarios_autorizados: [] }),
+        adminAllowed: isAdminUser(adminUser),
+        superAdminAllowed: isAdminUser({ role: 'super_admin' }),
+        advisorDenied: !isAdminUser(advisorUser),
+        normalUserDenied: !isAdminUser({ role: 'user' }),
+        assignedTraceRecognized: explicitlyAssigned(advisorUser, { owner_email: 'x@test.invalid', usuarios_autorizados: ['advisor@test.invalid'] }),
+        portfolioNameAloneDenied: !explicitlyAssigned(advisorUser, { owner_email: 'client@test.invalid' }),
       };
       return Response.json({ ok: Object.values(checks).every(Boolean), checks });
     }
