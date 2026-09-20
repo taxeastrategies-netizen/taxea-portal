@@ -21,7 +21,7 @@ import ConfigContable from './ConfigContable';
 import AccountingControlCenter from './AccountingControlCenter';
 import PeriodosContables from './PeriodosContables';
 import ActivosContables from './ActivosContables';
-import FiscalProfileManager from '@/components/ajustes/FiscalProfileManager';
+import ConfiguracionFiscal from '@/components/tax/impuestos/ConfiguracionFiscal';
 import AccountingCertification from './AccountingCertification';
 
 const TABS = [
@@ -32,7 +32,7 @@ const TABS = [
   { id: 'emitidas', label: 'Registro emitidas', icon: ArrowUpCircle },
   { id: 'recibidas', label: 'Registro recibidas', icon: ArrowDownCircle },
   { id: 'iva', label: 'IVA / IGIC', icon: Receipt },
-  { id: 'fiscal', label: 'Perfil fiscal', icon: ShieldCheck },
+  { id: 'fiscal', label: 'Configuración fiscal', icon: ShieldCheck },
   { id: 'mayores', label: 'Mayores', icon: TrendingUp },
   { id: 'activos', label: 'Activos y amortización', icon: Boxes },
   { id: 'conciliacion', label: 'Conciliación', icon: Landmark },
@@ -138,7 +138,7 @@ export default function ContabilidadModule() {
         {activeTab === 'emitidas' && <LibroRegistroEmitidas companyId={companyId} />}
         {activeTab === 'recibidas' && <LibroRegistroRecibidas companyId={companyId} />}
         {activeTab === 'iva' && <IVAResumen companyId={companyId} />}
-        {activeTab === 'fiscal' && <FiscalProfileManager company={company} />}
+        {activeTab === 'fiscal' && <ConfiguracionFiscal />}
         {activeTab === 'mayores' && <MayoresTab companyId={companyId} />}
         {activeTab === 'activos' && <ActivosContables companyId={companyId} />}
         {activeTab === 'conciliacion' && <AccountingControlCenter companyId={companyId} />}
