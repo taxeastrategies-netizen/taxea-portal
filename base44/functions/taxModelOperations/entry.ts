@@ -2559,6 +2559,53 @@ function export296(company:any, year:number, calculation:any, declarationNumber:
   return [header.join(''),...ordinary,...annexF].join('\r\n');
 }
 
+function export296AnnexAB(company: any, year: number, state: any) {
+  const parentMap = new Map((state.eligibleParents || []).map((parent: any) => [clean(parent.recordOrder), parent]));
+  const aById = new Map((state.aRecords || []).map((record: any) => [clean(record.recordId), record]));
+  const aRecord = (row: any) => {
+    const parent: any = parentMap.get(clean(row.parentRecordOrder)) || {};
+    const value = Array(500).fill(' ');
+    place(value,1,1,'2'); place(value,2,3,'296'); place(value,5,4,String(year)); place(value,9,9,normalizedText(company.nif_cif,9)); place(value,18,9,normalizedText(parent.recipientTaxId,9)); place(value,27,9,normalizedText(parent.representativeTaxId,9)); place(value,36,1,normalizedText(parent.personalityKey,1)); place(value,37,40,normalizedText(parent.recipientName,40)); place(value,77,8,normalizedText(parent.recordOrder,8)); place(value,85,12,normalizedText(parent.isin,12)); place(value,97,8,aeatDate(parent.accrualDate,year));
+    place(value,105,1,normalizedText(row.contributorPersonality,1)); place(value,106,9,normalizedText(row.contributorSpanishTaxId,9)); place(value,115,20,normalizedText(row.contributorLei,20)); place(value,135,40,normalizedText(row.contributorName,40)); place(value,175,13,signedAmount(row.netPayment,13)); place(value,188,4,numeric(row.withholdingRate,4,false,2)); place(value,192,13,numeric(row.withholdingAmount,13));
+    place(value,205,50,normalizedText(row.address,50)); place(value,255,90,normalizedText(row.addressComplement,90)); place(value,345,30,normalizedText(row.city,30)); place(value,375,30,normalizedText(row.region,30)); place(value,405,10,normalizedText(row.postalCode,10)); place(value,415,2,normalizedText(row.addressCountry,2)); place(value,417,13,leftPaddedText(row.model210Receipt,13,'0')); place(value,433,20,normalizedText(row.foreignTaxId,20)); place(value,453,8,aeatDate(row.birthDate,year)); place(value,461,35,normalizedText(row.birthCity,35)); place(value,496,2,normalizedText(row.birthCountry,2)); place(value,498,2,normalizedText(row.residenceCountry,2)); place(value,500,1,'A');
+    return value.join('');
+  };
+  const bRecord = (row: any) => {
+    const linked: any = aById.get(clean(row.linkedAnnexARecordId)) || {};
+    const parent: any = parentMap.get(clean(linked.parentRecordOrder || row.parentRecordOrder)) || {};
+    const value = Array(500).fill(' ');
+    place(value,1,1,'2'); place(value,2,3,'296'); place(value,5,4,String(year)); place(value,9,9,normalizedText(company.nif_cif,9)); place(value,18,9,normalizedText(parent.recipientTaxId,9)); place(value,27,9,normalizedText(parent.representativeTaxId,9)); place(value,36,1,normalizedText(parent.personalityKey,1)); place(value,37,40,normalizedText(parent.recipientName,40)); place(value,77,8,normalizedText(parent.recordOrder,8)); place(value,85,40,normalizedText(linked.contributorName,40)); place(value,125,12,normalizedText(parent.isin,12)); place(value,137,20,normalizedText(row.securitiesAccount,20)); place(value,157,20,normalizedText(row.accountHolderLei,20)); place(value,177,40,normalizedText(row.accountHolderName,40)); place(value,217,17,numeric(row.totalSecurities,17,false,6)); place(value,234,17,numeric(row.contributorSecurities,17,false,6)); place(value,251,8,aeatDate(row.paymentDate,year)); place(value,259,13,numeric(row.grossIncome,13)); place(value,272,13,numeric(row.withholdingAmount,13)); place(value,285,4,numeric(row.withholdingRate,4,false,2)); place(value,289,13,leftPaddedText(linked.model210Receipt || row.model210Receipt,13,'0')); place(value,302,8,aeatDate(row.model210PresentationDate,year)); place(value,500,1,'B');
+    return value.join('');
+  };
+  const records: string[] = [];
+  for (const annexA of state.aRecords || []) {
+    records.push(aRecord(annexA));
+    for (const annexB of (state.bRecords || []).filter((row: any) => clean(row.linkedAnnexARecordId) === clean(annexA.recordId))) records.push(bRecord(annexB));
+  }
+  return records.join('\r\n');
+}
+
+function validate296AnnexABContent(content: string) {
+  const records = content.split(/\r?\n/).filter(Boolean), errors: string[] = [];
+  if (!records.length) errors.push('El fichero A/B no contiene registros.');
+  if (records.some(record => record.length !== 500)) errors.push('Todos los registros A/B deben tener exactamente 500 posiciones.');
+  if (records.some(record => !record.startsWith('2296'))) errors.push('Todos los anexos A/B deben ser registros tipo 2 del modelo 296.');
+  if (records.some(record => !['A','B'].includes(record[499]))) errors.push('Hay un tipo de hoja distinto de A o B.');
+  const aRecords = records.filter(record => record[499] === 'A'), bRecords = records.filter(record => record[499] === 'B');
+  if (!aRecords.length || !bRecords.length) errors.push('El fichero debe contener al menos una pareja A/B.');
+  for (const record of aRecords) {
+    const order = record.slice(76,84), receipt = record.slice(416,429);
+    const linked = bRecords.filter(item => item.slice(76,84) === order && item.slice(288,301) === receipt);
+    if (!linked.length) errors.push(`El anexo A ${order.trim()} no tiene certificado B con el mismo justificante 210.`);
+    if (!/^\d{13}$/.test(receipt) || record.slice(429,432).trim()) errors.push(`El anexo A ${order.trim()} no respeta las posiciones 417-432.`);
+  }
+  for (const record of bRecords) {
+    if (!/^\d{13}$/.test(record.slice(288,301)) || !/^\d{8}$/.test(record.slice(301,309))) errors.push(`El anexo B ${record.slice(76,84).trim()} no tiene justificante y fecha 210 válidos.`);
+    if (record.slice(309,499).trim()) errors.push(`El anexo B ${record.slice(76,84).trim()} debe dejar en blanco las posiciones 310-499.`);
+  }
+  return unique(errors);
+}
+
 function export303(company: any, profile: any, year: number, period: string, calculation: any) {
   const o=calculation.operations||{}, values=fieldMap(calculation), rates=new Map((o.rates||[]).map((r:any)=>[Number(r.rate),r]));
   const simplified=o.simplified||{active:false,details:[],agriculture:[],other:[],fields:{},result:0};
