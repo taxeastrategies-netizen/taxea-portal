@@ -9,6 +9,7 @@ import {
 
 const BREADCRUMBS = {
   '/tax-accounting/dashboard': ['Tax & Accounting', 'Dashboard'],
+  '/tax-accounting/asesoria': ['Tax & Accounting', 'Bandeja del asesor'],
   '/tax-accounting/facturas': ['Tax & Accounting', 'Facturas'],
   '/tax-accounting/ingresos-gastos': ['Tax & Accounting', 'Ingresos y Gastos'],
   '/tax-accounting/presupuestos': ['Tax & Accounting', 'Presupuestos'],
@@ -19,6 +20,8 @@ const BREADCRUMBS = {
   '/tax-accounting/lector-gastos': ['Tax & Accounting', 'Lector de Gastos'],
   '/tax-accounting/lector-ingresos': ['Tax & Accounting', 'Lector de Ingresos'],
   '/tax-accounting/obligaciones': ['Tax & Accounting', 'Obligaciones Fiscales'],
+  '/tax-accounting/impuestos': ['Tax & Accounting', 'Modelos tributarios'],
+  '/tax-accounting/contabilidad': ['Tax & Accounting', 'Contabilidad'],
   '/tax-accounting': ['Tax & Accounting', 'Dashboard'],
   '/finance/dashboard': ['Finance', 'Dashboard'],
   '/finance': ['Finance', 'Dashboard'],
