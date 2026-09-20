@@ -63,7 +63,7 @@ const advisorRecords = {
   JournalEntryLine: [{ id: 'line-a', companyId: 'company-a', journalEntryId: 'entry-a', accountCode: '430000', debit: 121, credit: 0 }],
   InvoicePayment: [{ id: 'payment-a', company_id: 'company-a', invoice_id: 'invoice-a', amount: 121, payment_date: '2026-01-20', bank_transaction_id: 'bank-a', journal_entry_id: 'entry-a', operation_status: 'committed' }],
   BankTransaction: [{ id: 'bank-a', company_id: 'company-a', fecha_operacion: '2026-01-20', concepto: 'Cobro A-1', importe: 121, estado_conciliacion: 'conciliada_manual', entidad_tipo: 'Invoice', entidad_id: 'invoice-a', journal_entry_id: 'entry-a' }],
-  TaxDraft: [], TaxPeriod: [], TaxObligation: [], FiscalError: [],
+  TaxDraft: [], TaxPeriod: [], TaxObligation: [{ id: 'obligation-a', company_id: 'company-a', anio: 2026, modelo_codigo: '303', periodo: '3T', estado: 'pendiente', fecha_limite_presentacion: '2026-09-25' }], FiscalError: [],
   AccountingConfiguration: [{ id: 'cfg-a', companyId: 'company-a', frameworkReviewStatus: 'validated' }],
   AdvisorSavedView: [],
 };
@@ -106,6 +106,7 @@ const invoiceUi = fs.readFileSync('src/components/facturas/InvoiceOperationalSid
 const checks = {
   workspaceSelfTest: workspaceSelf.status === 200 && workspaceSelf.data.ok,
   adminPortfolioGlobal: overview.status === 200 && overview.data.rows.length === 2 && overview.data.scope === 'global_admin',
+  sourceAlertsDeduplicated: overview.data.rows.find(row => row.company.id === 'company-a')?.alerts.filter(alert => alert.sourceId === 'obligation-a').length === 1 && overview.data.rows.find(row => row.company.id === 'company-a')?.alerts.find(alert => alert.sourceId === 'obligation-a')?.severity === 'critical',
   advisorNoPortfolio: advisorOverview.status === 403,
   advisorNoSavedViews: advisorSavedViews.status === 403,
   advisorAssignedTrace: advisorTrace.status === 200,
