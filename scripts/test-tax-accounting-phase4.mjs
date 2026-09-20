@@ -73,6 +73,9 @@ const overview = await advisor.call({ action: 'overview', year: 2026 });
 const trace = await advisor.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
 const save = await advisor.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'critical' } });
 const saveAgain = await advisor.call({ action: 'save_view', name: 'Urgentes', filters: { severity: 'high' } });
+advisor.setUser({ email: 'admin@test.invalid', role: 'admin', data: {} });
+const assigned = await advisor.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
+const assignedAgain = await advisor.call({ action: 'assign_advisor', companyId: 'company-b', advisorEmail: 'advisor2@test.invalid' });
 advisor.setUser({ email: 'client-a@test.invalid', role: 'user', data: { company_id: 'company-a' } });
 const userOverview = await advisor.call({ action: 'overview', year: 2026 });
 const userTrace = await advisor.call({ action: 'trace', companyId: 'company-a', entityType: 'Invoice', entityId: 'invoice-a' });
@@ -100,6 +103,7 @@ const checks = {
   advisorIsolation: overview.status === 200 && overview.data.rows.length === 1 && overview.data.rows[0].company.id === 'company-a',
   completeTrace: trace.status === 200 && ['Invoice', 'InvoiceTaxLine', 'JournalEntry', 'JournalEntryLine', 'InvoicePayment', 'BankTransaction'].every(type => nodeTypes.has(type)),
   savedViewIdempotent: save.status === 200 && saveAgain.status === 200 && advisorRecords.AdvisorSavedView.length === 1 && advisorRecords.AdvisorSavedView[0].filters.severity === 'high',
+  advisorAssignmentIdempotent: assigned.status === 200 && assignedAgain.data.alreadyAssigned === true && advisorRecords.Company[1].usuarios_autorizados.filter(email => email === 'advisor2@test.invalid').length === 1,
   normalUserNoPortfolio: userOverview.status === 403,
   normalUserOwnTrace: userTrace.status === 200,
   crossCompanyHidden: crossTrace.status === 404,
