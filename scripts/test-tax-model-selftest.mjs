@@ -160,9 +160,11 @@ records.TaxDeclarableRecord.push({ id: 'm296-parent', companyId: 'company-test',
 records.TaxFiling.push({ id: 'filing-296', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', estadoPresentacion: 'presentado', snapshotVersion: 1, tipoDeclaracion: 'original', numeroJustificante: '2961234567890', snapshotHash: 'filing-296-hash', fechaPresentacion: '2026-01-30' });
 const annexAInput = { parentRecordOrder: '00000001', contributorPersonality: 'J', contributorLei: '529900T8BM49AURSDO55', contributorName: 'CONTRIBUYENTE QA', netPayment: 810, withholdingRate: 19, withholdingAmount: 190, address: '1 RUE QA', city: 'PARIS', postalCode: '75001', addressCountry: 'FR', model210Receipt: '2101234567890', foreignTaxId: 'FR-QA-001', residenceCountry: 'FR' };
 const annexA = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'A', reviewStatus: 'validado_asesor', payload: annexAInput });
+const annexADuplicate = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'A', reviewStatus: 'validado_asesor', payload: annexAInput });
 const annexB = await invoke({ action: 'upsert_296_annex', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual', annexType: 'B', reviewStatus: 'validado_asesor', payload: { linkedAnnexARecordId: annexA.payload.record?.id, securitiesAccount: 'ACCOUNT-QA-1', accountHolderLei: '529900T8BM49AURSDO55', accountHolderName: 'CUSTODIO QA', totalSecurities: 100, contributorSecurities: 100, paymentDate: '2025-06-30', grossIncome: 1000, withholdingAmount: 190, withholdingRate: 19, model210PresentationDate: '2026-03-10' } });
 const annexCalculation = await invoke({ action: 'calculate', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual' });
 const annexExport = await invoke({ action: 'export_296_annexes', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual' });
+const annexExportRepeat = await invoke({ action: 'export_296_annexes', companyId: 'company-test', modeloCodigo: '296', ejercicio: 2025, periodo: 'Anual' });
 const annexContent = annexExport.payload.file?.contentBase64 ? Buffer.from(annexExport.payload.file.contentBase64, 'base64').toString('utf8') : '';
 const annexRecords = annexContent.split(/\r?\n/).filter(Boolean);
 testClient.auth.me = async () => ({ id: 'taxea-user-test', email: 'qa@taxea.test', role: 'user', company_id: 'company-test' });
@@ -243,11 +245,19 @@ const workflowChecks = {
     && model200Content.includes('<T200DID00>')
     && model200Content.endsWith('</T200020250A0000>'),
   model296AnnexABWorkflow: annexA.response.ok
+    && annexADuplicate.response.ok
+    && annexADuplicate.payload.reusedExisting === true
+    && annexADuplicate.payload.record?.id === annexA.payload.record?.id
+    && records.TaxDeclarableRecord.filter(record => record.payload?.annexType === 'A').length === 1
     && annexB.response.ok
     && annexCalculation.response.ok
     && annexCalculation.payload.calculation?.details?.length === 1
     && annexCalculation.payload.calculation?.annexes?.ready === true
     && annexExport.response.ok
+    && annexExportRepeat.response.ok
+    && annexExportRepeat.payload.alreadyGenerated === true
+    && annexExportRepeat.payload.file?.id === annexExport.payload.file?.id
+    && records.TaxOfficialFile.filter(file => file.modeloCodigo === '296').length === 1
     && annexRecords.length === 2
     && annexRecords.every(record => record.length === 500 && record.startsWith('2296'))
     && annexRecords[0][499] === 'A'
