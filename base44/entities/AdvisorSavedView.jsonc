@@ -1,0 +1,42 @@
+{
+  "name": "AdvisorSavedView",
+  "type": "object",
+  "properties": {
+    "advisor_email": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "filters": {
+      "type": "object"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "advisor_email",
+    "name",
+    "filters"
+  ],
+  "rls": {
+    "create": {
+      "data.advisor_email": "{{user.email}}"
+    },
+    "read": {
+      "data.advisor_email": "{{user.email}}"
+    },
+    "update": {
+      "data.advisor_email": "{{user.email}}"
+    },
+    "delete": {
+      "data.advisor_email": "{{user.email}}"
+    }
+  }
+}
