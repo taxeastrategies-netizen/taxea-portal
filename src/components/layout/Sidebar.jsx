@@ -18,11 +18,12 @@ const ROLE_LABELS = {
   super_admin: { label: 'Super Admin', color: 'bg-red-50 border-red-200 text-red-600' },
   admin: { label: 'Administrador', color: 'bg-amber-50 border-amber-200 text-amber-700' },
   advisor: { label: 'Asesor', color: 'bg-blue-50 border-blue-200 text-blue-600' },
+  asesor: { label: 'Asesor', color: 'bg-blue-50 border-blue-200 text-blue-600' },
 };
 
 const TAX_MODULES = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/tax-accounting/dashboard' },
-  { id: 'asesoria', label: 'Bandeja del asesor', icon: BriefcaseBusiness, path: '/tax-accounting/asesoria', adminOnly: true },
+  { id: 'asesoria', label: 'Bandeja del asesor', icon: BriefcaseBusiness, path: '/tax-accounting/asesoria', reviewerOnly: true },
   { id: 'facturas', label: 'Facturas', icon: FileText, path: '/tax-accounting/facturas' },
   { id: 'ingresos-gastos', label: 'Ingresos y Gastos', icon: TrendingUp, path: '/tax-accounting/ingresos-gastos' },
   { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
@@ -266,6 +267,7 @@ const ADMIN_ITEMS = [
 export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole, isSubscriptionActive }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const isPlatformAdmin = ['admin', 'super_admin'].includes(userRole);
 
   const getActiveDept = () => {
     for (const dept of DEPARTMENTS) {
@@ -384,7 +386,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                       <div key={dept.id}>
                         <button
                           onClick={() => {
-                            if (dept.adminOnly && !isAdmin) { navigate('/coming-soon'); onClose(); return; }
+                            if (dept.adminOnly && !isPlatformAdmin) { navigate('/coming-soon'); onClose(); return; }
                             if (isLockedBySubscription) { navigate('/suscripcion'); onClose(); return; }
                             handleDeptClick(dept);
                           }}
@@ -402,10 +404,10 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                             isLockedBySubscription ? "text-slate-300" : isActiveDept ? dept.activeColor : "text-slate-400 group-hover:text-slate-600"
                           )} />
                           <span className="flex-1">{dept.label}</span>
-                          {(dept.adminOnly && !isAdmin) || isLockedBySubscription ? (
+                          {(dept.adminOnly && !isPlatformAdmin) || isLockedBySubscription ? (
                             <Lock className="w-3 h-3 text-slate-300" />
                           ) : null}
-                          {hasModules && (!dept.adminOnly || isAdmin) && !isLockedBySubscription && (
+                          {hasModules && (!dept.adminOnly || isPlatformAdmin) && !isLockedBySubscription && (
                             <ChevronDown className={cn(
                               "w-3.5 h-3.5 transition-transform duration-200",
                               isExpanded ? "rotate-0" : "-rotate-90",
@@ -425,7 +427,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                 className="overflow-hidden"
                               >
                                 <div className="mt-0.5 ml-3 pl-3 border-l border-slate-100 space-y-0.5 py-1">
-                                  {dept.modules.filter(mod => !mod.adminOnly || isAdmin).map(mod => {
+                                  {dept.modules.filter(mod => (!mod.adminOnly || isPlatformAdmin) && (!mod.reviewerOnly || isAdmin)).map(mod => {
                                    const ModIcon = mod.icon;
                                    const isActiveModule = location.pathname === mod.path;
                                    return (
@@ -501,7 +503,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
           </div>
 
           {/* Admin */}
-          {isAdmin && (
+          {isPlatformAdmin && (
             <div>
               <p className="text-[10px] text-amber-500/80 px-3 pb-1.5 uppercase tracking-widest font-semibold">Admin</p>
               <div className="space-y-0.5">
