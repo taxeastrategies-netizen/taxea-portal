@@ -10,7 +10,7 @@ import {
   Package, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Heart, Gavel, Building2, Target, DollarSign, CreditCard,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
-  Folder, Zap, Megaphone, HardDrive
+  Folder, Zap, Megaphone, HardDrive, BriefcaseBusiness
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,6 +22,7 @@ const ROLE_LABELS = {
 
 const TAX_MODULES = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/tax-accounting/dashboard' },
+  { id: 'asesoria', label: 'Bandeja del asesor', icon: BriefcaseBusiness, path: '/tax-accounting/asesoria', adminOnly: true },
   { id: 'facturas', label: 'Facturas', icon: FileText, path: '/tax-accounting/facturas' },
   { id: 'ingresos-gastos', label: 'Ingresos y Gastos', icon: TrendingUp, path: '/tax-accounting/ingresos-gastos' },
   { id: 'presupuestos', label: 'Presupuestos', icon: FileCheck, path: '/tax-accounting/presupuestos' },
