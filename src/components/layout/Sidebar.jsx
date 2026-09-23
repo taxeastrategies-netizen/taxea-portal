@@ -143,6 +143,7 @@ const DEPT_GROUPS = [
         id: 'operations',
         label: 'Operations',
         adminOnly: true,
+        hiddenForNonAdmin: true,
         icon: Cpu,
         activeColor: 'text-violet-600',
         activeBg: 'bg-violet-50',
@@ -165,6 +166,7 @@ const DEPT_GROUPS = [
         id: 'logistics',
         label: 'Logistics',
         adminOnly: true,
+        hiddenForNonAdmin: true,
         icon: Warehouse,
         activeColor: 'text-orange-600',
         activeBg: 'bg-orange-50',
@@ -207,6 +209,7 @@ const DEPT_GROUPS = [
         id: 'growth',
         label: 'Marketing & Growth',
         adminOnly: true,
+        hiddenForNonAdmin: true,
         icon: TrendingUp,
         activeColor: 'text-pink-600',
         activeBg: 'bg-pink-50',
@@ -267,6 +270,9 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
   const location = useLocation();
   const navigate = useNavigate();
   const isPlatformAdmin = ['admin', 'super_admin'].includes(userRole);
+  const visibleGroups = DEPT_GROUPS
+    .map(group => ({ ...group, depts: group.depts.filter(dept => !dept.hiddenForNonAdmin || isPlatformAdmin) }))
+    .filter(group => group.depts.length > 0);
 
   const getActiveDept = () => {
     for (const dept of DEPARTMENTS) {
@@ -354,7 +360,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
 
           {/* Departments grouped */}
           <div className="space-y-3">
-            {DEPT_GROUPS.map((group, gi) => (
+            {visibleGroups.map((group, gi) => (
               <div key={group.groupLabel}>
                 <p className="text-[10px] text-slate-400 px-3 pb-1.5 uppercase tracking-widest font-semibold">
                   {group.groupLabel}

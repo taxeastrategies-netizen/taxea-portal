@@ -7,6 +7,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import AdminOnlyRoute from '@/components/AdminOnlyRoute';
 import AppLayout from '@/components/layout/AppLayout';
 import { useCompanyContext, isAdminRole } from '@/lib/useCompanyContext';
 
@@ -118,12 +119,12 @@ function AppWithContext({ user }) {
           <Route path="/finance/:module" element={<Finance />} />
           <Route path="/people" element={<PeopleHR />} />
           <Route path="/people/:module" element={<PeopleHR />} />
-          <Route path="/logistics" element={<Logistics />} />
-          <Route path="/logistics/:module" element={<Logistics />} />
-          <Route path="/operations" element={<Operations />} />
-          <Route path="/operations/:module" element={<Operations />} />
-          <Route path="/growth" element={<Growth />} />
-          <Route path="/growth/:module" element={<Growth />} />
+          <Route path="/logistics" element={<AdminOnlyRoute isAdmin={isAdmin}><Logistics /></AdminOnlyRoute>} />
+          <Route path="/logistics/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Logistics /></AdminOnlyRoute>} />
+          <Route path="/operations" element={<AdminOnlyRoute isAdmin={isAdmin}><Operations /></AdminOnlyRoute>} />
+          <Route path="/operations/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Operations /></AdminOnlyRoute>} />
+          <Route path="/growth" element={<AdminOnlyRoute isAdmin={isAdmin}><Growth /></AdminOnlyRoute>} />
+          <Route path="/growth/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Growth /></AdminOnlyRoute>} />
           <Route path="/law" element={<Law />} />
           <Route path="/law/:subdept" element={<Law />} />
           <Route path="/law/:subdept/:module" element={<Law />} />
