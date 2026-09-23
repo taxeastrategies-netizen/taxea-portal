@@ -229,7 +229,7 @@ async function listAllEntity(entity, sort = '-created_date', maximum = 10000) {
   const rows = [];
   const pageSize = Math.min(500, maximum);
   for (let skip = 0; skip < maximum; skip += pageSize) {
-    const page = await entity.list(sort, pageSize, skip).catch(() => []);
+    const page = await entity.list(sort, pageSize, skip);
     rows.push(...(page || []));
     if (!page || page.length < pageSize) break;
   }
@@ -252,7 +252,7 @@ async function scanDocumentSource(base44, src) {
   const all = [];
   for (let skip = 0; skip < 10000; skip += 500) {
     // Oldest-first keeps cursor pagination stable when new documents arrive during a resumed run.
-    const batch = await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip).catch(() => []);
+    const batch = await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip);
     if (!batch?.length) break;
     for (const rec of batch) {
       const url = rec[src.urlField];
