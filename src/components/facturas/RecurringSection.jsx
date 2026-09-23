@@ -32,13 +32,17 @@ export default function RecurringSection({ company, user, isAdmin }) {
 
   const togglePause = async (tmpl) => {
     const newStatus = tmpl.status === 'paused' ? 'active' : 'paused';
-    await base44.entities.RecurringInvoiceTemplate.update(tmpl.id, { status: newStatus });
+    await base44.functions.invoke('generateRecurringInvoices', {
+      action: 'set_template_status', templateId: tmpl.id, status: newStatus,
+    });
     load();
   };
 
   const handleDelete = async (tmpl) => {
     if (!confirm(`¿Eliminar la recurrencia "${tmpl.concept}"? Las facturas ya emitidas no se borrarán.`)) return;
-    await base44.entities.RecurringInvoiceTemplate.update(tmpl.id, { status: 'finished' });
+    await base44.functions.invoke('generateRecurringInvoices', {
+      action: 'set_template_status', templateId: tmpl.id, status: 'finished',
+    });
     load();
   };
 
