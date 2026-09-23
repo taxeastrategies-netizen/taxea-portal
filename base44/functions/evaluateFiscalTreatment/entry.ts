@@ -328,10 +328,13 @@ Deno.serve(async (req) => {
 
     // ── RULE: No activity configured ──
     if (!primaryActivity) {
-      status = 'blocked_missing_fiscal_profile';
+      // El perfil fiscal existe y aporta valores por defecto; sin actividad no se
+      // bloquea, pero se marca para revision humana obligatoria en lugar de impedir
+      // el guardado de la factura.
+      if (status === 'ready_to_post') status = 'review_required';
       reviewReasons.push('No hay actividad fiscal configurada para este cliente');
-      alerts.push('Falta actividad fiscal vinculada. No se puede contabilizar automaticamente.');
-      confidence = 0;
+      alerts.push('Sin actividad fiscal vinculada: se aplican los valores por defecto del perfil y la factura queda pendiente de revision contable.');
+      confidence = Math.min(confidence, 50);
     }
 
     // ── Automation level check ──
