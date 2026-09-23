@@ -69,6 +69,7 @@ const PageLoader = () => (
 function AppWithContext({ user }) {
   const isAdmin = isAdminRole(user?.role);
   const isSuperAdmin = user?.role === 'super_admin';
+  const isPlatformAdmin = ['admin', 'super_admin'].includes(user?.role);
   const { company, loadingCompany, refreshCompany, setCompany } = useCompanyContext(user);
 
   // Admins no esperan a loadingCompany para ver el layout
@@ -137,7 +138,7 @@ function AppWithContext({ user }) {
           <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
           <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
           <Route path="/importacion-contable" element={<ImportacionContable />} />
-          <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
+          <Route path="/admin/backup-drive" element={<AdminOnlyRoute isAdmin={isPlatformAdmin}><AdminBackupDrive /></AdminOnlyRoute>} />
           <Route path="/signup" element={<Navigate to="/login" replace />} />
         </Route>
         <Route path="*" element={<PageNotFound />} />
