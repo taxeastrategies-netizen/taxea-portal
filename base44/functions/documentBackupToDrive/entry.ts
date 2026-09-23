@@ -12,7 +12,8 @@ const DRIVE_RETRY_ATTEMPTS = 4;
 const MANUAL_TIME_BUDGET_MS = 40_000;
 const SCHEDULED_TIME_BUDGET_MS = 210_000;
 const BACKUP_BATCH_SIZE = 3;
-const ACTIVE_JOB_MAX_AGE_MS = 30 * 60 * 1000;
+const MANUAL_JOB_MAX_AGE_MS = 30 * 60 * 1000;
+const SCHEDULED_JOB_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 
 // ── Helpers ──
 
@@ -398,16 +399,17 @@ Deno.serve(async (req) => {
     const requestedJobType = isManual ? 'manual' : 'scheduled';
     if (job && (!['preparing', 'copying'].includes(job.status) || job.jobType !== requestedJobType)) job = null;
     if (!job) {
-      const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 20);
+      const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
       const nowMs = Date.now();
+      const maxJobAge = item => item.jobType === 'scheduled' ? SCHEDULED_JOB_MAX_AGE_MS : MANUAL_JOB_MAX_AGE_MS;
       job = recentJobs?.find(item =>
-        item.jobType === (isManual ? 'manual' : 'scheduled') &&
+        item.jobType === requestedJobType &&
         ['preparing', 'copying'].includes(item.status) &&
-        nowMs - new Date(item.lastHeartbeatAt || item.startedAt || 0).getTime() < ACTIVE_JOB_MAX_AGE_MS
+        nowMs - new Date(item.lastHeartbeatAt || item.startedAt || 0).getTime() < maxJobAge(item)
       ) || null;
       for (const stale of recentJobs || []) {
         if (!['preparing', 'copying'].includes(stale.status)) continue;
-        if (nowMs - new Date(stale.lastHeartbeatAt || stale.startedAt || 0).getTime() < ACTIVE_JOB_MAX_AGE_MS) continue;
+        if (nowMs - new Date(stale.lastHeartbeatAt || stale.startedAt || 0).getTime() < maxJobAge(stale)) continue;
         await base44.asServiceRole.entities.BackupJob.update(stale.id, {
           status: 'failed', completedAt: new Date().toISOString(), internalErrorCode: 'STALE_INTERRUPTED',
           safeErrorMessage: 'Ejecución interrumpida; puede iniciarse una nueva copia sin duplicar documentos.',
