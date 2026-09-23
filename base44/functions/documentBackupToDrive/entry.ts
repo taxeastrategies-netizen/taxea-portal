@@ -511,35 +511,41 @@ Deno.serve(async (req) => {
         const checksum = await computeChecksum(contentBytes);
         const fileSize = contentBytes.length;
 
-        // Check if content changed (checksum mismatch with existing)
-        if (!isFullCopy && existing && existing.backupStatus === 'backed_up' && existing.checksum === checksum) {
+        // If the URL changed but the bytes did not, refresh metadata without creating another Drive copy.
+        if (!isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && existing.checksum === checksum) {
+          const nowIso = new Date().toISOString();
+          const refreshed = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
+            backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
+            fileSize, mimeType, lastVerifiedAt: nowIso, safeErrorMessage: '',
+          });
+          recordMap[key] = { ...existing, ...refreshed, fileStorageUrl: fileUrl, lastVerifiedAt: nowIso };
           return { type: 'skipped', manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName, size: fileSize,
             mimeType, checksum, driveFileId: existing.driveFileId, drivePath: existing.drivePath,
-            status: 'skipped_existing', lastVerifiedAt: existing.lastVerifiedAt || '',
+            status: 'skipped_unchanged', lastVerifiedAt: nowIso,
           }};
         }
 
-        // Create client folder + subfolder (cached to avoid redundant Drive API calls)
-        const cFolderName = clientFolderName(record[source.companyField], companyName, config.folderNamingMode);
-        const clientFolder = await findOrCreateFolderCached(cFolderName, dayFolder.id, accessToken);
-        const subFolder = await findOrCreateFolderCached(subfolder, clientFolder.id, accessToken);
-        const drivePath = `${now.full}/${cFolderName}/${subfolder}/${safeFileName}`;
-
-        // Upload to Drive
+        // Folder creation and upload are one recoverable operation. Drive throttling is retried by driveFetch.
         try {
+          const cFolderName = clientFolderName(record[source.companyField], companyName, config.folderNamingMode);
+          const clientFolder = await findOrCreateFolderCached(cFolderName, dayFolder.id, accessToken);
+          const subFolder = await findOrCreateFolderCached(subfolder, clientFolder.id, accessToken);
+          const drivePath = `${now.full}/${cFolderName}/${subfolder}/${safeFileName}`;
           const uploaded = await uploadFileToDrive(safeFileName, subFolder.id, contentBytes, mimeType, accessToken);
           const nowIso = new Date().toISOString();
+          let persisted;
           if (existing) {
-            await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
-              backupStatus: 'backed_up', driveFileId: uploaded.id, driveFolderId: subFolder.id,
+            persisted = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
+              backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
+              driveFileId: uploaded.id, driveFolderId: subFolder.id,
               drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso, lastVerifiedAt: nowIso,
               version: (existing.version || 1) + 1, safeErrorMessage: '',
             });
           } else {
-            await base44.asServiceRole.entities.DocumentBackupRecord.create({
+            persisted = await base44.asServiceRole.entities.DocumentBackupRecord.create({
               documentId: docId, documentEntity: source.entity,
               clientAccountId: record[source.companyField], clientName: companyName,
               documentType: source.entity, sourceModule: subfolder,
@@ -549,6 +555,7 @@ Deno.serve(async (req) => {
               backupStatus: 'backed_up', lastBackedUpAt: nowIso, lastVerifiedAt: nowIso, version: 1,
             });
           }
+          recordMap[key] = persisted;
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
@@ -565,10 +572,13 @@ Deno.serve(async (req) => {
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
-            status: 'failed', action: 'fail', safeErrorMessage: `upload: ${e.message}`, attempts: 1,
+            status: 'failed', action: 'fail', safeErrorMessage: `upload: ${e.message}`, attempts: DRIVE_RETRY_ATTEMPTS,
           });
           if (existing) {
-            await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, { backupStatus: 'failed', safeErrorMessage: `upload: ${e.message}` });
+            const failedRecord = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
+              backupStatus: 'failed', safeErrorMessage: `upload: ${e.message}`,
+            });
+            recordMap[key] = { ...existing, ...failedRecord, backupStatus: 'failed' };
           }
           return { type: 'failed', docId, error: `upload: ${e.message}` };
         }
