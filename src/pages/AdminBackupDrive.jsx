@@ -118,6 +118,9 @@ export default function AdminBackupDrive() {
 
   const config = status?.config;
   const isCorrectAccount = status?.isCorrectAccount;
+  const hasVerifiableBackup = jobs.some(job =>
+    ['completed', 'completed_with_errors'].includes(job.status) && job.manifestDriveFileId
+  );
 
   return (
     <div className="space-y-6">
@@ -126,7 +129,7 @@ export default function AdminBackupDrive() {
         subtitle="Copia de seguridad documental automática en Google Drive"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleVerify} disabled={verifying || !jobs.length} className="gap-2">
+            <Button variant="outline" onClick={handleVerify} disabled={verifying || !isCorrectAccount || !hasVerifiableBackup} className="gap-2">
               {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
               Verificar última copia
             </Button>
