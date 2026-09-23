@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
-    const isManual = true;
+    const isManual = body.jobType !== 'scheduled';
 
     // Get Drive connection
     let accessToken;
@@ -337,9 +337,11 @@ Deno.serve(async (req) => {
 
     // ── STATUS action ──
     if (action === 'status') {
-      const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 20);
-      const pendingRecords = await base44.asServiceRole.entities.DocumentBackupRecord.filter({ backupStatus: 'pending' });
-      const failedRecords = await base44.asServiceRole.entities.DocumentBackupRecord.filter({ backupStatus: 'failed' });
+      const [recentJobs, allRecords] = await Promise.all([
+        base44.asServiceRole.entities.BackupJob.list('-startedAt', 20),
+        listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000),
+      ]);
+      const canonicalRecords = Object.values(latestBackupRecordMap(allRecords));
       return Response.json({
         connected: !!driveEmail,
         connectedEmail: driveEmail,
@@ -347,15 +349,18 @@ Deno.serve(async (req) => {
         requiredEmail: REQUIRED_EMAIL,
         config,
         recentJobs: recentJobs || [],
-        pendingCount: pendingRecords?.length || 0,
-        failedCount: failedRecords?.length || 0,
+        pendingCount: canonicalRecords.filter(record => record.backupStatus === 'pending').length,
+        failedCount: canonicalRecords.filter(record => record.backupStatus === 'failed').length,
+        trackedDocuments: canonicalRecords.length,
+        metadataDuplicateCount: Math.max(0, allRecords.length - canonicalRecords.length),
       });
     }
 
     // ── VERIFY action ──
     if (action === 'verify') {
-      const lastJob = (await base44.asServiceRole.entities.BackupJob.list('-startedAt', 1))?.[0];
-      if (!lastJob) return Response.json({ error: 'No hay copias previas para verificar' }, { status: 404 });
+      const recentCompleted = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
+      const lastJob = recentCompleted?.find(item => ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
+      if (!lastJob) return Response.json({ error: 'No hay copias finalizadas para verificar' }, { status: 404 });
 
       const items = await base44.asServiceRole.entities.BackupJobItem.filter({ backupJobId: lastJob.id });
       let verified = 0, missing = 0;
@@ -380,16 +385,41 @@ Deno.serve(async (req) => {
 
     // ── BACKUP action ──
     const now = getCanaryDate();
-    const job = await base44.asServiceRole.entities.BackupJob.create({
-      jobType: isManual ? 'manual' : 'scheduled',
-      status: 'preparing',
-      startedAt: new Date().toISOString(),
-      triggeredByUserId: user?.id || null,
-      triggeredByEmail: user?.email || 'sistema',
-      driveAccountEmail: driveEmail,
-      backupMode: config.backupMode,
-      documentsScanned: 0, documentsCopied: 0, documentsSkipped: 0, documentsFailed: 0, bytesCopied: 0,
-    });
+    const requestedJobId = String(body.resumeJobId || '').trim();
+    let job = requestedJobId ? await base44.asServiceRole.entities.BackupJob.get(requestedJobId).catch(() => null) : null;
+    if (job && !['preparing', 'copying'].includes(job.status)) job = null;
+    if (!job) {
+      const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 20);
+      const nowMs = Date.now();
+      job = recentJobs?.find(item =>
+        item.jobType === (isManual ? 'manual' : 'scheduled') &&
+        ['preparing', 'copying'].includes(item.status) &&
+        nowMs - new Date(item.lastHeartbeatAt || item.startedAt || 0).getTime() < ACTIVE_JOB_MAX_AGE_MS
+      ) || null;
+      for (const stale of recentJobs || []) {
+        if (!['preparing', 'copying'].includes(stale.status)) continue;
+        if (nowMs - new Date(stale.lastHeartbeatAt || stale.startedAt || 0).getTime() < ACTIVE_JOB_MAX_AGE_MS) continue;
+        await base44.asServiceRole.entities.BackupJob.update(stale.id, {
+          status: 'failed', completedAt: new Date().toISOString(), internalErrorCode: 'STALE_INTERRUPTED',
+          safeErrorMessage: 'Ejecución interrumpida; puede iniciarse una nueva copia sin duplicar documentos.',
+        }).catch(() => {});
+      }
+    }
+    if (!job) {
+      job = await base44.asServiceRole.entities.BackupJob.create({
+        jobType: isManual ? 'manual' : 'scheduled',
+        status: 'preparing',
+        startedAt: new Date().toISOString(),
+        lastHeartbeatAt: new Date().toISOString(),
+        triggeredByUserId: user?.id || null,
+        triggeredByEmail: user?.email || 'sistema',
+        driveAccountEmail: driveEmail,
+        backupMode: config.backupMode,
+        nextCursor: 0,
+        runVersion: 'resumable-v2',
+        documentsScanned: 0, documentsCopied: 0, documentsSkipped: 0, documentsFailed: 0, bytesCopied: 0,
+      });
+    }
 
     try {
       // Update config with connected email
@@ -402,31 +432,38 @@ Deno.serve(async (req) => {
       const portalFolder = await findOrCreateFolder(config.portalFolderName || 'Taxea Portal', rootFolder.id, accessToken);
       const yearFolder = await findOrCreateFolder(now.year, portalFolder.id, accessToken);
       const monthFolder = await findOrCreateFolder(now.month, yearFolder.id, accessToken);
-      const dayFolder = await findOrCreateFolder(now.full, monthFolder.id, accessToken);
+      const dayFolder = job.driveBackupFolderId
+        ? { id: job.driveBackupFolderId, name: now.full }
+        : await findOrCreateFolder(now.full, monthFolder.id, accessToken);
 
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
         status: 'copying',
+        lastHeartbeatAt: new Date().toISOString(),
         driveRootFolderId: rootFolder.id,
         driveBackupFolderId: dayFolder.id,
         driveBackupFolderPath: `${config.rootFolderName}/${config.portalFolderName}/${now.year}/${now.month}/${now.full}`,
       });
+      await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'running' });
 
-      // Load existing backup records
-      const existingRecords = await base44.asServiceRole.entities.DocumentBackupRecord.list('-created_date', 500);
-      const recordMap = {};
-      for (const r of existingRecords) {
-        recordMap[`${r.documentEntity}:${r.documentId}`] = r;
-      }
+      // Load the complete history and keep one canonical record per source document.
+      const existingRecords = await listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000);
+      const recordMap = latestBackupRecordMap(existingRecords);
 
       const companyCache = {};
       const isFullCopy = config.backupMode === 'full_daily_copy';
-      const manifestEntries = [];
-      let copied = 0, skipped = 0, failed = 0, bytesCopied = 0;
+      let copied = Number(job.documentsCopied || 0);
+      let skipped = Number(job.documentsSkipped || 0);
+      let failed = Number(job.documentsFailed || 0);
+      let bytesCopied = Number(job.bytesCopied || 0);
       const failedItems = [];
 
       // Scan all documents
       const documents = await scanAllDocuments(base44);
-      await base44.asServiceRole.entities.BackupJob.update(job.id, { documentsScanned: documents.length });
+      const startCursor = Math.min(Math.max(0, Number(job.nextCursor || 0)), documents.length);
+      await base44.asServiceRole.entities.BackupJob.update(job.id, {
+        documentsScanned: documents.length,
+        lastHeartbeatAt: new Date().toISOString(),
+      });
 
       // Per-document processing (extracted for parallel batching)
       const processDoc = async ({ record, source }) => {
@@ -434,7 +471,8 @@ Deno.serve(async (req) => {
         const docId = record.id;
         const key = `${source.entity}:${docId}`;
         const existing = recordMap[key];
-        const skipExisting = !isFullCopy && existing && existing.backupStatus === 'backed_up';
+        const sourceUnchanged = !existing?.fileStorageUrl || existing.fileStorageUrl === fileUrl;
+        const skipExisting = !isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && sourceUnchanged;
 
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
         const subfolder = getSubfolder(source.entity, record);
