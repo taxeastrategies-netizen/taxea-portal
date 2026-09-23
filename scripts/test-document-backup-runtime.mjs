@@ -193,6 +193,7 @@ const appSource = fs.readFileSync('src/App.jsx', 'utf8');
 assert.match(appSource, /path="\/admin\/backup-drive" element=\{<AdminOnlyRoute isAdmin=\{isPlatformAdmin\}>/);
 assert.match(functionSource, /nextCursor/);
 assert.match(functionSource, /lastHeartbeatAt/);
+assert.match(functionSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
 assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
 
 console.log(JSON.stringify({
@@ -206,6 +207,7 @@ console.log(JSON.stringify({
     manualRunIsResumable: true,
     backupPanelIsPlatformAdminOnly: true,
     scheduledRunExecutesBackupInCanaryTimezone: true,
+    scheduledRunCanResumeNextDay: true,
     wrongDriveAccountIsBlocked: true,
   },
 }, null, 2));
