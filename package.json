@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "test:tax-accounting-phase0": "node scripts/test-tax-accounting-certification.mjs && node scripts/test-certification-runtime.mjs && node scripts/test-accounting-boundary-runtime.mjs && node scripts/test-tax-model-selftest.mjs && node scripts/verify-tax-accounting-boundaries.mjs",
     "test:tax-accounting-phase1": "npm run test:tax-accounting-phase0 && node scripts/test-financial-source-truth.mjs && node scripts/test-invoice-create-runtime.mjs && node scripts/test-manual-financial-runtime.mjs && node scripts/test-financial-mutation-boundaries.mjs && node scripts/test-import-client-accounting-security.mjs && node scripts/test-accounting-engine-parity.mjs && node scripts/test-accounting-bootstrap-runtime.mjs && node scripts/test-accounting-core-phase1.mjs && node scripts/test-invoice-payment-unit-runtime.mjs && node scripts/test-open-banking-accounting-boundary.mjs",
-    "test:tax-accounting-phase2": "npm run test:tax-accounting-phase1 && node scripts/test-document-backup-security.mjs && node scripts/test-public-functions-security.mjs",
+    "test:document-backup": "node scripts/test-document-backup-security.mjs && node scripts/test-document-backup-runtime.mjs",
+    "test:tax-accounting-phase2": "npm run test:tax-accounting-phase1 && npm run test:document-backup && node scripts/test-public-functions-security.mjs",
     "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs"
   },
   "dependencies": {
