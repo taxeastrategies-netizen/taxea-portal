@@ -189,6 +189,8 @@ assert.deepEqual(workflow.definition.do[0].run_function.with.args, {
 const panelSource = fs.readFileSync('src/pages/AdminBackupDrive.jsx', 'utf8');
 assert.match(panelSource, /for \(let chunk = 0; chunk < 200; chunk \+= 1\)/);
 assert.match(panelSource, /resumeJobId/);
+const appSource = fs.readFileSync('src/App.jsx', 'utf8');
+assert.match(appSource, /path="\/admin\/backup-drive" element=\{<AdminOnlyRoute isAdmin=\{isPlatformAdmin\}>/);
 assert.match(functionSource, /nextCursor/);
 assert.match(functionSource, /lastHeartbeatAt/);
 assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
@@ -202,6 +204,7 @@ console.log(JSON.stringify({
     drive429RetriesAndRecovers: true,
     successfulUploadCreatesSingleTrackingRecord: true,
     manualRunIsResumable: true,
+    backupPanelIsPlatformAdminOnly: true,
     scheduledRunExecutesBackupInCanaryTimezone: true,
     wrongDriveAccountIsBlocked: true,
   },
