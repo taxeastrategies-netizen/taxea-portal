@@ -708,32 +708,45 @@ Deno.serve(async (req) => {
       ].join('\n');
 
       let manifestFileId = '', csvFileId = '', summaryFileId = '';
+      const manifestErrors = [];
       try {
         const mj = await uploadTextFile('manifest.json', dayFolder.id, manifestJson, accessToken);
         manifestFileId = mj.id;
-      } catch {}
+      } catch (error) {
+        manifestErrors.push(`manifest.json: ${error.message}`);
+      }
       try {
         const mc = await uploadTextFile('manifest.csv', dayFolder.id, manifestCsv, accessToken);
         csvFileId = mc.id;
-      } catch {}
+      } catch (error) {
+        manifestErrors.push(`manifest.csv: ${error.message}`);
+      }
       try {
         const sf = await uploadTextFile('resumen_backup.txt', dayFolder.id, summary, accessToken);
         summaryFileId = sf.id;
-      } catch {}
+      } catch (error) {
+        manifestErrors.push(`resumen_backup.txt: ${error.message}`);
+      }
 
       // ── Finalize job ──
       const completedAt = new Date().toISOString();
       const durationSeconds = Math.round((new Date(completedAt).getTime() - new Date(job.startedAt).getTime()) / 1000);
-      const finalStatus = failed === 0 ? 'completed' : 'completed_with_errors';
+      const finalStatus = failed === 0 && manifestErrors.length === 0 ? 'completed' : 'completed_with_errors';
+      const finalErrorMessage = [...failedItems.map(item => `${item.documentId}: ${item.error}`), ...manifestErrors]
+        .join(' | ')
+        .substring(0, 500);
 
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
         status: finalStatus,
         completedAt, durationSeconds,
+        lastHeartbeatAt: completedAt,
+        nextCursor: documents.length,
         documentsScanned: documents.length, documentsCopied: copied,
         documentsSkipped: skipped, documentsFailed: failed,
         bytesCopied, manifestDriveFileId: manifestFileId,
         manifestCsvDriveFileId: csvFileId, summaryDriveFileId: summaryFileId,
         manifestChecksum: await computeChecksum(new TextEncoder().encode(manifestJson)),
+        safeErrorMessage: finalErrorMessage,
       });
 
       await base44.asServiceRole.entities.BackupConfiguration.update(config.id, {
