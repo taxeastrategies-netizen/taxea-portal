@@ -1,23 +1,4 @@
 {
-  "name": "DailyDocumentBackupToDrive",
-  "description": "Copia de seguridad autom\u00e1tica diaria de toda la documentaci\u00f3n a Google Drive (taxeastrategies@gmail.com)",
-  "trigger": {
-    "condition": null,
-    "config": {
-      "trigger_type": "scheduled",
-      "events": [],
-      "schedule_mode": "recurring",
-      "cron_expression": "0 3 * * *",
-      "one_time_date": null,
-      "timezone": "Atlantic/Canary",
-      "interval_value": null,
-      "interval_unit": null,
-      "interval_anchor": null,
-      "ends_type": "never",
-      "ends_on_date": null,
-      "ends_after_count": null
-    }
-  },
   "definition": {
     "document": {
       "dsl": "1.0.0",
@@ -41,6 +22,25 @@
       }
     ]
   },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 3 * * *",
+      "one_time_date": null,
+      "timezone": "Atlantic/Canary",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "name": "DailyDocumentBackupToDrive",
+  "description": "Copia de seguridad autom\u00e1tica diaria de toda la documentaci\u00f3n a Google Drive (taxeastrategies@gmail.com)",
   "x-base44-migrated-from-automation": {
     "legacy_payload_function": "documentBackupToDrive"
   }
