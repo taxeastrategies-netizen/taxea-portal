@@ -35,7 +35,7 @@ export default function BackupModal({ config, driveEmail, onConfirm, onCancel })
         <div className="flex items-start gap-2 mb-5">
           <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-muted-foreground">
-            La copia se ejecuta en segundo plano. No cierres esta ventana hasta que finalice. Evita pulsar el botón múltiples veces.
+            La copia avanza por bloques seguros y muestra su progreso en el panel. Si se interrumpe, podrás reanudarla sin volver a copiar los documentos ya procesados.
           </p>
         </div>
 
