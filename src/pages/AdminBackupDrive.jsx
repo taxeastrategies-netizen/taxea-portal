@@ -39,6 +39,7 @@ export default function AdminBackupDrive() {
   const [status, setStatus] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState(null);
@@ -47,14 +48,17 @@ export default function AdminBackupDrive() {
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await base44.functions.invoke('documentBackupToDrive', { action: 'status' });
       setStatus(res.data);
       setJobs(res.data?.recentJobs || []);
     } catch (e) {
       console.error(e);
+      setLoadError(e.response?.data?.error || e.message || 'No se pudo consultar el estado de las copias.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
@@ -140,6 +144,19 @@ export default function AdminBackupDrive() {
           </div>
         }
       />
+
+      {loadError && (
+        <Card className="border-red-200 bg-red-50/50">
+          <CardContent className="pt-5 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-900">No se pudo cargar el estado de las copias</p>
+              <p className="text-xs text-red-700 mt-1">{loadError}</p>
+              <Button variant="outline" size="sm" onClick={loadStatus} className="mt-3">Reintentar</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Drive Connection Card */}
       <Card>
