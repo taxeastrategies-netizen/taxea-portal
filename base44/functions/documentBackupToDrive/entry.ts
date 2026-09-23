@@ -387,7 +387,8 @@ Deno.serve(async (req) => {
     const now = getCanaryDate();
     const requestedJobId = String(body.resumeJobId || '').trim();
     let job = requestedJobId ? await base44.asServiceRole.entities.BackupJob.get(requestedJobId).catch(() => null) : null;
-    if (job && !['preparing', 'copying'].includes(job.status)) job = null;
+    const requestedJobType = isManual ? 'manual' : 'scheduled';
+    if (job && (!['preparing', 'copying'].includes(job.status) || job.jobType !== requestedJobType)) job = null;
     if (!job) {
       const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 20);
       const nowMs = Date.now();
@@ -757,14 +758,14 @@ Deno.serve(async (req) => {
       });
 
       // ── Alert email on failures ──
-      if (failed > 0) {
+      if (finalStatus !== 'completed') {
         const alertEmail = config.alertEmail || Deno.env.get('ENVIO_FACTURAS');
         if (alertEmail) {
           try {
             await base44.asServiceRole.integrations.Core.SendEmail({
               to: alertEmail,
               subject: `[Taxea Portal] Copia de seguridad con incidencias — ${now.full}`,
-              body: `La copia de seguridad del ${now.full} se completó con ${failed} documento(s) con error de un total de ${documents.length} revisados.\n\nDocumentos copiados: ${copied}\nOmitidos: ${skipped}\nFallidos: ${failed}\n\nRevisa el panel de administración para más detalles.`,
+              body: `La copia de seguridad del ${now.full} terminó con incidencias.\n\nDocumentos revisados: ${documents.length}\nCopiados: ${copied}\nOmitidos: ${skipped}\nFallidos: ${failed}\nIncidencias de manifiesto: ${manifestErrors.length}\n\nRevisa el panel de administración para más detalles.`,
             });
           } catch {}
         }
@@ -773,6 +774,8 @@ Deno.serve(async (req) => {
       return Response.json({
         status: finalStatus,
         jobId: job.id,
+        continueRequired: false,
+        progressPercent: 100,
         documentsScanned: documents.length,
         documentsCopied: copied,
         documentsSkipped: skipped,
@@ -781,13 +784,15 @@ Deno.serve(async (req) => {
         durationSeconds,
         driveFolderPath: `${config.rootFolderName}/${config.portalFolderName}/${now.year}/${now.month}/${now.full}`,
         failedItems: failedItems.slice(0, 20),
+        manifestErrors,
       });
 
     } catch (error) {
       const failAt = new Date().toISOString();
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
-        status: 'failed', completedAt: failAt,
-        safeErrorMessage: error.message?.substring(0, 500) || 'Unknown error',
+        status: 'failed', completedAt: failAt, lastHeartbeatAt: failAt,
+        durationSeconds: Math.max(0, Math.round((new Date(failAt).getTime() - new Date(job.startedAt || failAt).getTime()) / 1000)),
+        safeErrorMessage: error.message?.substring(0, 500) || 'Error no identificado',
       });
       await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'failed' });
       return Response.json({ error: error.message, jobId: job.id }, { status: 500 });
