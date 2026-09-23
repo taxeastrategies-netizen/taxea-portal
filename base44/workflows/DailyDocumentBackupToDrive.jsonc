@@ -9,7 +9,7 @@
       "schedule_mode": "recurring",
       "cron_expression": "0 3 * * *",
       "one_time_date": null,
-      "timezone": "UTC",
+      "timezone": "Atlantic/Canary",
       "interval_value": null,
       "interval_unit": null,
       "interval_anchor": null,
@@ -31,7 +31,10 @@
           "call": "invoke_backend_function",
           "with": {
             "function_name": "documentBackupToDrive",
-            "args": {}
+            "args": {
+              "action": "backup",
+              "jobType": "scheduled"
+            }
           },
           "then": "end"
         }
