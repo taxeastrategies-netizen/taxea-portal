@@ -584,41 +584,90 @@ Deno.serve(async (req) => {
         }
       };
 
-      // Process documents in parallel batches with time budget
-      const TIME_BUDGET_MS = 240000; // 4 minutes — leave room before function timeout
-      const BATCH_SIZE = 5;
-      const startTime = Date.now();
-      let timeBudgetExceeded = false;
+      // Process a bounded chunk and persist the cursor. Manual runs continue through short requests
+      // instead of keeping one request open for four minutes.
+      const invocationStartedAt = Date.now();
+      const timeBudgetMs = isManual ? MANUAL_TIME_BUDGET_MS : SCHEDULED_TIME_BUDGET_MS;
+      let nextCursor = startCursor;
 
-      for (let i = 0; i < documents.length; i += BATCH_SIZE) {
-        if (Date.now() - startTime > TIME_BUDGET_MS) { timeBudgetExceeded = true; break; }
-        const batch = documents.slice(i, i + BATCH_SIZE);
+      for (let i = startCursor; i < documents.length; i += BACKUP_BATCH_SIZE) {
+        if (Date.now() - invocationStartedAt >= timeBudgetMs) break;
+        const batch = documents.slice(i, i + BACKUP_BATCH_SIZE);
         const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
         for (const result of results) {
           if (result.status === 'fulfilled') {
-            const r = result.value;
-            if (r.type === 'copied') { copied++; bytesCopied += r.fileSize; manifestEntries.push(r.manifest); }
-            else if (r.type === 'skipped') { skipped++; manifestEntries.push(r.manifest); }
-            else if (r.type === 'failed') { failed++; failedItems.push({ documentId: r.docId, error: r.error }); }
+            const item = result.value;
+            if (item.type === 'copied') { copied++; bytesCopied += item.fileSize; }
+            else if (item.type === 'skipped') skipped++;
+            else if (item.type === 'failed') {
+              failed++;
+              failedItems.push({ documentId: item.docId, error: item.error });
+            }
           } else {
             failed++;
-            failedItems.push({ documentId: 'unknown', error: result.reason?.message || 'Unknown error' });
+            failedItems.push({ documentId: 'unknown', error: result.reason?.message || 'Error no identificado' });
           }
         }
-        // Update progress periodically
-        if (i % 25 === 0) {
-          await base44.asServiceRole.entities.BackupJob.update(job.id, {
-            documentsCopied: copied, documentsSkipped: skipped, documentsFailed: failed,
-          }).catch(() => {});
-        }
+        nextCursor = i + batch.length;
+        await base44.asServiceRole.entities.BackupJob.update(job.id, {
+          status: 'copying',
+          documentsScanned: documents.length,
+          documentsCopied: copied,
+          documentsSkipped: skipped,
+          documentsFailed: failed,
+          bytesCopied,
+          nextCursor,
+          lastHeartbeatAt: new Date().toISOString(),
+        });
       }
 
-      if (timeBudgetExceeded) {
-        failedItems.push({ documentId: 'timeout', error: 'Tiempo límite alcanzado — se reanudará en la próxima ejecución' });
+      if (nextCursor < documents.length) {
+        return Response.json({
+          status: 'copying',
+          jobId: job.id,
+          continueRequired: true,
+          documentsScanned: documents.length,
+          documentsProcessed: nextCursor,
+          documentsRemaining: documents.length - nextCursor,
+          documentsCopied: copied,
+          documentsSkipped: skipped,
+          documentsFailed: failed,
+          bytesCopied,
+          progressPercent: documents.length ? Math.round((nextCursor / documents.length) * 100) : 100,
+          failedItems: failedItems.slice(0, 20),
+        }, { status: 202 });
+      }
+
+      // Build the final manifest from the canonical records, not only from this invocation.
+      const manifestEntries = [];
+      for (const { record, source } of documents) {
+        const backupRecord = recordMap[`${source.entity}:${record.id}`];
+        const displayName = getDisplayName(source.entity, record);
+        const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
+        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus);
+        manifestEntries.push({
+          documentId: record.id,
+          documentEntity: source.entity,
+          clientAccountId: record[source.companyField],
+          clientName: companyName,
+          type: source.entity,
+          originalFileName: displayName,
+          size: backupRecord?.fileSize || (source.sizeField ? record[source.sizeField] : 0) || 0,
+          mimeType: backupRecord?.mimeType || guessMimeType(displayName, source.mimeField ? record[source.mimeField] : null),
+          checksum: backupRecord?.checksum || '',
+          driveFileId: backupRecord?.driveFileId || '',
+          drivePath: backupRecord?.drivePath || '',
+          status: isBackedUp ? 'backed_up' : (backupRecord?.backupStatus || 'missing'),
+          lastVerifiedAt: backupRecord?.lastVerifiedAt || '',
+        });
       }
 
       // ── Verification phase ──
-      await base44.asServiceRole.entities.BackupJob.update(job.id, { status: 'verifying' });
+      await base44.asServiceRole.entities.BackupJob.update(job.id, {
+        status: 'verifying',
+        nextCursor: documents.length,
+        lastHeartbeatAt: new Date().toISOString(),
+      });
 
       // ── Create manifests ──
       const manifestJson = JSON.stringify({
