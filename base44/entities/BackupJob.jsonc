@@ -99,6 +99,17 @@
     },
     "internalErrorCode": {
       "type": "string"
+    },
+    "nextCursor": {
+      "type": "number",
+      "default": 0
+    },
+    "lastHeartbeatAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "runVersion": {
+      "type": "string"
     }
   },
   "required": [
