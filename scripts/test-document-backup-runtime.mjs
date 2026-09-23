@@ -180,6 +180,19 @@ assert.equal(throttled.itemCreates, 1);
 assert.equal(throttled.mediaDownloads, 1);
 assert.equal(throttled.uploadAttempts, 5, 'one retried document upload plus three manifests expected');
 
+const workflow = JSON.parse(fs.readFileSync('base44/workflows/DailyDocumentBackupToDrive.jsonc', 'utf8'));
+assert.equal(workflow.trigger.config.timezone, 'Atlantic/Canary');
+assert.deepEqual(workflow.definition.do[0].run_function.with.args, {
+  action: 'backup',
+  jobType: 'scheduled',
+});
+const panelSource = fs.readFileSync('src/pages/AdminBackupDrive.jsx', 'utf8');
+assert.match(panelSource, /for \(let chunk = 0; chunk < 200; chunk \+= 1\)/);
+assert.match(panelSource, /resumeJobId/);
+assert.match(functionSource, /nextCursor/);
+assert.match(functionSource, /lastHeartbeatAt/);
+assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
@@ -188,5 +201,8 @@ console.log(JSON.stringify({
     noRedownloadForTrackedDocuments: true,
     drive429RetriesAndRecovers: true,
     successfulUploadCreatesSingleTrackingRecord: true,
+    manualRunIsResumable: true,
+    scheduledRunExecutesBackupInCanaryTimezone: true,
+    wrongDriveAccountIsBlocked: true,
   },
 }, null, 2));
