@@ -8,6 +8,11 @@ const BACKUP_MEDIA_HOST = 'media.base44.com';
 const BACKUP_FILE_PREFIX = `/files/public/${BACKUP_APP_ID}/`;
 const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024;
 const BACKUP_DOWNLOAD_TIMEOUT_MS = 20_000;
+const DRIVE_RETRY_ATTEMPTS = 4;
+const MANUAL_TIME_BUDGET_MS = 40_000;
+const SCHEDULED_TIME_BUDGET_MS = 210_000;
+const BACKUP_BATCH_SIZE = 3;
+const ACTIVE_JOB_MAX_AGE_MS = 30 * 60 * 1000;
 
 // ── Helpers ──
 
@@ -105,9 +110,32 @@ function getDisplayName(entityName, record) {
 
 // ── Google Drive API helpers ──
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function driveFetch(url, options = {}) {
+  let lastResponse = null;
+  let lastError = null;
+  for (let attempt = 0; attempt < DRIVE_RETRY_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      lastResponse = response;
+      if (response.status !== 429 && response.status < 500) return response;
+      if (attempt === DRIVE_RETRY_ATTEMPTS - 1) return response;
+      const retryAfter = Number(response.headers.get('retry-after') || 0);
+      const delay = retryAfter > 0 ? retryAfter * 1000 : 400 * (2 ** attempt) + Math.floor(Math.random() * 200);
+      await sleep(Math.min(delay, 5000));
+    } catch (error) {
+      lastError = error;
+      if (attempt === DRIVE_RETRY_ATTEMPTS - 1) throw error;
+      await sleep(400 * (2 ** attempt));
+    }
+  }
+  if (lastResponse) return lastResponse;
+  throw lastError || new Error('No se pudo contactar con Google Drive.');
+}
+
 async function driveGet(url, token) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  return res;
+  return driveFetch(url, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 async function getDriveUserEmail(token) {
@@ -124,13 +152,12 @@ async function findOrCreateFolder(name, parentId, token) {
   let query = `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) query += ` and '${parentId}' in parents`;
   const searchRes = await driveGet(`${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, token);
-  if (searchRes.ok) {
-    const found = await searchRes.json();
-    if (found.files?.length > 0) return found.files[0];
-  }
+  if (!searchRes.ok) throw new Error(`No se pudo buscar la carpeta \"${name}\": ${searchRes.status}`);
+  const found = await searchRes.json();
+  if (found.files?.length > 0) return found.files[0];
   const body = { name, mimeType: 'application/vnd.google-apps.folder' };
   if (parentId) body.parents = [parentId];
-  const createRes = await fetch(`${DRIVE_API}/files?fields=id,name`, {
+  const createRes = await driveFetch(`${DRIVE_API}/files?fields=id,name`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -167,7 +194,7 @@ async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) 
   fullBody.set(header, 0);
   fullBody.set(contentBytes, header.length);
   fullBody.set(footer, header.length + contentBytes.length);
-  const res = await fetch(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,size,name`, {
+  const res = await driveFetch(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,size,name`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
     body: fullBody,
@@ -198,26 +225,47 @@ const DOC_SOURCES = [
   { entity: 'MercantilDocumento', urlField: 'fileUrl', companyField: 'sociedadId', mimeField: null, sizeField: null },
 ];
 
-async function scanAllDocuments(base44) {
+async function listAllEntity(entity, sort = '-created_date', maximum = 10000) {
+  const rows = [];
+  const pageSize = Math.min(500, maximum);
+  for (let skip = 0; skip < maximum; skip += pageSize) {
+    const page = await entity.list(sort, pageSize, skip).catch(() => []);
+    rows.push(...(page || []));
+    if (!page || page.length < pageSize) break;
+  }
+  return rows.slice(0, maximum);
+}
+
+function latestBackupRecordMap(records) {
+  const map = {};
+  for (const record of records) {
+    const key = `${record.documentEntity}:${record.documentId}`;
+    const current = map[key];
+    const recordTime = String(record.updated_date || record.lastBackedUpAt || record.created_date || '');
+    const currentTime = String(current?.updated_date || current?.lastBackedUpAt || current?.created_date || '');
+    if (!current || recordTime > currentTime) map[key] = record;
+  }
+  return map;
+}
+
+async function scanDocumentSource(base44, src) {
   const all = [];
-  for (const src of DOC_SOURCES) {
-    let skip = 0;
-    while (true) {
-      let batch;
-      try {
-        batch = await base44.asServiceRole.entities[src.entity].list('-created_date', 200, skip);
-      } catch { break; }
-      if (!batch || batch.length === 0) break;
-      for (const rec of batch) {
-        const url = rec[src.urlField];
-        if (!url || typeof url !== 'string' || url.trim() === '') continue;
-        all.push({ record: rec, source: src });
-      }
-      if (batch.length < 200) break;
-      skip += 200;
+  for (let skip = 0; skip < 10000; skip += 500) {
+    const batch = await base44.asServiceRole.entities[src.entity].list('-created_date', 500, skip).catch(() => []);
+    if (!batch?.length) break;
+    for (const rec of batch) {
+      const url = rec[src.urlField];
+      if (!url || typeof url !== 'string' || url.trim() === '') continue;
+      all.push({ record: rec, source: src });
     }
+    if (batch.length < 500) break;
   }
   return all;
+}
+
+async function scanAllDocuments(base44) {
+  const groups = await Promise.all(DOC_SOURCES.map(src => scanDocumentSource(base44, src)));
+  return groups.flat();
 }
 
 async function getCompanyName(companyId, base44, cache) {
