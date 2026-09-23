@@ -130,13 +130,93 @@ Deno.serve(async (req) => {
     if (!user) {
       return Response.json({ error: 'No autenticado' }, { status: 401 });
     }
-    const isManual = true;
+    const isService = user.is_service === true;
+    const isAdminUser = user.role === 'admin' || user.role === 'super_admin';
 
-    // Cada ejecución queda limitada a la empresa activa del usuario autenticado.
-    const activeCompanyId = user.data?.company_id;
-    if (!activeCompanyId) {
+    // La sesión puede traer permisos caducados: resolver la empresa desde la base de datos.
+    let activeCompanyId = '';
+    if (!isService) {
+      const freshUser = await base44.asServiceRole.entities.User.get(user.id).catch(() => null);
+      activeCompanyId = freshUser?.data?.company_id || user.data?.company_id || '';
+    }
+
+    // ── Gestión de plantillas verificada en servidor (sin depender de la sesión) ──
+    if (action === 'create_template' || action === 'list_templates' || action === 'set_template_status') {
+      if (isService) return Response.json({ error: 'No autorizado' }, { status: 401 });
+
+      if (action === 'create_template') {
+        const t = body.template || {};
+        if (!t.ownerAccountId || t.ownerAccountId !== activeCompanyId) {
+          return Response.json({ error: 'La plantilla debe pertenecer a la empresa activa.' }, { status: 403 });
+        }
+        if (!t.frequency || !t.startDate || !t.nextRunDate || !t.concept || !(Number(t.baseAmount) > 0)) {
+          return Response.json({ error: 'Faltan datos obligatorios de la plantilla (concepto, base imponible o fechas).' }, { status: 400 });
+        }
+        const created = await base44.asServiceRole.entities.RecurringInvoiceTemplate.create({
+          ownerAccountId: t.ownerAccountId,
+          createdByUserId: t.createdByUserId || user.id,
+          createdByEmail: t.createdByEmail || user.email,
+          status: 'active',
+          mode: t.mode || 'auto_issue',
+          frequency: t.frequency,
+          interval: t.interval || 1,
+          startDate: t.startDate,
+          endDate: t.endDate || null,
+          nextRunDate: t.nextRunDate,
+          dayOfWeek: t.dayOfWeek,
+          dayOfMonth: t.dayOfMonth,
+          monthOfYear: t.monthOfYear,
+          dueDateMode: t.dueDateMode || 'days_after',
+          dueDaysAfterIssue: t.dueDaysAfterIssue,
+          dueDayOfMonth: t.dueDayOfMonth,
+          invoiceType: 'emitida',
+          concept: t.concept,
+          baseAmount: Number(t.baseAmount) || 0,
+          taxRate: Number(t.taxRate) || 0,
+          taxType: t.taxType || 'iva',
+          retentionRate: Number(t.retentionRate) || 0,
+          totalAmount: Number(t.totalAmount) || 0,
+          currency: t.currency || 'EUR',
+          sendEmailAutomatically: false,
+          clientName: t.clientName,
+          clientNif: t.clientNif,
+          clientAddress: t.clientAddress,
+          clientEmail: t.clientEmail,
+          formaPago: t.formaPago,
+          coletillaFiscal: t.coletillaFiscal || '',
+          totalGenerated: 0,
+        });
+        return Response.json({ ok: true, template: created });
+      }
+
+      if (action === 'list_templates') {
+        const companyId = String(body.companyId || activeCompanyId);
+        if (!companyId) return Response.json({ error: 'Falta empresa' }, { status: 400 });
+        if (!isAdminUser && companyId !== activeCompanyId) {
+          return Response.json({ error: 'Forbidden' }, { status: 403 });
+        }
+        const [tmpls, rns] = await Promise.all([
+          base44.asServiceRole.entities.RecurringInvoiceTemplate.filter({ ownerAccountId: companyId }, '-created_date'),
+          base44.asServiceRole.entities.RecurringInvoiceRun.filter({ ownerAccountId: companyId }, '-created_date', 200),
+        ]);
+        return Response.json({ ok: true, templates: tmpls || [], runs: rns || [] });
+      }
+
+      const tmpl = await base44.asServiceRole.entities.RecurringInvoiceTemplate.get(body.templateId);
+      if (!tmpl) return Response.json({ error: 'Plantilla no encontrada' }, { status: 404 });
+      if (!isAdminUser && tmpl.ownerAccountId !== activeCompanyId) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const updated = await base44.asServiceRole.entities.RecurringInvoiceTemplate.update(tmpl.id, { status: body.status });
+      return Response.json({ ok: true, template: updated });
+    }
+
+    // Modo global (workflow diario / admin sin empresa activa): procesa todas las empresas.
+    const globalScan = isService || (isAdminUser && !activeCompanyId);
+    if (!globalScan && !activeCompanyId) {
       return Response.json({ error: 'Selecciona una empresa antes de generar facturas recurrentes.' }, { status: 403 });
     }
+    const isManual = !globalScan;
     let templates = [];
     if (body.templateId) {
       const tmpl = await base44.asServiceRole.entities.RecurringInvoiceTemplate.get(body.templateId);

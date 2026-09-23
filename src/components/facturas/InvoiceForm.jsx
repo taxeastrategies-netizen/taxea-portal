@@ -215,40 +215,47 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         // Create recurring template if enabled and invoice is "emitida"
         if (recurring.enabled && payload.tipo === 'emitida') {
           const nextRun = calculateNextRun(recurring, recurring.startDate);
-          await base44.entities.RecurringInvoiceTemplate.create({
-            ownerAccountId: company.id,
-            createdByUserId: user?.id,
-            createdByEmail: user?.email,
-            status: 'active',
-            mode: recurring.mode,
-            frequency: recurring.frequency,
-            interval: recurring.interval,
-            startDate: recurring.startDate,
-            endDate: recurring.endDate || null,
-            nextRunDate: nextRun,
-            dayOfWeek: recurring.dayOfWeek,
-            dayOfMonth: recurring.frequency === 'yearly' ? recurring.dayOfMonthYearly : recurring.dayOfMonth,
-            monthOfYear: recurring.monthOfYear,
-            dueDateMode: recurring.dueDateMode,
-            dueDaysAfterIssue: recurring.dueDaysAfterIssue,
-            dueDayOfMonth: recurring.dueDayOfMonth,
-            invoiceType: 'emitida',
-            concept: payload.concepto,
-            baseAmount: Number(payload.base_imponible) || 0,
-            taxRate: Number(payload.tipo_iva) || 0,
-            taxType: taxType.toLowerCase(),
-            retentionRate: payload.retencion_irpf || 0,
-            totalAmount: total,
-            currency: payload.moneda || 'EUR',
-            sendEmailAutomatically: false,
-            clientName: payload.cliente_nombre,
-            clientNif: payload.cliente_nif,
-            clientAddress: payload.cliente_direccion,
-            clientEmail: payload.cliente_email,
-            formaPago: payload.forma_pago,
-            coletillaFiscal: payload.coletilla_fiscal || '',
-            totalGenerated: 0,
-          }).catch(() => {});
+          try {
+            const tmplResp = await base44.functions.invoke('generateRecurringInvoices', {
+              action: 'create_template',
+              template: {
+                ownerAccountId: company.id,
+                createdByUserId: user?.id,
+                createdByEmail: user?.email,
+                mode: recurring.mode,
+                frequency: recurring.frequency,
+                interval: recurring.interval,
+                startDate: recurring.startDate,
+                endDate: recurring.endDate || null,
+                nextRunDate: nextRun,
+                dayOfWeek: recurring.dayOfWeek,
+                dayOfMonth: recurring.frequency === 'yearly' ? recurring.dayOfMonthYearly : recurring.dayOfMonth,
+                monthOfYear: recurring.monthOfYear,
+                dueDateMode: recurring.dueDateMode,
+                dueDaysAfterIssue: recurring.dueDaysAfterIssue,
+                dueDayOfMonth: recurring.dueDayOfMonth,
+                concept: payload.concepto,
+                baseAmount: Number(payload.base_imponible) || 0,
+                taxRate: Number(payload.tipo_iva) || 0,
+                taxType: taxType.toLowerCase(),
+                retentionRate: payload.retencion_irpf || 0,
+                totalAmount: total,
+                currency: payload.moneda || 'EUR',
+                clientName: payload.cliente_nombre,
+                clientNif: payload.cliente_nif,
+                clientAddress: payload.cliente_direccion,
+                clientEmail: payload.cliente_email,
+                formaPago: payload.forma_pago,
+                coletillaFiscal: payload.coletilla_fiscal || '',
+              },
+            });
+            const tmplResult = tmplResp?.data || tmplResp;
+            if (!tmplResult?.ok) throw new Error(tmplResult?.error || 'Error desconocido');
+          } catch (tmplError) {
+            setSaveError(`La factura se guardó, pero la plantilla recurrente no pudo crearse: ${tmplError?.message || 'inténtalo de nuevo.'}`);
+            onSaved?.();
+            return;
+          }
         }
       }
       onSaved?.();

@@ -17,12 +17,13 @@ export default function RecurringSection({ company, user, isAdmin }) {
     if (!company?.id) return;
     setLoading(true);
     try {
-      const [tmpls, rns] = await Promise.all([
-        base44.entities.RecurringInvoiceTemplate.filter({ ownerAccountId: company.id }, '-created_date'),
-        base44.entities.RecurringInvoiceRun.filter({ ownerAccountId: company.id }, '-created_date', 200),
-      ]);
-      setTemplates(tmpls || []);
-      setRuns(rns || []);
+      const res = await base44.functions.invoke('generateRecurringInvoices', {
+        action: 'list_templates',
+        companyId: company.id,
+      });
+      const d = res?.data || res;
+      setTemplates(d?.templates || []);
+      setRuns(d?.runs || []);
     } catch {}
     setLoading(false);
   }, [company?.id]);
