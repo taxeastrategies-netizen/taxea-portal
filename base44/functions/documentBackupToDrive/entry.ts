@@ -251,7 +251,8 @@ function latestBackupRecordMap(records) {
 async function scanDocumentSource(base44, src) {
   const all = [];
   for (let skip = 0; skip < 10000; skip += 500) {
-    const batch = await base44.asServiceRole.entities[src.entity].list('-created_date', 500, skip).catch(() => []);
+    // Oldest-first keeps cursor pagination stable when new documents arrive during a resumed run.
+    const batch = await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip).catch(() => []);
     if (!batch?.length) break;
     for (const rec of batch) {
       const url = rec[src.urlField];
@@ -316,6 +317,13 @@ Deno.serve(async (req) => {
     }
 
     const driveEmail = await getDriveUserEmail(accessToken);
+    if (action !== 'status' && driveEmail !== REQUIRED_EMAIL) {
+      return Response.json({
+        error: `La copia requiere Google Drive conectado como ${REQUIRED_EMAIL}.`,
+        connectedEmail: driveEmail,
+        requiredEmail: REQUIRED_EMAIL,
+      }, { status: 409 });
+    }
 
     // Load config
     let configs = await base44.asServiceRole.entities.BackupConfiguration.list();
