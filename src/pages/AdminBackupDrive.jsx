@@ -63,14 +63,37 @@ export default function AdminBackupDrive() {
     setShowModal(false);
     setRunning(true);
     setRunResult(null);
+    let resumeJobId = null;
+    let completed = false;
     try {
-      const res = await base44.functions.invoke('documentBackupToDrive', { action: 'backup' });
-      setRunResult(res.data);
+      // Each request processes a short, persisted chunk. This avoids browser/proxy timeouts
+      // and makes an interrupted run safely resumable without duplicating Drive files.
+      for (let chunk = 0; chunk < 200; chunk += 1) {
+        const res = await base44.functions.invoke('documentBackupToDrive', {
+          action: 'backup',
+          jobType: 'manual',
+          resumeJobId,
+        });
+        const data = res.data || {};
+        setRunResult(data);
+        resumeJobId = data.jobId || resumeJobId;
+        if (!data.continueRequired) {
+          completed = true;
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+      if (!completed) throw new Error('La copia no pudo finalizar dentro del límite de bloques. Puedes reanudarla sin duplicar archivos.');
       await loadStatus();
     } catch (e) {
-      setRunResult({ status: 'failed', error: e.response?.data?.error || e.message });
+      setRunResult(previous => ({
+        ...(previous || {}),
+        status: 'failed',
+        error: e.response?.data?.error || e.message,
+      }));
+    } finally {
+      setRunning(false);
     }
-    setRunning(false);
   };
 
   const handleVerify = async () => {
@@ -107,9 +130,9 @@ export default function AdminBackupDrive() {
               {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
               Verificar última copia
             </Button>
-            <Button onClick={() => setShowModal(true)} disabled={running} className="bg-teal hover:bg-teal-dark gap-2">
+            <Button onClick={() => setShowModal(true)} disabled={running || !isCorrectAccount} className="bg-teal hover:bg-teal-dark gap-2">
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              Copia seguridad
+              {running ? 'Procesando…' : 'Copia seguridad'}
             </Button>
           </div>
         }
@@ -167,9 +190,15 @@ export default function AdminBackupDrive() {
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
             <ShieldCheck className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-700">
-              Activa verificación en dos pasos en la cuenta de Google Drive usada para copias.
-            </p>
+            <div className="text-xs text-blue-700 space-y-1">
+              <p>Activa verificación en dos pasos en la cuenta de Google Drive usada para copias.</p>
+              <p>
+                Seguimiento: <strong>{status?.trackedDocuments || 0}</strong> documentos únicos.
+                {status?.metadataDuplicateCount > 0 && (
+                  <> Se han consolidado lógicamente <strong>{status.metadataDuplicateCount}</strong> registros históricos repetidos para impedir nuevas copias duplicadas.</>
+                )}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -212,11 +241,21 @@ export default function AdminBackupDrive() {
       {/* Running progress */}
       {running && (
         <Card className="border-blue-200 bg-blue-50/50">
-          <CardContent className="pt-5 flex items-center gap-3">
-            <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-            <div>
-              <p className="text-sm font-medium text-blue-900">Ejecutando copia de seguridad...</p>
-              <p className="text-xs text-blue-700">Los documentos se están copiando a Google Drive. Esto puede tardar varios minutos.</p>
+          <CardContent className="pt-5 flex items-start gap-3">
+            <Loader2 className="w-6 h-6 text-blue-600 animate-spin mt-0.5" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-blue-900">Ejecutando copia reanudable...</p>
+                <span className="text-xs font-semibold text-blue-800">{runResult?.progressPercent || 0}%</span>
+              </div>
+              <div className="h-2 bg-blue-100 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-blue-600 transition-all duration-300" style={{ width: `${runResult?.progressPercent || 0}%` }} />
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                {runResult?.documentsProcessed || 0} de {runResult?.documentsScanned || '…'} documentos procesados
+                {Number.isFinite(runResult?.documentsRemaining) ? ` · ${runResult.documentsRemaining} pendientes` : ''}.
+                Si se interrumpe, el siguiente intento continuará desde el último bloque guardado.
+              </p>
             </div>
           </CardContent>
         </Card>
