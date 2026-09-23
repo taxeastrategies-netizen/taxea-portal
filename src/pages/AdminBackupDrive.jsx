@@ -120,6 +120,24 @@ export default function AdminBackupDrive() {
     );
   }
 
+  if (loadError && !status) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Seguridad y Copias" subtitle="Copia de seguridad documental automática en Google Drive" />
+        <Card className="border-red-200 bg-red-50/50">
+          <CardContent className="pt-5 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-red-900">No se pudo cargar el estado de las copias</p>
+              <p className="text-xs text-red-700 mt-1">{loadError}</p>
+              <Button variant="outline" size="sm" onClick={loadStatus} className="mt-3">Reintentar</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const config = status?.config;
   const isCorrectAccount = status?.isCorrectAccount;
   const hasVerifiableBackup = jobs.some(job =>
