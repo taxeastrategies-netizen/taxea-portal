@@ -55,7 +55,6 @@ const AdminOcrCredits = lazy(() => import('./pages/AdminOcrCredits'));
 const ImportacionContable = lazy(() => import('./pages/ImportacionContable'));
 const AdminOcrBandeja = lazy(() => import('./pages/AdminOcrBandeja'));
 const AdminBackupDrive = lazy(() => import('./pages/AdminBackupDrive'));
-const AdminClientesCobros = lazy(() => import('./pages/AdminClientesCobros'));
 const SetupPassword = lazy(() => import('./pages/SetupPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Register = lazy(() => import('./pages/Register'));
@@ -138,7 +137,6 @@ function AppWithContext({ user }) {
           <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
           <Route path="/importacion-contable" element={<ImportacionContable />} />
           <Route path="/admin/backup-drive" element={<AdminBackupDrive />} />
-          <Route path="/admin/clientes-cobros" element={<AdminClientesCobros />} />
           <Route path="/signup" element={<Navigate to="/login" replace />} />
         </Route>
         <Route path="*" element={<PageNotFound />} />

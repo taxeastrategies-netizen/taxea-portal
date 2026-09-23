@@ -175,10 +175,10 @@ Deno.serve(async (req) => {
             });
             await createAdminNotification(base44, userId, subId, 'pago_verificado',
               'Nuevo pago verificado — pendiente de activación',
-              `Primer pago confirmado (${amount}€). Activa la cuenta en: https://taxeaportal.com/admin/clientes-cobros`);
+              `Primer pago confirmado (${amount}€). Activa la cuenta en: https://taxeaportal.com/admin/clients`);
             await sendAdminEmail(base44,
               `Pago confirmado — Activación pendiente`,
-              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nActiva la cuenta desde el panel: https://taxeaportal.com/admin/clientes-cobros`);
+              `Se ha confirmado el primer pago de ${amount}€ (ID de usuario: ${userId}).\n\nActiva la cuenta desde el panel: https://taxeaportal.com/admin/clients`);
           } else {
             // Renovación
             await base44.asServiceRole.entities.Subscription.update(subId, {
@@ -430,4 +430,3 @@ async function sendAdminEmail(base44, subject, body) {
     console.error('Error enviando email admin:', err);
   }
 }
-
