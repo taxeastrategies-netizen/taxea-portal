@@ -154,6 +154,16 @@ async function syncParty(svc, contactsByCompany, party) {
   }
 
   const current = findExisting(contacts, party);
+  // Idempotencia: si este contacto ya tiene registrada esta factura/documento,
+  // ya fue guardado antes y NO se vuelve a escribir ni re-escanear.
+  if (current) {
+    const invoiceId = clean(party.invoice_id);
+    const ocrId = clean(party.ocr_document_id);
+    const alreadySaved =
+      (invoiceId && (current.factura_origen_ids || []).includes(invoiceId)) ||
+      (ocrId && (current.ocr_origen_ids || []).includes(ocrId));
+    if (alreadySaved) return { skipped: true, alreadySaved: true };
+  }
   const payload = contactPayload(party, current);
   if (current) {
     const updated = await svc.entities.Contact.update(current.id, payload);
