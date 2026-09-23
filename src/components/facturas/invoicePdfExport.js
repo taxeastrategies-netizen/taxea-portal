@@ -174,10 +174,23 @@ export async function exportInvoiceToPdf(invoice, company) {
     doc.text(`Indica el número ${invoice.numero_factura} como referencia del pago.`, M, py);
   }
 
-  // ── Notas ─────────────────────────────────────────────────────────────────
-  if (invoice.notas) {
+  // ── Coletilla fiscal ──────────────────────────────────────────────────────
+  y += 18;
+  if (invoice.coletilla_fiscal) {
+    doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(71, 85, 105);
+    const coletillaLines = doc.splitTextToSize(String(invoice.coletilla_fiscal), W - M * 2);
+    const coletillaY = Math.min(y, 291 - coletillaLines.length * 3.6 - 8);
+    doc.text(coletillaLines, M, coletillaY);
+    y = coletillaY + coletillaLines.length * 3.6 + 3;
+  }
+
+  // ── Observaciones ─────────────────────────────────────────────────────────
+  const observaciones = [invoice.comentarios, invoice.notas].filter(Boolean).join('\n').trim();
+  if (observaciones) {
     doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(148, 163, 184);
-    doc.text(doc.splitTextToSize(String(invoice.notas), W - M * 2), M, 278);
+    const obsLines = doc.splitTextToSize(observaciones, W - M * 2);
+    const obsY = Math.min(y + 4, 291 - obsLines.length * 3.6);
+    doc.text(obsLines, M, obsY);
   }
 
   // ── Pie ───────────────────────────────────────────────────────────────────

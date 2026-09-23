@@ -108,7 +108,7 @@ function invoiceCreationPayload(input, companyId, user) {
     'proveedor_nombre', 'proveedor_nif', 'proveedor_email', 'proveedor_telefono', 'proveedor_direccion',
     'proveedor_codigo_postal', 'proveedor_ciudad', 'proveedor_provincia', 'proveedor_pais', 'concepto',
     'categoria_gasto', 'fiscal_treatment', 'fiscal_activity_id', 'deductible_tax_amount',
-    'non_deductible_tax_amount', 'moneda', 'exchange_rate', 'forma_pago', 'coletilla_fiscal',
+    'non_deductible_tax_amount', 'moneda', 'exchange_rate', 'forma_pago', 'coletilla_fiscal', 'comentarios',
     'source_document_type', 'source_document_id', 'es_rectificativa', 'factura_rectificada', 'ocr_document_id',
     'indirect_tax_kind', 'origin', 'source_system', 'source_record_id',
   ];
@@ -835,4 +835,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.message || 'Error interno.' }, { status });
   }
 });
-
