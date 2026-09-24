@@ -240,6 +240,9 @@ assert.match(functionSource, /nextCursor/);
 assert.match(functionSource, /lastHeartbeatAt/);
 assert.match(functionSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
 assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
+assert.match(functionSource, /const alreadyVerified = withDriveFile\.filter/);
+assert.match(functionSource, /pendingVerification\.slice\(index, index \+ 5\)/);
+assert.match(functionSource, /status: 'partial'/);
 
 console.log(JSON.stringify({
   ok: true,
@@ -257,5 +260,6 @@ console.log(JSON.stringify({
     scheduledRunExecutesBackupInCanaryTimezone: true,
     scheduledRunCanResumeNextDay: true,
     wrongDriveAccountIsBlocked: true,
+    verificationResumesWithoutRecheckingVerifiedItems: true,
   },
 }, null, 2));
