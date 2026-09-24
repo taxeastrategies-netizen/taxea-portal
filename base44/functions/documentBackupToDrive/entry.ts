@@ -4,8 +4,10 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const REQUIRED_EMAIL = 'taxeastrategies@gmail.com';
 const BACKUP_APP_ID = '6a00fec50cc522a74ddde4b2';
-const BACKUP_MEDIA_HOST = 'media.base44.com';
-const BACKUP_FILE_PREFIX = `/files/public/${BACKUP_APP_ID}/`;
+const AUTHORIZED_BACKUP_LOCATIONS = [
+  { hostname: 'media.base44.com', pathPrefix: `/files/public/${BACKUP_APP_ID}/` },
+  { hostname: 'base44.app', pathPrefix: `/api/apps/${BACKUP_APP_ID}/files/mp/public/${BACKUP_APP_ID}/` },
+];
 const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024;
 const BACKUP_DOWNLOAD_TIMEOUT_MS = 20_000;
 const DRIVE_RETRY_ATTEMPTS = 4;
@@ -36,7 +38,11 @@ function validateBackupFileUrl(value) {
   if (url.protocol !== 'https:' || url.username || url.password || url.port) {
     throw new Error('La URL del documento debe usar HTTPS sin credenciales ni puerto personalizado.');
   }
-  if (url.hostname.toLowerCase() !== BACKUP_MEDIA_HOST || !url.pathname.startsWith(BACKUP_FILE_PREFIX)) {
+  const hostname = url.hostname.toLowerCase();
+  const isAuthorizedLocation = AUTHORIZED_BACKUP_LOCATIONS.some(location =>
+    hostname === location.hostname && url.pathname.startsWith(location.pathPrefix)
+  );
+  if (!isAuthorizedLocation) {
     throw new Error('El documento no pertenece al almacenamiento autorizado de Taxea Portal.');
   }
   url.hash = '';
