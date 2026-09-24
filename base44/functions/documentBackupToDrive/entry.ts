@@ -61,7 +61,7 @@ async function downloadBackupFile(value) {
   const timeout = setTimeout(() => controller.abort(), BACKUP_DOWNLOAD_TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(fileUrl, { redirect: 'error', signal: controller.signal });
+    response = await fetch(fileUrl, { redirect: 'manual', signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }
