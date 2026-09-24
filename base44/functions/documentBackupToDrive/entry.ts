@@ -158,7 +158,7 @@ async function findOrCreateFolder(name, parentId, token) {
   const escaped = name.replace(/'/g, "\\'");
   let query = `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) query += ` and '${parentId}' in parents`;
-  const searchRes = await driveGet(`${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, token);
+  const searchRes = await driveGet(`${DRIVE_API}/files?q=${encodeURIComponent(query)}&orderBy=createdTime&fields=files(id,name,createdTime)`, token);
   if (!searchRes.ok) throw new Error(`No se pudo buscar la carpeta \"${name}\": ${searchRes.status}`);
   const found = await searchRes.json();
   if (found.files?.length > 0) return found.files[0];
@@ -248,9 +248,13 @@ function latestBackupRecordMap(records) {
   for (const record of records) {
     const key = `${record.documentEntity}:${record.documentId}`;
     const current = map[key];
-    const recordTime = String(record.updated_date || record.lastBackedUpAt || record.created_date || '');
-    const currentTime = String(current?.updated_date || current?.lastBackedUpAt || current?.created_date || '');
-    if (!current || recordTime > currentTime) map[key] = record;
+    const hasUsableCopy = ['backed_up', 'verified'].includes(record.backupStatus) && !!record.driveFileId;
+    const currentHasUsableCopy = ['backed_up', 'verified'].includes(current?.backupStatus) && !!current?.driveFileId;
+    const recordTime = String(record.lastBackedUpAt || record.updated_date || record.created_date || '');
+    const currentTime = String(current?.lastBackedUpAt || current?.updated_date || current?.created_date || '');
+    if (!current || (hasUsableCopy && !currentHasUsableCopy) || (hasUsableCopy === currentHasUsableCopy && recordTime > currentTime)) {
+      map[key] = record;
+    }
   }
   return map;
 }
