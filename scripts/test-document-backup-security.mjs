@@ -11,7 +11,7 @@ assert.match(source, /hostname: 'base44\.app'/);
 assert.match(source, /\/api\/apps\/\$\{BACKUP_APP_ID\}\/files\/mp\/public\/\$\{BACKUP_APP_ID\}\//);
 assert.match(source, /AUTHORIZED_BACKUP_LOCATIONS\.some/);
 assert.match(source, /hostname === location\.hostname && url\.pathname\.startsWith\(location\.pathPrefix\)/);
-assert.match(source, /fetch\(fileUrl, \{ redirect: 'error', signal: controller\.signal \}\)/);
+assert.match(source, /fetch\(fileUrl, \{ redirect: 'manual', signal: controller\.signal \}\)/);
 assert.match(source, /MAX_BACKUP_FILE_BYTES = 50 \* 1024 \* 1024/);
 assert.match(source, /declaredLength > MAX_BACKUP_FILE_BYTES/);
 assert.match(source, /arrayBuffer\.byteLength > MAX_BACKUP_FILE_BYTES/);
@@ -22,7 +22,7 @@ console.log(JSON.stringify({
   assertions: {
     fixedHttpsMediaOrigins: true,
     currentAndLegacyAppScopedStoragePaths: true,
-    redirectsDisabled: true,
+    redirectsHandledManuallyAndRejectedByStatus: true,
     downloadTimeoutEnabled: true,
     declaredAndActualSizeLimited: true,
     rawDocumentUrlNeverFetched: true,
