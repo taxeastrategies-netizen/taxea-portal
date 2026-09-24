@@ -6,6 +6,7 @@ const REQUIRED_EMAIL = 'taxeastrategies@gmail.com';
 const BACKUP_APP_ID = '6a00fec50cc522a74ddde4b2';
 const AUTHORIZED_BACKUP_LOCATIONS = [
   { hostname: 'media.base44.com', pathPrefix: `/files/public/${BACKUP_APP_ID}/` },
+  { hostname: 'media.base44.com', pathPrefix: `/images/public/${BACKUP_APP_ID}/` },
   { hostname: 'base44.app', pathPrefix: `/api/apps/${BACKUP_APP_ID}/files/mp/public/${BACKUP_APP_ID}/` },
 ];
 const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024;
@@ -62,6 +63,12 @@ async function downloadBackupFile(value) {
   let response;
   try {
     response = await fetch(fileUrl, { redirect: 'manual', signal: controller.signal });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) throw new Error('Redirección de descarga sin destino.');
+      const redirectedUrl = validateBackupFileUrl(new URL(location, fileUrl).toString());
+      response = await fetch(redirectedUrl, { redirect: 'manual', signal: controller.signal });
+    }
   } finally {
     clearTimeout(timeout);
   }
