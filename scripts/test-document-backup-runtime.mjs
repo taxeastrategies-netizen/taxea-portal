@@ -19,7 +19,7 @@ function paged(rows) {
   };
 }
 
-async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false }) {
+async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false }) {
   const fileUrl = id => `https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
   const documents = Array.from({ length: documentCount }, (_, index) => ({
     id: `doc-${index}`,
@@ -39,8 +39,19 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     checksum: `checksum-${index}`,
     driveFileId: `drive-${index}`,
     drivePath: `path-${index}`,
-    updated_date: new Date(2026, 0, 2, 0, 0, index % 60).toISOString(),
+    lastBackedUpAt: new Date(2026, 7, 9, 0, 0, index % 60).toISOString(),
+    updated_date: new Date(2026, 7, 9, 0, 0, index % 60).toISOString(),
   }));
+  if (addNewerPendingDuplicates) {
+    records.unshift(...Array.from({ length: existingCount }, (_, index) => ({
+      id: `pending-record-${index}`,
+      documentId: `doc-${index}`,
+      documentEntity: 'OcrInvoiceDocument',
+      fileStorageUrl: fileUrl(index),
+      backupStatus: 'pending',
+      updated_date: new Date(2026, 8, 24, 0, 0, index % 60).toISOString(),
+    })));
+  }
 
   const config = {
     id: 'config-1',
@@ -172,6 +183,16 @@ assert.equal(paginated.mediaDownloads, 0, 'existing records beyond page 500 must
 assert.equal(paginated.recordCreates, 0, 'existing records beyond page 500 must not create duplicate metadata');
 assert.equal(paginated.uploadAttempts, 3, 'only the three manifests should be uploaded');
 
+const augustBaseline = await executeScenario({
+  documentCount: 600,
+  existingCount: 600,
+  addNewerPendingDuplicates: true,
+});
+assert.equal(augustBaseline.payload.documentsCopied, 0);
+assert.equal(augustBaseline.payload.documentsSkipped, 600);
+assert.equal(augustBaseline.mediaDownloads, 0, 'newer failed-run metadata must not hide a valid August copy');
+assert.equal(augustBaseline.recordCreates, 0, 'August baseline must remain canonical after failed September metadata');
+
 const throttled = await executeScenario({ documentCount: 1, existingCount: 0, throttleFirstUpload: true });
 assert.equal(throttled.payload.status, 'completed');
 assert.equal(throttled.payload.documentsCopied, 1);
@@ -202,6 +223,8 @@ console.log(JSON.stringify({
     completePaginationBeyond500: true,
     noDuplicateMetadataForTrackedDocuments: true,
     noRedownloadForTrackedDocuments: true,
+    validAugustBaselineSurvivesNewerPendingMetadata: true,
+    canonicalFolderSelectionIsDeterministic: true,
     drive429RetriesAndRecovers: true,
     successfulUploadCreatesSingleTrackingRecord: true,
     manualRunIsResumable: true,
