@@ -20,7 +20,7 @@ function paged(rows) {
 }
 
 async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false }) {
-  const fileUrl = id => `https://media.base44.com/files/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
+  const fileUrl = id => `https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
   const documents = Array.from({ length: documentCount }, (_, index) => ({
     id: `doc-${index}`,
     fileStorageUrl: fileUrl(index),
@@ -112,7 +112,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     if (target.includes('/drive/v3/files?') && options.method !== 'POST') {
       return responseJson({ files: [{ id: `folder-${Math.random()}`, name: 'folder' }] });
     }
-    if (target.startsWith('https://media.base44.com/')) {
+    if (target.startsWith('https://media.base44.com/') || target.startsWith('https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/')) {
       mediaDownloads++;
       return new Response(new Uint8Array([1, 2, 3]), {
         status: 200,
