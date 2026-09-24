@@ -16,6 +16,12 @@ const SCHEDULED_TIME_BUDGET_MS = 210_000;
 const BACKUP_BATCH_SIZE = 3;
 const MANUAL_JOB_MAX_AGE_MS = 30 * 60 * 1000;
 const SCHEDULED_JOB_MAX_AGE_MS = 36 * 60 * 60 * 1000;
+const FAILED_BACKUP_CLEANUP_CONFIRMATION = 'REBUILD_FROM_LAST_SUCCESS_2026_08_09';
+const FAILED_BACKUP_FOLDERS = Object.freeze([
+  { id: '16GbBB0nnHlKWnVzeKa_PJZh0ZtkEaMDB', name: '2026-09-23', parentId: '1o8ZKgbcrkPuiSxS3OHhn2avm0GsQBZMO' },
+  { id: '10UKyJC6jbEiDLE7_BEmEYc4mVQkkhbL2', name: '2026-09-23', parentId: '18gx8jT2pTqYekE1gPH3q3iUEwvxPnf9p' },
+  { id: '1gKs5eQXjbRLYyxFj_hnjuHLuWO9YUiiZ', name: '2026-09-24', parentId: '18gx8jT2pTqYekE1gPH3q3iUEwvxPnf9p' },
+]);
 
 // ── Helpers ──
 
@@ -222,6 +228,51 @@ async function verifyDriveFile(fileId, token) {
   return res.ok;
 }
 
+async function trashExactFailedBackupFolders(token) {
+  const results = [];
+  for (const expected of FAILED_BACKUP_FOLDERS) {
+    const metadataRes = await driveGet(
+      `${DRIVE_API}/files/${expected.id}?supportsAllDrives=true&fields=id,name,mimeType,parents,trashed`,
+      token,
+    );
+    if (metadataRes.status === 404) {
+      results.push({ id: expected.id, name: expected.name, status: 'already_missing' });
+      continue;
+    }
+    if (!metadataRes.ok) {
+      throw new Error(`No se pudo verificar la carpeta ${expected.id}: ${metadataRes.status}`);
+    }
+    const metadata = await metadataRes.json();
+    const isExactTarget = metadata.id === expected.id
+      && metadata.name === expected.name
+      && metadata.mimeType === 'application/vnd.google-apps.folder'
+      && Array.isArray(metadata.parents)
+      && metadata.parents.includes(expected.parentId);
+    if (!isExactTarget) {
+      throw new Error(`La carpeta ${expected.id} no coincide exactamente con el respaldo fallido autorizado.`);
+    }
+    if (metadata.trashed) {
+      results.push({ id: expected.id, name: expected.name, status: 'already_trashed' });
+      continue;
+    }
+    const trashRes = await driveFetch(
+      `${DRIVE_API}/files/${expected.id}?supportsAllDrives=true&fields=id,name,trashed`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashed: true }),
+      },
+    );
+    if (!trashRes.ok) {
+      throw new Error(`No se pudo enviar a la papelera la carpeta ${expected.id}: ${trashRes.status}`);
+    }
+    const trashed = await trashRes.json();
+    if (!trashed.trashed) throw new Error(`Google Drive no confirmó la limpieza de ${expected.id}.`);
+    results.push({ id: expected.id, name: expected.name, status: 'trashed' });
+  }
+  return results;
+}
+
 // ── Document sources ──
 
 const DOC_SOURCES = [
@@ -334,6 +385,19 @@ Deno.serve(async (req) => {
         connectedEmail: driveEmail,
         requiredEmail: REQUIRED_EMAIL,
       }, { status: 409 });
+    }
+
+    if (action === 'cleanup_failed_backups') {
+      if (body.confirmation !== FAILED_BACKUP_CLEANUP_CONFIRMATION) {
+        return Response.json({ error: 'Confirmación de limpieza no válida.' }, { status: 400 });
+      }
+      const folders = await trashExactFailedBackupFolders(accessToken);
+      return Response.json({
+        ok: true,
+        cleanupMode: 'drive_trash_recoverable',
+        baselineDate: '2026-08-09',
+        folders,
+      });
     }
 
     // Load config
