@@ -19,7 +19,7 @@ function paged(rows) {
   };
 }
 
-async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false }) {
+async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false, redirectFirstDownload = false }) {
   const fileUrl = id => `https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
   const documents = Array.from({ length: documentCount }, (_, index) => ({
     id: `doc-${index}`,
@@ -123,7 +123,21 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     if (target.includes('/drive/v3/files?') && options.method !== 'POST') {
       return responseJson({ files: [{ id: `folder-${Math.random()}`, name: 'folder' }] });
     }
-    if (target.startsWith('https://media.base44.com/') || target.startsWith('https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/')) {
+    if (target.startsWith('https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/')) {
+      mediaDownloads++;
+      if (redirectFirstDownload) {
+        const fileName = target.split('/').pop();
+        return new Response(null, {
+          status: 302,
+          headers: { location: `https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/${fileName}` },
+        });
+      }
+      return new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { 'content-length': '3', 'content-type': 'application/pdf' },
+      });
+    }
+    if (target.startsWith('https://media.base44.com/')) {
       mediaDownloads++;
       return new Response(new Uint8Array([1, 2, 3]), {
         status: 200,
@@ -201,6 +215,16 @@ assert.equal(throttled.itemCreates, 1);
 assert.equal(throttled.mediaDownloads, 1);
 assert.equal(throttled.uploadAttempts, 5, 'one retried document upload plus three manifests expected');
 
+const redirected = await executeScenario({
+  documentCount: 1,
+  existingCount: 0,
+  redirectFirstDownload: true,
+});
+assert.equal(redirected.payload.status, 'completed');
+assert.equal(redirected.payload.documentsCopied, 1);
+assert.equal(redirected.payload.documentsFailed, 0);
+assert.equal(redirected.mediaDownloads, 2, 'the app-scoped redirect and its validated media target must both be fetched');
+
 const workflow = JSON.parse(fs.readFileSync('base44/workflows/DailyDocumentBackupToDrive.jsonc', 'utf8'));
 assert.equal(workflow.trigger.config.timezone, 'Atlantic/Canary');
 assert.deepEqual(workflow.definition.do[0].run_function.with.args, {
@@ -226,6 +250,7 @@ console.log(JSON.stringify({
     validAugustBaselineSurvivesNewerPendingMetadata: true,
     canonicalFolderSelectionIsDeterministic: true,
     drive429RetriesAndRecovers: true,
+    currentBase44RedirectIsValidatedAndDownloaded: true,
     successfulUploadCreatesSingleTrackingRecord: true,
     manualRunIsResumable: true,
     backupPanelIsPlatformAdminOnly: true,
