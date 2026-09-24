@@ -453,24 +453,58 @@ Deno.serve(async (req) => {
       if (!lastJob) return Response.json({ error: 'No hay copias finalizadas para verificar' }, { status: 404 });
 
       const items = await base44.asServiceRole.entities.BackupJobItem.filter({ backupJobId: lastJob.id });
-      let verified = 0, missing = 0;
+      const withDriveFile = (items || []).filter(item => item.driveFileId);
+      const alreadyVerified = withDriveFile.filter(item => item.status === 'verified').length;
+      const pendingVerification = withDriveFile.filter(item => item.status !== 'verified');
+      const verifyStartedAt = Date.now();
+      let verifiedThisRun = 0, processedThisRun = 0, missing = 0;
       const missingItems = [];
-      for (const item of items) {
-        if (!item.driveFileId) continue;
-        const exists = await verifyDriveFile(item.driveFileId, accessToken);
-        if (exists) {
-          verified++;
-          await base44.asServiceRole.entities.BackupJobItem.update(item.id, { status: 'verified' });
-        } else {
-          missing++;
-          missingItems.push({ documentId: item.documentId, name: item.clientName });
+
+      for (let index = 0; index < pendingVerification.length; index += 5) {
+        const batch = pendingVerification.slice(index, index + 5);
+        const results = await Promise.all(batch.map(async item => ({
+          item,
+          exists: await verifyDriveFile(item.driveFileId, accessToken),
+        })));
+        for (const { item, exists } of results) {
+          processedThisRun++;
+          if (exists) {
+            verifiedThisRun++;
+            await base44.asServiceRole.entities.BackupJobItem.update(item.id, { status: 'verified' });
+          } else {
+            missing++;
+            missingItems.push({ documentId: item.documentId, name: item.clientName });
+          }
         }
+        if (Date.now() - verifyStartedAt >= MANUAL_TIME_BUDGET_MS - 5000) break;
       }
+
+      const remaining = Math.max(0, pendingVerification.length - processedThisRun);
+      if (remaining > 0) {
+        return Response.json({
+          jobId: lastJob.id,
+          verified: alreadyVerified + verifiedThisRun,
+          verifiedThisRun,
+          missing,
+          missingItems,
+          remaining,
+          status: 'partial',
+        });
+      }
+
       if (lastJob.manifestDriveFileId) {
         const manifestOk = await verifyDriveFile(lastJob.manifestDriveFileId, accessToken);
         if (!manifestOk) missing++;
       }
-      return Response.json({ jobId: lastJob.id, verified, missing, missingItems, status: missing === 0 ? 'ok' : 'incidents' });
+      return Response.json({
+        jobId: lastJob.id,
+        verified: alreadyVerified + verifiedThisRun,
+        verifiedThisRun,
+        missing,
+        missingItems,
+        remaining: 0,
+        status: missing === 0 ? 'ok' : 'incidents',
+      });
     }
 
     // ── BACKUP action ──
