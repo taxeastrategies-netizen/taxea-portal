@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 import * as esbuild from 'esbuild';
 
 const entry = path.resolve('base44/functions/sendEmail/entry.ts');
@@ -61,7 +62,7 @@ const fakeFetch = async url => {
 };
 let handler;
 const ctx = vm.createContext({
-  console, Request, Response, URL, TextEncoder, Uint8Array, btoa, fetch: fakeFetch,
+  console, Request, Response, URL, TextEncoder, Uint8Array, btoa, crypto: webcrypto, fetch: fakeFetch,
   __client: client, Deno: { serve(fn) { handler = fn; } },
 });
 vm.runInContext(bundle.outputFiles[0].text, ctx, { filename: 'sendEmail.bundle.cjs' });
