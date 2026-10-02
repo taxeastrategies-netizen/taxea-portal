@@ -10,7 +10,7 @@ const build = await esbuild.build({
     builder.onResolve({ filter: /^npm:@base44\/sdk/ }, () => ({ path: 'sdk', namespace: 'stub' }));
     builder.onResolve({ filter: /^npm:stripe/ }, () => ({ path: 'stripe', namespace: 'stub' }));
     builder.onLoad({ filter: /^sdk$/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export const createClientFromRequest=()=>globalThis.__client;' }));
-    builder.onLoad({ filter: /^stripe$/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export default class Stripe { billingPortal={sessions={create: async p => { globalThis.__calls.push(p); return {url: \'https://billing.test.invalid/session\'}; }}} }' }));
+    builder.onLoad({ filter: /^stripe$/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export default class Stripe { billingPortal = { sessions: { create: async p => { globalThis.__calls.push(p); return {url: \'https://billing.test.invalid/session\'}; } } }; }' }));
   } }],
 });
 let user = { id: 'user-a', stripeCustomerId: 'cus_FORGED', role: 'user' };
