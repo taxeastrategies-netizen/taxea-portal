@@ -40,8 +40,8 @@ const build = await esbuild.build({
 
 const records = {
   Company: [
-    { id: 'company-a', owner_email: 'owner@a.test', usuarios_autorizados: [] },
-    { id: 'company-b', owner_email: 'owner@b.test', usuarios_autorizados: [] },
+    { id: 'company-a', nif_cif: 'B12345678', owner_email: 'owner@a.test', usuarios_autorizados: [] },
+    { id: 'company-b', nif_cif: 'B87654321', owner_email: 'owner@b.test', usuarios_autorizados: [] },
   ],
   Invoice: [],
   InvoiceTimelineEvent: [],
@@ -73,6 +73,7 @@ const context = vm.createContext({
   Request,
   Response,
   URL,
+  URLSearchParams,
   TextEncoder,
   TextDecoder,
   Uint8Array,
@@ -125,6 +126,8 @@ assert.equal(created.response.status, 200);
 assert.equal(created.payload.ok, true);
 assert.equal(records.Invoice.length, 1);
 assert.equal(counters.accountingEntries, 1);
+assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
+assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
 
 const repeated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', invoice: validInvoice });
 assert.equal(repeated.response.status, 200);
