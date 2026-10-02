@@ -2,6 +2,7 @@
  * invoicePremiumEmail.js — Generador de email HTML premium para facturas
  * Taxea Strategies · No requiere librerías externas
  */
+import { invoiceQrPng } from '@/lib/aeatInvoiceQr';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 const BRAND_COLOR = '#b91c1c'; // taxea-red — usar solo como acento, nunca como fondo masivo
@@ -270,11 +271,12 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     return { ok: false, error: 'La factura recibida no tiene un PDF original adjunto.' };
   }
 
-  // 1. Si ya existe PDF, reutilizarlo
-  if (invoice?.archivo_url) {
+  // Para emitidas con QR, nunca enviar el original OCR si carece de ese QR.
+  const reusableUrl = invoice?.qr_url ? invoice?.qr_pdf_url : invoice?.archivo_url;
+  if (reusableUrl) {
     return {
       ok: true,
-      pdfUrl: invoice.archivo_url,
+      pdfUrl: reusableUrl,
       fileName: `Factura_${(invoice.numero_factura || 'factura').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
     };
   }
@@ -303,7 +305,13 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
 
     const M = 15; // margen izquierdo
     const W = 180; // ancho útil
-    let Y = 15;
+    const qrPng = await invoiceQrPng(invoice);
+    let Y = qrPng ? 55 : 15;
+    if (qrPng) {
+      doc.setFontSize(8).setTextColor(...dark).setFont(undefined, 'bold');
+      doc.text('QR tributario:', 177, 9, { align: 'center' });
+      doc.addImage(qrPng, 'PNG', 159, 11, 36, 36);
+    }
 
     // Línea superior roja
     doc.setFillColor(...red);
@@ -348,8 +356,8 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     Y += 4;
     doc.setFont(undefined, 'normal').setFontSize(8).setTextColor(...dark);
     const issuerLines = [
-      company?.nombre || 'Taxea Portal',
-      company?.nif ? `NIF: ${company.nif}` : null,
+      company?.razon_social || company?.nombre_comercial || 'Taxea Portal',
+      company?.nif_cif ? `NIF: ${company.nif_cif}` : null,
       company?.direccion_fiscal || null,
     ].filter(Boolean);
     const clientLines = [
@@ -451,7 +459,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     // Vincular el PDF mediante el backend para mantener la frontera de mutación
     // y la trazabilidad de la factura en un único flujo autorizado.
     const linked = await base44Client.functions.invoke('invoiceOperations', {
-      action: 'set_primary_pdf',
+      action: invoice.qr_url ? 'set_qr_pdf' : 'set_primary_pdf',
       company_id: invoice.company_id,
       invoice_id: invoice.id,
       file_url,
