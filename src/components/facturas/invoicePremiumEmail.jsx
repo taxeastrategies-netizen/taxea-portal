@@ -49,8 +49,8 @@ const maskIban = (iban) => {
  * @param {string} templateId - ID de la plantilla
  */
 export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateId = 'envio_factura') {
-  const issuerName = escapeHtml(company?.nombre || company?.razon_social || 'Taxea Portal');
-  const issuerNif = escapeHtml(company?.nif || company?.cif || '');
+  const issuerName = escapeHtml(company?.razon_social || company?.nombre_comercial || 'Taxea Portal');
+  const issuerNif = escapeHtml(company?.nif_cif || '');
   const issuerAddress = escapeHtml(company?.direccion_fiscal || company?.direccion || '');
   const issuerEmail = escapeHtml(company?.email_contacto || company?.email || '');
   const issuerPhone = escapeHtml(company?.telefono || '');
@@ -65,11 +65,12 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
   const invDue = invoice?.fecha_vencimiento ? escapeHtml(fmtDate(invoice.fecha_vencimiento)) : null;
   const invBase = fmt(invoice?.base_imponible);
   const invIva = fmt(invoice?.cuota_iva);
-  const invIvaPct = invoice?.tipo_iva ?? 21;
+  const invIvaPct = invoice?.tipo_iva ?? 0;
+  const taxLabel = invoice?.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const invRetention = invoice?.retencion_irpf > 0 ? fmt(withholdingAmount(invoice)) : null;
   const invTotal = fmt(invoice?.total_factura);
   const invConcept = escapeHtml(invoice?.concepto || '');
-  const paymentMethod = escapeHtml(invoice?.metodo_pago || 'Transferencia bancaria');
+  const paymentMethod = escapeHtml(invoice?.forma_pago || 'Transferencia bancaria');
   const pdfName = escapeHtml(`Factura_${String(rawInvNumber).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
   const publicHref = safeWebUrl(publicLink);
 
@@ -210,7 +211,7 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
       <div class="section-title">Desglose de importes</div>
       <table class="totals-table">
         <tr><td>Base imponible</td><td>${invBase}</td></tr>
-        <tr><td>IVA (${invIvaPct}%)</td><td>${invIva}</td></tr>
+        <tr><td>${taxLabel} (${invIvaPct}%)</td><td>${invIva}</td></tr>
         ${invRetention ? `<tr><td>Retención IRPF</td><td>−${invRetention}</td></tr>` : ''}
         <tr class="total-row"><td>Total</td><td>${invTotal}</td></tr>
       </table>
@@ -427,7 +428,8 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     doc.line(totX, Y, totX + totW, Y);
     Y += 4;
     addTotRow('Base imponible', fmtN(invoice.base_imponible));
-    addTotRow(`IVA (${invoice.tipo_iva ?? 21}%)`, fmtN(invoice.cuota_iva));
+    const taxLabel = invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
+    addTotRow(`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, fmtN(invoice.cuota_iva));
     if (invoice.retencion_irpf > 0) addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
     doc.line(totX, Y, totX + totW, Y); Y += 4;
     addTotRow('Total', fmtN(invoice.total_factura), true, red);
