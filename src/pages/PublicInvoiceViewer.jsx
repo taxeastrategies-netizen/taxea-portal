@@ -131,7 +131,7 @@ function InvoicePublicRender({ invoice, company }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
-            <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
+            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {invoice.retencion_irpf > 0 && (
@@ -371,7 +371,7 @@ export default function PublicInvoiceViewer() {
                     <span className="font-medium text-slate-800">{fmt(invoice.base_imponible)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
+                    <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
                     <span className="font-medium text-slate-800">{fmt(invoice.cuota_iva)}</span>
                   </div>
                   {invoice.retencion_irpf > 0 && (
