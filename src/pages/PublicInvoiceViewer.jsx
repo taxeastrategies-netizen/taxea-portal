@@ -134,14 +134,20 @@ function InvoicePublicRender({ invoice, company }) {
             <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
-          {invoice.retencion_irpf > 0 && (
+          {qrUrl && getWithholdingAmount(invoice) > 0 && (
+            <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
+              <span className="text-slate-500">Importe fiscal del QR</span>
+              <span className="font-medium">{fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))}</span>
+            </div>
+          )}
+          {getWithholdingAmount(invoice) > 0 && (
             <div className="flex justify-between py-1.5 text-xs border-b border-slate-100">
               <span className="text-slate-500">Retención IRPF</span>
               <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
             </div>
           )}
           <div className="flex justify-between py-2 mt-1 rounded-lg px-2" style={{ backgroundColor: `${brandColor}10` }}>
-            <span className="font-bold text-slate-800 text-sm">Total</span>
+            <span className="font-bold text-slate-800 text-sm">{getWithholdingAmount(invoice) > 0 ? 'Total a pagar' : 'Total'}</span>
             <span className="font-bold text-sm" style={{ color: brandColor }}>{fmt(invoice.total_factura)}</span>
           </div>
         </div>
@@ -374,14 +380,20 @@ export default function PublicInvoiceViewer() {
                     <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
                     <span className="font-medium text-slate-800">{fmt(invoice.cuota_iva)}</span>
                   </div>
-                  {invoice.retencion_irpf > 0 && (
+                  {getInvoiceQrUrl(invoice) && getWithholdingAmount(invoice) > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Importe fiscal del QR</span>
+                      <span className="font-medium text-slate-800">{fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))}</span>
+                    </div>
+                  )}
+                  {getWithholdingAmount(invoice) > 0 && (
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-500">Retención IRPF</span>
                       <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-bold border-t border-slate-100 pt-2 mt-1">
-                    <span className="text-slate-800">Total</span>
+                    <span className="text-slate-800">{getWithholdingAmount(invoice) > 0 ? 'Total a pagar' : 'Total'}</span>
                     <span className="text-slate-900">{fmt(invoice.total_factura)}</span>
                   </div>
                 </div>
