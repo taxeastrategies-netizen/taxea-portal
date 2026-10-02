@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { getInvoiceQrUrl, invoiceQrPng } from '../src/lib/aeatInvoiceQr.js';
+import { PNG } from 'pngjs';
+import jsQR from 'jsqr';
 
 const helperSource = await readFile(new URL('../base44/functions/invoiceOperations/invoiceQr.ts', import.meta.url), 'utf8');
 const { buildAeatQrUrl } = await import(`data:text/javascript,${encodeURIComponent(helperSource)}`);
@@ -31,6 +33,9 @@ const png = await invoiceQrPng({ ...invoice, qr_url: url });
 assert.match(png, /^data:image\/png;base64,/);
 const decodePng = Buffer.from(png.slice(png.indexOf(',') + 1), 'base64');
 assert.equal(decodePng.toString('ascii', 1, 4), 'PNG');
+const image = PNG.sync.read(decodePng);
+const decoded = jsQR(new Uint8ClampedArray(image.data), image.width, image.height);
+assert.equal(decoded?.data, url, 'El QR debe poder leerse y devolver la URL AEAT exacta.');
 
 for (const path of [
   '../base44/functions/invoiceOperations/entry.ts',
