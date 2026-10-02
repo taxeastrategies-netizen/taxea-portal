@@ -157,7 +157,7 @@ export default function InvoiceTemplate({ invoice, company }) {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, breakInside: 'avoid' }}>
           <div style={{ textAlign: 'center', color: '#111' }}>
             <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 2 }}>QR tributario:</div>
-            <QRCodeSVG value={qrUrl} size={136} level="M" includeMargin style={{ width: '36mm', height: '36mm' }} />
+            <QRCodeSVG value={qrUrl} size={136} level="M" style={{ width: '36mm', height: '36mm', padding: '2mm', boxSizing: 'border-box', background: '#fff' }} />
           </div>
         </div>
       )}
