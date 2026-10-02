@@ -3,9 +3,12 @@ import { Download, Eye, MoreVertical, FileText, FileImage, FileSpreadsheet, File
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getCarpetaLabel } from './CarpetasTree';
 import { cn } from '@/lib/utils';
+import { safeDocumentUrl } from '@/lib/safeDocumentUrl';
 
 async function downloadFile(url, filename) {
-  const res = await fetch(url);
+  const safeUrl = safeDocumentUrl(url);
+  if (!safeUrl) throw new Error('URL de documento no permitida');
+  const res = await fetch(safeUrl);
   if (!res.ok) throw new Error('No se pudo descargar el archivo');
   const blob = await res.blob();
   const blobUrl = URL.createObjectURL(blob);
@@ -119,16 +122,17 @@ export default function DocCard({ doc, isAdmin, onUpdate, view = 'grid' }) {
 
 function DocActions({ doc, isAdmin, onUpdate }) {
   const [downloading, setDownloading] = useState(false);
+  const documentUrl = safeDocumentUrl(doc.archivo_url);
 
   const handleDownload = async (e) => {
     e.preventDefault();
-    if (!doc.archivo_url || downloading) return;
+    if (!documentUrl || downloading) return;
     setDownloading(true);
     try {
-      await downloadFile(doc.archivo_url, doc.nombre || 'documento');
+      await downloadFile(documentUrl, doc.nombre || 'documento');
     } catch {
       // Fallback: abrir en nueva pestaña como último recurso
-      window.open(doc.archivo_url, '_blank');
+      window.open(documentUrl, '_blank', 'noopener,noreferrer');
     }
     setDownloading(false);
   };
@@ -141,10 +145,10 @@ function DocActions({ doc, isAdmin, onUpdate }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {doc.archivo_url && (
+        {documentUrl && (
           <>
             <DropdownMenuItem asChild>
-              <a href={doc.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+              <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                 <Eye className="w-3.5 h-3.5" /> Ver documento
               </a>
             </DropdownMenuItem>
