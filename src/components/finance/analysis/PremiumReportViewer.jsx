@@ -487,7 +487,7 @@ Genera la respuesta en JSON con esta estructura exacta:
       <tr><td>Fuente documental:</td><td>${escapeHtml(imp?.origen || 'Documentación contable aportada')} · ${escapeHtml(imp?.nombre_archivo || '—')}</td></tr>
       <tr><td>Fecha de generación:</td><td>${today()}</td></tr>
       <tr><td>Nivel de revisión:</td><td>Preliminar — pendiente de validación contable definitiva</td></tr>
-      <tr><td>Confianza extracción IA:</td><td>${confianza ? `${confianza}%` : 'N/D'}</td></tr>
+      <tr><td>Confianza extracción IA:</td><td>${escapeHtml(confianza ? `${confianza}%` : 'N/D')}</td></tr>
       <tr><td>Motor análisis:</td><td>Taxea IA V4 — Big Four Grade</td></tr>
     </table>
   </div>
@@ -559,7 +559,7 @@ ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','
 <table class="data">
   <tr><th>Cuenta</th><th>Descripción</th><th>Masa</th><th style="text-align:right">Importe</th></tr>
   ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','patrimonio_neto','pasivo_no_corriente','pasivo_corriente'].includes(a.masa))
-    .map(a => `<tr><td style="font-family:monospace">${a.cuenta||'—'}</td><td>${a.descripcion||'—'}</td><td>${escapeHtml(a.masa?.replace(/_/g,' ')||'—')}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
+    .map(a => `<tr><td style="font-family:monospace">${escapeHtml(a.cuenta||'—')}</td><td>${escapeHtml(a.descripcion||'—')}</td><td>${escapeHtml(a.masa?.replace(/_/g,' ')||'—')}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
 </table>` : ''}
 </div>
 
@@ -587,7 +587,7 @@ ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa
 <table class="data">
   <tr><th>Cuenta</th><th>Descripción</th><th>Tipo</th><th style="text-align:right">Importe</th></tr>
   ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa))
-    .map(a => `<tr><td style="font-family:monospace">${a.cuenta||'—'}</td><td>${a.descripcion||'—'}</td><td style="color:${a.masa==='pyg_ingreso'?'#059669':'#dc2626'}">${a.masa==='pyg_ingreso'?'Ingreso':'Gasto'}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
+    .map(a => `<tr><td style="font-family:monospace">${escapeHtml(a.cuenta||'—')}</td><td>${escapeHtml(a.descripcion||'—')}</td><td style="color:${a.masa==='pyg_ingreso'?'#059669':'#dc2626'}">${a.masa==='pyg_ingreso'?'Ingreso':'Gasto'}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
 </table>` : ''}
 </div>
 
@@ -599,10 +599,10 @@ ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa
 <div class="ratio-grid">
   ${ratios.map(r => `
   <div class="ratio-card ${r.ok ? 'ok' : 'ko'} avoid-break">
-    <div class="rv">${r.valor}</div>
-    <div class="rn">${r.nombre}</div>
+    <div class="rv">${escapeHtml(r.valor)}</div>
+    <div class="rn">${escapeHtml(r.nombre)}</div>
     <div class="rf">${escapeHtml(r.formula)} · Ref: ${escapeHtml(r.ref)}</div>
-    <div style="font-size:7pt;color:#64748b;margin-top:3px">${r.interpretacion}</div>
+    <div style="font-size:7pt;color:#64748b;margin-top:3px">${escapeHtml(r.interpretacion)}</div>
   </div>`).join('')}
 </div>
 </div>
@@ -615,8 +615,8 @@ ${alertasEnriquecidas.length === 0 ? '<p>No se han detectado alertas relevantes 
   <div class="alert ${['critico','alta','media','baja','informativo'].includes(a.nivel) ? a.nivel : 'informativo'} avoid-break">
     <div class="alert-titulo">${escapeHtml(a.titulo || '')}</div>
     <div class="alert-desc">${escapeHtml(a.desc || '')}</div>
-    ${a.recomendacion ? `<div class="alert-rec">Recomendación: ${a.recomendacion}</div>` : ''}
-    ${a.area ? `<div style="font-size:7pt;color:#94a3b8;margin-top:4px">Área: ${a.area}</div>` : ''}
+    ${a.recomendacion ? `<div class="alert-rec">Recomendación: ${escapeHtml(a.recomendacion)}</div>` : ''}
+    ${a.area ? `<div style="font-size:7pt;color:#94a3b8;margin-top:4px">Área: ${escapeHtml(a.area)}</div>` : ''}
   </div>`).join('')}
 
 ${aiContent?.alertas_narrativas?.length > 0 ? `
