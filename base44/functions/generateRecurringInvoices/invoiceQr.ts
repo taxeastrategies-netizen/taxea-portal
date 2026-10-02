@@ -14,7 +14,12 @@ export function buildAeatQrUrl(company, invoice) {
   if (!dateMatch || new Date(isoDate + 'T00:00:00Z').toISOString().slice(0, 10) !== isoDate) {
     throw new Error('La fecha de emisión no es válida para el QR tributario.');
   }
-  if (!Number.isFinite(amount) || Math.abs(amount) >= 1e12) throw new Error('El total no es válido para el QR tributario.');
+  if (!Number.isFinite(amount) || Math.abs(amount) >= 1e12) throw new Error('El importe fiscal no es válido para el QR tributario.');
+  const payable = Number(invoice?.total_factura);
+  const retention = Number(invoice?.importe_retencion || 0);
+  if (!Number.isFinite(payable) || !Number.isFinite(retention) || Math.abs(amount - retention - payable) > 0.03) {
+    throw new Error('La base, el impuesto, la retención y el total a pagar no cuadran; revisa la factura antes de emitirla.');
+  }
   if (String(invoice?.moneda || 'EUR').toUpperCase() !== 'EUR') {
     throw new Error('El QR tributario requiere el importe en euros; revisa la conversión de la factura.');
   }
