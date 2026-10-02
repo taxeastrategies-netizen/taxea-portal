@@ -50,8 +50,15 @@ for (const path of [
   '../src/components/facturas/InvoiceTemplate.jsx',
   '../src/components/facturas/invoicePdfExport.js',
   '../src/components/facturas/invoicePremiumEmail.jsx',
+  '../src/components/facturas/InvoiceDocumentWorkspace.jsx',
+  '../src/pages/PublicInvoiceViewer.jsx',
 ]) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   assert.match(source, /QR tributario:/);
 }
-console.log('VERI*FACTU fase 5: URL AEAT, validaciones, imagen QR y rutas de emisión/PDF OK');
+const emailSource = await readFile(new URL('../base44/functions/sendEmail/entry.ts', import.meta.url), 'utf8');
+assert.match(emailSource, /allowedInvoicePdfUrl = invoice\?\.qr_url/);
+assert.match(emailSource, /loadAttachments\(body.attachments, allowedInvoicePdfUrl/);
+const publicSource = await readFile(new URL('../base44/functions/getPublicInvoice/entry.ts', import.meta.url), 'utf8');
+assert.match(publicSource, /'qr_url', 'qr_mode', 'qr_pdf_url'/);
+console.log('QR tributario: URL AEAT, lectura real, validaciones y rutas de emisión/PDF/email/público OK');
