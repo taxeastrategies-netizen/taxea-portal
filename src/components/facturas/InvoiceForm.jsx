@@ -273,6 +273,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         <DialogHeader>
           <DialogTitle>Nueva factura definitiva</DialogTitle>
         </DialogHeader>
+        {form.tipo === 'emitida' && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Al emitir se fija el número y se prepara un QR tributario para la factura. La remisión VERI*FACTU a la AEAT aún no está activada; este QR no acredita un envío.
+          </div>
+        )}
 
         <div className="space-y-5 mt-2">
           {/* Tipo + Nº */}
@@ -556,7 +561,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         <div className="flex justify-end gap-3 mt-5">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
-            {saving ? 'Guardando...' : 'Guardar factura'}
+            {saving ? 'Guardando...' : form.tipo === 'emitida' ? 'Emitir factura' : 'Registrar factura recibida'}
           </Button>
         </div>
       </DialogContent>
