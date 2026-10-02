@@ -522,6 +522,30 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, attachments: signed });
     }
 
+    if (action === 'set_qr_pdf') {
+      if (invoice.anulada || invoice.tipo !== 'emitida' || !invoice.qr_url) {
+        return Response.json({ error: 'La factura no admite un PDF con QR tributario.' }, { status: 409 });
+      }
+      if (invoice.qr_pdf_url) return Response.json({ ok: true, pdf_url: invoice.qr_pdf_url, duplicate: true });
+      const fileUrl = cleanText(body.file_url, 1600);
+      const sizeBytes = Math.round(Number(body.size_bytes) || 0);
+      if (!isSafeHttpsUrl(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
+      if (cleanText(body.mime_type, 100).toLowerCase() !== 'application/pdf') return Response.json({ error: 'El documento debe ser PDF.' }, { status: 400 });
+      if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El PDF debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      const saved = await base44.asServiceRole.entities.Invoice.update(invoice.id, { qr_pdf_url: fileUrl });
+      await recordTimeline(base44, {
+        invoice_id: invoice.id,
+        company_id: companyId,
+        event_type: 'pdf_qr_adjuntado',
+        event_label: 'PDF con QR tributario vinculado',
+        event_detail: cleanText(body.filename, 180) || 'Factura.pdf',
+        created_at: new Date().toISOString(),
+        created_by: user.full_name || user.email || 'Usuario',
+        origin: 'manual',
+      });
+      return Response.json({ ok: true, pdf_url: saved.qr_pdf_url });
+    }
+
     if (action === 'set_primary_pdf') {
       if (invoice.anulada) return Response.json({ error: 'No se puede adjuntar un PDF a una factura anulada.' }, { status: 409 });
       if (invoice.archivo_url) return Response.json({ error: 'La factura ya tiene un PDF principal. No se ha sobrescrito.' }, { status: 409 });
