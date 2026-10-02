@@ -372,7 +372,6 @@ export default function InvoiceDocumentWorkspace({
 
   if (!invoice) return null;
 
-  const isRecibida = invoice?.tipo === 'recibida';
   const status = resolveStatus(invoice);
   const publicUrl = invoice.public_token
     ? `${window.location.origin}/public/invoice/${invoice.public_token}`
