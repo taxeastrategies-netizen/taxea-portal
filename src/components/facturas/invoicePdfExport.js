@@ -154,7 +154,8 @@ export async function exportInvoiceToPdf(invoice, company) {
     ['Base imponible', `${fmtEUR(invoice.base_imponible)} €`],
     [`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} €`],
   ];
-  if (invoice.retencion_irpf > 0) {
+  if (getWithholdingAmount(invoice) > 0) {
+    if (qrPng) totalRows.push(['Importe fiscal del QR', `${fmtEUR(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} €`]);
     totalRows.push(['Retención IRPF', `-${fmtEUR(getWithholdingAmount(invoice))} €`]);
   }
   totalRows.forEach(([label, val]) => {
@@ -166,7 +167,7 @@ export async function exportInvoiceToPdf(invoice, company) {
   doc.setFillColor(254, 242, 242);
   doc.rect(128, y, W - M - 128, 10, 'F');
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(30, 41, 59);
-  doc.text('Total', 131, y + 6.5);
+  doc.text(getWithholdingAmount(invoice) > 0 ? 'A pagar' : 'Total', 131, y + 6.5);
   doc.setFontSize(12).setTextColor(...BRAND);
   doc.text(`${fmtEUR(invoice.total_factura)} €`, W - M - 3, y + 6.8, { align: 'right' });
 
