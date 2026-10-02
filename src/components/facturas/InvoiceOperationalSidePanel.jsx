@@ -415,7 +415,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             {/* Importes */}
             <Section title="Importes" icon={CreditCard}>
               <InfoRow label="Base imponible" value={fmt(invoice.base_imponible)} />
-              <InfoRow label={`IVA (${invoice.tipo_iva ?? 21}%)`} value={fmt(invoice.cuota_iva)} />
+              <InfoRow label={`${invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} (${invoice.tipo_iva ?? 0}%)`} value={fmt(invoice.cuota_iva)} />
               {invoice.retencion_irpf > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
               <div className="flex items-center justify-between py-2 mt-1 bg-secondary/50 rounded-lg px-2">
                 <span className="text-sm font-semibold text-foreground">Total factura</span>
