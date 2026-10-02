@@ -396,7 +396,14 @@ Deno.serve(async (req) => {
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
       const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
-      const qrUrl = payload.tipo === 'emitida' ? buildAeatQrUrl(company, payload) : '';
+      let qrUrl = '';
+      if (payload.tipo === 'emitida') {
+        try {
+          qrUrl = buildAeatQrUrl(company, payload);
+        } catch (qrError) {
+          return Response.json({ error: qrError.message || 'No se pudo preparar el QR tributario.' }, { status: 422 });
+        }
+      }
       const sourceHash = await sha256(JSON.stringify(payload));
       const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
       const previous = await base44.asServiceRole.entities.Invoice.filter({
