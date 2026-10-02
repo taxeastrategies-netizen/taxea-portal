@@ -319,6 +319,10 @@
     "qr_spec_version": {
       "type": "string"
     },
+    "qr_pdf_url": {
+      "type": "string",
+      "description": "PDF derivado con QR tributario; conserva el archivo original en archivo_url."
+    },
     "lifecycle_version": {
       "type": "integer",
       "default": 1
