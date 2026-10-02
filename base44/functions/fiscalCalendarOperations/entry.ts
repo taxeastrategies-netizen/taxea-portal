@@ -48,9 +48,20 @@ const MODEL_META: Record<string, any> = {
   '425': ['Resumen anual IGIC', 'ATC', 'igic'],
 };
 
-function authorize(user: any, companyId: string) {
-  if (privileged(user)) return;
-  if (clean(user?.data?.company_id) !== companyId) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
+function authorize(user: any, companyId: string, company: any) {
+  const role = roleOf(user);
+  if (['admin', 'super_admin'].includes(role)) return;
+  const email = clean(user?.email).toLowerCase();
+  const owner = clean(company?.owner_email).toLowerCase();
+  const authorized = Array.isArray(company?.usuarios_autorizados)
+    ? company.usuarios_autorizados.map((value: unknown) => clean(value).toLowerCase())
+    : [];
+  if (['advisor', 'asesor'].includes(role)) {
+    if (email && (owner === email || authorized.includes(email))) return;
+    throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
+  }
+  if (clean(user?.data?.company_id || user?.company_id) === companyId || (email && (owner === email || authorized.includes(email)))) return;
+  throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
 }
 
 function atUtc(year: number, month: number, day: number) { return new Date(Date.UTC(year, month - 1, day, 12)); }
@@ -222,8 +233,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
-    authorize(user, companyId);
     const svc = base44.asServiceRole;
+    const company = await svc.entities.Company.get(companyId).catch(() => null);
+    if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+    authorize(user, companyId, company);
     const action = clean(body.action || 'bundle');
     const fiscalYear = Number(body.fiscalYear || new Date().getUTCFullYear());
     if (fiscalYear < 2000 || fiscalYear > 2100) throw new Error('Ejercicio fiscal no valido.');
