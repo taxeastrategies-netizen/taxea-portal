@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
     const publicInvoice = pick(invoice, [
       'numero_factura', 'fecha_emision', 'fecha_vencimiento', 'tipo', 'cliente_nombre',
       'cliente_nif', 'cliente_direccion', 'proveedor_nombre', 'proveedor_nif', 'proveedor_direccion', 'concepto', 'base_imponible',
-      'tipo_iva', 'cuota_iva', 'retencion_irpf', 'importe_retencion',
+      'tipo_iva', 'cuota_iva', 'indirect_tax_kind', 'retencion_irpf', 'importe_retencion',
       'total_factura', 'moneda', 'estado_cobro', 'importe_pagado', 'importe_pendiente', 'forma_pago', 'coletilla_fiscal',
       'archivo_url', 'qr_url', 'qr_mode', 'qr_pdf_url', 'es_rectificativa', 'factura_rectificada',
     ]);
