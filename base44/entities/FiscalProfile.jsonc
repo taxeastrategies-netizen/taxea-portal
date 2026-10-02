@@ -88,7 +88,7 @@
         "excluido"
       ],
       "default": "pendiente_confirmar",
-      "description": "Clasificaci\u00f3n indicada por cliente o asesor; sujeta a revisi\u00f3n normativa."
+      "description": "Aplicaci\u00f3n del RRSIF indicada por cliente o asesor; la obligaci\u00f3n de SIF no equivale a obligaci\u00f3n de optar por VERI*FACTU."
     },
     "indirectTaxDefault": {
       "type": "string",
