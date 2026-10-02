@@ -1,0 +1,66 @@
+{
+  "name": "VerifactuIssuerSetup",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "description": "Empresa emisora; nunca identifica por s\u00ed sola un certificado operativo."
+    },
+    "secret_resource": {
+      "type": "string",
+      "description": "Referencia del secreto regional en Google Cloud; nunca contiene certificado ni contrase\u00f1a."
+    },
+    "custody_status": {
+      "type": "string",
+      "enum": [
+        "referencia_registrada_sin_verificar",
+        "verificacion_pendiente",
+        "revocada"
+      ],
+      "default": "referencia_registrada_sin_verificar"
+    },
+    "registered_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "registered_by": {
+      "type": "string"
+    },
+    "revoked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revoked_by": {
+      "type": "string"
+    },
+    "review_note": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "secret_resource"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
