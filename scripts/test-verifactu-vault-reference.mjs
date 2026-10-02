@@ -11,7 +11,7 @@ const build = await esbuild.build({
   plugins: [{
     name: 'base44-test-client',
     setup(builder) {
-      builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'taxea-test' }));
+      builder.onResolve({ filter: /^npm:/ }, () => ({ path: 'sdk', namespace: 'taxea-test' }));
       builder.onLoad({ filter: /^sdk$/, namespace: 'taxea-test' }, () => ({
         loader: 'js', contents: 'export function createClientFromRequest(){return globalThis.__base44TestClient}',
       }));
