@@ -196,7 +196,7 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
         <div className="flex justify-end mb-4">
           <div className="text-center text-slate-900">
             <div className="text-[10px] font-bold mb-1">QR tributario:</div>
-            <QRCodeSVG value={qrUrl} size={136} level="M" includeMargin style={{ width: '36mm', height: '36mm' }} />
+            <QRCodeSVG value={qrUrl} size={136} level="M" style={{ width: '36mm', height: '36mm', padding: '2mm', boxSizing: 'border-box', background: '#fff' }} />
           </div>
         </div>
       )}
