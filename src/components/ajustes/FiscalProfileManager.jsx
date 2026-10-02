@@ -104,7 +104,9 @@ export default function FiscalProfileManager({ company, onChanged = undefined })
         <Field label="Vigente desde"><Input type="date" value={profile.effectiveFrom || ''} onChange={e => set('effectiveFrom', e.target.value)} /></Field>
         <Field label="Motivo del cambio"><Input value={profile.lastChangeReason || ''} onChange={e => set('lastChangeReason', e.target.value)} placeholder="Alta, cambio censal, nuevo régimen…" /></Field>
       </div>
-      <div className="flex flex-wrap gap-5"><Check checked={profile.isLargeCompany} onChange={v=>set('isLargeCompany',v)} label="Gran empresa" /><Check checked={profile.isREDEME} onChange={v=>set('isREDEME',v)} label="REDEME" /><Check checked={profile.usesSII} onChange={v=>set('usesSII',v)} label="SII" /><Check checked={profile.usesVeriFactu} onChange={v=>set('usesVeriFactu',v)} label="VERI*FACTU" /></div>
+      <div className="flex flex-wrap gap-5"><Check checked={profile.isLargeCompany} onChange={v=>set('isLargeCompany',v)} label="Gran empresa" /><Check checked={profile.isREDEME} onChange={v=>set('isREDEME',v)} label="REDEME" /><Check checked={profile.usesSII} onChange={v=>set('usesSII',v)} label="SII" /><Check checked={profile.usesVeriFactu} onChange={v=>set('usesVeriFactu',v)} label="Prevé usar VERI*FACTU (pendiente de activación)" /></div>
+      <p className="text-xs text-amber-700">Esta preferencia no activa remisiones a la AEAT. Las nuevas facturas emitidas incorporan QR tributario, pero la modalidad VERI*FACTU solo podrá indicarse tras configurar certificado/representación, registro encadenado y envío real con respuesta de la AEAT.</p>
+      {profile.usesSII && profile.usesVeriFactu && <p className="text-xs text-red-700">Revisa este perfil: los obligados al SII quedan excluidos del ámbito del RRSIF con carácter general.</p>}
     </section>
 
     <section className="rounded-xl border bg-card p-5 space-y-4">
