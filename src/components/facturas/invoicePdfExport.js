@@ -44,6 +44,7 @@ export async function exportInvoiceToPdf(invoice, company) {
   const W = 210;
   const M = 18;
   const qrPng = await invoiceQrPng(invoice);
+  const taxLabel = invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   let y = qrPng ? 60 : 24;
   if (qrPng) {
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(30, 41, 59);
@@ -151,7 +152,7 @@ export async function exportInvoiceToPdf(invoice, company) {
   y += 4;
   const totalRows = [
     ['Base imponible', `${fmtEUR(invoice.base_imponible)} €`],
-    [`IVA (${invoice.tipo_iva ?? 21}%)`, `${fmtEUR(invoice.cuota_iva)} €`],
+    [`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} €`],
   ];
   if (invoice.retencion_irpf > 0) {
     totalRows.push(['Retención IRPF', `-${fmtEUR(getWithholdingAmount(invoice))} €`]);
