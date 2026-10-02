@@ -28,7 +28,7 @@ let user = { email: 'advisor-a@test.invalid', role: 'advisor', data: {} };
 const client = { auth: { me: async () => user }, asServiceRole: { entities } };
 let handler;
 vm.runInContext(build.outputFiles[0].text, vm.createContext({
-  console, Request, Response, URL, Date, __client: client, Deno: { serve: fn => { handler = fn; } },
+  console, Request, Response, URL, Date, module: { exports: {} }, exports: {}, __client: client, Deno: { serve: fn => { handler = fn; } },
 }), { filename: entry });
 const call = async (action, companyId) => {
   const response = await handler(new Request('https://test.invalid', {
