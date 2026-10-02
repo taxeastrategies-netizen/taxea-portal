@@ -410,15 +410,17 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
               <InfoRow label="Vencimiento" value={fmtDate(invoice.fecha_vencimiento)} valueClass={overdue ? 'text-red-600 font-semibold' : 'text-foreground font-medium'} />
               <InfoRow label="Concepto" value={invoice.concepto} />
               <InfoRow label="Tipo" value={invoice.tipo === 'emitida' ? 'Factura emitida' : 'Factura recibida'} />
+              {invoice.tipo === 'emitida' && invoice.qr_url && <InfoRow label="QR tributario" value="Generado · sin remisión VERI*FACTU" valueClass="text-amber-700" />}
             </Section>
 
             {/* Importes */}
             <Section title="Importes" icon={CreditCard}>
               <InfoRow label="Base imponible" value={fmt(invoice.base_imponible)} />
               <InfoRow label={`${invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} (${invoice.tipo_iva ?? 0}%)`} value={fmt(invoice.cuota_iva)} />
-              {invoice.retencion_irpf > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
+              {invoice.qr_url && getWithholdingAmount(invoice) > 0 && <InfoRow label="Importe fiscal del QR" value={fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} />}
+              {getWithholdingAmount(invoice) > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
               <div className="flex items-center justify-between py-2 mt-1 bg-secondary/50 rounded-lg px-2">
-                <span className="text-sm font-semibold text-foreground">Total factura</span>
+                <span className="text-sm font-semibold text-foreground">{getWithholdingAmount(invoice) > 0 ? 'Total a pagar' : 'Total factura'}</span>
                 <span className="text-sm font-bold text-foreground">{fmt(invoice.total_factura)}</span>
               </div>
             </Section>
