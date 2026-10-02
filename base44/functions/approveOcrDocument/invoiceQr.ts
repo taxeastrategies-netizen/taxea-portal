@@ -11,7 +11,8 @@ export function buildAeatQrUrl(company, invoice) {
   if (!/^[A-Z0-9]{9}$/.test(nif)) throw new Error('El emisor necesita un NIF/CIF español válido para el QR tributario.');
   if (!numserie || numserie.length > 60) throw new Error('El número de factura no es válido para el QR tributario.');
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
-  if (!dateMatch || new Date(isoDate + 'T00:00:00Z').toISOString().slice(0, 10) !== isoDate) {
+  const parsedDate = new Date(isoDate + 'T00:00:00Z');
+  if (!dateMatch || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== isoDate) {
     throw new Error('La fecha de emisión no es válida para el QR tributario.');
   }
   if (!Number.isFinite(amount) || Math.abs(amount) >= 1e12) throw new Error('El importe fiscal no es válido para el QR tributario.');
