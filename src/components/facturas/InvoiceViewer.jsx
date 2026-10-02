@@ -14,10 +14,11 @@ export default function InvoiceViewer({ open, onOpenChange, invoice, company }) 
     const content = document.getElementById('invoice-print-area');
     if (!content) return;
     const w = window.open('', '_blank');
+    if (!w) return;
     const filename = `Factura_${invoice.numero_factura}_${(invoice.cliente_nombre || '').replace(/\s+/g, '_')}_${invoice.fecha_emision}.pdf`;
     w.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8"/>
-      <title>${filename}</title>
+      <title>Factura</title>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -29,6 +30,7 @@ export default function InvoiceViewer({ open, onOpenChange, invoice, company }) 
       </style>
     </head><body>${content.outerHTML}</body></html>`);
     w.document.close();
+    w.document.title = filename;
     w.focus();
     setTimeout(() => { w.print(); }, 600);
   };
@@ -37,9 +39,10 @@ export default function InvoiceViewer({ open, onOpenChange, invoice, company }) 
     const content = document.getElementById('invoice-print-area');
     if (!content) return;
     const w = window.open('', '_blank');
+    if (!w) return;
     w.document.write(`<!DOCTYPE html><html><head>
       <meta charset="utf-8"/>
-      <title>Factura ${invoice.numero_factura}</title>
+      <title>Factura</title>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -48,6 +51,7 @@ export default function InvoiceViewer({ open, onOpenChange, invoice, company }) 
       </style>
     </head><body>${content.outerHTML}</body></html>`);
     w.document.close();
+    w.document.title = `Factura ${invoice.numero_factura}`;
     w.focus();
     setTimeout(() => { w.print(); w.close(); }, 600);
   };
