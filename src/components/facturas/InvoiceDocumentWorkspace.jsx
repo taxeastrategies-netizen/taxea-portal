@@ -153,7 +153,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
                   ['Fecha vencimiento', invoice.fecha_vencimiento ? new Date(invoice.fecha_vencimiento).toLocaleDateString('es-ES') : null],
                   ['Concepto', invoice.concepto],
                   ['Base imponible', invoice.base_imponible != null ? invoice.base_imponible.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
-                  ['IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
+                  [invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
                   ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label} className="flex justify-between py-2.5 border-b border-slate-100 last:border-0 text-sm">
@@ -295,7 +295,7 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
-            <span className="text-slate-500">IVA ({invoice.tipo_iva ?? 21}%)</span>
+            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {invoice.retencion_irpf > 0 && (
