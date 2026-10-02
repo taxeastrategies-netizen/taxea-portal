@@ -288,7 +288,23 @@ Deno.serve(async (req) => {
 
     if (action === 'bundle') {
       const invoiceTaxLines=body.invoiceId?await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:clean(body.invoiceId)},'lineNumber',100):[];
-      return Response.json({ success: true, ruleSetVersion: RULESET, profile, profileVersions, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), verifactuReadiness: { requested: profile?.usesVeriFactu === true, obligation: profile?.verifactuObligation || 'pendiente_confirmar', authentication: 'certificado_individual_del_emisor', certificateStatus: 'sin_custodia_segura_configurada', transmissionStatus: 'desactivada', activationAllowed: false }, sources: SOURCES });
+      const issuerSetups = await svc.entities.VerifactuIssuerSetup.filter({ company_id: companyId }, '-registered_at', 20);
+      const activeSetup = (issuerSetups || []).find((item: any) => item.custody_status !== 'revocada') || null;
+      const certificateStatus = activeSetup ? 'referencia_registrada_sin_verificar' : 'sin_certificado_verificado';
+      return Response.json({ success: true, ruleSetVersion: RULESET, profile, profileVersions, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), verifactuReadiness: { requested: profile?.usesVeriFactu === true, obligation: profile?.verifactuObligation || 'pendiente_confirmar', authentication: 'certificado_individual_del_emisor', certificateStatus, custodyRegion: 'europe-southwest1', gatewayStatus: 'no_desplegado', aeatTestStatus: 'no_validado', transmissionStatus: 'desactivada', activationAllowed: false, secretResource: ['admin','super_admin'].includes(clean(user?.role).toLowerCase()) ? activeSetup?.secret_resource || '' : undefined }, sources: SOURCES });
+    }
+    if (action === 'register_verifactu_vault_reference') {
+      if (!['admin', 'super_admin'].includes(clean(user?.role).toLowerCase())) return Response.json({ error: 'Solo administración puede registrar la referencia de custodia.' }, { status: 403 });
+      const secretResource = clean(body.secretResource);
+      if (!/^projects\/plasma-minutia-510419-c4\/locations\/europe-southwest1\/secrets\/[A-Za-z0-9_-]{1,255}$/.test(secretResource)) {
+        return Response.json({ error: 'Indica solo el identificador del secreto regional de Taxea en Madrid; nunca el certificado ni su contraseña.' }, { status: 400 });
+      }
+      const rows = await svc.entities.VerifactuIssuerSetup.filter({ company_id: companyId }, '-registered_at', 20);
+      const current = (rows || []).find((item: any) => item.custody_status !== 'revocada');
+      if (current?.secret_resource === secretResource) return Response.json({ success: true, duplicate: true, certificateStatus: 'referencia_registrada_sin_verificar' });
+      if (current) return Response.json({ error: 'Ya existe una referencia activa. Revócala y verifica la rotación antes de asociar otra.' }, { status: 409 });
+      await svc.entities.VerifactuIssuerSetup.create({ company_id: companyId, secret_resource: secretResource, custody_status: 'referencia_registrada_sin_verificar', registered_at: new Date().toISOString(), registered_by: user.email });
+      return Response.json({ success: true, certificateStatus: 'referencia_registrada_sin_verificar', activationAllowed: false });
     }
     if (action === 'evaluate') return Response.json({ success: true, evaluation: evaluate(profile, activities, body), ruleSetVersion: RULESET });
 
