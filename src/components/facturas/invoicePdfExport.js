@@ -5,6 +5,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
+import { invoiceQrPng } from '@/lib/aeatInvoiceQr';
 
 /** @type {[number, number, number]} */
 const BRAND = [185, 28, 28]; // #b91c1c
@@ -42,7 +43,13 @@ export async function exportInvoiceToPdf(invoice, company) {
   const doc = new jsPDF('p', 'mm', 'a4');
   const W = 210;
   const M = 18;
-  let y = 24;
+  const qrPng = await invoiceQrPng(invoice);
+  let y = qrPng ? 60 : 24;
+  if (qrPng) {
+    doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(30, 41, 59);
+    doc.text('QR tributario:', W - M - 18, 10, { align: 'center' });
+    doc.addImage(qrPng, 'PNG', W - M - 36, 12, 36, 36);
+  }
 
   // ── Cabecera ──────────────────────────────────────────────────────────────
   const logo = await loadLogo(company?.logo_url || LOGO);
@@ -50,7 +57,7 @@ export async function exportInvoiceToPdf(invoice, company) {
   if (logo) {
     const logoH = 13;
     const logoW = Math.min(48, (logo.w / logo.h) * logoH);
-    doc.addImage(logo.dataUrl, 'PNG', M, 11, logoW, logoH);
+    doc.addImage(logo.dataUrl, 'PNG', M, y - 13, logoW, logoH);
     titleX = M + logoW + 6;
   }
   doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(...BRAND);
