@@ -4,7 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import * as esbuild from 'esbuild';
 
-const entry = path.resolve('base44/functions/fiscalCalendarOperations/entry.ts');
+const entry = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../base44/functions/fiscalCalendarOperations/entry.ts');
 const build = await esbuild.build({
   entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs',
   plugins: [{ name: 'sdk-stub', setup(builder) {
