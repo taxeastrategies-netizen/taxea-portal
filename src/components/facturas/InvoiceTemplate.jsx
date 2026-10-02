@@ -21,7 +21,7 @@ export default function InvoiceTemplate({ invoice, company }) {
   const base = parseFloat(invoice?.base_imponible) || 0;
   const cuota = parseFloat(invoice?.cuota_iva) || (base * (parseFloat(invoice?.tipo_iva) || 0) / 100);
   const retencionPct = parseFloat(invoice?.retencion_irpf) || 0;
-  const retencionImporte = base * retencionPct / 100;
+  const retencionImporte = invoice?.importe_retencion != null ? Number(invoice.importe_retencion) : base * retencionPct / 100;
   const total = parseFloat(invoice?.total_factura) || (base + cuota - retencionImporte);
   const qrUrl = getInvoiceQrUrl(invoice);
 
@@ -211,7 +211,7 @@ export default function InvoiceTemplate({ invoice, company }) {
 
         {/* Total destacado */}
         <div style={s.totalHighlight}>
-          <div style={s.totalLabel}>Total factura</div>
+          <div style={s.totalLabel}>{hasRetention ? 'Total a pagar' : 'Total factura'}</div>
           <div style={s.totalAmount}>{fmt(total)} €</div>
           {invoice?.fecha_vencimiento && (
             <div style={{ fontSize: 10.5, marginTop: 8, opacity: 0.8 }}>
@@ -264,6 +264,12 @@ export default function InvoiceTemplate({ invoice, company }) {
             <span style={s.totalesLabel}>{taxType} {invoice?.tipo_iva ?? 0} %</span>
             <span style={s.totalesValue}>{fmt(cuota)} €</span>
           </div>
+          {hasRetention && qrUrl && (
+            <div style={s.totalesRow}>
+              <span style={s.totalesLabel}>Importe fiscal del QR</span>
+              <span style={s.totalesValue}>{fmt(base + cuota)} €</span>
+            </div>
+          )}
           {hasRetention && (
             <div style={s.totalesRow}>
               <span style={s.totalesLabel}>Retención IRPF {retencionPct} %</span>
@@ -271,7 +277,7 @@ export default function InvoiceTemplate({ invoice, company }) {
             </div>
           )}
           <div style={s.totalesRowTotal}>
-            <span>TOTAL</span>
+            <span>{hasRetention ? 'TOTAL A PAGAR' : 'TOTAL'}</span>
             <span style={s.totalesTotalValue}>{fmt(total)} €</span>
           </div>
         </div>
