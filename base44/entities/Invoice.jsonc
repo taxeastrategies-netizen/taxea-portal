@@ -23,7 +23,7 @@
     "fecha_recepcion": {
       "type": "string",
       "format": "date",
-      "description": "Fecha real de recepción de la factura recibida. Determina desde qué período puede ejercerse la deducción del IVA/IGIC, sin alterar el devengo contable."
+      "description": "Fecha real de recepci\u00f3n de la factura recibida. Determina desde qu\u00e9 per\u00edodo puede ejercerse la deducci\u00f3n del IVA/IGIC, sin alterar el devengo contable."
     },
     "cliente_nombre": {
       "type": "string"
@@ -288,11 +288,11 @@
     },
     "creation_idempotency_key": {
       "type": "string",
-      "description": "Clave estable de creación para impedir facturas duplicadas por reintentos de red o doble clic."
+      "description": "Clave estable de creaci\u00f3n para impedir facturas duplicadas por reintentos de red o doble clic."
     },
     "canonical_document_key": {
       "type": "string",
-      "description": "Huella normalizada por empresa, tipo, número, fecha e importe usada por el núcleo financiero."
+      "description": "Huella normalizada por empresa, tipo, n\u00famero, fecha e importe usada por el n\u00facleo financiero."
     },
     "source_system": {
       "type": "string",
@@ -302,6 +302,21 @@
       "type": "string"
     },
     "source_hash": {
+      "type": "string"
+    },
+    "qr_url": {
+      "type": "string",
+      "description": "URL tributaria AEAT fijada al emitir la factura; no acredita remisi\u00f3n VERI*FACTU."
+    },
+    "qr_mode": {
+      "type": "string",
+      "enum": [
+        "no_verifactu",
+        "verifactu"
+      ],
+      "description": "S\u00f3lo usar verifactu tras env\u00edo y aceptaci\u00f3n efectiva del registro."
+    },
+    "qr_spec_version": {
       "type": "string"
     },
     "lifecycle_version": {
