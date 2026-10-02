@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import InvoiceOperationalSidePanel from './InvoiceOperationalSidePanel';
 import { exportInvoiceToPdf } from './invoicePdfExport';
+import { QRCodeSVG } from 'qrcode.react';
+import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
 
 // ── Estado visual de factura ───────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -44,7 +46,8 @@ function resolveStatus(invoice) {
 function InvoiceDocumentPreviewPane({ invoice, company }) {
   const [zoom, setZoom] = useState(100);
   const isRecibida = invoice?.tipo === 'recibida';
-  const hasPdf = !!invoice?.archivo_url;
+  const documentPdfUrl = invoice?.qr_url && !isRecibida ? invoice?.qr_pdf_url : invoice?.archivo_url;
+  const hasPdf = !!documentPdfUrl;
 
   const fmt = (n) => typeof n === 'number'
     ? n.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €'
@@ -104,7 +107,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
           </button>
           {hasPdf ? (
             <a
-              href={invoice.archivo_url}
+              href={documentPdfUrl}
               download={`Factura_${invoice.numero_factura}.pdf`}
               className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title="Descargar PDF">
@@ -185,9 +188,18 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
   const brandColor = '#b91c1c';
 
   const lineas = invoice?.lineas || [];
+  const qrUrl = getInvoiceQrUrl(invoice);
 
   return (
     <div className="p-10 font-sans text-sm text-slate-800" style={{ minHeight: '1100px' }}>
+      {qrUrl && (
+        <div className="flex justify-end mb-4">
+          <div className="text-center text-slate-900">
+            <div className="text-[10px] font-bold mb-1">QR tributario:</div>
+            <QRCodeSVG value={qrUrl} size={136} level="M" includeMargin style={{ width: '36mm', height: '36mm' }} />
+          </div>
+        </div>
+      )}
       {/* Cabecera */}
       <div className="flex items-start justify-between mb-10">
         <div>
@@ -337,6 +349,8 @@ export default function InvoiceDocumentWorkspace({
   onNavigate,
 }) {
   const [copiedLink, setCopiedLink] = useState(false);
+  const isRecibida = invoice?.tipo === 'recibida';
+  const documentPdfUrl = invoice?.qr_url && !isRecibida ? invoice?.qr_pdf_url : invoice?.archivo_url;
 
   const currentIndex = invoicesList && invoice ? invoicesList.findIndex(i => i.id === invoice.id) : -1;
   const hasPrev = currentIndex > 0;
@@ -431,9 +445,9 @@ export default function InvoiceDocumentWorkspace({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-sm w-44">
-              {invoice.archivo_url ? (
+              {documentPdfUrl ? (
                 <DropdownMenuItem asChild>
-                  <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                  <a href={documentPdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2">
                     <Download className="w-3.5 h-3.5" /> Descargar PDF
                   </a>
                 </DropdownMenuItem>
