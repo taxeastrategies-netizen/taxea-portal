@@ -17,7 +17,7 @@ const TAXEA_RED_LIGHT = '#f5e8ea';
 
 export default function InvoiceTemplate({ invoice, company }) {
   const taxType = company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
-  const hasRetention = (parseFloat(invoice?.retencion_irpf) || 0) > 0;
+  const hasRetention = Number(invoice?.retencion_irpf || 0) > 0 || Number(invoice?.importe_retencion || 0) > 0;
   const base = parseFloat(invoice?.base_imponible) || 0;
   const cuota = invoice?.cuota_iva != null ? Number(invoice.cuota_iva) : base * (Number(invoice?.tipo_iva) || 0) / 100;
   const retencionPct = parseFloat(invoice?.retencion_irpf) || 0;
