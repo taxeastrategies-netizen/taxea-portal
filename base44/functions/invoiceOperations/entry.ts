@@ -532,7 +532,10 @@ Deno.serve(async (req) => {
       if (!isSafeHttpsUrl(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
       if (cleanText(body.mime_type, 100).toLowerCase() !== 'application/pdf') return Response.json({ error: 'El documento debe ser PDF.' }, { status: 400 });
       if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El PDF debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
-      const saved = await base44.asServiceRole.entities.Invoice.update(invoice.id, { qr_pdf_url: fileUrl });
+      const saved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+        qr_pdf_url: fileUrl,
+        ...(invoice.archivo_url ? {} : { archivo_url: fileUrl }),
+      });
       await recordTimeline(base44, {
         invoice_id: invoice.id,
         company_id: companyId,
