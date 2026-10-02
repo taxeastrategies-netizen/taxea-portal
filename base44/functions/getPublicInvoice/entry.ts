@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
       'cliente_nif', 'cliente_direccion', 'proveedor_nombre', 'proveedor_nif', 'proveedor_direccion', 'concepto', 'base_imponible',
       'tipo_iva', 'cuota_iva', 'retencion_irpf', 'importe_retencion',
       'total_factura', 'moneda', 'estado_cobro', 'importe_pagado', 'importe_pendiente', 'forma_pago', 'coletilla_fiscal',
-      'archivo_url', 'es_rectificativa', 'factura_rectificada',
+      'archivo_url', 'qr_url', 'qr_mode', 'qr_pdf_url', 'es_rectificativa', 'factura_rectificada',
     ]);
     const publicCompany = pick(company, [
       'nombre_comercial', 'razon_social', 'nif_cif', 'direccion_fiscal',
