@@ -1,5 +1,7 @@
 // InvoiceTemplate — plantilla premium Taxea Portal
 // Inspirada en la factura real F260009 de Taxea Strategies
+import { QRCodeSVG } from 'qrcode.react';
+import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -21,6 +23,7 @@ export default function InvoiceTemplate({ invoice, company }) {
   const retencionPct = parseFloat(invoice?.retencion_irpf) || 0;
   const retencionImporte = base * retencionPct / 100;
   const total = parseFloat(invoice?.total_factura) || (base + cuota - retencionImporte);
+  const qrUrl = getInvoiceQrUrl(invoice);
 
   /** @type {Record<string, import('react').CSSProperties>} */
   const s = {
@@ -150,6 +153,14 @@ export default function InvoiceTemplate({ invoice, company }) {
 
   return (
     <div id="invoice-print-area" style={s.page}>
+      {qrUrl && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, breakInside: 'avoid' }}>
+          <div style={{ textAlign: 'center', color: '#111' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 2 }}>QR tributario:</div>
+            <QRCodeSVG value={qrUrl} size={136} level="M" includeMargin style={{ width: '36mm', height: '36mm' }} />
+          </div>
+        </div>
+      )}
       {/* ── CABECERA ── */}
       <div style={s.header}>
         {/* Emisor */}
