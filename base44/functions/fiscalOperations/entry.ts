@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 
 const RULESET = 'taxea-fiscal-es-2026.09.12-v2';
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -376,7 +377,7 @@ Deno.serve(async (req) => {
     if (action === 'save_invoice_tax_line') {
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
-      const evaluation = evaluate(profile, activities, { ...body, direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso', base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva, taxAmount: body.taxAmount ?? invoice.cuota_iva, operationDate: body.operationDate ?? invoice.fecha_emision });
+      const evaluation = guardIssuedQrInvoiceTaxChange(invoice, evaluate(profile, activities, { ...body, direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso', base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva, taxAmount: body.taxAmount ?? invoice.cuota_iva, operationDate: body.operationDate ?? invoice.fecha_emision }), body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
       const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: evaluation.deductibleTax >= evaluation.taxAmount, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
