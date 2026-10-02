@@ -180,8 +180,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setSent(false);
     setError('');
     setShowPreview(false);
-    setPdfReady(!!invoice?.archivo_url);
-    setResolvedPdfUrl(invoice?.archivo_url || null);
+    const initialPdfUrl = invoice?.qr_url && invoice?.tipo === 'emitida'
+      ? invoice?.qr_pdf_url
+      : invoice?.archivo_url;
+    setPdfReady(Boolean(initialPdfUrl));
+    setResolvedPdfUrl(initialPdfUrl || null);
     loadClientEmail();
     initPublicLink();
     setTemplateId('envio_factura');
@@ -192,7 +195,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setSendRequestId(crypto.randomUUID());
     refreshGmailStatus();
 
-    if (!invoice?.archivo_url && invoice.tipo !== 'recibida') {
+    if (!initialPdfUrl && invoice.tipo !== 'recibida') {
       setPreparingPdf(true);
       ensureInvoicePdf(invoice, company, base44).then(result => {
         if (result.ok) { setPdfReady(true); setResolvedPdfUrl(result.pdfUrl); }
@@ -428,7 +431,7 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
                   <p className="text-xs text-red-700">Esta factura recibida no tiene PDF original. Súbelo desde “Archivos adjuntos” antes de enviarla.</p>
                 </div>
               )}
-              {!preparingPdf && pdfReady && !invoice?.archivo_url && (
+              {!preparingPdf && pdfReady && !initialPdfUrl && (
                 <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                   <p className="text-xs font-semibold text-emerald-800">PDF generado automáticamente y listo para adjuntar.</p>
