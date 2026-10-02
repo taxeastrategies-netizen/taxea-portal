@@ -101,6 +101,9 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
   const [preparingPdf, setPreparingPdf] = useState(false);
   const [pdfReady, setPdfReady] = useState(false);
   const [resolvedPdfUrl, setResolvedPdfUrl] = useState(null);
+  const initialPdfUrl = invoice?.qr_url && invoice?.tipo === 'emitida'
+    ? invoice?.qr_pdf_url
+    : invoice?.archivo_url;
   const [saveEmail, setSaveEmail] = useState(false);
   const [clientEmails, setClientEmails] = useState([]);
   const [noEmailWarning, setNoEmailWarning] = useState(false);
@@ -180,9 +183,6 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
     setSent(false);
     setError('');
     setShowPreview(false);
-    const initialPdfUrl = invoice?.qr_url && invoice?.tipo === 'emitida'
-      ? invoice?.qr_pdf_url
-      : invoice?.archivo_url;
     setPdfReady(Boolean(initialPdfUrl));
     setResolvedPdfUrl(initialPdfUrl || null);
     loadClientEmail();
