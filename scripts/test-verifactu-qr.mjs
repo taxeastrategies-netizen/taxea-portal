@@ -11,7 +11,10 @@ const invoice = {
   tipo: 'emitida',
   numero_factura: 'F 26/001-Á',
   fecha_emision: '2026-10-02',
-  total_factura: 121.5,
+  base_imponible: 100,
+  cuota_iva: 21,
+  importe_retencion: 15.5,
+  total_factura: 105.5,
   moneda: 'EUR',
 };
 const url = buildAeatQrUrl(company, invoice);
@@ -22,7 +25,8 @@ assert.deepEqual([...parsed.searchParams.keys()], ['nif', 'numserie', 'fecha', '
 assert.equal(parsed.searchParams.get('nif'), company.nif_cif);
 assert.equal(parsed.searchParams.get('numserie'), invoice.numero_factura);
 assert.equal(parsed.searchParams.get('fecha'), '02-10-2026');
-assert.equal(parsed.searchParams.get('importe'), '121.50');
+assert.equal(parsed.searchParams.get('importe'), '121.00');
+assert.notEqual(parsed.searchParams.get('importe'), invoice.total_factura.toFixed(2), 'El QR no debe restar la retención del importe fiscal.');
 assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: url }), url);
 assert.equal(getInvoiceQrUrl({ ...invoice, tipo: 'recibida', qr_url: url }), '');
 assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: 'https://evil.example/qr' }), '');
