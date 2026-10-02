@@ -19,6 +19,7 @@ const fmtDec = n => typeof n === 'number'
   ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) : '—';
 const pct = n => typeof n === 'number' ? `${n.toFixed(1)}%` : '—';
 const today = () => new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
 // ─── Logo Taxea Strategies (SVG inline) ───────────────────────────────────────
 const TAXEA_LOGO_URL = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
@@ -355,6 +356,7 @@ Genera la respuesta en JSON con esta estructura exacta:
     // Build print-friendly HTML
     const content = buildPrintHTML();
     const printWindow = window.open('', '_blank');
+    if (!printWindow) { setExportingPdf(false); return; }
     printWindow.document.write(content);
     printWindow.document.close();
     printWindow.focus();
@@ -371,7 +373,8 @@ Genera la respuesta en JSON con esta estructura exacta:
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Informe Financiero Premium — ${empresa} — ${ejercicio}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; object-src 'none'; frame-src 'none'; connect-src 'none'; img-src https://media.base44.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'">
+<title>Informe Financiero Premium — ${escapeHtml(empresa)} — ${escapeHtml(ejercicio)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -479,9 +482,9 @@ Genera la respuesta en JSON con esta estructura exacta:
 
   <div class="portada-datos">
     <table>
-      <tr><td>Sociedad analizada:</td><td>${empresa}</td></tr>
-      <tr><td>Período analizado:</td><td>${imp?.periodo_inicio || ejercicio + '-01-01'} — ${imp?.periodo_fin || ejercicio + '-12-31'}</td></tr>
-      <tr><td>Fuente documental:</td><td>${imp?.origen || 'Documentación contable aportada'} · ${imp?.nombre_archivo || '—'}</td></tr>
+      <tr><td>Sociedad analizada:</td><td>${escapeHtml(empresa)}</td></tr>
+      <tr><td>Período analizado:</td><td>${escapeHtml(imp?.periodo_inicio || ejercicio + '-01-01')} — ${escapeHtml(imp?.periodo_fin || ejercicio + '-12-31')}</td></tr>
+      <tr><td>Fuente documental:</td><td>${escapeHtml(imp?.origen || 'Documentación contable aportada')} · ${escapeHtml(imp?.nombre_archivo || '—')}</td></tr>
       <tr><td>Fecha de generación:</td><td>${today()}</td></tr>
       <tr><td>Nivel de revisión:</td><td>Preliminar — pendiente de validación contable definitiva</td></tr>
       <tr><td>Confianza extracción IA:</td><td>${confianza ? `${confianza}%` : 'N/D'}</td></tr>
@@ -516,14 +519,14 @@ Genera la respuesta en JSON con esta estructura exacta:
 </div>
 
 <h3>1.2. Diagnóstico ejecutivo</h3>
-<p>${aiContent?.diagnostico_ejecutivo || `A la vista de la información aportada, ${empresa} presenta un total activo de ${fmt(totalActivo)} para el ejercicio ${ejercicio}, con un patrimonio neto de ${fmt(patrimonioNeto)} y un resultado estimado de ${fmt(resultado)}. ${!balance.cuadra ? 'Se identifica una diferencia de cuadre en el balance que requiere revisión prioritaria antes de considerar definitivos los estados financieros. ' : ''}${fondoManiobra < 0 ? 'El fondo de maniobra negativo advierte de una posible tensión de liquidez a corto plazo. ' : 'La posición de liquidez es aparentemente favorable con un fondo de maniobra positivo. '}Con carácter preliminar y pendiente de contraste documental, la situación financiera requiere la atención de los aspectos señalados en el presente informe.`}</p>
+<p>${escapeHtml(aiContent?.diagnostico_ejecutivo || `A la vista de la información aportada, ${empresa} presenta un total activo de ${fmt(totalActivo)} para el ejercicio ${ejercicio}, con un patrimonio neto de ${fmt(patrimonioNeto)} y un resultado estimado de ${fmt(resultado)}. ${!balance.cuadra ? 'Se identifica una diferencia de cuadre en el balance que requiere revisión prioritaria antes de considerar definitivos los estados financieros. ' : ''}${fondoManiobra < 0 ? 'El fondo de maniobra negativo advierte de una posible tensión de liquidez a corto plazo. ' : 'La posición de liquidez es aparentemente favorable con un fondo de maniobra positivo. '}Con carácter preliminar y pendiente de contraste documental, la situación financiera requiere la atención de los aspectos señalados en el presente informe.`)}</p>
 
 <h3>1.3. Semáforo financiero Taxea Strategies</h3>
 <div class="semaforo-grid">
   ${semaforos.map(s => `
   <div class="sem-card" style="border-color:${semColores[s.estado]||'#6b7280'};background:${s.estado==='verde'?'#f0fdf4':s.estado==='ambar'?'#fffbeb':s.estado==='rojo'?'#fef2f2':'#f8fafc'}">
-    <div class="sem-label" style="color:${semColores[s.estado]||'#6b7280'}">● ${s.label} · ${semLabels[s.estado]||'—'}</div>
-    <div class="sem-text">${s.comentario}</div>
+    <div class="sem-label" style="color:${semColores[s.estado]||'#6b7280'}">● ${escapeHtml(s.label)} · ${semLabels[s.estado]||'—'}</div>
+    <div class="sem-text">${escapeHtml(s.comentario)}</div>
   </div>`).join('')}
 </div>
 </div>
@@ -544,11 +547,11 @@ Genera la respuesta en JSON con esta estructura exacta:
 </table>
 
 ${aiContent?.analisis_balance ? `
-<h3>2.1. Activo no corriente</h3><p>${aiContent.analisis_balance.activo_no_corriente}</p>
-<h3>2.2. Activo corriente</h3><p>${aiContent.analisis_balance.activo_corriente}</p>
-<h3>2.3. Patrimonio neto</h3><p>${aiContent.analisis_balance.patrimonio_neto}</p>
-<h3>2.4. Pasivo no corriente</h3><p>${aiContent.analisis_balance.pasivo_no_corriente}</p>
-<h3>2.5. Pasivo corriente</h3><p>${aiContent.analisis_balance.pasivo_corriente}</p>
+<h3>2.1. Activo no corriente</h3><p>${escapeHtml(aiContent.analisis_balance.activo_no_corriente)}</p>
+<h3>2.2. Activo corriente</h3><p>${escapeHtml(aiContent.analisis_balance.activo_corriente)}</p>
+<h3>2.3. Patrimonio neto</h3><p>${escapeHtml(aiContent.analisis_balance.patrimonio_neto)}</p>
+<h3>2.4. Pasivo no corriente</h3><p>${escapeHtml(aiContent.analisis_balance.pasivo_no_corriente)}</p>
+<h3>2.5. Pasivo corriente</h3><p>${escapeHtml(aiContent.analisis_balance.pasivo_corriente)}</p>
 ` : `<p>Con carácter preliminar, a la vista de la información extraída, el balance de situación refleja una estructura patrimonial con total activo de ${fmt(totalActivo)}, de los cuales ${fmt(activoNoCorriente)} corresponden a activo no corriente y ${fmt(activoCorriente)} a activo corriente. El patrimonio neto asciende a ${fmt(patrimonioNeto)}, representando el ${totalActivo > 0 ? pct(patrimonioNeto/totalActivo*100) : '—'} del activo total.</p>`}
 
 ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','patrimonio_neto','pasivo_no_corriente','pasivo_corriente'].includes(a.masa)).length > 0 ? `
@@ -556,7 +559,7 @@ ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','
 <table class="data">
   <tr><th>Cuenta</th><th>Descripción</th><th>Masa</th><th style="text-align:right">Importe</th></tr>
   ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','patrimonio_neto','pasivo_no_corriente','pasivo_corriente'].includes(a.masa))
-    .map(a => `<tr><td style="font-family:monospace">${a.cuenta||'—'}</td><td>${a.descripcion||'—'}</td><td>${a.masa?.replace(/_/g,' ')||'—'}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
+    .map(a => `<tr><td style="font-family:monospace">${a.cuenta||'—'}</td><td>${a.descripcion||'—'}</td><td>${escapeHtml(a.masa?.replace(/_/g,' ')||'—')}</td><td class="mono">${fmtDec(a.importe_actual)}</td></tr>`).join('')}
 </table>` : ''}
 </div>
 
@@ -574,9 +577,9 @@ ${cuentas.filter(a => !a.excluida && ['activo_no_corriente','activo_corriente','
 </table>
 
 ${aiContent?.analisis_pyg ? `
-<h3>3.1. Ingresos</h3><p>${aiContent.analisis_pyg.ingresos}</p>
-<h3>3.2. Gastos</h3><p>${aiContent.analisis_pyg.gastos}</p>
-<h3>3.3. Resultado</h3><p>${aiContent.analisis_pyg.resultado}</p>
+<h3>3.1. Ingresos</h3><p>${escapeHtml(aiContent.analisis_pyg.ingresos)}</p>
+<h3>3.2. Gastos</h3><p>${escapeHtml(aiContent.analisis_pyg.gastos)}</p>
+<h3>3.3. Resultado</h3><p>${escapeHtml(aiContent.analisis_pyg.resultado)}</p>
 ` : `<p>Los ingresos del ejercicio ascienden a ${fmt(ingresos)}, con unos gastos de explotación de ${fmt(gastos)}, resultando un resultado estimado de ${fmt(resultado)}, equivalente a un margen neto del ${ingresos > 0 ? pct(resultado/ingresos*100) : '—'}. El análisis detallado requiere contrastar las partidas con el libro diario y el mayor contable.</p>`}
 
 ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa)).length > 0 ? `
@@ -598,7 +601,7 @@ ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa
   <div class="ratio-card ${r.ok ? 'ok' : 'ko'} avoid-break">
     <div class="rv">${r.valor}</div>
     <div class="rn">${r.nombre}</div>
-    <div class="rf">${r.formula} · Ref: ${r.ref}</div>
+    <div class="rf">${escapeHtml(r.formula)} · Ref: ${escapeHtml(r.ref)}</div>
     <div style="font-size:7pt;color:#64748b;margin-top:3px">${r.interpretacion}</div>
   </div>`).join('')}
 </div>
@@ -609,16 +612,16 @@ ${cuentas.filter(a => !a.excluida && ['pyg_ingreso','pyg_gasto'].includes(a.masa
 <h2>5. Alertas detectadas</h2>
 ${alertasEnriquecidas.length === 0 ? '<p>No se han detectado alertas relevantes en los datos analizados.</p>' :
   alertasEnriquecidas.map(a => `
-  <div class="alert ${a.nivel || 'informativo'} avoid-break">
-    <div class="alert-titulo">${a.titulo || ''}</div>
-    <div class="alert-desc">${a.desc || ''}</div>
+  <div class="alert ${['critico','alta','media','baja','informativo'].includes(a.nivel) ? a.nivel : 'informativo'} avoid-break">
+    <div class="alert-titulo">${escapeHtml(a.titulo || '')}</div>
+    <div class="alert-desc">${escapeHtml(a.desc || '')}</div>
     ${a.recomendacion ? `<div class="alert-rec">Recomendación: ${a.recomendacion}</div>` : ''}
     ${a.area ? `<div style="font-size:7pt;color:#94a3b8;margin-top:4px">Área: ${a.area}</div>` : ''}
   </div>`).join('')}
 
 ${aiContent?.alertas_narrativas?.length > 0 ? `
 <h3 style="margin-top:16px">Análisis narrativo de riesgos</h3>
-${aiContent.alertas_narrativas.map(a => `<div class="alert baja avoid-break"><div class="alert-titulo">${a.titulo}</div><div class="alert-desc">${a.texto}</div></div>`).join('')}` : ''}
+${aiContent.alertas_narrativas.map(a => `<div class="alert baja avoid-break"><div class="alert-titulo">${escapeHtml(a.titulo)}</div><div class="alert-desc">${escapeHtml(a.texto)}</div></div>`).join('')}` : ''}
 </div>
 
 <!-- ═══════════════ 6. FISCALIDAD ════════════════ -->
@@ -630,12 +633,12 @@ ${aiContent.alertas_narrativas.map(a => `<div class="alert baja avoid-break"><di
   <div class="alert-desc">El presente análisis fiscal tiene carácter exclusivamente preliminar y se basa en la información contable aportada. Para emitir una conclusión fiscal definitiva es necesario contrastar la contabilidad con los modelos tributarios presentados, declaraciones del Impuesto sobre Sociedades, libros registro, facturas soporte y documentación mercantil correspondiente.</div>
 </div>
 
-${aiContent?.analisis_fiscal ? `<p>${aiContent.analisis_fiscal}</p>` : `
+${aiContent?.analisis_fiscal ? `<p>${escapeHtml(aiContent.analisis_fiscal)}</p>` : `
 <p>A la vista de la información contable extraída, se identifican las siguientes cuentas fiscales relevantes: ${cuentasFiscales.length > 0 ? `${cuentasFiscales.length} cuenta(s) del grupo 47x (IVA, retenciones, hacienda pública)` : 'no se dispone de información fiscal suficiente'}. ${cuentasVinculadas.length > 0 ? 'Adicionalmente, la existencia de saldos con socios o partes vinculadas exige un análisis de operaciones vinculadas desde la perspectiva del artículo 18 de la LIS.' : ''} Se recomienda aportar los modelos fiscales del ejercicio para completar el análisis.</p>`}
 
 <h3>Documentación fiscal adicional recomendada</h3>
 <ul style="list-style:none;margin:8px 0">
-  ${docRecomendada.map(d => `<li style="font-size:8.5pt;padding:2px 0;color:#334155">→ ${d}</li>`).join('')}
+  ${docRecomendada.map(d => `<li style="font-size:8.5pt;padding:2px 0;color:#334155">→ ${escapeHtml(d)}</li>`).join('')}
 </ul>
 </div>
 
@@ -645,14 +648,14 @@ ${aiContent?.analisis_fiscal ? `<p>${aiContent.analisis_fiscal}</p>` : `
 
 ${planActuacion.map(p => `
 <div class="plan-block avoid-break" style="background:${p.color.includes('red')?'#fef2f2':p.color.includes('amber')?'#fffbeb':p.color.includes('blue')?'#eff6ff':'#f0fdf4'};border:1px solid ${p.color.includes('red')?'#fca5a5':p.color.includes('amber')?'#fcd34d':p.color.includes('blue')?'#93c5fd':'#86efac'}">
-  <span class="plan-badge" style="background:${p.color.includes('red')?'#dc2626':p.color.includes('amber')?'#d97706':p.color.includes('blue')?'#2563eb':'#16a34a'};color:white">Prioridad ${p.prioridad} — ${p.label}</span>
+  <span class="plan-badge" style="background:${p.color.includes('red')?'#dc2626':p.color.includes('amber')?'#d97706':p.color.includes('blue')?'#2563eb':'#16a34a'};color:white">Prioridad ${p.prioridad} — ${escapeHtml(p.label)}</span>
   <ul class="plan-items">
-    ${p.items.map(i => `<li>${i}</li>`).join('')}
+    ${p.items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}
   </ul>
 </div>`).join('')}
 
 <h3 style="margin-top:20px">Conclusión profesional</h3>
-<p>${aiContent?.conclusion_final || `A la vista de la información aportada, ${empresa} presenta una estructura financiera que requiere atención en los aspectos señalados en el presente informe, con especial énfasis en la conciliación del balance${!balance.cuadra ? ', dado el descuadre detectado' : ''}, la revisión de los saldos con partes vinculadas${cuentasVinculadas.length > 0 ? ' identificados' : ''} y el contraste fiscal con los modelos tributarios correspondientes. Se recomienda proceder a las actuaciones descritas en el plan de acción antes de considerar definitivo el cierre contable del ejercicio ${ejercicio}.`}</p>
+<p>${escapeHtml(aiContent?.conclusion_final || `A la vista de la información aportada, ${empresa} presenta una estructura financiera que requiere atención en los aspectos señalados en el presente informe, con especial énfasis en la conciliación del balance${!balance.cuadra ? ', dado el descuadre detectado' : ''}, la revisión de los saldos con partes vinculadas${cuentasVinculadas.length > 0 ? ' identificados' : ''} y el contraste fiscal con los modelos tributarios correspondientes. Se recomienda proceder a las actuaciones descritas en el plan de acción antes de considerar definitivo el cierre contable del ejercicio ${ejercicio}.`)}</p>
 </div>
 
 <!-- ═══════════════ CIERRE ════════════════ -->
@@ -661,7 +664,7 @@ ${planActuacion.map(p => `
 </div>
 
 <div class="page-footer">
-  <span>Taxea Strategies · Informe Financiero Premium · ${empresa} · Ejercicio ${ejercicio}</span>
+  <span>Taxea Strategies · Informe Financiero Premium · ${escapeHtml(empresa)} · Ejercicio ${escapeHtml(ejercicio)}</span>
   <span>Generado el ${today()} · Motor Taxea IA V4</span>
 </div>
 
