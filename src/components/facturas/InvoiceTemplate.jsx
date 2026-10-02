@@ -19,10 +19,10 @@ export default function InvoiceTemplate({ invoice, company }) {
   const taxType = company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const hasRetention = (parseFloat(invoice?.retencion_irpf) || 0) > 0;
   const base = parseFloat(invoice?.base_imponible) || 0;
-  const cuota = parseFloat(invoice?.cuota_iva) || (base * (parseFloat(invoice?.tipo_iva) || 0) / 100);
+  const cuota = invoice?.cuota_iva != null ? Number(invoice.cuota_iva) : base * (Number(invoice?.tipo_iva) || 0) / 100;
   const retencionPct = parseFloat(invoice?.retencion_irpf) || 0;
   const retencionImporte = invoice?.importe_retencion != null ? Number(invoice.importe_retencion) : base * retencionPct / 100;
-  const total = parseFloat(invoice?.total_factura) || (base + cuota - retencionImporte);
+  const total = invoice?.total_factura != null ? Number(invoice.total_factura) : base + cuota - retencionImporte;
   const qrUrl = getInvoiceQrUrl(invoice);
 
   /** @type {Record<string, import('react').CSSProperties>} */
