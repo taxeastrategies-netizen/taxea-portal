@@ -8,6 +8,9 @@ import { base44 } from '@/api/base44Client';
 import { Download, Printer, AlertTriangle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
+import { QRCodeSVG } from 'qrcode.react';
+import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
+import { exportInvoiceToPdf } from '@/components/facturas/invoicePdfExport';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 
@@ -25,6 +28,7 @@ function InvoicePublicRender({ invoice, company }) {
   const LOGO_URL = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
   const lineas = invoice?.lineas || [];
   const isReceived = invoice?.tipo === 'recibida';
+  const qrUrl = getInvoiceQrUrl(invoice);
   const issuerName = isReceived ? (invoice?.proveedor_nombre || invoice?.cliente_nombre || 'Proveedor') : (company?.nombre_comercial || company?.razon_social || 'Emisor');
   const issuerNif = isReceived ? (invoice?.proveedor_nif || invoice?.cliente_nif) : company?.nif_cif;
   const recipientName = isReceived ? (company?.nombre_comercial || company?.razon_social || 'Empresa') : (invoice?.cliente_nombre || '—');
@@ -32,6 +36,14 @@ function InvoicePublicRender({ invoice, company }) {
 
   return (
     <div className="p-8 font-sans text-sm text-slate-800" style={{ minHeight: '900px' }}>
+      {qrUrl && (
+        <div className="flex justify-end mb-4">
+          <div className="text-center text-slate-900">
+            <div className="text-[10px] font-bold mb-1">QR tributario:</div>
+            <QRCodeSVG value={qrUrl} size={136} level="M" style={{ width: '36mm', height: '36mm', padding: '2mm', boxSizing: 'border-box', background: '#fff' }} />
+          </div>
+        </div>
+      )}
       {/* Cabecera */}
       <div className="flex items-start justify-between mb-8">
         <div>
@@ -190,15 +202,20 @@ export default function PublicInvoiceViewer() {
     setLoading(false);
   };
 
-  const handleDownload = () => {
-    if (!invoice?.archivo_url) return;
-    const a = document.createElement('a');
-    a.href = invoice.archivo_url;
-    a.download = `Factura_${invoice.numero_factura || token}.pdf`;
-    a.target = '_blank';
-    a.click();
+  const downloadUrl = invoice?.qr_url && invoice?.tipo === 'emitida' ? invoice?.qr_pdf_url : invoice?.archivo_url;
+  const canDownload = Boolean(downloadUrl || (invoice?.qr_url && invoice?.tipo === 'emitida'));
+  const handleDownload = async () => {
+    if (!canDownload) return;
+    if (downloadUrl) {
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Factura_${invoice.numero_factura || token}.pdf`;
+      a.target = '_blank';
+      a.click();
+    } else {
+      await exportInvoiceToPdf(invoice, company);
+    }
     base44.functions.invoke('getPublicInvoice', { token, action: 'download' }).catch(() => {});
-
   };
 
   const isOverdue = invoice?.fecha_vencimiento && new Date(invoice.fecha_vencimiento) < new Date()
@@ -262,7 +279,7 @@ export default function PublicInvoiceViewer() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {invoice.archivo_url && (
+              {canDownload && (
                 <Button onClick={handleDownload} variant="outline" size="sm" className="gap-2 h-8 text-xs">
                   <Download className="w-3.5 h-3.5" /> Descargar PDF
                 </Button>
@@ -283,7 +300,7 @@ export default function PublicInvoiceViewer() {
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <InvoicePublicRender invoice={invoice} company={company} />
               </div>
-              {invoice.archivo_url && (
+              {canDownload && (
                 <button onClick={handleDownload}
                   className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                   <Download className="w-4 h-4" /> Descargar PDF
