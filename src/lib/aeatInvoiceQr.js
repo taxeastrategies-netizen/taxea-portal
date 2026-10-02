@@ -21,7 +21,7 @@ export async function invoiceQrPng(invoice) {
   if (!url) return null;
   return QRCode.toDataURL(url, {
     errorCorrectionLevel: 'M',
-    margin: 2,
+    margin: 0, // El PDF añade un margen físico blanco de 2 mm por lado.
     width: 500,
     color: { dark: '#000000', light: '#ffffff' },
   });
