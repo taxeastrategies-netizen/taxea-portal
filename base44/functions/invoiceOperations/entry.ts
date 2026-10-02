@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { buildInvoicePosting, commitJournalEntry, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
+import { buildAeatQrUrl } from './invoiceQr.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -393,8 +394,9 @@ Deno.serve(async (req) => {
     currentAction = action;
 
     if (action === 'create_invoice') {
-      const { companyId } = await authorizeCompany(base44, user, body.company_id);
+      const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
       const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
+      const qrUrl = payload.tipo === 'emitida' ? buildAeatQrUrl(company, payload) : '';
       const sourceHash = await sha256(JSON.stringify(payload));
       const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
       const previous = await base44.asServiceRole.entities.Invoice.filter({
@@ -418,6 +420,7 @@ Deno.serve(async (req) => {
         }
         createdInvoice = await base44.asServiceRole.entities.Invoice.create({
           ...payload,
+          ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
           creation_idempotency_key: idempotencyKey,
           source_hash: sourceHash,
         });
