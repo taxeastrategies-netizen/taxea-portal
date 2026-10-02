@@ -6,6 +6,12 @@ import jsQR from 'jsqr';
 
 const helperSource = await readFile(new URL('../base44/functions/invoiceOperations/invoiceQr.ts', import.meta.url), 'utf8');
 const { buildAeatQrUrl } = await import(`data:text/javascript,${encodeURIComponent(helperSource)}`);
+for (const copy of [
+  '../base44/functions/generateRecurringInvoices/invoiceQr.ts',
+  '../base44/functions/approveOcrDocument/invoiceQr.ts',
+]) {
+  assert.equal(await readFile(new URL(copy, import.meta.url), 'utf8'), helperSource, 'Las tres rutas de emisión deben usar la misma regla QR.');
+}
 const company = { nif_cif: 'B12345678' };
 const invoice = {
   tipo: 'emitida',
