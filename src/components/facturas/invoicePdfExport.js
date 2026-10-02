@@ -48,7 +48,7 @@ export async function exportInvoiceToPdf(invoice, company) {
   if (qrPng) {
     doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(30, 41, 59);
     doc.text('QR tributario:', W - M - 18, 10, { align: 'center' });
-    doc.addImage(qrPng, 'PNG', W - M - 36, 12, 36, 36);
+    doc.addImage(qrPng, 'PNG', W - M - 34, 14, 32, 32);
   }
 
   // ── Cabecera ──────────────────────────────────────────────────────────────
