@@ -76,7 +76,19 @@
     },
     "usesVeriFactu": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Intenci\u00f3n de utilizar VERI*FACTU; nunca equivale a modalidad activa ni a remisi\u00f3n AEAT."
+    },
+    "verifactuObligation": {
+      "type": "string",
+      "enum": [
+        "pendiente_confirmar",
+        "obligado",
+        "voluntario",
+        "excluido"
+      ],
+      "default": "pendiente_confirmar",
+      "description": "Clasificaci\u00f3n indicada por cliente o asesor; sujeta a revisi\u00f3n normativa."
     },
     "indirectTaxDefault": {
       "type": "string",
