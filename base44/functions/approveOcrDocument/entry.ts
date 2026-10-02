@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { postInvoice, SCHEMA_VERSION } from './accountingEngine.ts';
+import { buildAeatQrUrl } from './invoiceQr.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -226,6 +227,16 @@ Deno.serve(async (req) => {
         appliedRules: fiscalAssessment.appliedRules,
         explanation: fiscalAssessment.explanation,
       });
+    }
+    if (invoiceType === 'emitida') {
+      try {
+        const issuer = await base44.asServiceRole.entities.Company.get(doc.company_id);
+        invoiceData.qr_url = buildAeatQrUrl(issuer, invoiceData);
+        invoiceData.qr_mode = 'no_verifactu';
+        invoiceData.qr_spec_version = 'AEAT-QR-0.5.0';
+      } catch (qrError) {
+        return Response.json({ error: qrError.message || 'No se pudo preparar el QR tributario.' }, { status: 422 });
+      }
     }
     const inv = await base44.asServiceRole.entities.Invoice.create(invoiceData);
 
