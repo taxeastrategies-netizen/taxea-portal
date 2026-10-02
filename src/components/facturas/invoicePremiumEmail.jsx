@@ -310,7 +310,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     if (qrPng) {
       doc.setFontSize(8).setTextColor(...dark).setFont(undefined, 'bold');
       doc.text('QR tributario:', 177, 9, { align: 'center' });
-      doc.addImage(qrPng, 'PNG', 159, 11, 36, 36);
+      doc.addImage(qrPng, 'PNG', 161, 13, 32, 32);
     }
 
     // Línea superior roja
