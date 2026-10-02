@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { buildAeatQrUrl } from './invoiceQr.ts';
 
 // ── Date helpers ──
 
@@ -402,6 +403,29 @@ Deno.serve(async (req) => {
           recurringPeriodKey: periodKey,
           origin: 'recurring_invoice'
         };
+
+        try {
+          const issuer = await base44.asServiceRole.entities.Company.get(tmpl.ownerAccountId);
+          invoiceData.qr_url = buildAeatQrUrl(issuer, invoiceData);
+          invoiceData.qr_mode = 'no_verifactu';
+          invoiceData.qr_spec_version = 'AEAT-QR-0.5.0';
+        } catch (qrError) {
+          results.errors++;
+          await base44.asServiceRole.entities.RecurringInvoiceRun.create({
+            recurringInvoiceTemplateId: tmpl.id,
+            ownerAccountId: tmpl.ownerAccountId,
+            runType,
+            status: 'error',
+            runAt: new Date().toISOString(),
+            triggeredByUserId,
+            triggeredByEmail,
+            periodStart: runDate,
+            periodEnd,
+            periodKey,
+            safeErrorMessage: qrError.message || 'No se pudo preparar el QR tributario.'
+          });
+          break;
+        }
 
         const invoice = await base44.asServiceRole.entities.Invoice.create(invoiceData);
         await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
