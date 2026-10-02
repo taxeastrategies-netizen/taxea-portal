@@ -211,7 +211,10 @@ Deno.serve(async (req) => {
     if (!subject || !html || html.length > 250_000) {
       return Response.json({ error: 'El asunto o el contenido del email no son válidos.' }, { status: 400 });
     }
-    if (invoice && !invoice.archivo_url) return Response.json({ error: 'La factura no tiene un PDF preparado.' }, { status: 409 });
+    const allowedInvoicePdfUrl = invoice?.qr_url && invoice?.tipo === 'emitida'
+      ? invoice?.qr_pdf_url
+      : invoice?.archivo_url;
+    if (invoice && !allowedInvoicePdfUrl) return Response.json({ error: 'La factura no tiene un PDF válido preparado para este envío.' }, { status: 409 });
     if (invoice && (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`))) {
       return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
     }
@@ -237,7 +240,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const attachments = await loadAttachments(body.attachments, invoice?.archivo_url, Boolean(invoice));
+    const attachments = await loadAttachments(body.attachments, allowedInvoicePdfUrl, Boolean(invoice));
     const connectedEmail = await getConnectedEmail(connection);
     if (!connectedEmail) {
       return Response.json({ error: 'gmail_identity_unavailable', message: 'No se pudo identificar el buzón Gmail conectado.' }, { status: 502 });
@@ -293,7 +296,7 @@ Deno.serve(async (req) => {
         subject,
         body: html,
         template_id: String(body.template_id || 'envio_factura').slice(0, 80),
-        attachments: [invoice.archivo_url],
+        attachments: [allowedInvoicePdfUrl],
         public_invoice_url: body.public_invoice_url,
         pdf_attachment_name: attachments[0]?.name || '',
         sent_at: now,
