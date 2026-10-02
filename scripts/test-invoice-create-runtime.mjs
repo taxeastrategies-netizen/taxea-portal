@@ -128,6 +128,20 @@ assert.equal(records.Invoice.length, 1);
 assert.equal(counters.accountingEntries, 1);
 assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
 assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
+const qrPdfUrl = 'https://media.base44.com/invoices/test-qr.pdf';
+const linkedQrPdf = await invoke({
+  action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
+  file_url: qrPdfUrl, mime_type: 'application/pdf', size_bytes: 4096,
+});
+assert.equal(linkedQrPdf.response.status, 200);
+assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
+assert.equal(records.Invoice[0].archivo_url, qrPdfUrl);
+const repeatedQrPdf = await invoke({
+  action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
+  file_url: 'https://media.base44.com/invoices/other.pdf', mime_type: 'application/pdf', size_bytes: 4096,
+});
+assert.equal(repeatedQrPdf.payload.duplicate, true);
+assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
 
 const repeated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', invoice: validInvoice });
 assert.equal(repeated.response.status, 200);
