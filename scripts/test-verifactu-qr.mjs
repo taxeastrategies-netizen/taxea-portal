@@ -33,6 +33,7 @@ assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: 'https://evil.example/qr' }),
 assert.throws(() => buildAeatQrUrl({ nif_cif: '' }, invoice), /NIF\/CIF/);
 assert.throws(() => buildAeatQrUrl(company, { ...invoice, fecha_emision: '2026-02-30' }), /fecha/);
 assert.throws(() => buildAeatQrUrl(company, { ...invoice, moneda: 'USD' }), /euros/);
+assert.throws(() => buildAeatQrUrl(company, { ...invoice, total_factura: 99 }), /no cuadran/);
 const png = await invoiceQrPng({ ...invoice, qr_url: url });
 assert.match(png, /^data:image\/png;base64,/);
 const decodePng = Buffer.from(png.slice(png.indexOf(',') + 1), 'base64');
