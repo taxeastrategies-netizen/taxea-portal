@@ -288,9 +288,9 @@ Deno.serve(async (req) => {
 
     if (action === 'bundle') {
       const invoiceTaxLines=body.invoiceId?await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:clean(body.invoiceId)},'lineNumber',100):[];
-      const issuerSetups = await svc.entities.VerifactuIssuerSetup.filter({ company_id: companyId }, '-registered_at', 20);
+      const issuerSetups = await svc.entities.VerifactuIssuerSetup.filter({ company_id: companyId }, '-registered_at', 20).catch(() => null);
       const activeSetup = (issuerSetups || []).find((item: any) => item.custody_status !== 'revocada') || null;
-      const certificateStatus = activeSetup ? 'referencia_registrada_sin_verificar' : 'sin_certificado_verificado';
+      const certificateStatus = issuerSetups === null ? 'estado_no_disponible' : activeSetup ? 'referencia_registrada_sin_verificar' : 'sin_certificado_verificado';
       return Response.json({ success: true, ruleSetVersion: RULESET, profile, profileVersions, activities, models, invoiceTaxLines, recommendations: recommendedObligations(profile, activities), verifactuReadiness: { requested: profile?.usesVeriFactu === true, obligation: profile?.verifactuObligation || 'pendiente_confirmar', authentication: 'certificado_individual_del_emisor', certificateStatus, custodyRegion: 'europe-southwest1', gatewayStatus: 'no_desplegado', aeatTestStatus: 'no_validado', transmissionStatus: 'desactivada', activationAllowed: false, secretResource: ['admin','super_admin'].includes(clean(user?.role).toLowerCase()) ? activeSetup?.secret_resource || '' : undefined }, sources: SOURCES });
     }
     if (action === 'register_verifactu_vault_reference') {
