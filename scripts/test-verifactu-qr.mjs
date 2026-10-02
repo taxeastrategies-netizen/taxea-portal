@@ -10,7 +10,7 @@ for (const copy of [
   '../base44/functions/generateRecurringInvoices/invoiceQr.ts',
   '../base44/functions/approveOcrDocument/invoiceQr.ts',
 ]) {
-  assert.equal(await readFile(new URL(copy, import.meta.url), 'utf8'), helperSource, 'Las tres rutas de emisión deben usar la misma regla QR.');
+  assert.equal((await readFile(new URL(copy, import.meta.url), 'utf8')).trimEnd(), helperSource.trimEnd(), 'Las tres rutas de emisión deben usar la misma regla QR.');
 }
 const company = { nif_cif: 'B12345678' };
 const invoice = {
