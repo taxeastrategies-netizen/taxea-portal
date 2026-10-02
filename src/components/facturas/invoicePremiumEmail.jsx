@@ -67,7 +67,8 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
   const invIva = fmt(invoice?.cuota_iva);
   const invIvaPct = invoice?.tipo_iva ?? 0;
   const taxLabel = invoice?.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
-  const invRetention = invoice?.retencion_irpf > 0 ? fmt(withholdingAmount(invoice)) : null;
+  const invRetention = withholdingAmount(invoice) > 0 ? fmt(withholdingAmount(invoice)) : null;
+  const fiscalQrAmount = invoice?.qr_url && invRetention ? fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva)) : null;
   const invTotal = fmt(invoice?.total_factura);
   const invConcept = escapeHtml(invoice?.concepto || '');
   const paymentMethod = escapeHtml(invoice?.forma_pago || 'Transferencia bancaria');
@@ -212,8 +213,9 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
       <table class="totals-table">
         <tr><td>Base imponible</td><td>${invBase}</td></tr>
         <tr><td>${taxLabel} (${invIvaPct}%)</td><td>${invIva}</td></tr>
+        ${fiscalQrAmount ? `<tr><td>Importe fiscal del QR</td><td>${fiscalQrAmount}</td></tr>` : ''}
         ${invRetention ? `<tr><td>Retención IRPF</td><td>−${invRetention}</td></tr>` : ''}
-        <tr class="total-row"><td>Total</td><td>${invTotal}</td></tr>
+        <tr class="total-row"><td>${invRetention ? 'Total a pagar' : 'Total'}</td><td>${invTotal}</td></tr>
       </table>
 
       ${(paymentMethod || issuerIban) ? `
@@ -430,9 +432,12 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     addTotRow('Base imponible', fmtN(invoice.base_imponible));
     const taxLabel = invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
     addTotRow(`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, fmtN(invoice.cuota_iva));
-    if (invoice.retencion_irpf > 0) addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
+    if (withholdingAmount(invoice) > 0) {
+      if (qrPng) addTotRow('Importe fiscal del QR', fmtN(Number(invoice.base_imponible) + Number(invoice.cuota_iva)));
+      addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
+    }
     doc.line(totX, Y, totX + totW, Y); Y += 4;
-    addTotRow('Total', fmtN(invoice.total_factura), true, red);
+    addTotRow(withholdingAmount(invoice) > 0 ? 'A pagar' : 'Total', fmtN(invoice.total_factura), true, red);
 
     // Método de pago
     if (invoice.metodo_pago || company?.iban) {
