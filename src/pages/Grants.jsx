@@ -41,7 +41,10 @@ function StatusBadge({ status }) {
 }
 function GrantCard({ item }) {
   const subject = encodeURIComponent('Consulta sobre ayuda BDNS ' + item.id);
-  const body = encodeURIComponent('Hola, me interesa esta ayuda y quisiera confirmar si puedo solicitarla:\n\n' + item.title + '\n' + item.sourceUrl + '\n\n');
+  const body = encodeURIComponent('Hola, me interesa esta ayuda y quisiera confirmar si puedo solicitarla:\\n\\n' + item.title + '\\n' + item.sourceUrl + '\\n\\n');
+  const audience = item.beneficiaries?.length ? item.beneficiaries.join(' · ') : 'No especificado en la ficha estructurada';
+  const period = [item.opensAt ? 'Desde ' + formatDate(item.opensAt) : item.startNote ? 'Inicio: ' + item.startNote : null, item.closesAt ? 'Hasta ' + formatDate(item.closesAt) : item.endNote ? 'Fin: ' + item.endNote : null].filter(Boolean).join(' · ') || 'Sin fechas estructuradas; comprobar convocatoria';
+  const benefit = [item.purpose && 'Finalidad: ' + item.purpose, item.instruments?.length && 'Modalidad: ' + item.instruments.join(' · ')].filter(Boolean).join('. ') || 'El beneficio concreto debe consultarse en las bases';
   return <article className="rounded-2xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <StatusBadge status={item.status} />
@@ -49,20 +52,27 @@ function GrantCard({ item }) {
     </div>
     <h3 className="mt-3 font-jakarta text-base font-bold leading-snug text-foreground">{item.title}</h3>
     <p className="mt-2 text-xs text-muted-foreground">{item.administration || item.scope || 'Administración pública'}{item.scope && item.administration ? ' · ' + item.scope : ''}</p>
-    <div className="mt-4 flex flex-wrap gap-2 text-xs">
-      {item.opensAt && <span className="rounded-lg bg-secondary px-2.5 py-1.5"><Clock3 className="mr-1 inline h-3 w-3" />Desde {formatDate(item.opensAt)}</span>}
-      {item.closesAt && <span className="rounded-lg bg-secondary px-2.5 py-1.5"><CalendarDays className="mr-1 inline h-3 w-3" />Hasta {formatDate(item.closesAt)}</span>}
-      {!item.opensAt && item.timingNote && <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-800">{item.timingNote}</span>}
-    </div>
     {item.purpose && <p className="mt-3 text-xs text-muted-foreground">Finalidad: {item.purpose}</p>}
-    {item.beneficiaries?.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Beneficiarios oficiales: {item.beneficiaries.join(' · ')}</p>}
-    {item.sectors?.length > 0 && <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">Sectores: {item.sectors.join(' · ')}</p>}
-    {item.budget != null && <p className="mt-2 text-xs text-muted-foreground">Presupuesto de convocatoria: {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(item.budget)}</p>}
-    <div className="mt-5 flex flex-wrap gap-4 border-t border-border pt-4">
-      <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-taxea-red hover:underline">Ver convocatoria oficial <ArrowUpRight className="h-3.5 w-3.5" /></a>
-      {item.basesUrl && <a href={item.basesUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-taxea-red hover:underline">Bases reguladoras <ArrowUpRight className="h-3.5 w-3.5" /></a>}
-      <a href={'mailto:taxeastrategies@gmail.com?subject=' + subject + '&body=' + body} className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground hover:underline"><Mail className="h-3.5 w-3.5" />Preguntar a Taxea</a>
-    </div>
+    <details className="group mt-4 rounded-xl border border-border bg-secondary/30 open:bg-background">
+      <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-taxea-red marker:hidden">Ver resumen, requisitos y enlaces oficiales <span aria-hidden="true" className="float-right transition-transform group-open:rotate-180">⌄</span></summary>
+      <div className="space-y-4 border-t border-border px-4 py-4 text-xs leading-relaxed">
+        <dl className="grid gap-3">
+          <div><dt className="font-bold text-foreground">Periodo de solicitud</dt><dd className="mt-1 text-muted-foreground">{period}</dd></div>
+          <div><dt className="font-bold text-foreground">A quién va dirigida</dt><dd className="mt-1 text-muted-foreground">{audience}</dd></div>
+          <div><dt className="font-bold text-foreground">Qué ofrece</dt><dd className="mt-1 text-muted-foreground">{benefit}{item.budget != null ? '. Presupuesto total de la convocatoria: ' + new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(item.budget) + ' (no es la cuantía individual).' : ''}</dd></div>
+          <div><dt className="font-bold text-foreground">Requisitos publicados en la ficha</dt><dd className="mt-1 text-muted-foreground">{item.regions?.length ? 'Ámbito: ' + item.regions.join(' · ') + '. ' : ''}{item.sectors?.length ? 'Sectores: ' + item.sectors.join(' · ') + '. ' : ''}{item.callType ? 'Procedimiento: ' + item.callType + '. ' : ''}Las condiciones completas de acceso, exclusiones y documentación deben comprobarse en la convocatoria y sus bases.</dd></div>
+        </dl>
+        {item.basisName && <p className="text-muted-foreground">Bases reguladoras: {item.basisName}</p>}
+        <div className="flex flex-wrap gap-3 border-t border-border pt-3">
+          {item.applicationUrl && <a href={item.applicationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Sede indicada para solicitar <ArrowUpRight className="h-3.5 w-3.5" /></a>}
+          <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Convocatoria oficial <ArrowUpRight className="h-3.5 w-3.5" /></a>
+          {item.basesUrl && <a href={item.basesUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Bases reguladoras <ArrowUpRight className="h-3.5 w-3.5" /></a>}
+          <a href={'mailto:taxeastrategies@gmail.com?subject=' + subject + '&body=' + body} className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"><Mail className="h-3.5 w-3.5" />Preguntar a Taxea</a>
+        </div>
+        {!item.applicationUrl && <p className="text-amber-800">La ficha oficial no aporta una URL de tramitación válida. Accede a la convocatoria para localizar el procedimiento exacto.</p>}
+        {item.applicationUrl && <p className="text-muted-foreground">La sede procede del dato publicado por el convocante; puede llevar al portal general y no directamente al formulario.</p>}
+      </div>
+    </details>
   </article>;
 }
 export default function Grants() {
