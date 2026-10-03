@@ -4,7 +4,7 @@
  */
 export function deriveAccountingEbitda(report) {
   const pnl = report?.profitAndLoss;
-  if (!pnl || !Array.isArray(pnl.income) || !Array.isArray(pnl.expenses) || !Number.isFinite(Number(pnl.result))) return null;
+  if (!pnl || !Array.isArray(pnl.income) || !Array.isArray(pnl.expenses) || !Number.isFinite(Number(pnl.result)) || Number(report.includedEntries || 0) === 0) return null;
   const amount = rows => rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   const expenses = pnl.expenses;
   const income = pnl.income;
