@@ -78,6 +78,39 @@
       "type": "number",
       "default": 0
     },
+    "verificationChecked": {
+      "type": "number",
+      "default": 0
+    },
+    "verificationMissing": {
+      "type": "number",
+      "default": 0
+    },
+    "verificationChecksumChecked": {
+      "type": "number",
+      "default": 0
+    },
+    "verificationStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "partial",
+        "ok",
+        "incidents"
+      ],
+      "default": "pending"
+    },
+    "verificationIssues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "lastVerifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
     "bytesCopied": {
       "type": "number",
       "default": 0
