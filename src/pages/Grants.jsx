@@ -109,7 +109,11 @@ export default function Grants() {
     return () => { active = false; };
   }, [community, province, applicant, topic, administration, query, page, refresh]);
   const grants = useMemo(() => Array.from(new Map(pages.flatMap(row => row.grants || []).map(row => [row.id, row])).values()), [pages]);
-  const visible = tab === 'all' ? grants : grants.filter(row => row.status === tab);
+  const visible = useMemo(() => {
+    const rows = tab === 'all' ? grants : grants.filter(row => row.status === tab);
+    const priority = { open: 0, upcoming: 1, announced: 2, later: 3, closed: 4 };
+    return [...rows].sort((a, b) => (priority[a.status] ?? 5) - (priority[b.status] ?? 5) || String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+  }, [grants, tab]);
   const latest = pages.find(row => row.page === page);
   const changeGeography = (nextCommunity, nextProvince = '') => { setCommunity(nextCommunity); setProvince(nextProvince); setPage(0); setPages([]); };
   const chooseProvince = feature => {
