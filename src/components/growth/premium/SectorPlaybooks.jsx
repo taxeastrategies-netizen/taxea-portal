@@ -25,7 +25,7 @@ export default function SectorPlaybooks() {
 
   const launchPlaybook = async (pb) => {
     setLaunching(p => ({ ...p, [pb.id]: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Genera un plan de lanzamiento completo para el playbook "${pb.label}".\n\nDatos del playbook:\n- Dolor: ${pb.dolor}\n- Oferta: ${pb.oferta}\n- Hook: ${pb.hook}\n- Canal: ${pb.canal}\n- Precio: ${pb.precio}\n- Lead magnet: ${pb.lead_magnet}\n- KPIs objetivo: ${pb.kpis}\n\nDevuelve:\n1. 3 copies para anuncios\n2. Email de bienvenida (borrador)\n3. WhatsApp de primer contacto\n4. 5 tareas de lanzamiento ordenadas\n5. Experimento A/B recomendado\n\nTodo como BORRADOR pendiente de revision. No prometer resultados garantizados.`,
     });
     setLaunchResult(p => ({ ...p, [pb.id]: typeof res === 'string' ? res : res?.response || '' }));

@@ -32,7 +32,7 @@ export default function AiVisibilityCenter() {
 
   const generateContent = async (vertical) => {
     setLoading(p => ({ ...p, [vertical.id]: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en GEO (Generative Engine Optimization) y AEO (Answer Engine Optimization) para servicios fiscales espanoles.\n\nPara la vertical "${vertical.label}" de Taxea genera:\n1. 5 preguntas que hace el usuario ideal en ChatGPT/Perplexity/Gemini\n2. Respuesta estructurada ideal para cada pregunta (que Taxea deberia tener en su web)\n3. Schema JSON-LD recomendado (FAQPage)\n4. Que necesita Taxea para aparecer en respuestas de IA (E-E-A-T, menciones, autoridad)\n5. Gap principal vs competidores\n\nBrief: ${vertical.pilar}\nFortaleza E-E-A-T: ${vertical.eeat}\n\nRespuesta concisa y accionable. Borrador.`,
     });
     setAiContent(p => ({ ...p, [vertical.id]: typeof res === 'string' ? res : res?.response || '' }));

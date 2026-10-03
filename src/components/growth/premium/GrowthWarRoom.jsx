@@ -49,7 +49,7 @@ export default function GrowthWarRoom() {
 
   const generateReport = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Growth de "${company?.nombre || 'Taxea'}". Genera un informe ejecutivo brevísimo (War Room ${period}) basado en estos datos:\n\nMRR: ${d.mrr}EUR | CAC: ${d.cac}EUR | LTV: ${d.ltv}EUR | Objetivo: ${d.objetivo}EUR | Avance: ${d.avance}% | Riesgo: ${d.riesgo}\nCanales OK: ${d.canales_ok.join(', ')}\nFugas: ${d.fugas.join(', ')}\nRiesgos churn: ${d.churn_riesgo.join(', ')}\nTareas críticas: ${d.tareas_criticas.join(', ')}\n\nFormato: 5 bullets ejecutivos. Tono director. Sin adornos. Marca estimaciones.`,
     });
     setReport(typeof res === 'string' ? res : res?.response || '');

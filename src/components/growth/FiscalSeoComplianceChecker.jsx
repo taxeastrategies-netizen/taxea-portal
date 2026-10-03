@@ -21,7 +21,7 @@ export default function FiscalSeoComplianceChecker() {
     if (!txt.trim()) return;
     setLoading(true);
     setResult(null);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en compliance fiscal y editorial para contenidos de marketing en Espana. Revisa este texto para publicacion SEO/editorial y devuelve un JSON:
 {
   "nivel_riesgo": "bajo|medio|alto|critico",

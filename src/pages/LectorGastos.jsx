@@ -277,7 +277,7 @@ export default function LectorGastos() {
     debouncedLoadDocs();
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await base44.controlledCore.InvokeLLM({
         prompt: buildOcrPrompt(company, fiscalContext.profile, fiscalContext.activity),
         file_urls: [doc.fileStorageUrl],
         response_json_schema: OCR_SCHEMA,

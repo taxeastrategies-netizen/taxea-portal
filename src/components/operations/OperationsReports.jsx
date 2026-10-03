@@ -43,7 +43,7 @@ export default function OperationsReports() {
   const generateReport = async () => {
     if (!data) return;
     setGenerating(true);
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt: `Genera un informe operativo ejecutivo para la empresa "${company.nombre || 'la empresa'}". Actúa como Director de Operaciones senior.\n\nDatos actuales:\n- Total tareas: ${data.tasks.length} (${data.overdue.length} vencidas, ${data.critical.length} críticas, ${data.blocked.length} bloqueadas)\n- Tareas con impacto fiscal/contable: ${data.withImpact.length}\n- Proyectos activos: ${data.activeProjects.length} (${data.highRiskProjects.length} en riesgo alto)\n- Procesos definidos: ${data.processes.length}\n- Iniciativas roadmap: ${data.roadmap.length}\n\nEl informe debe incluir:\n1. Situación operativa actual (semáforo: verde/ámbar/rojo)\n2. Alertas críticas\n3. Productividad y rendimiento\n4. Proyectos en riesgo\n5. Tareas con impacto fiscal/contable pendientes\n6. Recomendaciones inmediatas (3-5 acciones)\n7. Recomendaciones estratégicas\n\nTono: ejecutivo, directo, sin florituras.`,
       model: 'claude_sonnet_4_6',
     });

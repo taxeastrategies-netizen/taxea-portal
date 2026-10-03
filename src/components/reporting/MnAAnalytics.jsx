@@ -45,7 +45,7 @@ export default function MnAAnalytics({ financials, company, invoices, debts }) {
 
   const generateAnalysis = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista de M&A de una firma de inversión. Prepara un análisis preliminar de atractivo para adquisición/inversión en español (máx 220 palabras) estilo PE/VC:
 
 Target: ${company?.nombre_comercial || company?.razon_social || 'N/A'}

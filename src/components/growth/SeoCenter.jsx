@@ -58,7 +58,7 @@ export default function SeoCenter() {
 
   const generateClusterIdeas = async (cluster) => {
     setLoading(p => ({ ...p, [cluster.id]: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto SEO para el mercado espanol en fiscalidad y asesorias. Para el cluster "${cluster.keyword}" genera:\n1. Brief del articulo pilar (estructura H1-H2, 300 palabras)\n2. 5 preguntas FAQ para schema\n3. 3 ideas de lead magnet\n4. Advertencias de compliance fiscal si aplica\n\nRespuesta concisa y practica. Marca borrador.`,
     });
     setAiCluster(p => ({ ...p, [cluster.id]: typeof res === 'string' ? res : res?.response || '' }));

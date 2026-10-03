@@ -42,7 +42,7 @@ export default function CampaignAutopilot() {
     if (!form.objetivo.trim()) return;
     setLoading(true);
     setResult(null);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en campanas de marketing para asesorias fiscales espanolas. Genera una campana completa basada en este objetivo:\n\nObjetivo: ${form.objetivo}\nSegmento: ${form.segmento}\nSector: ${form.sector}\nOferta: ${form.oferta}\nCanal principal: ${form.canal}\nPresupuesto: ${form.presupuesto}EUR\nPlazo: ${form.plazo} dias\nTono: ${form.tono}\nLead magnet: ${form.lead_magnet}\nAgresividad comercial: ${form.agresividad}\nEmpresa: ${company?.nombre || 'Taxea'}\n\nDevuelve un JSON con exactamente estas secciones:\n{\n  "nombre": "...",\n  "posicionamiento": "...",\n  "buyer_persona": "...",\n  "dolor_principal": "...",\n  "promesa_prudente": "...",\n  "oferta": "...",\n  "landing_sugerida": "descripcion de la landing",\n  "secuencia_email": "3 emails con asunto y cuerpo",\n  "secuencia_whatsapp": "3 mensajes con timing",\n  "copies_ads": "3 copies de anuncio con hook",\n  "hooks": "5 hooks creativos",\n  "posts_organicos": "3 ideas de post",\n  "articulos_seo": "3 titulos con keyword",\n  "metricas_objetivo": "CPL, leads, cierres esperados",\n  "presupuesto_detalle": "desglose por canal",\n  "riesgos": "3 riesgos a considerar",\n  "compliance_checklist": "5 puntos de revision legal",\n  "tareas_lanzamiento": "10 tareas ordenadas"\n}\n\nIMPORTANTE: Todo es BORRADOR pendiente de aprobacion. No prometer resultados garantizados. No usar claims fiscales absolutos.`,
       response_json_schema: {
         type: 'object',

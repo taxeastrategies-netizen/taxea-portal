@@ -53,7 +53,7 @@ export default function GrowthForecast() {
   const getInsight = async () => {
     setLoading(true);
     const r = results.base;
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Analiza este forecast de growth y da 3 recomendaciones concretas para alcanzar el objetivo.\n\nObjetivo MRR: ${params.objetivo_mrr}EUR\nPresupuesto: ${params.presupuesto}EUR/mes\nLeads estimados (base): ${r.leads_mes}/mes\nCierres estimados: ${r.cierres}/mes\nMRR nuevo estimado: ${r.mrr_nuevo}EUR/mes\nCAC: ${r.cac}EUR\nChurn: ${params.churn}%\nPayback: ${r.payback} meses\n\nIdentifica el cuello de botella principal, calcula cuantos meses tardara en llegar al objetivo y recomienda la accion de mayor impacto. Borrador.`,
     });
     setAiInsight(typeof res === 'string' ? res : res?.response || '');

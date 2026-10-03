@@ -29,7 +29,7 @@ export default function ActionPlan() {
   const generate = async () => {
     setLoading(true);
     setPlan(null);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Growth de "${company?.nombre || 'Taxea'}". Genera un plan de accion de ${horizon} dias basado en:\n\nObjetivo: ${form.objetivo}\nPresupuesto: ${form.presupuesto}EUR/mes\nEquipo: ${form.equipo}\nEstado actual: ${form.estado}\nRestricciones: ${form.restricciones}\n\nEstructura del plan:\n\n# PLAN DE ACCION ${horizon} DIAS — ${company?.nombre || 'TAXEA'}\n\n## Prioridades clave\n(3 prioridades con justificacion)\n\n## Acciones por semana\n${horizon === '7' ? '## Dia 1-3\n## Dia 4-7' : horizon === '30' ? '## Semana 1\n## Semana 2\n## Semana 3\n## Semana 4' : '## Mes 1 (detallado)\n## Mes 2 (objetivos)\n## Mes 3 (objetivos)'}\n\n## Campanas a lanzar\n## Contenidos a crear\n## Landings a corregir\n## Seguimientos comerciales\n## Experimentos\n## Metricas de exito\n\n## Riesgos\n## Puntos de revision\n\nTono: ejecutivo, directo, accionable. Cada accion con responsable, metrica y tiempo estimado. BORRADOR.`,
     });
     setPlan(typeof res === 'string' ? res : res?.response || '');

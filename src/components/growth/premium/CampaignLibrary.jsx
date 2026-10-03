@@ -25,7 +25,7 @@ export default function CampaignLibrary() {
 
   const adapt = async (t) => {
     setLoading(p => ({ ...p, [t.id]: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en marketing para asesorias. Adapta la campana "${t.nombre}" ${sector ? `para el sector "${sector}"` : 'con un toque fresco'}.\n\nDatos base:\n- Hook: ${t.hook}\n- Oferta: ${t.oferta}\n- Lead magnet: ${t.lead_magnet}\n- Compliance: ${t.compliance}\n\nGenera:\n1. Hook adaptado (1 frase)\n2. 2 copies de anuncio\n3. Asunto de email (3 opciones)\n4. Mensaje WhatsApp inicial\n5. 3 tareas de lanzamiento\n\nBorrador pendiente de aprobacion. Sin promesas garantizadas.`,
     });
     setAiAdapt(p => ({ ...p, [t.id]: typeof res === 'string' ? res : res?.response || '' }));

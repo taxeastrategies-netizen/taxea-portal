@@ -38,7 +38,7 @@ export default function MonthlyReport({ financials, company, invoices, expenses,
 
   const generateNarrative = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista financiero de Big4. Escribe un resumen ejecutivo mensual profesional en español (máx 150 palabras) estilo KPMG para:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}

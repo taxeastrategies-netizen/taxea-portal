@@ -56,7 +56,7 @@ export default function ARInvoiceTable({ invoices, contacts, onReconcile }) {
     setSending(inv.id);
     setSendNotice('');
     try {
-      await base44.integrations.Core.SendEmail({ operation: 'reminder', companyId: inv.company_id, invoiceId: inv.id });
+      await base44.controlledCore.SendEmail({ operation: 'reminder', companyId: inv.company_id, invoiceId: inv.id });
       setSendNotice(`Recordatorio enviado para la factura ${inv.numero_factura}.`);
     } catch (error) {
       setSendNotice(error?.response?.data?.error || error?.message || 'No se pudo enviar el recordatorio.');

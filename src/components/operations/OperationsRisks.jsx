@@ -59,7 +59,7 @@ export default function OperationsRisks() {
   const analyzeRisks = async () => {
     setAnalyzing(true);
     const active = risks.filter(r => r.status !== 'cerrado');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Analiza estos ${active.length} riesgos operativos activos y da recomendaciones de mitigación priorizadas. Riesgos: ${active.map(r => `[${r.severity}] ${r.title}: ${r.category}, prob ${r.probability}, impacto ${r.impact}${r.economic_impact ? ', impacto económico ' + r.economic_impact + '€' : ''}`).join('\n')}. Sé directo y accionable. Máximo 200 palabras.`,
     });
     setAiAnalysis(typeof res === 'string' ? res : res?.response || '');

@@ -33,7 +33,7 @@ export default function InventorySmartImport() {
     setAnalyzing(true);
     setProposals([]);
     setSummary('');
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt: `Analiza este documento (factura, albarán, ticket, Excel o imagen de compra) y extrae todos los productos/artículos que aparezcan.\n\nPara cada línea de producto detectada, proporciona:\n- nombre del producto\n- descripción\n- cantidad\n- precio unitario sin IVA\n- IVA si aparece\n- descuento si aparece\n- unidad de medida\n- proveedor si aparece\n- acción propuesta: "crear_producto", "actualizar_precio" o "registrar_entrada"\n- confianza (alta/media/baja)\n- aviso si hay algo extraño\n\nSi es un Excel de inventario, extrae todos los productos con sus stocks, precios y datos.\n\nGenera también un resumen ejecutivo de lo detectado.`,
       file_urls: [fileUrl],
       model: 'claude_sonnet_4_6',

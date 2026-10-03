@@ -58,7 +58,7 @@ export default function LegalKnowledgeEngine() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setLoading(true);
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto jurídico y consultor legal español con conocimiento profundo de: derecho tributario (AEAT, DGT, TEAC, TEAR, TS, AN), derecho mercantil (LSC, CCom), derecho de la UE y jurisprudencia española e internacional.
 
 Contexto: Legal Knowledge Engine de Taxea Business OS. El usuario busca información jurídica, jurisprudencia o análisis doctrinal.

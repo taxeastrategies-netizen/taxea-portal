@@ -88,7 +88,7 @@ export default function OperationsFocusView() {
     const critical = tasks.filter(t => t.priority === 'critica' && !['finalizado','archivado'].includes(t.status));
     const openTickets = tickets.filter(t => !['resuelto','cerrado','archivado'].includes(t.status));
     const highRisks = risks.filter(r => ['alto','critico'].includes(r.severity) && r.status !== 'cerrado');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Operaciones. Fecha: ${today}. Resumen del ${tab === 'today' ? 'día' : tab === 'week' ? 'semana' : 'mes'}: ${overdue.length} tareas vencidas, ${critical.length} críticas, ${openTickets.length} tickets abiertos, ${highRisks.length} riesgos altos. Proyectos activos: ${projects.filter(p => p.status === 'activo').length}. Da una recomendación operativa concreta en 2-3 frases, directa y accionable.`,
     });
     setAiRec(typeof res === 'string' ? res : res?.response || '');

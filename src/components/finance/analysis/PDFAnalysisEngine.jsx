@@ -247,7 +247,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         const tipoInfo = PDF_TYPES.find(t => t.value === u.type);
         setMsg(`Analizando ${i + 1}/${uploadedUrls.length}: ${u.nombre}…`, Math.round(28 + (i / uploadedUrls.length) * 60));
 
-        const result = await base44.integrations.Core.InvokeLLM({
+        const result = await base44.controlledCore.InvokeLLM({
           prompt: `Eres un experto contable español certificado (PGC 2007). Extrae los datos contables de este documento.
 
 EMPRESA: "${empresa}" | EJERCICIO: ${ejercicio}
@@ -504,7 +504,7 @@ VERIFICACIÓN FINAL:
                 },
               };
 
-              const corrResult = await base44.integrations.Core.InvokeLLM({
+              const corrResult = await base44.controlledCore.InvokeLLM({
                 prompt: `Eres un auditor contable español. He extraído el balance de situación pero NO CUADRA.
 
 Datos actuales calculados:

@@ -29,7 +29,7 @@ export default function CorporateLaw() {
 
   const generarActa = async () => {
     setGeneratingActa(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Genera un modelo de Acta de Junta General Ordinaria para una Sociedad de Responsabilidad Limitada española llamada "Taxea Strategies SL", con CIF B12345678. La junta se celebra el 30 de junio de 2026 en Santa Cruz de Tenerife. Socios presentes: 3 socios que representan el 100% del capital social. Orden del día: 1) Aprobación cuentas anuales 2025, 2) Aplicación resultado ejercicio, 3) Renovación cargo administrador único. Formato profesional con todos los elementos legalmente requeridos por la LSC.`,
     });
     setActaGenerada(res);

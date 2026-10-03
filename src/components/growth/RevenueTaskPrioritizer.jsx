@@ -52,7 +52,7 @@ export default function RevenueTaskPrioritizer() {
   const generatePlan = async () => {
     setLoading(true);
     const top5 = tasks.slice(0, 5).map(t => `- ${t.tarea} (ICE: ${t.ice}, Potencial: ${t.potencial_eur}EUR)`).join('\n');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Growth Director de una asesoria fiscal. Crea un plan de accion semanal con estas 5 tareas prioritarias:\n\n${top5}\n\nGenera:\n1. Orden de ejecucion optimo con justificacion\n2. Responsables sugeridos (marketing, ventas, tecnico)\n3. Tiempo estimado total\n4. Metrica de exito por tarea\n5. Alerta si alguna tarea depende de otra\n\nBrief ejecutivo, maximo 300 palabras. Borrador.`,
     });
     setAiPlan(typeof res === 'string' ? res : res?.response || '');

@@ -137,7 +137,7 @@ Para nóminas, las cuentas contables estándar son:
 
 Sé preciso. Si un campo no aparece, devuelve null. No inventes datos.`;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt,
       file_urls: [fileUrl],
       response_json_schema: {

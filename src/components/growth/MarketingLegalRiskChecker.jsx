@@ -36,7 +36,7 @@ export default function MarketingLegalRiskChecker() {
     if (!txt.trim()) return;
     setLoading(true);
     setResult(null);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en compliance de marketing para servicios fiscales y financieros en Espana. Analiza el texto publicitario y devuelve un JSON con este formato exacto:
 {
   "nivel_riesgo": "bajo|medio|alto|critico",

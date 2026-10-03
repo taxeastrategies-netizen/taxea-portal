@@ -40,7 +40,7 @@ export default function ContractsCenter() {
 
   const runAI = async (prompt) => {
     setAiLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un abogado experto en derecho contractual español e internacional. ${prompt}`,
     });
     setAiResult(res);

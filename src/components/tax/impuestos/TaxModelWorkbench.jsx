@@ -259,7 +259,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
       let rawContent = '';
       let extracted = /** @type {any} */ ({});
       if (isPdf) {
-        const response = /** @type {any} */ (await base44.integrations.Core.ExtractDataFromUploadedFile({
+        const response = /** @type {any} */ (await base44.controlledCore.ExtractDataFromUploadedFile({
           operation: 'extract', companyId, file_url: upload.file_url,
           json_schema: {
             type: 'object',

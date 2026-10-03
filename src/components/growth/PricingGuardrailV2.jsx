@@ -54,7 +54,7 @@ export default function PricingGuardrailV2() {
   const generateArgument = async () => {
     if (!result) return;
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asesor comercial experto en venta de servicios de asesoria fiscal. Genera un argumento para defender el precio de ${result.precio_recomendado}EUR/mes a un cliente ${data.tipo_cliente} con facturacion de ${data.facturacion.toLocaleString('es-ES')}EUR/ano.\n\nEl precio minimo es ${result.precio_minimo}EUR/mes. Horas estimadas mensuales: ${result.hours}h. Coste interno: ${result.coste_bruto}EUR.\n\nGenera:\n1. Argumento principal de valor (2 frases)\n2. Respuesta a "es demasiado caro"\n3. Comparativa con coste de errores fiscales\n4. Condiciones negociables\n\nTono: consultivo, no vendedor. Borrador.`,
     });
     setAiArg(typeof res === 'string' ? res : res?.response || '');

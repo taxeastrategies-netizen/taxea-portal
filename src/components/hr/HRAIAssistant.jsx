@@ -30,7 +30,7 @@ export default function HRAIAssistant() {
     setInput('');
     setLoading(true);
 
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asistente de Recursos Humanos experto integrado en Taxea Business OS. 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 

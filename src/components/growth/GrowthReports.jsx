@@ -37,7 +37,7 @@ export default function GrowthReports() {
       executive: `Genera un informe ejecutivo premium estilo McKinsey/Big Four de Marketing y Growth para "${company?.nombre || 'la empresa'}".\n\nKPIs:\n- MRR: ${DEMO_KPIS.mrr}EUR/mes\n- Clientes cerrados: ${DEMO_KPIS.closed}\n- CAC: ${DEMO_KPIS.cac}EUR\n- Conversion: ${DEMO_KPIS.conv}%\n- Churn: ${DEMO_KPIS.churn}%\n- LTV estimado: ${Math.round(DEMO_KPIS.mrr / DEMO_KPIS.closed * 18)}EUR\n- LTV/CAC: ${(Math.round(DEMO_KPIS.mrr / DEMO_KPIS.closed * 18) / DEMO_KPIS.cac).toFixed(1)}x\n\nEstructura:\n# INFORME EJECUTIVO DE MARKETING Y GROWTH\n## Executive Summary\n## 1. Situacion comercial actual\n## 2. Analisis de canales y eficiencia\n## 3. Salud del embudo de venta\n## 4. Rentabilidad del marketing\n## 5. Riesgos y oportunidades\n## 6. Recomendaciones estrategicas\n## 7. Plan de accion 90 dias\n## 8. KPIs de seguimiento\n\nTono: consultor senior, denso, con datos, benchmarks y recomendaciones de alto impacto.`,
     };
 
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: prompts[type],
       model: 'claude_sonnet_4_6',
     });

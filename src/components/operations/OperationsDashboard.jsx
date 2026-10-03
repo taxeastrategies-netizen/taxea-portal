@@ -52,7 +52,7 @@ export default function OperationsDashboard() {
     const overdue = tasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== 'finalizado' && t.status !== 'archivado');
     const critical = tasks.filter(t => t.priority === 'critica' && t.status !== 'finalizado');
     const blocked = tasks.filter(t => t.status === 'bloqueado');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Operaciones de una pyme. Tienes: ${overdue.length} tareas vencidas, ${critical.length} tareas críticas, ${blocked.length} tareas bloqueadas, ${projects.filter(p => p.status === 'activo').length} proyectos activos. Da una recomendación operativa del día en 2-3 frases, directa y accionable. Sin eufemismos.`,
     });
     setAiRec(typeof res === 'string' ? res : res?.response || 'Sin recomendación disponible.');

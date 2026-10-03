@@ -150,7 +150,7 @@ export default function PDFImportWizard({ importType, companyId, company, onComp
     setOcrStatus('Asignando confianza por bloque...');
     await delay(400);
 
-    // In production, this would call base44.integrations.Core.InvokeLLM + ExtractDataFromUploadedFile
+    // In production, this would call base44.controlledCore.InvokeLLM + ExtractDataFromUploadedFile
     setExtracted({ balance: DEMO_BALANCE_EXTRACTED, pyg: DEMO_PYG_EXTRACTED });
     setAlerts(buildAlerts(DEMO_BALANCE_EXTRACTED, DEMO_PYG_EXTRACTED));
     setLoading(false);

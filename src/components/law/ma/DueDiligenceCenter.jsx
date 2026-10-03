@@ -74,7 +74,7 @@ export default function DueDiligenceCenter() {
   const generateSummary = async () => {
     setAiLoading(true);
     const flags = DD_AREAS.flatMap(a => a.items.filter(i => i.flag).map(i => `[${a.area}] ${i.label}`));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Genera un Executive Summary de Due Diligence profesional en formato de informe ejecutivo para M&A. 
       
 Progreso general por área: ${DD_AREAS.map(a => `${a.area} (${a.progress}%)`).join(', ')}.

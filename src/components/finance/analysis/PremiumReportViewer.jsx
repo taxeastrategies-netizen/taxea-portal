@@ -319,7 +319,7 @@ Genera la respuesta en JSON con esta estructura exacta:
   ]
 }`;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt,
       response_json_schema: {
         type: 'object',

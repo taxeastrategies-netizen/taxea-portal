@@ -112,7 +112,7 @@ ${Object.keys(supuestos).length > 0 ? 'Supuestos usuario: ' + JSON.stringify(sup
 
 Genera JSON con: diagnostico_ejecutivo (4-6 frases, diagnóstico general prudente y accionable), analisis_balance {activo_no_corriente, activo_corriente, patrimonio_neto, pasivo_no_corriente, pasivo_corriente} (2-3 frases cada uno), analisis_pyg {ingresos, gastos, resultado} (2 frases cada uno, solo si hasPyG=true, si no pon null), analisis_fiscal (3-4 frases preliminares), conclusion_final (3-5 frases con recomendación profesional).`;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt,
       response_json_schema: {
         type: 'object',

@@ -264,7 +264,7 @@ export default function AdminOcrBandeja() {
     const schema = isExpense ? OCR_SCHEMA_EXPENSE : OCR_SCHEMA_INCOME;
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await base44.controlledCore.InvokeLLM({
         prompt, file_urls: [doc.fileStorageUrl], response_json_schema: schema,
       });
       const doneNow = new Date().toISOString();

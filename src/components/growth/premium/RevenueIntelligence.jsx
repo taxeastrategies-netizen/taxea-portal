@@ -28,7 +28,7 @@ export default function RevenueIntelligence() {
   const generatePlan = async () => {
     setLoading(true);
     const top = INSIGHTS.slice(0, 4).map(i => `- ${i.titulo}: ${i.accion}`).join('\n');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Revenue de Taxea. Basandote en estos insights de Revenue Intelligence:\n\n${top}\n\nOportunidad total estimada: ${totalOpp.toLocaleString('es-ES')}EUR\nRiesgo estimado: ${totalRisk.toLocaleString('es-ES')}EUR\n\nGenera un plan de accion de 30 dias con las 5 acciones de mayor impacto, ordenadas por prioridad. Borrador.`,
     });
     setAiPlan(typeof res === 'string' ? res : res?.response || '');

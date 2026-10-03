@@ -54,7 +54,7 @@ export default function ExecutiveCommentary({ financials, company }) {
       cautious: 'prudente y conservador, destacando riesgos y medidas',
     };
 
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un consultor ejecutivo con estilo ${styleDescriptions[style]}.
 Escribe un executive commentary financiero en español (200-280 palabras) para: ${audienceDescriptions[audience]}.
 Tono: ${toneDescriptions[tone]}.

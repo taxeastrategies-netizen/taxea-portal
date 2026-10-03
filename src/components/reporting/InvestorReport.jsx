@@ -19,7 +19,7 @@ export default function InvestorReport({ financials, company, invoices, expenses
 
   const generateMemo = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista de M&A / VC preparando un investor memo en español (máx 200 palabras) estilo Goldman Sachs / McKinsey:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}

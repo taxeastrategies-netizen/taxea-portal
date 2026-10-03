@@ -209,7 +209,7 @@ REGLAS CRÍTICAS:
 - NO inventes cuentas ni importes. Si una celda está vacía, pon null.
 - Incluye TODAS las subcuentas, no solo totales.`;
 
-        const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
+        const result = await base44.controlledCore.ExtractDataFromUploadedFile({
           operation: 'extract', companyId, file_url,
           json_schema: schema,
         });
@@ -217,7 +217,7 @@ REGLAS CRÍTICAS:
         if (result.status !== 'success' || !result.output?.filas?.length) {
           // Fallback: InvokeLLM with file
           await setMsg(`Analizando ${file.name} con motor IA avanzado…`, 500);
-          const llmRes = await base44.integrations.Core.InvokeLLM({
+          const llmRes = await base44.controlledCore.InvokeLLM({
             prompt: `${prompt}\n\nExtrae las filas contables del archivo adjunto.`,
             file_urls: [file_url],
             response_json_schema: schema,

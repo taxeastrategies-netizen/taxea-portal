@@ -71,7 +71,7 @@ export default function BankReport({ financials, company, invoices, expenses, de
 
   const generateAnalysis = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista de riesgos bancarios. Prepara un informe de bankability en español (máx 200 palabras) para presentar a una entidad financiera:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}

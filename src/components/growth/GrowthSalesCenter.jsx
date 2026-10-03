@@ -50,7 +50,7 @@ function ObjectionAssistant() {
   const handleAI = async () => {
     if (!custom) return;
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asesor de ventas experto en servicios de asesoría fiscal y financiera para pymes españolas. Un prospecto dice: "${custom}"\n\nGenera 3 respuestas:\n1. Respuesta directa para WhatsApp (máx 2 frases)\n2. Respuesta consultiva para llamada (3-4 frases)\n3. Pregunta de reencuadre\n\nTono: profesional, empático, sin presión. Sin promesas absolutas.`
     });
     setAiResponse(typeof res === 'string' ? res : res?.response || '');

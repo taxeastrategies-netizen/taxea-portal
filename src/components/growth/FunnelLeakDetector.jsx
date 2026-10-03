@@ -69,7 +69,7 @@ export default function FunnelLeakDetector() {
       const conv = getConv(s, i + 1, FUNNEL_STAGES);
       return `${s.label}: ${conv}% conv`;
     }).join(', ');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en optimizacion de embudos de ventas para asesorias fiscales. Analiza este embudo y da las 3 acciones prioritarias con mayor impacto economico:\n\n${summary}\n\nIngreso medio por cliente: 240EUR/mes. Leads totales: 247.\n\nIdentifica la fuga principal, calcula el impacto economico y recomienda la accion concreta con mayor ROI. Responde en maximo 4 parrafos. Marca estimaciones claramente.`,
     });
     setAiInsight(typeof res === 'string' ? res : res?.response || '');

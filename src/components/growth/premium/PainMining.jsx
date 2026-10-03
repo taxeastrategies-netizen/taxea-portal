@@ -29,7 +29,7 @@ export default function PainMining() {
   const convert = async (pain) => {
     setSelected(pain.id);
     setLoading(p => ({ ...p, [pain.id]: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en marketing de contenidos y ventas para asesorias fiscales. Convierte este dolor de cliente en activos de marketing:\n\nDolor: "${pain.dolor}"\nSector: ${pain.sector}\nUrgencia: ${pain.urgencia}\nSentimiento: ${pain.sentimiento}\n\nGenera:\n1. Hook para anuncio (1 frase)\n2. Titular de landing\n3. Titulo de articulo SEO con keyword\n4. Asunto de email\n5. Mensaje WhatsApp (max 2 frases)\n6. Oferta que resuelve el dolor\n7. Objecion probable y respuesta\n\nTodo como borrador. Sin promesas absolutas.`,
     });
     setAiOutput(p => ({ ...p, [pain.id]: typeof res === 'string' ? res : res?.response || '' }));

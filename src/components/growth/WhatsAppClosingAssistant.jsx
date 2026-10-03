@@ -34,7 +34,7 @@ export default function WhatsAppClosingAssistant() {
     if (!convo.trim()) return;
     setLoading(true);
     setResult(null);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en ventas consultivas para asesorias fiscales espanolas. Analiza esta conversacion de WhatsApp y devuelve un JSON con el siguiente formato exacto:
 {
   "estado": "caliente|necesita confianza|objecion precio|objecion cambio|falta urgencia|comparar competencia|perdido probable|reactivar mas adelante",

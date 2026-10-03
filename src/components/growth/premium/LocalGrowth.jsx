@@ -18,7 +18,7 @@ export default function LocalGrowth() {
 
   const generate = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en SEO y marketing local para Canarias. Genera un plan de dominacion local para:\n\nCiudad: ${form.ciudad}\nSector: ${form.sector}\nPresupuesto: ${form.presupuesto}EUR/mes\nPrioridad: ${form.prio}\n\nGenera:\n\n# PLAN LOCAL 30 DIAS\n## Keywords locales (10 con volumen estimado)\n## Google Business Profile (5 acciones)\n## Resenas (objetivo y estrategia)\n## Contenido local (3 articulos/posts)\n## Google Ads local (si presupuesto > 200EUR)\n## Directorios y menciones locales\n\n# PLAN LOCAL 90 DIAS\n## Acciones clave mes 2 y 3\n## Metricas de exito\n\nBorrador. Datos estimados marcados como tal.`,
     });
     setPlan(typeof res === 'string' ? res : res?.response || '');

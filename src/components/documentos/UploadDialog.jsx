@@ -16,7 +16,7 @@ const ALL_CARPETAS = getAllCarpetas();
 async function clasificarConIA(nombre) {
   try {
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000));
-    const llmCall = base44.integrations.Core.InvokeLLM({
+    const llmCall = base44.controlledCore.InvokeLLM({
       prompt: `Analiza el nombre de este documento y clasifícalo en la carpeta correcta de un despacho fiscal/legal.
 Documento: "${nombre}"
 

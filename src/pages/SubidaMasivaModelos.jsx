@@ -25,7 +25,7 @@ const MODELO_A_CARPETA = {
 
 async function extraerConIA(fileUrl, fileName) {
   // Lee el PDF completo y extrae datos del documento real
-  const result = await base44.integrations.Core.InvokeLLM({
+  const result = await base44.controlledCore.InvokeLLM({
     prompt: `Eres un experto en modelos fiscales españoles. Lee este PDF y extrae TODOS los datos posibles.
 
 Busca especialmente:
@@ -214,7 +214,7 @@ export default function SubidaMasivaModelos() {
         razonSocial: empresa.razon_social || empresa.nombre_comercial,
         resultado: ex.resultado,
       });
-      await base44.integrations.Core.SendEmail({
+      await base44.controlledCore.SendEmail({
         operation: 'tax_notice', companyId: empresa.id, documentId: doc.id,
         subject: `Tu ${modeloLabel} ha sido presentado correctamente — Taxea Strategies`,
         body: htmlEmail,

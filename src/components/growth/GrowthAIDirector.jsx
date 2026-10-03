@@ -59,7 +59,7 @@ export default function GrowthAIDirector() {
     setMessages(newMessages);
     setLoading(true);
     const history = newMessages.slice(-8).map(m => `${m.role === 'user' ? 'Usuario' : 'Asistente'}: ${m.content}`).join('\n\n');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `${SYSTEM_PROMPTS[mode]}\n\nContexto de empresa: ${company?.nombre || 'asesoria/pyme espanola'}\n\nConversacion:\n${history}`,
       model: 'claude_sonnet_4_6',
     });

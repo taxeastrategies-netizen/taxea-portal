@@ -106,7 +106,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
   const generateAI = async () => {
     setLoading(true);
     const f = financials || {};
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista financiero senior de Big4 (Deloitte/KPMG). 
 Analiza este perfil financiero empresarial y genera un comentario ejecutivo profesional en español (máximo 180 palabras), estilo consultoría estratégica:
 

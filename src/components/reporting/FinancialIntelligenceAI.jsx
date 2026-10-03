@@ -109,7 +109,7 @@ ${ctx}`,
     setResult(null);
     const ctx = buildContext();
     const prompt = PROMPTS[selected](ctx);
-    const res = await base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
+    const res = await base44.controlledCore.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
     setResult(typeof res === 'string' ? res : res?.result || res?.text || '');
     setLoading(false);
   };

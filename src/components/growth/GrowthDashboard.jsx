@@ -133,7 +133,7 @@ export default function GrowthDashboard() {
 
   const generateAiRec = async () => {
     setLoadingAi(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Growth de una asesoría/pyme española. Analiza estos KPIs y da 3 recomendaciones concretas y accionables en máximo 120 palabras total:\n\n- Total leads: ${totalLeads}\n- Leads cualificados: ${totalQualified} (${totalLeads > 0 ? Math.round(totalQualified/totalLeads*100) : 0}%)\n- Clientes cerrados: ${totalClosed}\n- MRR generado: ${totalMrr}€\n- CAC medio: ${Math.round(avgCac)}€\n- Conversión lead→cliente: ${convRate}%\n- Inversión publicitaria: ${totalBudget}€\n- Campañas activas: ${campaigns.filter(c=>c.status==='activa').length}\n- Campañas en riesgo (ROAS<1.5): ${campaigns.filter(c=>c.roas>0&&c.roas<1.5).length}\n\nFormato: emoji + acción directa. Sin titulares. Sin explicaciones largas.`
     });
     setAiRec(typeof res === 'string' ? res : res?.response || '');

@@ -260,7 +260,7 @@ export default function OperationsAICenter() {
   const runDirectorBriefing = async () => {
     if (!data) return;
     setGenerating(p => ({ ...p, director: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el Director de Operaciones de "${company.nombre || 'la empresa'}". Genera un briefing ejecutivo del estado operativo actual. Sé directo, analítico y accionable.\n\nDatos:\n- Health Score: ${healthScore}/100\n- Tareas vencidas: ${data.overdue.length}\n- Tareas críticas: ${data.critical.length}\n- Tareas bloqueadas: ${data.blocked.length}\n- Tareas con impacto fiscal/contable: ${data.withImpact.length}\n- Proyectos activos: ${data.activeProjects.length} (${data.highRiskProjects.length} en riesgo alto)\n- Tickets abiertos: ${data.openTickets.length}\n- Riesgos activos: ${data.activeRisks.length} (${data.criticalRisks.length} críticos)\n- Procesos documentados: ${data.processes.length}\n- Roadmap items: ${data.roadmap.length}\n\nEstructura del briefing:\n🎯 SITUACIÓN GENERAL (2 frases)\n⚠️ ALERTAS CRÍTICAS (lista de máximo 3)\n📊 ANÁLISIS DE CAPACIDAD (2-3 frases)\n💡 DECISIONES REQUERIDAS HOY (lista de 3-4 acciones concretas)\n🔮 PREVISIÓN PRÓXIMOS 7 DÍAS (2 frases)\n\nTono: CEO-level, sin florituras, máxima densidad informativa.`,
       model: 'claude_sonnet_4_6',
     });
@@ -271,7 +271,7 @@ export default function OperationsAICenter() {
   const runAudit = async () => {
     if (!data) return;
     setGenerating(p => ({ ...p, audit: true }));
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Realiza una auditoría operativa automática de "${company.nombre || 'la empresa'}". Actúa como auditor senior de operaciones.\n\nDatos actuales:\n- ${data.tasks.length} tareas totales (${data.overdue.length} vencidas, ${data.blocked.length} bloqueadas)\n- ${data.projects.length} proyectos (${data.activeProjects.length} activos)\n- ${data.processes.length} procesos documentados\n- ${data.risks.length} riesgos registrados (${data.criticalRisks.length} críticos)\n- ${data.tickets.length} tickets (${data.openTickets.length} abiertos)\n\nEmite un informe de auditoría con:\n1. PUNTUACIÓN POR ÁREA (Gestión de tareas /10, Proyectos /10, Procesos /10, Riesgos /10, Incidencias /10)\n2. HALLAZGOS CRÍTICOS\n3. HALLAZGOS MODERADOS  \n4. BUENAS PRÁCTICAS DETECTADAS\n5. PLAN DE ACCIÓN CORRECTIVO (5-7 acciones con plazo)\n6. DICTAMEN FINAL\n\nTono: formal, riguroso, estilo Big Four.`,
       model: 'claude_sonnet_4_6',
     });
@@ -283,7 +283,7 @@ export default function OperationsAICenter() {
     if (!data) return;
     setGenerating(p => ({ ...p, report: true }));
     const margin = data.activeProjects.reduce((sum, p) => sum + (p.revenue || 0) - (p.actual_cost || 0), 0);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Genera un informe operativo ejecutivo premium estilo McKinsey / Big Four para "${company.nombre || 'la empresa'}".\n\nDatos operativos:\n- Health Score: ${healthScore}/100\n- Tareas: ${data.tasks.length} totales, ${data.overdue.length} vencidas, ${data.critical.length} críticas\n- Proyectos: ${data.activeProjects.length} activos, ${data.highRiskProjects.length} en riesgo\n- Margen operativo proyectos: ${margin > 0 ? '+' : ''}${margin.toLocaleString('es-ES')}€\n- Riesgos: ${data.criticalRisks.length} críticos activos\n- Procesos: ${data.processes.length} documentados\n- Eficiencia general: ${Math.round((data.tasks.filter(t=>t.status==='finalizado').length / Math.max(data.tasks.length,1))*100)}% tareas completadas\n\nEstructura del informe:\n\n# INFORME OPERATIVO EJECUTIVO\n## Executive Summary\n## 1. Situación Operativa Actual\n## 2. Análisis de Rendimiento\n## 3. Gestión de Riesgos\n## 4. Eficiencia de Procesos\n## 5. Análisis de Capacidad y Recursos\n## 6. Rentabilidad Operativa\n## 7. Recomendaciones Estratégicas\n## 8. Plan de Acción 90 días\n## 9. KPIs de Seguimiento\n\nTono: consultoría senior, denso, con datos, benchmarks implícitos y recomendaciones de alto impacto.`,
       model: 'claude_sonnet_4_6',
     });

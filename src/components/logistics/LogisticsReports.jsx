@@ -43,7 +43,7 @@ export default function LogisticsReports() {
 
     const prompt = `Genera un informe logístico profesional tipo "${selectedType}" para la empresa "${company.nombre || 'la empresa'}" para el periodo ${period.start} a ${period.end}.\n\nDatos disponibles:\n- Total productos: ${products.length}\n- Valor total inventario: ${totalValue.toFixed(2)} EUR\n- Productos en stock crítico: ${critical.length}\n- Movimientos en periodo: ${movements.filter(m => m.movement_date >= period.start && m.movement_date <= period.end).length}\n\nEl informe debe incluir: resumen ejecutivo, estado del inventario, KPIs principales, alertas detectadas, recomendaciones y si aplica asiento contable sugerido.\n\nIncluir nota: "Informe operativo y contable sujeto a revisión profesional."`;
 
-    const result = await base44.integrations.Core.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
+    const result = await base44.controlledCore.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
     await base44.entities.LogisticsReport.create({
       company_id: company.id,
       report_type: selectedType,

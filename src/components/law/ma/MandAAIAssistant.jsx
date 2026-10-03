@@ -40,7 +40,7 @@ export default function MandAAIAssistant() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setLoading(true);
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asesor M&A experto en fusiones y adquisiciones, corporate finance y operaciones corporativas en España. Tienes experiencia en Due Diligence, valoraciones, negociación de SPAs y SHAs, y asesoramiento a despachos Big Four y boutiques de inversión. Contexto: Taxea Business OS — M&A AI Assistant.
 
 Usuario: ${userText}

@@ -40,7 +40,7 @@ export default function TaxAIAssistant() {
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     setLoading(true);
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asesor fiscal y tributario experto especializado en derecho tributario español. Contexto: Taxea Business OS — Tax Law AI Assistant.
 
 Usuario: ${userText}

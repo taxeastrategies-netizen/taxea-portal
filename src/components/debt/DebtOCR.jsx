@@ -50,7 +50,7 @@ export default function DebtOCR({ companyId, onImported }) {
     setFileUrl(file_url);
 
     // Extract + analyze with LLM
-    const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
+    const extracted = await base44.controlledCore.ExtractDataFromUploadedFile({
       operation: 'extract', companyId, file_url,
       json_schema: {
         type: 'object',
@@ -62,7 +62,7 @@ export default function DebtOCR({ companyId, onImported }) {
 
     const rawText = extracted?.output?.raw_text || '';
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       model: 'claude_sonnet_4_6',
       prompt: `Eres un experto en análisis de documentos financieros y bancarios españoles. Analiza el siguiente documento y extrae TODOS los datos financieros que puedas identificar.
 

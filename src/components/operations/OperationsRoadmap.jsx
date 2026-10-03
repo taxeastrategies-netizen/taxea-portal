@@ -46,7 +46,7 @@ export default function OperationsRoadmap() {
 
   const prioritizeAI = async () => {
     setPrioritizing(true);
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un experto en gestión de operaciones y roadmaps de producto. Analiza estas ${items.length} iniciativas del roadmap y proporciona una priorización comentada. Para cada una indica si debe subir, bajar o mantener prioridad y por qué. Sé muy concreto y accionable. Iniciativas: ${items.map(i => `- ${i.title}: impacto ${i.estimated_impact}, esfuerzo ${i.estimated_effort}, estado ${i.status}, clientes afectados ${i.affected_clients || 0}, impacto económico ${i.economic_impact || 0}€`).join('\n')}`,
     });
     toast.success('Análisis IA completado');

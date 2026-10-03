@@ -48,7 +48,7 @@ export default function LeadFitScore() {
     setSelected(lead);
     setLoading(true);
     setAiMsg('');
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un asesor comercial experto en servicios fiscales. Genera el siguiente mensaje de seguimiento para este lead:\n\n- Nombre/empresa: ${lead.name}\n- Tipo: ${lead.tipo}\n- Servicio: ${lead.servicio}\n- Urgencia: ${lead.urgencia}\n- Score: ${lead.score}/100\n- Clasificacion: ${lead.clase}\n\nGenera:\n1. Mensaje corto WhatsApp (max 3 frases, no agresivo)\n2. Siguiente accion recomendada\n3. Riesgo a evitar\n\nMarca como borrador. No prometas resultados garantizados.`,
     });
     setAiMsg(typeof res === 'string' ? res : res?.response || '');

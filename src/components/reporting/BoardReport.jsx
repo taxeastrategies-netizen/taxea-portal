@@ -30,7 +30,7 @@ export default function BoardReport({ financials, company, invoices, expenses, d
 
   const generateInsights = async () => {
     setLoading(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el CFO de la empresa presentando al Consejo de Administración. Genera "Board Insights" ejecutivos en español (máx 200 palabras):
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
