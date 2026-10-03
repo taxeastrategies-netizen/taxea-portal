@@ -78,7 +78,7 @@ function KpiCard({ title, value, subtitle, icon: KpiIcon, color, bgColor, glowCo
 }
 
 export default function KpiRow({ financials }) {
-  const { totalIngresos, gastoTotal, beneficio, ebitda, cashDisponible, cashSource, bankConnected, bankUnreconciled, burnRate, runway, ingresosDelta, sparkData: sd } = financials;
+  const { totalIngresos, gastoTotal, beneficio, cashDisponible, cashSource, bankConnected, bankUnreconciled, burnRate, runway, ingresosDelta, sparkData: sd } = financials;
 
   const kpis = [
     {
@@ -134,16 +134,16 @@ export default function KpiRow({ financials }) {
       delay: 0.15,
     },
     {
-      title: 'EBITDA',
-      value: fmt(ebitda),
-      subtitle: 'Resultado operativo est.',
+      title: 'EBITDA contable',
+      value: '—',
+      subtitle: 'Consultar PyG confirmada',
       icon: BarChart3,
       color: 'text-violet-600',
       bgColor: 'bg-violet-500',
       glowColor: 'violet-500',
       delta: null,
-      deltaLabel: 'Resultado neto del periodo',
-      sparkData: sd?.ebitda || null,
+      deltaLabel: 'Sin estimación inventada',
+      sparkData: null,
       delay: 0.2,
     },
     {
