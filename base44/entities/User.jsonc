@@ -14,7 +14,16 @@
       "default": "user"
     },
     "company_id": {
-      "type": "string"
+      "type": "string",
+      "description": "Empresa activa verificada en backend; no editable directamente por el usuario.",
+      "rls": {
+        "read": true,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     },
     "phone": {
       "type": "string"
