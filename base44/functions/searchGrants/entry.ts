@@ -89,6 +89,36 @@ function classify(detail: any) {
   if (detail?.abierto === true) return 'open';
   return 'announced';
 }
+function noticeSections(detail: any) {
+  const notice = Array.isArray(detail?.anuncios) ? detail.anuncios.find((row: any) => typeof row?.texto === 'string' && row.texto.length > 50) : null;
+  if (!notice) return { audience: '', object: '', amount: '', requirements: '', period: '', noticeUrl: null };
+  const raw = clean(notice.texto, 60000).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, '');
+  const plain = raw.replace(/<\/(?:p|div|li|h[1-6])>|<br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_: string, n: string) => String.fromCodePoint(Math.min(Number(n), 0x10ffff)));
+  const paragraphs = plain.split(/\n+/).map((row: string) => row.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const heading = /^(?:(?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|octavo|noveno|décimo)\s*[.:-]\s*)?(?:beneficiari[oa]s?|personas beneficiarias|destinatari[oa]s?|objeto|finalidad|cuantía|importe|requisitos|plazo(?: de (?:presentación|solicitud|solicitudes))?)(?:\s*[.:-]|$)/i;
+  function section(pattern: RegExp) {
+    const index = paragraphs.findIndex((row: string) => row.length < 160 && pattern.test(row));
+    if (index < 0) return '';
+    const selected: string[] = [];
+    for (let i = index + 1; i < paragraphs.length && selected.length < 3; i++) {
+      if (paragraphs[i].length < 160 && heading.test(paragraphs[i])) break;
+      selected.push(paragraphs[i]);
+    }
+    return clean(selected.join(' '), 650);
+  }
+  const cve = clean(notice.cve, 40);
+  return {
+    audience: section(/beneficiari|destinatari|personas beneficiarias/i),
+    object: section(/objeto|finalidad/i),
+    amount: section(/cuantía|importe/i),
+    requirements: section(/requisitos/i),
+    period: section(/plazo/i),
+    noticeUrl: /^BOE-[AB]-\d{4}-\d+$/.test(cve) ? `https://www.boe.es/diario_boe/txt.php?id=${encodeURIComponent(cve)}` : safeOfficialUrl(notice.url),
+  };
+}
 function normalize(summary: any, detail: any) {
   const id = clean(detail?.codigoBDNS || summary?.numeroConvocatoria, 30);
   const status = classify(detail);
@@ -104,6 +134,7 @@ function normalize(summary: any, detail: any) {
     administration: clean(detail?.organo?.descripcion || summary?.nivel3 || summary?.nivel2, 150),
     scope: clean(summary?.nivel2 || summary?.nivel1, 100),
     regions, sectors, instruments,
+    notice: noticeSections(detail),
     beneficiaries: Array.isArray(detail?.tiposBeneficiarios) ? detail.tiposBeneficiarios.map((row: any) => clean(row?.descripcion, 120)).filter(Boolean).slice(0, 5) : [],
     purpose: clean(detail?.descripcionFinalidad, 120),
     callType: clean(detail?.tipoConvocatoria, 120),
