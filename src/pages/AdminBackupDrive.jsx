@@ -103,13 +103,24 @@ export default function AdminBackupDrive() {
   const handleVerify = async () => {
     setVerifying(true);
     setVerifyResult(null);
+    const latest = jobs.find(job => ['completed', 'completed_with_errors'].includes(job.status) && job.manifestDriveFileId);
+    let restartVerification = ['ok', 'incidents'].includes(latest?.verificationStatus);
     try {
-      const res = await base44.functions.invoke('documentBackupToDrive', { action: 'verify' });
-      setVerifyResult(res.data);
+      let complete = false;
+      for (let chunk = 0; chunk < 200; chunk += 1) {
+        const res = await base44.functions.invoke('documentBackupToDrive', { action: 'verify', restartVerification });
+        restartVerification = false;
+        const data = res.data || {};
+        setVerifyResult(data);
+        if (data.status !== 'partial') { complete = true; break; }
+      }
+      if (!complete) throw new Error('La verificación sigue pendiente. Puedes reanudarla sin repetir los bloques comprobados.');
+      await loadStatus();
     } catch (e) {
-      setVerifyResult({ status: 'error', error: e.response?.data?.error || e.message });
+      setVerifyResult(previous => ({ ...(previous || {}), status: 'error', error: e.response?.data?.error || e.message }));
+    } finally {
+      setVerifying(false);
     }
-    setVerifying(false);
   };
 
   if (loading) {
@@ -307,7 +318,7 @@ export default function AdminBackupDrive() {
               {runResult.status === 'completed' ? <CheckCircle className="w-6 h-6 text-green-600" /> : runResult.status === 'failed' ? <XCircle className="w-6 h-6 text-red-600" /> : <AlertTriangle className="w-6 h-6 text-amber-600" />}
               <div className="flex-1">
                 <p className="text-sm font-medium">
-                  {runResult.status === 'completed' ? 'Copia completada correctamente' : runResult.status === 'failed' ? 'Error en la copia' : 'Copia completada con incidencias'}
+                  {runResult.status === 'completed' ? 'Copia creada; integridad pendiente de verificación' : runResult.status === 'failed' ? 'Error en la copia' : 'Copia creada con incidencias'}
                 </p>
                 {runResult.status !== 'failed' && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
@@ -337,11 +348,13 @@ export default function AdminBackupDrive() {
               {verifyResult.status === 'ok' ? <CheckCircle className="w-6 h-6 text-green-600" /> : <AlertTriangle className="w-6 h-6 text-amber-600" />}
               <div>
                 <p className="text-sm font-medium">
-                  {verifyResult.status === 'ok' ? 'Verificación correcta' : 'Verificación con incidencias'}
+                  {verifyResult.status === 'ok' ? 'Verificación completa' : verifyResult.status === 'partial' ? 'Verificando toda la copia…' : verifyResult.status === 'error' ? 'Verificación interrumpida' : 'Verificación con incidencias'}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Verificados: {verifyResult.verified} · Faltantes: {verifyResult.missing}
+                  Comprobados: {verifyResult.checked || 0}{verifyResult.total ? ` de ${verifyResult.total}` : ''} · Disponibles: {verifyResult.verified || 0} · Faltantes o dañados: {verifyResult.missing || 0} · Contenido contrastado por hash: {verifyResult.checksumChecked || 0}
                 </p>
+                {verifyResult.error && <p className="text-xs text-red-700 mt-1">{verifyResult.error}</p>}
+                {verifyResult.issues?.length > 0 && <p className="text-xs text-amber-800 mt-1">Incidencias registradas: {verifyResult.issues.length}. Revisa el trabajo antes de dar la copia por recuperable.</p>}
               </div>
             </div>
           </CardContent>
@@ -366,6 +379,7 @@ export default function AdminBackupDrive() {
                     <th className="pb-2 pr-4 font-medium">Fecha</th>
                     <th className="pb-2 pr-4 font-medium">Tipo</th>
                     <th className="pb-2 pr-4 font-medium">Estado</th>
+                    <th className="pb-2 pr-4 font-medium">Integridad</th>
                     <th className="pb-2 pr-4 font-medium text-right">Revisados</th>
                     <th className="pb-2 pr-4 font-medium text-right">Copiados</th>
                     <th className="pb-2 pr-4 font-medium text-right">Errores</th>
@@ -386,6 +400,7 @@ export default function AdminBackupDrive() {
                         <td className="py-2.5 pr-4">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.color}`}>{st.label}</span>
                         </td>
+                        <td className="py-2.5 pr-4 text-xs">{job.verificationStatus === 'ok' ? `Verificada (${job.documentsVerified || 0})` : job.verificationStatus === 'incidents' ? 'Con incidencias' : job.verificationStatus === 'partial' ? `${job.verificationChecked || 0} comprobados` : 'Pendiente'}</td>
                         <td className="py-2.5 pr-4 text-right tabular-nums">{job.documentsScanned || 0}</td>
                         <td className="py-2.5 pr-4 text-right tabular-nums">{job.documentsCopied || 0}</td>
                         <td className="py-2.5 pr-4 text-right tabular-nums">{job.documentsFailed || 0}</td>
