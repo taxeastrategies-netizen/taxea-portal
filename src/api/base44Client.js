@@ -14,16 +14,27 @@ const sdkBase44 = createClient({
 
 const limitedCore = new Proxy(sdkBase44.integrations.Core, {
   get(target, property, receiver) {
-    if (property !== 'InvokeLLM') return Reflect.get(target, property, receiver);
-
-    return async (params) => {
-      const response = await sdkBase44.functions.invoke('invokeLimitedLLM', params);
-      const payload = response?.data ?? response;
-      if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'result')) {
-        throw new Error(payload?.error || 'No se pudo completar la solicitud de IA');
-      }
-      return payload.result;
-    };
+    if (property === 'InvokeLLM') {
+      return async (params) => {
+        const response = await sdkBase44.functions.invoke('invokeLimitedLLM', params);
+        const payload = response?.data ?? response;
+        if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'result')) {
+          throw new Error(payload?.error || 'No se pudo completar la solicitud de IA');
+        }
+        return payload.result;
+      };
+    }
+    if (property === 'ExtractDataFromUploadedFile' || property === 'SendEmail') {
+      return async (params) => {
+        const response = await sdkBase44.functions.invoke('limitedCoreOperations', params);
+        const payload = response?.data ?? response;
+        if (!payload?.ok || !Object.prototype.hasOwnProperty.call(payload, 'result')) {
+          throw new Error(payload?.error || 'No se pudo completar la operación');
+        }
+        return payload.result;
+      };
+    }
+    return Reflect.get(target, property, receiver);
   }
 });
 
