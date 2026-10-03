@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
-import { postInvoice, SCHEMA_VERSION } from './accountingEngine.ts';
+import { postInvoice, SCHEMA_VERSION, canonical8 } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 
 Deno.serve(async (req) => {
@@ -37,10 +37,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3. Validate required fields
-    const required = invoiceType === 'emitida'
-      ? ['numero_factura', 'fecha_emision', 'base_imponible']
-      : ['fecha', 'base_imponible'];
+    // 3. Validate direction and any explicit PGC override before creating an invoice.
+    const expectedType = doc.documentType === 'income_invoice' ? 'emitida'
+      : doc.documentType === 'expense_invoice' ? 'recibida' : null;
+    if (!expectedType || invoiceType !== expectedType) {
+      return Response.json({ error: 'El tipo de factura no coincide con el documento OCR.' }, { status: 422 });
+    }
+
+    const manualAccountInput = String(form.cuenta_contable_manual || '').trim();
+    let manualAccount = null;
+    if (manualAccountInput) {
+      const expectedGroup = invoiceType === 'emitida' ? '7' : '6';
+      const expectedAccountType = invoiceType === 'emitida' ? 'ingreso' : 'gasto';
+      if (!/^\d{3,8}$/.test(manualAccountInput) || !manualAccountInput.startsWith(expectedGroup)) {
+        return Response.json({ error: `La cuenta manual debe ser del grupo ${expectedGroup} y tener entre 3 y 8 dígitos.` }, { status: 422 });
+      }
+      const accountCode = canonical8(manualAccountInput);
+      const accounts = await base44.asServiceRole.entities.AccountingAccount.filter({ companyId: doc.company_id, code: accountCode });
+      manualAccount = (accounts || []).find(account => account.companyId === doc.company_id && account.code === accountCode && account.status !== 'inactiva' && account.type === expectedAccountType);
+      if (!manualAccount) {
+        return Response.json({ error: `La cuenta ${accountCode} no existe como cuenta activa de ${expectedAccountType} en el plan contable de esta empresa. Créala o actívala en Contabilidad antes de aprobar.` }, { status: 422 });
+      }
+    }
 
     const numeroFactura = invoiceType === 'emitida'
       ? (form.numero_factura || extractedData?.numero_factura || '')
@@ -208,6 +226,10 @@ Deno.serve(async (req) => {
     }
 
     invoiceData.ocr_document_id = docId;
+    if (manualAccount) {
+      invoiceData.revenue_expense_account_code = manualAccount.code;
+      invoiceData.revenue_expense_account_id = manualAccount.id;
+    }
     invoiceData.accounting_review_status = 'pendiente_revision';
     invoiceData.accounting_schema_version = SCHEMA_VERSION;
 
@@ -285,7 +307,7 @@ Deno.serve(async (req) => {
       timestamp: new Date().toISOString(),
       prevStatus: doc.status,
       newStatus: 'accounted',
-      detail: `invoice=${inv.id} journalEntry=${posting.entry.id} type=${invoiceType} schema=${SCHEMA_VERSION}`,
+      detail: `invoice=${inv.id} journalEntry=${posting.entry.id} type=${invoiceType} schema=${SCHEMA_VERSION} manualAccount=${manualAccount?.code || 'none'}`,
       source: 'approveOcrDocument',
     });
 
