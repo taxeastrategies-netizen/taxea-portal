@@ -26,6 +26,7 @@ const COMMUNITIES = [
   { ine: '18', code: 'ES12', name: 'Asturias' },
   { ine: '19', code: 'ES52', name: 'Comunitat Valenciana' },
 ];
+const PROVINCES = '01:17:Araba/Álava|02:06:Albacete|03:19:Alacant/Alicante|04:01:Almería|05:07:Ávila|06:10:Badajoz|07:03:Illes Balears|08:08:Barcelona|09:07:Burgos|10:10:Cáceres|11:01:Cádiz|12:19:Castelló/Castellón|13:06:Ciudad Real|14:01:Córdoba|15:11:A Coruña|16:06:Cuenca|17:08:Girona|18:01:Granada|19:06:Guadalajara|20:17:Gipuzkoa/Guipúzcoa|21:01:Huelva|22:02:Huesca|23:01:Jaén|24:07:León|25:08:Lleida|26:12:La Rioja|27:11:Lugo|28:13:Madrid|29:01:Málaga|30:15:Murcia|31:16:Navarra|32:11:Ourense|33:18:Asturias|34:07:Palencia|35:04:Las Palmas|36:11:Pontevedra|37:07:Salamanca|38:04:Santa Cruz De Tenerife|39:05:Cantabria|40:07:Segovia|41:01:Sevilla|42:07:Soria|43:08:Tarragona|44:02:Teruel|45:06:Toledo|46:19:València/Valencia|47:07:Valladolid|48:17:Bizkaia/Vizcaya|49:07:Zamora|50:02:Zaragoza|51:09:Ceuta|52:14:Melilla'.split('|').map(row => { const [code, ine, name] = row.split(':'); return { code, ine, name }; });
 const STATUS = {
   open: { label: 'Abierta', className: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
   upcoming: { label: 'Próxima · apertura confirmada', className: 'bg-cyan-500/15 text-cyan-800 border-cyan-500/30' },
@@ -82,7 +83,7 @@ export default function Grants() {
       .catch(() => { if (active) setMapError(true); });
     return () => { active = false; };
   }, []);
-  const options = useMemo(() => (geo?.features || []).filter(feature => !community || feature.properties.cod_ccaa === community.ine).map(feature => ({ code: feature.properties.cod_prov, name: feature.properties.name })).sort((a, b) => a.name.localeCompare(b.name, 'es')), [geo, community]);
+  const options = useMemo(() => PROVINCES.filter(row => !community || row.ine === community.ine).sort((a, b) => a.name.localeCompare(b.name, 'es')), [community]);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -148,7 +149,7 @@ export default function Grants() {
             </select>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Provincia
-            <select value={province} onChange={e => { setProvince(e.target.value); setPage(0); setPages([]); }} disabled={!community || !geo} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50">
+            <select value={province} onChange={e => { setProvince(e.target.value); setPage(0); setPages([]); }} disabled={!community} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50">
               <option value="">Todas las provincias</option>{options.map(row => <option key={row.code} value={row.name}>{row.name}</option>)}
             </select>
           </label>
@@ -162,6 +163,7 @@ export default function Grants() {
             <div className="flex gap-2"><input id="grant-keyword" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Ej.: comercio, hostelería, digitalización" maxLength={100} className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /><button type="submit" aria-label="Buscar" className="rounded-xl bg-taxea-red px-3 text-white"><Search className="h-4 w-4" /></button></div>
           </form>
         </div>
+        <p className="mt-3 text-[11px] text-muted-foreground">La palabra clave sustituye el tema predeterminado; prueba búsquedas distintas para cada sector.</p>
         <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ayuda anunciada sin fecha confirmada queda en espera; no aparece como solicitables.</div>
         <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs">
           <a href="https://fandit.es/subvenciones" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Ampliar búsqueda en FANDIT ↗</a>
