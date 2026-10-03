@@ -22,6 +22,15 @@ const today = () => new Date().toISOString().slice(0, 10);
 const sixMonths = () => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 6); return d.toISOString().slice(0, 10); };
 const normalizeCode = (value: unknown) => clean(value, 6).toUpperCase();
 const allowedCountryCode = (code: string) => /^ES(?:[0-9]{2})?$/.test(code);
+function safeOfficialUrl(value: unknown): string | null {
+  const raw = clean(value, 700);
+  const candidate = /^www\./i.test(raw) ? `https://${raw}` : raw;
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' || url.username || url.password || !url.hostname.includes('.') || /^(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/i.test(url.hostname)) return null;
+    return url.toString();
+  } catch { return null; }
+}
 const provinceAliases: Record<string, string[]> = {
   'las palmas': ['Fuerteventura', 'Gran Canaria', 'Lanzarote'],
   'santa cruz de tenerife': ['Tenerife', 'La Palma', 'La Gomera', 'El Hierro'],
@@ -83,6 +92,8 @@ function normalize(summary: any, detail: any) {
   const id = clean(detail?.codigoBDNS || summary?.numeroConvocatoria, 30);
   const status = classify(detail);
   const sectors = Array.isArray(detail?.sectores) ? detail.sectores.map((s: any) => clean(s?.descripcion || s, 100)).filter(Boolean).slice(0, 6) : [];
+  const regions = Array.isArray(detail?.regiones) ? detail.regiones.map((r: any) => clean(r?.descripcion, 100)).filter(Boolean).slice(0, 8) : [];
+  const instruments = Array.isArray(detail?.instrumentos) ? detail.instrumentos.map((r: any) => clean(r?.descripcion, 120)).filter(Boolean).slice(0, 4) : [];
   return {
     id, title: clean(detail?.descripcion || summary?.descripcion, 500),
     status, publishedAt: iso(summary?.fechaRecepcion || detail?.fechaRecepcion),
@@ -90,10 +101,13 @@ function normalize(summary: any, detail: any) {
     timingNote: clean(detail?.textInicio || detail?.textFin, 240),
     administration: clean(detail?.organo?.descripcion || summary?.nivel3 || summary?.nivel2, 150),
     scope: clean(summary?.nivel2 || summary?.nivel1, 100),
-    sectors,
+    regions, sectors, instruments,
     beneficiaries: Array.isArray(detail?.tiposBeneficiarios) ? detail.tiposBeneficiarios.map((row: any) => clean(row?.descripcion, 120)).filter(Boolean).slice(0, 5) : [],
     purpose: clean(detail?.descripcionFinalidad, 120),
-    basesUrl: /^https:\/\//i.test(clean(detail?.urlBasesReguladoras, 500)) ? clean(detail.urlBasesReguladoras, 500) : null,
+    callType: clean(detail?.tipoConvocatoria, 120),
+    basisName: clean(detail?.descripcionBasesReguladoras, 300),
+    basesUrl: safeOfficialUrl(detail?.urlBasesReguladoras),
+    applicationUrl: safeOfficialUrl(detail?.sedeElectronica),
     budget: typeof detail?.presupuestoTotal === 'number' ? detail.presupuestoTotal : null,
     source: 'BDNS · fuente oficial',
     sourceUrl: `https://www.infosubvenciones.es/bdnstrans/GE/es/convocatoria/${encodeURIComponent(id)}`,
