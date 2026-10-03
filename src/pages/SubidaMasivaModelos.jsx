@@ -215,8 +215,7 @@ export default function SubidaMasivaModelos() {
         resultado: ex.resultado,
       });
       await base44.integrations.Core.SendEmail({
-        to: emailEmpresa,
-        from_name: 'Taxea Strategies',
+        operation: 'tax_notice', companyId: empresa.id, documentId: doc.id,
         subject: `Tu ${modeloLabel} ha sido presentado correctamente — Taxea Strategies`,
         body: htmlEmail,
       });
