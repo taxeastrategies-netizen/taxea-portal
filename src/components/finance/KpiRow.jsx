@@ -121,9 +121,9 @@ export default function KpiRow({ financials }) {
       delay: 0.1,
     },
     {
-      title: 'Beneficio Neto',
+      title: 'Resultado estimado',
       value: fmt(beneficio),
-      subtitle: 'Ingresos − Gastos',
+      subtitle: 'Facturas del período · no cierre contable',
       icon: beneficio >= 0 ? TrendingUp : TrendingDown,
       color: beneficio >= 0 ? 'text-primary' : 'text-destructive',
       bgColor: beneficio >= 0 ? 'bg-taxea-red' : 'bg-destructive',
