@@ -11,7 +11,7 @@ const PATHS = {
   consultations: /^\/sindicacion\/sindicacion_1403\/CPM_SectorPublico(?:_\d{8}_\d{6})?\.atom$/,
 };
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', parseTagValue: false, trimValues: true, processEntities: true });
-const cache = new Map<string, { at: number; value: { rows: any[]; next: string | null; updated: string | null } }>();
+const cache = new Map<string, { at: number; value: { rows: any[]; next: string | null; updated: string | null; examined: number } }>();
 const CACHE_TTL = 10 * 60 * 1000;
 const asArray = (v: any): any[] => v == null ? [] : Array.isArray(v) ? v : [v];
 const val = (v: any): string => String(v && typeof v === 'object' ? v['#text'] ?? '' : v ?? '').trim();
@@ -107,7 +107,8 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
     if (xml.length > 16_000_000) throw new Error('Feed oficial demasiado grande');
     const feed = parser.parse(xml)?.feed;
     if (!feed || !feed.id || !feed.entry) throw new Error('Formato Atom oficial inesperado');
-    const result = { rows: asArray(feed.entry).map((entry: any) => normalizeEntry(entry, source)).filter(Boolean), next: nextLink(feed, source), updated: txt(feed.updated, 45) || null };
+    const entries = asArray(feed.entry);
+    const result = { rows: entries.map((entry: any) => normalizeEntry(entry, source)).filter(Boolean), next: nextLink(feed, source), updated: txt(feed.updated, 45) || null, examined: entries.length };
     if (cache.size >= 24) cache.delete(cache.keys().next().value);
     cache.set(url, { at: Date.now(), value: result });
     return result;
