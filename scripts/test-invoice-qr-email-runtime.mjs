@@ -19,8 +19,8 @@ const bundle = await esbuild.build({
     },
   }],
 });
-const originalUrl = 'https://media.base44.com/test/original.pdf';
-const qrPdfUrl = 'https://media.base44.com/test/with-qr.pdf';
+const originalUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/original.pdf';
+const qrPdfUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/with-qr.pdf';
 const invoice = {
   id: 'invoice-1', company_id: 'company-a', tipo: 'emitida',
   archivo_url: originalUrl, qr_url: 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?nif=B12345678',
@@ -30,6 +30,7 @@ const logs = [];
 const requestedFiles = [];
 let gmailCalls = 0;
 const entities = {
+  Company: { async get(id) { return id === 'company-a' ? { id, owner_email: 'sender@example.test', usuarios_autorizados: [] } : null; } },
   Invoice: {
     async get(id) { return id === invoice.id ? invoice : null; },
     async update(id, patch) { Object.assign(invoice, patch); return invoice; },
