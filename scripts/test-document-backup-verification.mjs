@@ -28,7 +28,7 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
   const driveGet = async url => {
     calls++;
     if (url.includes('manifest-1')) return new Response(manifestBytes);
-    const match = url.match(/file-(\\d+)/);
+    const match = url.match(/file-([0-9]+)/);
     assert.ok(match, url);
     const index = Number(match[1]);
     if (index === missingIndex) return new Response(null, { status: 404 });
