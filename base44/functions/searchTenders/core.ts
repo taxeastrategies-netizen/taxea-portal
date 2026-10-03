@@ -6,9 +6,9 @@ export const SOURCES = {
   consultations: 'https://contrataciondelestado.es/sindicacion/sindicacion_1403/CPM_SectorPublico.atom',
 };
 const PATHS = {
-  hosted: /^\/sindicacion\/sindicacion_643\/licitacionesPerfilesContratanteCompleto3(?:_\d{8}_\d{6})?\.atom$/,
-  aggregated: /^\/sindicacion\/sindicacion_1044\/PlataformasAgregadasSinMenores(?:_\d{8}_\d{6})?\.atom$/,
-  consultations: /^\/sindicacion\/sindicacion_1403\/CPM_SectorPublico(?:_\d{8}_\d{6})?\.atom$/,
+  hosted: /^\/sindicacion\/sindicacion_643\/licitacionesPerfilesContratanteCompleto3(?:_\d{8}_\d{6}(?:_\d{1,6})?)?\.atom$/,
+  aggregated: /^\/sindicacion\/sindicacion_1044\/PlataformasAgregadasSinMenores(?:_\d{8}_\d{6}(?:_\d{1,6})?)?\.atom$/,
+  consultations: /^\/sindicacion\/sindicacion_1403\/CPM_SectorPublico(?:_\d{8}_\d{6}(?:_\d{1,6})?)?\.atom$/,
 };
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', parseTagValue: false, trimValues: true, processEntities: true });
 const cache = new Map<string, { at: number; value: { rows: any[]; next: string | null; updated: string | null; examined: number } }>();
