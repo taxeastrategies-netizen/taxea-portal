@@ -210,7 +210,7 @@ REGLAS CRÍTICAS:
 - Incluye TODAS las subcuentas, no solo totales.`;
 
         const result = await base44.integrations.Core.ExtractDataFromUploadedFile({
-          file_url,
+          operation: 'extract', companyId, file_url,
           json_schema: schema,
         });
 
