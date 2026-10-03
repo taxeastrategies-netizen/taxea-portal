@@ -30,6 +30,7 @@ export default function Facturas() {
   const [filterTipo, setFilterTipo] = useState('emitida');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [anularError, setAnularError] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [viewing, setViewing] = useState(null);
@@ -75,6 +76,7 @@ export default function Facturas() {
 
   const handleAnular = async (inv) => {
     setAnulando(true);
+    setAnularError('');
     try {
       const res = await base44.functions.invoke('anularFacturas', { invoiceIds: [inv.id], companyId: company?.id });
       const data = res?.data || res;
@@ -82,7 +84,9 @@ export default function Facturas() {
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
       triggerFinancialRefresh();
     } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'No se pudo anular la factura.';
       console.error('Error anulando:', e);
+      setAnularError(msg);
     }
     setAnulando(false);
   };
@@ -90,6 +94,7 @@ export default function Facturas() {
   const handleAnularBulk = async () => {
     if (selectedIds.length === 0) return;
     setAnulando(true);
+    setAnularError('');
     try {
       const res = await base44.functions.invoke('anularFacturas', { invoiceIds: selectedIds, companyId: company?.id });
       const data = res?.data || res;
@@ -99,7 +104,9 @@ export default function Facturas() {
       setSelectedIds([]);
       triggerFinancialRefresh();
     } catch (e) {
+      const msg = e?.response?.data?.error || e?.message || 'No se pudieron anular las facturas.';
       console.error('Error anulación múltiple:', e);
+      setAnularError(msg);
     }
     setAnulando(false);
   };
@@ -348,6 +355,14 @@ export default function Facturas() {
             </SelectContent>
           </Select>
         </div>
+        )}
+
+        {anularError && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span className="text-sm text-red-700">{anularError}</span>
+            <button className="ml-auto text-xs text-red-600 hover:underline" onClick={() => setAnularError('')}>Cerrar</button>
+          </div>
         )}
 
         {/* Bulk action bar */}

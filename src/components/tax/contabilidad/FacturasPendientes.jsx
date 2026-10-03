@@ -82,6 +82,7 @@ export default function FacturasPendientes() {
       setAnularTarget(null);
       setMotivoAnulacion('');
     },
+    onError: (mutationError) => setSyncMessage(errorMessage(mutationError)),
   });
 
   const activas = invoices.filter(i => !i.anulada);

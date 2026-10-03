@@ -60,12 +60,14 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const userCompanyId = user.data?.company_id;
-    if (!userCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
-
     const body = await req.json();
     const { invoiceIds, motivo, companyId } = body || {};
-    if (companyId && companyId !== userCompanyId) return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
+    const userCompanyId = user.data?.company_id;
+    const isPlatformAdmin = ['admin', 'super_admin'].includes(user.role);
+    // Los administradores de plataforma gestionan varias empresas: pueden operar con la empresa indicada.
+    const effectiveCompanyId = userCompanyId || (isPlatformAdmin ? companyId : '');
+    if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
+    if (companyId && companyId !== userCompanyId && !isPlatformAdmin) return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) return Response.json({ error: 'invoiceIds required' }, { status: 400 });
 
     const reason = String(motivo || '').trim();
@@ -73,7 +75,8 @@ Deno.serve(async (req) => {
     const svc = base44.asServiceRole;
     const now = new Date().toISOString();
     const accountingDate = String(body.accountingDate || now.slice(0, 10));
-    const allInvoices = await svc.entities.Invoice.filter({ company_id: userCompanyId }, 'created_date', 5000);
+    if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
+    const allInvoices = await svc.entities.Invoice.filter({ company_id: effectiveCompanyId }, 'created_date', 5000);
     const targets = (allInvoices || []).filter(invoice => invoiceIds.includes(invoice.id) && !invoice.anulada);
     if (!targets.length) return Response.json({ success: true, annulled: 0, message: 'No invoices to annul' });
 
@@ -82,9 +85,9 @@ Deno.serve(async (req) => {
       let reversalEntryId = '';
       if (invoice.linked_journal_entry_id) {
         const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id).catch(() => null);
-        if (entry && entry.companyId === userCompanyId) {
+        if (entry && entry.companyId === effectiveCompanyId) {
           if (entry.status === 'confirmado') {
-            const reversal = await reverseConfirmedEntry(svc, userCompanyId, entry, reason, user.email, accountingDate);
+            const reversal = await reverseConfirmedEntry(svc, effectiveCompanyId, entry, reason, user.email, accountingDate);
             reversalEntryId = reversal.id;
           } else if (entry.status !== 'anulado') {
             const lines = await resolveLines(svc, userCompanyId, entry);
@@ -111,4 +114,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
-
