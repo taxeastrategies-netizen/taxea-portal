@@ -126,7 +126,7 @@ export default function Grants() {
         <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-cyan-200"><Sparkles className="h-3.5 w-3.5" />Radar de oportunidades</span>
         <h1 className="mt-4 font-jakarta text-3xl font-extrabold tracking-tight md:text-4xl">Subvenciones y Ayudas</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">Explora convocatorias por territorio, inicio de actividad y sector. Revisa cada ayuda en su fuente oficial y consulta con Taxea antes de solicitarla.</p>
-        <p className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-400" />Fuente activa: BDNS oficial · consulta en vivo{checkedAt ? ' · ' + new Date(checkedAt).toLocaleString('es-ES') : ''}</p>
+        <p className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-400" />Fuente activa: BDNS oficial · actualización al consultar (caché máxima: 10 min){checkedAt ? ' · ' + new Date(checkedAt).toLocaleString('es-ES') : ''}</p>
       </div>
     </section>
     <div className="grid gap-5 xl:grid-cols-[minmax(340px,0.95fr)_minmax(0,1.3fr)]">
@@ -179,6 +179,7 @@ export default function Grants() {
       </div>
       <div className="mt-4 flex flex-wrap gap-2">{tabs.map(row => <button key={row.id} onClick={() => setTab(row.id)} className={'rounded-full border px-3 py-2 text-xs font-semibold ' + (tab === row.id ? 'border-taxea-red bg-taxea-red text-white' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>{row.name}</button>)}</div>
       {error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="h-4 w-4" />{error}</div>}
+      {latest?.partial && <div role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><AlertCircle className="h-4 w-4" />La BDNS no ha entregado el detalle de {latest.failedDetails} convocatoria(s). Resultados parciales; comprueba de nuevo más tarde.</div>}
       {loading && page === 0 && <p className="mt-7 text-sm text-muted-foreground">Consultando convocatorias oficiales…</p>}
       {!loading && !error && visible.length === 0 && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No hay resultados de este estado en las páginas cargadas. Prueba otra palabra clave o carga más resultados.</div>}
       <div className="mt-5 grid gap-4 md:grid-cols-2">{visible.map(row => <GrantCard key={row.id} item={row} />)}</div>
