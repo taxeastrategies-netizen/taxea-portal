@@ -126,7 +126,8 @@ Deno.serve(async req => {
     if (communityCode && !allowedCountryCode(communityCode)) return response({ error: 'Comunidad no válida.' }, 400);
     if (province && !communityCode) return response({ error: 'Selecciona antes una comunidad.' }, 400);
     if (!Number.isInteger(page) || page < 0 || page > 30) return response({ error: 'Página no válida.' }, 400);
-    const searchText = query || (focus === 'autonomos' ? 'autónom' : '');
+    const broadAutonomos = !query && focus === 'autonomos';
+    const searchText = query || (broadAutonomos ? 'autónom autoempleo emprendimiento' : '');
     // Acotar siempre a convocatorias recibidas en los últimos 24 meses; se informa en la respuesta.
     const earliest = new Date(); earliest.setUTCMonth(earliest.getUTCMonth() - 24);
     const key = JSON.stringify({ communityCode, province, searchText, page });
@@ -143,6 +144,7 @@ Deno.serve(async req => {
     url.searchParams.set('direccion', 'desc');
     url.searchParams.set('fechaDesde', `${String(earliest.getUTCDate()).padStart(2, '0')}/${String(earliest.getUTCMonth() + 1).padStart(2, '0')}/${earliest.getUTCFullYear()}`);
     if (searchText) url.searchParams.set('descripcion', searchText);
+    if (broadAutonomos) url.searchParams.set('descripcionTipoBusqueda', '2');
     if (ids.length) url.searchParams.set('regiones', ids.join(','));
     const list = await requestJson(url);
     if (!Array.isArray(list?.content)) throw new Error('Respuesta BDNS inesperada.');
