@@ -699,7 +699,7 @@ Deno.serve(async (req) => {
             persisted = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
               backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
               driveFileId: uploaded.id, driveFolderId: subFolder.id,
-              drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso, lastVerifiedAt: '',
+              drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso,
               version: (existing.version || 1) + 1, safeErrorMessage: '',
             });
           } else {
@@ -816,7 +816,7 @@ Deno.serve(async (req) => {
           driveFileId: backupRecord?.driveFileId || '',
           drivePath: backupRecord?.drivePath || '',
           status: isBackedUp ? 'backed_up' : (backupRecord?.backupStatus || 'missing'),
-          lastVerifiedAt: backupRecord?.lastVerifiedAt || '',
+          lastVerifiedAt: backupRecord?.backupStatus === 'verified' ? (backupRecord.lastVerifiedAt || '') : '',
         });
       }
 
