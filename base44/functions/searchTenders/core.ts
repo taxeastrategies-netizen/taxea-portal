@@ -89,7 +89,7 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
     updatedAt: txt(entry?.updated, 45),
     deadline: kind === 'abierta' ? deadline : null, deadlineTime: kind === 'abierta' ? deadlineTime : null,
     consultationLimit: kind === 'consulta' ? consultationLimit : null,
-    plannedDate: kind === 'consulta' && plannedDate && plannedDate >= now && plannedDate <= futureLimit ? plannedDate : null,
+    plannedDate: kind === 'consulta' && plannedDate && plannedDate >= current.date && plannedDate <= futureLimit ? plannedDate : null,
     cpv, contractType: contractType(val(project?.['cbc:TypeCode'])),
     amountExVat: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:TaxExclusiveAmount']),
     estimatedValue: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:EstimatedOverallContractAmount']),
