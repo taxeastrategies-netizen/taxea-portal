@@ -63,7 +63,6 @@ async function authorizeCompany(base44, user, requestedCompanyId) {
     ? company.usuarios_autorizados.map(value => cleanText(value, 240).toLowerCase())
     : [];
   const allowed = ['admin', 'super_admin'].includes(roleOf(user))
-    || cleanText(user?.data?.company_id || user?.company_id, 120) === companyId
     || (email && cleanText(company.owner_email, 240).toLowerCase() === email)
     || (email && authorizedEmails.includes(email));
   if (!allowed) throw Object.assign(new Error('No tienes permiso para operar en esta empresa.'), { status: 403 });
