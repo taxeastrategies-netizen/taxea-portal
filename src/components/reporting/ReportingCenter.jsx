@@ -21,6 +21,7 @@ import MnAAnalytics from './MnAAnalytics';
 import ExecutiveCommentary from './ExecutiveCommentary';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { calculateFinancialKPIs } from '@/lib/financialCore';
+import { deriveAccountingEbitda } from '@/lib/verifiedFinancialMetrics';
 
 const TABS = [
   { id: 'dashboard',   label: 'Centro',             icon: BarChart2,   color: 'text-slate-600' },
@@ -46,6 +47,7 @@ export default function ReportingCenter() {
   const { invoices, expenses, bankAccounts, bankTransactions: transactions, treasury, loading: financialLoading, error: financialError, refresh } = useFinancialData(companyId, { year: new Date().getFullYear() });
   const [obligations, setObligations] = useState([]);
   const [debts, setDebts] = useState([]);
+  const [accountingReport, setAccountingReport] = useState(null);
   const [auxiliaryLoading, setAuxiliaryLoading] = useState(true);
   const [auxiliaryError, setAuxiliaryError] = useState('');
   const loading = financialLoading || auxiliaryLoading;
@@ -55,12 +57,16 @@ export default function ReportingCenter() {
     setAuxiliaryLoading(true);
     setAuxiliaryError('');
     try {
-      const [obl, dbs] = await Promise.all([
+      const [obl, dbs, accountingResponse] = await Promise.all([
         base44.entities.TaxObligation.filter({ company_id: companyId }),
         base44.entities.DebtInstrument.filter({ company_id: companyId }),
+        base44.functions.invoke('accountingOperations', { action: 'reports', companyId, year: new Date().getFullYear(), scope: 'confirmed' }),
       ]);
+      const report = accountingResponse?.data?.report || accountingResponse?.report;
+      if (!report) throw new Error('No se pudo obtener la PyG contable confirmada.');
       setObligations(obl || []);
       setDebts(dbs || []);
+      setAccountingReport(report);
     } catch (error) {
       setAuxiliaryError(error?.message || 'No se pudieron cargar obligaciones o deudas.');
     } finally {
@@ -76,8 +82,8 @@ export default function ReportingCenter() {
     const gastoTotal = canonical.totalGastos;
     const beneficio = ingresos - gastoTotal;
     const margen = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
-    // No se inventa una amortización fija: el EBITDA requiere desglose contable confirmado.
-    const ebitda = null;
+    const accountingEbitda = deriveAccountingEbitda(accountingReport);
+    const ebitda = accountingEbitda?.value ?? 0;
     const deudaTotal = debts.filter(d => d.estado === 'activo').reduce((s, d) => s + (d.capital_pendiente || d.importe_inicial || 0), 0);
     const cashTotal = treasury.connectedAccounts > 0 ? treasury.availableCash : 0;
     const burnRate = gastoTotal / 12;
@@ -99,11 +105,11 @@ export default function ReportingCenter() {
       ? Math.round((pagosPendientes / canonical.totalGastosFacturas) * elapsedDays)
       : null;
     return {
-      ingresos, gastoTotal, beneficio, margen, ebitda, deudaTotal,
+      ingresos, gastoTotal, beneficio, margen, ebitda, accountingEbitda, deudaTotal,
       cashTotal, burnRate, runway, cobrosPendientes, pagosPendientes,
       workingCapital, cuotasMensuales, interesesAnuales, dso, dpo
     };
-  }, [invoices, expenses, debts, treasury]);
+  }, [invoices, expenses, debts, treasury, accountingReport]);
 
   const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading };
 
