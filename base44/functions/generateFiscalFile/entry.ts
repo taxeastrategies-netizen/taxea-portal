@@ -347,10 +347,14 @@ Deno.serve(async (req) => {
     });
     avisos.push(`El modelo ${modeloCodigo} se ha calculado como borrador interno. El archivo no es presentable ante ${administracion}.`);
 
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(resultado_fichero.contenido);
+    const b64 = btoa(String.fromCharCode(...bytes));
     const hash = await hashContent(resultado_fichero.contenido);
     const fechaGeneracion = new Date().toISOString();
 
-    // 6. Guardar en TaxOfficialFile
+    // 6. Guardar el contenido exacto, no solo una huella irrecuperable.
+    // Sigue siendo un borrador de revisión, nunca un fichero oficial presentable.
     const fileRecord = await base44.asServiceRole.entities.TaxOfficialFile.create({
       companyId,
       modeloCodigo,
@@ -362,6 +366,10 @@ Deno.serve(async (req) => {
       formato: resultado_fichero.formato,
       versionDiseno: resultado_fichero.versionDiseno,
       hash,
+      contentBase64: b64,
+      contentEncoding: 'base64',
+      contentSize: bytes.length,
+      immutable: true,
       generadoPor: user.email,
       fechaGeneracion,
       estado: 'borrador',
@@ -377,11 +385,7 @@ Deno.serve(async (req) => {
       }),
     });
 
-    // 7. Devolver contenido en base64 + metadatos
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(resultado_fichero.contenido);
-    const b64 = btoa(String.fromCharCode(...bytes));
-
+    // 7. Devolver el mismo contenido que se conservó en el registro.
     return Response.json({
       ok: true,
       fichero: {
