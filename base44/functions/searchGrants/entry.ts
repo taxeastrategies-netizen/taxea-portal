@@ -22,8 +22,8 @@ const allowedCountryCode = (code: string) => /^ES(?:[0-9]{2})?$/.test(code);
 const provinceAliases: Record<string, string[]> = {
   'las palmas': ['Fuerteventura', 'Gran Canaria', 'Lanzarote'],
   'santa cruz de tenerife': ['Tenerife', 'La Palma', 'La Gomera', 'El Hierro'],
-  'illes balears': ['Illes Balears', 'Mallorca', 'Menorca', 'Ibiza', 'Formentera'],
-  'islas baleares': ['Illes Balears', 'Mallorca', 'Menorca', 'Ibiza', 'Formentera'],
+  'illes balears': ['Eivissa y Formentera', 'Mallorca', 'Menorca'],
+  'islas baleares': ['Eivissa y Formentera', 'Mallorca', 'Menorca'],
   'alava': ['Araba/Álava'], 'araba': ['Araba/Álava'],
   'guipuzcoa': ['Gipuzkoa'], 'vizcaya': ['Bizkaia'],
   'gerona': ['Girona'], 'lerida': ['Lleida'],
@@ -61,7 +61,7 @@ function findRegionIds(rows: Region[], communityCode: string, province: string):
   const community = all.find(row => row.descripcion.toUpperCase().startsWith(`${communityCode} -`));
   if (!community) throw Object.assign(new Error('Comunidad autónoma no reconocida.'), { status: 400 });
   if (!province) return [community.id, countryId];
-  const names = provinceAliases[fold(province)] || [province];
+  const names = provinceAliases[fold(province)] || province.split('/').map(part => part.trim());
   const childIds = flatten(community.children || []).filter(row => names.some(name => fold(row.descripcion.replace(/^ES\d+ - /, '')) === fold(name) || fold(row.descripcion).includes(fold(name)))).map(row => row.id);
   if (!childIds.length) throw Object.assign(new Error('Provincia no reconocida en la comunidad seleccionada.'), { status: 400 });
   return [...new Set([...childIds, community.id, countryId])];
@@ -73,7 +73,7 @@ function classify(detail: any) {
   if (end && end < now) return 'closed';
   if (start && start > now && start <= sixMonths()) return 'upcoming';
   if (start && start > sixMonths()) return 'later';
-  if (detail?.abierto === true || (start && start <= now && (!end || end >= now))) return 'open';
+  if (detail?.abierto === true) return 'open';
   return 'announced';
 }
 function normalize(summary: any, detail: any) {
@@ -94,13 +94,22 @@ function normalize(summary: any, detail: any) {
     checkedAt: new Date().toISOString(),
   };
 }
-async function detailFor(summary: any) {
+function appliesGeography(summary: any, detail: any, communityCode: string, selectedCodes: string[]) {
+  if (!communityCode) return true;
+  const codes = Array.isArray(detail?.regiones) ? detail.regiones.map((region: any) => clean(region?.descripcion, 70).match(/^(ES\d*)\s*-/i)?.[1]?.toUpperCase()).filter(Boolean) : [];
+  if (!codes.length) return false;
+  return codes.some((code: string) => code === communityCode || selectedCodes.includes(code) || (code !== 'ES' && communityCode.startsWith(code)) || (code === 'ES' && clean(summary?.nivel1).toUpperCase() === 'ESTATAL'));
+}
+async function detailFor(summary: any, communityCode: string, selectedCodes: string[]) {
   const id = clean(summary?.numeroConvocatoria, 30);
   if (!/^\d+$/.test(id)) return null;
   const url = new URL(`${ROOT}/convocatorias`);
   url.searchParams.set('vpd', 'GE');
   url.searchParams.set('numConv', id);
-  try { return normalize(summary, await requestJson(url)); } catch { return null; }
+  try {
+    const detail = await requestJson(url);
+    return appliesGeography(summary, detail, communityCode, selectedCodes) ? normalize(summary, detail) : null;
+  } catch { return null; }
 }
 function response(value: unknown, status = 200) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -125,7 +134,9 @@ Deno.serve(async req => {
     const key = JSON.stringify({ communityCode, province, searchText, page });
     const cached = resultCache.get(key);
     if (cached && Date.now() - cached.at < CACHE_TTL) return response(cached.value);
-    const ids = findRegionIds(await regions(), communityCode, province);
+    const regionRows = await regions();
+    const ids = findRegionIds(regionRows, communityCode, province);
+    const selectedCodes = flatten(regionRows).filter(row => ids.includes(row.id) && row.descripcion.toUpperCase().startsWith('ES')).map(row => row.descripcion.match(/^(ES\d*)\s*-/i)?.[1]?.toUpperCase()).filter((code): code is string => Boolean(code && code !== 'ES' && code !== communityCode));
     const url = new URL(`${ROOT}/convocatorias/busqueda`);
     url.searchParams.set('vpd', 'GE');
     url.searchParams.set('page', String(page));
@@ -140,7 +151,7 @@ Deno.serve(async req => {
     const summaries = list.content.filter((row: any) => /^\d+$/.test(String(row?.numeroConvocatoria || '')));
     const grants: any[] = [];
     for (let i = 0; i < summaries.length; i += 6) {
-      grants.push(...(await Promise.all(summaries.slice(i, i + 6).map(detailFor))).filter(Boolean));
+      grants.push(...(await Promise.all(summaries.slice(i, i + 6).map((summary: any) => detailFor(summary, communityCode, selectedCodes)))).filter(Boolean));
     }
     const value = {
       ok: true,
