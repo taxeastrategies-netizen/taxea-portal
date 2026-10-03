@@ -175,7 +175,14 @@ Deno.serve(async (req) => {
 
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     companyId = body.company_id || user.data?.company_id;
-    if (!companyId || (!isAdmin && body.company_id && body.company_id !== user.data?.company_id)) {
+    if (!companyId) return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
+    const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
+    const email = String(user.email || '').trim().toLowerCase();
+    const isMember = company && email && (
+      String(company.owner_email || '').trim().toLowerCase() === email
+      || (company.usuarios_autorizados || []).some(value => String(value || '').trim().toLowerCase() === email)
+    );
+    if (!company || (!isAdmin && !isMember)) {
       return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
     }
     if (body.invoice_id) {
