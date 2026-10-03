@@ -144,7 +144,8 @@ export default function AdminClients() {
       try {
         await base44.functions.invoke('inviteUser', { email: client.email, role: 'user', full_name: client.legalName });
       } catch (_inviteError) { /* puede existir previamente */ }
-      await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl: issue.setupUrl, isResend: true });
+      const inviteResponse = await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl: issue.setupUrl, isResend: true });
+      if (!(inviteResponse?.data ?? inviteResponse)?.success) throw new Error('El envío no fue confirmado.');
       await base44.entities.ClientAccount.update(client.id, { inviteEmailSentAt: new Date().toISOString() });
       await logAction(client.id, client.legalName, 'credenciales_generadas', 'Admin reenvió enlace de acceso al cliente.');
       await load();
