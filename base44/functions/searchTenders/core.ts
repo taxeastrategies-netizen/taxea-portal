@@ -21,8 +21,8 @@ const fold = (v: any) => txt(v, 500).normalize('NFD').replace(/[\u0300-\u036f]/g
 // Relación INE provincia -> NUTS 2021 de Eurostat; Canarias e Illes Balears incluyen varias NUTS 3.
 const PROVINCE_NUTS: Record<string, string[]> = Object.fromEntries('01:ES211|02:ES421|03:ES521|04:ES611|05:ES411|06:ES431|07:ES531,ES532,ES533|08:ES511|09:ES412|10:ES432|11:ES612|12:ES522|13:ES422|14:ES613|15:ES111|16:ES423|17:ES512|18:ES614|19:ES424|20:ES212|21:ES615|22:ES241|23:ES616|24:ES413|25:ES513|26:ES230|27:ES112|28:ES300|29:ES617|30:ES620|31:ES220|32:ES113|33:ES120|34:ES414|35:ES704,ES705,ES708|36:ES114|37:ES415|38:ES703,ES706,ES707,ES709|39:ES130|40:ES416|41:ES618|42:ES417|43:ES514|44:ES242|45:ES425|46:ES523|47:ES418|48:ES213|49:ES419|50:ES243|51:ES630|52:ES640'.split('|').map(x => { const [key, codes] = x.split(':'); return [key, codes.split(',')]; }));
 export const validProvinceCode = (code: string) => !code || Boolean(PROVINCE_NUTS[code]);
-const dateToday = () => new Date().toISOString().slice(0, 10);
-const inSixMonths = () => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 6); return d.toISOString().slice(0, 10); };
+const dateToday = () => { const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()); const fields = Object.fromEntries(parts.map(part => [part.type, part.value])); return fields.year + '-' + fields.month + '-' + fields.day; };
+const inSixMonths = () => { const [year, month, day] = dateToday().split('-').map(Number); const last = new Date(Date.UTC(year, month + 6, 0)).getUTCDate(); return new Date(Date.UTC(year, month + 5, Math.min(day, last))).toISOString().slice(0, 10); };
 function safeLink(value: any): string | null {
   try {
     const url = new URL(txt(value, 900));
@@ -70,7 +70,7 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
   if (!id || !title || !url) return null;
   let kind = '';
   if (consultation) {
-    if (rawState !== 'PUB' || (!consultationLimit && !plannedDate) || (consultationLimit && consultationLimit < now) || (!consultationLimit && plannedDate && plannedDate < now)) return null;
+    if (rawState !== 'PUB' || (!consultationLimit && !plannedDate) || (consultationLimit && (consultationLimit < now || consultationLimit > inSixMonths())) || (!consultationLimit && plannedDate && (plannedDate < now || plannedDate > inSixMonths()))) return null;
     kind = 'consulta';
   } else if (rawState === 'PUB' && deadline && deadline >= now) {
     kind = 'abierta';
