@@ -1,15 +1,17 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
+const escapeHtml = value => String(value ?? '')
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+const safeFilename = value => String(value ?? 'informe').replace(/[\\/\x00-\x1f<>:"|?*]/g, '_').slice(0, 120);
+
 /**
  * Convierte Markdown a HTML básico para exportación.
  */
 function markdownToHtml(md) {
   if (!md) return '';
-  let html = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  let html = escapeHtml(md);
 
   // Tablas
   html = html.replace(/^\|(.+)\|\n\|([-: |]+)\|\n((?:\|.+\|\n?)*)/gm, (match, header, sep, body) => {
@@ -48,7 +50,7 @@ export async function exportReportToPDF(report) {
   container.innerHTML = `
     <div style="border-bottom:2px solid #b81e2a;padding-bottom:8px;margin-bottom:16px;">
       <h1 style="font-size:20px;font-weight:700;color:#b81e2a;margin:0;">TAXEA Audit</h1>
-      <p style="font-size:11px;color:#666;margin:2px 0 0;">${report.title} · v${report.version}</p>
+      <p style="font-size:11px;color:#666;margin:2px 0 0;">${escapeHtml(report.title)} · v${escapeHtml(report.version)}</p>
     </div>
     ${markdownToHtml(report.markdownContent)}
     <div style="margin-top:24px;border-top:1px solid #ddd;padding-top:8px;">
@@ -78,7 +80,7 @@ export async function exportReportToPDF(report) {
       heightLeft -= pageHeight;
     }
 
-    pdf.save(`${report.title}_v${report.version}.pdf`);
+    pdf.save(`${safeFilename(report.title)}_v${safeFilename(report.version)}.pdf`);
   } finally {
     document.body.removeChild(container);
   }
@@ -90,7 +92,7 @@ export async function exportReportToPDF(report) {
 export function exportReportToDOCX(report) {
   const html = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head><meta charset='utf-8'><title>${report.title}</title>
+    <head><meta charset='utf-8'><title>${escapeHtml(report.title)}</title>
     <style>
       body { font-family: 'Calibri', sans-serif; font-size: 11pt; color: #1a1a1a; }
       h1 { color: #b81e2a; font-size: 16pt; }
@@ -102,7 +104,7 @@ export function exportReportToDOCX(report) {
     </style></head>
     <body>
     <h1>TAXEA Audit</h1>
-    <p style="font-size:10pt;color:#666;">${report.title} · Versión ${report.version} · Generado por ${report.generatedBy || 'sistema'}</p>
+    <p style="font-size:10pt;color:#666;">${escapeHtml(report.title)} · Versión ${escapeHtml(report.version)} · Generado por ${escapeHtml(report.generatedBy || 'sistema')}</p>
     <hr/>
     ${markdownToHtml(report.markdownContent)}
     <div class="footer"><p>Documento de trabajo interno. Borrador pendiente de revisión profesional. No sustituye asesoramiento fiscal, contable ni jurídico.</p></div>
@@ -113,7 +115,7 @@ export function exportReportToDOCX(report) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${report.title}_v${report.version}.doc`;
+  a.download = `${safeFilename(report.title)}_v${safeFilename(report.version)}.doc`;
   a.click();
   URL.revokeObjectURL(url);
 }
