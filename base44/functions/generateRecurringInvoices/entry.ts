@@ -131,7 +131,9 @@ Deno.serve(async (req) => {
     if (!user) {
       return Response.json({ error: 'No autenticado' }, { status: 401 });
     }
-    const isService = user.is_service === true;
+    // La marca is_service sola no autoriza procesar facturas de todas las empresas.
+    const isService = user.is_service === true
+      && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(String(user.email || ''));
     const isAdminUser = user.role === 'admin' || user.role === 'super_admin';
 
     // La sesión puede traer permisos caducados: resolver la empresa desde la base de datos.
@@ -139,6 +141,17 @@ Deno.serve(async (req) => {
     if (!isService) {
       const freshUser = await base44.asServiceRole.entities.User.get(user.id).catch(() => null);
       activeCompanyId = freshUser?.data?.company_id || user.data?.company_id || '';
+      if (!isAdminUser && activeCompanyId) {
+        const company = await base44.asServiceRole.entities.Company.get(activeCompanyId).catch(() => null);
+        const email = String(user.email || '').trim().toLowerCase();
+        const allowedEmails = Array.isArray(company?.usuarios_autorizados)
+          ? company.usuarios_autorizados.map(value => String(value || '').trim().toLowerCase())
+          : [];
+        if (!company || !email || (String(company.owner_email || '').trim().toLowerCase() !== email
+          && !allowedEmails.includes(email))) {
+          return Response.json({ error: 'Empresa no autorizada' }, { status: 403 });
+        }
+      }
     }
 
     // ── Gestión de plantillas verificada en servidor (sin depender de la sesión) ──
