@@ -92,6 +92,7 @@ tipo_iva (numero %), cuota_iva (numero, negativo si rectificativa), retencion_ir
 retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_retencion (numero, negativo si rectificativa, 0 si no aplica),
 total_factura (numero, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (numero de factura original rectificada, si aparece),
+cuenta_pgc (cuenta 7XX PGC sugerida para el ingreso), confianza_pgc (0-100), motivo_clasificacion (explicación breve; requiere revisión humana),
 alertas_fiscales (array strings), datos_faltantes (array strings)`;
 
 const OCR_SCHEMA_INCOME = {
@@ -108,6 +109,7 @@ const OCR_SCHEMA_INCOME = {
     total_factura: { type: 'number' },
     fecha_vencimiento: { type: 'string' }, estado_cobro_sugerido: { type: 'string' },
     es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
+    cuenta_pgc: { type: 'string' }, confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
   }
@@ -167,6 +169,9 @@ const mapFormIngresos = (r) => ({
   total_factura: r?.total_factura || '',
   fecha_vencimiento: r?.fecha_vencimiento || '',
   estado_cobro: r?.estado_cobro_sugerido || 'pendiente',
+  cuenta_pgc: r?.cuenta_pgc || '',
+  confianza_pgc: r?.confianza_pgc ?? null,
+  motivo_clasificacion: r?.motivo_clasificacion || '',
 });
 
 function fileIcon(name) {
