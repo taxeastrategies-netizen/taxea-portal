@@ -109,7 +109,7 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
     if (!feed || !feed.id || !feed.entry) throw new Error('Formato Atom oficial inesperado');
     const entries = asArray(feed.entry);
     const result = { rows: entries.map((entry: any) => normalizeEntry(entry, source)).filter(Boolean), next: nextLink(feed, source), updated: txt(feed.updated, 45) || null, examined: entries.length };
-    if (cache.size >= 24) cache.delete(cache.keys().next().value);
+    if (cache.size >= 24) { const oldest = cache.keys().next().value; if (oldest) cache.delete(oldest); }
     cache.set(url, { at: Date.now(), value: result });
     return result;
   } finally { clearTimeout(timer); }
