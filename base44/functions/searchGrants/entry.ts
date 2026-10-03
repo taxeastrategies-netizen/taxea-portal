@@ -179,6 +179,7 @@ Deno.serve(async req => {
     const topic = clean(body?.topic, 30) || 'all';
     const finality = clean(body?.finality, 2);
     const administration = clean(body?.administration, 1).toUpperCase();
+    const requestedStatus = clean(body?.status, 20) || 'all';
     const page = Number(body?.page ?? 0);
     if (communityCode && !allowedCountryCode(communityCode)) return response({ error: 'Comunidad no válida.' }, 400);
     if (province && !communityCode) return response({ error: 'Selecciona antes una comunidad.' }, 400);
@@ -187,46 +188,63 @@ Deno.serve(async req => {
     if (topic !== 'all' && !TOPIC_TERMS[topic]) return response({ error: 'Tema no válido.' }, 400);
     if (finality && !FINALITY_IDS.has(finality)) return response({ error: 'Finalidad no válida.' }, 400);
     if (administration && !ADMINISTRATIONS.has(administration)) return response({ error: 'Administración no válida.' }, 400);
+    if (!['all', 'open', 'upcoming', 'announced', 'later', 'closed'].includes(requestedStatus)) return response({ error: 'Estado no válido.' }, 400);
     const searchText = query || (topic !== 'all' ? TOPIC_TERMS[topic] : '');
-    const key = JSON.stringify({ communityCode, province, applicant, topic, finality, administration, searchText, page });
+    const key = JSON.stringify({ communityCode, province, applicant, topic, finality, administration, requestedStatus, searchText, page });
     const cached = resultCache.get(key);
     if (cached && Date.now() - cached.at < CACHE_TTL) return response(cached.value);
     const regionRows = await regions();
     const ids = findRegionIds(regionRows, communityCode, province);
     const selectedCodes = flatten(regionRows).filter(row => ids.includes(row.id) && row.descripcion.toUpperCase().startsWith('ES')).map(row => row.descripcion.match(/^(ES\d*)\s*-/i)?.[1]?.toUpperCase()).filter((code): code is string => Boolean(code && code !== 'ES' && code !== communityCode));
-    const url = new URL(`${ROOT}/convocatorias/busqueda`);
-    url.searchParams.set('vpd', 'GE');
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('pageSize', '18');
-    url.searchParams.set('order', 'fechaRecepcion');
-    url.searchParams.set('direccion', 'desc');
-    if (searchText) {
-      url.searchParams.set('descripcion', searchText);
-      url.searchParams.set('descripcionTipoBusqueda', '2');
-    }
-    if (applicant !== 'all') url.searchParams.set('tiposBeneficiario', BENEFICIARY_IDS[applicant]);
-    if (finality) url.searchParams.set('finalidad', finality);
-    if (administration) url.searchParams.set('tipoAdministracion', administration);
-    if (ids.length) url.searchParams.set('regiones', ids.join(','));
-    const list = await requestJson(url);
-    if (!Array.isArray(list?.content)) throw new Error('Respuesta BDNS inesperada.');
-    const summaries = list.content.filter((row: any) => /^\d+$/.test(String(row?.numeroConvocatoria || '')));
     const grants: any[] = [];
     let failedDetails = 0;
-    for (let i = 0; i < summaries.length; i += 3) {
-      const batch = await Promise.allSettled(summaries.slice(i, i + 3).map((summary: any) => detailFor(summary, communityCode, selectedCodes)));
-      failedDetails += batch.filter(row => row.status === 'rejected').length;
-      grants.push(...batch.filter((row): row is PromiseFulfilledResult<any> => row.status === 'fulfilled').map(row => row.value).filter(Boolean));
+    let attemptedDetails = 0;
+    let scannedSourcePages = 0;
+    let totalSourceMatches = 0;
+    let totalSourcePages = 0;
+    let cursor = page;
+    const maxSourcePages = requestedStatus === 'open' || requestedStatus === 'upcoming' ? 2 : 1;
+    while (scannedSourcePages < maxSourcePages && cursor <= 100000) {
+      const url = new URL(`${ROOT}/convocatorias/busqueda`);
+      url.searchParams.set('vpd', 'GE');
+      url.searchParams.set('page', String(cursor));
+      url.searchParams.set('pageSize', '18');
+      url.searchParams.set('order', 'fechaRecepcion');
+      url.searchParams.set('direccion', 'desc');
+      if (searchText) {
+        url.searchParams.set('descripcion', searchText);
+        url.searchParams.set('descripcionTipoBusqueda', '2');
+      }
+      if (applicant !== 'all') url.searchParams.set('tiposBeneficiario', BENEFICIARY_IDS[applicant]);
+      if (finality) url.searchParams.set('finalidad', finality);
+      if (administration) url.searchParams.set('tipoAdministracion', administration);
+      if (ids.length) url.searchParams.set('regiones', ids.join(','));
+      const list = await requestJson(url);
+      if (!Array.isArray(list?.content)) throw new Error('Respuesta BDNS inesperada.');
+      totalSourceMatches = Number(list?.totalElements || 0);
+      totalSourcePages = Number(list?.totalPages || 0);
+      const summaries = list.content.filter((row: any) => /^\d+$/.test(String(row?.numeroConvocatoria || '')));
+      let pageFailures = 0;
+      for (let i = 0; i < summaries.length; i += 6) {
+        const batch = await Promise.allSettled(summaries.slice(i, i + 6).map((summary: any) => detailFor(summary, communityCode, selectedCodes)));
+        pageFailures += batch.filter(row => row.status === 'rejected').length;
+        grants.push(...batch.filter((row): row is PromiseFulfilledResult<any> => row.status === 'fulfilled').map(row => row.value).filter((row: any) => row && (requestedStatus === 'all' || row.status === requestedStatus)));
+      }
+      if (summaries.length && pageFailures === summaries.length) throw new Error('No se pudieron consultar los detalles de la BDNS.');
+      failedDetails += pageFailures;
+      attemptedDetails += summaries.length;
+      scannedSourcePages++;
+      cursor++;
+      if (cursor >= totalSourcePages || grants.length >= 18 || requestedStatus === 'all') break;
     }
-    if (summaries.length && failedDetails === summaries.length) throw new Error('No se pudieron consultar los detalles de la BDNS.');
     const value = {
       ok: true,
       grants,
-      page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 100000,
-      totalSourceMatches: Number(list?.totalElements || 0),
+      page, nextPage: cursor, hasMore: cursor < totalSourcePages && cursor <= 100000,
+      totalSourceMatches, scannedSourcePages, attemptedDetails, requestedStatus,
       partial: failedDetails > 0, failedDetails,
       checkedAt: new Date().toISOString(),
-      source: 'BDNS', coverage: 'Resultados paginados de BDNS, ordenados por recepción. Las categorías autónomos y pymes comparten el tipo oficial de beneficiario. Los temas son búsquedas orientativas por texto, no una clasificación exhaustiva ni una garantía de elegibilidad.',
+      source: 'BDNS', coverage: 'Búsqueda paginada en la BDNS. El estado se comprueba en la ficha oficial de cada resultado examinado: la BDNS no ofrece filtro de estado en su listado, de modo que puede haber más coincidencias en páginas posteriores. Autónomos y pymes comparten el tipo oficial; los temas son texto orientativo, no garantía de elegibilidad.',
     };
     if (resultCache.size >= MAX_CACHE) resultCache.delete(resultCache.keys().next().value);
     resultCache.set(key, { at: Date.now(), value });
