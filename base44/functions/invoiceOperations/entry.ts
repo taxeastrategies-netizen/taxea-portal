@@ -31,21 +31,10 @@ const isPrivateFileUri = (value) => /^private\/[A-Za-z0-9/_\-.]+$/.test(String(v
 const isSafeHttpsUrl = (value) => {
   try {
     const url = new URL(String(value || ''));
-    const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-    if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) return false;
-    if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal') || host.includes(':')) return false;
-    const octets = host.split('.');
-    if (octets.length === 4 && octets.every((part) => /^\d+$/.test(part))) {
-      const ip = octets.map(Number);
-      if (ip.some((part) => part < 0 || part > 255)) return false;
-      if (ip[0] === 0 || ip[0] === 10 || ip[0] === 127 || ip[0] >= 224) return false;
-      if (ip[0] === 100 && ip[1] >= 64 && ip[1] <= 127) return false;
-      if (ip[0] === 169 && ip[1] === 254) return false;
-      if (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31) return false;
-      if (ip[0] === 192 && (ip[1] === 168 || ip[1] === 0)) return false;
-      if (ip[0] === 198 && (ip[1] === 18 || ip[1] === 19)) return false;
-    }
-    return host.includes('.') && !host.endsWith('.example') && !host.endsWith('.invalid') && !host.endsWith('.test');
+    return url.protocol === 'https:'
+      && url.hostname === 'base44.app'
+      && !url.username && !url.password && !url.port && !url.hash
+      && url.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/');
   } catch {
     return false;
   }
