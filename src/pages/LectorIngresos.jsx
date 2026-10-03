@@ -52,6 +52,9 @@ const mapForm = (r) => ({
   es_rectificativa: r?.es_rectificativa || false,
   factura_rectificada: r?.factura_rectificada || '',
   situacion_impuesto: r?.situacion_impuesto || 'sujeta_gravada',
+  cuenta_pgc: r?.cuenta_pgc || '',
+  confianza_pgc: r?.confianza_pgc ?? null,
+  motivo_clasificacion: r?.motivo_clasificacion || '',
 });
 
 const buildOcrPrompt = (company, fiscalProfile, activity) => {
@@ -87,6 +90,7 @@ retencion_tipo (string: ninguna/profesional/alquiler/premios/otros), importe_ret
 total_factura (número, negativo si rectificativa), fecha_vencimiento (YYYY-MM-DD), estado_cobro_sugerido (pendiente/cobrada),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (número de factura original rectificada, si aparece),
 alertas_fiscales (array strings), datos_faltantes (array strings),
+cuenta_pgc (cuenta 7XX PGC sugerida para el ingreso), confianza_pgc (0-100), motivo_clasificacion (explicación breve; la propuesta requiere revisión humana),
 impuesto_detectado (string: IVA/IGIC/ninguno segun lo que aparezca en la factura),
 situacion_impuesto (string: sujeta_gravada/sujeta_exenta/no_sujeta - sujeta_gravada si aplica IGIC/IVA, sujeta_exenta si la operación está exenta, no_sujeta si no está sujeta al impuesto),
 tipo_operacion (string: interior/intracomunitaria/exportacion/adquisicion_intracomunitaria/inversion_sujeto_pasivo/isp),
@@ -111,6 +115,7 @@ const OCR_SCHEMA = {
     es_rectificativa: { type: 'boolean' }, factura_rectificada: { type: 'string' },
     alertas_fiscales: { type: 'array', items: { type: 'string' } },
     datos_faltantes: { type: 'array', items: { type: 'string' } },
+    cuenta_pgc: { type: 'string' }, confianza_pgc: { type: 'number' }, motivo_clasificacion: { type: 'string' },
     impuesto_detectado: { type: 'string' },
     situacion_impuesto: { type: 'string' },
     tipo_operacion: { type: 'string' },
