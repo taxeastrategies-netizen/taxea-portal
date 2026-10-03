@@ -45,10 +45,11 @@ const limitedIntegrations = new Proxy(sdkBase44.integrations, {
   }
 });
 
-// Todas las llamadas InvokeLLM del frontend pasan por el control de cuota del servidor.
+// Los servicios que consumen créditos se invocan explícitamente en el backend.
 export const base44 = new Proxy(sdkBase44, {
   get(target, property, receiver) {
     if (property === 'integrations') return limitedIntegrations;
+    if (property === 'controlledCore') return limitedCore;
     return Reflect.get(target, property, receiver);
   }
 });
