@@ -136,18 +136,16 @@ export default function AdminClients() {
   const handleResendInvite = async (client) => {
     setActionLoading(true);
     try {
-      if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
-        throw new Error('Este navegador no permite generar un enlace de acceso seguro.');
-      }
-      const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
-      const newToken = crypto.randomUUID?.() || Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('');
-      const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-      const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(newToken)}&email=${encodeURIComponent(client.email)}`;
-      await base44.entities.ClientAccount.update(client.id, { setupToken: newToken, setupTokenExpiresAt, inviteEmailSentAt: new Date().toISOString() });
+      const issueResponse = await base44.functions.invoke('clientSetup', {
+        action: 'issue', clientAccountId: client.id,
+      });
+      const issue = issueResponse?.data ?? issueResponse;
+      if (!issue?.valid || !issue?.setupUrl) throw new Error('No se pudo generar el enlace de acceso.');
       try {
         await base44.functions.invoke('inviteUser', { email: client.email, role: 'user', full_name: client.legalName });
       } catch (_inviteError) { /* puede existir previamente */ }
-      await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl, isResend: true });
+      await base44.functions.invoke('sendClientInviteEmail', { email: client.email, clientName: client.legalName, setupUrl: issue.setupUrl, isResend: true });
+      await base44.entities.ClientAccount.update(client.id, { inviteEmailSentAt: new Date().toISOString() });
       await logAction(client.id, client.legalName, 'credenciales_generadas', 'Admin reenvió enlace de acceso al cliente.');
       await load();
     } catch (e) { alert('Error al reenviar: ' + e.message); }
