@@ -129,6 +129,12 @@ assert.equal(counters.accountingEntries, 1);
 assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
 assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
 const qrPdfUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/test-qr.pdf';
+const foreignPdf = await invoke({
+  action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
+  file_url: 'https://external.example.org/invoice.pdf', mime_type: 'application/pdf', size_bytes: 4096,
+});
+assert.equal(foreignPdf.response.status, 400);
+assert.equal(records.Invoice[0].qr_pdf_url, undefined);
 const linkedQrPdf = await invoke({
   action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
   file_url: qrPdfUrl, mime_type: 'application/pdf', size_bytes: 4096,
@@ -164,7 +170,7 @@ const invalidTotal = await invoke({
 });
 assert.equal(invalidTotal.response.status, 400);
 
-currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-b' } };
+currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
   action: 'create_invoice', company_id: 'company-a', idempotency_key: 'foreign',
   invoice: { ...validInvoice, numero_factura: 'F-2026-003' },
