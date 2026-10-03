@@ -31,6 +31,8 @@ const STATUS = {
   open: { label: 'Abierta', className: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
   upcoming: { label: 'Próxima · apertura confirmada', className: 'bg-cyan-500/15 text-cyan-800 border-cyan-500/30' },
   announced: { label: 'Plazo por verificar', className: 'bg-amber-500/15 text-amber-800 border-amber-500/30' },
+  later: { label: 'A más de 6 meses', className: 'bg-blue-500/15 text-blue-800 border-blue-500/30' },
+  closed: { label: 'Cerrada', className: 'bg-slate-500/15 text-slate-700 border-slate-500/30' },
 };
 const formatDate = value => value ? new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value + 'T12:00:00Z')) : 'No indicada';
 function StatusBadge({ status }) {
@@ -52,9 +54,13 @@ function GrantCard({ item }) {
       {item.closesAt && <span className="rounded-lg bg-secondary px-2.5 py-1.5"><CalendarDays className="mr-1 inline h-3 w-3" />Hasta {formatDate(item.closesAt)}</span>}
       {!item.opensAt && item.timingNote && <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-amber-800">{item.timingNote}</span>}
     </div>
-    {item.sectors?.length > 0 && <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">Sectores: {item.sectors.join(' · ')}</p>}
+    {item.purpose && <p className="mt-3 text-xs text-muted-foreground">Finalidad: {item.purpose}</p>}
+    {item.beneficiaries?.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Beneficiarios oficiales: {item.beneficiaries.join(' · ')}</p>}
+    {item.sectors?.length > 0 && <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">Sectores: {item.sectors.join(' · ')}</p>}
+    {item.budget != null && <p className="mt-2 text-xs text-muted-foreground">Presupuesto de convocatoria: {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(item.budget)}</p>}
     <div className="mt-5 flex flex-wrap gap-4 border-t border-border pt-4">
       <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-taxea-red hover:underline">Ver convocatoria oficial <ArrowUpRight className="h-3.5 w-3.5" /></a>
+      {item.basesUrl && <a href={item.basesUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-taxea-red hover:underline">Bases reguladoras <ArrowUpRight className="h-3.5 w-3.5" /></a>}
       <a href={'mailto:taxeastrategies@gmail.com?subject=' + subject + '&body=' + body} className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground hover:underline"><Mail className="h-3.5 w-3.5" />Preguntar a Taxea</a>
     </div>
   </article>;
@@ -64,7 +70,9 @@ export default function Grants() {
   const [mapError, setMapError] = useState(false);
   const [community, setCommunity] = useState('');
   const [province, setProvince] = useState('');
-  const [focus, setFocus] = useState('autonomos');
+  const [applicant, setApplicant] = useState('all');
+  const [topic, setTopic] = useState('all');
+  const [administration, setAdministration] = useState('');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState('all');
@@ -88,7 +96,7 @@ export default function Grants() {
     let active = true;
     setLoading(true);
     setError('');
-    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, focus, query, page })
+    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, administration, query, page })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -99,7 +107,7 @@ export default function Grants() {
       .catch(err => { if (active) setError(err?.response?.data?.error || err?.message || 'No se pudieron consultar las ayudas.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [community, province, focus, query, page, refresh]);
+  }, [community, province, applicant, topic, administration, query, page, refresh]);
   const grants = useMemo(() => Array.from(new Map(pages.flatMap(row => row.grants || []).map(row => [row.id, row])).values()), [pages]);
   const visible = tab === 'all' ? grants : grants.filter(row => row.status === tab);
   const latest = pages.find(row => row.page === page);
@@ -116,6 +124,8 @@ export default function Grants() {
     { id: 'open', name: 'Abiertas' },
     { id: 'upcoming', name: 'Lista de espera · 6 meses' },
     { id: 'announced', name: 'Plazo por verificar' },
+    { id: 'later', name: 'Más adelante' },
+    { id: 'closed', name: 'Cerradas' },
     { id: 'all', name: 'Todas las encontradas' },
   ];
   return <main className="mx-auto max-w-[1500px] space-y-6 p-4 pb-16 md:p-7">
@@ -125,7 +135,7 @@ export default function Grants() {
       <div className="relative">
         <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-cyan-200"><Sparkles className="h-3.5 w-3.5" />Radar de oportunidades</span>
         <h1 className="mt-4 font-jakarta text-3xl font-extrabold tracking-tight md:text-4xl">Subvenciones y Ayudas</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">Explora convocatorias por territorio, inicio de actividad y sector. Revisa cada ayuda en su fuente oficial y consulta con Taxea antes de solicitarla.</p>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">Encuentra ayudas para autónomos, empresas, particulares y entidades por territorio, finalidad y administración. Consulta las bases oficiales y pregunta a Taxea antes de solicitar.</p>
         <p className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-400" />Fuente activa: BDNS oficial · actualización al consultar (caché máxima: 10 min){checkedAt ? ' · ' + new Date(checkedAt).toLocaleString('es-ES') : ''}</p>
       </div>
     </section>
@@ -153,9 +163,19 @@ export default function Grants() {
               <option value="">Todas las provincias</option>{options.map(row => <option key={row.code} value={row.name}>{row.name}</option>)}
             </select>
           </label>
-          <label className="space-y-1.5 text-xs font-semibold">Interés principal
-            <select value={focus} onChange={e => { setFocus(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
-              <option value="autonomos">Inicio y actividad autónoma</option><option value="all">Todos los sectores</option>
+          <label className="space-y-1.5 text-xs font-semibold">Quién busca la ayuda
+            <select value={applicant} onChange={e => { setApplicant(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+              <option value="all">Todos los beneficiarios</option><option value="autonomos">Autónomos</option><option value="pymes">Pymes</option><option value="grandes_empresas">Grandes empresas</option><option value="particulares">Particulares</option><option value="entidades">Entidades y asociaciones</option>
+            </select>
+          </label>
+          <label className="space-y-1.5 text-xs font-semibold">Qué quieres impulsar
+            <select value={topic} onChange={e => { setTopic(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+              <option value="all">Cualquier finalidad</option><option value="inicio">Emprendimiento e inicio</option><option value="digitalizacion">Digitalización</option><option value="empleo">Empleo y contratación</option><option value="energia">Energía y sostenibilidad</option><option value="rural">Campo y medio rural</option><option value="innovacion">Innovación e I+D</option><option value="cultura">Cultura, deporte y educación</option><option value="vivienda">Vivienda y rehabilitación</option><option value="social">Acción social y cuidados</option>
+            </select>
+          </label>
+          <label className="space-y-1.5 text-xs font-semibold">Administración convocante
+            <select value={administration} onChange={e => { setAdministration(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+              <option value="">Todas las administraciones</option><option value="C">Estado</option><option value="A">Comunidad autónoma</option><option value="L">Entidad local</option><option value="O">Otros organismos</option>
             </select>
           </label>
           <form onSubmit={e => { e.preventDefault(); setQuery(draft.trim()); setPage(0); setPages([]); }} className="space-y-1.5">
@@ -163,13 +183,10 @@ export default function Grants() {
             <div className="flex gap-2"><input id="grant-keyword" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Ej.: comercio, hostelería, digitalización" maxLength={100} className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /><button type="submit" aria-label="Buscar" className="rounded-xl bg-taxea-red px-3 text-white"><Search className="h-4 w-4" /></button></div>
           </form>
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">La palabra clave sustituye el tema predeterminado; prueba búsquedas distintas para cada sector.</p>
+        <p className="mt-3 text-[11px] text-muted-foreground">Los temas orientan una búsqueda textual. Si escribes una palabra clave, prevalece sobre el tema; no equivale a filtrar por CNAE ni garantiza encontrar todas las ayudas aplicables.</p>
+        {(applicant === 'autonomos' || applicant === 'pymes') && <p className="mt-2 text-[11px] text-amber-800">La BDNS agrupa autónomos y pymes en un mismo tipo oficial. La selección muestra candidatas; confirma los requisitos en cada convocatoria.</p>}
         <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ficha sin fecha confirmada queda por verificar; no se asume próxima ni solicitables.</div>
-        <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs">
-          <a href="https://fandit.es/subvenciones" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Ampliar búsqueda en FANDIT ↗</a>
-          <a href="https://ipyme.org/es-es/AyudasIncentivos/Paginas/buscador-de-ayudas.aspx" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Consultar IPYME ↗</a>
-          <a href="https://plataformapyme.es/es-es/AyudasPublicas/Paginas/buscador-ayudas-incentivos-publicos.aspx" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Consultar PlataformaPyme ↗</a>
-        </div>
+        <p className="mt-5 text-xs text-muted-foreground">Buscador propio de Taxea con información oficial de BDNS. Las ayudas de otras fuentes todavía no están incorporadas; el enlace de cada ficha lleva a la convocatoria y sus bases.</p>
       </section>
     </div>
     <section>
@@ -184,7 +201,7 @@ export default function Grants() {
       {!loading && !error && visible.length === 0 && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No hay resultados de este estado en las páginas cargadas. Prueba otra palabra clave o carga más resultados.</div>}
       <div className="mt-5 grid gap-4 md:grid-cols-2">{visible.map(row => <GrantCard key={row.id} item={row} />)}</div>
       {latest?.hasMore && <div className="mt-6 text-center"><button disabled={loading} onClick={() => setPage(value => value + 1)} className="rounded-xl border border-border bg-card px-5 py-2.5 text-xs font-semibold hover:bg-secondary disabled:opacity-50">{loading ? 'Cargando…' : 'Cargar más convocatorias'}</button></div>}
-      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">La BDNS puede rectificar datos. Esta búsqueda incluye convocatorias publicadas en los últimos 24 meses y no sustituye la comprobación individual de bases, plazos, compatibilidades y requisitos. FANDIT figura como búsqueda complementaria; su API no está conectada sin credenciales y autorización de consumo.</p>
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">La BDNS puede rectificar datos. Los resultados están paginados por fecha de recepción y los estados se calculan con la información publicada; «plazo por verificar» no significa convocatoria abierta. Revisa bases, fechas, elegibilidad y compatibilidad antes de actuar. Este radar aún no cubre fuentes adicionales como boletines y sedes no reflejados en BDNS.</p>
     </section>
   </main>;
 }
