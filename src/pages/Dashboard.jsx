@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import {
   Activity, AlertTriangle, ArrowRight, BarChart3, Bell,
   Calendar, Calculator, CheckCircle, ChevronRight, Clock, Database,
-  Euro, FileText, Heart, Landmark, RefreshCw, TrendingDown, TrendingUp,
+  Euro, FileText, Heart, Landmark, MapPinned, RefreshCw, TrendingDown, TrendingUp,
   Upload, Users, Wallet,
 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -280,6 +280,7 @@ export default function Dashboard() {
           { label: 'Cobros vencidos', value: currency(receivables.overdueAmount), alert: receivables.overdue > 0, sub: `${receivables.overdue || 0} factura(s)` },
           { label: 'Pagos vencidos', value: currency(payables.overdueAmount), alert: payables.overdue > 0, sub: `${payables.overdue || 0} factura(s)` },
         ]} tools={FIN_TOOLS} />
+        <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white"><div className="flex items-center gap-2"><MapPinned className="h-5 w-5 text-cyan-300" /><h3 className="font-jakarta text-sm font-bold">Subvenciones y Ayudas</h3></div><p className="mt-3 text-xs leading-relaxed text-slate-300">Mapa de España, ayudas para autónomos y búsqueda por provincia y actividad con fuente oficial.</p><Link to="/subvenciones" className="mt-5 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-50">Explorar ayudas</Link></div>
         <DeptCard icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100" title="People & HR" to="/people/dashboard" kpis={[
           { label: 'Empleados activos', value: people.activeEmployees || 0, sub: `${people.employees || 0} total plantilla` },
           { label: 'Ausencias actuales', value: people.currentAbsences || 0, sub: `${people.pendingAbsences || 0} pendientes` },
