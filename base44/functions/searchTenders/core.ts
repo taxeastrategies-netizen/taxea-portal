@@ -21,7 +21,8 @@ const fold = (v: any) => txt(v, 500).normalize('NFD').replace(/[\u0300-\u036f]/g
 // Relación INE provincia -> NUTS 2021 de Eurostat; Canarias e Illes Balears incluyen varias NUTS 3.
 const PROVINCE_NUTS: Record<string, string[]> = Object.fromEntries('01:ES211|02:ES421|03:ES521|04:ES611|05:ES411|06:ES431|07:ES531,ES532,ES533|08:ES511|09:ES412|10:ES432|11:ES612|12:ES522|13:ES422|14:ES613|15:ES111|16:ES423|17:ES512|18:ES614|19:ES424|20:ES212|21:ES615|22:ES241|23:ES616|24:ES413|25:ES513|26:ES230|27:ES112|28:ES300|29:ES617|30:ES620|31:ES220|32:ES113|33:ES120|34:ES414|35:ES704,ES705,ES708|36:ES114|37:ES415|38:ES703,ES706,ES707,ES709|39:ES130|40:ES416|41:ES618|42:ES417|43:ES514|44:ES242|45:ES425|46:ES523|47:ES418|48:ES213|49:ES419|50:ES243|51:ES630|52:ES640'.split('|').map(x => { const [key, codes] = x.split(':'); return [key, codes.split(',')]; }));
 export const validProvinceCode = (code: string) => !code || Boolean(PROVINCE_NUTS[code]);
-const dateToday = () => { const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()); const fields = Object.fromEntries(parts.map(part => [part.type, part.value])); return fields.year + '-' + fields.month + '-' + fields.day; };
+const localNow = (zone: string) => { const parts = new Intl.DateTimeFormat('en-GB', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()); const fields = Object.fromEntries(parts.map(part => [part.type, part.value])); return { date: fields.year + '-' + fields.month + '-' + fields.day, time: fields.hour + ':' + fields.minute }; };
+const dateToday = () => localNow('Europe/Madrid').date;
 const inSixMonths = () => { const [year, month, day] = dateToday().split('-').map(Number); const last = new Date(Date.UTC(year, month + 6, 0)).getUTCDate(); return new Date(Date.UTC(year, month + 5, Math.min(day, last))).toISOString().slice(0, 10); };
 function safeLink(value: any): string | null {
   try {
@@ -61,8 +62,11 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
   const process = status?.['cac:TenderingProcess'] || {};
   const location = project?.['cac:RealizedLocation'] || {};
   const deadline = iso(process?.['cac:TenderSubmissionDeadlinePeriod']?.['cbc:EndDate']);
+  const deadlineTime = txt(process?.['cac:TenderSubmissionDeadlinePeriod']?.['cbc:EndTime'], 8).match(/^\d{2}:\d{2}/)?.[0] || null;
   const consultationLimit = iso(status?.['cbc:LimitDate']);
   const plannedDate = iso(status?.['cbc:PlannedDate']);
+  const placeNuts = txt(location?.['cbc:CountrySubentityCode'], 12).toUpperCase();
+  const current = now === dateToday() ? localNow(placeNuts.startsWith('ES70') ? 'Atlantic/Canary' : 'Europe/Madrid') : { date: now, time: '00:00' };
   const cpv = asArray(project?.['cac:RequiredCommodityClassification']).map((item: any) => txt(item?.['cbc:ItemClassificationCode'], 10)).filter((item: string) => /^\d{8}$/.test(item)).slice(0, 12);
   const title = txt(entry?.title || project?.['cbc:Name'] || status?.['cbc:ConsultationName'], 650);
   const id = txt(entry?.id, 240);
@@ -70,9 +74,9 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
   if (!id || !title || !url) return null;
   let kind = '';
   if (consultation) {
-    if (rawState !== 'PUB' || (!consultationLimit && !plannedDate) || (consultationLimit && (consultationLimit < now || consultationLimit > inSixMonths())) || (!consultationLimit && plannedDate && (plannedDate < now || plannedDate > inSixMonths()))) return null;
+    if (rawState !== 'PUB' || (!consultationLimit && !plannedDate) || (consultationLimit && (consultationLimit < current.date || consultationLimit > inSixMonths())) || (!consultationLimit && plannedDate && (plannedDate < current.date || plannedDate > inSixMonths()))) return null;
     kind = 'consulta';
-  } else if (rawState === 'PUB' && deadline && deadline >= now) {
+  } else if (rawState === 'PUB' && deadline && (deadline > current.date || (deadline === current.date && (!deadlineTime || deadlineTime > current.time)))) {
     kind = 'abierta';
   } else if (rawState === 'PRE') {
     kind = 'anuncio_previo';
@@ -83,14 +87,14 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
     id, tenderId: txt(status?.[consultation ? 'cbc-place-ext:PreliminaryMarketConsultationID' : 'cbc:ContractFolderID'], 140),
     title, kind, rawState, source, url,
     updatedAt: txt(entry?.updated, 45),
-    deadline: kind === 'abierta' ? deadline : null,
+    deadline: kind === 'abierta' ? deadline : null, deadlineTime: kind === 'abierta' ? deadlineTime : null,
     consultationLimit: kind === 'consulta' ? consultationLimit : null,
     plannedDate: kind === 'consulta' && plannedDate && plannedDate >= now && plannedDate <= futureLimit ? plannedDate : null,
     cpv, contractType: contractType(val(project?.['cbc:TypeCode'])),
     amountExVat: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:TaxExclusiveAmount']),
     estimatedValue: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:EstimatedOverallContractAmount']),
     province: txt(location?.['cbc:CountrySubentity'], 90),
-    nuts: txt(location?.['cbc:CountrySubentityCode'], 12).toUpperCase(),
+    nuts: placeNuts,
     contractingBody: partyName(status) || txt(entry?.summary?.['#text'] || entry?.summary, 200).match(/Órgano de Contratación:\s*([^;]+)/i)?.[1]?.trim() || '',
     summary: kind === 'abierta' ? 'Expediente publicado con plazo de presentación vigente según los datos estructurados de la Plataforma.' : kind === 'anuncio_previo' ? 'Anuncio previo publicado. Aún no consta un plazo de presentación de ofertas: no equivale a una licitación abierta.' : 'Consulta preliminar de mercado. Puede permitir aportaciones, pero no constituye una convocatoria de ofertas.',
   };
