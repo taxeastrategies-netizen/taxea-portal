@@ -83,7 +83,6 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         firstAccessCompleted: false,
         passwordChangedByClient: false,
         tempPasswordShared: false,
-        inviteEmailSentAt: '',
       });
 
       // 2. Crear o invitar al usuario de acceso desde el backend administrativo.
