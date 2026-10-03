@@ -630,7 +630,7 @@ Deno.serve(async (req) => {
         const key = `${source.entity}:${docId}`;
         const existing = recordMap[key];
         const sourceUnchanged = !existing?.fileStorageUrl || existing.fileStorageUrl === fileUrl;
-        const skipExisting = !isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && sourceUnchanged;
+        const skipExisting = !isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && !!existing.driveFileId && !!existing.checksum && sourceUnchanged;
 
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
         const subfolder = getSubfolder(source.entity, record);
@@ -670,19 +670,19 @@ Deno.serve(async (req) => {
         const fileSize = contentBytes.length;
 
         // If the URL changed but the bytes did not, refresh metadata without creating another Drive copy.
-        if (!isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && existing.checksum === checksum) {
+        if (!isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && existing.driveFileId && existing.checksum === checksum) {
           const nowIso = new Date().toISOString();
           const refreshed = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
             backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
-            fileSize, mimeType, lastVerifiedAt: nowIso, safeErrorMessage: '',
+            fileSize, mimeType, safeErrorMessage: '',
           });
-          recordMap[key] = { ...existing, ...refreshed, fileStorageUrl: fileUrl, lastVerifiedAt: nowIso };
+          recordMap[key] = { ...existing, ...refreshed, fileStorageUrl: fileUrl };
           return { type: 'skipped', manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName, size: fileSize,
             mimeType, checksum, driveFileId: existing.driveFileId, drivePath: existing.drivePath,
-            status: 'skipped_unchanged', lastVerifiedAt: nowIso,
+            status: 'skipped_unchanged', lastVerifiedAt: existing.lastVerifiedAt || '',
           }};
         }
 
@@ -699,7 +699,7 @@ Deno.serve(async (req) => {
             persisted = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
               backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
               driveFileId: uploaded.id, driveFolderId: subFolder.id,
-              drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso, lastVerifiedAt: nowIso,
+              drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso, lastVerifiedAt: '',
               version: (existing.version || 1) + 1, safeErrorMessage: '',
             });
           } else {
@@ -710,7 +710,7 @@ Deno.serve(async (req) => {
               originalFileName: displayName, fileStorageUrl: fileUrl,
               fileSize, mimeType, checksum,
               driveFileId: uploaded.id, driveFolderId: subFolder.id, drivePath,
-              backupStatus: 'backed_up', lastBackedUpAt: nowIso, lastVerifiedAt: nowIso, version: 1,
+              backupStatus: 'backed_up', lastBackedUpAt: nowIso, version: 1,
             });
           }
           recordMap[key] = persisted;
@@ -802,7 +802,7 @@ Deno.serve(async (req) => {
         const backupRecord = recordMap[`${source.entity}:${record.id}`];
         const displayName = getDisplayName(source.entity, record);
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
-        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus);
+        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus) && !!backupRecord?.driveFileId && !!backupRecord?.checksum;
         manifestEntries.push({
           documentId: record.id,
           documentEntity: source.entity,
@@ -904,6 +904,8 @@ Deno.serve(async (req) => {
         bytesCopied, manifestDriveFileId: manifestFileId,
         manifestCsvDriveFileId: csvFileId, summaryDriveFileId: summaryFileId,
         manifestChecksum: await computeChecksum(new TextEncoder().encode(manifestJson)),
+        verificationStatus: 'pending', verificationChecked: 0, documentsVerified: 0,
+        verificationMissing: 0, verificationChecksumChecked: 0, verificationIssues: [],
         safeErrorMessage: finalErrorMessage,
       });
 
