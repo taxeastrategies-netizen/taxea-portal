@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
-import { allowedFeedUrl, filterRows, readFeed } from './core.ts';
+import { allowedFeedUrl, filterRows, readFeed, validProvinceCode } from './core.ts';
 
 const SOURCE_KEYS = ['hosted', 'aggregated', 'consultations'] as const;
 const KINDS = ['all', 'abierta', 'anuncio_previo', 'consulta'];
@@ -17,13 +17,13 @@ Deno.serve(async req => {
       kind: text(body.kind, 20) || 'all',
       query: text(body.query, 100),
       communityCode: text(body.communityCode, 4).toUpperCase(),
-      province: text(body.province, 80),
+      provinceCode: text(body.provinceCode, 2),
       cpv: text(body.cpv, 8),
       contractType: text(body.contractType, 40),
       minAmount: body.minAmount === '' || body.minAmount == null ? '' : Number(body.minAmount),
       maxAmount: body.maxAmount === '' || body.maxAmount == null ? '' : Number(body.maxAmount),
     };
-    if (!KINDS.includes(filters.kind) || (filters.communityCode && !/^ES\d{2}$/.test(filters.communityCode)) || (filters.province && !filters.communityCode) || (filters.cpv && !/^\d{1,8}$/.test(filters.cpv)) || !TYPES.includes(filters.contractType) || (filters.minAmount !== '' && (!Number.isFinite(filters.minAmount) || Number(filters.minAmount) < 0)) || (filters.maxAmount !== '' && (!Number.isFinite(filters.maxAmount) || Number(filters.maxAmount) < 0)) || (filters.minAmount !== '' && filters.maxAmount !== '' && Number(filters.minAmount) > Number(filters.maxAmount))) return response({ error: 'Filtros de búsqueda no válidos.' }, 400);
+    if (!KINDS.includes(filters.kind) || (filters.communityCode && !/^ES\d{2}$/.test(filters.communityCode)) || (filters.provinceCode && (!filters.communityCode || !validProvinceCode(filters.provinceCode))) || (filters.cpv && !/^\d{1,8}$/.test(filters.cpv)) || !TYPES.includes(filters.contractType) || (filters.minAmount !== '' && (!Number.isFinite(filters.minAmount) || Number(filters.minAmount) < 0)) || (filters.maxAmount !== '' && (!Number.isFinite(filters.maxAmount) || Number(filters.maxAmount) < 0)) || (filters.minAmount !== '' && filters.maxAmount !== '' && Number(filters.minAmount) > Number(filters.maxAmount))) return response({ error: 'Filtros de búsqueda no válidos.' }, 400);
     const requestedCursor = body.cursor && typeof body.cursor === 'object' && !Array.isArray(body.cursor) ? body.cursor : null;
     const sources: (typeof SOURCE_KEYS[number])[] = filters.kind === 'consulta' ? ['consultations'] : filters.kind === 'all' ? [...SOURCE_KEYS] : ['hosted', 'aggregated'];
     const requested: { source: typeof SOURCE_KEYS[number]; url: string | null }[] = [];
@@ -56,7 +56,7 @@ Deno.serve(async req => {
       coverage: 'Resultados de las páginas Atom oficiales examinadas en esta consulta. Los filtros se aplican a estos registros; puede haber más coincidencias en páginas siguientes. Las consultas preliminares y los anuncios previos no son licitaciones abiertas.',
     });
   } catch (error) {
-    if (String((error as Error)?.message || '').includes('Cursor de búsqueda inválido')) return response({ error: 'Cursor de búsqueda inválido.' }, 400);
+    if (String((error as Error)?.message || '').includes('Cursor de búsqueda inválido') || error instanceof TypeError && String((error as Error)?.message || '').includes('URL')) return response({ error: 'Cursor de búsqueda inválido.' }, 400);
     return response({ error: 'No se pudo consultar la fuente oficial. Inténtalo más tarde.' }, 502);
   }
 });
