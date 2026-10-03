@@ -12,7 +12,7 @@ async function loadHandler(relativePath, client) {
     plugins: [{
       name: 'sdk-stub',
       setup(builder) {
-        builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'test' }));
+        builder.onResolve({ filter: /^npm:@base44\/sdk/ }, () => ({ path: 'sdk', namespace: 'test' }));
         builder.onLoad({ filter: /^sdk$/, namespace: 'test' }, () => ({
           loader: 'js', contents: 'export function createClientFromRequest(){ return globalThis.__client; }',
         }));
