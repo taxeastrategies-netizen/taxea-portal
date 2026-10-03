@@ -56,14 +56,6 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
     }
 
     setSaving(true);
-    if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
-      setError('Este navegador no permite generar un enlace de acceso seguro.');
-      setSaving(false);
-      return;
-    }
-    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
-    const setupToken = crypto.randomUUID?.() || Array.from(tokenBytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    const setupTokenExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
     try {
       // 1. Crear ClientAccount
       const client = await base44.entities.ClientAccount.create({
@@ -91,9 +83,7 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         firstAccessCompleted: false,
         passwordChangedByClient: false,
         tempPasswordShared: false,
-        setupToken,
-        setupTokenExpiresAt,
-        inviteEmailSentAt: new Date().toISOString(),
+        inviteEmailSentAt: '',
       });
 
       // 2. Crear o invitar al usuario de acceso desde el backend administrativo.
@@ -132,16 +122,23 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         throw new Error(accountingPayload?.error || 'No se pudo preparar la contabilidad del cliente.');
       }
 
-      // 4. Enviar email personalizado en español vía backend function
-      const setupUrl = `https://taxeaportal.com/setup-password?token=${encodeURIComponent(setupToken)}&email=${encodeURIComponent(form.email)}`;
+      // 4. El backend administrativo emite el enlace; el token no viaja en la URL HTTP.
+      const issueResponse = await base44.functions.invoke('clientSetup', {
+        action: 'issue', clientAccountId: client.id,
+      });
+      const issue = issueResponse?.data ?? issueResponse;
+      if (!issue?.valid || !issue?.setupUrl) throw new Error('No se pudo generar el enlace de acceso.');
+      let inviteSent = false;
       try {
         await base44.functions.invoke('sendClientInviteEmail', {
           email: form.email,
           clientName: form.legalName,
-          setupUrl,
+          setupUrl: issue.setupUrl,
           isResend: false,
         });
-      } catch (_emailError) { /* no bloquear si falla */ }
+        inviteSent = true;
+        await base44.entities.ClientAccount.update(client.id, { inviteEmailSentAt: new Date().toISOString() });
+      } catch (_emailError) { /* se ofrece el enlace para reintento manual */ }
 
       // 5. Audit log
       await base44.entities.ClientAccessAuditLog.create({
@@ -150,10 +147,10 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
         actionType: 'cuenta_creada',
         actionBy: 'admin',
         actionAt: new Date().toISOString(),
-        details: `Cuenta creada e invitación enviada. Email: ${form.email}. Régimen: ${form.taxRegime}. Plan: ${form.plan || '—'}`,
+        details: `Cuenta creada. Invitación ${inviteSent ? 'enviada' : 'pendiente de envío'}. Régimen: ${form.taxRegime}. Plan: ${form.plan || '—'}`,
       });
 
-      setCreatedClient(client);
+      setCreatedClient({ ...client, setupUrl: issue.setupUrl, inviteSent });
       setStep(3);
       onCreated?.();
     } catch (e) {
@@ -363,13 +360,13 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
               <p className="text-sm text-muted-foreground">{createdClient.email}</p>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left text-sm text-emerald-800 space-y-3">
-              <p className="font-semibold">Cuenta creada y email enviado en español ✓</p>
-              <p>Se ha enviado un email de bienvenida con el enlace de acceso a <strong>{createdClient.email}</strong>. El cliente puede hacer clic en el enlace para establecer su contraseña.</p>
+              <p className="font-semibold">{createdClient.inviteSent ? 'Cuenta creada e invitación enviada' : 'Cuenta creada; invitación pendiente de envío'}</p>
+              <p>{createdClient.inviteSent ? 'El cliente ha recibido el enlace de acceso.' : 'No se confirmó el envío del correo. Puedes copiar el enlace seguro y reenviarlo.'}</p>
               <div>
                 <p className="text-xs text-emerald-700 font-medium mb-1.5">Enlace directo (para reenviar si fuera necesario):</p>
                 <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-3 py-2">
-                  <span className="text-[11px] text-emerald-700 flex-1 break-all">{`https://taxeaportal.com/setup-password?token=${encodeURIComponent(createdClient.setupToken)}&email=${encodeURIComponent(createdClient.email)}`}</span>
-                  <button type="button" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(`https://taxeaportal.com/setup-password?token=${encodeURIComponent(createdClient.setupToken)}&email=${encodeURIComponent(createdClient.email)}`)} className="text-emerald-600 hover:text-emerald-800 flex-shrink-0">
+                  <span className="text-[11px] text-emerald-700 flex-1 break-all">{createdClient.setupUrl}</span>
+                  <button type="button" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(createdClient.setupUrl)} className="text-emerald-600 hover:text-emerald-800 flex-shrink-0">
                     <Copy className="w-3.5 h-3.5" />
                   </button>
                 </div>
