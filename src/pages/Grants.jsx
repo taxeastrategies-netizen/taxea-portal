@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { base44 } from '@/api/base44Client';
-import { MapPinned, Search, RefreshCw, ArrowUpRight, CalendarDays, Clock3, Sparkles, AlertCircle, SlidersHorizontal, Mail, ShieldCheck } from 'lucide-react';
+import { MapPinned, Search, RefreshCw, ArrowUpRight, Sparkles, AlertCircle, SlidersHorizontal, Mail, ShieldCheck } from 'lucide-react';
 
 const GEOJSON_URL = 'https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson';
 const COMMUNITIES = [
@@ -27,6 +27,9 @@ const COMMUNITIES = [
   { ine: '19', code: 'ES52', name: 'Comunitat Valenciana' },
 ];
 const PROVINCES = '01:17:Araba/Álava|02:06:Albacete|03:19:Alacant/Alicante|04:01:Almería|05:07:Ávila|06:10:Badajoz|07:03:Illes Balears|08:08:Barcelona|09:07:Burgos|10:10:Cáceres|11:01:Cádiz|12:19:Castelló/Castellón|13:06:Ciudad Real|14:01:Córdoba|15:11:A Coruña|16:06:Cuenca|17:08:Girona|18:01:Granada|19:06:Guadalajara|20:17:Gipuzkoa/Guipúzcoa|21:01:Huelva|22:02:Huesca|23:01:Jaén|24:07:León|25:08:Lleida|26:12:La Rioja|27:11:Lugo|28:13:Madrid|29:01:Málaga|30:15:Murcia|31:16:Navarra|32:11:Ourense|33:18:Asturias|34:07:Palencia|35:04:Las Palmas|36:11:Pontevedra|37:07:Salamanca|38:04:Santa Cruz De Tenerife|39:05:Cantabria|40:07:Segovia|41:01:Sevilla|42:07:Soria|43:08:Tarragona|44:02:Teruel|45:06:Toledo|46:19:València/Valencia|47:07:Valladolid|48:17:Bizkaia/Vizcaya|49:07:Zamora|50:02:Zaragoza|51:09:Ceuta|52:14:Melilla'.split('|').map(row => { const [code, ine, name] = row.split(':'); return { code, ine, name }; });
+const OFFICIAL_FINALITIES = [
+  [8, 'Vivienda y edificación'], [12, 'Agricultura, pesca y alimentación'], [14, 'Comercio, turismo y pymes'], [11, 'Cultura'], [7, 'Desempleo'], [10, 'Educación'], [6, 'Fomento del empleo'], [13, 'Industria y energía'], [16, 'Infraestructuras'], [17, 'Investigación, desarrollo e innovación'], [18, 'Otras actuaciones económicas'], [4, 'Otras prestaciones económicas'], [9, 'Sanidad'], [5, 'Servicios sociales'], [15, 'Transporte'], [20, 'Cooperación internacional y cultural'], [1, 'Justicia'], [2, 'Defensa'], [3, 'Seguridad ciudadana'], [19, 'Sin información específica'], [21, 'Información no disponible'],
+];
 const STATUS = {
   open: { label: 'Abierta', className: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
   upcoming: { label: 'Próxima · apertura confirmada', className: 'bg-cyan-500/15 text-cyan-800 border-cyan-500/30' },
@@ -41,7 +44,7 @@ function StatusBadge({ status }) {
 }
 function GrantCard({ item }) {
   const subject = encodeURIComponent('Consulta sobre ayuda BDNS ' + item.id);
-  const body = encodeURIComponent('Hola, me interesa esta ayuda y quisiera confirmar si puedo solicitarla:\\n\\n' + item.title + '\\n' + item.sourceUrl + '\\n\\n');
+  const body = encodeURIComponent('Hola, me interesa esta ayuda y quisiera confirmar si puedo solicitarla:\n\n' + item.title + '\n' + item.sourceUrl + '\n\n');
   const audience = item.beneficiaries?.length ? item.beneficiaries.join(' · ') : 'No especificado en la ficha estructurada';
   const period = [item.opensAt ? 'Desde ' + formatDate(item.opensAt) : item.startNote ? 'Inicio: ' + item.startNote : null, item.closesAt ? 'Hasta ' + formatDate(item.closesAt) : item.endNote ? 'Fin: ' + item.endNote : null].filter(Boolean).join(' · ') || 'Sin fechas estructuradas; comprobar convocatoria';
   const benefit = [item.purpose && 'Finalidad: ' + item.purpose, item.instruments?.length && 'Modalidad: ' + item.instruments.join(' · ')].filter(Boolean).join('. ') || 'El beneficio concreto debe consultarse en las bases';
@@ -60,7 +63,7 @@ function GrantCard({ item }) {
           <div><dt className="font-bold text-foreground">Periodo de solicitud</dt><dd className="mt-1 text-muted-foreground">{period}</dd></div>
           <div><dt className="font-bold text-foreground">A quién va dirigida</dt><dd className="mt-1 text-muted-foreground">{audience}</dd></div>
           <div><dt className="font-bold text-foreground">Qué ofrece</dt><dd className="mt-1 text-muted-foreground">{benefit}{item.budget != null ? '. Presupuesto total de la convocatoria: ' + new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(item.budget) + ' (no es la cuantía individual).' : ''}</dd></div>
-          <div><dt className="font-bold text-foreground">Requisitos publicados en la ficha</dt><dd className="mt-1 text-muted-foreground">{item.regions?.length ? 'Ámbito: ' + item.regions.join(' · ') + '. ' : ''}{item.sectors?.length ? 'Sectores: ' + item.sectors.join(' · ') + '. ' : ''}{item.callType ? 'Procedimiento: ' + item.callType + '. ' : ''}Las condiciones completas de acceso, exclusiones y documentación deben comprobarse en la convocatoria y sus bases.</dd></div>
+          <div><dt className="font-bold text-foreground">Ámbito y condiciones que constan</dt><dd className="mt-1 text-muted-foreground">{item.regions?.length ? 'Ámbito: ' + item.regions.join(' · ') + '. ' : ''}{item.sectors?.length ? 'Sectores: ' + item.sectors.join(' · ') + '. ' : ''}{item.callType ? 'Procedimiento: ' + item.callType + '. ' : ''}Las condiciones completas de acceso, exclusiones y documentación deben comprobarse en la convocatoria y sus bases.</dd></div>
         </dl>
         {item.basisName && <p className="text-muted-foreground">Bases reguladoras: {item.basisName}</p>}
         <div className="flex flex-wrap gap-3 border-t border-border pt-3">
@@ -82,6 +85,7 @@ export default function Grants() {
   const [province, setProvince] = useState('');
   const [applicant, setApplicant] = useState('all');
   const [topic, setTopic] = useState('all');
+  const [finality, setFinality] = useState('');
   const [administration, setAdministration] = useState('');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
@@ -106,7 +110,7 @@ export default function Grants() {
     let active = true;
     setLoading(true);
     setError('');
-    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, administration, query, page })
+    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, finality, administration, query, page })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -117,7 +121,7 @@ export default function Grants() {
       .catch(err => { if (active) setError(err?.response?.data?.error || err?.message || 'No se pudieron consultar las ayudas.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [community, province, applicant, topic, administration, query, page, refresh]);
+  }, [community, province, applicant, topic, finality, administration, query, page, refresh]);
   const grants = useMemo(() => Array.from(new Map(pages.flatMap(row => row.grants || []).map(row => [row.id, row])).values()), [pages]);
   const visible = useMemo(() => {
     const rows = tab === 'all' ? grants : grants.filter(row => row.status === tab);
@@ -187,6 +191,11 @@ export default function Grants() {
               <option value="all">Cualquier finalidad</option><option value="inicio">Emprendimiento e inicio</option><option value="digitalizacion">Digitalización</option><option value="empleo">Empleo y contratación</option><option value="energia">Energía y sostenibilidad</option><option value="rural">Campo y medio rural</option><option value="innovacion">Innovación e I+D</option><option value="cultura">Cultura, deporte y educación</option><option value="vivienda">Vivienda y rehabilitación</option><option value="social">Acción social y cuidados</option>
             </select>
           </label>
+          <label className="space-y-1.5 text-xs font-semibold">Finalidad oficial BDNS
+            <select value={finality} onChange={e => { setFinality(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+              <option value="">Todas las finalidades</option>{OFFICIAL_FINALITIES.map(([id, label]) => <option key={id} value={String(id)}>{label}</option>)}
+            </select>
+          </label>
           <label className="space-y-1.5 text-xs font-semibold">Administración convocante
             <select value={administration} onChange={e => { setAdministration(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="">Todas las administraciones</option><option value="C">Estado</option><option value="A">Comunidad autónoma</option><option value="L">Entidad local</option><option value="O">Otros organismos</option>
@@ -197,7 +206,7 @@ export default function Grants() {
             <div className="flex gap-2"><input id="grant-keyword" value={draft} onChange={e => setDraft(e.target.value)} placeholder="Ej.: comercio, hostelería, digitalización" maxLength={100} className="min-w-0 flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /><button type="submit" aria-label="Buscar" className="rounded-xl bg-taxea-red px-3 text-white"><Search className="h-4 w-4" /></button></div>
           </form>
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">Los temas orientan una búsqueda textual. Si escribes una palabra clave, prevalece sobre el tema; no equivale a filtrar por CNAE ni garantiza encontrar todas las ayudas aplicables.</p>
+        <p className="mt-3 text-[11px] text-muted-foreground">La finalidad oficial filtra por la clasificación BDNS. Los temas son búsquedas textuales orientativas; una palabra clave sustituye el tema. No equivale a un filtro CNAE ni garantiza todas las ayudas aplicables.</p>
         {(applicant === 'autonomos' || applicant === 'pymes') && <p className="mt-2 text-[11px] text-amber-800">La BDNS agrupa autónomos y pymes en un mismo tipo oficial. La selección muestra candidatas; confirma los requisitos en cada convocatoria.</p>}
         <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ficha sin fecha confirmada queda por verificar; no se asume próxima ni solicitables.</div>
         <p className="mt-5 text-xs text-muted-foreground">Buscador propio de Taxea con información oficial de BDNS. Las ayudas de otras fuentes todavía no están incorporadas; el enlace de cada ficha lleva a la convocatoria y sus bases.</p>
