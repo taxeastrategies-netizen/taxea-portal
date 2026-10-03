@@ -51,7 +51,7 @@ export default function DebtOCR({ companyId, onImported }) {
 
     // Extract + analyze with LLM
     const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
-      file_url,
+      operation: 'extract', companyId, file_url,
       json_schema: {
         type: 'object',
         properties: {
