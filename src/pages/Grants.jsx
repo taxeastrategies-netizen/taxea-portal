@@ -111,7 +111,7 @@ export default function Grants() {
     let active = true;
     setLoading(true);
     setError('');
-    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, finality, administration, query, page })
+    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, finality, administration, query, status: tab, page })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -122,7 +122,7 @@ export default function Grants() {
       .catch(err => { if (active) setError(err?.response?.data?.error || err?.message || 'No se pudieron consultar las ayudas.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [community, province, applicant, topic, finality, administration, query, page, refresh]);
+  }, [community, province, applicant, topic, finality, administration, query, tab, page, refresh]);
   const grants = useMemo(() => Array.from(new Map(pages.flatMap(row => row.grants || []).map(row => [row.id, row])).values()), [pages]);
   const visible = useMemo(() => {
     const rows = tab === 'all' ? grants : grants.filter(row => row.status === tab);
@@ -215,17 +215,17 @@ export default function Grants() {
     </div>
     <section>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><h2 className="font-jakarta text-xl font-bold">Convocatorias encontradas</h2><p className="mt-1 text-xs text-muted-foreground">Se muestran resultados verificados de las páginas cargadas, no un total nacional exhaustivo.</p></div>
+        <div><h2 className="font-jakarta text-xl font-bold">Convocatorias encontradas</h2><p className="mt-1 text-xs text-muted-foreground">El filtro elegido se aplica a las fichas oficiales examinadas en la BDNS. Puede haber más coincidencias en páginas posteriores.</p></div>
         <button onClick={() => { setPage(0); setPages([]); setRefresh(value => value + 1); }} disabled={loading} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:bg-secondary disabled:opacity-50"><RefreshCw className={'h-3.5 w-3.5 ' + (loading ? 'animate-spin' : '')} />Actualizar consulta</button>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">{tabs.map(row => <button key={row.id} onClick={() => setTab(row.id)} className={'rounded-full border px-3 py-2 text-xs font-semibold ' + (tab === row.id ? 'border-taxea-red bg-taxea-red text-white' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>{row.name}</button>)}</div>
+      <div className="mt-4 flex flex-wrap gap-2">{tabs.map(row => <button key={row.id} onClick={() => { setTab(row.id); setPage(0); setPages([]); }} className={'rounded-full border px-3 py-2 text-xs font-semibold ' + (tab === row.id ? 'border-taxea-red bg-taxea-red text-white' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>{row.name}</button>)}</div>
       {error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><AlertCircle className="h-4 w-4" />{error}</div>}
       {latest?.partial && <div role="status" className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><AlertCircle className="h-4 w-4" />La BDNS no ha entregado el detalle de {latest.failedDetails} convocatoria(s). Resultados parciales; comprueba de nuevo más tarde.</div>}
       {loading && page === 0 && <p className="mt-7 text-sm text-muted-foreground">Consultando convocatorias oficiales…</p>}
-      {!loading && !error && visible.length === 0 && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No hay resultados de este estado en las páginas cargadas. Prueba otra palabra clave o carga más resultados.</div>}
+      {!loading && !error && visible.length === 0 && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No se encontraron coincidencias en las fichas examinadas. Ajusta los filtros o continúa buscando en la BDNS.</div>}
       <div className="mt-5 grid gap-4 md:grid-cols-2">{visible.map(row => <GrantCard key={row.id} item={row} />)}</div>
-      {latest?.hasMore && <div className="mt-6 text-center"><button disabled={loading} onClick={() => setPage(value => value + 1)} className="rounded-xl border border-border bg-card px-5 py-2.5 text-xs font-semibold hover:bg-secondary disabled:opacity-50">{loading ? 'Cargando…' : 'Cargar más convocatorias'}</button></div>}
-      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">La BDNS puede rectificar datos. Los resultados están paginados por fecha de recepción y los estados se calculan con la información publicada; «plazo por verificar» no significa convocatoria abierta. Revisa bases, fechas, elegibilidad y compatibilidad antes de actuar. Este radar aún no cubre fuentes adicionales como boletines y sedes no reflejados en BDNS.</p>
+      {latest?.hasMore && <div className="mt-6 text-center"><button disabled={loading} onClick={() => setPage(latest.nextPage)} className="rounded-xl border border-border bg-card px-5 py-2.5 text-xs font-semibold hover:bg-secondary disabled:opacity-50">{loading ? 'Buscando…' : 'Seguir buscando en BDNS'}</button></div>}
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">La búsqueda consulta directamente la BDNS y no guarda las convocatorias en Taxea. Los resultados se recorren por páginas; el estado abierta/próxima se verifica en cada ficha porque el listado BDNS no permite filtrarlo por estado. Si aparecen pocos resultados, usa «Seguir buscando en BDNS». «Plazo por verificar» no significa abierta. Comprueba siempre bases, fechas y elegibilidad en el enlace oficial.</p>
     </section>
   </main>;
 }
