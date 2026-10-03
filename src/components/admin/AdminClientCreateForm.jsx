@@ -129,12 +129,13 @@ export default function AdminClientCreateForm({ open, onOpenChange, onCreated })
       if (!issue?.valid || !issue?.setupUrl) throw new Error('No se pudo generar el enlace de acceso.');
       let inviteSent = false;
       try {
-        await base44.functions.invoke('sendClientInviteEmail', {
+        const inviteResponse = await base44.functions.invoke('sendClientInviteEmail', {
           email: form.email,
           clientName: form.legalName,
           setupUrl: issue.setupUrl,
           isResend: false,
         });
+        if (!(inviteResponse?.data ?? inviteResponse)?.success) throw new Error('El envío no fue confirmado.');
         inviteSent = true;
         await base44.entities.ClientAccount.update(client.id, { inviteEmailSentAt: new Date().toISOString() });
       } catch (_emailError) { /* se ofrece el enlace para reintento manual */ }
