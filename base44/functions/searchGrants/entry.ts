@@ -149,8 +149,8 @@ Deno.serve(async req => {
     const summaries = list.content.filter((row: any) => /^\d+$/.test(String(row?.numeroConvocatoria || '')));
     const grants: any[] = [];
     let failedDetails = 0;
-    for (let i = 0; i < summaries.length; i += 6) {
-      const batch = await Promise.allSettled(summaries.slice(i, i + 6).map((summary: any) => detailFor(summary, communityCode, selectedCodes)));
+    for (let i = 0; i < summaries.length; i += 3) {
+      const batch = await Promise.allSettled(summaries.slice(i, i + 3).map((summary: any) => detailFor(summary, communityCode, selectedCodes)));
       failedDetails += batch.filter(row => row.status === 'rejected').length;
       grants.push(...batch.filter((row): row is PromiseFulfilledResult<any> => row.status === 'fulfilled').map(row => row.value).filter(Boolean));
     }
