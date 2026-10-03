@@ -55,12 +55,12 @@ function flatten(rows: Region[]): Region[] {
 }
 function findRegionIds(rows: Region[], communityCode: string, province: string): number[] {
   const all = flatten(rows);
-  const country = all.find(row => /^ES - ESPANA$/i.test(fold(row.descripcion).toUpperCase())) || all.find(row => /^ES - /i.test(row.descripcion));
+  const country = all.find(row => /^ES - /i.test(row.descripcion));
   const countryId = country?.id || 1;
   if (!communityCode) return [];
   const community = all.find(row => row.descripcion.toUpperCase().startsWith(`${communityCode} -`));
   if (!community) throw Object.assign(new Error('Comunidad autónoma no reconocida.'), { status: 400 });
-  if (!province) return [community.id, countryId];
+  if (!province) return [...new Set([community.id, ...flatten(community.children || []).map(row => row.id), countryId])];
   const names = provinceAliases[fold(province)] || province.split('/').map(part => part.trim());
   const childIds = flatten(community.children || []).filter(row => names.some(name => fold(row.descripcion.replace(/^ES\d+ - /, '')) === fold(name) || fold(row.descripcion).includes(fold(name)))).map(row => row.id);
   if (!childIds.length) throw Object.assign(new Error('Provincia no reconocida en la comunidad seleccionada.'), { status: 400 });
