@@ -222,7 +222,7 @@ export default function SubidaMasivaModelos() {
       });
     }
 
-    // 5. WhatsApp premium
+    // 5. WhatsApp: conservar borrador sin enviar; el canal automático no está contratado.
     const telefonoRaw = empresa.telefono;
     const telefonoFormateado = formatearTelefono(telefonoRaw);
     
@@ -239,7 +239,7 @@ export default function SubidaMasivaModelos() {
       });
 
       // Crear log primero
-      const waLog = await base44.entities.WhatsAppLog.create({
+      await base44.entities.WhatsAppLog.create({
         company_id: empresa.id,
         destinatario_nombre: empresa.razon_social || empresa.nombre_comercial,
         destinatario_telefono: telefonoFormateado,
@@ -247,17 +247,12 @@ export default function SubidaMasivaModelos() {
         periodo,
         mensaje: mensajeWA,
         estado: 'pendiente',
+        proveedor: 'manual',
+        error_detalle: 'Borrador. Envío automático por WhatsApp desactivado.',
         obligacion_id: oblig?.id,
       });
 
-      // Enviar via backend
-      base44.functions.invoke('enviarWhatsApp', {
-        to: telefonoFormateado,
-        mensaje: mensajeWA,
-        whatsapp_log_id: waLog.id,
-      }).catch(() => {
-        // Error silencioso — el log ya registra el estado
-      });
+      // El mensaje queda disponible para revisión manual; no se llama a un proveedor externo.
     }
 
     // 6. Timeline
