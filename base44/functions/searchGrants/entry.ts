@@ -106,10 +106,8 @@ async function detailFor(summary: any, communityCode: string, selectedCodes: str
   const url = new URL(`${ROOT}/convocatorias`);
   url.searchParams.set('vpd', 'GE');
   url.searchParams.set('numConv', id);
-  try {
-    const detail = await requestJson(url);
-    return appliesGeography(summary, detail, communityCode, selectedCodes) ? normalize(summary, detail) : null;
-  } catch { return null; }
+  const detail = await requestJson(url);
+  return appliesGeography(summary, detail, communityCode, selectedCodes) ? normalize(summary, detail) : null;
 }
 function response(value: unknown, status = 200) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -150,14 +148,19 @@ Deno.serve(async req => {
     if (!Array.isArray(list?.content)) throw new Error('Respuesta BDNS inesperada.');
     const summaries = list.content.filter((row: any) => /^\d+$/.test(String(row?.numeroConvocatoria || '')));
     const grants: any[] = [];
+    let failedDetails = 0;
     for (let i = 0; i < summaries.length; i += 6) {
-      grants.push(...(await Promise.all(summaries.slice(i, i + 6).map((summary: any) => detailFor(summary, communityCode, selectedCodes)))).filter(Boolean));
+      const batch = await Promise.allSettled(summaries.slice(i, i + 6).map((summary: any) => detailFor(summary, communityCode, selectedCodes)));
+      failedDetails += batch.filter(row => row.status === 'rejected').length;
+      grants.push(...batch.filter((row): row is PromiseFulfilledResult<any> => row.status === 'fulfilled').map(row => row.value).filter(Boolean));
     }
+    if (summaries.length && failedDetails === summaries.length) throw new Error('No se pudieron consultar los detalles de la BDNS.');
     const value = {
       ok: true,
       grants: grants.filter(grant => grant.status !== 'closed' && grant.status !== 'later'),
       page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 30,
       totalSourceMatches: Number(list?.totalElements || 0),
+      partial: failedDetails > 0, failedDetails,
       checkedAt: new Date().toISOString(),
       source: 'BDNS', coverage: 'Convocatorias publicadas en los últimos 24 meses. No garantiza exhaustividad de otras fuentes ni la elegibilidad personal.',
       provider: { fandit: 'Pendiente de clave y autorización de consumo API' },
