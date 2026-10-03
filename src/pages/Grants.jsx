@@ -67,7 +67,7 @@ export default function Grants() {
   const [focus, setFocus] = useState('autonomos');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState('open');
+  const [tab, setTab] = useState('all');
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -116,7 +116,7 @@ export default function Grants() {
     { id: 'open', name: 'Abiertas' },
     { id: 'upcoming', name: 'Próximas 6 meses' },
     { id: 'announced', name: 'En espera / anunciadas' },
-    { id: 'all', name: 'Todas las vigentes' },
+    { id: 'all', name: 'Todas las encontradas' },
   ];
   return <main className="mx-auto max-w-[1500px] space-y-6 p-4 pb-16 md:p-7">
     <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 px-6 py-8 text-white md:px-9">
