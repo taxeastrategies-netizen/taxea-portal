@@ -182,7 +182,7 @@ Deno.serve(async req => {
     const page = Number(body?.page ?? 0);
     if (communityCode && !allowedCountryCode(communityCode)) return response({ error: 'Comunidad no válida.' }, 400);
     if (province && !communityCode) return response({ error: 'Selecciona antes una comunidad.' }, 400);
-    if (!Number.isInteger(page) || page < 0 || page > 10000) return response({ error: 'Página no válida.' }, 400);
+    if (!Number.isInteger(page) || page < 0 || page > 100000) return response({ error: 'Página no válida.' }, 400);
     if (applicant !== 'all' && !BENEFICIARY_IDS[applicant]) return response({ error: 'Tipo de beneficiario no válido.' }, 400);
     if (topic !== 'all' && !TOPIC_TERMS[topic]) return response({ error: 'Tema no válido.' }, 400);
     if (finality && !FINALITY_IDS.has(finality)) return response({ error: 'Finalidad no válida.' }, 400);
@@ -222,7 +222,7 @@ Deno.serve(async req => {
     const value = {
       ok: true,
       grants,
-      page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 10000,
+      page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 100000,
       totalSourceMatches: Number(list?.totalElements || 0),
       partial: failedDetails > 0, failedDetails,
       checkedAt: new Date().toISOString(),
