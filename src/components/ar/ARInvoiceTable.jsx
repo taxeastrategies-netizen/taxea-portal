@@ -36,6 +36,7 @@ export default function ARInvoiceTable({ invoices, contacts, onReconcile }) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('todas');
   const [sending, setSending] = useState(null);
+  const [sendNotice, setSendNotice] = useState('');
 
   const filtered = useMemo(() => {
     let list = invoices.filter(i => !i.anulada && i.estado_cobro !== 'cobrada');
@@ -53,17 +54,21 @@ export default function ARInvoiceTable({ invoices, contacts, onReconcile }) {
 
   const handleSendReminder = async (inv) => {
     setSending(inv.id);
-    await base44.integrations.Core.SendEmail({
-      to: inv.cliente_email || '',
-      subject: `Recordatorio de pago — Factura ${inv.numero_factura}`,
-      body: `Estimado ${inv.cliente_nombre},\n\nLe recordamos que la factura ${inv.numero_factura} por importe de ${fmt(getOutstandingAmount(inv))} se encuentra pendiente de pago.\n\nFecha de vencimiento: ${inv.fecha_vencimiento || 'N/D'}\n\nSi ya ha realizado el pago, por favor ignore este mensaje.\n\nGracias por su confianza.\n\nEquipo Taxea`,
-    }).catch(() => {});
-    setSending(null);
+    setSendNotice('');
+    try {
+      await base44.integrations.Core.SendEmail({ operation: 'reminder', companyId: inv.company_id, invoiceId: inv.id });
+      setSendNotice(`Recordatorio enviado para la factura ${inv.numero_factura}.`);
+    } catch (error) {
+      setSendNotice(error?.response?.data?.error || error?.message || 'No se pudo enviar el recordatorio.');
+    } finally {
+      setSending(null);
+    }
   };
 
 
   return (
     <div className="space-y-4">
+      {sendNotice && <p role="status" className="text-sm text-slate-700">{sendNotice}</p>}
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-xs">
