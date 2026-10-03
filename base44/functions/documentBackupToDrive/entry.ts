@@ -526,7 +526,10 @@ Deno.serve(async (req) => {
       if (remaining === 0 && entries.length > 0 && checksumChecked === 0) {
         issues.push({ code: 'NO_CONTENT_SAMPLE' });
       }
-      const status = remaining > 0 ? 'partial' : (missing === 0 && (entries.length === 0 || checksumChecked > 0) ? 'ok' : 'incidents');
+      if (remaining === 0 && (lastJob.status === 'completed_with_errors' || Number(lastJob.documentsFailed || 0) > 0)) {
+        issues.push({ code: 'BACKUP_RUN_ERRORS' });
+      }
+      const status = remaining > 0 ? 'partial' : (missing === 0 && issues.length === 0 && (entries.length === 0 || checksumChecked > 0) ? 'ok' : 'incidents');
       await base44.asServiceRole.entities.BackupJob.update(lastJob.id, {
         verificationChecked: checked, documentsVerified: verified,
         verificationMissing: missing, verificationChecksumChecked: checksumChecked,
