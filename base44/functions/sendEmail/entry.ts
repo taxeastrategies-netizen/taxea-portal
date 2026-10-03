@@ -34,12 +34,10 @@ function safeFilename(value) {
 function isSafeRemoteUrl(value) {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase();
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return false;
-    if (/^(10|127|169\.254|192\.168)\./.test(host)) return false;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-    return true;
+    return url.protocol === 'https:'
+      && url.hostname === 'base44.app'
+      && !url.username && !url.password && !url.port && !url.hash
+      && url.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/');
   } catch {
     return false;
   }
