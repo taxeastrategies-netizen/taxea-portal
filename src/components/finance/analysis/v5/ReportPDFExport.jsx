@@ -7,6 +7,17 @@ import { fmtEUR, fmtPct, fmtX, SOURCE } from './ReportEngine';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 const today = () => new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+const escapeHtml = (value) => String(value)
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+const escapeReportData = (value) => {
+  if (typeof value === 'string') return escapeHtml(value);
+  if (Array.isArray(value)) return value.map(escapeReportData);
+  if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, escapeReportData(item)]));
+  }
+  return value;
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const sem = {
@@ -214,6 +225,11 @@ function narrativaRentabilidad(calc) {
 
 // ── Constructor principal del HTML ─────────────────────────────────────────────
 export function buildPDFHTML(calc, alertas, recs, aiContent, imp) {
+  calc = escapeReportData(calc);
+  alertas = escapeReportData(alertas);
+  recs = escapeReportData(recs);
+  aiContent = escapeReportData(aiContent);
+  imp = escapeReportData(imp);
   const { empresa, ejercicio } = calc;
   const genDate = today();
   const TOTAL_PAGES = 14;
@@ -764,6 +780,7 @@ export function buildPDFHTML(calc, alertas, recs, aiContent, imp) {
 
   return `<!DOCTYPE html><html lang="es"><head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; img-src https://media.base44.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Informe Financiero Premium Taxea — ${empresa} — ${ejercicio}</title>
 <style>${CSS}</style>
 </head><body>
