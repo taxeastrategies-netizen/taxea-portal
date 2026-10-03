@@ -446,64 +446,96 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── VERIFY action ──
+    // ── VERIFY action: verify the whole manifest, including skipped documents ──
     if (action === 'verify') {
       const recentCompleted = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
       const lastJob = recentCompleted?.find(item => ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
-      if (!lastJob) return Response.json({ error: 'No hay copias finalizadas para verificar' }, { status: 404 });
+      if (!lastJob) return Response.json({ error: 'No hay copias finalizadas con manifiesto para verificar' }, { status: 404 });
 
-      const items = await base44.asServiceRole.entities.BackupJobItem.filter({ backupJobId: lastJob.id });
-      const withDriveFile = (items || []).filter(item => item.driveFileId);
-      const alreadyVerified = withDriveFile.filter(item => item.status === 'verified').length;
-      const pendingVerification = withDriveFile.filter(item => item.status !== 'verified');
-      const verifyStartedAt = Date.now();
-      let verifiedThisRun = 0, processedThisRun = 0, missing = 0;
-      const missingItems = [];
-
-      for (let index = 0; index < pendingVerification.length; index += 5) {
-        const batch = pendingVerification.slice(index, index + 5);
-        const results = await Promise.all(batch.map(async item => ({
-          item,
-          exists: await verifyDriveFile(item.driveFileId, accessToken),
-        })));
-        for (const { item, exists } of results) {
-          processedThisRun++;
-          if (exists) {
-            verifiedThisRun++;
-            await base44.asServiceRole.entities.BackupJobItem.update(item.id, { status: 'verified' });
-          } else {
-            missing++;
-            missingItems.push({ documentId: item.documentId, name: item.clientName });
-          }
-        }
-        if (Date.now() - verifyStartedAt >= MANUAL_TIME_BUDGET_MS - 5000) break;
-      }
-
-      const remaining = Math.max(0, pendingVerification.length - processedThisRun);
-      if (remaining > 0) {
+      const restart = body.restartVerification === true;
+      if (!restart && ['ok', 'incidents'].includes(lastJob.verificationStatus)) {
         return Response.json({
-          jobId: lastJob.id,
-          verified: alreadyVerified + verifiedThisRun,
-          verifiedThisRun,
-          missing,
-          missingItems,
-          remaining,
-          status: 'partial',
+          jobId: lastJob.id, status: lastJob.verificationStatus,
+          checked: Number(lastJob.verificationChecked || 0),
+          verified: Number(lastJob.documentsVerified || 0),
+          missing: Number(lastJob.verificationMissing || 0),
+          checksumChecked: Number(lastJob.verificationChecksumChecked || 0),
+          issues: lastJob.verificationIssues || [], remaining: 0,
         });
       }
 
-      if (lastJob.manifestDriveFileId) {
-        const manifestOk = await verifyDriveFile(lastJob.manifestDriveFileId, accessToken);
-        if (!manifestOk) missing++;
+      const manifestRes = await driveGet(`${DRIVE_API}/files/${encodeURIComponent(lastJob.manifestDriveFileId)}?alt=media`, accessToken);
+      if (!manifestRes.ok) return Response.json({ error: `No se pudo recuperar el manifiesto de Drive (${manifestRes.status})` }, { status: 503 });
+      const manifestBytes = new Uint8Array(await manifestRes.arrayBuffer());
+      const manifestChecksum = await computeChecksum(manifestBytes);
+      if (!lastJob.manifestChecksum || manifestChecksum !== lastJob.manifestChecksum) {
+        await base44.asServiceRole.entities.BackupJob.update(lastJob.id, {
+          verificationStatus: 'incidents', verificationIssues: [{ code: 'MANIFEST_CHECKSUM_MISMATCH' }],
+        });
+        return Response.json({ jobId: lastJob.id, status: 'incidents', error: 'El hash del manifiesto no coincide. La copia no está verificada.' }, { status: 409 });
       }
+
+      let manifest;
+      try { manifest = JSON.parse(new TextDecoder().decode(manifestBytes)); }
+      catch { return Response.json({ error: 'El manifiesto no es JSON válido.' }, { status: 409 }); }
+      const entries = manifest?.documents;
+      if (!Array.isArray(entries) || Number(manifest.totalDocuments) !== entries.length
+        || Number(lastJob.documentsScanned) !== entries.length) {
+        return Response.json({ error: 'El número de documentos del manifiesto no coincide con el trabajo.' }, { status: 409 });
+      }
+
+      const cursor = restart ? 0 : Math.min(Math.max(0, Number(lastJob.verificationChecked || 0)), entries.length);
+      const verifiedBefore = restart ? 0 : Number(lastJob.documentsVerified || 0);
+      const missingBefore = restart ? 0 : Number(lastJob.verificationMissing || 0);
+      const checksumBefore = restart ? 0 : Number(lastJob.verificationChecksumChecked || 0);
+      const issuesBefore = restart ? [] : (lastJob.verificationIssues || []);
+      const lastCopiedIndex = entries.findLastIndex(entry => entry.status === 'backed_up' && entry.driveFileId);
+      const sampleIndices = new Set([0, Math.floor(entries.length / 2), entries.length - 1, lastCopiedIndex]);
+      const batch = entries.slice(cursor, cursor + 25);
+      const results = [];
+      for (let offset = 0; offset < batch.length; offset += 5) {
+        const group = batch.slice(offset, offset + 5);
+        const groupResults = await Promise.all(group.map(async (entry, localIndex) => {
+          const index = cursor + offset + localIndex;
+          if (!entry.driveFileId || !entry.checksum) return { ok: false, code: 'MISSING_COPY_OR_HASH', index };
+          const metaRes = await driveGet(`${DRIVE_API}/files/${encodeURIComponent(entry.driveFileId)}?fields=id,size,trashed`, accessToken);
+          if (metaRes.status === 404) return { ok: false, code: 'DRIVE_FILE_MISSING', index };
+          if (!metaRes.ok) throw new Error(`Drive metadata verification failed (${metaRes.status})`);
+          const metadata = await metaRes.json();
+          if (metadata.trashed || metadata.id !== entry.driveFileId) return { ok: false, code: 'DRIVE_FILE_UNAVAILABLE', index };
+          if (Number(metadata.size) !== Number(entry.size)) return { ok: false, code: 'SIZE_MISMATCH', index };
+          if (!sampleIndices.has(index) || Number(entry.size) > 25 * 1024 * 1024) return { ok: true, checksumChecked: false, index };
+          const contentRes = await driveGet(`${DRIVE_API}/files/${encodeURIComponent(entry.driveFileId)}?alt=media`, accessToken);
+          if (contentRes.status === 404) return { ok: false, code: 'DRIVE_FILE_MISSING', index };
+          if (!contentRes.ok) throw new Error(`Drive content verification failed (${contentRes.status})`);
+          const restoredBytes = new Uint8Array(await contentRes.arrayBuffer());
+          if (await computeChecksum(restoredBytes) !== entry.checksum) return { ok: false, code: 'CONTENT_CHECKSUM_MISMATCH', index };
+          return { ok: true, checksumChecked: true, index };
+        }));
+        results.push(...groupResults);
+      }
+
+      const checked = cursor + results.length;
+      const verified = verifiedBefore + results.filter(result => result.ok).length;
+      const missing = missingBefore + results.filter(result => !result.ok).length;
+      const checksumChecked = checksumBefore + results.filter(result => result.checksumChecked).length;
+      const issues = [...issuesBefore, ...results.filter(result => !result.ok).map(result => ({
+        code: result.code, manifestIndex: result.index,
+      }))].slice(0, 20);
+      const remaining = entries.length - checked;
+      if (remaining === 0 && entries.length > 0 && checksumChecked === 0) {
+        issues.push({ code: 'NO_CONTENT_SAMPLE' });
+      }
+      const status = remaining > 0 ? 'partial' : (missing === 0 && (entries.length === 0 || checksumChecked > 0) ? 'ok' : 'incidents');
+      await base44.asServiceRole.entities.BackupJob.update(lastJob.id, {
+        verificationChecked: checked, documentsVerified: verified,
+        verificationMissing: missing, verificationChecksumChecked: checksumChecked,
+        verificationStatus: status, verificationIssues: issues.slice(0, 20),
+        ...(status === 'ok' ? { lastVerifiedAt: new Date().toISOString() } : {}),
+      });
       return Response.json({
-        jobId: lastJob.id,
-        verified: alreadyVerified + verifiedThisRun,
-        verifiedThisRun,
-        missing,
-        missingItems,
-        remaining: 0,
-        status: missing === 0 ? 'ok' : 'incidents',
+        jobId: lastJob.id, status, checked, verified, missing, checksumChecked,
+        issues: issues.slice(0, 20), remaining, total: entries.length,
       });
     }
 
