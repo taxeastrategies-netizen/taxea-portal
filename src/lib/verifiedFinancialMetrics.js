@@ -8,8 +8,8 @@ export function deriveAccountingEbitda(report) {
   const amount = rows => rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
   const expenses = pnl.expenses;
   const income = pnl.income;
-  const addBack = amount(expenses.filter(row => /^(66|67|68|630)/.test(String(row.code || ''))));
-  const remove = amount(income.filter(row => /^(76|77)/.test(String(row.code || ''))));
+  const addBack = amount(expenses.filter(row => /^(66|68|630|633|638|639)/.test(String(row.code || ''))));
+  const remove = amount(income.filter(row => /^76/.test(String(row.code || ''))));
   return {
     value: Math.round((Number(pnl.result) + addBack - remove) * 100) / 100,
     provisional: Number(report.pendingEntriesInYear || 0) > 0 || Number(report.excludedEntries || 0) > 0 || report.frameworkReviewStatus !== 'validated',
