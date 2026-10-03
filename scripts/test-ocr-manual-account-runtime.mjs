@@ -111,4 +111,27 @@ assert.equal(records.Invoice[1].revenue_expense_account_code, '70500000');
 assert.equal(records.Invoice[1].revenue_expense_account_id, 'a-705');
 assert.equal(postingCount, 2);
 assert.equal(records.OcrInvoiceDocument[1].linkedJournalEntryId, 'entry-2');
-console.log('OCR manual account: tenant, direction, active account, idempotency and invoice/posting flows OK');
+
+// Use the real accounting engine to verify the selected account reaches Debe/Haber.
+const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
+const engineBuild = await esbuild.build({
+  stdin: {
+    contents: "import { buildInvoicePosting } from './base44/functions/approveOcrDocument/accountingEngine.ts'; globalThis.__buildInvoicePosting = buildInvoicePosting;",
+    loader: 'ts', resolveDir: process.cwd(),
+  },
+  bundle: true, write: false, platform: 'node', format: 'cjs',
+  plugins: [{
+    name: 'accounting-sdk-stub',
+    setup(builder) {
+      builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'engine-test' }));
+      builder.onLoad({ filter: /^sdk$/, namespace: 'engine-test' }, () => ({ loader: 'js', contents: 'export const createClientFromRequest = () => ({})' }));
+    },
+  }],
+});
+const engineContext = vm.createContext({ console, TextEncoder, crypto: globalThis.crypto, __buildInvoicePosting: null });
+vm.runInContext(engineBuild.outputFiles[0].text, engineContext, { filename: engineEntry });
+const expensePosting = await engineContext.__buildInvoicePosting({ entities }, 'company-a', records.Invoice[0]);
+const incomePosting = await engineContext.__buildInvoicePosting({ entities }, 'company-a', records.Invoice[1]);
+assert.ok(expensePosting.lines.some(line => line.accountCode === '62900000' && line.debit === 100 && line.sourceLineType === 'gasto'));
+assert.ok(incomePosting.lines.some(line => line.accountCode === '70500000' && line.credit === 100 && line.sourceLineType === 'ingreso'));
+console.log('OCR manual account: tenant, direction, active account, idempotency and real accounting lines OK');
