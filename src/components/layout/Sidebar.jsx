@@ -78,6 +78,15 @@ const DEPT_GROUPS = [
     groupLabel: 'Core People',
     depts: [
       {
+        id: 'grants',
+        label: 'Subvenciones y Ayudas',
+        icon: Map,
+        activeColor: 'text-cyan-700',
+        activeBg: 'bg-cyan-50',
+        basePath: '/subvenciones',
+        modules: [],
+      },
+      {
         id: 'people',
         label: 'People & HR',
         icon: Heart,
