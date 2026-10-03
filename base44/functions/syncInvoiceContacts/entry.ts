@@ -206,7 +206,10 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'sync_company';
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || user.is_service === true;
+    // El indicador is_service por sí solo no otorga privilegios: exigir también identidad interna autenticada.
+    const isInternalService = user.is_service === true
+      && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(String(user.email || ''));
+    const isAdmin = user.role === 'admin' || user.role === 'super_admin' || isInternalService;
     const svc = base44.asServiceRole;
     const contactsByCompany = new Map();
     const summary = { created: 0, updated: 0, skipped: 0, invoices: 0, ocrDocuments: 0 };
@@ -220,7 +223,7 @@ Deno.serve(async (req) => {
     if (action === 'sync_invoice') {
       const invoice = await svc.entities.Invoice.get(body.invoiceId);
       if (!invoice) return Response.json({ error: 'Factura no encontrada' }, { status: 404 });
-      if (!isAdmin && invoice.company_id !== user.data?.company_id) {
+      if (!isAdmin && !(await userOwnsCompany(svc, user, invoice.company_id))) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
       record(await syncParty(svc, contactsByCompany, partyFromInvoice(invoice)));
@@ -231,7 +234,7 @@ Deno.serve(async (req) => {
     if (action === 'sync_ocr') {
       const doc = await svc.entities.OcrInvoiceDocument.get(body.docId);
       if (!doc) return Response.json({ error: 'Documento OCR no encontrado' }, { status: 404 });
-      if (!isAdmin && doc.company_id !== user.data?.company_id) {
+      if (!isAdmin && !(await userOwnsCompany(svc, user, doc.company_id))) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
       record(await syncParty(svc, contactsByCompany, partyFromOcr(doc, body.extractedData)));
@@ -244,8 +247,7 @@ Deno.serve(async (req) => {
     }
 
     const companyId = action === 'backfill_all' ? '' : clean(body.companyId || user.data?.company_id);
-    const companyAllowed = isAdmin || companyId === user.data?.company_id
-      || (companyId ? await userOwnsCompany(svc, user, companyId) : false);
+    const companyAllowed = isAdmin || (companyId ? await userOwnsCompany(svc, user, companyId) : false);
     if (action !== 'backfill_all' && (!companyId || !companyAllowed)) {
       return Response.json({ error: 'Empresa no autorizada' }, { status: 403 });
     }
