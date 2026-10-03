@@ -139,7 +139,18 @@ async function companyWorkload(svc: any, company: any, client: any, year: number
     if (!READY_OBLIGATION_STATES.has(obligation.estado)) pushAlert(alerts, companyId, { severity: 'medium', category: 'deadline', title: `Obligación ${obligation.modelo_codigo || obligation.modelo || ''} pendiente`, detail: `${obligation.periodo || obligation.trimestre || ''} · ${obligation.estado || 'pendiente'}`, sourceType: 'TaxObligation', sourceId: obligation.id, detectedAt: obligation.updated_date || obligation.created_date, deepLink: '/tax-accounting/obligaciones' });
     const deadline = obligation.fecha_limite_presentacion || obligation.fecha_limite;
     const remaining = daysUntil(deadline);
-    if (!READY_OBLIGATION_STATES.has(obligation.estado) && remaining != null && remaining >= 0 && remaining <= 30) pushAlert(alerts, companyId, { severity: remaining <= 7 ? 'critical' : 'high', category: 'deadline', title: `Vencimiento en ${remaining} día(s)`, detail: `${obligation.modelo_codigo || obligation.modelo || 'Obligación'} · ${isoDate(deadline)}`, sourceType: 'TaxObligation', sourceId: obligation.id, detectedAt: obligation.updated_date || obligation.created_date, deepLink: '/tax-accounting/obligaciones' });
+    if (!READY_OBLIGATION_STATES.has(obligation.estado) && remaining != null && remaining <= 30) {
+      const overdue = remaining < 0;
+      pushAlert(alerts, companyId, {
+        severity: overdue || remaining <= 7 ? 'critical' : 'high',
+        category: 'deadline',
+        title: overdue ? `Obligación vencida hace ${Math.abs(remaining)} día(s)` : `Vencimiento en ${remaining} día(s)`,
+        detail: `${obligation.modelo_codigo || obligation.modelo || 'Obligación'} · ${isoDate(deadline)}`,
+        sourceType: 'TaxObligation', sourceId: obligation.id,
+        detectedAt: obligation.updated_date || obligation.created_date,
+        deepLink: '/tax-accounting/obligaciones',
+      });
+    }
   }
   for (const issue of fiscalErrors.filter((row: any) => OPEN_FISCAL_STATES.has(row.estado))) pushAlert(alerts, companyId, { severity: issue.severidad === 'critica' ? 'critical' : issue.severidad === 'alta' ? 'high' : 'medium', category: 'incident', title: issue.tipo || 'Incidencia fiscal', detail: issue.descripcion || issue.accion_recomendada || '', sourceType: issue.entidad_tipo || 'FiscalError', sourceId: issue.entidad_id || issue.id, detectedAt: issue.updated_date || issue.created_date, deepLink: '/tax-accounting/impuestos?tab=errores' });
   if (!configuration || configuration.frameworkReviewStatus !== 'validated') pushAlert(alerts, companyId, { severity: 'medium', category: 'configuration', title: 'Configuración contable pendiente', detail: 'Revisa marco PGC, ejercicio y cuentas por defecto.', sourceType: 'AccountingConfiguration', sourceId: configuration?.id || '', detectedAt: configuration?.updated_date, deepLink: '/tax-accounting/contabilidad' });
