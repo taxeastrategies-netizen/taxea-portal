@@ -31,6 +31,7 @@ const records = {
     { id: 'expense-a', company_id: 'company-a', documentType: 'expense_invoice', status: 'review_required', uploadedAt: '2026-10-03', auditTrail: [] },
     { id: 'income-a', company_id: 'company-a', documentType: 'income_invoice', status: 'review_required', uploadedAt: '2026-10-03', auditTrail: [] },
     { id: 'expense-b', company_id: 'company-b', documentType: 'expense_invoice', status: 'review_required', uploadedAt: '2026-10-03', auditTrail: [] },
+    { id: 'expense-default', company_id: 'company-a', documentType: 'expense_invoice', status: 'review_required', uploadedAt: '2026-10-03', auditTrail: [] },
   ],
   AccountingAccount: [
     { id: 'a-629', companyId: 'company-a', code: '62900000', type: 'gasto', status: 'activa' },
@@ -111,6 +112,10 @@ assert.equal(records.Invoice[1].revenue_expense_account_code, '70500000');
 assert.equal(records.Invoice[1].revenue_expense_account_id, 'a-705');
 assert.equal(postingCount, 2);
 assert.equal(records.OcrInvoiceDocument[1].linkedJournalEntryId, 'entry-2');
+const defaultExpense = await invoke('expense-default', 'recibida');
+assert.equal(defaultExpense.status, 200);
+assert.equal(records.Invoice[2].revenue_expense_account_code, undefined);
+assert.equal(postingCount, 3);
 
 // Use the real accounting engine to verify the selected account reaches Debe/Haber.
 const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
