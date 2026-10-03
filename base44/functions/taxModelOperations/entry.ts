@@ -3182,6 +3182,11 @@ async function sha256(text: string) {
   return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+async function sha256Bytes(bytes: Uint8Array) {
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 function encodeBase64(text: string) {
   const bytes=new TextEncoder().encode(text); let binary=''; for(let i=0;i<bytes.length;i+=0x8000) binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000)); return btoa(binary);
 }
@@ -3684,8 +3689,12 @@ Deno.serve(async (req) => {
       const fileId=clean(body.fileId); if(!fileId) return Response.json({error:'fileId es obligatorio.'},{status:400});
       const file=await svc.entities.TaxOfficialFile.get(fileId);
       if(!file||file.companyId!==companyId) return Response.json({error:'Fichero fiscal no encontrado.'},{status:404});
-      if(!clean(file.contentBase64)) return Response.json({error:'Este fichero histórico no conservó su contenido exacto. Debe regenerarse desde su borrador congelado.'},{status:410});
-      return Response.json({ok:true,file:{id:file.id,filename:file.nombreFichero,extension:file.extension,format:file.formato,design:file.versionDiseno,hash:file.hash,contentBase64:file.contentBase64,contentEncoding:file.contentEncoding||'base64',contentSize:Number(file.contentSize||0),immutable:file.immutable!==false,taxDraftId:file.taxDraftId||'',sourceHash:file.sourceHash||'',snapshotHash:file.snapshotHash||''}});
+      if(!clean(file.contentBase64) || file.immutable !== true || !clean(file.hash)) return Response.json({error:'Este fichero histórico no conserva contenido inmutable verificable. Debe regenerarse desde su borrador congelado.'},{status:410});
+      let contentBytes: Uint8Array;
+      try { contentBytes=Uint8Array.from(atob(file.contentBase64),(char:string)=>char.charCodeAt(0)); }
+      catch { return Response.json({error:'El contenido fiscal guardado no se puede decodificar.'},{status:409}); }
+      if(contentBytes.length!==Number(file.contentSize) || await sha256Bytes(contentBytes)!==file.hash) return Response.json({error:'El contenido fiscal guardado no coincide con su tamaño o huella SHA-256.'},{status:409});
+      return Response.json({ok:true,file:{id:file.id,filename:file.nombreFichero,extension:file.extension,format:file.formato,design:file.versionDiseno,hash:file.hash,contentBase64:file.contentBase64,contentEncoding:file.contentEncoding||'base64',contentSize:Number(file.contentSize||0),immutable:true,taxDraftId:file.taxDraftId||'',sourceHash:file.sourceHash||'',snapshotHash:file.snapshotHash||''}});
     }
 
     if(action==='open_draft') {
@@ -3994,8 +4003,9 @@ Deno.serve(async (req) => {
       const hash=await sha256(content); const contentBase64=encodeBase64(content); const filename=`${clean(company.nif_cif).toUpperCase()}_${year}_296_anexos_AB.txt`;
       const sourceHash=await sha256(JSON.stringify({companyId,year,contentHash:hash,records:[...state.aRecords,...state.bRecords].map((row:any)=>[row.recordId,row.recordKey,row.reviewStatus])}));
       const previousArtifacts=await svc.entities.TaxOfficialFile.filter({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',sourceHash},'-created_date',1);
-      const artifact=previousArtifacts?.[0]||await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',administracion:'AEAT',nombreFichero:filename,extension:'txt',formato:'Diseño de registro AEAT modelo 296 · anexos A/B posteriores al modelo 210',versionDiseno:DEFINITIONS['296'].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:'',taxDraftId:'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:[],resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,workflow:'modelo296_annex_ab_after_210',annexA:state.aRecords.length,annexB:state.bRecords.length})});
-      return Response.json({ok:true,alreadyGenerated:!!previousArtifacts?.[0],engineVersion:ENGINE_VERSION,calculation:{...calculation,annexes:state},validation:{blockers:[],warnings:[],recommendations:[],technicalErrors:[],canExport:true,canExportOfficial:true,requiresReview:false},file:{id:artifact.id,filename,extension:'txt',format:artifact.formato,design:artifact.versionDiseno,hash,contentBase64,nextStep:'Importa estos registros A/B en el flujo complementario del modelo 296 después de las solicitudes de devolución 210. La aceptación definitiva corresponde a la AEAT.'}});
+      const reusableArtifact=previousArtifacts?.[0]?.immutable===true && previousArtifacts[0].hash===hash && !!clean(previousArtifacts[0].contentBase64) ? previousArtifacts[0] : null;
+      const artifact=reusableArtifact||await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',administracion:'AEAT',nombreFichero:filename,extension:'txt',formato:'Diseño de registro AEAT modelo 296 · anexos A/B posteriores al modelo 210',versionDiseno:DEFINITIONS['296'].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:'',taxDraftId:'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:[],resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,workflow:'modelo296_annex_ab_after_210',annexA:state.aRecords.length,annexB:state.bRecords.length})});
+      return Response.json({ok:true,alreadyGenerated:!!reusableArtifact,engineVersion:ENGINE_VERSION,calculation:{...calculation,annexes:state},validation:{blockers:[],warnings:[],recommendations:[],technicalErrors:[],canExport:true,canExportOfficial:true,requiresReview:false},file:{id:artifact.id,filename,extension:'txt',format:artifact.formato,design:artifact.versionDiseno,hash,contentBase64,nextStep:'Importa estos registros A/B en el flujo complementario del modelo 296 después de las solicitudes de devolución 210. La aceptación definitiva corresponde a la AEAT.'}});
     }
     if(action==='calculate_bundle') {
       const models=TARGET_MODELS.map(code=>{
