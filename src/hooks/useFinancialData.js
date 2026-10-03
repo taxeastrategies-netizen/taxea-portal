@@ -36,6 +36,7 @@ export function useFinancialData(companyId, options = {}) {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [treasuryError, setTreasuryError] = useState('');
   const [lastSync, setLastSync] = useState(null);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
@@ -45,13 +46,14 @@ export function useFinancialData(companyId, options = {}) {
     const requestId = ++requestIdRef.current;
     try {
       setError('');
+      setTreasuryError('');
       const params = { company_id: companyId };
       if (year) params.anio = year;
       const treasuryRequest = includeTreasury
         ? base44.functions.invoke('openBanking', { action: 'treasury_snapshot', company_id: companyId })
           .catch(error => {
             console.error('[useFinancialData] Treasury snapshot unavailable:', error);
-            return { data: { accounts: [], transactions: [], summary: {} } };
+            return { data: { accounts: [], transactions: [], summary: {}, treasuryError: error?.response?.data?.error || error?.message || 'Tesorería no disponible.' } };
           })
         : Promise.resolve({ data: { accounts: [], transactions: [], summary: {} } });
       const [financialResponse, treasuryResponse] = await Promise.all([
@@ -67,6 +69,7 @@ export function useFinancialData(companyId, options = {}) {
       setSourceTruth(current => ({ ...current, ...(finData?.source_truth || {}) }));
       setBankAccounts(bankData?.accounts || []);
       setBankTransactions(bankData?.transactions || []);
+      setTreasuryError(bankData?.treasuryError || '');
       setTreasury({
         connectedAccounts: Number(summary.connected_accounts || 0),
         availableCash: Number(summary.available_cash_eur || 0),
@@ -133,7 +136,7 @@ export function useFinancialData(companyId, options = {}) {
     return () => window.removeEventListener('financials:refresh', onRefresh);
   }, [fetch, autoRefresh]);
 
-  return { invoices, expenses, bankAccounts, bankTransactions, treasury, sourceTruth, loading, error, lastSync, refresh };
+  return { invoices, expenses, bankAccounts, bankTransactions, treasury, sourceTruth, loading, error, treasuryError, lastSync, refresh };
 }
 
 export function triggerFinancialRefresh() {
