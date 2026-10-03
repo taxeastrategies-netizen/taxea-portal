@@ -104,7 +104,12 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
         } else {
           const createdCompany = await base44.entities.Company.create(payload);
           savedCompanyId = createdCompany?.id || null;
-          if (savedCompanyId) await base44.auth.updateMe({ company_id: savedCompanyId });
+          if (savedCompanyId) {
+            const linked = await base44.functions.invoke('companyContextOperations', {
+              action: 'set_active_company', companyId: savedCompanyId,
+            });
+            if (linked?.data?.ok !== true) throw new Error('La empresa se guardó, pero no se pudo vincular al usuario.');
+          }
         }
       }
 
