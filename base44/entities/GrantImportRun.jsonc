@@ -1,0 +1,81 @@
+{
+  "name": "GrantImportRun",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "scanning",
+        "complete",
+        "error"
+      ]
+    },
+    "page": {
+      "type": "integer"
+    },
+    "offset": {
+      "type": "integer"
+    },
+    "pageSize": {
+      "type": "integer"
+    },
+    "sourceTotal": {
+      "type": "integer"
+    },
+    "inspected": {
+      "type": "integer"
+    },
+    "activeFound": {
+      "type": "integer"
+    },
+    "failed": {
+      "type": "integer"
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string"
+    },
+    "lastError": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "state",
+    "page",
+    "offset",
+    "inspected",
+    "activeFound"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
