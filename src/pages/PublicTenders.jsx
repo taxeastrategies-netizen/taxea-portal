@@ -34,7 +34,7 @@ function TenderCard({ row }) {
     <h3 className="mt-4 font-jakarta text-base font-bold leading-snug text-foreground">{row.title}</h3>
     <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground"><Landmark className="mt-0.5 h-3.5 w-3.5 shrink-0" />{row.contractingBody || 'Órgano no estructurado en esta ficha'}</p>
     <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-secondary/40 p-3 text-xs sm:grid-cols-3">
-      <div><span className="block text-muted-foreground">{row.kind === 'abierta' ? 'Fin de ofertas' : row.kind === 'consulta' ? 'Fin de consulta' : 'Plazo de ofertas'}</span><strong className="mt-1 block">{fmtDate(row.kind === 'abierta' ? row.deadline : row.kind === 'consulta' ? row.consultationLimit : null)}</strong></div>
+      <div><span className="block text-muted-foreground">{row.kind === 'abierta' ? 'Fin de ofertas' : row.kind === 'consulta' ? 'Fin de consulta' : 'Plazo de ofertas'}</span><strong className="mt-1 block">{fmtDate(row.kind === 'abierta' ? row.deadline : row.kind === 'consulta' ? row.consultationLimit : null)}{row.kind === 'abierta' && row.deadlineTime ? ' · ' + row.deadlineTime : ''}</strong></div>
       <div><span className="block text-muted-foreground">Importe sin IVA</span><strong className="mt-1 block">{fmtMoney(row.amountExVat)}</strong></div>
       <div className="col-span-2 sm:col-span-1"><span className="block text-muted-foreground">Localización</span><strong className="mt-1 block">{row.province || 'No precisada'}</strong></div>
     </div>
@@ -49,7 +49,7 @@ function TenderCard({ row }) {
         <p><strong className="text-foreground">Identificador:</strong> {row.tenderId || row.id}</p>
         <p><strong className="text-foreground">CPV:</strong> {row.cpv.length ? row.cpv.join(', ') : 'No estructurado'}</p>
         <p><strong className="text-foreground">Valor estimado:</strong> {fmtMoney(row.estimatedValue)}. El importe mostrado no equivale necesariamente al presupuesto licitable; verifica pliegos y lotes.</p>
-        {row.kind === 'consulta' && <p>La fecha indicada pertenece a la consulta de mercado, no garantiza cuándo se abrirá una licitación.</p>}
+        {row.kind === 'consulta' && <p>La fecha indicada pertenece a la consulta de mercado, no garantiza cuándo se abrirá una licitación.{row.plannedDate ? ' Hito previsto de la consulta: ' + fmtDate(row.plannedDate) + '.' : ''}</p>}
         {row.kind === 'anuncio_previo' && <p>No consta una fecha confirmada de apertura de ofertas dentro de los próximos seis meses.</p>}
       </div>
     </details>
