@@ -43,6 +43,7 @@ const TaxAccounting = lazy(() => import('./pages/TaxAccounting'));
 const Finance = lazy(() => import('./pages/Finance'));
 const PeopleHR = lazy(() => import('./pages/PeopleHR.jsx'));
 const Grants = lazy(() => import('./pages/Grants.jsx'));
+const PublicTenders = lazy(() => import('./pages/PublicTenders.jsx'));
 const Logistics = lazy(() => import('./pages/Logistics'));
 const Operations = lazy(() => import('./pages/Operations'));
 const Growth = lazy(() => import('./pages/Growth'));
@@ -120,6 +121,7 @@ function AppWithContext({ user }) {
           <Route path="/finance" element={<Finance />} />
           <Route path="/finance/:module" element={<Finance />} />
           <Route path="/subvenciones" element={<Grants />} />
+          <Route path="/licitaciones" element={<PublicTenders />} />
           <Route path="/people" element={<PeopleHR />} />
           <Route path="/people/:module" element={<PeopleHR />} />
           <Route path="/logistics" element={<AdminOnlyRoute isAdmin={isAdmin}><Logistics /></AdminOnlyRoute>} />
