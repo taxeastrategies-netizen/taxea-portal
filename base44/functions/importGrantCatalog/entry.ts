@@ -98,7 +98,7 @@ Deno.serve(async req => {
           finality: clean(detail?.descripcionFinalidad, 120),
           administration: clean(summary?.nivel1, 40),
           searchText: clean(`${detail?.descripcion || summary?.descripcion} ${detail?.descripcionFinalidad || ''} ${summary?.nivel2 || ''}`, 1000),
-          payload: JSON.stringify({ summary, detail }).slice(0, 40000),
+          payload: JSON.stringify({ purpose: clean(detail?.descripcionFinalidad, 120), callType: clean(detail?.tipoConvocatoria, 120), basisName: clean(detail?.descripcionBasesReguladoras, 300), basesUrl: clean(detail?.urlBasesReguladoras, 700), applicationUrl: clean(detail?.sedeElectronica, 700), budget: typeof detail?.presupuestoTotal === 'number' ? detail.presupuestoTotal : null, startNote: clean(detail?.textInicio, 240), endNote: clean(detail?.textFin, 240), sectors: Array.isArray(detail?.sectores) ? detail.sectores.map((r: any) => clean(r?.descripcion, 100)).filter(Boolean).slice(0, 12) : [] }),
           checkedAt: new Date().toISOString(),
           sourceUrl: `https://www.infosubvenciones.es/bdnstrans/GE/es/convocatoria/${encodeURIComponent(id)}`,
         };
