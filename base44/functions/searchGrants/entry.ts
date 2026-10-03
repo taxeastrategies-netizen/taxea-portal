@@ -98,9 +98,9 @@ function noticeSections(detail: any) {
     .replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
     .replace(/&#(\d+);/g, (_: string, n: string) => String.fromCodePoint(Math.min(Number(n), 0x10ffff)));
   const paragraphs = plain.split(/\n+/).map((row: string) => row.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const heading = /^(?:(?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|octavo|noveno|décimo)\s*[.:-]\s*)?(?:beneficiari[oa]s?|personas beneficiarias|destinatari[oa]s?|objeto|finalidad|cuantía|importe|requisitos|plazo(?: de (?:presentación|solicitud|solicitudes))?)(?:\s*[.:-]|$)/i;
+  const heading = /^(?:(?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|octavo|noveno|décimo|\d{1,2})\s*[.:-]\s*)?(?:beneficiari[oa]s?|personas beneficiarias|destinatari[oa]s?|objeto|finalidad|cuantía|importe|requisitos|plazo(?: de (?:presentación|solicitud|solicitudes))?)(?:\s*[.:-]|$)/i;
   function section(pattern: RegExp) {
-    const index = paragraphs.findIndex((row: string) => row.length < 160 && pattern.test(row));
+    const index = paragraphs.findIndex((row: string) => row.length < 160 && heading.test(row) && pattern.test(row));
     if (index < 0) return '';
     const selected: string[] = [];
     for (let i = index + 1; i < paragraphs.length && selected.length < 3; i++) {
