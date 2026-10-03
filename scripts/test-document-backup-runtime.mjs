@@ -240,9 +240,13 @@ assert.match(functionSource, /nextCursor/);
 assert.match(functionSource, /lastHeartbeatAt/);
 assert.match(functionSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
 assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
-assert.match(functionSource, /const alreadyVerified = withDriveFile\.filter/);
-assert.match(functionSource, /pendingVerification\.slice\(index, index \+ 5\)/);
+assert.match(functionSource, /const entries = manifest\?\.documents/);
+assert.match(functionSource, /manifestChecksum !== lastJob\.manifestChecksum/);
+assert.match(functionSource, /entries\.slice\(cursor, cursor \+ 25\)/);
+assert.match(functionSource, /computeChecksum\(restoredBytes\)/);
+assert.match(functionSource, /verificationChecked: checked, documentsVerified: verified/);
 assert.match(functionSource, /status: 'partial'/);
+assert.match(functionSource, /existing\.driveFileId && !!existing\.checksum && sourceUnchanged/);
 
 console.log(JSON.stringify({
   ok: true,
@@ -260,6 +264,8 @@ console.log(JSON.stringify({
     scheduledRunExecutesBackupInCanaryTimezone: true,
     scheduledRunCanResumeNextDay: true,
     wrongDriveAccountIsBlocked: true,
-    verificationResumesWithoutRecheckingVerifiedItems: true,
+    verificationCoversManifestAndResumesByCursor: true,
+    manifestAndSampleContentHashesChecked: true,
+    missingDriveIdCannotBeSkipped: true,
   },
 }, null, 2));
