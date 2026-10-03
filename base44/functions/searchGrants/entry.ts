@@ -4,6 +4,9 @@ const ROOT = 'https://www.infosubvenciones.es/bdnstrans/api';
 const REGION_TTL = 24 * 60 * 60 * 1000;
 const CACHE_TTL = 10 * 60 * 1000;
 const MAX_CACHE = 80;
+const BENEFICIARY_IDS: Record<string, string> = { autonomos: '3', pymes: '3', grandes_empresas: '4', particulares: '1', entidades: '2' };
+const TOPIC_TERMS: Record<string, string> = { inicio: 'autoempleo emprendimiento nueva actividad', digitalizacion: 'digitalización transformación digital', empleo: 'empleo contratación', energia: 'eficiencia energética autoconsumo', rural: 'agricultura ganadería desarrollo rural', innovacion: 'innovación investigación I+D', cultura: 'cultura deporte educación', vivienda: 'vivienda rehabilitación', social: 'inclusión cuidados dependencia' };
+const ADMINISTRATIONS = new Set(['C', 'A', 'L', 'O']);
 let regionCache: { at: number; rows: Region[] } | null = null;
 const resultCache = new Map<string, { at: number; value: unknown }>();
 type Region = { id: number; descripcion: string; children?: Region[] };
@@ -88,6 +91,9 @@ function normalize(summary: any, detail: any) {
     administration: clean(detail?.organo?.descripcion || summary?.nivel3 || summary?.nivel2, 150),
     scope: clean(summary?.nivel2 || summary?.nivel1, 100),
     sectors,
+    beneficiaries: Array.isArray(detail?.tiposBeneficiarios) ? detail.tiposBeneficiarios.map((row: any) => clean(row?.descripcion, 120)).filter(Boolean).slice(0, 5) : [],
+    purpose: clean(detail?.descripcionFinalidad, 120),
+    basesUrl: /^https:\/\//i.test(clean(detail?.urlBasesReguladoras, 500)) ? clean(detail.urlBasesReguladoras, 500) : null,
     budget: typeof detail?.presupuestoTotal === 'number' ? detail.presupuestoTotal : null,
     source: 'BDNS · fuente oficial',
     sourceUrl: `https://www.infosubvenciones.es/bdnstrans/GE/es/convocatoria/${encodeURIComponent(id)}`,
@@ -121,16 +127,18 @@ Deno.serve(async req => {
     const communityCode = normalizeCode(body?.communityCode);
     const province = clean(body?.province, 80);
     const query = clean(body?.query, 100);
-    const focus = body?.focus === 'all' ? 'all' : 'autonomos';
+    const applicant = clean(body?.applicant, 30) || 'all';
+    const topic = clean(body?.topic, 30) || 'all';
+    const administration = clean(body?.administration, 1).toUpperCase();
     const page = Number(body?.page ?? 0);
     if (communityCode && !allowedCountryCode(communityCode)) return response({ error: 'Comunidad no válida.' }, 400);
     if (province && !communityCode) return response({ error: 'Selecciona antes una comunidad.' }, 400);
-    if (!Number.isInteger(page) || page < 0 || page > 30) return response({ error: 'Página no válida.' }, 400);
-    const broadAutonomos = !query && focus === 'autonomos';
-    const searchText = query || (broadAutonomos ? 'autónom autoempleo emprendimiento' : '');
-    // Acotar siempre a convocatorias recibidas en los últimos 24 meses; se informa en la respuesta.
-    const earliest = new Date(); earliest.setUTCMonth(earliest.getUTCMonth() - 24);
-    const key = JSON.stringify({ communityCode, province, searchText, page });
+    if (!Number.isInteger(page) || page < 0 || page > 10000) return response({ error: 'Página no válida.' }, 400);
+    if (applicant !== 'all' && !BENEFICIARY_IDS[applicant]) return response({ error: 'Tipo de beneficiario no válido.' }, 400);
+    if (topic !== 'all' && !TOPIC_TERMS[topic]) return response({ error: 'Tema no válido.' }, 400);
+    if (administration && !ADMINISTRATIONS.has(administration)) return response({ error: 'Administración no válida.' }, 400);
+    const searchText = query || (topic !== 'all' ? TOPIC_TERMS[topic] : '');
+    const key = JSON.stringify({ communityCode, province, applicant, topic, administration, searchText, page });
     const cached = resultCache.get(key);
     if (cached && Date.now() - cached.at < CACHE_TTL) return response(cached.value);
     const regionRows = await regions();
@@ -142,9 +150,12 @@ Deno.serve(async req => {
     url.searchParams.set('pageSize', '18');
     url.searchParams.set('order', 'fechaRecepcion');
     url.searchParams.set('direccion', 'desc');
-    url.searchParams.set('fechaDesde', `${String(earliest.getUTCDate()).padStart(2, '0')}/${String(earliest.getUTCMonth() + 1).padStart(2, '0')}/${earliest.getUTCFullYear()}`);
-    if (searchText) url.searchParams.set('descripcion', searchText);
-    if (broadAutonomos) url.searchParams.set('descripcionTipoBusqueda', '2');
+    if (searchText) {
+      url.searchParams.set('descripcion', searchText);
+      url.searchParams.set('descripcionTipoBusqueda', '2');
+    }
+    if (applicant !== 'all') url.searchParams.set('tiposBeneficiario', BENEFICIARY_IDS[applicant]);
+    if (administration) url.searchParams.set('tipoAdministracion', administration);
     if (ids.length) url.searchParams.set('regiones', ids.join(','));
     const list = await requestJson(url);
     if (!Array.isArray(list?.content)) throw new Error('Respuesta BDNS inesperada.');
@@ -159,13 +170,12 @@ Deno.serve(async req => {
     if (summaries.length && failedDetails === summaries.length) throw new Error('No se pudieron consultar los detalles de la BDNS.');
     const value = {
       ok: true,
-      grants: grants.filter(grant => grant.status !== 'closed' && grant.status !== 'later'),
-      page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 30,
+      grants,
+      page, hasMore: page + 1 < Number(list?.totalPages || 0) && page < 10000,
       totalSourceMatches: Number(list?.totalElements || 0),
       partial: failedDetails > 0, failedDetails,
       checkedAt: new Date().toISOString(),
-      source: 'BDNS', coverage: 'Convocatorias publicadas en los últimos 24 meses. No garantiza exhaustividad de otras fuentes ni la elegibilidad personal.',
-      provider: { fandit: 'Pendiente de clave y autorización de consumo API' },
+      source: 'BDNS', coverage: 'Resultados paginados de BDNS, ordenados por recepción. Las categorías autónomos y pymes comparten el tipo oficial de beneficiario. Los temas son búsquedas orientativas por texto, no una clasificación exhaustiva ni una garantía de elegibilidad.',
     };
     if (resultCache.size >= MAX_CACHE) resultCache.delete(resultCache.keys().next().value);
     resultCache.set(key, { at: Date.now(), value });
