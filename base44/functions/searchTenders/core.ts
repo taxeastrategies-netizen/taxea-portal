@@ -18,6 +18,9 @@ const val = (v: any): string => String(v && typeof v === 'object' ? v['#text'] ?
 const txt = (v: any, max = 500): string => val(v).replace(/\s+/g, ' ').slice(0, max);
 const iso = (v: any): string | null => /^\d{4}-\d{2}-\d{2}/.test(val(v)) ? val(v).slice(0, 10) : null;
 const fold = (v: any) => txt(v, 500).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// Relación INE provincia -> NUTS 2021 de Eurostat; Canarias e Illes Balears incluyen varias NUTS 3.
+const PROVINCE_NUTS: Record<string, string[]> = Object.fromEntries('01:ES211|02:ES421|03:ES521|04:ES611|05:ES411|06:ES431|07:ES531,ES532,ES533|08:ES511|09:ES412|10:ES432|11:ES612|12:ES522|13:ES422|14:ES613|15:ES111|16:ES423|17:ES512|18:ES614|19:ES424|20:ES212|21:ES615|22:ES241|23:ES616|24:ES413|25:ES513|26:ES230|27:ES112|28:ES300|29:ES617|30:ES620|31:ES220|32:ES113|33:ES120|34:ES414|35:ES704,ES705,ES708|36:ES114|37:ES415|38:ES703,ES706,ES707,ES709|39:ES130|40:ES416|41:ES618|42:ES417|43:ES514|44:ES242|45:ES425|46:ES523|47:ES418|48:ES213|49:ES419|50:ES243|51:ES630|52:ES640'.split('|').map(x => { const [key, codes] = x.split(':'); return [key, codes.split(',')]; }));
+export const validProvinceCode = (code: string) => !code || Boolean(PROVINCE_NUTS[code]);
 const dateToday = () => new Date().toISOString().slice(0, 10);
 const inSixMonths = () => { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + 6); return d.toISOString().slice(0, 10); };
 function safeLink(value: any): string | null {
@@ -67,7 +70,7 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
   if (!id || !title || !url) return null;
   let kind = '';
   if (consultation) {
-    if (rawState !== 'PUB' || (consultationLimit && consultationLimit < now)) return null;
+    if (rawState !== 'PUB' || (!consultationLimit && !plannedDate) || (consultationLimit && consultationLimit < now) || (!consultationLimit && plannedDate && plannedDate < now)) return null;
     kind = 'consulta';
   } else if (rawState === 'PUB' && deadline && deadline >= now) {
     kind = 'abierta';
@@ -84,8 +87,8 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
     consultationLimit: kind === 'consulta' ? consultationLimit : null,
     plannedDate: kind === 'consulta' && plannedDate && plannedDate >= now && plannedDate <= futureLimit ? plannedDate : null,
     cpv, contractType: contractType(val(project?.['cbc:TypeCode'])),
-    amountExVat: money(project?.['cac:BudgetAmount']?.['cbc:TaxExclusiveAmount']),
-    estimatedValue: money(project?.['cac:BudgetAmount']?.['cbc:EstimatedOverallContractAmount']),
+    amountExVat: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:TaxExclusiveAmount']),
+    estimatedValue: consultation ? null : money(project?.['cac:BudgetAmount']?.['cbc:EstimatedOverallContractAmount']),
     province: txt(location?.['cbc:CountrySubentity'], 90),
     nuts: txt(location?.['cbc:CountrySubentityCode'], 12).toUpperCase(),
     contractingBody: partyName(status) || txt(entry?.summary?.['#text'] || entry?.summary, 200).match(/Órgano de Contratación:\s*([^;]+)/i)?.[1]?.trim() || '',
@@ -116,7 +119,7 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
 }
 export function filterRows(rows: any[], filters: any) {
   const query = fold(filters.query);
-  const province = fold(filters.province);
+  const provinceNuts = PROVINCE_NUTS[filters.provinceCode] || [];
   const community = txt(filters.communityCode, 4).toUpperCase();
   const cpv = txt(filters.cpv, 8);
   const kind = txt(filters.kind, 20);
@@ -129,7 +132,7 @@ export function filterRows(rows: any[], filters: any) {
     if (cpv && !row.cpv.some((code: string) => code.startsWith(cpv))) return false;
     if (type && row.contractType !== type) return false;
     if (community && !row.nuts.startsWith(community)) return false;
-    if (province && !fold(row.province).includes(province)) return false;
+    if (provinceNuts.length && !provinceNuts.some(code => row.nuts === code || row.nuts.startsWith(code))) return false;
     const amount = row.amountExVat ?? row.estimatedValue;
     if (min != null && (amount == null || amount < min)) return false;
     if (max != null && (amount == null || amount > max)) return false;
