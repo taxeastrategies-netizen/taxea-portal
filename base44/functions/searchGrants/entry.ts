@@ -98,7 +98,7 @@ function noticeSections(detail: any) {
     .replace(/&amp;/gi, '&').replace(/&quot;/gi, '"').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
     .replace(/&#(\d+);/g, (_: string, n: string) => String.fromCodePoint(Math.min(Number(n), 0x10ffff)));
   const paragraphs = plain.split(/\n+/).map((row: string) => row.replace(/\s+/g, ' ').trim()).filter(Boolean);
-  const heading = /^(?:(?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|octavo|noveno|décimo|\d{1,2})\s*[.:-]\s*)?(?:beneficiari[oa]s?|personas beneficiarias|destinatari[oa]s?|objeto|finalidad|cuantía|importe|requisitos|plazo(?: de (?:presentación|solicitud|solicitudes))?)(?:\s*[.:-]|$)/i;
+  const heading = /^(?:(?:primero|segundo|tercero|cuarto|quinto|sexto|séptimo|octavo|noveno|décimo|\d{1,2})\s*[.:-]\s*)?(?:beneficiari[oa]s?|personas beneficiarias|destinatari[oa]s?|objeto|finalidad|cuantía|importe|requisitos|plazo(?: de [^.]{0,80})?)(?:\s*[.:-]|$)/i;
   function section(pattern: RegExp) {
     const index = paragraphs.findIndex((row: string) => row.length < 160 && heading.test(row) && pattern.test(row));
     if (index < 0) return '';
@@ -107,7 +107,8 @@ function noticeSections(detail: any) {
       if (paragraphs[i].length < 160 && heading.test(paragraphs[i])) break;
       selected.push(paragraphs[i]);
     }
-    return clean(selected.join(' '), 650);
+    const excerpt = selected.join(' ');
+    return excerpt.length > 550 ? excerpt.slice(0, 545).replace(/\s+\S*$/, '') + '…' : excerpt;
   }
   const cve = clean(notice.cve, 40);
   return {
