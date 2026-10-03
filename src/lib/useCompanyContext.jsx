@@ -9,6 +9,14 @@ export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 // Cache simple en memoria para evitar re-fetches innecesarios
 const companyCache = new Map();
 
+async function syncCompanyId(companyId) {
+  const response = await base44.functions.invoke('companyContextOperations', {
+    action: 'set_active_company',
+    companyId,
+  });
+  if (response?.data?.ok !== true) throw new Error('No se pudo sincronizar la empresa activa');
+}
+
 export function useCompanyContext(user) {
   const [company, setCompany] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,14 +46,14 @@ export function useCompanyContext(user) {
             : (await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1))?.[0] || null;
           // Sincronizar company_id en el servidor para que la RLS permita acceso a entidades del cliente
           if (c && user.data?.company_id !== c.id) {
-            try { await base44.auth.updateMe({ company_id: c.id }); } catch {}
+            try { await syncCompanyId(c.id); } catch {}
           }
           companyCache.set(cacheKey, c);
           setCompany(c);
         } else {
           // Admin sin impersonación: limpiar company_id y sin empresa asignada
           if (user.data?.company_id) {
-            try { await base44.auth.updateMe({ company_id: null }); } catch {}
+            try { await syncCompanyId(null); } catch {}
           }
           companyCache.set(cacheKey, null);
           setCompany(null);
@@ -70,7 +78,7 @@ export function useCompanyContext(user) {
           const c = own[0];
           // Sincronizar company_id en el usuario si no coincide (invalida caché servidor)
           if (user.data?.company_id !== c.id) {
-            try { await base44.auth.updateMe({ company_id: c.id }); } catch {}
+            try { await syncCompanyId(c.id); } catch {}
           }
           companyCache.set(cacheKey, c);
           setCompany(c);
@@ -81,7 +89,7 @@ export function useCompanyContext(user) {
         const all = await base44.entities.Company.list('-created_date', 50);
         const found = all?.find(c => c.usuarios_autorizados?.includes(user.email)) || null;
         if (found && user.data?.company_id !== found.id) {
-          try { await base44.auth.updateMe({ company_id: found.id }); } catch {}
+          try { await syncCompanyId(found.id); } catch {}
         }
         companyCache.set(cacheKey, found);
         setCompany(found);
