@@ -28,8 +28,11 @@ function PasswordStrength({ password }) {
 }
 
 export default function SetupPassword() {
+  // Los enlaces nuevos usan el fragmento: el token no se envía en la petición HTTP.
+  // Se conserva la lectura de enlaces antiguos con query string hasta su caducidad.
   const params = new URLSearchParams(window.location.search);
-  const urlToken = params.get('token');
+  const fragment = new URLSearchParams(window.location.hash.slice(1));
+  const urlToken = fragment.get('token') || params.get('token');
   const urlEmail = params.get('email');
 
   const [mode, setMode] = useState(urlToken ? 'token' : 'request'); // 'token' | 'request' | 'sent' | 'invalid'
