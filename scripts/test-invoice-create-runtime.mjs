@@ -65,7 +65,7 @@ const entity = name => ({
   },
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
-let currentUser = { id: 'user-a', email: 'user@a.test', role: 'user', data: { company_id: 'company-a' } };
+let currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
 const testClient = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
 let handler;
 const context = vm.createContext({
@@ -128,7 +128,7 @@ assert.equal(records.Invoice.length, 1);
 assert.equal(counters.accountingEntries, 1);
 assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
 assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
-const qrPdfUrl = 'https://media.base44.com/invoices/test-qr.pdf';
+const qrPdfUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/test-qr.pdf';
 const linkedQrPdf = await invoke({
   action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
   file_url: qrPdfUrl, mime_type: 'application/pdf', size_bytes: 4096,
@@ -138,7 +138,7 @@ assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
 assert.equal(records.Invoice[0].archivo_url, qrPdfUrl);
 const repeatedQrPdf = await invoke({
   action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
-  file_url: 'https://media.base44.com/invoices/other.pdf', mime_type: 'application/pdf', size_bytes: 4096,
+  file_url: 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/other.pdf', mime_type: 'application/pdf', size_bytes: 4096,
 });
 assert.equal(repeatedQrPdf.payload.duplicate, true);
 assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
