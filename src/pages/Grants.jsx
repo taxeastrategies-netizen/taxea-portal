@@ -138,7 +138,7 @@ export default function Grants() {
             <GeoJSON key={(community?.code || 'all') + province} data={geo} style={mapStyle} onEachFeature={(feature, layer) => { layer.bindTooltip(feature.properties.name); layer.on('click', () => chooseProvince(feature)); }} />
           </MapContainer>
         </div> : <div className="flex h-[390px] items-center justify-center p-8 text-center text-sm text-muted-foreground">{mapError ? 'El mapa no se pudo cargar. Usa los selectores geográficos para seguir buscando.' : 'Cargando mapa interactivo…'}</div>}
-        <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">El mapa orienta la búsqueda. Comprueba siempre el ámbito territorial y los requisitos en la convocatoria.</p>
+        <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">El mapa orienta la búsqueda. Comprueba siempre el ámbito territorial y los requisitos en la convocatoria. Geometría: <a href="https://github.com/codeforgermany/click_that_hood" target="_blank" rel="noopener noreferrer" className="underline">Click That Hood (MIT)</a>.</p>
       </section>
       <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
         <h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><SlidersHorizontal className="h-4 w-4 text-taxea-red" />Ajusta la búsqueda</h2>
