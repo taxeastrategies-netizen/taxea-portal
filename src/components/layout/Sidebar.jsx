@@ -87,6 +87,15 @@ const DEPT_GROUPS = [
         modules: [],
       },
       {
+        id: 'public-tenders',
+        label: 'Licitaciones y contratos públicos',
+        icon: Gavel,
+        activeColor: 'text-cyan-700',
+        activeBg: 'bg-cyan-50',
+        basePath: '/licitaciones',
+        modules: [],
+      },
+      {
         id: 'people',
         label: 'People & HR',
         icon: Heart,
