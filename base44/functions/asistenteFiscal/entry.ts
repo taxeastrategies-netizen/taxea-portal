@@ -254,23 +254,11 @@ Responde ÚNICAMENTE con el JSON definido en tus instrucciones de sistema. Sin t
       const monthKey = iso.slice(0, 7);
       const userId = String(user.id);
       const isPrivileged = ['admin', 'super_admin'].includes(user.role);
-      const parseLimit = (name, fallback) => {
-        const value = Number.parseInt(Deno.env.get(name) || '', 10);
-        return Number.isFinite(value) && value > 0 ? value : fallback;
-      };
+      // Límites numéricos de producto, no secretos. Se aplican los mismos valores por defecto
+      // que estaban vigentes cuando no había variables AI_* registradas en Base44.
       const limits = isPrivileged
-        ? {
-            minute: parseLimit('AI_ADMIN_CALLS_PER_MINUTE', 20),
-            day: parseLimit('AI_ADMIN_CALLS_PER_DAY', 200),
-            month: parseLimit('AI_ADMIN_CALLS_PER_MONTH', 2000),
-            tokensDay: parseLimit('AI_ADMIN_INPUT_TOKENS_PER_DAY', 500000),
-          }
-        : {
-            minute: parseLimit('AI_USER_CALLS_PER_MINUTE', 4),
-            day: parseLimit('AI_USER_CALLS_PER_DAY', 40),
-            month: parseLimit('AI_USER_CALLS_PER_MONTH', 300),
-            tokensDay: parseLimit('AI_USER_INPUT_TOKENS_PER_DAY', 80000),
-          };
+        ? { minute: 20, day: 200, month: 2000, tokensDay: 500000 }
+        : { minute: 4, day: 40, month: 300, tokensDay: 80000 };
 
       const [minuteEvents, dayEvents, monthEvents] = await Promise.all([
         base44.asServiceRole.entities.AIUsageEvent.filter({ userId, minuteKey }),
