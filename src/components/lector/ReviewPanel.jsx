@@ -11,6 +11,9 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
   const [form, setForm] = useState(doc.formData || {});
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
+  const manualAccount = String(form.cuenta_contable_manual || '').trim();
+  const accountPrefix = tipo === 'ingresos' ? '7' : '6';
+  const invalidManualAccount = manualAccount && (!/^\d{3,8}$/.test(manualAccount) || !manualAccount.startsWith(accountPrefix));
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -25,7 +28,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
           <Button size="sm" variant="outline" disabled={loading} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
             <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
-          <Button size="sm" disabled={loading} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
+          <Button size="sm" disabled={loading || !!invalidManualAccount} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : 'Aprobar y guardar'}
           </Button>
           <button onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
@@ -83,6 +86,22 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
               </div>
             </div>
           )}
+
+          <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
+            <Label htmlFor="ocr-cuenta-manual" className="text-xs font-semibold">Cuenta contable manual (opcional)</Label>
+            <Input
+              id="ocr-cuenta-manual"
+              inputMode="numeric"
+              maxLength={8}
+              value={form.cuenta_contable_manual || ''}
+              onChange={e => set('cuenta_contable_manual', e.target.value.replace(/\s/g, ''))}
+              className="h-8 text-sm"
+              placeholder={tipo === 'ingresos' ? 'Ej. 70500000' : 'Ej. 62900000'}
+              aria-invalid={!!invalidManualAccount}
+            />
+            <p className="text-xs text-muted-foreground">Si la indicas, sustituye la clasificación automática en la factura y su asiento. Usa una cuenta activa de tu plan contable (3 a 8 dígitos; se completa a 8 con ceros).</p>
+            {invalidManualAccount && <p className="text-xs text-red-600">Indica una cuenta PGC de {tipo === 'ingresos' ? 'ingresos (grupo 7)' : 'gastos (grupo 6)'} de 3 a 8 dígitos.</p>}
+          </div>
 
           {/* Alertas */}
           {doc.extracted?.alertas_fiscales?.length > 0 && (
