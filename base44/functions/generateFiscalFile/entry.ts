@@ -349,7 +349,9 @@ Deno.serve(async (req) => {
 
     const encoder = new TextEncoder();
     const bytes = encoder.encode(resultado_fichero.contenido);
-    const b64 = btoa(String.fromCharCode(...bytes));
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    const b64 = btoa(binary);
     const hash = await hashContent(resultado_fichero.contenido);
     const fechaGeneracion = new Date().toISOString();
 
