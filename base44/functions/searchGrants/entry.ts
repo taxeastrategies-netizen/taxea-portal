@@ -7,6 +7,7 @@ const MAX_CACHE = 80;
 const BENEFICIARY_IDS: Record<string, string> = { autonomos: '3', pymes: '3', grandes_empresas: '4', particulares: '1', entidades: '2' };
 const TOPIC_TERMS: Record<string, string> = { inicio: 'autoempleo emprendimiento nueva actividad', digitalizacion: 'digitalización transformación digital', empleo: 'empleo contratación', energia: 'eficiencia energética autoconsumo', rural: 'agricultura ganadería desarrollo rural', innovacion: 'innovación investigación I+D', cultura: 'cultura deporte educación', vivienda: 'vivienda rehabilitación', social: 'inclusión cuidados dependencia' };
 const ADMINISTRATIONS = new Set(['C', 'A', 'L', 'O']);
+const FINALITY_IDS = new Set(Array.from({ length: 21 }, (_, index) => String(index + 1)));
 let regionCache: { at: number; rows: Region[] } | null = null;
 const resultCache = new Map<string, { at: number; value: unknown }>();
 type Region = { id: number; descripcion: string; children?: Region[] };
@@ -144,6 +145,7 @@ Deno.serve(async req => {
     const query = clean(body?.query, 100);
     const applicant = clean(body?.applicant, 30) || 'all';
     const topic = clean(body?.topic, 30) || 'all';
+    const finality = clean(body?.finality, 2);
     const administration = clean(body?.administration, 1).toUpperCase();
     const page = Number(body?.page ?? 0);
     if (communityCode && !allowedCountryCode(communityCode)) return response({ error: 'Comunidad no válida.' }, 400);
@@ -151,9 +153,10 @@ Deno.serve(async req => {
     if (!Number.isInteger(page) || page < 0 || page > 10000) return response({ error: 'Página no válida.' }, 400);
     if (applicant !== 'all' && !BENEFICIARY_IDS[applicant]) return response({ error: 'Tipo de beneficiario no válido.' }, 400);
     if (topic !== 'all' && !TOPIC_TERMS[topic]) return response({ error: 'Tema no válido.' }, 400);
+    if (finality && !FINALITY_IDS.has(finality)) return response({ error: 'Finalidad no válida.' }, 400);
     if (administration && !ADMINISTRATIONS.has(administration)) return response({ error: 'Administración no válida.' }, 400);
     const searchText = query || (topic !== 'all' ? TOPIC_TERMS[topic] : '');
-    const key = JSON.stringify({ communityCode, province, applicant, topic, administration, searchText, page });
+    const key = JSON.stringify({ communityCode, province, applicant, topic, finality, administration, searchText, page });
     const cached = resultCache.get(key);
     if (cached && Date.now() - cached.at < CACHE_TTL) return response(cached.value);
     const regionRows = await regions();
@@ -170,6 +173,7 @@ Deno.serve(async req => {
       url.searchParams.set('descripcionTipoBusqueda', '2');
     }
     if (applicant !== 'all') url.searchParams.set('tiposBeneficiario', BENEFICIARY_IDS[applicant]);
+    if (finality) url.searchParams.set('finalidad', finality);
     if (administration) url.searchParams.set('tipoAdministracion', administration);
     if (ids.length) url.searchParams.set('regiones', ids.join(','));
     const list = await requestJson(url);
