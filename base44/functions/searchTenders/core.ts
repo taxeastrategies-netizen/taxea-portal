@@ -100,14 +100,14 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
   const cached = cache.get(url);
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.value;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), 40000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/atom+xml' } });
     if (!response.ok) throw new Error('La Plataforma devolvió ' + response.status);
     const declaredSize = Number(response.headers.get('content-length') || 0);
-    if (declaredSize > 16_000_000) throw new Error('Feed oficial demasiado grande');
+    if (declaredSize > 25_000_000) throw new Error('Feed oficial demasiado grande');
     const xml = await response.text();
-    if (xml.length > 16_000_000) throw new Error('Feed oficial demasiado grande');
+    if (xml.length > 25_000_000) throw new Error('Feed oficial demasiado grande');
     const feed = parser.parse(xml)?.feed;
     if (!feed || !feed.id || !feed.entry) throw new Error('Formato Atom oficial inesperado');
     const entries = asArray(feed.entry);
