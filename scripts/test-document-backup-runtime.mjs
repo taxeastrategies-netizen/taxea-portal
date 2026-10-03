@@ -245,7 +245,7 @@ assert.match(functionSource, /manifestChecksum !== lastJob\.manifestChecksum/);
 assert.match(functionSource, /entries\.slice\(cursor, cursor \+ 25\)/);
 assert.match(functionSource, /computeChecksum\(restoredBytes\)/);
 assert.match(functionSource, /verificationChecked: checked, documentsVerified: verified/);
-assert.match(functionSource, /status: 'partial'/);
+assert.match(functionSource, /remaining > 0 \? 'partial'/);
 assert.match(functionSource, /existing\.driveFileId && !!existing\.checksum && sourceUnchanged/);
 
 console.log(JSON.stringify({
