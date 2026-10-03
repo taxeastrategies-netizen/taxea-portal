@@ -81,9 +81,11 @@ export default function ReportingCenter() {
     const ingresos = canonical.totalIngresos;
     const gastoTotal = canonical.totalGastos;
     const beneficio = ingresos - gastoTotal;
-    const margen = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
+    const margenNeto = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
     const accountingEbitda = deriveAccountingEbitda(accountingReport);
     const ebitda = accountingEbitda?.value ?? 0;
+    const accountingIncome = Number(accountingReport?.profitAndLoss?.totalIncome || 0);
+    const margen = accountingIncome > 0 ? (ebitda / accountingIncome) * 100 : 0;
     const deudaTotal = debts.filter(d => d.estado === 'activo').reduce((s, d) => s + (d.capital_pendiente || d.importe_inicial || 0), 0);
     const cashTotal = treasury.connectedAccounts > 0 ? treasury.availableCash : 0;
     const burnRate = gastoTotal / 12;
@@ -105,7 +107,7 @@ export default function ReportingCenter() {
       ? Math.round((pagosPendientes / canonical.totalGastosFacturas) * elapsedDays)
       : null;
     return {
-      ingresos, gastoTotal, beneficio, margen, ebitda, accountingEbitda, deudaTotal,
+      ingresos, gastoTotal, beneficio, margen, margenNeto, ebitda, accountingEbitda, deudaTotal,
       cashTotal, burnRate, runway, cobrosPendientes, pagosPendientes,
       workingCapital, cuotasMensuales, interesesAnuales, dso, dpo
     };
