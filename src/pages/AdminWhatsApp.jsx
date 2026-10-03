@@ -19,12 +19,11 @@ const ESTADO_CONFIG = {
 };
 
 export default function AdminWhatsApp() {
-  const { user, isAdmin } = useOutletContext() || {};
+  const { isAdmin } = useOutletContext() || {};
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [selectedLog, setSelectedLog] = useState(null);
-  const [reenviando, setReenviando] = useState(null);
 
   useEffect(() => {
     cargarLogs();
@@ -35,18 +34,6 @@ export default function AdminWhatsApp() {
     const data = await base44.entities.WhatsAppLog.list('-created_date', 100);
     setLogs(data || []);
     setLoading(false);
-  };
-
-  const handleReenviar = async (log) => {
-    setReenviando(log.id);
-    await base44.entities.WhatsAppLog.update(log.id, { estado: 'reintentando' });
-    await base44.functions.invoke('enviarWhatsApp', {
-      to: log.destinatario_telefono,
-      mensaje: log.mensaje,
-      whatsapp_log_id: log.id,
-    });
-    await cargarLogs();
-    setReenviando(null);
   };
 
   const logsFiltrados = filtroEstado === 'todos'
@@ -72,7 +59,7 @@ export default function AdminWhatsApp() {
     <div>
       <PageHeader
         title="WhatsApp Notificaciones"
-        subtitle="Seguimiento de mensajes automáticos enviados a clientes"
+        subtitle="Historial de mensajes y borradores; el envío automático está desactivado"
       >
         <Button variant="outline" size="sm" onClick={cargarLogs} disabled={loading}>
           <RefreshCw className={cn('w-4 h-4 mr-1.5', loading && 'animate-spin')} />
@@ -205,7 +192,7 @@ export default function AdminWhatsApp() {
                   );
                 })()}
                 {selectedLog.error_detalle && (
-                  <p className="text-xs text-red-600 mt-1.5 bg-red-50 rounded-lg p-2">{selectedLog.error_detalle}</p>
+                  <p className={cn('text-xs mt-1.5 rounded-lg p-2', selectedLog.proveedor === 'manual' ? 'text-slate-600 bg-slate-50' : 'text-red-600 bg-red-50')}>{selectedLog.error_detalle}</p>
                 )}
               </div>
 
@@ -220,7 +207,7 @@ export default function AdminWhatsApp() {
 
               {/* Mensaje */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Mensaje enviado</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Contenido del mensaje</p>
                 <pre className="text-xs text-foreground bg-secondary/40 rounded-xl p-3 whitespace-pre-wrap font-sans leading-relaxed">
                   {selectedLog.mensaje}
                 </pre>
@@ -232,12 +219,10 @@ export default function AdminWhatsApp() {
               <Button
                 className="w-full bg-teal hover:bg-teal-dark"
                 size="sm"
-                onClick={() => handleReenviar(selectedLog)}
-                disabled={reenviando === selectedLog.id}
+                disabled
+                title="Canal automático desactivado; no se enviará ningún WhatsApp"
               >
-                {reenviando === selectedLog.id
-                  ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Reenviando...</>
-                  : <><Send className="w-3.5 h-3.5 mr-1.5" /> Reenviar WhatsApp</>}
+                <Send className="w-3.5 h-3.5 mr-1.5" /> Envío automático desactivado
               </Button>
             </div>
           </div>
