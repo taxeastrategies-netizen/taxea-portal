@@ -11,7 +11,11 @@ export default function ImpersonationBanner({ impersonation }) {
   const handleExit = async () => {
     endImpersonation();
     // Limpiar company_id del admin al salir de impersonación
-    try { await base44.auth.updateMe({ company_id: null }); } catch {}
+    try {
+      await base44.functions.invoke('companyContextOperations', { action: 'set_active_company', companyId: null });
+    } catch (error) {
+      console.warn('[ImpersonationBanner] No se pudo limpiar el contexto de empresa', error);
+    }
     navigate('/admin/clients');
     window.location.reload();
   };
