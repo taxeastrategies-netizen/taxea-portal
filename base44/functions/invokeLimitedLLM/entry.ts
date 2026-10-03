@@ -14,11 +14,6 @@ const DEFAULTS = {
   maxSchemaChars: 20000,
 };
 
-function envInt(name: string, fallback: number) {
-  const value = Number.parseInt(Deno.env.get(name) || '', 10);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 function utcKeys(now = new Date()) {
   const iso = now.toISOString();
   return {
@@ -72,21 +67,21 @@ Deno.serve(async (req) => {
     const isAdmin = ['admin', 'super_admin'].includes(user.role);
     const limits = isAdmin
       ? {
-          minute: envInt('AI_ADMIN_CALLS_PER_MINUTE', DEFAULTS.adminMinute),
-          day: envInt('AI_ADMIN_CALLS_PER_DAY', DEFAULTS.adminDay),
-          month: envInt('AI_ADMIN_CALLS_PER_MONTH', DEFAULTS.adminMonth),
-          tokensDay: envInt('AI_ADMIN_INPUT_TOKENS_PER_DAY', DEFAULTS.adminTokensDay),
+          minute: DEFAULTS.adminMinute,
+          day: DEFAULTS.adminDay,
+          month: DEFAULTS.adminMonth,
+          tokensDay: DEFAULTS.adminTokensDay,
         }
       : {
-          minute: envInt('AI_USER_CALLS_PER_MINUTE', DEFAULTS.userMinute),
-          day: envInt('AI_USER_CALLS_PER_DAY', DEFAULTS.userDay),
-          month: envInt('AI_USER_CALLS_PER_MONTH', DEFAULTS.userMonth),
-          tokensDay: envInt('AI_USER_INPUT_TOKENS_PER_DAY', DEFAULTS.userTokensDay),
+          minute: DEFAULTS.userMinute,
+          day: DEFAULTS.userDay,
+          month: DEFAULTS.userMonth,
+          tokensDay: DEFAULTS.userTokensDay,
         };
 
-    const maxPromptChars = envInt('AI_MAX_PROMPT_CHARS', DEFAULTS.maxPromptChars);
-    const maxFiles = envInt('AI_MAX_FILES_PER_REQUEST', DEFAULTS.maxFiles);
-    const maxSchemaChars = envInt('AI_MAX_SCHEMA_CHARS', DEFAULTS.maxSchemaChars);
+    const maxPromptChars = DEFAULTS.maxPromptChars;
+    const maxFiles = DEFAULTS.maxFiles;
+    const maxSchemaChars = DEFAULTS.maxSchemaChars;
     const keys = utcKeys();
     const userId = String(user.id);
 
