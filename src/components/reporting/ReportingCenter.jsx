@@ -44,7 +44,7 @@ export default function ReportingCenter() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('dashboard');
-  const { invoices, expenses, bankAccounts, bankTransactions: transactions, treasury, loading: financialLoading, error: financialError, refresh } = useFinancialData(companyId, { year: new Date().getFullYear() });
+  const { invoices, expenses, bankAccounts, bankTransactions: transactions, treasury, loading: financialLoading, error: financialError, treasuryError, refresh } = useFinancialData(companyId, { year: new Date().getFullYear() });
   const [obligations, setObligations] = useState([]);
   const [debts, setDebts] = useState([]);
   const [accountingReport, setAccountingReport] = useState(null);
@@ -127,9 +127,9 @@ export default function ReportingCenter() {
     );
   }
 
-  if (!loading && (financialError || auxiliaryError || !financials.accountingEbitda)) {
+  if (!loading && (financialError || treasuryError || auxiliaryError || treasury.connectedAccounts === 0 || !financials.accountingEbitda)) {
     return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-      No se puede generar un informe financiero fiable: {financialError || auxiliaryError || 'falta la PyG contable confirmada de este ejercicio.'}
+      No se puede generar un informe financiero fiable: {financialError || treasuryError || auxiliaryError || (treasury.connectedAccounts === 0 ? 'no hay bancos conectados con saldo disponible en Tesorería.' : 'falta la PyG contable confirmada de este ejercicio.')}
       <button type="button" onClick={() => { refresh(); loadData(); }} className="ml-3 underline">Reintentar</button>
     </div>;
   }
