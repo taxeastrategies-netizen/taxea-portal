@@ -19,7 +19,7 @@ import FinancialIntelligenceAI from './FinancialIntelligenceAI';
 import CompanyScoring from './CompanyScoring';
 import MnAAnalytics from './MnAAnalytics';
 import ExecutiveCommentary from './ExecutiveCommentary';
-import { fetchCompanyFinancials } from '@/lib/financialDataService';
+import { useFinancialData } from '@/hooks/useFinancialData';
 import { calculateFinancialKPIs } from '@/lib/financialCore';
 
 const TABS = [
@@ -43,31 +43,29 @@ export default function ReportingCenter() {
   const companyId = company?.id;
 
   const [tab, setTab] = useState('dashboard');
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
+  const { invoices, expenses, bankAccounts, bankTransactions: transactions, treasury, loading: financialLoading, error: financialError, refresh } = useFinancialData(companyId, { year: new Date().getFullYear() });
   const [obligations, setObligations] = useState([]);
   const [debts, setDebts] = useState([]);
-  const [bankAccounts, setBankAccounts] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [auxiliaryLoading, setAuxiliaryLoading] = useState(true);
+  const [auxiliaryError, setAuxiliaryError] = useState('');
+  const loading = financialLoading || auxiliaryLoading;
 
   const loadData = async () => {
-    if (!companyId) { setLoading(false); return; }
-    setLoading(true);
-    const [financialData, obl, dbs, banks, txs] = await Promise.all([
-      fetchCompanyFinancials(companyId, { year: new Date().getFullYear() }),
-      base44.entities.TaxObligation.filter({ company_id: companyId }),
-      base44.entities.DebtInstrument.filter({ company_id: companyId }),
-      base44.entities.BankAccount.filter({ company_id: companyId }),
-      base44.entities.BankTransaction.filter({ company_id: companyId }, '-fecha_operacion', 500),
-    ]);
-    setInvoices(financialData.invoices);
-    setExpenses(financialData.expenses);
-    setObligations(obl || []);
-    setDebts(dbs || []);
-    setBankAccounts(banks || []);
-    setTransactions(txs || []);
-    setLoading(false);
+    if (!companyId) { setAuxiliaryLoading(false); return; }
+    setAuxiliaryLoading(true);
+    setAuxiliaryError('');
+    try {
+      const [obl, dbs] = await Promise.all([
+        base44.entities.TaxObligation.filter({ company_id: companyId }),
+        base44.entities.DebtInstrument.filter({ company_id: companyId }),
+      ]);
+      setObligations(obl || []);
+      setDebts(dbs || []);
+    } catch (error) {
+      setAuxiliaryError(error?.message || 'No se pudieron cargar obligaciones o deudas.');
+    } finally {
+      setAuxiliaryLoading(false);
+    }
   };
 
   useEffect(() => { loadData(); }, [companyId]);
@@ -78,9 +76,10 @@ export default function ReportingCenter() {
     const gastoTotal = canonical.totalGastos;
     const beneficio = ingresos - gastoTotal;
     const margen = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
-    const ebitda = beneficio + gastoTotal * 0.05;
+    // No se inventa una amortización fija: el EBITDA requiere desglose contable confirmado.
+    const ebitda = null;
     const deudaTotal = debts.filter(d => d.estado === 'activo').reduce((s, d) => s + (d.capital_pendiente || d.importe_inicial || 0), 0);
-    const cashTotal = bankAccounts.reduce((s, b) => s + (b.saldo_disponible || 0), 0);
+    const cashTotal = treasury.connectedAccounts > 0 ? treasury.availableCash : 0;
     const burnRate = gastoTotal / 12;
     const runway = burnRate > 0 ? cashTotal / burnRate : null;
     const cobrosPendientes = canonical.cobrosPendientes;
@@ -104,7 +103,7 @@ export default function ReportingCenter() {
       cashTotal, burnRate, runway, cobrosPendientes, pagosPendientes,
       workingCapital, cuotasMensuales, interesesAnuales, dso, dpo
     };
-  }, [invoices, expenses, debts, bankAccounts]);
+  }, [invoices, expenses, debts, treasury]);
 
   const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading };
 
@@ -136,7 +135,7 @@ export default function ReportingCenter() {
             <p className="text-sm text-slate-400 mt-0.5">Informes ejecutivos, scoring financiero e inteligencia Big4</p>
           </div>
         </div>
-        <button onClick={loadData} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all self-start sm:self-auto">
+        <button onClick={() => { refresh(); loadData(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all self-start sm:self-auto">
           <RefreshCw className="w-3.5 h-3.5" /> Actualizar datos
         </button>
       </div>
