@@ -7,7 +7,7 @@ const source = fs.readFileSync('base44/functions/taxModelOperations/entry.ts', '
 const start = source.indexOf("    if(action==='download_official_file') {");
 const end = source.indexOf("    if(action==='open_draft') {", start);
 assert.ok(start > 0 && end > start);
-const branch = source.slice(start, end).replace('let contentBytes: Uint8Array;', 'let contentBytes;');
+const branch = source.slice(start, end).replace('let contentBytes: Uint8Array;', 'let contentBytes;').replace('(char:string)', '(char)');
 const bytes = new TextEncoder().encode('MODELO FICTICIO');
 const hash = async data => Array.from(new Uint8Array(await webcrypto.subtle.digest('SHA-256', data))).map(n => n.toString(16).padStart(2, '0')).join('');
 const valid = { id: 'file-1', companyId: 'company-1', contentBase64: Buffer.from(bytes).toString('base64'),
