@@ -99,6 +99,7 @@ function normalize(summary: any, detail: any) {
     status, publishedAt: iso(summary?.fechaRecepcion || detail?.fechaRecepcion),
     opensAt: iso(detail?.fechaInicioSolicitud), closesAt: iso(detail?.fechaFinSolicitud),
     timingNote: clean(detail?.textInicio || detail?.textFin, 240),
+    startNote: clean(detail?.textInicio, 240), endNote: clean(detail?.textFin, 240),
     administration: clean(detail?.organo?.descripcion || summary?.nivel3 || summary?.nivel2, 150),
     scope: clean(summary?.nivel2 || summary?.nivel1, 100),
     regions, sectors, instruments,
