@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { base44 } from '@/api/base44Client';
 import { ArrowUpRight, BellRing, BriefcaseBusiness, CalendarClock, ChevronDown, CircleAlert, FileSearch2, Filter, Landmark, MapPinned, RefreshCw, Search, ShieldCheck, Sparkles } from 'lucide-react';
 
-const GEOJSON_URL = 'https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson';
+const GEOJSON_URL = '/data/spain-provinces.geojson';
 const COMMUNITIES = [
   { ine: '01', code: 'ES61', name: 'Andalucía' }, { ine: '02', code: 'ES24', name: 'Aragón' },
   { ine: '03', code: 'ES53', name: 'Illes Balears' }, { ine: '04', code: 'ES70', name: 'Canarias' },
