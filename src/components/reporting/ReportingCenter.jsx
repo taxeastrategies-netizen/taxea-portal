@@ -125,6 +125,13 @@ export default function ReportingCenter() {
     );
   }
 
+  if (!loading && (financialError || auxiliaryError || !financials.accountingEbitda)) {
+    return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+      No se puede generar un informe financiero fiable: {financialError || auxiliaryError || 'falta la PyG contable confirmada de este ejercicio.'}
+      <button type="button" onClick={() => { refresh(); loadData(); }} className="ml-3 underline">Reintentar</button>
+    </div>;
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-10">
       {/* Header */}
@@ -145,6 +152,11 @@ export default function ReportingCenter() {
           <RefreshCw className="w-3.5 h-3.5" /> Actualizar datos
         </button>
       </div>
+
+      <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-900">
+        Caja: saldo EUR de bancos conectados en Tesorería. EBITDA: derivado de la PyG contable confirmada de {financials.accountingEbitda?.year || new Date().getFullYear()}.
+        {financials.accountingEbitda?.provisional && ' Cifra provisional: hay asientos pendientes, excluidos o marco contable por revisar.'}
+      </p>
 
       {/* Tabs */}
       <div className="overflow-x-auto">
