@@ -63,21 +63,18 @@ Deno.serve(async (req) => {
       params = { file_url: body.file_url, json_schema: schema };
     } else if (operation === 'reminder') {
       const invoice = await svc.entities.Invoice.get(String(body.invoiceId || '')).catch(() => null);
-      if (!invoice || invoice.company_id !== companyId || invoice.tipo !== 'emitida' || invoice.anulada) {
+      if (!invoice || invoice.company_id !== companyId || invoice.tipo !== 'emitida' || invoice.anulada || invoice.estado_cobro === 'cobrada') {
         return Response.json({ error: 'Factura no disponible' }, { status: 404 });
       }
       const recipient = norm(invoice.cliente_email);
       if (!EMAIL_RE.test(recipient)) return Response.json({ error: 'Falta el correo válido del cliente' }, { status: 400 });
       targetId = String(invoice.id);
-      const amount = Number(invoice.total_factura || 0);
-      const amountLabel = Number.isFinite(amount) ? amount.toFixed(2).replace('.', ',') + ' €' : '';
       params = {
         to: recipient,
         from_name: 'Taxea Strategies',
         subject: 'Recordatorio de pago — Factura ' + String(invoice.numero_factura || '').slice(0, 80),
         body: 'Estimado/a cliente,\n\nLe recordamos que la factura '
           + String(invoice.numero_factura || '').slice(0, 80)
-          + (amountLabel ? ' por importe de ' + amountLabel : '')
           + ' está pendiente de pago.\nFecha de vencimiento: '
           + String(invoice.fecha_vencimiento || 'no indicada').slice(0, 20)
           + '\n\nSi ya realizó el pago, ignore este aviso.\n\nEquipo Taxea',
