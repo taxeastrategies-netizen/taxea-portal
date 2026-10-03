@@ -123,7 +123,7 @@ const engineBuild = await esbuild.build({
   plugins: [{
     name: 'accounting-sdk-stub',
     setup(builder) {
-      builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'engine-test' }));
+      builder.onResolve({ filter: new RegExp('^npm:@base44/sdk') }, () => ({ path: 'sdk', namespace: 'engine-test' }));
       builder.onLoad({ filter: /^sdk$/, namespace: 'engine-test' }, () => ({ loader: 'js', contents: 'export const createClientFromRequest = () => ({})' }));
     },
   }],
