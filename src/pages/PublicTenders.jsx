@@ -17,7 +17,7 @@ const COMMUNITIES = [
   { ine: '17', code: 'ES21', name: 'País Vasco' }, { ine: '18', code: 'ES12', name: 'Asturias' },
   { ine: '19', code: 'ES52', name: 'Comunitat Valenciana' },
 ];
-const PROVINCES = '01:01:Almería|02:06:Albacete|03:19:Alacant/Alicante|04:01:Almería|05:07:Ávila|06:10:Badajoz|07:03:Illes Balears|08:08:Barcelona|09:07:Burgos|10:10:Cáceres|11:01:Cádiz|12:19:Castelló/Castellón|13:06:Ciudad Real|14:01:Córdoba|15:11:A Coruña|16:06:Cuenca|17:08:Girona|18:01:Granada|19:06:Guadalajara|20:17:Gipuzkoa|21:01:Huelva|22:02:Huesca|23:01:Jaén|24:07:León|25:08:Lleida|26:12:La Rioja|27:11:Lugo|28:13:Madrid|29:01:Málaga|30:15:Murcia|31:16:Navarra|32:11:Ourense|33:18:Asturias|34:07:Palencia|35:04:Las Palmas|36:11:Pontevedra|37:07:Salamanca|38:04:Santa Cruz de Tenerife|39:05:Cantabria|40:07:Segovia|41:01:Sevilla|42:07:Soria|43:08:Tarragona|44:02:Teruel|45:06:Toledo|46:19:València/Valencia|47:07:Valladolid|48:17:Bizkaia|49:07:Zamora|50:02:Zaragoza|51:09:Ceuta|52:14:Melilla'.split('|').map(item => { const [code, ine, name] = item.split(':'); return { code, ine, name }; });
+const PROVINCES = '01:17:Araba/Álava|02:06:Albacete|03:19:Alacant/Alicante|04:01:Almería|05:07:Ávila|06:10:Badajoz|07:03:Illes Balears|08:08:Barcelona|09:07:Burgos|10:10:Cáceres|11:01:Cádiz|12:19:Castelló/Castellón|13:06:Ciudad Real|14:01:Córdoba|15:11:A Coruña|16:06:Cuenca|17:08:Girona|18:01:Granada|19:06:Guadalajara|20:17:Gipuzkoa|21:01:Huelva|22:02:Huesca|23:01:Jaén|24:07:León|25:08:Lleida|26:12:La Rioja|27:11:Lugo|28:13:Madrid|29:01:Málaga|30:15:Murcia|31:16:Navarra|32:11:Ourense|33:18:Asturias|34:07:Palencia|35:04:Las Palmas|36:11:Pontevedra|37:07:Salamanca|38:04:Santa Cruz de Tenerife|39:05:Cantabria|40:07:Segovia|41:01:Sevilla|42:07:Soria|43:08:Tarragona|44:02:Teruel|45:06:Toledo|46:19:València/Valencia|47:07:Valladolid|48:17:Bizkaia|49:07:Zamora|50:02:Zaragoza|51:09:Ceuta|52:14:Melilla'.split('|').map(item => { const [code, ine, name] = item.split(':'); return { code, ine, name }; });
 const TABS = [{ id: 'all', label: 'Todas las oportunidades' }, { id: 'abierta', label: 'Licitaciones abiertas' }, { id: 'anuncio_previo', label: 'Anuncios previos' }, { id: 'consulta', label: 'Consultas preliminares' }];
 const TYPES = ['Suministros', 'Servicios', 'Obras', 'Concesión de obras', 'Concesión de servicios', 'Administrativo especial', 'Privado'];
 const badgeStyle = { abierta: 'border-emerald-300 bg-emerald-50 text-emerald-800', anuncio_previo: 'border-cyan-300 bg-cyan-50 text-cyan-800', consulta: 'border-amber-300 bg-amber-50 text-amber-800' };
@@ -83,7 +83,7 @@ export default function PublicTenders() {
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    base44.functions.invoke('searchTenders', { kind, query, cpv, contractType, communityCode: community?.code || '', province, minAmount, maxAmount, cursor: requestCursor })
+    const timer = setTimeout(() => base44.functions.invoke('searchTenders', { kind, query, cpv, contractType, communityCode: community?.code || '', provinceCode: province, minAmount, maxAmount, cursor: requestCursor })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -92,8 +92,8 @@ export default function PublicTenders() {
         setCursor(value.nextCursor);
       })
       .catch(err => { if (active) setError(err?.response?.data?.error || err?.message || 'No se pudieron consultar las licitaciones.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .finally(() => { if (active) setLoading(false); }), 350);
+    return () => { active = false; clearTimeout(timer); };
   }, [kind, query, cpv, contractType, community, province, minAmount, maxAmount, requestCursor, refresh]);
   const reset = () => { setPages([]); setCursor(null); setRequestCursor(null); setShow(24); setRefresh(v => v + 1); };
   const selectCommunity = (value, selectedProvince = '') => { setCommunity(value); setProvince(selectedProvince); reset(); };
@@ -105,10 +105,11 @@ export default function PublicTenders() {
   const checkedAt = pages.at(-1)?.checkedAt;
   const chooseProvince = feature => {
     const value = COMMUNITIES.find(item => item.ine === feature.properties.cod_ccaa);
-    if (value) selectCommunity(value, PROVINCES.find(item => item.ine === value.ine && normal(item.name).split('/').some(name => name === normal(feature.properties.name)))?.name || feature.properties.name);
+    if (value) selectCommunity(value, PROVINCES.find(item => item.ine === value.ine && normal(item.name).split('/').some(name => name === normal(feature.properties.name)))?.code || '');
   };
   const mapStyle = feature => {
-    const selected = province ? normal(province).includes(normal(feature.properties.name)) && community?.ine === feature.properties.cod_ccaa : community?.ine === feature.properties.cod_ccaa;
+    const selectedName = PROVINCES.find(item => item.code === province)?.name || '';
+    const selected = province ? normal(selectedName).split('/').some(name => name === normal(feature.properties.name)) && community?.ine === feature.properties.cod_ccaa : community?.ine === feature.properties.cod_ccaa;
     return { color: selected ? '#e22c43' : '#ffffff', weight: selected ? 2 : 1, fillColor: selected ? '#e22c43' : community?.ine === feature.properties.cod_ccaa ? '#22d3ee' : '#254463', fillOpacity: selected ? 0.85 : 0.68 };
   };
   return <main className="mx-auto max-w-7xl space-y-7 px-4 py-7 md:px-7">
@@ -139,7 +140,7 @@ export default function PublicTenders() {
         <h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><Filter className="h-4 w-4 text-taxea-red" />Filtros de búsqueda</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="space-y-1.5 text-xs font-semibold">Comunidad autónoma<select value={community?.ine || ''} onChange={e => selectCommunity(COMMUNITIES.find(item => item.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"><option value="">Toda España</option>{COMMUNITIES.map(item => <option key={item.ine} value={item.ine}>{item.name}</option>)}</select></label>
-          <label className="space-y-1.5 text-xs font-semibold">Provincia<select value={province} disabled={!community} onChange={e => { setProvince(e.target.value); reset(); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50"><option value="">Todas las provincias</option>{options.map(item => <option key={item.code} value={item.name}>{item.name}</option>)}</select></label>
+          <label className="space-y-1.5 text-xs font-semibold">Provincia<select value={province} disabled={!community} onChange={e => { setProvince(e.target.value); reset(); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50"><option value="">Todas las provincias</option>{options.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
           <label className="space-y-1.5 text-xs font-semibold">Tipo de contrato<select value={contractType} onChange={e => { setContractType(e.target.value); reset(); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"><option value="">Todos los tipos</option>{TYPES.map(item => <option key={item}>{item}</option>)}</select></label>
           <label className="space-y-1.5 text-xs font-semibold">Código CPV<input value={cpv} onChange={e => { if (/^\d{0,8}$/.test(e.target.value)) { setCpv(e.target.value); reset(); } }} placeholder="Ej.: 72000000" inputMode="numeric" maxLength={8} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /></label>
           <label className="space-y-1.5 text-xs font-semibold">Importe mínimo sin IVA (€)<input value={minAmount} onChange={e => { setMinAmount(e.target.value); reset(); }} type="number" min="0" placeholder="Sin mínimo" className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /></label>
