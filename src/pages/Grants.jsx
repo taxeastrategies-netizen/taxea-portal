@@ -67,13 +67,13 @@ function GrantCard({ item }) {
         </dl>
         {item.basisName && <p className="text-muted-foreground">Bases reguladoras: {item.basisName}</p>}
         <div className="flex flex-wrap gap-3 border-t border-border pt-3">
-          {item.applicationUrl && <a href={item.applicationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Sede indicada para solicitar <ArrowUpRight className="h-3.5 w-3.5" /></a>}
+          {item.applicationUrl && <a href={item.applicationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Sede publicada en BDNS <ArrowUpRight className="h-3.5 w-3.5" /></a>}
           <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Convocatoria oficial <ArrowUpRight className="h-3.5 w-3.5" /></a>
           {item.basesUrl && <a href={item.basesUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-taxea-red hover:underline">Bases reguladoras <ArrowUpRight className="h-3.5 w-3.5" /></a>}
           <a href={'mailto:taxeastrategies@gmail.com?subject=' + subject + '&body=' + body} className="inline-flex items-center gap-1 font-semibold text-foreground hover:underline"><Mail className="h-3.5 w-3.5" />Preguntar a Taxea</a>
         </div>
         {!item.applicationUrl && <p className="text-amber-800">La ficha oficial no aporta una URL de tramitación válida. Accede a la convocatoria para localizar el procedimiento exacto.</p>}
-        {item.applicationUrl && <p className="text-muted-foreground">La sede procede del dato publicado por el convocante; puede llevar al portal general y no directamente al formulario.</p>}
+        {item.applicationUrl && <p className="text-muted-foreground">La sede procede de la ficha BDNS; puede llevar al portal general, no al formulario, o haber cambiado. Si falla, consulta la convocatoria oficial.</p>}
       </div>
     </details>
   </article>;
@@ -209,7 +209,7 @@ export default function Grants() {
         <p className="mt-3 text-[11px] text-muted-foreground">La finalidad oficial filtra por la clasificación BDNS. Los temas son búsquedas textuales orientativas; una palabra clave sustituye el tema. No equivale a un filtro CNAE ni garantiza todas las ayudas aplicables.</p>
         {(applicant === 'autonomos' || applicant === 'pymes') && <p className="mt-2 text-[11px] text-amber-800">La BDNS agrupa autónomos y pymes en un mismo tipo oficial. La selección muestra candidatas; confirma los requisitos en cada convocatoria.</p>}
         <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ficha sin fecha confirmada queda por verificar; no se asume próxima ni solicitables.</div>
-        <p className="mt-5 text-xs text-muted-foreground">Buscador propio de Taxea con información oficial de BDNS. Las ayudas de otras fuentes todavía no están incorporadas; el enlace de cada ficha lleva a la convocatoria y sus bases.</p>
+        <p className="mt-5 text-xs text-muted-foreground">Buscador propio de Taxea con información oficial de BDNS. Las ayudas de otras fuentes todavía no están incorporadas; cada ficha enlaza la convocatoria oficial y, cuando existen, sus bases y la sede publicada.</p>
       </section>
     </div>
     <section>
