@@ -30,7 +30,7 @@ const PROVINCES = '01:17:Araba/Álava|02:06:Albacete|03:19:Alacant/Alicante|04:0
 const STATUS = {
   open: { label: 'Abierta', className: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
   upcoming: { label: 'Próxima · apertura confirmada', className: 'bg-cyan-500/15 text-cyan-800 border-cyan-500/30' },
-  announced: { label: 'Anunciada · fecha por verificar', className: 'bg-amber-500/15 text-amber-800 border-amber-500/30' },
+  announced: { label: 'Plazo por verificar', className: 'bg-amber-500/15 text-amber-800 border-amber-500/30' },
 };
 const formatDate = value => value ? new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value + 'T12:00:00Z')) : 'No indicada';
 function StatusBadge({ status }) {
@@ -114,8 +114,8 @@ export default function Grants() {
   };
   const tabs = [
     { id: 'open', name: 'Abiertas' },
-    { id: 'upcoming', name: 'Próximas 6 meses' },
-    { id: 'announced', name: 'En espera / anunciadas' },
+    { id: 'upcoming', name: 'Lista de espera · 6 meses' },
+    { id: 'announced', name: 'Plazo por verificar' },
     { id: 'all', name: 'Todas las encontradas' },
   ];
   return <main className="mx-auto max-w-[1500px] space-y-6 p-4 pb-16 md:p-7">
@@ -164,7 +164,7 @@ export default function Grants() {
           </form>
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">La palabra clave sustituye el tema predeterminado; prueba búsquedas distintas para cada sector.</p>
-        <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ayuda anunciada sin fecha confirmada queda en espera; no aparece como solicitables.</div>
+        <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/60 p-4 text-xs leading-relaxed text-slate-700"><strong>Cómo leer el radar:</strong> «Abierta» procede del estado/plazo informado por BDNS. «Próxima» exige fecha de inicio publicada dentro de seis meses. Una ficha sin fecha confirmada queda por verificar; no se asume próxima ni solicitables.</div>
         <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs">
           <a href="https://fandit.es/subvenciones" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Ampliar búsqueda en FANDIT ↗</a>
           <a href="https://ipyme.org/es-es/AyudasIncentivos/Paginas/buscador-de-ayudas.aspx" target="_blank" rel="noopener noreferrer" className="text-taxea-red hover:underline">Consultar IPYME ↗</a>
