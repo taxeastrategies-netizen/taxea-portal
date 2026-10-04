@@ -1,0 +1,41 @@
+{
+  "name": "Revisar radar oportunidades",
+  "description": "Cada 15 minutos revisa hasta dos b\u00fasquedas guardadas vencidas. Cada b\u00fasqueda se consulta como m\u00e1ximo una vez al d\u00eda; los fallos se reintentan tras dos horas. Los avisos aparecen solo dentro de Taxea.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "7,22,37,52 * * * *",
+      "one_time_date": null,
+      "timezone": "Atlantic/Canary",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "check_opportunity_watches",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "checkOpportunityWatches",
+            "args": {}
+          },
+          "then": "end"
+        }
+      }
+    ]
+  }
+}
