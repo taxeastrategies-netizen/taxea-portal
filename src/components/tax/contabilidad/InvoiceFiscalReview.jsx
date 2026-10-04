@@ -32,6 +32,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const activeActivities = useMemo(() => (bundle?.activities || []).filter(item => item.active !== false), [bundle]);
   const selectedActivity = activeActivities.find(item => item.id === form.activityId) || activeActivities[0];
   const taxKind = form.taxKind || selectedActivity?.indirectTax || bundle?.profile?.indirectTaxDefault || invoice.indirect_tax_kind || 'iva';
+  const selectedRegime = form.regime || selectedActivity?.indirectTaxRegime || 'general';
+  const specialInputs = form.specialInputs || {};
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +69,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         counterpartyIsWithholdingAgent: Boolean(invoice.retencion_irpf || invoice.importe_retencion),
         exemptionKey: invoice.fiscal_exemption_key || invoice.exemption_key || '',
         legalBasis: invoice.fiscal_legal_basis || invoice.exemption_legal_basis || '',
+        specialInputs: {
+          saleGross: Number(invoice.total_factura || 0),
+          invoiceGross: Number(invoice.total_factura || 0),
+          directCostGross: '', surchargeRate: '',
+          destinationCountry: /^[A-Z]{2}$/.test(String(invoice.cliente_pais || '').toUpperCase()) ? String(invoice.cliente_pais).toUpperCase() : '',
+          destinationRateConfirmed: false,
+          groupId: bundleData.profile?.taxGroupId || '', groupRole: bundleData.profile?.taxGroupRole || '',
+          payments: (bundleData.invoicePayments || []).filter(item => item.operation_status === 'committed' || !item.operation_status).map(item => ({ id: item.id, date: item.payment_date, amount: item.amount })),
+        },
         manualOverride: false,
         manualOverrideReason: '',
       });
@@ -75,6 +86,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
 
   const update = (key, value) => {
     setForm(current => ({ ...current, [key]: value }));
+    setEvaluation(null);
+  };
+
+  const updateSpecial = (key, value) => {
+    setForm(current => ({ ...current, specialInputs: { ...(current.specialInputs || {}), [key]: value } }));
     setEvaluation(null);
   };
 
@@ -163,6 +179,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <label className="text-xs font-medium text-slate-700">Tipo (%)
                     <input type="number" step="0.01" value={form.taxRate ?? 0} onChange={event => update('taxRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
+                  {['rebu', 'agencias_viajes'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-2">
+                    <p className="text-xs font-bold text-cyan-900">Cálculo interno del margen · propuesta para el asesor</p>
+                    <p className="text-[11px] text-cyan-800">El precio total al cliente incluye el impuesto; la cuota calculada no se desglosa en la factura. Debe vincularse la compra o los servicios directos antes de contabilizar.</p>
+                    <div className="grid gap-2 sm:grid-cols-2"><label className="text-xs">Precio total al cliente (€)<input type="number" step="0.01" value={specialInputs.saleGross ?? ''} onChange={event => updateSpecial('saleGross', event.target.value)} className="mt-1 w-full rounded-lg border border-cyan-200 px-3 py-2" /></label><label className="text-xs">{selectedRegime === 'rebu' ? 'Adquisición del bien' : 'Costes directos del viaje'} (€)<input type="number" step="0.01" value={specialInputs.directCostGross ?? ''} onChange={event => updateSpecial('directCostGross', event.target.value)} className="mt-1 w-full rounded-lg border border-cyan-200 px-3 py-2" /></label></div>
+                  </div>}
+                  {selectedRegime === 'recargo_equivalencia' && invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Recargo repercutido por proveedor (%)<input type="number" min="0" step="0.01" value={specialInputs.surchargeRate ?? ''} onChange={event => updateSpecial('surchargeRate', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /><span className="mt-1 block font-normal text-slate-500">El IVA y el recargo de esta compra son mayor coste, no IVA deducible.</span></label>}
+                  {['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Estado miembro de consumo (ISO 2 letras)<input value={specialInputs.destinationCountry || ''} maxLength={2} onChange={event => updateSpecial('destinationCountry', event.target.value.toUpperCase())} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(specialInputs.destinationRateConfirmed)} onChange={event => updateSpecial('destinationRateConfirmed', event.target.checked)} />Tipo de IVA del país de destino confirmado por asesor</label></div>}
+                  {selectedRegime === 'grupo_entidades' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Identificador del grupo validado<input value={specialInputs.groupId || ''} onChange={event => updateSpecial('groupId', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="text-xs">Rol en el grupo<select value={specialInputs.groupRole || ''} onChange={event => updateSpecial('groupRole', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"><option value="">Seleccionar</option><option value="dominante">Dominante</option><option value="dependiente">Dependiente</option></select></label></div>}
+                  {selectedRegime === 'criterio_caja' && <div className="sm:col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">Criterio de caja: {specialInputs.payments?.length || 0} cobro(s)/pago(s) trazado(s). El cálculo toma solo movimientos guardados; el resto se reconoce como máximo el 31 de diciembre del año siguiente. No se crean cobros desde esta revisión.</div>}
                   {invoice.tipo === 'recibida' && selectedActivity?.deductionRight === 'prorrata_especial' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Destino del gasto · prorrata especial
                     <select value={form.deductionUse || ''} onChange={event => update('deductionUse', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       <option value="">Seleccionar destino antes de confirmar</option>
@@ -204,6 +229,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                 {evaluation && <div className={`rounded-xl border p-4 text-xs ${evaluation.reviewRequired ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
                   <div className="flex items-center gap-2 font-bold">{evaluation.reviewRequired ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}{evaluation.reviewRequired ? 'Revisión profesional requerida' : 'Regla fiscal coherente'}</div>
                   <p className="mt-2">{evaluation.taxKind?.toUpperCase()} {evaluation.taxRate}% · cuota {money(evaluation.taxAmount)} · deducible {money(evaluation.deductibleTax)} · retención {money(evaluation.withholdingAmount)}</p>
+                  {evaluation.specialPreview && <div className="mt-2 rounded-lg border border-amber-300 bg-white/70 p-2"><p className="font-semibold">Desglose específico · solo simulación</p><p className="mt-1">{evaluation.specialPreview.reason}</p>{evaluation.specialPreview.taxableBase != null && <p className="mt-1">Margen bruto {money(evaluation.specialPreview.marginGross)} · base interna {money(evaluation.specialPreview.taxableBase)} · impuesto incluido en margen {money(evaluation.specialPreview.embeddedTax)}</p>}{evaluation.specialPreview.surcharge != null && <p className="mt-1">IVA compra {money(evaluation.specialPreview.vat)} · recargo {money(evaluation.specialPreview.surcharge)} · mayor coste {money(evaluation.specialPreview.purchaseCost)}</p>}{evaluation.specialPreview.events && <p className="mt-1">Reconocimientos: {evaluation.specialPreview.events.map(item => `${item.date}: ${money(item.amount)}`).join(' · ')}</p>}{evaluation.specialPreview.destinationTax != null && <p className="mt-1">{evaluation.specialPreview.destinationCountry} · impuesto destino {money(evaluation.specialPreview.destinationTax)}</p>}{evaluation.specialPreview.individualModel && <p className="mt-1">Modelo individual {evaluation.specialPreview.individualModel}{evaluation.specialPreview.aggregateModel ? ` · agregado ${evaluation.specialPreview.aggregateModel}` : ''}</p>}</div>}
                   {[...(evaluation.reasons || []), ...(evaluation.alerts || [])].map((item, index) => <p key={index} className="mt-1">· {item}</p>)}
                   <p className="mt-2 font-medium">Libros propuestos: {(evaluation.bookImpact || []).join(', ') || 'sin impacto'} · modelos orientativos: {(evaluation.modelImpact || []).join(', ') || 'revisar'}</p>
                   {evaluation.postingBlocked && <p className="mt-2 font-semibold text-red-700">Confirmación bloqueada: falta el circuito específico de este régimen. La factura y el diario no se modificarán.</p>}
