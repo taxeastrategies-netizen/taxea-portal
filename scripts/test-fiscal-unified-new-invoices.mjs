@@ -188,8 +188,18 @@ const mixedOssCodes = await recommendedCodes([generalActivity, ossActivity]);
 assert(mixedOssCodes.includes('303') && mixedOssCodes.includes('369'));
 const onlyOssCodes = await recommendedCodes([ossActivity]);
 assert(onlyOssCodes.includes('369') && !onlyOssCodes.includes('303') && !onlyOssCodes.includes('390'));
-const groupCodes = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
-assert(groupCodes.includes('322') && groupCodes.includes('353') && !groupCodes.includes('303'));
+const groupCodesWithoutRole = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
+assert(groupCodesWithoutRole.includes('322') && !groupCodesWithoutRole.includes('353') && !groupCodesWithoutRole.includes('303'));
+records.FiscalProfile[0].taxGroupId = 'grupo-ficticio';
+records.FiscalProfile[0].taxGroupRole = 'dependiente';
+const dependentCodes = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
+assert(dependentCodes.includes('322') && !dependentCodes.includes('353'));
+records.FiscalProfile[0].taxGroupRole = 'dominante';
+const dominantCodes = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
+assert(dominantCodes.includes('322') && dominantCodes.includes('353'));
+const igicDominantCodes = await recommendedCodes([{ ...generalActivity, indirectTax: 'igic', indirectTaxRegime: 'grupo_entidades' }]);
+assert(igicDominantCodes.includes('418') && igicDominantCodes.includes('419'));
+records.FiscalProfile[0].taxGroupRole = 'sin_grupo';
 const igicMixedCodes = await recommendedCodes([
   { ...generalActivity, indirectTax: 'igic', indirectTaxRegime: 'simplificado' },
   { ...ossActivity, indirectTax: 'igic', indirectTaxRegime: 'general' },
