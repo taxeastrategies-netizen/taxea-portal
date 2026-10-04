@@ -73,7 +73,7 @@ export default function LawHome() {
             </div>
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Taxea Business OS</p>
-              <h1 className="text-2xl font-jakarta font-bold">LAW — Legal Operating System</h1>
+              <h1 className="text-2xl font-jakarta font-bold">LEGAL — Legal Operating System</h1>
             </div>
           </div>
           <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
