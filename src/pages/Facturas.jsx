@@ -23,6 +23,7 @@ import DataPagination from '@/components/ui/DataPagination';
 export default function Facturas() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [invoices, setInvoices] = useState([]);
+  const [fiscalPendingInvoices, setFiscalPendingInvoices] = useState([]);
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('all');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
@@ -58,6 +59,7 @@ export default function Facturas() {
   const fetchInvoices = async () => {
     const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
     const finData = res?.data || res;
+    setFiscalPendingInvoices(finData?.fiscal_pending_invoices || []);
     return finData?.invoices || [];
   };
 
@@ -288,6 +290,11 @@ export default function Facturas() {
           </div>
         </div>
         )}
+
+        {fiscalPendingInvoices.length > 0 && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>{fiscalPendingInvoices.length} documento(s) pendientes de revisión fiscal.</strong> Todavía no figuran en los totales, libros o modelos ni admiten envío. El asesor los confirma en Contabilidad → Revisión fiscal.
+          <div className="mt-2 text-xs">{fiscalPendingInvoices.slice(0, 8).map(inv => inv.numero_factura || inv.id).join(' · ')}{fiscalPendingInvoices.length > 8 ? ' · …' : ''}</div>
+        </div>}
 
         {/* Tipo toggle + estado anuladas */}
         <div className="flex flex-wrap items-center gap-3 mb-5">
