@@ -55,6 +55,7 @@ Deno.serve(async req => {
     }));
     const rows: any[] = [];
     const errors: string[] = [];
+    const uncachedSources: string[] = [];
     const nextCursor: Record<string, string> = {};
     const sourceUpdated: Record<string, string | null> = {};
     let examinedEntries = 0;
@@ -66,6 +67,7 @@ Deno.serve(async req => {
       rows.push(...result.value.rows);
       examinedEntries += result.value.examined;
       sourceUpdated[source] = result.value.updated;
+      if (result.value.cacheStored === false) uncachedSources.push(source);
       fetchedAt[source] = result.value.fetchedAt;
       if (Date.now() - Date.parse(result.value.fetchedAt) > 90 * 60 * 1000) stale = true;
       if (result.value.next) nextCursor[source] = result.value.next;
@@ -75,7 +77,7 @@ Deno.serve(async req => {
     return response({
       ok: true, tenders, nextCursor: Object.keys(nextCursor).length ? nextCursor : null, hasMore: Object.keys(nextCursor).length > 0,
       examinedEntries, checkedAt: new Date().toISOString(), sourceUpdated, fetchedAt,
-      stale, partial: errors.length > 0, failedSources: errors,
+      stale, partial: errors.length > 0, failedSources: errors, uncachedSources,
       coverage: 'Resultados de las páginas Atom oficiales examinadas y guardadas temporalmente. Los filtros se aplican a estos registros; puede haber más coincidencias en páginas siguientes. Las consultas preliminares y los anuncios previos no son licitaciones abiertas.',
     });
   } catch (error) {
