@@ -56,6 +56,6 @@ export default function GroupReconciliationChooser({ transaction, candidates, al
       <input type="checkbox" checked={confirmed} onChange={event => onConfirm(event.target.checked)} />
       He comprobado las facturas, terceros, importes y que este movimiento bancario corresponde a este reparto.
     </label>
-    <p className="text-[11px] text-slate-500">Disponible para movimientos y facturas EUR. Si ya existe un asiento bancario para este movimiento (por ejemplo 555/572), debe revisarse o reclasificarse antes de evitar duplicar la cuenta 572.</p>
+    <p className="text-[11px] text-slate-500">Disponible para movimientos y facturas EUR. Si el asiento 572/555 ya está confirmado y coincide con el banco, Taxea conserva ese asiento y crea solo la reclasificación de la 555. Otros asientos bancarios previos requieren revisión manual.</p>
   </div>;
 }
