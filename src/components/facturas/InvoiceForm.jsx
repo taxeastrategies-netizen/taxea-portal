@@ -74,6 +74,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     base_imponible: '',
     tipo_iva: taxType === 'IGIC' ? 7 : 21,
     cuota_iva: '',
+    aplica_recargo: false,
+    tipo_recargo: 0,
     aplica_retencion: false,
     retencion_irpf: 0,
     total_factura: '',
@@ -134,18 +136,20 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     }));
   };
 
-  const { cuota, retencionImporte, total } = calcTotals(
+  const { cuota, retencionImporte, total: ordinaryTotal } = calcTotals(
     form.base_imponible,
     form.tipo_iva,
     form.aplica_retencion ? form.retencion_irpf : 0
   );
+  const recargoImporte = form.aplica_recargo ? Math.round((Number(form.base_imponible || 0) * Number(form.tipo_recargo || 0) / 100 + Number.EPSILON) * 100) / 100 : 0;
+  const total = ordinaryTotal + recargoImporte;
 
   useEffect(() => {
     const run = async () => {
     if (!open) { loadedRef.current = false; creationKeyRef.current = ''; return; }
     if (editing && !loadedRef.current) {
       loadedRef.current = true;
-      setForm({ ...getEmpty(), ...editing, aplica_retencion: (Number(editing.retencion_irpf) || 0) > 0 });
+      setForm({ ...getEmpty(), ...editing, aplica_retencion: (Number(editing.retencion_irpf) || 0) > 0, aplica_recargo: Number(editing.cuota_recargo || 0) !== 0 });
       setCustomRetention(!RETENTION_RATES.includes(Number(editing.retencion_irpf)));
       setUseCustomColetilla(Boolean(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal)));
       setRecurring(getDefaultRecurring());
@@ -177,6 +181,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (form.tipo === 'recibida' && form.fecha_recepcion && form.fecha_emision && form.fecha_recepcion < form.fecha_emision) e.fecha_recepcion = 'No puede ser anterior a la fecha de emisión';
     if (form.base_imponible === '' || isNaN(Number(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
     else if (Number(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
+    if (form.aplica_recargo && (taxType !== 'IVA' || !Number.isFinite(Number(form.tipo_recargo)) || Number(form.tipo_recargo) <= 0 || Number(form.tipo_recargo) > 100)) e.tipo_recargo = 'Indica un tipo de recargo IVA válido';
+    if (form.aplica_recargo && recurring.enabled) e.tipo_recargo = 'El recargo necesita revisión individual: desactiva la recurrencia.';
     if (form.aplica_retencion && (String(form.retencion_irpf) === '' || isNaN(Number(form.retencion_irpf)))) {
       e.retencion_irpf = 'Introduce el porcentaje';
     }
@@ -198,6 +204,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       base_imponible: Number(form.base_imponible) || 0,
       tipo_iva: Number(form.tipo_iva) || 0,
       cuota_iva: cuota,
+      tipo_recargo: form.aplica_recargo ? Number(form.tipo_recargo) : 0,
+      cuota_recargo: recargoImporte,
       retencion_irpf: form.aplica_retencion ? (Number(form.retencion_irpf) || 0) : 0,
       importe_retencion: form.aplica_retencion ? retencionImporte : 0,
       total_factura: total,
