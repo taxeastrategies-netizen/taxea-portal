@@ -162,7 +162,7 @@ function recommendedObligations(profile: any, activities: any[]) {
       if (iva.some(item => !['recargo_equivalencia', 'agricultura_ganaderia_pesca', 'exenta_limitada', 'no_sujeta', 'oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(item.indirectTaxRegime))) add('303', 'Operaciones nacionales liquidables; las OSS/IOSS mantienen su 369 separado');
     }
     if (['recargo_equivalencia', 'agricultura_ganaderia_pesca'].some(code => ivaRegimes.has(code))) add('309', 'Supuestos ocasionales de autoliquidación; revisar inversión del sujeto pasivo o adquisiciones intracomunitarias', 'review');
-    add('390', 'Resumen anual IVA; confirmar exoneraciones aplicables', 'review');
+    if (iva.some(item => !['oss_union', 'oss_exterior_union', 'ioss_importacion', 'recargo_equivalencia', 'agricultura_ganaderia_pesca', 'exenta_limitada', 'no_sujeta', 'grupo_entidades'].includes(item.indirectTaxRegime))) add('390', 'Resumen anual IVA; confirmar exoneraciones aplicables', 'review');
   }
   if (igic.length) {
     const igicRegimes = new Set(igic.map(item => item.indirectTaxRegime));
