@@ -9,7 +9,7 @@ export default function CashPositionHeader({ company, lastSync, loading, onRefre
     <div className="flex flex-col gap-4">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
-        <span className="hover:text-emerald-600 cursor-pointer transition-colors">Finance</span>
+        <span className="hover:text-emerald-600 cursor-pointer transition-colors">Finanzas y tesorería</span>
         <span className="text-muted-foreground/40">›</span>
         <span className="text-emerald-600 font-semibold">Cashflow Center</span>
       </div>
