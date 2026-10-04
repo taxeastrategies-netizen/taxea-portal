@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { allowedFeedUrl, filterRows, readFeed, validProvinceCode } from './core.ts';
-import { getSnapshot, refreshSnapshot } from './snapshot.ts';
+import { getSnapshot, isSource, refreshSnapshot } from './snapshot.ts';
 
 const SOURCE_KEYS = ['hosted', 'aggregated', 'consultations'] as const;
 const KINDS = ['all', 'abierta', 'anuncio_previo', 'consulta'];
@@ -14,6 +14,18 @@ Deno.serve(async req => {
     const sdk = createClientFromRequest(req);
     if (!await sdk.auth.me()) return response({ error: 'Inicia sesión para consultar licitaciones.' }, 401);
     const body = await req.json().catch(() => ({}));
+    if (body.action === 'refresh_source') {
+      const user = await sdk.auth.me();
+      if (!['admin', 'super_admin'].includes(user?.role)) return response({ error: 'Acceso reservado al administrador.' }, 403);
+      if (!isSource(body.source)) return response({ error: 'Fuente no válida.' }, 400);
+      try {
+        const refreshed = await refreshSnapshot(sdk, body.source);
+        return response({ ok: true, source: body.source, fetchedAt: refreshed.fetchedAt, examined: refreshed.examined, matches: refreshed.rows.length });
+      } catch (error) {
+        console.error('Tender cache refresh failed:', String((error as Error)?.message || error).slice(0, 250));
+        return response({ error: 'No se pudo renovar esta fuente oficial; se conserva la última copia correcta.' }, 502);
+      }
+    }
     const filters = {
       kind: text(body.kind, 20) || 'all',
       query: text(body.query, 100),
