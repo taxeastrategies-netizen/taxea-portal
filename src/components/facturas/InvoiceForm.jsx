@@ -227,7 +227,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `${result.review_required ? 'Factura pendiente de revisión' : 'Nueva factura'}: ${payload.numero_factura}`,
-          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || payload.proveedor_nombre || ''} · ${fmt(total)} €`,
+          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || ''} · ${fmt(total)} €`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
 
