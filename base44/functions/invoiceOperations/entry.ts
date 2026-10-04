@@ -624,7 +624,6 @@ Deno.serve(async (req) => {
       if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
         approved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: false, accounting_migration_hold_reason: '',
-          ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
         });
       }
       try {
