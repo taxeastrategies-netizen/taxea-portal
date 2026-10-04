@@ -236,6 +236,22 @@ assert.equal(records.Invoice.length, 4);
 assert.equal(counters.accountingEntries, 2);
 const clientFinalize = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: clientDraft.payload.invoice.id });
 assert.equal(clientFinalize.response.status, 403);
+currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
+await entities.Invoice.update(unvalidated.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test' });
+await entities.InvoiceTaxLine.create({
+  companyId: 'company-a', invoiceId: unvalidated.payload.invoice.id, lineNumber: 1,
+  reviewStatus: 'validado', regime: 'general', taxKind: 'iva', operationType: 'subject_taxed',
+  base: 100, quota: 21, deductibleQuota: 0,
+});
+failPostingOnce = true;
+const postingFailed = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: unvalidated.payload.invoice.id });
+assert.equal(postingFailed.response.status, 503);
+assert.equal(records.Invoice[1].accounting_migration_hold_reason, 'FISCAL_POSTING_ERROR');
+assert.equal(records.Invoice[1].qr_url, undefined);
+const recovered = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: unvalidated.payload.invoice.id });
+assert.equal(recovered.response.status, 200);
+assert.equal(records.Invoice[1].accounting_migration_hold, false);
+assert.equal(counters.accountingEntries, 3);
 
 currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
