@@ -45,12 +45,12 @@ const TABS = [
 ];
 
 export default function ContabilidadModule() {
-  const { company, user } = useOutletContext() || {};
+  const { company, user, isAdmin: contextIsAdmin } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('facturas');
   const [bootstrap, setBootstrap] = useState({ status: 'idle', error: '' });
   const [retryToken, setRetryToken] = useState(0);
   const companyId = company?.id;
-  const isAdvisor = ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
+  const isAdvisor = Boolean(contextIsAdmin) || ['admin', 'super_admin', 'advisor', 'asesor'].includes(String(user?.role || '').toLowerCase());
   const companyReady = Boolean(
     companyId
     && company?.nif_cif
