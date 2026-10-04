@@ -89,8 +89,8 @@ export default function ImportacionContable() {
 
   const TABS = [
     { key: 'resumen', label: 'Resumen', icon: Database },
-    { key: 'tax', label: 'Tax & Accounting', icon: FileSpreadsheet },
-    { key: 'finance', label: 'Finance', icon: Brain },
+    { key: 'tax', label: 'Fiscalidad y Contabilidad', icon: FileSpreadsheet },
+    { key: 'finance', label: 'Finanzas y tesorería', icon: Brain },
   ];
 
   return (
