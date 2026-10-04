@@ -417,14 +417,15 @@ Deno.serve(async (req) => {
       if (body.apply !== true) return Response.json({ success: true, mode: 'dry_run', recommendations });
       const existingByCode = new Map((models || []).map(item => [clean(item.codigo), item]));
       const created: string[] = [];
-      const updated: string[] = [];
+      const preserved: string[] = [];
       for (const item of recommendations) {
         const current = existingByCode.get(item.code);
-        const payload = { nombre: item.name, impuesto: ['303','309','322','353','369','390'].includes(item.code) ? 'IVA' : ['400','412','415','416','417','418','419','420','421','422','424','425'].includes(item.code) ? 'IGIC' : ['130','131','210','216','296'].includes(item.code) ? 'IRPF' : ['111','115','123','180','190','193'].includes(item.code) ? 'Retenciones' : 'Otro', administracion: item.authority, periodicidad: item.frequency, activo: true, fuenteValidacion: item.certainty === 'recommended' ? 'criterio_asesor' : 'pendiente_confirmar', estadoImplementacion: 'configuracion', observaciones: `Propuesta ${RULESET}: ${item.reasons.join('; ')}` };
-        if (current) { await svc.entities.TaxModel.update(current.id, payload); updated.push(current.id); }
-        else { const row = await svc.entities.TaxModel.create({ companyId, codigo: item.code, ...payload }); created.push(row.id); }
+        if (current) { preserved.push(current.id); continue; }
+        const payload = { nombre: item.name, impuesto: ['303','309','322','353','369','390'].includes(item.code) ? 'IVA' : ['400','412','415','416','417','418','419','420','421','422','424','425'].includes(item.code) ? 'IGIC' : ['130','131','210','216','296'].includes(item.code) ? 'IRPF' : ['111','115','123','180','190','193'].includes(item.code) ? 'Retenciones' : 'Otro', administracion: item.authority, periodicidad: item.frequency, activo: false, fuenteValidacion: 'pendiente_confirmar', estadoImplementacion: 'propuesta', observaciones: `Propuesta ${RULESET}: ${item.reasons.join('; ')}` };
+        const row = await svc.entities.TaxModel.create({ companyId, codigo: item.code, ...payload });
+        created.push(row.id);
       }
-      return Response.json({ success: true, mode: 'apply', created: created.length, updated: updated.length, recommendations });
+      return Response.json({ success: true, mode: 'apply', created: created.length, preserved: preserved.length, recommendations });
     }
 
     if (action === 'save_manual_obligation') {
