@@ -9,6 +9,7 @@ import { base44 } from '@/api/base44Client';
 
 const EMPTY_TREASURY = {
   connectedAccounts: 0,
+  connectedEuroAccounts: 0,
   availableCash: 0,
   reconciledTransactions: 0,
   unreconciledTransactions: 0,
@@ -72,6 +73,7 @@ export function useFinancialData(companyId, options = {}) {
       setTreasuryError(bankData?.treasuryError || '');
       setTreasury({
         connectedAccounts: Number(summary.connected_accounts || 0),
+        connectedEuroAccounts: (bankData?.accounts || []).filter(account => account.activa !== false && account.estado_conexion === 'conectado' && String(account.moneda || '').toUpperCase() === 'EUR').length,
         availableCash: Number(summary.available_cash_eur || 0),
         reconciledTransactions: Number(summary.reconciled_transactions || 0),
         unreconciledTransactions: Number(summary.unreconciled_transactions || 0),
