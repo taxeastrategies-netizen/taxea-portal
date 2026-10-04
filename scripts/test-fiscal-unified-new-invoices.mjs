@@ -102,4 +102,16 @@ assert.equal(professionalResponse.status, 409);
 assert.equal(records.Invoice[0].deductible_tax_amount, 21);
 assert.equal(writes, 0);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
+records.Invoice.push({ id: 'invoice-pending', company_id: 'company-a', tipo: 'recibida',
+  fecha_emision: '2026-04-10', fecha_recepcion: '2026-04-11',
+  fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
+  base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121 });
+const untracedOverride = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
+    invoiceId: 'invoice-pending', activityId: 'activity-a', taxKind: 'iva',
+    regime: 'exenta_limitada', operationType: 'exempt_full', base: 100,
+    taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(untracedOverride.status, 422);
+assert.equal(writes, 0);
 console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
