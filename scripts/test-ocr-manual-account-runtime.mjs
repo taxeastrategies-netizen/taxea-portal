@@ -114,21 +114,23 @@ assert.equal(expense.status, 200);
 assert.equal(records.Invoice[0].revenue_expense_account_code, '62900000');
 assert.equal(records.Invoice[0].revenue_expense_account_id, 'a-629');
 assert.equal(records.Invoice[0].tipo_iva, 0);
-assert.equal(records.InvoiceTaxLine[0].quota, 0);
+assert.equal(records.InvoiceTaxLine?.length || 0, 0);
+assert.equal(records.Invoice[0].fiscal_review_status, 'pendiente_revision');
+assert.equal(records.Invoice[0].qr_url, undefined);
 assert.equal(records.OcrInvoiceDocument[0].linkedInvoiceId, records.Invoice[0].id);
-assert.match(records.OcrInvoiceDocument[0].auditTrail[0], /manualAccount=62900000/);
+assert.match(records.OcrInvoiceDocument[0].auditTrail[0], /"manualAccount":"62900000"/);
 assert.equal((await invoke('expense-a', 'recibida', '629')).payload.alreadyProcessed, true);
 assert.equal(records.Invoice.length, 1);
 const income = await invoke('income-a', 'emitida', '705');
 assert.equal(income.status, 200);
 assert.equal(records.Invoice[1].revenue_expense_account_code, '70500000');
 assert.equal(records.Invoice[1].revenue_expense_account_id, 'a-705');
-assert.equal(postingCount, 2);
-assert.equal(records.OcrInvoiceDocument[1].linkedJournalEntryId, 'entry-2');
+assert.equal(postingCount, 0);
+assert.equal(records.OcrInvoiceDocument[1].linkedJournalEntryId, undefined);
 const defaultExpense = await invoke('expense-default', 'recibida');
 assert.equal(defaultExpense.status, 200);
 assert.equal(records.Invoice[2].revenue_expense_account_code, undefined);
-assert.equal(postingCount, 3);
+assert.equal(postingCount, 0);
 
 // Use the real accounting engine to verify the selected account reaches Debe/Haber.
 const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
