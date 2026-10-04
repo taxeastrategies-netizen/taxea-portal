@@ -171,6 +171,30 @@ assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[1].total_factura, 121);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
 records.FiscalActivity[0].indirectTaxRegime = 'general';
+async function recommendedCodes(activities) {
+  const before = records.FiscalActivity;
+  records.FiscalActivity = activities;
+  const response = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+    method: 'POST', body: JSON.stringify({ action: 'bundle', companyId: 'company-a' }),
+  }));
+  assert.equal(response.status, 200);
+  const codes = (await response.json()).recommendations.map(item => item.code);
+  records.FiscalActivity = before;
+  return codes;
+}
+const generalActivity = { ...records.FiscalActivity[0], id: 'general-activity', indirectTax: 'iva', indirectTaxRegime: 'general' };
+const ossActivity = { ...generalActivity, id: 'oss-activity', indirectTaxRegime: 'oss_union' };
+const mixedOssCodes = await recommendedCodes([generalActivity, ossActivity]);
+assert(mixedOssCodes.includes('303') && mixedOssCodes.includes('369'));
+const onlyOssCodes = await recommendedCodes([ossActivity]);
+assert(onlyOssCodes.includes('369') && !onlyOssCodes.includes('303'));
+const groupCodes = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
+assert(groupCodes.includes('322') && groupCodes.includes('353') && !groupCodes.includes('303'));
+const igicMixedCodes = await recommendedCodes([
+  { ...generalActivity, indirectTax: 'igic', indirectTaxRegime: 'simplificado' },
+  { ...ossActivity, indirectTax: 'igic', indirectTaxRegime: 'general' },
+]);
+assert(igicMixedCodes.includes('421') && igicMixedCodes.includes('420'));
 records.TaxModel.push({ id: 'model-390-advisor', companyId: 'company-a', codigo: '390', activo: true, fuenteValidacion: 'criterio_asesor', observaciones: 'Confirmación previa del asesor' });
 const existingModelSnapshot = JSON.stringify(records.TaxModel[0]);
 currentUser = { id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } };
@@ -198,4 +222,4 @@ const advisorConfirmation = await handler(new Request('https://taxea.test/functi
 assert.equal(advisorConfirmation.status, 200);
 assert.equal(proposed303.activo, true);
 assert.equal(proposed303.fuenteValidacion, 'criterio_asesor');
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda', 'oss_y_nacional_303_mas_369', 'oss_solo_369', 'grupo_322_y_353', 'igic_mixto_421_mas_420'] }, null, 2));
