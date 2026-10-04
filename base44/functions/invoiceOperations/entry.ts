@@ -628,16 +628,17 @@ Deno.serve(async (req) => {
       try {
         const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
         const saved = await base44.asServiceRole.entities.Invoice.get(invoice.id);
+        let ocrWarning = '';
         if (saved.ocr_document_id) {
           const doc = await base44.asServiceRole.entities.OcrInvoiceDocument.get(saved.ocr_document_id).catch(() => null);
           if (doc && doc.company_id === companyId && doc.linkedInvoiceId === saved.id) {
             await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
               status: 'accounted', accountedAt: new Date().toISOString(), linkedJournalEntryId: posting.entry.id,
               reviewedAt: new Date().toISOString(), reviewedByAdminId: user.id,
-            });
+            }).catch(() => { ocrWarning = 'Asiento confirmado; actualizar el estado del documento OCR requiere reintento.'; });
           }
         }
-        return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted) });
+        return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted), ocr_warning: ocrWarning || null });
       } catch (error) {
         await base44.asServiceRole.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR',
