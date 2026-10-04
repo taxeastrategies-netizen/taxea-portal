@@ -183,7 +183,7 @@ function buildFacturasRecibidas(invoices) {
 
 // ─── Hoja 5: Libro Ventas (AEAT 303) ────────────────────────────────────────
 function buildLibroVentas(invoices) {
-  const header = ['Fecha Expedición','Nº Factura','Serie','Nombre/Razón Social','NIF/CIF','Concepto','Base Imponible (€)','Tipo IVA %','Cuota IVA (€)','Tipo IRPF %','Cuota IRPF (€)','Total (€)','Trimestre','Año'];
+  const header = ['Fecha Expedición','Nº Factura','Serie','Nombre/Razón Social','NIF/CIF','Concepto','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Tipo IRPF %','Cuota IRPF (€)','Total (€)','Trimestre','Año','Impuesto','Régimen','Tratamiento','Fundamento legal'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'emitida').forEach(i => {
     rows.push([
@@ -193,6 +193,7 @@ function buildLibroVentas(invoices) {
       n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf),
       n(i.total_factura),
       i.trimestre || quarter(i.fecha_emision), i.anio || '',
+      i.indirect_tax_kind || '', i.fiscal_regime || '', i.fiscal_treatment || '', i.fiscal_legal_basis || '',
     ]);
   });
   return rows;
@@ -402,7 +403,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '2. P&L', rows: buildPnL(invoices, expenses, year), colWidths: [16, 20, 20, 22, 12, 20, 20, 20], newRowIndices: [] },
         { name: '3. Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: newEmitidaIdx },
         { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
-        { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8], newRowIndices: newEmitidaIdx },
+        { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: newEmitidaIdx },
         { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: newComprasIdx },
         { name: '7. Libro Diario', rows: buildLibroDiario(invoices, expenses), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
         { name: '8. Libro Mayor', rows: buildLibroMayor(invoices, expenses), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
