@@ -17,6 +17,7 @@ import KPIsObligaciones from '@/components/obligaciones/KPIsObligaciones';
 import VistaTimeline from '@/components/obligaciones/VistaTimeline';
 import ProximosVencimientos from '@/components/obligaciones/ProximosVencimientos';
 import CalendarioGeneral from '@/components/obligaciones/CalendarioGeneral';
+import QuarterCloseGuide from '@/components/obligaciones/QuarterCloseGuide';
 
 const TABS = [
   { id: 'proximos', label: 'Próximos vencimientos', icon: Clock3 },
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'calendario', label: 'Calendario individual', icon: CalendarDays },
   { id: 'timeline', label: 'Timeline anual', icon: ShieldCheck },
   { id: 'documentos', label: 'Documentos fiscales', icon: FileCheck2 },
+  { id: 'cierre', label: 'Cierre trimestral', icon: ShieldCheck },
 ];
 const EMPTY_FORM = {
   modelCode: '303', period: 'T1', fiscalYear: new Date().getFullYear(), filingDeadline: '',
@@ -197,6 +199,7 @@ export default function ObligacionesFiscales() {
       ) : (
         <>
           {activeTab === 'proximos' && <div className="bg-card border border-border rounded-xl p-5"><ProximosVencimientos obligations={bundle.items} onEdit={openItem} /></div>}
+          {activeTab === 'cierre' && <QuarterCloseGuide companyId={companyId} bundle={bundle} fiscalYear={fiscalYear} />}
           {activeTab === 'calendario' && <CalendarioGeneral obligations={filtered} fiscalYear={fiscalYear} verifiedCalendarYear={bundle.verifiedCalendarYear} sources={bundle.sources} onEdit={openItem} />}
           {activeTab === 'timeline' && <VistaTimeline obligations={filtered} onEdit={openItem} />}
           {activeTab === 'obligaciones' && (
