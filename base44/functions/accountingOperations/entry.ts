@@ -2756,6 +2756,9 @@ Deno.serve(async (req) => {
           schemaVersion: SCHEMA_VERSION,
         });
       }
+      if (invoice.fiscal_review_status === 'pendiente_revision' || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+        return Response.json({ error: 'La factura espera revisión fiscal del asesor. No puede contabilizarse directamente.' }, { status: 409 });
+      }
       const options = {
         date: body.date,
         description: body.description,
