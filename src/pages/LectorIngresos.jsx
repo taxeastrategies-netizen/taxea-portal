@@ -366,7 +366,7 @@ export default function LectorIngresos() {
         throw new Error(result?.error || 'No se pudo crear la factura');
       }
       setReviewing(null);
-      setToast({ type: 'success', message: 'Factura guardada como pendiente de revisión contable.' });
+      setToast({ type: 'success', message: 'Documento OCR guardado. Pendiente de validación fiscal del asesor; aún no está emitido ni contabilizado.' });
       setTimeout(() => setToast(null), 6000);
       loadDocs();
     } catch (err) {
