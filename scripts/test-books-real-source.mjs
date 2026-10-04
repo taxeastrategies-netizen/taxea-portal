@@ -32,7 +32,7 @@ const base44 = { functions: { async invoke(name, payload) {
   assert.equal(name, 'accountingOperations');
   assert.equal(payload.companyId, 'company-a');
   calls.push(payload.action);
-  if (payload.action === 'reports') return { data: { success: true, report: { accounts } } };
+  if (payload.action === 'reports') return { data: { success: true, report: { accounts, includedEntries: 1, excludedEntries: 0 } } };
   if (payload.action === 'journal') return { data: { success: true, journal: { total: 1, entries: [entryRow] } } };
   throw new Error('Unexpected action');
 } } };
