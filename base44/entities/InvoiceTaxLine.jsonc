@@ -56,6 +56,15 @@
       ],
       "description": "Clasificaci\u00f3n anual del IVA soportado para los apartados de deducciones del modelo 390. Si falta, el motor propone una categor\u00eda y emite una recomendaci\u00f3n revisable."
     },
+    "deductionUse": {
+      "type": "string",
+      "enum": [
+        "exclusive_right",
+        "exclusive_no_right",
+        "shared"
+      ],
+      "description": "Destino del gasto bajo prorrata especial: exclusivo con derecho, exclusivo sin derecho o de uso com\u00fan."
+    },
     "deductionYear": {
       "type": "number",
       "description": "Ejercicio en el que se ejerce el derecho a deducir, que puede diferir del devengo de la factura."
