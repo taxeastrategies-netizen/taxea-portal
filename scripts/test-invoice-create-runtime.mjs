@@ -44,9 +44,10 @@ const records = {
     { id: 'company-b', nif_cif: 'B87654321', owner_email: 'owner@b.test', usuarios_autorizados: [] },
   ],
   Invoice: [],
+  InvoiceTaxLine: [],
   InvoiceTimelineEvent: [],
 };
-const counters = { Invoice: 0, InvoiceTimelineEvent: 0, accountingEntries: 0 };
+const counters = { Invoice: 0, InvoiceTaxLine: 0, InvoiceTimelineEvent: 0, accountingEntries: 0 };
 const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row?.[key] === value);
 const entity = name => ({
   async get(id) { return records[name]?.find(item => item.id === id) || null; },
@@ -66,7 +67,27 @@ const entity = name => ({
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
 let currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
-const testClient = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
+let fiscalBlocked = false;
+const testClient = {
+  auth: { me: async () => currentUser }, asServiceRole: { entities },
+  functions: { async invoke(name, body) {
+    assert.equal(name, 'fiscalOperations');
+    assert.equal(body.requireValidatedProfile, true);
+    if (fiscalBlocked) return { data: { evaluation: { status: 'blocked', reasons: ['Perfil pendiente de asesor.'] } } };
+    const taxAmount = Math.round(body.base * body.taxRate) / 100;
+    const withholdingAmount = Math.round(body.base * body.withholdingRate) / 100;
+    return { data: { evaluation: {
+      status: 'ready', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed',
+      activityId: 'activity-a', ruleSetVersion: 'synthetic-v1',
+      base: body.base, taxRate: body.taxRate, taxAmount,
+      withholdingRate: body.withholdingRate, withholdingAmount,
+      total: body.base + taxAmount - withholdingAmount,
+      deductibleTax: body.direction === 'gasto' ? taxAmount : 0,
+      nonDeductibleTax: 0, deductiblePercent: 100,
+      exemptionKey: '', legalBasis: '', accounting: { reverseCharge: false },
+    } } };
+  } },
+};
 let handler;
 const context = vm.createContext({
   console,
@@ -125,6 +146,9 @@ const created = await invoke({ action: 'create_invoice', company_id: 'company-a'
 assert.equal(created.response.status, 200);
 assert.equal(created.payload.ok, true);
 assert.equal(records.Invoice.length, 1);
+assert.equal(records.InvoiceTaxLine.length, 1);
+assert.equal(records.InvoiceTaxLine[0].regime, 'general');
+assert.equal(records.Invoice[0].fiscal_activity_id, 'activity-a');
 assert.equal(counters.accountingEntries, 1);
 assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
 assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
@@ -169,6 +193,12 @@ const invalidTotal = await invoke({
   invoice: { ...validInvoice, numero_factura: 'F-2026-002', total_factura: 120 },
 });
 assert.equal(invalidTotal.response.status, 400);
+
+fiscalBlocked = true;
+const unvalidated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'unvalidated', invoice: { ...validInvoice, numero_factura: 'F-2026-004' } });
+assert.equal(unvalidated.response.status, 422);
+assert.equal(records.Invoice.length, 1);
+fiscalBlocked = false;
 
 currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
