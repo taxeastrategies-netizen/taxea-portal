@@ -283,8 +283,10 @@ Deno.serve(async (req) => {
     const svc = base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
-    authorize(user, companyId, company);
     const action = clean(body.action || 'bundle');
+    const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
+      && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
+    if (!internalServiceEvaluation) authorize(user, companyId, company);
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
