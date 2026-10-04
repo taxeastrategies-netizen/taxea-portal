@@ -31,6 +31,7 @@ export default function LibroRegistros() {
   const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [lastSnapshot, setLastSnapshot] = useState(null);
 
   const currentYear = new Date().getFullYear();
@@ -88,6 +89,8 @@ export default function LibroRegistros() {
 
   const handleExport = async () => {
     setExporting(true);
+    setExportError('');
+    try {
     const hasBaseline = !!lastSnapshot;
     const newInvoiceIds = hasBaseline ? new Set([
       ...activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
@@ -95,7 +98,7 @@ export default function LibroRegistros() {
     ]) : new Set();
     const newExpenseIds = hasBaseline ? new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
     await exportarLibros({
-      invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
+      invoices: activeInvoices, expenses: activeExpenses, companyId: company?.id, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
       newInvoiceIds, newExpenseIds,
       lastExportDate: lastSnapshot?.exportedAt,
@@ -123,7 +126,11 @@ export default function LibroRegistros() {
       });
       setLastSnapshot({ exportedAt, emittedInvoiceIds: emittedIds, receivedInvoiceIds: receivedIds, expenseIds: expIds });
     } catch (e) { /* silent */ }
-    setExporting(false);
+    } catch (error) {
+      setExportError(error?.message || 'No se pudo exportar el Diario real. No se ha marcado una descarga correcta.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleExportPDF = async () => {
@@ -184,6 +191,7 @@ export default function LibroRegistros() {
         </div>
       </PageHeader>
 
+      {exportError && <p role="alert" className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError}</p>}
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5 overflow-x-auto">
         {TABS.map(t => (
