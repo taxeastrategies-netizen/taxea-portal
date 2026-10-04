@@ -86,6 +86,7 @@ Deno.serve(async (req) => {
 
     return Response.json({
       invoices: reconciled.invoices,
+      fiscal_pending_invoices: fiscalPendingInvoices,
       expenses: reconciled.expenses,
       source_truth: {
         ...reconciled.sourceTruth,
