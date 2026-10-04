@@ -309,12 +309,12 @@ Deno.serve(async (req) => {
 
     const regimesRequiringSpecialEngine = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
     if (regimesRequiringSpecialEngine.has(regime) || deductionRight === 'sector_diferenciado') {
-      status = 'review_required';
+      if (status === 'ready_to_post') status = 'review_required';
       reviewReasons.push('No confirmar asiento ni liquidación ordinarios: este régimen requiere un circuito fiscal específico.');
       confidence = Math.min(confidence, 50);
     }
     if (deductionRight === 'prorrata_especial') {
-      status = 'review_required';
+      if (status === 'ready_to_post') status = 'review_required';
       reviewReasons.push('Clasificar destino exclusivo o común del gasto en la revisión fiscal de la factura.');
       confidence = Math.min(confidence, 50);
     }
