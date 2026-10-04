@@ -654,7 +654,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'create_public_link') {
-      if (invoice.fiscal_review_status === 'pendiente_revision' || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+      if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
         return Response.json({ error: 'La factura requiere validación fiscal antes de publicar el enlace.' }, { status: 409 });
       }
       if (invoice.anulada) {
