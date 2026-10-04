@@ -153,19 +153,30 @@ function recommendedObligations(profile: any, activities: any[]) {
   const igic = active.filter(item => item.indirectTax === 'igic');
   const regimes = new Set(active.map(item => item.indirectTaxRegime));
   if (iva.length) {
-    if (regimes.has('grupo_entidades')) { add('322', 'Regimen especial de grupo de entidades IVA'); add('353', 'Regimen especial de grupo de entidades IVA'); }
-    else if (regimes.has('oss_union') || regimes.has('oss_exterior_union') || regimes.has('ioss_importacion')) add('369', 'Ventanilla unica OSS/IOSS');
-    else if (!iva.every(item => ['recargo_equivalencia', 'agricultura_ganaderia_pesca', 'exenta_limitada', 'no_sujeta'].includes(item.indirectTaxRegime))) add('303', 'Actividad en territorio IVA con liquidacion periodica');
+    const ivaRegimes = new Set(iva.map(item => item.indirectTaxRegime));
+    if (ivaRegimes.has('grupo_entidades')) {
+      add('322', 'Autoliquidación individual mensual del grupo IVA');
+      add('353', 'Solo la entidad dominante presenta el agregado mensual del grupo IVA', 'review');
+    } else {
+      if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].some(code => ivaRegimes.has(code))) add('369', 'Operaciones de ventanilla única OSS/IOSS; no mezclar con el 303');
+      if (iva.some(item => !['recargo_equivalencia', 'agricultura_ganaderia_pesca', 'exenta_limitada', 'no_sujeta', 'oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(item.indirectTaxRegime))) add('303', 'Operaciones nacionales liquidables; las OSS/IOSS mantienen su 369 separado');
+    }
+    if (['recargo_equivalencia', 'agricultura_ganaderia_pesca'].some(code => ivaRegimes.has(code))) add('309', 'Supuestos ocasionales de autoliquidación; revisar inversión del sujeto pasivo o adquisiciones intracomunitarias', 'review');
     add('390', 'Resumen anual IVA; confirmar exoneraciones aplicables', 'review');
   }
   if (igic.length) {
-    if (regimes.has('grupo_entidades')) { add('418', 'Grupo de entidades IGIC'); add('419', 'Grupo de entidades IGIC'); }
-    else if (regimes.has('simplificado')) add('421', 'Regimen simplificado IGIC');
-    else if (!igic.every(item => item.indirectTaxRegime === 'pequeno_empresario_igic')) add(profile?.usesSII ? '417' : '420', profile?.usesSII ? 'IGIC con SII' : 'Regimen general o especial liquidable IGIC');
-    if (regimes.has('agricultura_ganaderia_pesca')) add('422', 'Reintegro de compensaciones cuando proceda', 'review');
-    if (regimes.has('comerciante_minorista_igic')) add('424', 'Operaciones/importaciones de comerciante minorista cuando proceda', 'review');
-    add('425', regimes.has('pequeno_empresario_igic') ? 'REPEP: declaracion anual de volumen de operaciones, sin 420 periodico' : 'Resumen anual IGIC');
-    if (regimes.has('pequeno_empresario_igic')) add('412', 'Solo si existe devengo ocasional, por ejemplo inversion del sujeto pasivo', 'review');
+    const igicRegimes = new Set(igic.map(item => item.indirectTaxRegime));
+    if (igicRegimes.has('grupo_entidades')) {
+      add('418', 'Autoliquidación individual mensual del grupo IGIC');
+      add('419', 'Agregado del grupo IGIC, si la entidad es dominante', 'review');
+    } else {
+      if (igicRegimes.has('simplificado')) add('421', 'Actividad en régimen simplificado IGIC');
+      if (igic.some(item => !['simplificado', 'pequeno_empresario_igic', 'agricultura_ganaderia_pesca', 'comerciante_minorista_igic'].includes(item.indirectTaxRegime))) add(profile?.usesSII ? '417' : '420', profile?.usesSII ? 'IGIC con SII' : 'Actividad IGIC liquidable fuera de los regímenes especiales separados');
+    }
+    if (igicRegimes.has('agricultura_ganaderia_pesca')) add('422', 'Reintegro de compensaciones cuando proceda', 'review');
+    if (igicRegimes.has('comerciante_minorista_igic')) add('424', 'Operaciones/importaciones de comerciante minorista cuando proceda', 'review');
+    add('425', igicRegimes.has('pequeno_empresario_igic') ? 'REPEP: declaración anual de volumen de operaciones, sin 420 por esa actividad' : 'Resumen anual IGIC');
+    if (igicRegimes.has('pequeno_empresario_igic')) add('412', 'Solo si existe devengo ocasional, por ejemplo inversión del sujeto pasivo', 'review');
   }
   if (active.some(item => ['intra_eu_supply', 'intra_eu_acquisition'].includes(item.incomeDefaultTreatment) || item.hasIntraCommunityOperations)) add('349', 'Operaciones intracomunitarias');
   if (profile?.subjectToIRPF) {
