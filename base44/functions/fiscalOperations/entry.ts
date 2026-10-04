@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
+import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
@@ -267,6 +268,17 @@ function evaluate(profile: any, activities: any[], body: any) {
     reasons.push(`Prorrata especial: destino ${use}; deducción propuesta ${deductiblePercent}%, sujeta a revisión del asesor.`);
   }
   if (SPECIAL_POSTING_PENDING.has(regime)) { reviewRequired = true; alerts.push('Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'); }
+  let specialPreview = null;
+  let specialPreviewError = '';
+  if (body.specialInputs && typeof body.specialInputs === 'object') {
+    try {
+      specialPreview = calculateSpecialRegimePreview({ ...body.specialInputs, regime, direction, taxKind, taxRate, base, operationDate });
+    } catch (error) {
+      specialPreviewError = error?.message || 'No se pudo calcular la propuesta especial.';
+      reviewRequired = true;
+      alerts.push(specialPreviewError);
+    }
+  }
   const deductibleTax = direction === 'gasto' ? money(taxAmount * deductiblePercent / 100) : 0;
   const nonDeductibleTax = direction === 'gasto' ? money(taxAmount - deductibleTax) : 0;
 
@@ -304,7 +316,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     deductionCategory: clean(body.deductionCategory), deductionUse: clean(body.deductionUse),
     base, taxRate, taxAmount, deductiblePercent, deductibleTax, nonDeductibleTax,
     withholdingRate, withholdingAmount, total: money(base + taxAmount - withholdingAmount),
-    manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, bookImpact, modelImpact: [...new Set(modelImpact)],
+    manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, specialPreview, specialPreviewError, bookImpact, modelImpact: [...new Set(modelImpact)],
     accounting: {
       inputTaxAccount: taxKind === 'igic' ? '47270000' : '47200000', outputTaxAccount: taxKind === 'igic' ? '47770000' : '47700000',
       nonDeductibleTaxToExpense: nonDeductibleTax,
