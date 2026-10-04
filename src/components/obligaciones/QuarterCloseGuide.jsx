@@ -28,6 +28,8 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
   const modelItems = useMemo(() => (bundle?.items || []).filter(row => Number(row.fiscalYear) === Number(fiscalYear) && (row.period === 'T' + quarter || row.period === String(quarter) + 'T' || row.period === '0' + quarter + 'T' || row.period === String(quarter))), [bundle, fiscalYear, quarter]);
   const invoices = useMemo(() => extra?.invoices?.filter(row => !row.anulada && Number(String(row.fecha_emision || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_emision) === quarter) || [], [extra, fiscalYear, quarter]);
   const accountingExceptions = invoices.filter(row => row.estado_contable !== 'contabilizada' || !row.linked_journal_entry_id);
+  const invoicesKnown = Array.isArray(extra?.invoices);
+  const bankKnown = Boolean(extra?.bank?.accounts?.some(row => row.estado_conexion === 'conectado' && row.origen_datos === 'open_banking'));
   const transactions = extra?.bank?.transactions || [];
   const bankExceptions = transactions.filter(row => !row.es_demo && row.estado_proveedor !== 'pending' && Number(String(row.fecha_operacion || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_operacion) === quarter && ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(row.estado_conciliacion));
   const profileValid = bundle?.profile?.profileStatus === 'validado_asesor';
@@ -36,8 +38,8 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
   const checks = [
     { name: 'Perfil y obligaciones', detail: profileValid ? 'Perfil fiscal validado por asesor' : 'Confirmar territorio, actividad y regímenes', status: profileValid ? 'ready' : 'review', to: '/tax-accounting/contabilidad' },
     { name: 'Documentación', detail: unlinked ? unlinked + ' documento(s) fiscal(es) sin vincular' : 'Documentos fiscales vinculados o sin incidencias conocidas', status: unlinked ? 'review' : 'ready', to: '/tax-accounting/obligaciones' },
-    { name: 'Facturas y asientos', detail: extra?.invoices === null ? 'No se pudieron consultar facturas' : accountingExceptions.length + ' de ' + invoices.length + ' factura(s) requieren revisión contable', status: extra?.invoices === null ? 'unknown' : accountingExceptions.length ? 'review' : 'ready', to: '/tax-accounting/contabilidad' },
-    { name: 'Banco y conciliación', detail: !extra?.bank ? 'Sin lectura bancaria verificable' : bankExceptions.length + ' movimiento(s) pendientes en el trimestre', status: !extra?.bank ? 'unknown' : bankExceptions.length ? 'review' : 'ready', to: '/finance/treasury' },
+    { name: 'Facturas y asientos', detail: !invoicesKnown ? 'No se pudieron consultar facturas' : accountingExceptions.length + ' de ' + invoices.length + ' factura(s) requieren revisión contable', status: !invoicesKnown ? 'unknown' : accountingExceptions.length ? 'review' : 'ready', to: '/tax-accounting/contabilidad' },
+    { name: 'Banco y conciliación', detail: !bankKnown ? 'Sin banco conectado y verificable' : bankExceptions.length + ' movimiento(s) pendientes en el trimestre', status: !bankKnown ? 'unknown' : bankExceptions.length ? 'review' : 'ready', to: '/finance/treasury' },
     { name: 'Modelos del periodo', detail: modelItems.length ? modelPending.length + ' de ' + modelItems.length + ' modelo(s) sin estado final' : 'Ningún modelo trimestral detectado: comprobar perfil y calendario', status: modelItems.length && !modelPending.length ? 'ready' : 'review', to: '/tax-accounting/impuestos' },
   ];
   const ready = checks.every(row => row.status === 'ready');
