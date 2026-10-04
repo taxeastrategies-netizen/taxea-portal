@@ -537,12 +537,31 @@ function deductionDecision(line: any, data: any, selectedBounds: any, model: '30
   return { ...basic, treatment: 'pendiente_periodo_futuro', include: false, targetYear: selected.year, targetPeriod: selected.period, future: true };
 }
 
+// Estas líneas no pueden liquidarse con las casillas ordinarias del 303/420/417.
+// Se conservan como incidencia trazable hasta tener su modelo y libro específicos.
+const NON_ORDINARY_INDIRECT_REGIMES = new Set([
+  'rebu', 'agencias_viajes', 'recargo_equivalencia', 'agricola_ganadera',
+  'agricultura_ganaderia_pesca', 'oss_union', 'oss_exterior_union',
+  'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic',
+  'oro_inversion', 'mixto',
+]);
+
 function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: boolean, modelOverride?: '303'|'420'|'417') {
   const candidates = data.taxLines.filter((line: any) => line.taxKind === kind);
   const model: '303'|'420'|'417' = modelOverride || (kind === 'iva' ? '303' : '420');
-  const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [];
+  const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
   for (const line of candidates) {
-    if (clean(line.regime) === 'criterio_caja') {
+    const regime = clean(line.regime || line.invoice?.fiscal_regime);
+    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime)) {
+      const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
+      if (operationDate >= b.start && operationDate <= b.end) {
+        excludedSpecial.push({ sourceId: line.sourceId, invoiceId: line.invoice?.id,
+          invoiceNumber: line.invoice?.numero_factura, regime, operationDate,
+          reason: `El régimen ${regime} exige circuito/modelo específico; no se suma al ${model} ordinario.` });
+      }
+      continue;
+    }
+    if (regime === 'criterio_caja') {
       const cash = cashTaxLineForPeriod(line, data, b);
       if (cash.line) lines.push(cash.line);
       else if (cash.review) review.push(cash.review);
@@ -572,7 +591,7 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
     } else if (decision.review) review.push(decision);
     else if (!decision.alreadyFiled && (decision.future || periodOrdinal(Number(decision.targetYear || 0), clean(decision.targetPeriod)) > periodOrdinal(Number(data.year), clean(data.period)))) deferred.push(decision);
   }
-  return { lines, carry, review, deferred };
+  return { lines, carry, review, deferred, excludedSpecial };
 }
 
 function previous130FromFilings(data: any) {
@@ -728,7 +747,7 @@ function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[]
       quota: money(invoice.cuota_iva),
       deductibleQuota: money(invoice.deductible_tax_amount ?? invoice.cuota_iva),
       nonDeductibleQuota: money(invoice.non_deductible_tax_amount),
-      regime: clean(invoice.fiscal_treatment || 'general'),
+      regime: clean(invoice.fiscal_regime || invoice.indirect_tax_regime || 'general'),
       operationType: treatment,
       exemptionKey: clean(invoice.fiscal_exemption_key),
       legalBasis: clean(invoice.fiscal_legal_basis),
@@ -1304,6 +1323,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   const simplifiedTaggedLines = model === '303' ? selection.lines.filter((line: any) => clean(line.regime) === 'simplificado') : [];
   const lines = model === '303' ? selection.lines.filter((line: any) => clean(line.regime) !== 'simplificado') : selection.lines;
   const fields: any[] = [];
+  if (selection.excludedSpecial.length) data.blockers.push(`${selection.excludedSpecial.length} operación(es) de régimen especial se han excluido del ${model} ordinario. Revisa cada factura y su modelo propio antes de exportar; no se han perdido los documentos.`);
   if (simplifiedTaggedLines.length) data.warnings.push(`${simplifiedTaggedLines.length} línea(s) marcadas como régimen simplificado no se suman al régimen general; su liquidación procede de módulos y de la página 2.`);
   const rates = new Map<number, any>();
   const categorizedOutputRates = new Map<string, any>();
