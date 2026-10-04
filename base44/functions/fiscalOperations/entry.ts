@@ -422,6 +422,15 @@ Deno.serve(async (req) => {
       if ((profiles || []).length !== 1 || profile?.profileStatus !== 'validado_asesor') return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
+      const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
+      if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1' && selectedActivity && body.manualOverride !== true) {
+        const defaultOperation = selectedActivity[invoice.tipo === 'recibida' ? 'expenseDefaultTreatment' : 'incomeDefaultTreatment'] || 'subject_taxed';
+        if ((body.taxKind && body.taxKind !== selectedActivity.indirectTax)
+          || (body.regime && body.regime !== selectedActivity.indirectTaxRegime)
+          || (body.operationType && body.operationType !== defaultOperation)) {
+          return Response.json({ error: 'La clasificación difiere de la actividad validada. Marca modificación manual e indica su motivo.' }, { status: 422 });
+        }
+      }
       const proposedEvaluation = evaluate(profile, activities, { ...body,
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
