@@ -399,6 +399,44 @@ Deno.serve(async (req) => {
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
       const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
+      let fiscalEvaluation;
+      try {
+        const result = await base44.functions.invoke('fiscalOperations', {
+          action: 'evaluate', companyId, requireValidatedProfile: true, requireExactActivity: true,
+          activityId: payload.fiscal_activity_id || undefined,
+          direction: payload.tipo === 'recibida' ? 'gasto' : 'ingreso',
+          operationDate: payload.fecha_operacion || payload.fecha_emision,
+          base: payload.base_imponible, taxRate: payload.tipo_iva, taxAmount: payload.cuota_iva,
+          withholdingRate: payload.retencion_irpf,
+          counterpartyIsWithholdingAgent: payload.retencion_irpf > 0,
+        });
+        fiscalEvaluation = (result?.data || result)?.evaluation;
+      } catch (error) {
+        return Response.json({ error: error?.response?.data?.error || 'No se pudo verificar el encuadramiento fiscal; no se ha creado la factura.' }, { status: 503 });
+      }
+      if (!fiscalEvaluation || fiscalEvaluation.status === 'blocked') return Response.json({ error: fiscalEvaluation?.reasons?.join(' ') || 'Configura y valida el perfil fiscal antes de crear la factura.' }, { status: 422 });
+      if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
+        || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) {
+        return Response.json({ error: 'Esta operación requiere revisión fiscal y contable del asesor antes de emitir o contabilizar; el régimen especial se implementará en la siguiente fase.' }, { status: 422 });
+      }
+      if (fiscalEvaluation.operationType === 'exempt_limited' && (!fiscalEvaluation.exemptionKey || !fiscalEvaluation.legalBasis)) {
+        return Response.json({ error: 'La operación exenta necesita clave de exención y fundamento legal validados por el asesor.' }, { status: 422 });
+      }
+      if (Math.abs(payload.tipo_iva - fiscalEvaluation.taxRate) > 0.0001
+        || Math.abs(payload.cuota_iva - fiscalEvaluation.taxAmount) > 0.02
+        || Math.abs(payload.importe_retencion - fiscalEvaluation.withholdingAmount) > 0.02
+        || Math.abs(payload.total_factura - fiscalEvaluation.total) > 0.02) {
+        return Response.json({ error: `Los importes no coinciden con el perfil fiscal validado. Tipo ${fiscalEvaluation.taxRate} %, cuota ${fiscalEvaluation.taxAmount.toFixed(2)} €, retención ${fiscalEvaluation.withholdingAmount.toFixed(2)} € y total ${fiscalEvaluation.total.toFixed(2)} €. Revisa la factura antes de guardarla.` }, { status: 422 });
+      }
+      Object.assign(payload, {
+        indirect_tax_kind: fiscalEvaluation.taxKind, fiscal_treatment: fiscalEvaluation.operationType,
+        fiscal_regime: fiscalEvaluation.regime, fiscal_activity_id: fiscalEvaluation.activityId,
+        fiscal_rule_set_version: fiscalEvaluation.ruleSetVersion, fiscal_review_status: 'validado',
+        fiscal_reviewed_by: user.email, fiscal_exemption_key: fiscalEvaluation.exemptionKey,
+        fiscal_legal_basis: fiscalEvaluation.legalBasis,
+        deductible_tax_amount: fiscalEvaluation.deductibleTax,
+        non_deductible_tax_amount: fiscalEvaluation.nonDeductibleTax,
+      });
       let qrUrl = '';
       if (payload.tipo === 'emitida') {
         try {
@@ -429,12 +467,31 @@ Deno.serve(async (req) => {
           return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
         }
         createdInvoice = await base44.asServiceRole.entities.Invoice.create({
-          ...payload,
+          ...payload, fiscal_reviewed_at: new Date().toISOString(),
           ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
           creation_idempotency_key: idempotencyKey,
           source_hash: sourceHash,
         });
+        try {
+          await base44.asServiceRole.entities.InvoiceTaxLine.create({
+            companyId, invoiceId: createdInvoice.id, lineNumber: 1,
+            operationDate: payload.fecha_operacion, receiptDate: payload.tipo === 'recibida' ? payload.fecha_recepcion : undefined,
+            taxKind: fiscalEvaluation.taxKind, regime: fiscalEvaluation.regime,
+            operationType: fiscalEvaluation.operationType, activityId: fiscalEvaluation.activityId,
+            exemptionKey: fiscalEvaluation.exemptionKey, legalBasis: fiscalEvaluation.legalBasis,
+            base: fiscalEvaluation.base, rate: fiscalEvaluation.taxRate, quota: fiscalEvaluation.taxAmount,
+            deductibleQuota: fiscalEvaluation.deductibleTax, nonDeductibleQuota: fiscalEvaluation.nonDeductibleTax,
+            deductiblePercent: fiscalEvaluation.deductiblePercent,
+            deductible: payload.tipo === 'recibida' && fiscalEvaluation.nonDeductibleTax === 0,
+            source: 'manual', reviewStatus: 'validado', reviewedAt: new Date().toISOString(),
+            reviewedBy: user.email, ruleSetVersion: fiscalEvaluation.ruleSetVersion, schemaVersion: SCHEMA_VERSION,
+          });
+        } catch (error) {
+          await base44.asServiceRole.entities.Invoice.update(createdInvoice.id, { estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion', accounting_migration_hold: true, accounting_migration_hold_reason: 'No se pudo guardar la clasificación fiscal de la factura nueva.' });
+          return Response.json({ error: 'La factura se conservó sin contabilizar porque falló el registro fiscal. Revisa la incidencia antes de reintentar.', invoice_id: createdInvoice.id }, { status: 503 });
+        }
       }
+      if (createdInvoice.accounting_migration_hold) return Response.json({ error: 'Esta factura está retenida para revisión fiscal y no se contabilizará automáticamente.', invoice_id: createdInvoice.id }, { status: 409 });
       let accounting = null;
       let accountingWarning = '';
       try {
