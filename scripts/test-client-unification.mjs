@@ -35,4 +35,4 @@ assert.ok(candidates[0]._reasons.includes('Número de factura en el banco'));
 assert.equal(suggestInvoiceMatches({ ...tx, importe: 40 }, [{ ...invoices[0], cliente_nombre: 'Acme SA' }])[0]._partial, true);
 assert.equal(suggestInvoiceMatches({ ...tx, importe: 300 }, [invoices[0]]).length, 0);
 assert.equal(suggestInvoiceMatches({ ...tx, tipo: 'salida' }, [invoices[0]]).length, 0);
-console.log('Taxea client-unification synthetic checks: 13 assertions OK');
+console.log('Taxea client-unification synthetic checks: 14 assertions OK');
