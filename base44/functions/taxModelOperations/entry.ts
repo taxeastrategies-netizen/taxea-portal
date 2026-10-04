@@ -551,13 +551,18 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
   const model: '303'|'420'|'417' = modelOverride || (kind === 'iva' ? '303' : '420');
   const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
   for (const line of candidates) {
-    const regime = clean(line.regime || line.invoice?.fiscal_regime);
-    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime) || clean(line.operationType) === 'special_margin' || (kind === 'igic' && regime === 'simplificado')) {
+    const lineRegime = clean(line.regime);
+    const invoiceRegime = clean(line.invoice?.fiscal_regime);
+    // Algunas líneas históricas guardaron el tipo de operación en regime. No se toma por un régimen validado.
+    const legacyTreatment = ['subject_taxed', 'subject_zero', 'exempt_limited', 'exempt_full', 'special_margin'].includes(lineRegime);
+    const regime = legacyTreatment ? invoiceRegime || 'general' : lineRegime || invoiceRegime;
+    const regimeConflict = !legacyTreatment && !!lineRegime && !!invoiceRegime && lineRegime !== invoiceRegime;
+    if (regimeConflict || NON_ORDINARY_INDIRECT_REGIMES.has(regime) || clean(line.operationType) === 'special_margin' || (kind === 'igic' && regime === 'simplificado')) {
       const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
       if (operationDate >= b.start && operationDate <= b.end) {
         excludedSpecial.push({ sourceId: line.sourceId, invoiceId: line.invoice?.id,
           invoiceNumber: line.invoice?.numero_factura, regime, operationDate,
-          reason: `El régimen ${regime} exige circuito/modelo específico; no se suma al ${model} ordinario.` });
+          reason: regimeConflict ? `La línea indica ${lineRegime} y la factura ${invoiceRegime}; revisión fiscal antes del ${model}.` : `El régimen ${regime} exige circuito/modelo específico; no se suma al ${model} ordinario.` });
       }
       continue;
     }
