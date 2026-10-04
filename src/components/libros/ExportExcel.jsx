@@ -306,13 +306,41 @@ function buildCajaBancos(entries) {
   return rows;
 }
 
+// Solo se exporta el diario confirmado que devuelve Contabilidad; nunca se simulan asientos.
+async function loadRealAccounting(companyId, year) {
+  if (!companyId) throw new Error('Falta la empresa para obtener el Diario y Mayor reales.');
+  const { base44 } = await import('@/api/base44Client');
+  const invoke = async body => {
+    const response = await base44.functions.invoke('accountingOperations', { companyId, year, ...body });
+    const data = response?.data || response;
+    if (!data?.success) throw new Error(data?.error || 'No se pudo consultar Contabilidad.');
+    return data;
+  };
+  const reports = await invoke({ action: 'reports', scope: 'confirmed' });
+  const accounts = reports.report?.accounts || [];
+  const entries = [];
+  let page = 1;
+  while (page <= 1000) {
+    const result = await invoke({ action: 'journal', status: 'confirmado', page, pageSize: 200 });
+    const journal = result.journal || {};
+    entries.push(...(journal.entries || []));
+    if (entries.length >= Number(journal.total || 0)) break;
+    if (!(journal.entries || []).length) throw new Error('El Diario devolvió una página vacía antes de completar el ejercicio.');
+    page++;
+  }
+  if (page > 1000) throw new Error('El Diario supera el límite de exportación seguro.');
+  if (entries.some(entry => entry.isBalanced === false)) throw new Error('Hay asientos confirmados descuadrados; revisa Contabilidad antes de exportar.');
+  return { entries, accounts };
+}
+
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
-export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate }) {
+export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, companyId, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate, onlyNew = false }) {
   // Filtrar facturas y gastos anulados — única fuente de datos activos
   const invoices = (rawInvoices || []).filter(i => !i.anulada);
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
+  const accounting = onlyNew ? { entries: [], accounts: [] } : await loadRealAccounting(companyId, year);
   return new Promise(resolve => {
     setTimeout(() => {
       const emitidas = invoices.filter(i => i.tipo === 'emitida');
@@ -333,11 +361,13 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
         { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: newEmitidaIdx },
         { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: newComprasIdx },
-        { name: '7. Libro Diario', rows: buildLibroDiario(invoices, expenses), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
-        { name: '8. Libro Mayor', rows: buildLibroMayor(invoices, expenses), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
+        ...(!onlyNew ? [
+          { name: '7. Libro Diario', rows: buildLibroDiario(accounting.entries), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
+          { name: '8. Libro Mayor', rows: buildLibroMayor(accounting.accounts), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
+        ] : []),
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
         { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
-        { name: '11. Caja y Bancos', rows: buildCajaBancos(invoices, expenses), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] },
+        ...(!onlyNew ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
       ];
 
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
