@@ -4,6 +4,7 @@ import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Plus, CheckCircle, Clock, AlertTriangle, MoreVertical } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
+import ActionCenter from '@/components/ActionCenter';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -160,6 +161,8 @@ export default function Tareas() {
           </Button>
         }
       />
+
+      <ActionCenter companyId={company?.id} tasks={tareas} isAdmin={isAdmin} />
 
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
