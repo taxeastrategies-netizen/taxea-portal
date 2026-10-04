@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
         cliente_pais: form.cliente_pais || extractedData?.pais_cliente || extractedData?.cliente_pais || '',
         concepto: form.concepto || '',
         base_imponible: parseFloat(form.base_imponible) || 0,
-        tipo_iva: parseFloat(form.tipo_iva) || 21,
+        tipo_iva: Number(form.tipo_iva ?? 0),
         cuota_iva: parseFloat(form.cuota_iva) || 0,
         retencion_irpf: parseFloat(form.retencion_irpf) || 0,
         importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
         proveedor_pais: form.pais_proveedor || extractedData?.pais_proveedor || extractedData?.proveedor_pais || '',
         concepto: form.concepto || '',
         base_imponible: parseFloat(form.base_imponible) || 0,
-        tipo_iva: parseFloat(form.tipo_impuesto) || 21,
+        tipo_iva: Number(form.tipo_impuesto ?? 0),
         cuota_iva: parseFloat(form.cuota_impuesto) || 0,
         retencion_irpf: parseFloat(form.retencion_irpf) || 0,
         importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
@@ -203,6 +203,15 @@ Deno.serve(async (req) => {
       };
     }
 
+    Object.assign(invoiceData, {
+      indirect_tax_kind: fiscalAssessment.taxKind, fiscal_treatment: fiscalAssessment.operationType,
+      fiscal_regime: fiscalAssessment.regime, fiscal_activity_id: fiscalAssessment.activityId,
+      fiscal_rule_set_version: fiscalAssessment.ruleSetVersion, fiscal_review_status: 'validado',
+      fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email,
+      fiscal_exemption_key: fiscalAssessment.exemptionKey, fiscal_legal_basis: fiscalAssessment.legalBasis,
+      deductible_tax_amount: fiscalAssessment.deductibleTax,
+      non_deductible_tax_amount: fiscalAssessment.nonDeductibleTax,
+    });
     invoiceData.ocr_document_id = docId;
     if (manualAccount) {
       invoiceData.revenue_expense_account_code = manualAccount.code;
@@ -218,16 +227,14 @@ Deno.serve(async (req) => {
 
     // 5. Create the Invoice with service role (bypasses RLS)
     console.log('[approveOcrDocument] Creating invoice for company:', doc.company_id, 'type:', invoiceType, 'fiscalStatus:', fiscalAssessment?.status);
-    if (fiscalAssessment) {
-      invoiceData.fiscalAssessment = JSON.stringify({
-        status: fiscalAssessment.status,
-        treatment: fiscalAssessment.proposedTreatment,
-        confidence: fiscalAssessment.confidence,
-        alerts: fiscalAssessment.alerts,
-        appliedRules: fiscalAssessment.appliedRules,
-        explanation: fiscalAssessment.explanation,
-      });
-    }
+    invoiceData.fiscalAssessment = JSON.stringify({
+      status: fiscalAssessment.status,
+      treatment: fiscalAssessment.operationType,
+      confidence: fiscalAssessment.confidence,
+      alerts: fiscalAssessment.alerts,
+      appliedRules: fiscalAssessment.reasons,
+      explanation: 'Evaluación del motor fiscal unificado, revisada al aprobar el OCR.',
+    });
     if (invoiceType === 'emitida') {
       try {
         const issuer = await base44.asServiceRole.entities.Company.get(doc.company_id);
@@ -246,6 +253,25 @@ Deno.serve(async (req) => {
     }
 
     console.log('[approveOcrDocument] Invoice created:', inv.id);
+    try {
+      await base44.asServiceRole.entities.InvoiceTaxLine.create({
+        companyId: doc.company_id, invoiceId: inv.id, lineNumber: 1,
+        operationDate: fechaEmision, receiptDate: invoiceType === 'recibida' ? fechaRecepcion : undefined,
+        taxKind: fiscalAssessment.taxKind, regime: fiscalAssessment.regime,
+        operationType: fiscalAssessment.operationType, activityId: fiscalAssessment.activityId,
+        exemptionKey: fiscalAssessment.exemptionKey, legalBasis: fiscalAssessment.legalBasis,
+        base: fiscalAssessment.base, rate: fiscalAssessment.taxRate, quota: fiscalAssessment.taxAmount,
+        deductibleQuota: fiscalAssessment.deductibleTax, nonDeductibleQuota: fiscalAssessment.nonDeductibleTax,
+        deductiblePercent: fiscalAssessment.deductiblePercent,
+        deductible: invoiceType === 'recibida' && fiscalAssessment.nonDeductibleTax === 0,
+        source: 'ocr', reviewStatus: 'validado', reviewedAt: new Date().toISOString(),
+        reviewedBy: user.email, ruleSetVersion: fiscalAssessment.ruleSetVersion, schemaVersion: SCHEMA_VERSION,
+      });
+    } catch (taxLineError) {
+      await base44.asServiceRole.entities.Invoice.update(inv.id, { estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion', accounting_migration_hold: true, accounting_migration_hold_reason: 'Falló el registro fiscal OCR.' });
+      await base44.asServiceRole.entities.OcrInvoiceDocument.update(docId, { status: 'review_required', linkedInvoiceId: inv.id, safeErrorMessage: 'Factura conservada sin contabilizar: falta su línea fiscal.' });
+      return Response.json({ error: 'La factura se conservó sin contabilizar; falta su línea fiscal y requiere revisión.', invoiceId: inv.id }, { status: 503 });
+    }
 
     await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
       action: 'sync_invoice',
