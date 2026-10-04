@@ -64,8 +64,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         deductionCategory: existingTaxLine?.deductionCategory || '',
         withholdingRate: Number(invoice.retencion_irpf || 0),
         counterpartyIsWithholdingAgent: Boolean(invoice.retencion_irpf || invoice.importe_retencion),
-        exemptionKey: invoice.exemption_key || '',
-        legalBasis: invoice.exemption_legal_basis || '',
+        exemptionKey: invoice.fiscal_exemption_key || invoice.exemption_key || '',
+        legalBasis: invoice.fiscal_legal_basis || invoice.exemption_legal_basis || '',
         manualOverride: false,
         manualOverrideReason: '',
       });
