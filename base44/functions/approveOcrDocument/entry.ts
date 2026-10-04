@@ -105,21 +105,20 @@ Deno.serve(async (req) => {
       console.error('[approveOcrDocument] Fiscal check failed:', fiscalError.message);
       return Response.json({ error: 'No se pudo verificar el encuadramiento fiscal. El documento OCR sigue pendiente y no se ha creado una factura.' }, { status: 503 });
     }
-    if (!fiscalAssessment || fiscalAssessment.status !== 'ready') {
-      return Response.json({ error: fiscalAssessment?.reasons?.join(' ') || 'Valida el perfil fiscal antes de aprobar el OCR.' }, { status: 422 });
-    }
-    if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
+    const pendingReview = !fiscalAssessment || fiscalAssessment.status !== 'ready'
+      || body.confirm_fiscal_review !== true || !['admin', 'super_admin', 'advisor', 'asesor'].includes(user.role);
+    if (!pendingReview && !['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
       || fiscalAssessment.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalAssessment.taxKind)) {
       return Response.json({ error: 'Régimen u operación especial pendiente de revisión del asesor; el documento OCR se conserva sin contabilizar.' }, { status: 422 });
     }
-    if (fiscalAssessment.operationType === 'exempt_limited' && (!fiscalAssessment.exemptionKey || !fiscalAssessment.legalBasis)) {
+    if (!pendingReview && fiscalAssessment.operationType === 'exempt_limited' && (!fiscalAssessment.exemptionKey || !fiscalAssessment.legalBasis)) {
       return Response.json({ error: 'Falta clave de exención o fundamento legal confirmado por el asesor.' }, { status: 422 });
     }
     const sourceTotal = Number(invoiceType === 'emitida' ? form.total_factura : form.total);
     if (!Number.isFinite(sourceTotal)
-      || Math.abs(sourceTotal - fiscalAssessment.total) > 0.02
-      || Math.abs(Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) - fiscalAssessment.taxRate) > 0.0001
-      || Math.abs(Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) - fiscalAssessment.taxAmount) > 0.02) {
+      || (!pendingReview && Math.abs(sourceTotal - fiscalAssessment.total) > 0.02)
+      || (!pendingReview && Math.abs(Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) - fiscalAssessment.taxRate) > 0.0001)
+      || (!pendingReview && Math.abs(Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) - fiscalAssessment.taxAmount) > 0.02)) {
       return Response.json({ error: 'Los importes OCR no coinciden con el perfil fiscal validado. Revisa base, tipo, cuota, retención y total antes de aprobar.' }, { status: 422 });
     }
 
@@ -200,7 +199,7 @@ Deno.serve(async (req) => {
       };
     }
 
-    Object.assign(invoiceData, {
+    if (!pendingReview) Object.assign(invoiceData, {
       indirect_tax_kind: fiscalAssessment.taxKind, fiscal_treatment: fiscalAssessment.operationType,
       fiscal_regime: fiscalAssessment.regime, fiscal_activity_id: fiscalAssessment.activityId,
       fiscal_rule_set_version: fiscalAssessment.ruleSetVersion, fiscal_review_status: 'validado',
@@ -216,6 +215,10 @@ Deno.serve(async (req) => {
     }
     invoiceData.accounting_review_status = 'pendiente_revision';
     invoiceData.accounting_schema_version = SCHEMA_VERSION;
+    if (pendingReview) Object.assign(invoiceData, {
+      fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
+      accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
+    });
 
     // Remove undefined keys
     Object.keys(invoiceData).forEach(k => {
@@ -225,14 +228,14 @@ Deno.serve(async (req) => {
     // 5. Create the Invoice with service role (bypasses RLS)
     console.log('[approveOcrDocument] Creating invoice for company:', doc.company_id, 'type:', invoiceType, 'fiscalStatus:', fiscalAssessment?.status);
     invoiceData.fiscalAssessment = JSON.stringify({
-      status: fiscalAssessment.status,
-      treatment: fiscalAssessment.operationType,
-      confidence: fiscalAssessment.confidence,
-      alerts: fiscalAssessment.alerts,
-      appliedRules: fiscalAssessment.reasons,
+      status: fiscalAssessment?.status || 'blocked',
+      treatment: fiscalAssessment?.operationType || '',
+      confidence: fiscalAssessment?.confidence || 0,
+      alerts: fiscalAssessment?.alerts || [],
+      appliedRules: fiscalAssessment?.reasons || [],
       explanation: 'Evaluación del motor fiscal unificado, revisada al aprobar el OCR.',
     });
-    if (invoiceType === 'emitida') {
+    if (!pendingReview && invoiceType === 'emitida') {
       try {
         const issuer = await base44.asServiceRole.entities.Company.get(doc.company_id);
         invoiceData.qr_url = buildAeatQrUrl(issuer, invoiceData);
@@ -250,6 +253,15 @@ Deno.serve(async (req) => {
     }
 
     console.log('[approveOcrDocument] Invoice created:', inv.id);
+    if (pendingReview) {
+      await base44.asServiceRole.entities.OcrInvoiceDocument.update(docId, {
+        status: 'review_required', linkedInvoiceId: inv.id,
+        safeErrorMessage: 'Extracción OCR conservada; pendiente de validación fiscal del asesor. Sin QR ni asiento.',
+        lastStatusChangedAt: new Date().toISOString(),
+      });
+      return Response.json({ success: true, review_required: true, invoiceId: inv.id,
+        message: 'Factura guardada para revisión fiscal, sin emitir ni contabilizar.' });
+    }
     try {
       await base44.asServiceRole.entities.InvoiceTaxLine.create({
         companyId: doc.company_id, invoiceId: inv.id, lineNumber: 1,
