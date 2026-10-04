@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { base44 } from '@/api/base44Client';
+import OpportunityWatchPanel from '@/components/OpportunityWatchPanel';
 import { MapPinned, Search, RefreshCw, ArrowUpRight, Sparkles, AlertCircle, SlidersHorizontal, Mail, ShieldCheck } from 'lucide-react';
 
 const GEOJSON_URL = 'https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson';
@@ -131,6 +132,12 @@ export default function Grants() {
   }, [grants, tab]);
   const latest = pages.find(row => row.page === page);
   const changeGeography = (nextCommunity, nextProvince = '') => { setCommunity(nextCommunity); setProvince(nextProvince); setPage(0); setPages([]); };
+  const applySavedSearch = saved => {
+    setCommunity(COMMUNITIES.find(row => row.code === saved.communityCode) || '');
+    setProvince(saved.province || ''); setApplicant(saved.applicant || 'all'); setTopic(saved.topic || 'all');
+    setFinality(saved.finality || ''); setAdministration(saved.administration || '');
+    setDraft(saved.query || ''); setQuery(saved.query || ''); setTab('open'); setPage(0); setPages([]);
+  };
   const chooseProvince = feature => {
     const item = COMMUNITIES.find(row => row.ine === feature.properties.cod_ccaa);
     if (item) changeGeography(item, feature.properties.name);
@@ -158,6 +165,7 @@ export default function Grants() {
         <p className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-400" />Fuente activa: BDNS oficial · actualización al consultar (caché máxima: 10 min){checkedAt ? ' · ' + new Date(checkedAt).toLocaleString('es-ES') : ''}</p>
       </div>
     </section>
+    <OpportunityWatchPanel kind="grant" criteria={{ communityCode: community?.code || '', communityName: community?.name || '', province, applicant, topic, finality, administration, query }} onApply={applySavedSearch} />
     <div className="grid gap-5 xl:grid-cols-[minmax(340px,0.95fr)_minmax(0,1.3fr)]">
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><MapPinned className="h-4 w-4 text-taxea-red" />Mapa de España</h2><span className="text-xs text-muted-foreground">Pulsa una provincia</span></div>
