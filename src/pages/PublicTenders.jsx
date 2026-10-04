@@ -104,6 +104,7 @@ export default function PublicTenders() {
   const partial = pages.some(item => item.partial);
   const fetchedAt = Object.values(pages.at(-1)?.fetchedAt || {}).filter(Boolean).sort()[0];
   const stale = pages.some(item => item.stale);
+  const uncached = pages.some(item => item.uncachedSources?.length);
   const chooseProvince = feature => {
     const value = COMMUNITIES.find(item => item.ine === feature.properties.cod_ccaa);
     if (value) selectCommunity(value, PROVINCES.find(item => item.ine === value.ine && normal(item.name).split('/').some(name => name === normal(feature.properties.name)))?.code || '');
@@ -121,7 +122,7 @@ export default function PublicTenders() {
         <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-cyan-200"><Sparkles className="h-3.5 w-3.5" /> Radar de contratación pública</span>
         <h1 className="mt-4 max-w-3xl font-jakarta text-3xl font-extrabold tracking-tight md:text-5xl">Licitaciones y<br/><span className="text-cyan-300">contratos públicos</span></h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300">Encuentra oportunidades reales de contratación en España. Filtra por territorio, CPV, tipo e importe, consulta el expediente y verifica sus pliegos en la fuente oficial.</p>
-        <div className="mt-6 flex flex-wrap items-center gap-3 text-[11px] text-slate-300"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-400" /> Datos abiertos oficiales PLACSP</span><span>Fuentes oficiales · copia temporal renovada cada 30 min</span>{fetchedAt && <span>Última actualización: {new Date(fetchedAt).toLocaleString('es-ES')}</span>}</div>
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-[11px] text-slate-300"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-400" /> Datos abiertos oficiales PLACSP</span><span>Fuentes oficiales · renovación programada cada 30 min</span>{fetchedAt && <span>Última actualización: {new Date(fetchedAt).toLocaleString('es-ES')}</span>}</div>
       </div>
     </section>
     <div className="grid gap-4 sm:grid-cols-3">
@@ -157,6 +158,7 @@ export default function PublicTenders() {
       {error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div>}
       {partial && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Una fuente oficial no respondió. La lista es parcial; vuelve a actualizar para completar la búsqueda.</div>}
       {stale && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Los datos de alguna fuente tienen más de 90 minutos. Comprueba plazo y estado en el expediente oficial antes de actuar.</div>}
+      {uncached && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Hay resultados oficiales, pero no se pudo actualizar la copia temporal de una fuente. La siguiente búsqueda puede tardar más.</div>}
       {loading && !rows.length && <p className="mt-6 text-sm text-muted-foreground">Cargando oportunidades recientes de las fuentes oficiales… La primera carga puede tardar mientras se prepara la copia temporal.</p>}
       {!loading && !error && !rows.length && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Sin coincidencias en las páginas examinadas. Cambia los filtros o sigue consultando páginas oficiales.</div>}
       <div className="mt-5 grid gap-4 lg:grid-cols-2">{rows.slice(0, show).map(row => <TenderCard key={row.id} row={row} />)}</div>
