@@ -69,7 +69,9 @@ Deno.serve(async (req) => {
       const date = dateFields.map(field => clean(row?.[field])).find(Boolean);
       return Number(String(date || '').slice(0, 4)) === requestedYear;
     };
-    const invs = (rawInvoices || []).filter(row => belongsToYear(row, ['fecha_emision', 'fecha_operacion', 'created_date']));
+    const yearInvoices = (rawInvoices || []).filter(row => belongsToYear(row, ['fecha_emision', 'fecha_operacion', 'created_date']));
+    const fiscalPendingInvoices = yearInvoices.filter(row => row.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1');
+    const invs = yearInvoices.filter(row => row.accounting_migration_hold_reason !== 'FISCAL_ADVISOR_REVIEW_PHASE1');
     const exps = (rawExpenses || []).filter(row => belongsToYear(row, ['fecha', 'created_date']));
     const reconciled = reconcileFinancialSources(invs, exps);
     const coreSummary = buildFinancialSummary(invs, exps);
@@ -108,6 +110,7 @@ Deno.serve(async (req) => {
         pagosPendientes: coreSummary.pagos_pendientes,
         facturasVencidas: facturasVencidas.length,
         facturasPendientesContabilizar: activeInvs.filter(i => i.estado_contable === 'pendiente').length,
+        facturasPendientesRevisionFiscal: fiscalPendingInvoices.length,
         numFacturasEmitidas: emitidas.length,
         numFacturasRecibidas: recibidas.length,
         numGastos: reconciled.expenses.filter(expense => !expense.anulada && expense.tipo !== 'ingreso').length,
