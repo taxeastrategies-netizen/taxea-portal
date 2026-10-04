@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
-      const phaseOnePending = invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1';
+      const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
       if (Math.abs(Number(invoice.base_imponible || 0) - evaluation.base) > 0.02) return Response.json({ error: 'La base de la propuesta no coincide con la factura. Corrige primero el documento origen.' }, { status: 422 });
       if (phaseOnePending && Number(invoice.importe_pagado || 0) > 0) return Response.json({ error: 'La factura pendiente de revisión no puede tener cobros o pagos antes de su validación.' }, { status: 409 });
       if (invoice.linked_journal_entry_id && (
