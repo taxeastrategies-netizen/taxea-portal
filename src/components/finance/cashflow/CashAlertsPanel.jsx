@@ -10,6 +10,7 @@ function fmt(n) {
 function buildAlerts(financials, obligations) {
   const { cashDisponible, cobrosPendientes, pagosPendientes, runway, vencidas, dso, bankKnown } = financials;
   const alerts = [];
+  if (!bankKnown) alerts.push({ id: 'unknown', severity: 'unknown', icon: AlertTriangle, title: 'Liquidez no verificable', desc: 'Conecta o revisa el banco para calcular alertas de caja con saldo real.' });
 
   if (runway !== null && runway < 3) {
     alerts.push({ id: 'runway', severity: 'critical', icon: Zap, title: 'Runway crítico',
@@ -42,7 +43,7 @@ function buildAlerts(financials, obligations) {
       desc: `${fmt(cobrosPendientes)} en cobros pendientes supera 2x tu cash actual. Evalúa riesgo de concentración.` });
   }
   if (alerts.length === 0) {
-    alerts.push(bankKnown ? { id: 'ok', severity: 'ok', icon: CheckCircle, title: 'Sin alertas de estas reglas', desc: 'El resultado depende de los datos bancarios y vencimientos disponibles; no es una certificación financiera.' } : { id: 'unknown', severity: 'unknown', icon: AlertTriangle, title: 'Liquidez no verificable', desc: 'Conecta o revisa el banco para calcular alertas de caja con saldo real.' });
+    alerts.push({ id: 'ok', severity: 'ok', icon: CheckCircle, title: 'Sin alertas de estas reglas', desc: 'El resultado depende de los datos bancarios y vencimientos disponibles; no es una certificación financiera.' });
   }
   return alerts;
 }
