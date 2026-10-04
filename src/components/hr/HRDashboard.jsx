@@ -82,7 +82,7 @@ export default function HRDashboard() {
         <p className="text-rose-100 text-sm mt-1">
           {employees.length > 0
             ? `${active} persona${active !== 1 ? 's' : ''} activa${active !== 1 ? 's' : ''} · ${remote} en remoto · ${onVacation} de vacaciones`
-            : 'Bienvenido al módulo People & HR de Taxea Business OS'}
+            : 'Bienvenido al módulo Recursos humanos y personas de Taxea Business OS'}
         </p>
       </div>
 
