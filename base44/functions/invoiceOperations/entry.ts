@@ -575,7 +575,65 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, invoice: saved });
     }
 
+    if (action === 'finalize_fiscal_review') {
+      if (!['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user))) {
+        return Response.json({ error: 'Solo el asesor o administrador puede finalizar la revisión fiscal.' }, { status: 403 });
+      }
+      if (invoice.anulada) return Response.json({ error: 'La factura está anulada.' }, { status: 409 });
+      if (invoice.fiscal_review_status !== 'validado' || !invoice.fiscal_reviewed_by) {
+        return Response.json({ error: 'Confirma primero la clasificación fiscal y sus importes.' }, { status: 409 });
+      }
+      const taxLines = await base44.asServiceRole.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+      const line = (taxLines || []).find(row => Number(row.lineNumber) === 1 && row.reviewStatus === 'validado');
+      if (!line || taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
+        || Math.abs(Number(line.quota || 0) - Number(invoice.cuota_iva || 0)) > 0.02
+        || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
+        return Response.json({ error: 'La línea fiscal o el total no cuadran con la factura. Revisa antes de contabilizar.' }, { status: 422 });
+      }
+      if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(line.regime)
+        || ['reverse_charge', 'intra_eu_acquisition'].includes(line.operationType)
+        || !['iva', 'igic'].includes(line.taxKind)) {
+        return Response.json({ error: 'Este tratamiento especial aún no permite asiento automático; requiere revisión contable específica.' }, { status: 422 });
+      }
+      let qrUrl = invoice.qr_url || '';
+      if (invoice.tipo === 'emitida' && !qrUrl) {
+        const company = await base44.asServiceRole.entities.Company.get(companyId);
+        try { qrUrl = buildAeatQrUrl(company, invoice); }
+        catch (error) { return Response.json({ error: error.message || 'No se pudo preparar el QR.' }, { status: 422 }); }
+      }
+      let approved = invoice;
+      if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+        approved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+          accounting_migration_hold: false, accounting_migration_hold_reason: '',
+          ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
+        });
+      }
+      try {
+        const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
+        const saved = await base44.asServiceRole.entities.Invoice.get(invoice.id);
+        if (saved.ocr_document_id) {
+          const doc = await base44.asServiceRole.entities.OcrInvoiceDocument.get(saved.ocr_document_id).catch(() => null);
+          if (doc && doc.company_id === companyId && doc.linkedInvoiceId === saved.id) {
+            await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
+              status: 'accounted', accountedAt: new Date().toISOString(), linkedJournalEntryId: posting.entry.id,
+              reviewedAt: new Date().toISOString(), reviewedByAdminId: user.id,
+            });
+          }
+        }
+        return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted) });
+      } catch (error) {
+        await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+          accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR',
+          estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion',
+        });
+        return Response.json({ error: `Clasificación validada, pero no se pudo contabilizar: ${error.message}`, invoice_id: invoice.id }, { status: 503 });
+      }
+    }
+
     if (action === 'create_public_link') {
+      if (invoice.fiscal_review_status === 'pendiente_revision' || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+        return Response.json({ error: 'La factura requiere validación fiscal antes de publicar el enlace.' }, { status: 409 });
+      }
       if (invoice.anulada) {
         return Response.json({ error: 'No se puede publicar una factura anulada.' }, { status: 409 });
       }
