@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
     const yearNum = parseInt(ejercicio);
 
     const facturasPeriodo = invoices.filter(f => {
-      if (f.anulada) return false;
+      if (f.anulada || f.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') return false;
       const anio = f.anio || (f.fecha_emision && new Date(f.fecha_emision).getFullYear());
       if (anio !== yearNum) return false;
       if (periodo === 'Anual') return true;
