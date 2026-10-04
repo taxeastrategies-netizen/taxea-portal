@@ -41,6 +41,7 @@ export default function Tareas() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [tareas, setTareas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [taskError, setTaskError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -60,12 +61,15 @@ export default function Tareas() {
 
   const load = async () => {
     setLoading(true);
+    setTaskError('');
     const requestedCompany = company.id;
     const query = { company_id: requestedCompany };
     if (!isAdmin) query.interna = false;
     try {
       const data = await base44.entities.Task.filter(query, '-created_date');
       if (activeCompanyRef.current === requestedCompany) setTareas(data || []);
+    } catch (error) {
+      if (activeCompanyRef.current === requestedCompany) setTaskError(error?.message || 'No se pudieron cargar las tareas.');
     } finally {
       if (activeCompanyRef.current === requestedCompany) setLoading(false);
     }
@@ -169,6 +173,7 @@ export default function Tareas() {
         }
       />
 
+      {taskError && <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Tareas no disponibles: {taskError}. Los totales de tareas pueden estar incompletos.</p>}
       <ActionCenter companyId={company?.id} tasks={tareas} isAdmin={isAdmin} />
 
       <div className="grid grid-cols-3 gap-4 mb-6">
