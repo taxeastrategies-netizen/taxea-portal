@@ -286,26 +286,23 @@ function buildResumenIRPF(invoices) {
   return rows;
 }
 
-// ─── Hoja 11: Caja y Bancos (placeholder) ───────────────────────────────────
-function buildCajaBancos(invoices, expenses) {
-  const header = ['Fecha','Concepto','Entidad','Tipo','Importe (€)','Saldo Acumulado (€)','Referencia','Trimestre'];
-  const rows = [header];
-  const movimientos = [
-    ...invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada').map(i => ({
-      fecha: i.fecha_emision || '', concepto: `Cobro: ${i.numero_factura || ''} — ${i.cliente_nombre || ''}`,
-      tipo: 'Cobro', importe: n(i.total_factura), ref: i.numero_factura || '', trimestre: i.trimestre || '',
-    })),
-    ...expenses.filter(e => e.tipo === 'gasto').map(e => ({
-      fecha: e.fecha || '', concepto: `Pago: ${e.concepto || ''} — ${e.proveedor_cliente || ''}`,
-      tipo: 'Pago', importe: -n(e.total), ref: '', trimestre: e.trimestre || '',
-    })),
-  ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-  let saldo = 0;
-  movimientos.forEach(m => {
-    saldo += m.importe;
-    rows.push([m.fecha, m.concepto, '', m.tipo, m.importe, saldo, m.ref, m.trimestre]);
-  });
+// ─── Hoja 11: movimientos de caja y bancos confirmados ───────────────────
+function buildCajaBancos(entries) {
+  const rows = [['Fecha','Concepto','Cuenta','Tipo','Importe (€)','Saldo Acumulado (€)','Referencia','Trimestre']];
+  const balances = new Map();
+  const movements = entries.flatMap(entry => (entry.lines || [])
+    .filter(line => /^57/.test(String(line.accountCode || line.subcuenta || '')))
+    .map(line => ({ entry, line })))
+    .sort((a, b) => String(a.entry.date || '').localeCompare(String(b.entry.date || '')) || String(a.entry.entryNumber || '').localeCompare(String(b.entry.entryNumber || '')));
+  for (const { entry, line } of movements) {
+    const code = String(line.accountCode || line.subcuenta);
+    const amount = n(line.debit ?? line.debeE) - n(line.credit ?? line.haberE);
+    const balance = Math.round(((balances.get(code) || 0) + amount) * 100) / 100;
+    balances.set(code, balance);
+    rows.push([entry.date || '', line.description || entry.description || '', code,
+      amount >= 0 ? 'Entrada' : 'Salida', amount, balance,
+      line.documentId || entry.documentId || '', quarter(entry.date)]);
+  }
   return rows;
 }
 
