@@ -511,6 +511,10 @@ Deno.serve(async (req) => {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
+      if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
+        proposedEvaluation.postingBlocked = true;
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La cuota de recargo de la factura se conserva separada, pero su asiento, libro y liquidación específicos aún no están habilitados.'];
+      }
       if (proposedEvaluation.postingBlocked) {
         if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
         return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
