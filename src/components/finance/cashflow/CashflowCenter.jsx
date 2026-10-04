@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
@@ -24,21 +24,24 @@ export default function CashflowCenter() {
   const [obligations, setObligations] = useState([]);
   const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
+  const supportRequestRef = useRef(0);
   const loading = financialLoading || supportLoading;
 
   const loadObligations = () => {
-    if (!companyId) { setSupportLoading(false); return; }
+    const requestId = ++supportRequestRef.current;
+    if (!companyId) { setObligations([]); setTreasuryEvents([]); setSupportLoading(false); return; }
     setSupportLoading(true);
     Promise.allSettled([
       base44.entities.TaxObligation.filter({ company_id: companyId }),
       base44.entities.TreasuryEvent.filter({ company_id: companyId }),
     ]).then(([obligationsResult, eventsResult]) => {
+      if (requestId !== supportRequestRef.current) return;
       setObligations(obligationsResult.status === 'fulfilled' ? obligationsResult.value || [] : []);
       setTreasuryEvents(eventsResult.status === 'fulfilled' ? eventsResult.value || [] : []);
-    }).finally(() => setSupportLoading(false));
+    }).finally(() => { if (requestId === supportRequestRef.current) setSupportLoading(false); });
   };
 
-  useEffect(() => { loadObligations(); }, [companyId]);
+  useEffect(() => { setObligations([]); setTreasuryEvents([]); loadObligations(); return () => { supportRequestRef.current++; }; }, [companyId]);
 
   const financials = useMemo(() => {
     const now = new Date();
