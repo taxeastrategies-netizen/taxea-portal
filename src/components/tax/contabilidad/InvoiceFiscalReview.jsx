@@ -101,7 +101,7 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
     try {
       const result = await invoke(payload(true));
       if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
-      if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+      if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
         const finalized = unwrap(await base44.functions.invoke('invoiceOperations', {
           action: 'finalize_fiscal_review', company_id: companyId, invoice_id: invoice.id,
         }));
