@@ -18,7 +18,7 @@ async function invoke(payload) {
   return result;
 }
 
-export default function InvoiceFiscalReview({ companyId, invoice }) {
+export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
