@@ -10,7 +10,7 @@ const labelFor = (kind, criteria) => {
 };
 
 export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
-  const { company, user } = useOutletContext() || {};
+  const { company } = useOutletContext() || {};
   const companyId = company?.id;
   const [watches, setWatches] = useState([]);
   const [results, setResults] = useState({});
@@ -34,7 +34,7 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
     if (watches.some(row => JSON.stringify(row.criteria || {}) === key)) { setError('Esta búsqueda ya está guardada.'); return; }
     setBusy('save'); setError('');
     try {
-      await base44.entities.OpportunityWatch.create({ company_id: companyId, kind, title: labelFor(kind, criteria), criteria, created_by: user?.email || '', enabled: true });
+      await base44.entities.OpportunityWatch.create({ company_id: companyId, kind, title: labelFor(kind, criteria), criteria, enabled: true });
       await load();
     } catch (caught) { setError(caught?.message || 'No se pudo guardar la búsqueda.'); }
     finally { setBusy(''); }
