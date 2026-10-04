@@ -83,11 +83,11 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
     ['Total cobrado / pendiente', totalIngresos],
     [],
     ['── GASTOS ──', ''],
-    ['Base imponible compras + gastos', totalBaseGastos],
+    ['Gasto estimado: bases más impuesto no deducible clasificado', totalBaseGastos],
     ['IVA/IGIC deducible clasificado (sin importes pendientes de revisión)', totalIvaSop],
     ['Total pagado / pendiente', totalGastos],
     [],
-    ['── P&L (SIN IMPUESTOS) ──', ''],
+    ['── RESULTADO ESTIMADO (NO SUSTITUYE PyG CONTABLE) ──', ''],
     ['Beneficio estimado (base)', beneficio],
     ['Margen sobre ingresos', margen],
     [],
@@ -119,7 +119,7 @@ function buildPnL(invoices, expenses, year) {
   const gastos = expenses.filter(e => e.tipo === 'gasto');
   const recibidas = invoices.filter(i => i.tipo === 'recibida');
 
-  const header = ['Mes', 'Ingresos Base (€)', 'Gastos Base (€)', 'Beneficio Estimado (€)', 'Margen %', 'IVA Repercutido (€)', 'IVA Soportado (€)', 'Resultado IVA (€)'];
+  const header = ['Mes', 'Ingresos Base (€)', 'Gastos estimados (€)', 'Beneficio Estimado (€)', 'Margen %', 'IVA/IGIC Repercutido (€)', 'IVA/IGIC Deducible clasificado (€)', 'Diferencia orientativa (€)'];
   const rows = [header];
 
   let totIng = 0, totGas = 0, totIvaR = 0, totIvaS = 0;
@@ -254,7 +254,7 @@ function buildLibroMayor(accounts) {
 
 // ─── Hoja 9: Resumen IVA/IGIC ────────────────────────────────────────────────
 function buildResumenIVA(invoices, expenses) {
-  const header = ['Trimestre','Periodo','Base Imponible Ventas (€)','IVA/IGIC Repercutido (€)','Base Imponible Compras (€)','IVA/IGIC Soportado (€)','Resultado a Liquidar (€)'];
+  const header = ['Trimestre','Periodo','Base Imponible Ventas (€)','IVA/IGIC Repercutido (€)','Base Imponible Compras (€)','IVA/IGIC Deducible clasificado (€)','Diferencia orientativa (€)'];
   const rows = [header];
   const periodos = { T1: 'Ene-Mar', T2: 'Abr-Jun', T3: 'Jul-Sep', T4: 'Oct-Dic' };
   let totRep = 0, totSop = 0, totBaseV = 0, totBaseC = 0;
@@ -276,7 +276,6 @@ function buildResumenIRPF(invoices) {
   const header = ['Trimestre','Periodo','Base Retenciones (€)','Tipo Retención %','IRPF Retenido (€)','Modelo Trimestral','Fecha Límite Presentación'];
   const rows = [header];
   const periodos = { T1: 'Ene-Mar', T2: 'Abr-Jun', T3: 'Jul-Sep', T4: 'Oct-Dic' };
-  const limites = { T1: '20/04', T2: '20/07', T3: '20/10', T4: '30/01' };
   ['T1','T2','T3','T4'].forEach(t => {
     const emit = invoices.filter(i => i.tipo === 'emitida' && i.trimestre === t && n(i.retencion_irpf) > 0);
     const base = emit.reduce((s, i) => s + n(i.base_imponible), 0);
