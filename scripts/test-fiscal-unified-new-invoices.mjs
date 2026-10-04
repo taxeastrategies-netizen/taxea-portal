@@ -152,7 +152,7 @@ const untracedOverride = await handler(new Request('https://taxea.test/functions
 assert.equal(untracedOverride.status, 422);
 assert.equal(writes, 0);
 const invalidActivityResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
-  method: 'POST', body: JSON.stringify({ action: 'save_activity', companyId: 'company-a', activity: { id: 'activity-a', indirectTax: 'igic', indirectTaxRegime: 'recargo_equivalencia' } }),
+  method: 'POST', body: JSON.stringify({ action: 'save_activity', companyId: 'company-a', activity: { id: 'activity-a', name: 'Actividad de prueba', activityType: 'empresarial', indirectTax: 'igic', indirectTaxRegime: 'recargo_equivalencia' } }),
 }));
 assert.equal(invalidActivityResponse.status, 422);
 assert.equal(writes, 0);
