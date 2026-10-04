@@ -112,6 +112,7 @@ const context = vm.createContext({
   __postBankReconciliation: async () => ({ entry: { id: 'unused' } }),
   __seedOperationalPgc: async () => ({ created: 0 }),
   __postInvoice: async (_svc, companyId, invoice) => {
+    if (failPostingOnce) { failPostingOnce = false; throw new Error('Fallo contable sintético'); }
     if (invoice.linked_journal_entry_id) return { alreadyPosted: true, entry: { id: invoice.linked_journal_entry_id } };
     counters.accountingEntries += 1;
     const entryRow = { id: `entry-${counters.accountingEntries}`, companyId, status: 'confirmado' };
