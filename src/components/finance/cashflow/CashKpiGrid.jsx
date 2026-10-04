@@ -55,10 +55,10 @@ export default function CashKpiGrid({ financials }) {
     cashDisponible, cobrosPendientes, pagosPendientes,
     workingCapital, burnRate, runway,
     totalIngresos, gastoTotal, beneficio,
-    dso, ingresosDelta
+    dso, ingresosDelta, bankKnown
   } = financials;
 
-  const liquidezNeta = cashDisponible - pagosPendientes;
+  const liquidezNeta = bankKnown ? cashDisponible - pagosPendientes : null;
   const runwayLabel = runway ? `${runway.toFixed(1)} meses runway` : null;
   const deltaLabel = ingresosDelta !== 0 ? `${ingresosDelta > 0 ? '+' : ''}${ingresosDelta.toFixed(1)}% vs período anterior` : null;
 
@@ -66,25 +66,25 @@ export default function CashKpiGrid({ financials }) {
     <div className="space-y-3">
       {/* Top row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <CashKpi label="Cash Disponible" value={cashDisponible} sub="Facturas cobradas"
-          trend={cashDisponible > 0 ? 'up' : 'neutral'} trendLabel={runwayLabel} color="emerald" delay={0} large />
+        <CashKpi label="Saldo bancario disponible" value={bankKnown ? cashDisponible : '—'} sub={bankKnown ? 'Bancos conectados · saldo observado' : 'Conecta el banco para verificarlo'}
+          trend={bankKnown && cashDisponible > 0 ? 'up' : 'neutral'} trendLabel={runwayLabel} color="emerald" delay={0} large />
         <CashKpi label="Cobros Pendientes" value={cobrosPendientes} sub="Sin cobrar" color="blue" delay={0.05} large />
         <CashKpi label="Pagos Pendientes" value={pagosPendientes} sub="Sin pagar" color="amber" delay={0.1} large />
-        <CashKpi label="Liquidez Neta" value={liquidezNeta} sub="Cash − compromisos"
-          trend={liquidezNeta >= 0 ? 'up' : 'down'}
-          trendLabel={liquidezNeta >= 0 ? 'Posición positiva' : 'Posición negativa'}
-          color={liquidezNeta >= 0 ? 'emerald' : 'red'} delay={0.15} large />
+        <CashKpi label="Saldo tras facturas por pagar" value={bankKnown ? liquidezNeta : '—'} sub="Saldo observado menos facturas pendientes; no incluye todos los compromisos"
+          trend={!bankKnown ? 'neutral' : liquidezNeta >= 0 ? 'up' : 'down'}
+          trendLabel={!bankKnown ? null : liquidezNeta >= 0 ? 'Posición provisional positiva' : 'Posición provisional negativa'}
+          color={!bankKnown || liquidezNeta >= 0 ? 'emerald' : 'red'} delay={0.15} large />
       </div>
       {/* Second row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <CashKpi label="Ingresos" value={totalIngresos}
+        <CashKpi label={bankKnown ? 'Entradas bancarias 30d' : 'Facturación 30d'} value={totalIngresos}
           trend={ingresosDelta > 0 ? 'up' : ingresosDelta < 0 ? 'down' : 'neutral'} trendLabel={deltaLabel} color="blue" delay={0.2} />
-        <CashKpi label="Gastos" value={gastoTotal} color="red" delay={0.22} />
-        <CashKpi label="Beneficio" value={beneficio} trend={beneficio >= 0 ? 'up' : 'down'} color={beneficio >= 0 ? 'emerald' : 'red'} delay={0.24} />
-        <CashKpi label="Burn Rate" value={burnRate} sub="/ mes" color="amber" delay={0.26} />
+        <CashKpi label={bankKnown ? 'Salidas bancarias 30d' : 'Gastos documentados 30d'} value={gastoTotal} color="red" delay={0.22} />
+        <CashKpi label={bankKnown ? 'Flujo neto 30d' : 'Diferencia documental 30d'} value={beneficio} trend={beneficio >= 0 ? 'up' : 'down'} color={beneficio >= 0 ? 'emerald' : 'red'} delay={0.24} />
+        <CashKpi label="Salidas observadas / 30d" value={bankKnown ? burnRate : '—'} sub="No equivale a burn rate contable" color="amber" delay={0.26} />
         <CashKpi label="DSO" value={`${Math.round(dso)} días`} sub="Cobro medio"
           color={dso > 45 ? 'red' : dso > 30 ? 'amber' : 'emerald'} delay={0.28} />
-        <CashKpi label="Capital Trabajo" value={workingCapital} trend={workingCapital >= 0 ? 'up' : 'down'}
+        <CashKpi label="Cobros menos pagos pendientes" value={workingCapital} trend={workingCapital >= 0 ? 'up' : 'down'}
           color={workingCapital >= 0 ? 'emerald' : 'red'} delay={0.3} />
       </div>
     </div>
