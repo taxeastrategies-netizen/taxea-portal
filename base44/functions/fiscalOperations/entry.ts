@@ -182,8 +182,14 @@ function recommendedObligations(profile: any, activities: any[]) {
 }
 
 function evaluate(profile: any, activities: any[], body: any) {
-  const activity = activities.find(item => item.id === body.activityId) || activities.find(item => item.active !== false) || null;
-  if (!profile || !activity) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Falta perfil fiscal o actividad economica validada.'], ruleSetVersion: RULESET };
+  const activeActivities = (activities || []).filter(item => item.active !== false);
+  const activity = body.activityId
+    ? activeActivities.find(item => item.id === body.activityId)
+    : activeActivities.length === 1 ? activeActivities[0] : null;
+  if (!profile || profile.profileStatus !== 'validado_asesor') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El perfil fiscal debe estar validado por el asesor antes de automatizar una factura nueva.'], ruleSetVersion: RULESET };
+  if (!activity) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: [activeActivities.length > 1 ? 'Selecciona expresamente la actividad fiscal de esta factura.' : 'Falta una actividad fiscal activa para esta factura.'], ruleSetVersion: RULESET };
+  const operationDate = clean(body.operationDate);
+  if (operationDate && ((profile.effectiveFrom && operationDate < profile.effectiveFrom) || (activity.startDate && operationDate < activity.startDate))) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La operación es anterior a la vigencia del perfil o actividad seleccionada; requiere revisión histórica del asesor.'], ruleSetVersion: RULESET };
   const direction = body.direction === 'gasto' ? 'gasto' : 'ingreso';
   const taxKind = body.taxKind || activity.indirectTax || profile.indirectTaxDefault || 'iva';
   const regime = body.regime || activity.indirectTaxRegime || 'general';
@@ -206,8 +212,12 @@ function evaluate(profile: any, activities: any[], body: any) {
     reasons.push('REPEP: operaciones propias exentas y cuotas soportadas sin derecho a deduccion.');
     if (operationType === 'reverse_charge' || operationType === 'import') alerts.push('Puede existir autoliquidacion ocasional IGIC modelo 412.');
   }
-  if (['exenta_limitada', 'exenta_plena', 'no_sujeta'].includes(regime) && !manualOverride) {
+  if (['exenta_limitada', 'exenta_plena', 'no_sujeta'].includes(regime) && !manualOverride && direction === 'ingreso') {
     operationType = regime === 'exenta_limitada' ? 'exempt_limited' : regime === 'exenta_plena' ? 'exempt_full' : 'non_subject_article';
+  }
+  if (direction === 'gasto' && regime === 'exenta_limitada') {
+    deductiblePercent = 0;
+    reasons.push('Actividad exenta limitada: la cuota soportada se conserva, pero no se deduce y aumenta el coste o gasto.');
   }
   if (operationType === 'exempt_limited') { taxRate = 0; taxAmount = 0; deductiblePercent = direction === 'gasto' ? 0 : deductiblePercent; if (!exemptionKey || !legalBasis) { reviewRequired = true; reasons.push('La exencion exige clave y fundamento legal revisado.'); } }
   if (operationType === 'exempt_full' || operationType === 'export' || operationType === 'intra_eu_supply') { taxRate = 0; taxAmount = 0; }
@@ -394,7 +404,14 @@ Deno.serve(async (req) => {
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, evaluate(profile, activities, { ...body, direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso', base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva, taxAmount: body.taxAmount ?? invoice.cuota_iva, operationDate: body.operationDate ?? invoice.fecha_emision }), body);
+      if (evaluation.status === 'blocked') return Response.json({ error: evaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation }, { status: 422 });
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
+      if (invoice.linked_journal_entry_id && (
+        Math.abs(Number(invoice.cuota_iva || 0) - evaluation.taxAmount) > 0.01 ||
+        Math.abs(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) - evaluation.deductibleTax) > 0.01 ||
+        Math.abs(Number(invoice.importe_retencion || 0) - evaluation.withholdingAmount) > 0.01 ||
+        clean(invoice.indirect_tax_kind || evaluation.taxKind) !== evaluation.taxKind
+      )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
       const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: evaluation.deductibleTax >= evaluation.taxAmount, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
