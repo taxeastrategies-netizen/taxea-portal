@@ -40,7 +40,7 @@ export default function FiscalReviewInbox({ companyId }) {
           <div className="text-xs text-slate-600">{invoice.fecha_emision || 'Sin fecha'} · {invoice.proveedor_nombre || invoice.cliente_nombre || 'Sin tercero'} · {money(invoice.total_factura)} · {invoice.origin || 'manual'}</div>
           <div className="text-xs text-amber-800">{invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' ? 'Incidencia contable: clasificación validada, reintentar asiento tras revisar el error' : invoice.fiscal_review_status === 'validado' ? 'Clasificación guardada; falta finalizar asiento' : 'Pendiente de revisión profesional'}</div>
         </div>
-        <InvoiceFiscalReview companyId={companyId} invoice={invoice} />
+        <InvoiceFiscalReview companyId={companyId} invoice={invoice} advisorAccess />
       </div>)}
     </div>
   </section>;
