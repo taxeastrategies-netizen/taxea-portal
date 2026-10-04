@@ -20,6 +20,7 @@ Deno.serve(async req => {
       if (!isSource(body.source)) return response({ error: 'Fuente no válida.' }, 400);
       try {
         const refreshed = await refreshSnapshot(sdk, body.source);
+        if (refreshed.cacheStored === false) return response({ error: 'La fuente respondió, pero no se pudo guardar la actualización; se mantiene la copia anterior.' }, 502);
         return response({ ok: true, source: body.source, fetchedAt: refreshed.fetchedAt, examined: refreshed.examined, matches: refreshed.rows.length });
       } catch (error) {
         console.error('Tender cache refresh failed:', String((error as Error)?.message || error).slice(0, 250));
