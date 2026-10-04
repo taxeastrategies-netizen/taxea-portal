@@ -9,8 +9,8 @@ const build = await esbuild.build({
   stdin: { contents: fs.readFileSync(entry, 'utf8'), loader: 'ts', resolveDir: path.dirname(entry), sourcefile: entry },
   bundle: true, write: false, platform: 'node', format: 'cjs',
   plugins: [{ name: 'recurring-stubs', setup(builder) {
-    builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'stub' }));
-    builder.onResolve({ filter: /^\\.\\/invoiceQr\\.ts$/ }, () => ({ path: 'qr', namespace: 'stub' }));
+    builder.onResolve({ filter: /base44/ }, () => ({ path: 'sdk', namespace: 'stub' }));
+    builder.onResolve({ filter: /invoiceQr/ }, () => ({ path: 'qr', namespace: 'stub' }));
     builder.onLoad({ filter: /^sdk$/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export const createClientFromRequest=()=>globalThis.__client' }));
     builder.onLoad({ filter: /^qr$/, namespace: 'stub' }, () => ({ loader: 'js', contents: "export const buildAeatQrUrl=()=>{throw new Error('QR must not be generated before review')}" }));
   } }],
