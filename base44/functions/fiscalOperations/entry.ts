@@ -241,7 +241,13 @@ function evaluate(profile: any, activities: any[], body: any) {
     reasons.push('Regimen especial: la regla general no basta para validar esta operacion.');
   }
   if (taxKind === 'mixto' || activity.deductionRight === 'sector_diferenciado') { reviewRequired = true; reasons.push('Actividad mixta o sector diferenciado: seleccionar impuesto y sector en la operacion.'); }
-  if (activity.deductionRight === 'prorrata_especial') { reviewRequired = true; reasons.push('Prorrata especial: falta clasificación del destino exclusivo o común de cada adquisición; no aplicar un porcentaje uniforme.'); }
+  if (direction === 'gasto' && activity.deductionRight === 'prorrata_especial') {
+    const use = clean(body.deductionUse);
+    if (!['exclusive_right', 'exclusive_no_right', 'shared'].includes(use)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Prorrata especial: clasifica el destino del gasto como exclusivo con derecho, exclusivo sin derecho o común.'], ruleSetVersion: RULESET };
+    deductiblePercent = use === 'exclusive_right' ? 100 : use === 'exclusive_no_right' ? 0 : clamp(activity.proRataPercent);
+    reviewRequired = true;
+    reasons.push(`Prorrata especial: destino ${use}; deducción propuesta ${deductiblePercent}%, sujeta a revisión del asesor.`);
+  }
   if (SPECIAL_POSTING_PENDING.has(regime)) { reviewRequired = true; alerts.push('Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'); }
   const deductibleTax = direction === 'gasto' ? money(taxAmount * deductiblePercent / 100) : 0;
   const nonDeductibleTax = direction === 'gasto' ? money(taxAmount - deductibleTax) : 0;
@@ -272,7 +278,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   return {
     status: reviewRequired ? 'review_required' : 'ready', reviewRequired, confidence: Math.max(0, confidence),
     ruleSetVersion: RULESET, activityId: activity.id, taxKind, regime, operationType, exemptionKey, legalBasis,
-    deductionCategory: clean(body.deductionCategory),
+    deductionCategory: clean(body.deductionCategory), deductionUse: clean(body.deductionUse),
     base, taxRate, taxAmount, deductiblePercent, deductibleTax, nonDeductibleTax,
     withholdingRate, withholdingAmount, total: money(base + taxAmount - withholdingAmount),
     manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, bookImpact, modelImpact: [...new Set(modelImpact)],
@@ -448,7 +454,7 @@ Deno.serve(async (req) => {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
-      if (SPECIAL_POSTING_PENDING.has(proposedEvaluation.regime) || (invoice.tipo === 'recibida' && ['prorrata_especial', 'sector_diferenciado'].includes(selectedActivity?.deductionRight))) return Response.json({ error: 'Este régimen o derecho de deducción requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
+      if (SPECIAL_POSTING_PENDING.has(proposedEvaluation.regime) || (invoice.tipo === 'recibida' && selectedActivity?.deductionRight === 'sector_diferenciado')) return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
       const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
@@ -462,7 +468,7 @@ Deno.serve(async (req) => {
         evaluation.accounting?.reverseCharge
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       await svc.entities.Invoice.update(invoice.id, { indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: payload.deductibleQuota, non_deductible_tax_amount: payload.nonDeductibleQuota, tipo_iva: payload.rate, cuota_iva: payload.quota, retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: evaluation.total, importe_pendiente: Math.abs(evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
