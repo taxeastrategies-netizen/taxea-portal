@@ -54,17 +54,33 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
     throw Object.assign(new Error('Selecciona la subcuenta contable ya vinculada a esta cuenta bancaria.'), { status: 409 });
   }
   const ids = allocations.map(row => row.invoiceId);
+  const pending555 = (await svc.entities.AccountingAccount.filter({ companyId, code: '55500000' }, '-created_date', 1))?.[0];
+  const pendingReclassification = Boolean(pending555 && transaction.entidad_tipo === 'accounting_account' && transaction.entidad_id === pending555.id && transaction.estado_conciliacion === 'revisar');
   const existingGroup = transaction.entidad_tipo === 'invoice_group' && transaction.entidad_id === transaction.id;
-  if (transaction.entidad_id && !existingGroup) throw Object.assign(new Error('Este movimiento ya está conciliado con otro documento.'), { status: 409 });
-  if (!existingGroup && !['sin_conciliar', 'sugerida_ia', 'revisar'].includes(transaction.estado_conciliacion)) {
+  if (transaction.entidad_id && !existingGroup && !pendingReclassification) throw Object.assign(new Error('Este movimiento ya está conciliado con otro documento.'), { status: 409 });
+  if (!existingGroup && !pendingReclassification && !['sin_conciliar', 'sugerida_ia', 'revisar'].includes(transaction.estado_conciliacion)) {
     throw Object.assign(new Error('El movimiento no está disponible para conciliación.'), { status: 409 });
   }
   if (existingGroup && JSON.stringify([...(transaction.invoice_ids || [])].sort()) !== JSON.stringify([...ids].sort())) {
     throw Object.assign(new Error('El movimiento ya está repartido entre otras facturas.'), { status: 409 });
   }
-  const postingKey = `bank:${transaction.id}:${SCHEMA_VERSION}`;
-  const priorEntries = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 5);
-  if (priorEntries?.length) {
+  const bankPostingKey = `bank:${transaction.id}:${SCHEMA_VERSION}`;
+  const postingKey = pendingReclassification || (existingGroup && transaction.reclassification_journal_entry_id)
+    ? `bank-group-reclass:${transaction.id}:${SCHEMA_VERSION}` : bankPostingKey;
+  const priorEntries = await svc.entities.JournalEntry.filter({ companyId, postingKey: bankPostingKey }, '-created_date', 5);
+  if (pendingReclassification) {
+    const bankEntry = priorEntries?.find(entry => entry.id === transaction.journal_entry_id && entry.status === 'confirmado');
+    if (!bankEntry) throw Object.assign(new Error('La 555 no tiene un asiento bancario confirmado e identificable.'), { status: 409 });
+    const bankLines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: bankEntry.id }, 'lineNumber', 20);
+    const bankLine = bankLines?.find(line => line.accountId === bankLedger.id);
+    const pendingLine = bankLines?.find(line => line.accountId === pending555.id || line.accountCode === '55500000');
+    if (bankLines?.length !== 2 || !bankLine || !pendingLine || Math.round(Math.abs(Number(bankLine.debit || 0) - Number(bankLine.credit || 0)) * 100) !== Math.round(Math.abs(Number(transaction.importe)) * 100)) {
+      throw Object.assign(new Error('El asiento 572/555 previo no coincide exactamente con el movimiento. Revisión manual necesaria.'), { status: 409 });
+    }
+    const otherReclass = await svc.entities.JournalEntry.filter({ companyId, postingKey: `bank-reclass:${transaction.id}:${SCHEMA_VERSION}` }, '-created_date', 1);
+    if (otherReclass?.some(entry => entry.status !== 'anulado')) throw Object.assign(new Error('La 555 ya fue reclasificada por otro flujo.'), { status: 409 });
+  }
+  if (priorEntries?.length && !pendingReclassification) {
     const priorOperation = priorEntries[0].accountingOperationId
       ? await svc.entities.AccountingPostingOperation.get(priorEntries[0].accountingOperationId).catch(() => null)
       : null;
@@ -90,8 +106,9 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
     invoices.push({ invoice, allocation, priorPayment });
   }
   if (existingGroup) {
-    const operation = transaction.accounting_operation_id
-      ? await svc.entities.AccountingPostingOperation.get(transaction.accounting_operation_id).catch(() => null)
+    const operationId = transaction.group_accounting_operation_id || transaction.accounting_operation_id;
+    const operation = operationId
+      ? await svc.entities.AccountingPostingOperation.get(operationId).catch(() => null)
       : null;
     if (operation?.status === 'committed') {
       const expected = invoices.every(row => row.priorPayment?.operation_status === 'committed' && row.priorPayment.accounting_operation_id === operation.id);
@@ -114,8 +131,9 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
   const incoming = transaction.tipo === 'entrada';
   const amount = Math.abs(Number(transaction.importe) || 0);
   const description = `Reparto bancario de ${ids.length} facturas · ${clean(transaction.concepto, 220)}`;
+  const firstAccount = pendingReclassification ? pending555 : bankLedger;
   const lines = [
-    { accountId: bankLedger.id, accountCode: bankLedger.code, accountName: bankLedger.name, description, debit: incoming ? amount : 0, credit: incoming ? 0 : amount, sourceLineType: 'banco', bankTransactionId: transaction.id, isReconciled: true, reconciledAt: now },
+    { accountId: firstAccount.id, accountCode: firstAccount.code, accountName: firstAccount.name, description, debit: incoming ? amount : 0, credit: incoming ? 0 : amount, sourceLineType: pendingReclassification ? 'ajuste' : 'banco', bankTransactionId: transaction.id, isReconciled: true, reconciledAt: now },
     ...accountRows.map(row => ({ accountId: row.counterparty.id, accountCode: row.counterparty.code, accountName: row.counterparty.name, description: `Factura ${clean(row.invoice.numero_factura, 100)}`, debit: incoming ? 0 : row.allocation.amountCents / 100, credit: incoming ? row.allocation.amountCents / 100 : 0, sourceLineType: 'tercero', bankTransactionId: transaction.id, isReconciled: true, reconciledAt: now })),
   ];
   let posting = null;
@@ -145,7 +163,10 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
     await svc.entities.BankTransaction.update(transaction.id, {
       estado_conciliacion: 'conciliada_manual', confianza_conciliacion: 'alta',
       entidad_tipo: 'invoice_group', entidad_id: transaction.id, invoice_ids: ids,
-      journal_entry_id: committed.entry.id, accounting_operation_id: posting.operation.id,
+      journal_entry_id: pendingReclassification ? transaction.journal_entry_id : committed.entry.id,
+      accounting_operation_id: pendingReclassification ? transaction.accounting_operation_id : posting.operation.id,
+      group_journal_entry_id: committed.entry.id, group_accounting_operation_id: posting.operation.id,
+      reclassification_journal_entry_id: pendingReclassification ? committed.entry.id : '',
       accounting_account_id: '', accounting_account_code: '',
       reconciled_at: now, reconciled_by: user.email,
       notas: clean(`${transaction.notas ? `${transaction.notas}\n` : ''}Repartido entre ${ids.length} facturas.`, 500),
@@ -166,7 +187,7 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
         created_at: now, created_by: user.full_name || user.email || 'Usuario', origin: 'manual',
       });
     }
-    return { ok: true, duplicate: false, transaction_id: transaction.id, invoice_ids: ids, journal_entry_id: committed.entry.id, allocations: accountRows.map(row => ({ invoice_id: row.invoice.id, amount: row.allocation.amountCents / 100 })) };
+    return { ok: true, duplicate: false, transaction_id: transaction.id, invoice_ids: ids, journal_entry_id: committed.entry.id, reclassified_555: pendingReclassification, allocations: accountRows.map(row => ({ invoice_id: row.invoice.id, amount: row.allocation.amountCents / 100 })) };
   } catch (error) {
     if (posting?.operation?.id) {
       await updatePostingOperation(svc, posting.operation, { status: 'recovery_required', stage: 'group_incomplete', lastError: clean(error?.message, 300) }).catch(() => null);
