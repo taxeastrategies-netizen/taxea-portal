@@ -107,8 +107,8 @@ Deno.serve(async (req) => {
     }
     const pendingReview = !fiscalAssessment || fiscalAssessment.status !== 'ready'
       || body.confirm_fiscal_review !== true || !['admin', 'super_admin', 'advisor', 'asesor'].includes(user.role);
-    if (!pendingReview && !['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
-      || fiscalAssessment.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalAssessment.taxKind)) {
+    if (!pendingReview && (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
+      || fiscalAssessment.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalAssessment.taxKind))) {
       return Response.json({ error: 'Régimen u operación especial pendiente de revisión del asesor; el documento OCR se conserva sin contabilizar.' }, { status: 422 });
     }
     if (!pendingReview && fiscalAssessment.operationType === 'exempt_limited' && (!fiscalAssessment.exemptionKey || !fiscalAssessment.legalBasis)) {
@@ -217,6 +217,7 @@ Deno.serve(async (req) => {
     invoiceData.accounting_schema_version = SCHEMA_VERSION;
     if (pendingReview) Object.assign(invoiceData, {
       fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
+      fiscal_activity_id: form.fiscal_activity_id || fiscalAssessment?.activityId || '',
       accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
     });
 
