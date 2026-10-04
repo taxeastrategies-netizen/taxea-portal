@@ -45,8 +45,10 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
       const payload = response?.data || response;
       if (!payload?.ok) throw new Error(payload?.error || 'La fuente oficial no respondió.');
       const rows = (kind === 'grant' ? payload.grants || [] : payload.tenders || []).filter(row => kind === 'grant' ? ['open', 'upcoming'].includes(row.status) : ['abierta', 'anuncio_previo', 'consulta'].includes(row.kind));
-      const updated = rows.filter(row => !watch.last_checked_at || String(row.publishedAt || row.updatedAt || '') > watch.last_checked_at);
-      setResults(prev => ({ ...prev, [watch.id]: { rows, updated, checkedAt: new Date().toISOString(), partial: Boolean(payload.partial), examined: payload.examinedEntries || payload.attemptedDetails || 0 } }));
+      const signatures = Object.fromEntries(rows.slice(0, 200).map(row => [String(row.id), [row.updatedAt || row.publishedAt || '', row.deadline || row.endDate || '', row.status || row.kind || ''].join('|')]));
+      const seen = watch.seen_signatures || {};
+      const updated = rows.filter(row => !watch.last_checked_at || seen[String(row.id)] !== signatures[String(row.id)]);
+      setResults(prev => ({ ...prev, [watch.id]: { rows, updated, signatures, checkedAt: new Date().toISOString(), partial: Boolean(payload.partial), examined: payload.examinedEntries || payload.attemptedDetails || 0 } }));
     } catch (caught) { setError(caught?.response?.data?.error || caught?.message || 'No se pudo comprobar la búsqueda.'); }
     finally { setBusy(''); }
   };
@@ -55,7 +57,7 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
     if (!result || busy) return;
     setBusy(watch.id);
     try {
-      await base44.entities.OpportunityWatch.update(watch.id, { last_checked_at: result.checkedAt });
+      await base44.entities.OpportunityWatch.update(watch.id, { last_checked_at: result.checkedAt, seen_signatures: { ...(watch.seen_signatures || {}), ...result.signatures } });
       setResults(prev => ({ ...prev, [watch.id]: { ...prev[watch.id], updated: [] } }));
       await load();
     } catch (caught) { setError(caught?.message || 'No se pudo marcar como revisada.'); }
