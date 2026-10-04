@@ -120,6 +120,10 @@
     "fiscal_treatment": {
       "type": "string"
     },
+    "fiscal_regime": {
+      "type": "string",
+      "description": "R\u00e9gimen fiscal aplicado a esta factura; no modifica las subcuentas hist\u00f3ricas de terceros."
+    },
     "fiscal_activity_id": {
       "type": "string"
     },
