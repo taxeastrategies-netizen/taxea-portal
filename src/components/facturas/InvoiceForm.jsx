@@ -455,6 +455,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   {fmt(cuota)} €
                 </div>
               </div>
+              {taxType === 'IVA' && <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2"><div className="flex items-center gap-3"><Switch checked={Boolean(form.aplica_recargo)} onCheckedChange={value => setForm(current => ({ ...current, aplica_recargo: value, tipo_recargo: value ? (Number(current.tipo_iva) === 21 ? 5.2 : Number(current.tipo_iva) === 10 ? 1.4 : Number(current.tipo_iva) === 4 ? 0.5 : 0) : 0 }))} /><span className="text-sm font-medium text-amber-900">Factura con recargo de equivalencia</span></div>{form.aplica_recargo && <><label className="block text-xs text-amber-900">Tipo de recargo (%)<Input type="number" min="0" max="100" step="0.01" value={form.tipo_recargo ?? ''} onChange={set('tipo_recargo')} className="mt-1 bg-white" /></label><p className="text-[11px] text-amber-800">La cuota se consigna por separado. El documento quedará pendiente de validación fiscal y contable del asesor; no se emitirá ni contabilizará automáticamente.</p><ErrMsg msg={errors.tipo_recargo} /></>}</div>}
               <div className="space-y-1.5">
                 <Label>Retención IRPF</Label>
                 <div className="flex items-center gap-3 h-9">
@@ -507,6 +508,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <span className="text-muted-foreground">{taxType} {form.tipo_iva} %</span>
                   <span className="font-medium">+ {fmt(cuota)} €</span>
                 </div>
+                {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} €</span></div>}
                 {form.aplica_retencion && (
                   <div className="flex justify-between text-destructive">
                     <span>Retención IRPF {form.retencion_irpf} %</span>
