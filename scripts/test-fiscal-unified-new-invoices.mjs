@@ -165,4 +165,32 @@ assert.equal(records.InvoiceTaxLine[0].nonDeductibleQuota, 21);
 assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[1].total_factura, 121);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100'] }, null, 2));
+records.FiscalActivity[0].indirectTaxRegime = 'general';
+records.TaxModel.push({ id: 'model-390-advisor', companyId: 'company-a', codigo: '390', activo: true, fuenteValidacion: 'criterio_asesor', observaciones: 'Confirmación previa del asesor' });
+const existingModelSnapshot = JSON.stringify(records.TaxModel[0]);
+currentUser = { id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } };
+const proposedModelsResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'sync_obligations', companyId: 'company-a', apply: true }),
+}));
+assert.equal(proposedModelsResponse.status, 200);
+assert.equal(JSON.stringify(records.TaxModel.find(item => item.id === 'model-390-advisor')), existingModelSnapshot);
+const proposed303 = records.TaxModel.find(item => item.codigo === '303');
+assert.equal(proposed303.activo, false);
+assert.equal(proposed303.fuenteValidacion, 'pendiente_confirmar');
+const userConfirmation = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_manual_obligation', companyId: 'company-a', code: '303', active: true, reason: 'Prueba' }),
+}));
+assert.equal(userConfirmation.status, 403);
+assert.equal(proposed303.activo, false);
+currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
+const untracedConfirmation = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_manual_obligation', companyId: 'company-a', code: '303', active: true }),
+}));
+assert.equal(untracedConfirmation.status, 422);
+const advisorConfirmation = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_manual_obligation', companyId: 'company-a', code: '303', active: true, reason: 'Alta censal contrastada en empresa ficticia' }),
+}));
+assert.equal(advisorConfirmation.status, 200);
+assert.equal(proposed303.activo, true);
+assert.equal(proposed303.fuenteValidacion, 'criterio_asesor');
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor'] }, null, 2));
