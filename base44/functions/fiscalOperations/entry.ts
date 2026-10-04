@@ -88,7 +88,7 @@ const MODEL_CATALOG = [
   ['036', 'Declaracion censal AEAT', 'AEAT', 'segun_modelo'], ['037', 'Declaracion censal simplificada AEAT', 'AEAT', 'segun_modelo'],
   ['303', 'Autoliquidacion IVA', 'AEAT', 'trimestral'], ['309', 'IVA - autoliquidacion no periodica', 'AEAT', 'ocasional'],
   ['322', 'IVA - grupo de entidades individual', 'AEAT', 'mensual'], ['353', 'IVA - grupo de entidades agregado', 'AEAT', 'mensual'],
-  ['368', 'IVA servicios electronicos - regimenes anteriores', 'AEAT', 'segun_modelo'], ['369', 'IVA ventanilla unica OSS/IOSS', 'AEAT', 'trimestral'],
+  ['368', 'IVA servicios electronicos - regimenes anteriores', 'AEAT', 'segun_modelo'], ['369', 'IVA ventanilla unica OSS/IOSS', 'AEAT', 'segun_regimen'],
   ['390', 'Resumen anual IVA', 'AEAT', 'anual'], ['349', 'Operaciones intracomunitarias', 'AEAT', 'mensual'], ['347', 'Operaciones con terceros', 'AEAT', 'anual'],
   ['130', 'Pago fraccionado IRPF - estimacion directa', 'AEAT', 'trimestral'], ['131', 'Pago fraccionado IRPF - estimacion objetiva', 'AEAT', 'trimestral'],
   ['111', 'Retenciones trabajo y actividades economicas', 'AEAT', 'trimestral'], ['190', 'Resumen anual modelo 111', 'AEAT', 'anual'],
@@ -285,11 +285,16 @@ function evaluate(profile: any, activities: any[], body: any) {
   if (taxKind === 'iva') {
     if (['intra_eu_supply', 'intra_eu_acquisition'].includes(operationType)) modelImpact.push('349');
     if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) modelImpact.push('369');
-    else if (!['recargo_equivalencia', 'agricultura_ganaderia_pesca'].includes(regime)) modelImpact.push('303');
+    else if (regime === 'grupo_entidades') modelImpact.push('322');
+    else if (['recargo_equivalencia', 'agricultura_ganaderia_pesca'].includes(regime)) {
+      if (['reverse_charge', 'intra_eu_acquisition'].includes(operationType)) modelImpact.push('309');
+    } else modelImpact.push('303');
   }
   if (taxKind === 'igic') {
     if (regime === 'pequeno_empresario_igic') modelImpact.push('425');
     else if (regime === 'simplificado') modelImpact.push('421', '425');
+    else if (regime === 'grupo_entidades') modelImpact.push('418', '425');
+    else if (regime === 'comerciante_minorista_igic') modelImpact.push('424', '425');
     else modelImpact.push(profile.usesSII ? '417' : '420', '425');
     if (regime === 'pequeno_empresario_igic' && ['reverse_charge', 'import'].includes(operationType)) modelImpact.push('412');
   }
