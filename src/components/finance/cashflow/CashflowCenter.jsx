@@ -24,6 +24,7 @@ export default function CashflowCenter() {
   const [obligations, setObligations] = useState([]);
   const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
+  const [supportError, setSupportError] = useState('');
   const supportRequestRef = useRef(0);
   const loading = financialLoading || supportLoading;
 
@@ -31,6 +32,7 @@ export default function CashflowCenter() {
     const requestId = ++supportRequestRef.current;
     if (!companyId) { setObligations([]); setTreasuryEvents([]); setSupportLoading(false); return; }
     setSupportLoading(true);
+    setSupportError('');
     Promise.allSettled([
       base44.entities.TaxObligation.filter({ company_id: companyId }),
       base44.entities.TreasuryEvent.filter({ company_id: companyId }),
@@ -38,6 +40,7 @@ export default function CashflowCenter() {
       if (requestId !== supportRequestRef.current) return;
       setObligations(obligationsResult.status === 'fulfilled' ? obligationsResult.value || [] : []);
       setTreasuryEvents(eventsResult.status === 'fulfilled' ? eventsResult.value || [] : []);
+      setSupportError([obligationsResult.status !== 'fulfilled' ? 'impuestos' : '', eventsResult.status !== 'fulfilled' ? 'eventos' : ''].filter(Boolean).join(' y '));
     }).finally(() => { if (requestId === supportRequestRef.current) setSupportLoading(false); });
   };
 
@@ -177,7 +180,7 @@ export default function CashflowCenter() {
       <CashKpiGrid financials={financials} />
 
       {/* Main chart */}
-      <CashflowForecastChart invoices={invoices} obligations={obligations} events={treasuryEvents} treasury={treasury} treasuryError={treasuryError} />
+      <CashflowForecastChart invoices={invoices} obligations={obligations} events={treasuryEvents} treasury={treasury} treasuryError={treasuryError} supportError={supportError} />
 
       {/* Risk + Survival side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
