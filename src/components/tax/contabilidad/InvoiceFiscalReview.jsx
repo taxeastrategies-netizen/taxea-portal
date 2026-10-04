@@ -62,6 +62,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         taxAmount: Number(invoice.cuota_iva || 0),
         deductiblePercent: invoice.cuota_iva ? Math.round(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) * 10000 / Number(invoice.cuota_iva)) / 100 : 0,
         deductionCategory: existingTaxLine?.deductionCategory || '',
+        deductionUse: existingTaxLine?.deductionUse || '',
         withholdingRate: Number(invoice.retencion_irpf || 0),
         counterpartyIsWithholdingAgent: Boolean(invoice.retencion_irpf || invoice.importe_retencion),
         exemptionKey: invoice.fiscal_exemption_key || invoice.exemption_key || '',
@@ -162,6 +163,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <label className="text-xs font-medium text-slate-700">Tipo (%)
                     <input type="number" step="0.01" value={form.taxRate ?? 0} onChange={event => update('taxRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
+                  {invoice.tipo === 'recibida' && selectedActivity?.deductionRight === 'prorrata_especial' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Destino del gasto · prorrata especial
+                    <select value={form.deductionUse || ''} onChange={event => update('deductionUse', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                      <option value="">Seleccionar destino antes de confirmar</option>
+                      <option value="exclusive_right">Exclusivo de operaciones con derecho a deducción · 100 %</option>
+                      <option value="exclusive_no_right">Exclusivo de operaciones sin derecho a deducción · 0 %</option>
+                      <option value="shared">Uso común · porcentaje de prorrata confirmado en la actividad</option>
+                    </select>
+                    <span className="mt-1 block font-normal text-slate-500">La elección queda en la línea fiscal y debe revisarla el asesor; el porcentaje general no se aplica a los gastos exclusivos.</span>
+                  </label>}
                   {invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Cuota deducible (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.deductiblePercent ?? 0} onChange={event => update('deductiblePercent', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>}
