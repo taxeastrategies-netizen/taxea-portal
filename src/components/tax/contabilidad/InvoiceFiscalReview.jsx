@@ -26,11 +26,17 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
   const [catalog, setCatalog] = useState(/** @type {any} */ (null));
   const [evaluation, setEvaluation] = useState(/** @type {any} */ (null));
   const [error, setError] = useState('');
+  const [canApprove, setCanApprove] = useState(false);
   const [form, setForm] = useState(/** @type {Record<string, any>} */ ({}));
 
   const activeActivities = useMemo(() => (bundle?.activities || []).filter(item => item.active !== false), [bundle]);
   const selectedActivity = activeActivities.find(item => item.id === form.activityId) || activeActivities[0];
   const taxKind = form.taxKind || selectedActivity?.indirectTax || bundle?.profile?.indirectTaxDefault || invoice.indirect_tax_kind || 'iva';
+
+  useEffect(() => {
+    if (!open) return;
+    base44.auth.me().then(identity => setCanApprove(['admin', 'super_admin', 'advisor', 'asesor'].includes(String(identity?.role || '').toLowerCase()))).catch(() => setCanApprove(false));
+  }, [open]);
 
   useEffect(() => {
     if (!open || bundle) return;
@@ -190,10 +196,10 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
                   {[...(evaluation.reasons || []), ...(evaluation.alerts || [])].map((item, index) => <p key={index} className="mt-1">· {item}</p>)}
                   <p className="mt-2 font-medium">Libros: {(evaluation.bookImpact || []).join(', ') || 'sin impacto'} · modelos: {(evaluation.modelImpact || []).join(', ') || 'revisar'}</p>
                 </div>}
-                <div className="flex flex-wrap justify-end gap-2">
+                {canApprove ? <div className="flex flex-wrap justify-end gap-2">
                   <button type="button" onClick={review} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Analizar propuesta</button>
                   <button type="button" onClick={confirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Confirmar y guardar</button>
-                </div>
+                </div> : <p className="text-xs text-amber-800">Solo el asesor o administrador puede confirmar esta clasificación.</p>}
                 <p className="text-[11px] leading-relaxed text-slate-400">La confirmación guarda regla, actividad, fundamento legal, usuario y versión. No presenta ningún modelo tributario.</p>
               </div>
             )}
