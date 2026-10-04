@@ -104,7 +104,7 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
   const cached = cache.get(url);
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.value;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 40000);
+  const timer = setTimeout(() => controller.abort(), 55000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/atom+xml' } });
     if (!response.ok) throw new Error('La Plataforma devolvió ' + response.status);
