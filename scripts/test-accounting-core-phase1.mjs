@@ -173,6 +173,21 @@ assert.equal(recoveredInvoicePosting.entry.status, 'confirmado');
 assert.equal(records.InvoiceTaxLine.filter(item => item.invoiceId === invoiceTwo.id).length, 1);
 assert.equal(records.DocumentAccountingSource.filter(item => item.invoiceId === invoiceTwo.id).length, 1);
 
+const postingCountBeforeFiscalGuard = records.JournalEntry.length;
+const pendingFiscalInvoice = await entity('Invoice').create({
+  company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-REVIEW', fecha_emision: '2024-07-03',
+  base_imponible: 100, cuota_iva: 21, total_factura: 121,
+  fiscal_review_status: 'pendiente_revision', accounting_migration_hold: true,
+});
+await assert.rejects(() => postInvoice(svc, 'company-a', pendingFiscalInvoice, 'tester@taxea.test'), /pendiente de revisión fiscal/);
+const specialRegimeInvoice = await entity('Invoice').create({
+  company_id: 'company-a', tipo: 'emitida', numero_factura: 'F-REBU', fecha_emision: '2024-07-04',
+  base_imponible: 100, cuota_iva: 21, total_factura: 121,
+  fiscal_review_status: 'validado', fiscal_regime: 'rebu',
+});
+await assert.rejects(() => postInvoice(svc, 'company-a', specialRegimeInvoice, 'tester@taxea.test'), /Régimen especial sin circuito contable completo/);
+assert.equal(records.JournalEntry.length, postingCountBeforeFiscalGuard, 'Los casos fiscales bloqueados no deben crear asientos.');
+
 const close = await executeClosing(svc, 'company-a', { year: 2024, confirmation: 'CERRAR 2024', reason: 'Prueba de cierre' }, 'tester@taxea.test');
 assert.equal(close.cycle, 1);
 assert.equal(records.AccountingFiscalYear.find(item => item.year === 2024).status, 'cerrado');
@@ -205,6 +220,8 @@ console.log(JSON.stringify({
     partialLineFailureIsCompensated: true,
     invoiceEntryTaxDetailAndEvidenceCommitAsRecoverableUnit: true,
     interruptedInvoicePostingResumesWithoutDuplicate: true,
+    pendingFiscalInvoiceCannotPostThroughSharedEngine: true,
+    specialRegimeCannotUseGeneralPosting: true,
     closeCreatesRegularizationClosingAndOpening: true,
     reopenUsesThreeImmutableReversals: true,
     closeAndReopenAreAudited: true,
