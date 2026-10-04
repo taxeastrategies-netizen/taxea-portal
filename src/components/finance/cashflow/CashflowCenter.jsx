@@ -82,10 +82,8 @@ export default function CashflowCenter() {
     const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
     const ebitda = beneficio;
 
-    const cashDisponible = treasury.connectedAccounts > 0
-      ? treasury.availableCash
-      : invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
-        .reduce((s, i) => s + (i.total_factura || 0), 0);
+    const bankKnown = treasury.connectedAccounts > 0 && !treasuryError;
+    const cashDisponible = bankKnown ? treasury.availableCash : null;
 
     const pendingStates = ['pendiente', 'parcial', 'vencida'];
     const cobrosPendientes = invoices
@@ -96,8 +94,8 @@ export default function CashflowCenter() {
       .filter(i => i.tipo === 'recibida' && pendingStates.includes(i.estado_cobro))
       .reduce((s, i) => s + getOutstandingAmount(i), 0);
 
-    const burnRate = gastoTotal / 1 || 0; // monthly
-    const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
+    const burnRate = bankKnown ? gastoTotal : null; // Salidas bancarias observadas en 30 días, no un presupuesto.
+    const runway = bankKnown && cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
 
     const observedCollections = invoices
       .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
@@ -141,11 +139,11 @@ export default function CashflowCenter() {
 
     return {
       totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
-      cashDisponible, cashSource: treasury.connectedAccounts > 0 ? 'bank' : 'invoices', bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
+      cashDisponible, cashSource: bankKnown ? 'bank' : 'unavailable', bankKnown, bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
       burnRate, runway, dso, workingCapital, vencidas, ingresosDelta,
       filteredInvoices, filteredExpenses,
     };
-  }, [invoices, expenses, bankTransactions, treasury]);
+  }, [invoices, expenses, bankTransactions, treasury, treasuryError]);
 
   if (loading) {
     return (
@@ -181,8 +179,8 @@ export default function CashflowCenter() {
 
       {/* Risk + Survival side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <LiquidityRiskEngine financials={financials} />
-        <SurvivalMode financials={financials} />
+        {financials.bankKnown ? <LiquidityRiskEngine financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Riesgo de liquidez no calculable sin saldo bancario verificado.</div>}
+        {financials.bankKnown ? <SurvivalMode financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">La autonomía de caja requiere banco conectado y salidas observadas. No se deduce de facturas cobradas.</div>}
       </div>
 
       {/* Alerts + Insights */}
