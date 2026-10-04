@@ -261,6 +261,21 @@ const crossTenant = await invoke({
 assert.equal(crossTenant.response.status, 403);
 assert.equal(records.Invoice.length, 4);
 
+currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
+const surchargeInvoice = { ...validInvoice, tipo: 'recibida', numero_factura: 'R-2026-RECARGO', fecha_recepcion: '2026-04-11', proveedor_nombre: 'Proveedor ficticio', tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2 };
+const invalidSurcharge = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-mal', confirm_fiscal_review: true, invoice: { ...surchargeInvoice, cuota_recargo: 7 } });
+assert.equal(invalidSurcharge.response.status, 400);
+const surchargeDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-ok', confirm_fiscal_review: true, invoice: surchargeInvoice });
+assert.equal(surchargeDraft.response.status, 200);
+assert.equal(surchargeDraft.payload.review_required, true);
+assert.equal(surchargeDraft.payload.invoice.cuota_recargo, 5.2);
+assert.equal(surchargeDraft.payload.invoice.total_factura, 126.2);
+assert.equal(surchargeDraft.payload.invoice.linked_journal_entry_id, undefined);
+assert.equal(counters.accountingEntries, 3);
+const prematureSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
+assert.equal(prematureSurcharge.response.status, 409);
+assert.equal(counters.accountingEntries, 3);
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
