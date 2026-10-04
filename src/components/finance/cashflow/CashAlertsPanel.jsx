@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle, Zap, TrendingDown, Clock, Users, CreditCard, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getOutstandingAmount } from '@/lib/financialCore';
 
 function fmt(n) {
   if (!n && n !== 0) return '—';
@@ -13,15 +14,15 @@ function buildAlerts(financials, obligations) {
   if (!bankKnown) alerts.push({ id: 'unknown', severity: 'unknown', icon: AlertTriangle, title: 'Liquidez no verificable', desc: 'Conecta o revisa el banco para calcular alertas de caja con saldo real.' });
 
   if (runway !== null && runway < 3) {
-    alerts.push({ id: 'runway', severity: 'critical', icon: Zap, title: 'Runway crítico',
-      desc: `Con el burn rate actual, tu caja se agotaría en ${runway.toFixed(1)} meses. Acelera cobros o reduce gastos.` });
+    alerts.push({ id: 'runway', severity: 'critical', icon: Zap, title: 'Cobertura de salidas observadas baja',
+      desc: `El saldo cubre ${runway.toFixed(1)} meses al ritmo de salidas de los últimos 30 días, sin suponer cobros futuros. Revisa el pronóstico y los compromisos.` });
   }
   if (bankKnown && cashDisponible < pagosPendientes) {
     alerts.push({ id: 'cash_low', severity: 'high', icon: AlertTriangle, title: 'Cash insuficiente para pagos comprometidos',
       desc: `Tienes ${fmt(cashDisponible)} disponible pero ${fmt(pagosPendientes)} en pagos pendientes. Gap de ${fmt(pagosPendientes - cashDisponible)}.` });
   }
   if (vencidas && vencidas.length > 0) {
-    const total = vencidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+    const total = vencidas.reduce((s, i) => s + getOutstandingAmount(i), 0);
     alerts.push({ id: 'overdue', severity: 'high', icon: Clock, title: `${vencidas.length} facturas vencidas sin cobrar`,
       desc: `${fmt(total)} en facturas vencidas. Riesgo de impago elevado. Revisa el estado de cada cliente.` });
   }
@@ -64,7 +65,7 @@ export default function CashAlertsPanel({ financials, obligations }) {
       className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
       <div className="flex items-center gap-2 mb-4">
         <AlertTriangle className="w-4 h-4 text-amber-500" />
-        <h3 className="text-sm font-semibold text-foreground">Alertas IA — Tesorería</h3>
+        <h3 className="text-sm font-semibold text-foreground">Alertas de tesorería</h3>
         <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
           {alerts.filter(a => !['ok', 'unknown'].includes(a.severity)).length} activas
         </span>
