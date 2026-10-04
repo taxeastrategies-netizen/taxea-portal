@@ -40,7 +40,7 @@ export default function HRExpenses() {
       <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm text-center py-16">
         <Receipt className="w-14 h-14 text-slate-200 mx-auto mb-3" />
         <p className="text-base font-semibold text-foreground mb-1">Gastos & Reembolsos</p>
-        <p className="text-sm text-slate-400 max-w-sm mx-auto">OCR de tickets, hojas de gasto, aprobaciones y exportación contable conectada con Finance & Tax.</p>
+        <p className="text-sm text-slate-400 max-w-sm mx-auto">OCR de tickets, hojas de gasto, aprobaciones y exportación contable conectada con los departamentos de Finanzas y tesorería y de Fiscalidad y Contabilidad.</p>
         <button className="mt-4 flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold bg-taxea-red text-white hover:bg-taxea-red/90 transition-all shadow-sm mx-auto">
           <Plus className="w-4 h-4" /> Nuevo gasto
         </button>
