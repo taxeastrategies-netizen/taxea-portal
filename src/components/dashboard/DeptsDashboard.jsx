@@ -18,6 +18,11 @@ const PRIORITY_COLORS = {
 
 const PERIOD_LABELS = { hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes', trimestre: 'Este trimestre' };
 const STATUS_FILTERS = ['todo', 'urgente', 'pendiente', 'revision', 'completado'];
+const DEPARTMENT_LABELS = {
+  Tax: 'Fiscalidad y Contabilidad',
+  Finance: 'Finanzas y tesorería',
+  HR: 'Recursos humanos y personas',
+};
 
 function KpiTile({ label, value, color = 'text-foreground', sub, icon: Icon }) {
   return (
@@ -111,7 +116,7 @@ function CrossPriorityItem({ depts, priority, title, deadline, owner, action }) 
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold text-foreground">{title}</p>
         <div className="flex flex-wrap items-center gap-2 mt-0.5">
-          {depts.map(d => <span key={d} className="text-[10px] bg-secondary/80 px-1.5 py-0.5 rounded font-medium">{d}</span>)}
+          {depts.map(d => <span key={d} className="text-[10px] bg-secondary/80 px-1.5 py-0.5 rounded font-medium">{DEPARTMENT_LABELS[d] || d}</span>)}
           {deadline && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{deadline}</span>}
           {owner && <span className="text-[10px] text-muted-foreground">{owner}</span>}
         </div>
@@ -250,7 +255,7 @@ export default function DeptsDashboard({ invoices = [], expenses = [], obligatio
           color="text-taxea-red"
           bgColor="bg-red-50/60"
           borderColor="border-red-100"
-          title="Tax & Accounting"
+          title="Fiscalidad y Contabilidad"
           kpis={[
             { label: 'Obligaciones próximas', value: oblUrgent.length, urgent: oblUrgent.length > 0 },
             { label: 'Modelos pendientes', value: oblPending.length, warn: oblPending.length > 0 },
@@ -273,7 +278,7 @@ export default function DeptsDashboard({ invoices = [], expenses = [], obligatio
           color="text-emerald-700"
           bgColor="bg-emerald-50/60"
           borderColor="border-emerald-100"
-          title="Finance"
+          title="Finanzas y tesorería"
           kpis={[
             { label: 'Cobros pendientes', value: invoicesPending.length, warn: invoicesPending.length > 0 },
             { label: 'Cobros vencidos', value: invoicesOverdue.length, urgent: invoicesOverdue.length > 0 },
@@ -296,7 +301,7 @@ export default function DeptsDashboard({ invoices = [], expenses = [], obligatio
           color="text-rose-700"
           bgColor="bg-rose-50/60"
           borderColor="border-rose-100"
-          title="People & HR"
+          title="Recursos humanos y personas"
           kpis={[
             { label: 'Empleados activos', value: hrData.employees.filter(e => e.estado === 'activo' || !e.estado).length || '—' },
             { label: 'Ausencias pendientes', value: absencesPending.length, warn: absencesPending.length > 0 },
@@ -345,7 +350,7 @@ export default function DeptsDashboard({ invoices = [], expenses = [], obligatio
                   <p className="text-[11px] text-muted-foreground">{item.sub}</p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
-                  <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium text-muted-foreground">{item.dept}</span>
+                  <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium text-muted-foreground">{DEPARTMENT_LABELS[item.dept] || item.dept}</span>
                   {item.date && <span className="text-[10px] text-muted-foreground/60">{new Date(item.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}</span>}
                 </div>
               </div>
