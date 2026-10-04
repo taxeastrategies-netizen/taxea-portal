@@ -6,10 +6,11 @@ import { AlertTriangle, ArrowUpRight, RefreshCw } from 'lucide-react';
 
 const CLOSED = new Set(['presentado', 'domiciliado', 'pagado', 'completado', 'finalizado', 'cerrado', 'no_aplica']);
 const DONE_TASK = new Set(['completada', 'cancelada']);
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const daysAhead = days => { const base = new Date(today() + 'T12:00:00Z'); base.setUTCDate(base.getUTCDate() + days); return base.toISOString().slice(0, 10); };
 const dateValue = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : '';
 const eur = amount => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(amount) || 0);
-const urgency = (date, base = 1) => !date ? base : date < today() ? 4 : date <= new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10) ? 3 : base;
+const urgency = (date, base = 1) => !date ? base : date < today() ? 4 : date <= daysAhead(14) ? 3 : base;
 
 export function buildActionItems({ tasks = [], invoices = [], transactions = [], obligations = [], bankAccounts = [], unlinkedDocuments = [], fiscalProfile = null, isAdmin = false } = {}) {
   const items = [];
@@ -30,7 +31,7 @@ export function buildActionItems({ tasks = [], invoices = [], transactions = [],
   for (const item of obligations) {
     if (CLOSED.has(item.state)) continue;
     const due = dateValue(item.filingDeadline || item.internalDeadline);
-    if (!due || due > new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10)) continue;
+    if (!due || due > daysAhead(45)) continue;
     items.push({ id: 'tax:' + item.key, title: 'Modelo ' + (item.code || '') + ' · ' + (item.period || ''), detail: item.name || 'Obligación fiscal', source: 'Fiscalidad', owner: 'Taxea', due, weight: urgency(due, 2), route: '/tax-accounting/obligaciones' });
   }
   for (const account of bankAccounts) {
