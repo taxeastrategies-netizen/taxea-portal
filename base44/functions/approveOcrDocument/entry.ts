@@ -29,12 +29,9 @@ Deno.serve(async (req) => {
 
     // 2. Idempotency: if already linked, return existing
     if (doc.linkedInvoiceId) {
-      return Response.json({
-        success: true,
-        invoiceId: doc.linkedInvoiceId,
-        message: 'El documento ya estaba procesado',
-        alreadyProcessed: true
-      });
+      const linked = await base44.asServiceRole.entities.Invoice.get(doc.linkedInvoiceId).catch(() => null);
+      if (!linked || linked.estado_contable !== 'contabilizada') return Response.json({ error: 'El OCR ya tiene una factura conservada que requiere revisión; no se creará otra factura.', invoiceId: doc.linkedInvoiceId }, { status: 409 });
+      return Response.json({ success: true, invoiceId: linked.id, message: 'El documento ya estaba procesado', alreadyProcessed: true });
     }
 
     // 3. Validate direction and any explicit PGC override before creating an invoice.
@@ -293,6 +290,7 @@ Deno.serve(async (req) => {
       });
       await base44.asServiceRole.entities.OcrInvoiceDocument.update(docId, {
         status: 'review_required',
+        linkedInvoiceId: inv.id,
         safeErrorMessage: `La factura se guardó, pero el asiento no pudo generarse: ${postingError.message}`,
         lastStatusChangedAt: new Date().toISOString(),
       });
