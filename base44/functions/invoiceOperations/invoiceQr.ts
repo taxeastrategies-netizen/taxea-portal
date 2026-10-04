@@ -6,7 +6,7 @@ export function buildAeatQrUrl(company, invoice) {
   const nif = String(company?.nif_cif || '').toUpperCase().replace(/[\s.-]/g, '');
   const numserie = String(invoice?.numero_factura || '').trim();
   const isoDate = String(invoice?.fecha_emision || '');
-  // ImporteTotal del RRSIF: base + impuesto repercutido, antes de retenciones o suplidos.
+  // ImporteTotal del RRSIF: base + impuesto repercutido + recargo de equivalencia, antes de retenciones o suplidos.
   const amount = Math.round((Number(invoice?.base_imponible) + Number(invoice?.cuota_iva) + Number(invoice?.cuota_recargo || 0)) * 100) / 100;
   if (!/^[A-Z0-9]{9}$/.test(nif)) throw new Error('El emisor necesita un NIF/CIF español válido para el QR tributario.');
   if (!numserie || numserie.length > 60) throw new Error('El número de factura no es válido para el QR tributario.');
