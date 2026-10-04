@@ -142,6 +142,13 @@ const blockedPosting = await handler(new Request('https://taxea.test/functions/f
 }));
 assert.equal(blockedPosting.status, 422);
 assert.equal(writes, 0);
+records.FiscalActivity[0].indirectTaxRegime = 'general';
+records.Invoice.push({ id: 'invoice-surcharge', company_id: 'company-a', tipo: 'recibida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2 });
+const surchargePosting = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-surcharge', activityId: 'activity-a', regime: 'general', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(surchargePosting.status, 422);
+assert.equal(writes, 0);
 records.FiscalActivity[0].indirectTaxRegime = 'exenta_limitada';
 const untracedOverride = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
