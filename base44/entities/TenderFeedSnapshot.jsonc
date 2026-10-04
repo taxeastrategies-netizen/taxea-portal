@@ -1,0 +1,58 @@
+{
+  "name": "TenderFeedSnapshot",
+  "type": "object",
+  "properties": {
+    "source": {
+      "type": "string",
+      "enum": [
+        "hosted",
+        "aggregated",
+        "consultations"
+      ]
+    },
+    "fetchedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceUpdated": {
+      "type": "string"
+    },
+    "nextUrl": {
+      "type": "string"
+    },
+    "examined": {
+      "type": "number"
+    },
+    "rowsJson": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source",
+    "fetchedAt",
+    "examined",
+    "rowsJson"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
