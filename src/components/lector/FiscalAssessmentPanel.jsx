@@ -4,7 +4,8 @@ import { Shield, AlertTriangle, CheckCircle, Loader2, Info, ChevronDown, Chevron
 import { Badge } from '@/components/ui/badge';
 
 const STATUS_LABELS = {
-  ready_to_post: { label: 'Listo para contabilizar', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle },
+  ready: { label: 'Listo para contabilizar', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle },
+  blocked: { label: 'Bloqueado hasta revisión fiscal', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle },
   review_required: { label: 'Requiere revisión', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: AlertTriangle },
   blocked_missing_fiscal_profile: { label: 'Falta configuración fiscal', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle },
   blocked_conflict_ocr_vs_config: { label: 'Conflicto fiscal detectado', color: 'bg-red-100 text-red-700 border-red-200', icon: AlertTriangle },
@@ -22,7 +23,7 @@ const TREATMENT_LABELS = {
   sin_configuracion: 'Sin configuración',
 };
 
-export default function FiscalAssessmentPanel({ ocrData, companyId, direction, counterpartyName, counterpartyTaxId, invoiceBase, invoiceTaxRate, invoiceTaxAmount, invoiceWithholdingRate, invoiceWithholdingAmount, esProveedorExtranjero }) {
+export default function FiscalAssessmentPanel({ companyId, direction, activityId, operationDate, invoiceBase, invoiceTaxRate, invoiceTaxAmount, invoiceWithholdingRate }) {
   const [assessment, setAssessment] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -30,21 +31,23 @@ export default function FiscalAssessmentPanel({ ocrData, companyId, direction, c
   const evaluate = async () => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('evaluateFiscalTreatment', {
-        ocrData,
-        companyId,
-        direction,
-        counterpartyName,
-        counterpartyTaxId,
-        invoiceBase,
-        invoiceTaxRate,
-        invoiceTaxAmount,
-        invoiceWithholdingRate,
-        invoiceWithholdingAmount,
-        esProveedorExtranjero,
+      const res = await base44.functions.invoke('fiscalOperations', {
+        action: 'evaluate', companyId, direction, activityId: activityId || undefined,
+        requireValidatedProfile: true, requireExactActivity: true, operationDate,
+        base: invoiceBase, taxRate: invoiceTaxRate, taxAmount: invoiceTaxAmount,
+        withholdingRate: invoiceWithholdingRate,
+        counterpartyIsWithholdingAgent: Number(invoiceWithholdingRate || 0) > 0,
       });
-      const data = res?.data || res;
-      setAssessment(data);
+      const evaluation = (res?.data || res)?.evaluation;
+      setAssessment(evaluation ? {
+        status: evaluation.status, proposedTreatment: evaluation.operationType || 'sin_configuracion',
+        confidence: evaluation.confidence, proposedTaxRate: evaluation.taxRate,
+        proposedTaxAmount: evaluation.taxAmount, proposedWithholdingRate: evaluation.withholdingRate,
+        proposedWithholdingAmount: evaluation.withholdingAmount, deductibleAmount: evaluation.deductibleTax,
+        nonDeductibleAmount: evaluation.nonDeductibleTax, reverseChargeAmount: evaluation.accounting?.reverseCharge ? evaluation.taxAmount : 0,
+        explanation: [...(evaluation.reasons || []), ...(evaluation.alerts || [])].join(' '),
+        alerts: evaluation.alerts, reviewReasons: evaluation.reasons, appliedRules: [evaluation.ruleSetVersion],
+      } : null);
     } catch (e) {
       console.error('[FiscalAssessment] Error:', e);
     }
@@ -52,8 +55,10 @@ export default function FiscalAssessmentPanel({ ocrData, companyId, direction, c
   };
 
   useEffect(() => {
-    if (companyId && direction) evaluate();
-  }, [companyId, direction, counterpartyTaxId]);
+    if (!companyId || !direction) return;
+    const timer = setTimeout(() => evaluate(), 450);
+    return () => clearTimeout(timer);
+  }, [companyId, direction, activityId, operationDate, invoiceBase, invoiceTaxRate, invoiceTaxAmount, invoiceWithholdingRate]);
 
   if (loading) {
     return (
