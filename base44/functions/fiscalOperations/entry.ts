@@ -157,7 +157,7 @@ function recommendedObligations(profile: any, activities: any[]) {
     const ivaRegimes = new Set(iva.map(item => item.indirectTaxRegime));
     if (ivaRegimes.has('grupo_entidades')) {
       add('322', 'Autoliquidación individual mensual del grupo IVA');
-      add('353', 'Solo la entidad dominante presenta el agregado mensual del grupo IVA', 'review');
+      if (profile?.taxGroupId && profile?.taxGroupRole === 'dominante') add('353', 'Entidad dominante: agregado mensual después de las declaraciones individuales 322', 'review');
     } else {
       if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].some(code => ivaRegimes.has(code))) add('369', 'Operaciones de ventanilla única OSS/IOSS; no mezclar con el 303');
       if (iva.some(item => !['recargo_equivalencia', 'agricultura_ganaderia_pesca', 'exenta_limitada', 'no_sujeta', 'oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(item.indirectTaxRegime))) add('303', 'Operaciones nacionales liquidables; las OSS/IOSS mantienen su 369 separado');
@@ -169,7 +169,7 @@ function recommendedObligations(profile: any, activities: any[]) {
     const igicRegimes = new Set(igic.map(item => item.indirectTaxRegime));
     if (igicRegimes.has('grupo_entidades')) {
       add('418', 'Autoliquidación individual mensual del grupo IGIC');
-      add('419', 'Agregado del grupo IGIC, si la entidad es dominante', 'review');
+      if (profile?.taxGroupId && profile?.taxGroupRole === 'dominante') add('419', 'Entidad dominante: agregado mensual del grupo IGIC después de los modelos 418 individuales', 'review');
     } else {
       if (igicRegimes.has('simplificado')) add('421', 'Actividad en régimen simplificado IGIC');
       if (igic.some(item => !['simplificado', 'pequeno_empresario_igic', 'agricultura_ganaderia_pesca', 'comerciante_minorista_igic'].includes(item.indirectTaxRegime))) add(profile?.usesSII ? '417' : '420', profile?.usesSII ? 'IGIC con SII' : 'Actividad IGIC liquidable fuera de los regímenes especiales separados');
@@ -381,7 +381,7 @@ Deno.serve(async (req) => {
 
     if (action === 'save_profile') {
       const data = body.profile || {};
-      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','verifactuObligation','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
+      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxGroupId','taxGroupRole','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','verifactuObligation','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
       if (data.verifactuObligation !== undefined && !['pendiente_confirmar','obligado','voluntario','excluido'].includes(data.verifactuObligation)) throw new Error('Clasificación VERI*FACTU no admitida.');
       if ((data.usesVeriFactu ?? profile?.usesVeriFactu) === true && (data.verifactuObligation ?? profile?.verifactuObligation) === 'excluido') throw new Error('No puede solicitarse VERI*FACTU para un perfil clasificado como excluido.');
       const now = new Date().toISOString();
