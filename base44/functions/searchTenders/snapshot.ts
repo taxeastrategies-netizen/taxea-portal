@@ -61,8 +61,8 @@ export async function refreshSnapshot(sdk: any, source: Source): Promise<CachedP
     })));
     try {
       const old = await sdk.asServiceRole.entities.TenderFeedSnapshot.filter({ source }, '-fetchedAt', 40);
-      const retain = new Set([batchId, ...old.map(row => row.batchId).filter(id => id && id !== batchId).slice(0, 1)]);
-      await Promise.allSettled(old.filter(row => !retain.has(row.batchId)).map(row => sdk.asServiceRole.entities.TenderFeedSnapshot.delete(row.id)));
+      const retain = new Set([batchId, ...old.map((row: any) => row.batchId).filter((id: string) => id && id !== batchId).slice(0, 1)]);
+      await Promise.allSettled(old.filter((row: any) => !retain.has(row.batchId)).map((row: any) => sdk.asServiceRole.entities.TenderFeedSnapshot.delete(row.id)));
     } catch { /* Cache cleanup never blocks the search. */ }
     return { ...feed, fetchedAt, cacheStored: true };
   } catch (error) {
