@@ -20,7 +20,7 @@ export default function CashflowCenter() {
   const { company } = ctx;
   const companyId = company?.id;
 
-  const { invoices, expenses, bankTransactions, treasury, treasuryError, loading: financialLoading, refresh } = useFinancialData(companyId);
+  const { invoices, expenses, bankTransactions, treasury, treasuryError, error: financialError, loading: financialLoading, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
@@ -176,6 +176,7 @@ export default function CashflowCenter() {
         onRefresh={() => { refresh(); loadObligations(); }}
       />
 
+      {financialError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Datos financieros no disponibles: {financialError}. Los importes de esta vista no son fiables hasta actualizar.</p>}
       {/* KPI Grid */}
       <CashKpiGrid financials={financials} />
 
