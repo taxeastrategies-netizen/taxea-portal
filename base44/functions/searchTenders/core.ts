@@ -1,7 +1,7 @@
 import { XMLParser } from 'npm:fast-xml-parser@4.5.3';
 
 export const SOURCES = {
-  hosted: 'https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom',
+  hosted: 'https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom',
   aggregated: 'https://contrataciondelsectorpublico.gob.es/sindicacion/sindicacion_1044/PlataformasAgregadasSinMenores.atom',
   consultations: 'https://contrataciondelestado.es/sindicacion/sindicacion_1403/CPM_SectorPublico.atom',
 };
@@ -104,7 +104,7 @@ export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: stri
   const cached = cache.get(url);
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.value;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 55000);
+  const timer = setTimeout(() => controller.abort(), 75000);
   try {
     const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/atom+xml' } });
     if (!response.ok) throw new Error('La Plataforma devolvió ' + response.status);
