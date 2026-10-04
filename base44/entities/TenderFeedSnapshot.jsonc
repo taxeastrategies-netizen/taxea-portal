@@ -25,6 +25,18 @@
     },
     "rowsJson": {
       "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "part": {
+      "type": "number"
+    },
+    "totalParts": {
+      "type": "number"
+    },
+    "payloadEncoding": {
+      "type": "string"
     }
   },
   "required": [
