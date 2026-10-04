@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { BellRing, BookmarkPlus, RefreshCw, Trash2 } from 'lucide-react';
@@ -16,12 +16,18 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
   const [results, setResults] = useState({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const identityRef = useRef('');
+  const identity = `${companyId || ''}:${kind}`;
+  identityRef.current = identity;
   const load = async () => {
     if (!companyId) return;
-    try { setWatches(await base44.entities.OpportunityWatch.filter({ company_id: companyId, kind }, '-created_date', 30) || []); }
-    catch (caught) { setError(caught?.message || 'No se pudieron cargar las búsquedas guardadas.'); }
+    const requested = identity;
+    try {
+      const rows = await base44.entities.OpportunityWatch.filter({ company_id: companyId, kind }, '-created_date', 30);
+      if (identityRef.current === requested) setWatches(rows || []);
+    } catch (caught) { if (identityRef.current === requested) setError(caught?.message || 'No se pudieron cargar las búsquedas guardadas.'); }
   };
-  useEffect(() => { setResults({}); setError(''); load(); }, [companyId, kind]);
+  useEffect(() => { setWatches([]); setResults({}); setError(''); load(); }, [companyId, kind]);
   const save = async () => {
     if (!companyId || busy || watches.length >= 10) return;
     const key = JSON.stringify(criteria);
@@ -36,6 +42,7 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
   const check = async watch => {
     if (busy) return;
     setBusy(watch.id); setError('');
+    const requested = identity;
     try {
       const saved = watch.criteria || {};
       const params = kind === 'grant'
@@ -48,7 +55,7 @@ export default function OpportunityWatchPanel({ kind, criteria, onApply }) {
       const signatures = Object.fromEntries(rows.slice(0, 200).map(row => [String(row.id), [row.updatedAt || row.publishedAt || '', row.deadline || row.endDate || '', row.status || row.kind || ''].join('|')]));
       const seen = watch.seen_signatures || {};
       const updated = rows.filter(row => !watch.last_checked_at || seen[String(row.id)] !== signatures[String(row.id)]);
-      setResults(prev => ({ ...prev, [watch.id]: { rows, updated, signatures, checkedAt: new Date().toISOString(), partial: Boolean(payload.partial), examined: payload.examinedEntries || payload.attemptedDetails || 0 } }));
+      if (identityRef.current === requested) setResults(prev => ({ ...prev, [watch.id]: { rows, updated, signatures, checkedAt: new Date().toISOString(), partial: Boolean(payload.partial), examined: payload.examinedEntries || payload.attemptedDetails || 0 } }));
     } catch (caught) { setError(caught?.response?.data?.error || caught?.message || 'No se pudo comprobar la búsqueda.'); }
     finally { setBusy(''); }
   };
