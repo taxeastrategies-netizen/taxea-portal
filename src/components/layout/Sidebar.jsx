@@ -124,7 +124,7 @@ const DEPT_GROUPS = [
     depts: [
       {
         id: 'law',
-        label: 'Law',
+        label: 'Legal',
         adminOnly: true,
         icon: Scale,
         activeColor: 'text-slate-700',
