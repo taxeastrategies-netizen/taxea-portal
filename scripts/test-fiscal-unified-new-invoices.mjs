@@ -80,6 +80,21 @@ const repepIncome = await evaluate({ direction: 'ingreso', taxRate: 0, taxAmount
 assert.equal(repepIncome.operationType, 'exempt_limited');
 assert.equal(repepIncome.taxAmount, 0);
 
+records.FiscalActivity[0].indirectTax = 'iva';
+records.FiscalActivity[0].indirectTaxRegime = 'rebu';
+const rebu = await evaluate({ direction: 'ingreso', taxRate: 21, taxAmount: 21 });
+assert.equal(rebu.postingBlocked, true);
+assert.equal(rebu.status, 'review_required');
+const invalidRegime = await evaluate({ direction: 'ingreso', regime: 'pequeno_empresario_igic' });
+assert.equal(invalidRegime.status, 'blocked');
+records.FiscalActivity[0].indirectTaxRegime = 'general';
+records.FiscalActivity[0].deductionRight = 'prorrata_especial';
+records.FiscalActivity[0].proRataPercent = 40;
+assert.equal((await evaluate({ direction: 'gasto', taxRate: 21, taxAmount: 21 })).status, 'blocked');
+assert.equal((await evaluate({ direction: 'gasto', taxRate: 21, taxAmount: 21, deductionUse: 'exclusive_right' })).deductibleTax, 21);
+assert.equal((await evaluate({ direction: 'gasto', taxRate: 21, taxAmount: 21, deductionUse: 'exclusive_no_right' })).deductibleTax, 0);
+assert.equal((await evaluate({ direction: 'gasto', taxRate: 21, taxAmount: 21, deductionUse: 'shared' })).deductibleTax, 8.4);
+records.FiscalActivity[0].deductionRight = 'sin_derecho';
 records.FiscalActivity.push({ ...records.FiscalActivity[0], id: 'activity-b' });
 const ambiguous = await evaluate({ direction: 'gasto', activityId: undefined, taxRate: 7, taxAmount: 7 });
 assert.equal(ambiguous.status, 'blocked');
@@ -129,4 +144,4 @@ assert.equal(records.InvoiceTaxLine[0].nonDeductibleQuota, 21);
 assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[1].total_factura, 121);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100'] }, null, 2));
