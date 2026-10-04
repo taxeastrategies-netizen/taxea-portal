@@ -111,6 +111,10 @@
       "type": "string",
       "default": "iva"
     },
+    "fiscalActivityId": {
+      "type": "string",
+      "description": "Actividad fiscal seleccionada para nuevas emisiones; las plantillas anteriores permanecen intactas."
+    },
     "retentionRate": {
       "type": "number",
       "default": 0
