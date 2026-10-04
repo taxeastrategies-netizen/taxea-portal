@@ -108,7 +108,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         const bundle = response?.data || response;
         const activities = (bundle?.activities || []).filter(item => item.active !== false);
         setFiscalContext({ profile: bundle?.profile || null, activities, loading: false });
-        if (!editing && activities.length === 1) setForm(current => current.fiscal_activity_id ? current : { ...current, fiscal_activity_id: activities[0].id });
+        if (!editing && activities.length === 1) setForm(current => current.fiscal_activity_id ? current : {
+          ...current,
+          fiscal_activity_id: activities[0].id,
+          tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(activities[0].indirectTaxRegime) ? 0 : current.tipo_iva,
+        });
       })
       .catch(() => { if (active) setFiscalContext({ profile: null, activities: [], loading: false }); });
     return () => { active = false; };
