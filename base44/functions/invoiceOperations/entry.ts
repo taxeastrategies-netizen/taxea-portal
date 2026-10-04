@@ -83,25 +83,33 @@ function invoiceCreationPayload(input, companyId, user) {
   const base = asMoney(Number(input?.base_imponible));
   const taxRate = Number(input?.tipo_iva || 0);
   const withholdingRate = Number(input?.retencion_irpf || 0);
+  const surchargeRate = Number(input?.tipo_recargo || 0);
   const rectifying = input?.es_rectificativa === true;
   if (!Number.isFinite(base) || (!rectifying && base < 0)) throw Object.assign(new Error('La base imponible no es válida.'), { status: 400 });
   if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) throw Object.assign(new Error('El tipo de impuesto no es válido.'), { status: 400 });
   if (!Number.isFinite(withholdingRate) || withholdingRate < 0 || withholdingRate > 100) throw Object.assign(new Error('La retención no es válida.'), { status: 400 });
+  if (!Number.isFinite(surchargeRate) || surchargeRate < 0 || surchargeRate > 100) throw Object.assign(new Error('El tipo de recargo no es válido.'), { status: 400 });
   const taxAmount = input?.cuota_iva === null || input?.cuota_iva === undefined
     ? asMoney(base * taxRate / 100)
     : asMoney(input.cuota_iva);
+  const surchargeAmount = input?.cuota_recargo === null || input?.cuota_recargo === undefined
+    ? asMoney(base * surchargeRate / 100)
+    : asMoney(input.cuota_recargo);
+  if (!Number.isFinite(surchargeAmount) || Math.abs(surchargeAmount - asMoney(base * surchargeRate / 100)) > 0.02) {
+    throw Object.assign(new Error('La cuota de recargo no coincide con base y tipo de recargo.'), { status: 400 });
+  }
   const withholdingAmount = input?.importe_retencion === null || input?.importe_retencion === undefined
     ? asMoney(base * withholdingRate / 100)
     : asMoney(input.importe_retencion);
   if (!Number.isFinite(taxAmount) || !Number.isFinite(withholdingAmount)) {
     throw Object.assign(new Error('Las cuotas de impuesto y retención deben ser importes válidos.'), { status: 400 });
   }
-  const calculatedTotal = asMoney(base + taxAmount - withholdingAmount);
+  const calculatedTotal = asMoney(base + taxAmount + surchargeAmount - withholdingAmount);
   const total = input?.total_factura === null || input?.total_factura === undefined
     ? calculatedTotal
     : asMoney(input.total_factura);
   if (!Number.isFinite(total) || Math.abs(total - calculatedTotal) > 0.02) {
-    throw Object.assign(new Error('El total no coincide con base, impuesto y retención.'), { status: 400 });
+    throw Object.assign(new Error('El total no coincide con base, impuesto, recargo y retención.'), { status: 400 });
   }
   const month = Number(issueDate.slice(5, 7));
   const quarter = month <= 3 ? 'T1' : month <= 6 ? 'T2' : month <= 9 ? 'T3' : 'T4';
@@ -131,6 +139,8 @@ function invoiceCreationPayload(input, companyId, user) {
     base_imponible: base,
     tipo_iva: taxRate,
     cuota_iva: taxAmount,
+    tipo_recargo: surchargeRate,
+    cuota_recargo: surchargeAmount,
     retencion_irpf: withholdingRate,
     importe_retencion: withholdingAmount,
     total_factura: total,
@@ -417,6 +427,7 @@ Deno.serve(async (req) => {
       // En modo proponer/revisar se conserva el documento sin emitir QR, libro ni asiento.
       // La validación profesional se hace después desde la revisión fiscal de la factura.
       const requiresAdvisorReview = !fiscalEvaluation || fiscalEvaluation.status !== 'ready'
+        || Math.abs(Number(payload.cuota_recargo || 0)) > 0.001
         || body.confirm_fiscal_review !== true
         || !['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user));
       if (requiresAdvisorReview) {
