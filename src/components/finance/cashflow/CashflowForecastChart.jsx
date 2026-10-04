@@ -5,7 +5,7 @@ import { buildCashForecast } from '@/lib/cashForecast';
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
 const VIEWS = [{ id: '7d', label: '7 días', days: 7 }, { id: '30d', label: '30 días', days: 30 }, { id: '13w', label: '13 semanas', days: 91 }];
 
-export default function CashflowForecastChart({ invoices = [], obligations = [], events = [], treasury, treasuryError }) {
+export default function CashflowForecastChart({ invoices = [], obligations = [], events = [], treasury, treasuryError, supportError = '' }) {
   const [view, setView] = useState('13w');
   const days = VIEWS.find(item => item.id === view)?.days || 91;
   const forecast = useMemo(() => buildCashForecast({ invoices, obligations, events, treasury, treasuryError }), [invoices, obligations, events, treasury, treasuryError]);
@@ -21,6 +21,7 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
         </div>
         <div className="flex rounded-lg bg-secondary p-0.5">{VIEWS.map(item => <button key={item.id} type="button" onClick={() => setView(item.id)} className={'rounded-md px-2.5 py-1 text-xs ' + (view === item.id ? 'bg-card font-semibold shadow-sm' : 'text-muted-foreground')}>{item.label}</button>)}</div>
       </div>
+      {supportError && <p role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Previsión parcial: no se pudieron leer {supportError}. El saldo proyectado puede omitir pagos o cobros.</p>}
       {!forecast.hasBankBalance ? (
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sin saldo bancario conectado y verificable. Se muestran los vencimientos registrados, pero no un saldo futuro inventado. <a href="/finance/treasury" className="font-semibold underline">Revisar bancos</a></div>
       ) : (
