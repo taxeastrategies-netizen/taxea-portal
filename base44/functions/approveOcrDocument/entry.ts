@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
     // 2. Idempotency: if already linked, return existing
     if (doc.linkedInvoiceId) {
       const linked = await base44.asServiceRole.entities.Invoice.get(doc.linkedInvoiceId).catch(() => null);
-      if (!linked || linked.estado_contable !== 'contabilizada') return Response.json({ error: 'El OCR ya tiene una factura conservada que requiere revisión; no se creará otra factura.', invoiceId: doc.linkedInvoiceId }, { status: 409 });
+      if (!linked) return Response.json({ error: 'El OCR enlaza una factura que ya no se puede consultar; requiere revisión técnica.', invoiceId: doc.linkedInvoiceId }, { status: 409 });
+      if (linked.estado_contable !== 'contabilizada') return Response.json({ success: true, review_required: true, invoiceId: linked.id, message: 'La propuesta OCR ya existe y espera revisión fiscal; no se creó un duplicado.', alreadyProcessed: true });
       return Response.json({ success: true, invoiceId: linked.id, message: 'El documento ya estaba procesado', alreadyProcessed: true });
     }
 
