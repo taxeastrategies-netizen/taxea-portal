@@ -119,7 +119,7 @@ export function calculateSpecialRegimePreview(input) {
       if (input.isExcise === true) throw new Error('IOSS no admite bienes sujetos a impuestos especiales.');
     }
     const base = finite(input.base, 'base de la venta');
-    const rate = percent(taxRate, 'tipo del Estado de consumo');
+    const rate = percent(input.destinationRate, 'tipo del Estado de consumo');
     if (!input.destinationRateConfirmed) throw new Error('El tipo aplicable en destino debe estar confirmado por el asesor; no se presume el tipo español.');
     return { regime, status: 'proposal_only', destinationCountry, base, rate, destinationTax: cents(base * rate / 100),
       destinationRateConfirmed: true, advisorConfirmationRequired: true, reason: destinationCountry === 'ES' ? 'España puede ser Estado de consumo en supuestos concretos; comprobar el tipo de operación y la inclusión en 369 antes de validar.' : 'Agrupar por Estado de consumo y tipo en modelo 369; no mezclar con 303/420.' };
