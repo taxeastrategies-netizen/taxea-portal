@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
 
 async function bundle(file) {
@@ -35,4 +36,13 @@ assert.ok(candidates[0]._reasons.includes('Número de factura en el banco'));
 assert.equal(suggestInvoiceMatches({ ...tx, importe: 40 }, [{ ...invoices[0], cliente_nombre: 'Acme SA' }])[0]._partial, true);
 assert.equal(suggestInvoiceMatches({ ...tx, importe: 300 }, [invoices[0]]).length, 0);
 assert.equal(suggestInvoiceMatches({ ...tx, tipo: 'salida' }, [invoices[0]]).length, 0);
-console.log('Taxea client-unification synthetic checks: 14 assertions OK');
+const watchSchema = JSON.parse(readFileSync('base44/entities/OpportunityWatch.jsonc', 'utf8'));
+assert.equal(Object.hasOwn(watchSchema.properties, 'created_by'), false);
+for (const permission of ['read', 'update', 'delete']) {
+  const ownerRule = watchSchema.rls[permission].$or.find(rule => rule.$and);
+  assert.ok(ownerRule?.$and.some(rule => rule.created_by === '{{user.email}}'));
+  assert.ok(ownerRule?.$and.some(rule => rule['data.company_id'] === '{{user.data.company_id}}'));
+}
+const watchUi = readFileSync('src/components/OpportunityWatchPanel.jsx', 'utf8');
+assert.ok(!/OpportunityWatch\.create\(\{[^}]*created_by/.test(watchUi));
+console.log('Taxea client-unification synthetic checks: 19 assertions OK');
