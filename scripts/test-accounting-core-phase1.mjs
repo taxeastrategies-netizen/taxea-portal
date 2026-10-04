@@ -186,6 +186,10 @@ const specialRegimeInvoice = await entity('Invoice').create({
   fiscal_review_status: 'validado', fiscal_regime: 'rebu',
 });
 await assert.rejects(() => postInvoice(svc, 'company-a', specialRegimeInvoice, 'tester@taxea.test'), /Régimen especial sin circuito contable completo/);
+const reverseChargeInvoice = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-ISP', fiscal_treatment: 'reverse_charge' });
+await assert.rejects(() => postInvoice(svc, 'company-a', reverseChargeInvoice, 'tester@taxea.test'), /asientos fiscales específicos/);
+const surchargeInvoice = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-RECARGO', cuota_recargo: 5.2 });
+await assert.rejects(() => postInvoice(svc, 'company-a', surchargeInvoice, 'tester@taxea.test'), /asientos fiscales específicos/);
 assert.equal(records.JournalEntry.length, postingCountBeforeFiscalGuard, 'Los casos fiscales bloqueados no deben crear asientos.');
 
 const close = await executeClosing(svc, 'company-a', { year: 2024, confirmation: 'CERRAR 2024', reason: 'Prueba de cierre' }, 'tester@taxea.test');
@@ -222,6 +226,7 @@ console.log(JSON.stringify({
     interruptedInvoicePostingResumesWithoutDuplicate: true,
     pendingFiscalInvoiceCannotPostThroughSharedEngine: true,
     specialRegimeCannotUseGeneralPosting: true,
+    reverseChargeAndSurchargeRequireDedicatedPosting: true,
     closeCreatesRegularizationClosingAndOpening: true,
     reopenUsesThreeImmutableReversals: true,
     closeAndReopenAreAudited: true,
