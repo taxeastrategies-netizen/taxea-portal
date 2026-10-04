@@ -109,6 +109,14 @@
     "cuota_iva": {
       "type": "number"
     },
+    "tipo_recargo": {
+      "type": "number",
+      "description": "Tipo del recargo de equivalencia consignado separadamente por el proveedor; pendiente de revisi\u00f3n fiscal."
+    },
+    "cuota_recargo": {
+      "type": "number",
+      "description": "Cuota de recargo de equivalencia; forma parte del total y del mayor coste de la compra del minorista."
+    },
     "retencion_irpf": {
       "type": "number",
       "default": 0
