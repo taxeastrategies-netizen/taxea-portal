@@ -24,7 +24,7 @@ export default function FinanceHeader({ company, period, setPeriod, lastSync, lo
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">Finance</span>
+              <span className="text-xs text-muted-foreground font-medium">Finanzas y tesorería</span>
               <span className="text-xs text-muted-foreground/40">/</span>
               <span className="text-xs font-semibold text-foreground">Dashboard</span>
             </div>
