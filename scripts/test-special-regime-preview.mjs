@@ -31,7 +31,11 @@ assert.throws(() => calculate({ regime: 'criterio_caja', invoiceGross: 100, oper
   payments: [{ id: 'advance', date: '2025-12-30', amount: 20 }] }), /anticipos/);
 const oss = calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true });
 assert.equal(oss.destinationTax, 20);
-assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'ES', destinationRateConfirmed: true }), /Estado miembro/);
+assert.match(calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'ES', destinationRateConfirmed: true }).reason, /supuestos concretos/);
+assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'ZZ', destinationRateConfirmed: true }), /Estado miembro/);
+assert.equal(calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100 }).destinationTax, 20);
+assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 200, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 200 }), /150/);
+assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100, isExcise: true }), /impuestos especiales/);
 assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR' }), /confirmado/);
 assert.equal(calculate({ regime: 'grupo_entidades', taxKind: 'iva', groupId: 'grupo-test', groupRole: 'dependiente' }).aggregateModel, null);
 assert.equal(calculate({ regime: 'grupo_entidades', taxKind: 'iva', groupId: 'grupo-test', groupRole: 'dominante' }).aggregateModel, '353');
