@@ -88,64 +88,42 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Base imponible negativa solo permitida en facturas rectificativas. Marca la opción es_rectificativa.' }, { status: 400 });
     }
 
-    // 3.5. Fiscal engine check: evaluate treatment before allowing contabilización
-    let fiscalAssessment = null;
-    let fiscalProfileExists = false;
+    // La aprobación OCR utiliza la misma evaluación que la factura manual.
+    let fiscalAssessment;
     try {
-      const direction = invoiceType === 'emitida' ? 'ingreso' : 'gasto';
-      const counterpartyName = invoiceType === 'emitida' ? form.cliente_nombre : form.proveedor_cliente;
-      const counterpartyTaxId = invoiceType === 'emitida' ? form.cliente_nif : extractedData?.nif_proveedor;
-      const invoiceBase = parseFloat(form.base_imponible) || 0;
-      const invoiceTaxRate = parseFloat(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) || 0;
-      const invoiceTaxAmount = parseFloat(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) || 0;
-      const invoiceWithholdingRate = parseFloat(form.retencion_irpf) || 0;
-      const invoiceWithholdingAmount = parseFloat(form.importe_retencion) || 0;
-
-      const profiles = await base44.asServiceRole.entities.FiscalProfile.filter({ company_id: doc.company_id, active: true });
-      if (profiles && profiles.length > 0) {
-        fiscalProfileExists = true;
-        // Profile exists - run fiscal evaluation
-        const assessmentRes = await base44.functions.invoke('evaluateFiscalTreatment', {
-          ocrData: extractedData,
-          companyId: doc.company_id,
-          direction,
-          counterpartyName,
-          counterpartyTaxId,
-          invoiceBase,
-          invoiceTaxRate,
-          invoiceTaxAmount,
-          invoiceWithholdingRate,
-          invoiceWithholdingAmount,
-          esProveedorExtranjero: extractedData?.es_proveedor_extranjero,
-          detectedOperationType: extractedData?.tipo_operacion,
-          ocrDocumentId: docId,
-        });
-        fiscalAssessment = assessmentRes?.data || assessmentRes;
-
-        // Block if fiscal engine says blocked
-        if (fiscalAssessment?.status === 'blocked_conflict_ocr_vs_config') {
-          return Response.json({
-            error: 'BLOQUEO FISCAL: ' + (fiscalAssessment.alerts?.[0] || 'Conflicto entre datos OCR y configuración fiscal del cliente.'),
-            fiscalStatus: fiscalAssessment.status,
-            fiscalAlerts: fiscalAssessment.alerts,
-          }, { status: 422 });
-        }
-        if (fiscalAssessment?.status === 'blocked_missing_fiscal_profile') {
-          return Response.json({
-            error: 'Falta configuración fiscal. Configura el perfil fiscal en Ajustes > Fiscalidad antes de contabilizar.',
-            fiscalStatus: fiscalAssessment.status,
-          }, { status: 422 });
-        }
-        // For review_required, log warning but allow approval (human reviewer decided)
-        console.log('[approveOcrDocument] Fiscal assessment:', fiscalAssessment.status, 'confidence:', fiscalAssessment.confidence);
-      }
+      const fiscalResponse = await base44.functions.invoke('fiscalOperations', {
+        action: 'evaluate', companyId: doc.company_id,
+        requireValidatedProfile: true, requireExactActivity: true,
+        activityId: form.fiscal_activity_id || undefined,
+        direction: invoiceType === 'emitida' ? 'ingreso' : 'gasto',
+        operationDate: fechaEmision,
+        base: baseImponible,
+        taxRate: Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto),
+        taxAmount: Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto),
+        withholdingRate: Number(form.retencion_irpf || 0),
+        counterpartyIsWithholdingAgent: Number(form.retencion_irpf || 0) > 0,
+      });
+      fiscalAssessment = (fiscalResponse?.data || fiscalResponse)?.evaluation;
     } catch (fiscalError) {
       console.error('[approveOcrDocument] Fiscal check failed:', fiscalError.message);
-      if (fiscalProfileExists) {
-        return Response.json({
-          error: 'No se pudo validar el tratamiento fiscal. La factura permanece pendiente para evitar una contabilización incorrecta.',
-        }, { status: 503 });
-      }
+      return Response.json({ error: 'No se pudo verificar el encuadramiento fiscal. El documento OCR sigue pendiente y no se ha creado una factura.' }, { status: 503 });
+    }
+    if (!fiscalAssessment || fiscalAssessment.status === 'blocked') {
+      return Response.json({ error: fiscalAssessment?.reasons?.join(' ') || 'Valida el perfil fiscal antes de aprobar el OCR.' }, { status: 422 });
+    }
+    if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
+      || fiscalAssessment.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalAssessment.taxKind)) {
+      return Response.json({ error: 'Régimen u operación especial pendiente de revisión del asesor; el documento OCR se conserva sin contabilizar.' }, { status: 422 });
+    }
+    if (fiscalAssessment.operationType === 'exempt_limited' && (!fiscalAssessment.exemptionKey || !fiscalAssessment.legalBasis)) {
+      return Response.json({ error: 'Falta clave de exención o fundamento legal confirmado por el asesor.' }, { status: 422 });
+    }
+    const sourceTotal = Number(invoiceType === 'emitida' ? form.total_factura : form.total);
+    if (!Number.isFinite(sourceTotal)
+      || Math.abs(sourceTotal - fiscalAssessment.total) > 0.02
+      || Math.abs(Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) - fiscalAssessment.taxRate) > 0.0001
+      || Math.abs(Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) - fiscalAssessment.taxAmount) > 0.02) {
+      return Response.json({ error: 'Los importes OCR no coinciden con el perfil fiscal validado. Revisa base, tipo, cuota, retención y total antes de aprobar.' }, { status: 422 });
     }
 
     // 4. Build invoice data
