@@ -1,0 +1,44 @@
+{
+  "name": "Renovar licitaciones consultations",
+  "description": "Renueva cada 30 minutos la copia temporal de la primera p\u00e1gina oficial: Consultas preliminares PLACSP. Si falla, conserva la \u00faltima copia correcta.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "22,52 * * * *",
+      "one_time_date": null,
+      "timezone": "Europe/Madrid",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "refresh_tenders_consultations",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "run_function": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "searchTenders",
+            "args": {
+              "action": "refresh_source",
+              "source": "consultations"
+            }
+          },
+          "then": "end"
+        }
+      }
+    ]
+  }
+}
