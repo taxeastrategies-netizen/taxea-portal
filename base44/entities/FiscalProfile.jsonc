@@ -42,6 +42,7 @@
     "taxGroupRole": {
       "type": "string",
       "enum": [
+        "sin_grupo",
         "dominante",
         "dependiente"
       ],
