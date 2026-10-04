@@ -75,6 +75,15 @@ records.FiscalActivity.pop();
 records.FiscalProfile[0].profileStatus = 'pendiente_revision';
 const unvalidated = await evaluate({ direction: 'gasto', taxRate: 7, taxAmount: 7 });
 assert.equal(unvalidated.status, 'blocked');
+records.FiscalProfile[0].profileStatus = 'validado_asesor';
+records.FiscalActivity[0].indirectTax = 'iva';
+records.FiscalActivity[0].indirectTaxRegime = 'exenta_limitada';
+records.Invoice.push({ id: 'invoice-old', company_id: 'company-a', tipo: 'recibida', fecha_emision: '2026-04-10', fecha_recepcion: '2026-04-11', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, deductible_tax_amount: 21, importe_retencion: 0, indirect_tax_kind: 'iva', linked_journal_entry_id: 'journal-old' });
+const postedResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-old', activityId: 'activity-a', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(postedResponse.status, 409);
+assert.equal(records.Invoice[0].deductible_tax_amount, 21);
 assert.equal(writes, 0);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'subcuentas_historicas_intactas'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
