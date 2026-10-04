@@ -400,10 +400,10 @@ Deno.serve(async (req) => {
       if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new Error('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
       const selectedTax = clean(payload.indirectTax || existing?.indirectTax);
       const selectedRegime = clean(payload.indirectTaxRegime || existing?.indirectTaxRegime || 'general');
-      if (!REGIMES[selectedTax]?.some(([code]) => code === selectedRegime)) throw new Error('El régimen especial no corresponde al impuesto indirecto de la actividad.');
-      if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw new Error('La actividad mixta debe clasificarse por operación antes de contabilizar.');
+      if (!REGIMES[selectedTax]?.some(([code]) => code === selectedRegime)) throw Object.assign(new Error('El régimen especial no corresponde al impuesto indirecto de la actividad.'), { status: 422 });
+      if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw Object.assign(new Error('La actividad mixta debe clasificarse por operación antes de contabilizar.'), { status: 422 });
       const proRata = payload.proRataPercent ?? existing?.proRataPercent;
-      if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw new Error('La prorrata debe estar entre 0 y 100 %.');
+      if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw Object.assign(new Error('La prorrata debe estar entre 0 y 100 %.'), { status: 422 });
       const saved = existing ? await svc.entities.FiscalActivity.update(existing.id, payload) : await svc.entities.FiscalActivity.create(payload);
       if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal modificada; requiere nueva validación del asesor.' });
       const next = existing ? activities.map(item => item.id === saved.id ? saved : item) : [...activities, saved];
