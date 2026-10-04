@@ -260,6 +260,10 @@ Deno.serve(async (req) => {
         status: 'review_required', linkedInvoiceId: inv.id,
         safeErrorMessage: 'Extracción OCR conservada; pendiente de validación fiscal del asesor. Sin QR ni asiento.',
         lastStatusChangedAt: new Date().toISOString(),
+        auditTrail: [...(Array.isArray(doc.auditTrail) ? doc.auditTrail : []), JSON.stringify({
+          action: 'pendiente_revision_fiscal', invoiceId: inv.id, userEmail: user.email,
+          manualAccount: manualAccount?.code || 'none', timestamp: new Date().toISOString(),
+        })],
       });
       return Response.json({ success: true, review_required: true, invoiceId: inv.id,
         message: 'Factura guardada para revisión fiscal, sin emitir ni contabilizar.' });
