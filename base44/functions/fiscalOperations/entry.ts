@@ -202,6 +202,10 @@ function evaluate(profile: any, activities: any[], body: any) {
   let taxRate = Number(body.taxRate ?? activity.defaultTaxRate ?? (taxKind === 'igic' ? profile.defaultIgicRate : profile.defaultVatRate) ?? 0);
   const base = money(body.base);
   let taxAmount = money(body.taxAmount ?? base * taxRate / 100);
+  if (body.requireValidatedProfile === true && !manualOverride && direction === 'ingreso' && operationType === 'subject_taxed') {
+    taxRate = Number(activity.defaultTaxRate ?? (taxKind === 'igic' ? profile.defaultIgicRate : profile.defaultVatRate) ?? 0);
+  }
+  if (body.requireValidatedProfile === true && !manualOverride && operationType === 'subject_taxed') taxAmount = money(base * taxRate / 100);
   let deductiblePercent = clamp(body.deductiblePercent ?? (activity.deductionRight === 'sin_derecho' ? 0 : activity.proRataPercent ?? 100));
   let exemptionKey = clean(body.exemptionKey || activity.exemptionKey);
   let legalBasis = clean(body.legalBasis || activity.exemptionLegalBasis);
@@ -222,7 +226,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   if (operationType === 'exempt_limited') { taxRate = 0; taxAmount = 0; deductiblePercent = direction === 'gasto' ? 0 : deductiblePercent; if (!exemptionKey || !legalBasis) { reviewRequired = true; reasons.push('La exencion exige clave y fundamento legal revisado.'); } }
   if (operationType === 'exempt_full' || operationType === 'export' || operationType === 'intra_eu_supply') { taxRate = 0; taxAmount = 0; }
   if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(operationType)) { taxRate = 0; taxAmount = 0; deductiblePercent = 0; if (!legalBasis) { reviewRequired = true; reasons.push('La no sujecion exige motivo y fundamento legal.'); } }
-  if (operationType === 'subject_zero') taxRate = 0;
+  if (operationType === 'subject_zero') { taxRate = 0; taxAmount = 0; }
   if (['reverse_charge', 'intra_eu_acquisition'].includes(operationType)) { reviewRequired = true; alerts.push(`Autorrepercusion de ${taxKind.toUpperCase()}: registrar cuota devengada y deducible solo en la proporcion permitida.`); }
   if (['canary_peninsula_goods', 'canary_peninsula_service'].includes(operationType)) { reviewRequired = true; confidence -= 20; alerts.push('Canarias no forma parte del territorio IVA: revisar localizacion, importacion/exportacion e inversion del sujeto pasivo.'); }
   if (['recargo_equivalencia', 'comerciante_minorista_igic', 'agricultura_ganaderia_pesca', 'simplificado', 'rebu', 'agencias_viajes', 'oro_inversion', 'grupo_entidades', 'criterio_caja', 'oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
