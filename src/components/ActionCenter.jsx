@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { getOutstandingAmount } from '@/lib/financialCore';
@@ -47,8 +47,10 @@ export default function ActionCenter({ companyId, tasks = [], isAdmin = false })
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [limit, setLimit] = useState(18);
+  const requestRef = useRef(0);
   const refresh = async () => {
-    if (!companyId) return;
+    const requestId = ++requestRef.current;
+    if (!companyId) { setLoading(false); return; }
     setLoading(true);
     const [fin, bank, fiscal] = await Promise.allSettled([
       base44.functions.invoke('getCompanyFinancials', { company_id: companyId }),
@@ -57,6 +59,7 @@ export default function ActionCenter({ companyId, tasks = [], isAdmin = false })
     ]);
     const value = result => result.status === 'fulfilled' ? result.value?.data || result.value : null;
     const failed = [];
+    if (requestId !== requestRef.current) return;
     if (!value(fin) || value(fin).error) failed.push('facturas');
     if (!value(bank)?.ok) failed.push('bancos');
     if (!value(fiscal) || value(fiscal).error) failed.push('calendario');
@@ -64,7 +67,7 @@ export default function ActionCenter({ companyId, tasks = [], isAdmin = false })
     setSnapshot({ invoices: value(fin)?.invoices || [], transactions: value(bank)?.transactions || [], bankAccounts: value(bank)?.accounts || [], obligations: value(fiscal)?.items || [], unlinkedDocuments: value(fiscal)?.unlinkedDocuments || [], fiscalProfile: value(fiscal)?.profile || null, fiscalLoaded: !failed.includes('calendario') });
     setLoading(false);
   };
-  useEffect(() => { refresh(); }, [companyId]);
+  useEffect(() => { setSnapshot(null); setErrors([]); setLimit(18); refresh(); return () => { requestRef.current++; }; }, [companyId]);
   const items = useMemo(() => buildActionItems({ tasks, ...snapshot, fiscalProfile: snapshot?.fiscalLoaded ? snapshot.fiscalProfile : true, isAdmin }), [tasks, snapshot, isAdmin]);
   const counts = useMemo(() => ({ bank: items.filter(row => row.source === 'Banco').length, invoices: items.filter(row => row.source === 'Facturas').length, tax: items.filter(row => row.source === 'Fiscalidad').length }), [items]);
   return <section className="mb-7 overflow-hidden rounded-2xl border border-border bg-card">
