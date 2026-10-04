@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Factura no encontrada en la empresa activa.' }, { status: 404 });
       }
       if (invoice.anulada) return Response.json({ error: 'No se puede enviar una factura anulada.' }, { status: 409 });
-      if (invoice.fiscal_review_status === 'pendiente_revision' || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') return Response.json({ error: 'La factura requiere validación fiscal del asesor antes de enviarse.' }, { status: 409 });
+      if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) return Response.json({ error: 'La factura requiere validación fiscal del asesor antes de enviarse.' }, { status: 409 });
     } else {
       const entityName = body.document_type === 'quote' ? 'Quote' : body.document_type === 'proforma' ? 'Proforma' : '';
       if (!entityName || !body.document_id) {
