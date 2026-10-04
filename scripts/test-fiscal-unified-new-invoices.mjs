@@ -115,4 +115,18 @@ const untracedOverride = await handler(new Request('https://taxea.test/functions
 }));
 assert.equal(untracedOverride.status, 422);
 assert.equal(writes, 0);
+allowWrites = true;
+const approvedExpense = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
+    invoiceId: 'invoice-pending', activityId: 'activity-a', taxKind: 'iva',
+    regime: 'exenta_limitada', operationType: 'subject_taxed', base: 100,
+    taxRate: 21, taxAmount: 21, deductiblePercent: 0, confirmReviewed: true }),
+}));
+assert.equal(approvedExpense.status, 200);
+assert.equal(records.InvoiceTaxLine.length, 1);
+assert.equal(records.InvoiceTaxLine[0].deductibleQuota, 0);
+assert.equal(records.InvoiceTaxLine[0].nonDeductibleQuota, 21);
+assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
+assert.equal(records.Invoice[1].total_factura, 121);
+assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
 console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
