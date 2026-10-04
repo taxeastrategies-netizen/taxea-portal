@@ -155,6 +155,8 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             ocrData={doc.extracted}
             companyId={companyId}
             direction={tipo === 'ingresos' ? 'ingreso' : 'gasto'}
+            activityId={form.fiscal_activity_id}
+            operationDate={tipo === 'ingresos' ? form.fecha_emision : form.fecha}
             counterpartyName={tipo === 'ingresos' ? form.cliente_nombre : form.proveedor_cliente}
             counterpartyTaxId={tipo === 'ingresos' ? form.cliente_nif : doc.extracted?.nif_proveedor}
             invoiceBase={parseFloat(form.base_imponible) || 0}
