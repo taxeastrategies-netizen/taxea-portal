@@ -36,14 +36,15 @@ assert.throws(() => calculate({ regime: 'criterio_caja', base: 100, taxAmount: 0
   payments: [{ id: 'p1', date: '2026-02-01', amount: 60 }, { id: 'p1', date: '2026-03-01', amount: 20 }] }), /único/);
 assert.throws(() => calculate({ regime: 'criterio_caja', base: 100, taxAmount: 0, invoiceGross: 100, operationDate: '2026-01-15',
   payments: [{ id: 'advance', date: '2025-12-30', amount: 20 }] }), /anticipos/);
-const oss = calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true });
+const oss = calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true });
 assert.equal(oss.destinationTax, 20);
-assert.match(calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'ES', destinationRateConfirmed: true }).reason, /supuestos concretos/);
+assert.match(calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationRate: 21, destinationCountry: 'ES', destinationRateConfirmed: true }).reason, /supuestos concretos/);
 assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'ZZ', destinationRateConfirmed: true }), /Estado miembro/);
-assert.equal(calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100 }).destinationTax, 20);
-assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 200, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 200 }), /150/);
-assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100, isExcise: true }), /impuestos especiales/);
-assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR' }), /confirmado/);
+assert.equal(calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100 }).destinationTax, 20);
+assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 200, taxRate: 21, destinationRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 200 }), /150/);
+assert.throws(() => calculate({ regime: 'ioss_importacion', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true, consignmentIntrinsicValue: 100, isExcise: true }), /impuestos especiales/);
+assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationRate: 20, destinationCountry: 'FR' }), /confirmado/);
+assert.throws(() => calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 21, destinationCountry: 'FR', destinationRateConfirmed: true }), /tipo del Estado/);
 assert.equal(calculate({ regime: 'grupo_entidades', taxKind: 'iva', groupId: 'grupo-test', groupRole: 'dependiente' }).aggregateModel, null);
 assert.equal(calculate({ regime: 'grupo_entidades', taxKind: 'iva', groupId: 'grupo-test', groupRole: 'dominante' }).aggregateModel, '353');
 assert.equal(calculate({ regime: 'grupo_entidades', taxKind: 'igic', groupId: 'grupo-test', groupRole: 'dominante' }).aggregateModel, '419');
