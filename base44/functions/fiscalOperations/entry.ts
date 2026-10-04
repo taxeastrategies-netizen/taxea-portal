@@ -232,6 +232,11 @@ function evaluate(profile: any, activities: any[], body: any) {
     deductiblePercent = 0;
     reasons.push('Actividad exenta limitada: la cuota soportada se conserva, pero no se deduce y aumenta el coste o gasto.');
   }
+  if (direction === 'gasto' && taxKind === 'iva' && ['recargo_equivalencia', 'agricultura_ganaderia_pesca'].includes(regime)) {
+    deductiblePercent = 0;
+    reasons.push('En esta actividad especial el IVA soportado no se deduce en la autoliquidación periódica; integra el coste o gasto según la naturaleza de la adquisición.');
+    if (regime === 'recargo_equivalencia') alerts.push('Comprueba el recargo repercutido por el proveedor: su cuota y el mayor coste requieren desglose específico antes de contabilizar.');
+  }
   if (operationType === 'exempt_limited') { taxRate = 0; taxAmount = 0; deductiblePercent = direction === 'gasto' ? 0 : deductiblePercent; if (!exemptionKey || !legalBasis) { reviewRequired = true; reasons.push('La exencion exige clave y fundamento legal revisado.'); } }
   if (operationType === 'exempt_full' || operationType === 'export' || operationType === 'intra_eu_supply') { taxRate = 0; taxAmount = 0; }
   if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(operationType)) { taxRate = 0; taxAmount = 0; deductiblePercent = 0; if (!legalBasis) { reviewRequired = true; reasons.push('La no sujecion exige motivo y fundamento legal.'); } }
