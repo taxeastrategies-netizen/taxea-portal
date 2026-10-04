@@ -384,6 +384,37 @@ Deno.serve(async (req) => {
         const cuota = base * taxRate / 100;
         const retencion = base * retentionRate / 100;
         const total = base + cuota - retencion;
+        let fiscalEvaluation;
+        let fiscalErrorMessage = '';
+        try {
+          const fiscalResponse = await base44.asServiceRole.functions.invoke('fiscalOperations', {
+            action: 'evaluate', companyId: tmpl.ownerAccountId,
+            requireValidatedProfile: true, requireExactActivity: true,
+            activityId: tmpl.fiscalActivityId || undefined,
+            direction: 'ingreso', operationDate: runDate, base,
+            taxRate, taxAmount: cuota, withholdingRate: retentionRate,
+            counterpartyIsWithholdingAgent: retentionRate > 0,
+          });
+          fiscalEvaluation = (fiscalResponse?.data || fiscalResponse)?.evaluation;
+          if (!fiscalEvaluation || fiscalEvaluation.status === 'blocked') fiscalErrorMessage = fiscalEvaluation?.reasons?.join(' ') || 'Falta un perfil fiscal validado.';
+          else if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
+            || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) fiscalErrorMessage = 'Régimen especial pendiente de validación para emisión recurrente.';
+          else if (fiscalEvaluation.operationType === 'exempt_limited' && (!fiscalEvaluation.exemptionKey || !fiscalEvaluation.legalBasis)) fiscalErrorMessage = 'La exención requiere clave y fundamento legal validados.';
+          else if (Math.abs(taxRate - fiscalEvaluation.taxRate) > 0.0001 || Math.abs(cuota - fiscalEvaluation.taxAmount) > 0.02
+            || Math.abs(retencion - fiscalEvaluation.withholdingAmount) > 0.02 || Math.abs(total - fiscalEvaluation.total) > 0.02) fiscalErrorMessage = 'La plantilla recurrente no coincide con el encuadramiento fiscal vigente. Revísala antes de emitir.';
+        } catch (fiscalError) {
+          fiscalErrorMessage = 'No se pudo verificar el perfil fiscal de la emisión recurrente.';
+        }
+        if (fiscalErrorMessage) {
+          results.errors++;
+          await base44.asServiceRole.entities.RecurringInvoiceRun.create({
+            recurringInvoiceTemplateId: tmpl.id, ownerAccountId: tmpl.ownerAccountId,
+            runType, status: 'error', runAt: new Date().toISOString(),
+            triggeredByUserId, triggeredByEmail, periodStart: runDate, periodEnd, periodKey,
+            safeErrorMessage: fiscalErrorMessage,
+          });
+          break;
+        }
 
         const invoiceData = {
           company_id: tmpl.ownerAccountId,
@@ -415,7 +446,19 @@ Deno.serve(async (req) => {
           recurringPeriodStart: runDate,
           recurringPeriodEnd: periodEnd,
           recurringPeriodKey: periodKey,
-          origin: 'recurring_invoice'
+          origin: 'recurring_invoice',
+          indirect_tax_kind: fiscalEvaluation.taxKind,
+          fiscal_treatment: fiscalEvaluation.operationType,
+          fiscal_regime: fiscalEvaluation.regime,
+          fiscal_activity_id: fiscalEvaluation.activityId,
+          fiscal_rule_set_version: fiscalEvaluation.ruleSetVersion,
+          fiscal_review_status: 'validado',
+          fiscal_reviewed_at: new Date().toISOString(),
+          fiscal_reviewed_by: triggeredByEmail || 'sistema',
+          fiscal_exemption_key: fiscalEvaluation.exemptionKey,
+          fiscal_legal_basis: fiscalEvaluation.legalBasis,
+          deductible_tax_amount: fiscalEvaluation.deductibleTax,
+          non_deductible_tax_amount: fiscalEvaluation.nonDeductibleTax,
         };
 
         try {
