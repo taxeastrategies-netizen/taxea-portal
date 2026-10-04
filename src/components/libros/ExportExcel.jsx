@@ -138,31 +138,8 @@ function buildPnL(invoices, expenses, year) {
 }
 
 // ─── Account mapping helpers ─────────────────────────────────────────────────
-const GASTO_CUENTAS = {
-  ventas_servicios: '7000000000', compras: '6000000000', suministros: '6280000000',
-  alquiler: '6210000000', publicidad_marketing: '6270000000',
-  servicios_profesionales: '6230000000', software: '6280000000',
-  transporte: '6240000000', dietas: '6250000000', gastos_financieros: '6690000000',
-  seguros: '6250000000', otros: '6290000000',
-};
-function ctaIngreso(inv) { return n(inv.tipo_iva) === 0 ? '7050000000' : '7000000000'; }
-function ctaGasto(inv) { return GASTO_CUENTAS[inv.categoria_gasto] || '6000000000'; }
-function buildClienteMap(invoices) {
-  const map = {}; let c = 1;
-  invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-    const k = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
-    if (k && !map[k]) map[k] = `4300${String(c++).padStart(6, '0')}`;
-  });
-  return map;
-}
-function buildProveedorMap(invoices) {
-  const map = {}; let c = 1;
-  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
-    const k = i.proveedor_nif ? i.proveedor_nif.toUpperCase() : (i.proveedor_nombre || i.cliente_nombre || '').toLowerCase();
-    if (k && !map[k]) map[k] = `4100${String(c++).padStart(6, '0')}`;
-  });
-  return map;
-}
+function ctaIngreso(inv) { return inv.revenue_expense_account_code || ''; }
+function ctaGasto(inv) { return inv.revenue_expense_account_code || ''; }
 
 // ─── Hoja 3: Facturas Emitidas ───────────────────────────────────────────────
 function buildFacturasEmitidas(invoices) {
