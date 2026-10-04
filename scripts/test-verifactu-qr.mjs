@@ -33,6 +33,8 @@ assert.equal(parsed.searchParams.get('numserie'), invoice.numero_factura);
 assert.equal(parsed.searchParams.get('fecha'), '02-10-2026');
 assert.equal(parsed.searchParams.get('importe'), '121.00');
 assert.notEqual(parsed.searchParams.get('importe'), invoice.total_factura.toFixed(2), 'El QR no debe restar la retención del importe fiscal.');
+const withSurcharge = { ...invoice, tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 110.7 };
+assert.equal(new URL(buildAeatQrUrl(company, withSurcharge)).searchParams.get('importe'), '126.20', 'El QR fiscal incluye el recargo y no resta la retención.');
 assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: url }), url);
 assert.equal(getInvoiceQrUrl({ ...invoice, tipo: 'recibida', qr_url: url }), '');
 assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: 'https://evil.example/qr' }), '');
