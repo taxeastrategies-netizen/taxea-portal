@@ -396,7 +396,7 @@ Deno.serve(async (req) => {
             counterpartyIsWithholdingAgent: retentionRate > 0,
           });
           fiscalEvaluation = (fiscalResponse?.data || fiscalResponse)?.evaluation;
-          if (!fiscalEvaluation || fiscalEvaluation.status === 'blocked') fiscalErrorMessage = fiscalEvaluation?.reasons?.join(' ') || 'Falta un perfil fiscal validado.';
+          if (!fiscalEvaluation || fiscalEvaluation.status !== 'ready') fiscalErrorMessage = fiscalEvaluation?.reasons?.join(' ') || 'La plantilla requiere revisión fiscal del asesor antes de emitir.';
           else if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
             || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) fiscalErrorMessage = 'Régimen especial pendiente de validación para emisión recurrente.';
           else if (fiscalEvaluation.operationType === 'exempt_limited' && (!fiscalEvaluation.exemptionKey || !fiscalEvaluation.legalBasis)) fiscalErrorMessage = 'La exención requiere clave y fundamento legal validados.';
