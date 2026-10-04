@@ -65,6 +65,14 @@ export function calculateSpecialRegimePreview(input) {
   }
   if (regime === 'criterio_caja') {
     const invoiceGross = finite(input.invoiceGross, 'total de la factura', { positive: true });
+    const taxableBase = finite(input.base, 'base de la factura');
+    const taxQuota = finite(input.taxAmount, 'cuota de impuesto de la factura');
+    if (taxQuota > invoiceGross) throw new Error('La cuota del impuesto no puede superar el total de la factura.');
+    if (Math.abs(cents(taxableBase + taxQuota) - invoiceGross) > 0.02) return {
+      regime, status: 'requires_total_reconciliation', invoiceGross, taxableBase, taxQuota,
+      advisorConfirmationRequired: true,
+      reason: 'El total cobrado/pagado no equivale a base más impuesto (posibles retenciones u otros conceptos). Hay que reconstruir el precio y sus pagos antes de repartir la cuota fiscal.',
+    };
     const operationDate = date(input.operationDate, 'fecha de operación');
     const forcedRecognitionDate = `${Number(operationDate.slice(0, 4)) + 1}-12-31`;
     const payments = Array.isArray(input.payments) ? input.payments : [];
@@ -72,7 +80,7 @@ export function calculateSpecialRegimePreview(input) {
     let applied = 0;
     let paidTotal = 0;
     const events = [];
-    for (const row of payments) {
+    for (const row of [...payments].sort((a, b) => String(a?.date || '').localeCompare(String(b?.date || '')) || String(a?.id || '').localeCompare(String(b?.id || '')))) {
       const id = String(row?.id || '');
       if (!id || seen.has(id)) throw new Error('Cada cobro o pago necesita un identificador único.');
       seen.add(id);
@@ -88,7 +96,17 @@ export function calculateSpecialRegimePreview(input) {
     }
     const remaining = cents(invoiceGross - applied);
     if (remaining > 0) events.push({ id: 'forced_deadline', date: forcedRecognitionDate, amount: remaining, factor: remaining / invoiceGross, kind: 'forced_deadline' });
-    return { regime, status: 'proposal_only', invoiceGross, operationDate, forcedRecognitionDate, events,
+    let allocatedQuota = 0;
+    let allocatedBase = 0;
+    const taxEvents = events.map((event, index) => {
+      const last = index === events.length - 1;
+      const quota = last ? cents(taxQuota - allocatedQuota) : cents(taxQuota * event.amount / invoiceGross);
+      const base = last ? cents(taxableBase - allocatedBase) : cents(taxableBase * event.amount / invoiceGross);
+      allocatedQuota = cents(allocatedQuota + quota);
+      allocatedBase = cents(allocatedBase + base);
+      return { ...event, taxableBase: base, taxQuota: quota };
+    });
+    return { regime, status: 'proposal_only', invoiceGross, taxableBase, taxQuota, operationDate, forcedRecognitionDate, events: taxEvents,
       advisorConfirmationRequired: true, reason: 'El impuesto se reconoce según cobros/pagos trazados y, por el saldo restante, en la fecha límite legal; el asiento exige cuentas transitorias y libro de cobros/pagos.' };
   }
   if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
