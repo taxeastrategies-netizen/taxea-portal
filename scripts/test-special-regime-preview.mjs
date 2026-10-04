@@ -18,16 +18,23 @@ assert.equal(surcharge.surcharge, 5.2);
 assert.equal(surcharge.purchaseCost, 126.2);
 assert.equal(surcharge.deductibleTax, 0);
 assert.throws(() => calculate({ regime: 'recargo_equivalencia', direction: 'gasto', taxKind: 'iva', base: 100, taxRate: 21, surchargeRate: 1.4 }), /no corresponde/);
-const cash = calculate({ regime: 'criterio_caja', direction: 'ingreso', taxKind: 'iva', invoiceGross: 121,
+const cash = calculate({ regime: 'criterio_caja', direction: 'ingreso', taxKind: 'iva', base: 100, taxAmount: 21, invoiceGross: 121,
   operationDate: '2026-01-15', payments: [{ id: 'p1', date: '2026-04-15', amount: 60.5 }] });
-assert.deepEqual(cash.events.map(row => [row.date, row.amount, row.kind]), [
-  ['2026-04-15', 60.5, 'payment'], ['2027-12-31', 60.5, 'forced_deadline'],
+assert.deepEqual(cash.events.map(row => [row.date, row.amount, row.taxableBase, row.taxQuota, row.kind]), [
+  ['2026-04-15', 60.5, 50, 10.5, 'payment'], ['2027-12-31', 60.5, 50, 10.5, 'forced_deadline'],
 ]);
-assert.throws(() => calculate({ regime: 'criterio_caja', invoiceGross: 100, operationDate: '2026-01-15',
+const cashUnsorted = calculate({ regime: 'criterio_caja', direction: 'gasto', taxKind: 'iva', base: 100, taxAmount: 21, invoiceGross: 121,
+  operationDate: '2026-01-15', payments: [{ id: 'late', date: '2028-01-01', amount: 60.5 }, { id: 'early', date: '2026-02-01', amount: 60.5 }] });
+assert.deepEqual(cashUnsorted.events.map(row => [row.date, row.taxQuota]), [['2026-02-01', 10.5], ['2027-12-31', 10.5]]);
+assert.equal(calculate({ regime: 'criterio_caja', base: 100, taxAmount: 21, invoiceGross: 111,
+  operationDate: '2026-01-15' }).status, 'requires_total_reconciliation');
+assert.equal(calculate({ regime: 'criterio_caja', base: 100, taxAmount: 21, invoiceGross: 121,
+  operationDate: '2026-01-15', payments: [{ id: 'paid', date: '2026-05-01', amount: 121 }] }).events[0].taxQuota, 21);
+assert.throws(() => calculate({ regime: 'criterio_caja', base: 100, taxAmount: 0, invoiceGross: 100, operationDate: '2026-01-15',
   payments: [{ id: 'p1', date: '2026-02-01', amount: 60 }, { id: 'p2', date: '2026-03-01', amount: 60 }] }), /superan/);
-assert.throws(() => calculate({ regime: 'criterio_caja', invoiceGross: 100, operationDate: '2026-01-15',
+assert.throws(() => calculate({ regime: 'criterio_caja', base: 100, taxAmount: 0, invoiceGross: 100, operationDate: '2026-01-15',
   payments: [{ id: 'p1', date: '2026-02-01', amount: 60 }, { id: 'p1', date: '2026-03-01', amount: 20 }] }), /único/);
-assert.throws(() => calculate({ regime: 'criterio_caja', invoiceGross: 100, operationDate: '2026-01-15',
+assert.throws(() => calculate({ regime: 'criterio_caja', base: 100, taxAmount: 0, invoiceGross: 100, operationDate: '2026-01-15',
   payments: [{ id: 'advance', date: '2025-12-30', amount: 20 }] }), /anticipos/);
 const oss = calculate({ regime: 'oss_union', direction: 'ingreso', taxKind: 'iva', base: 100, taxRate: 20, destinationCountry: 'FR', destinationRateConfirmed: true });
 assert.equal(oss.destinationTax, 20);
