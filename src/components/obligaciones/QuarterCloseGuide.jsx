@@ -31,7 +31,7 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
   useEffect(() => { setExtra(null); load(); return () => { requestRef.current++; }; }, [companyId, fiscalYear]);
   const currentExtra = extra?.companyId === companyId ? extra : null;
   const modelItems = useMemo(() => (bundle?.items || []).filter(row => Number(row.fiscalYear) === Number(fiscalYear) && (row.period === 'T' + quarter || row.period === String(quarter) + 'T' || row.period === '0' + quarter + 'T' || row.period === String(quarter))), [bundle, fiscalYear, quarter]);
-  const invoices = useMemo(() => currentExtra?.invoices?.filter(row => !row.anulada && Number(String(row.fecha_emision || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_emision) === quarter) || [], [extra, fiscalYear, quarter]);
+  const invoices = useMemo(() => currentExtra?.invoices?.filter(row => !row.anulada && Number(String(row.fecha_emision || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_emision) === quarter) || [], [extra, companyId, fiscalYear, quarter]);
   const accountingExceptions = invoices.filter(row => row.estado_contable !== 'contabilizada' || !row.linked_journal_entry_id);
   const invoicesKnown = Array.isArray(currentExtra?.invoices);
   const bankKnown = Boolean(currentExtra?.bank?.accounts?.some(row => row.estado_conexion === 'conectado' && row.origen_datos === 'open_banking'));
