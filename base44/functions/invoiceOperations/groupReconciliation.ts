@@ -92,6 +92,9 @@ export async function reconcileInvoiceGroup(base44, user, companyId, body, helpe
   for (const allocation of allocations) {
     const invoice = await svc.entities.Invoice.get(allocation.invoiceId).catch(() => null);
     if (!invoice || invoice.company_id !== companyId || invoice.anulada) throw Object.assign(new Error('Una factura no pertenece a esta empresa o está anulada.'), { status: 409 });
+    if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
+      throw Object.assign(new Error('Una factura sigue pendiente de validación fiscal o contabilización; no se puede conciliar todavía.'), { status: 409 });
+    }
     if (directionFor(invoice) !== transaction.tipo || clean(invoice.moneda || 'EUR', 8).toUpperCase() !== 'EUR') {
       throw Object.assign(new Error('Todas las facturas deben coincidir en sentido bancario y divisa EUR.'), { status: 409 });
     }
