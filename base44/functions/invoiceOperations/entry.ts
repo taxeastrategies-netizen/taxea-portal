@@ -559,10 +559,12 @@ Deno.serve(async (req) => {
     if (action === 'list_fiscal_review') {
       const { companyId } = await authorizeCompany(base44, user, body.company_id);
       if (!['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user))) return Response.json({ error: 'Bandeja exclusiva del asesor o administrador.' }, { status: 403 });
-      const invoices = await base44.asServiceRole.entities.Invoice.filter({
-        company_id: companyId, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
-      }, '-created_date', 500);
-      return Response.json({ ok: true, invoices: (invoices || []).filter(row => !row.anulada), truncated: (invoices || []).length >= 500 });
+      const [pending, postingErrors] = await Promise.all([
+        base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1' }, '-created_date', 500),
+        base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR' }, '-created_date', 500),
+      ]);
+      const invoices = [...(pending || []), ...(postingErrors || [])].filter(row => !row.anulada);
+      return Response.json({ ok: true, invoices, truncated: (pending || []).length >= 500 || (postingErrors || []).length >= 500 });
     }
 
     if (action === 'reconcile_multiple') {
