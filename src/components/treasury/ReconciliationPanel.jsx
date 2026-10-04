@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
+import { suggestInvoiceMatches } from '@/lib/reconciliationSuggestions';
 
 function fmt(value, currency = 'EUR') {
   if (!value && value !== 0) return '—';
@@ -28,25 +29,12 @@ const CONFIDENCE_CFG = {
   baja: { label: 'Coincidencia baja', color: 'text-red-500', bg: 'bg-red-50 border-red-200' },
 };
 
-function scoreMatch(transaction, candidate) {
-  let score = 0;
-  const transactionAmount = Math.abs(transaction.importe || 0);
-  const candidateAmount = Math.abs(candidate.importe_pendiente ?? candidate.total_factura ?? candidate.total ?? 0);
-  if (Math.abs(transactionAmount - candidateAmount) < 0.01) score += 50;
-  else if (candidateAmount > 0 && Math.abs(transactionAmount - candidateAmount) < candidateAmount * 0.05) score += 20;
-  const bankText = `${transaction.concepto || ''} ${transaction.nombre_contraparte || ''} ${transaction.referencia || ''}`.toLowerCase();
-  const party = (candidate.cliente_nombre || candidate.proveedor_nombre || '').toLowerCase();
-  if (party && bankText.includes(party.split(' ')[0])) score += 25;
-  const invoiceNumber = (candidate.numero_factura || '').toLowerCase();
-  if (invoiceNumber && bankText.includes(invoiceNumber)) score += 30;
-  return score;
-}
-
 export default function ReconciliationPanel({ transaction, invoices, onClose, onReconciled }) {
   const [mode, setMode] = useState('invoice');
   const [loading, setLoading] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedBankLedgerId, setSelectedBankLedgerId] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
@@ -58,6 +46,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     if (!transaction?.id) return;
     setMode('invoice');
     setSelected(null);
+    setReviewConfirmed(false);
     setSelectedAccountId('');
     setSelectedBankLedgerId('');
     setAccountSearch('');
@@ -80,15 +69,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
 
   const candidates = useMemo(() => {
     if (!transaction) return [];
-    const incoming = transaction.tipo === 'entrada';
-    const pool = incoming
-      ? invoices.filter(invoice => invoice.tipo === 'emitida' && !invoice.anulada && invoice.estado_cobro !== 'cobrada')
-      : invoices.filter(invoice => invoice.tipo === 'recibida' && !invoice.anulada && invoice.estado_cobro !== 'cobrada');
-    return pool.map(candidate => {
-      const score = scoreMatch(transaction, candidate);
-      const confidence = score >= 70 ? 'alta' : score >= 35 ? 'media' : 'baja';
-      return { ...candidate, _score: score, _conf: confidence };
-    }).sort((left, right) => right._score - left._score).slice(0, 12);
+    return suggestInvoiceMatches(transaction, invoices);
   }, [transaction, invoices]);
 
   const filteredAccounts = useMemo(() => {
@@ -114,6 +95,10 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     if (loading) return;
     if (!selected) {
       setError('Selecciona primero la factura que quieres asociar al movimiento.');
+      return;
+    }
+    if (selected._conf !== 'alta' && !reviewConfirmed) {
+      setError('Confirma expresamente la identidad de la factura antes de conciliar una sugerencia no segura.');
       return;
     }
     if (!selectedBankLedgerId) {
@@ -276,6 +261,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
                     onClick={() => {
                       setError('');
                       setSelected(active ? null : candidate);
+                      setReviewConfirmed(false);
                     }}
                     className={cn('w-full text-left p-4 rounded-xl border transition-all', active ? 'border-taxea-red/40 bg-taxea-red/5 ring-2 ring-taxea-red/20' : 'border-slate-200 hover:bg-slate-50')}>
                     <div className="flex items-start justify-between gap-3">
@@ -292,10 +278,13 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
                       <span className={cn('text-[10px] font-medium px-2 py-0.5 rounded-full border', config.bg, config.color)}>{config.label}</span>
                       {active && <CheckCircle className="w-3.5 h-3.5 text-taxea-red ml-auto" />}
                     </div>
+                    <p className="mt-2 text-[11px] text-slate-500">{candidate._reasons.join(' · ')}</p>
                   </motion.button>
                 );
               })}
-              <p className="text-[11px] text-slate-500">Al confirmar se contabiliza la factura si todavía estaba pendiente y se genera el cobro o pago contra la cuenta del cliente/proveedor.</p>
+              {selected && selected._conf !== 'alta' && <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><input type="checkbox" checked={reviewConfirmed} onChange={event => setReviewConfirmed(event.target.checked)} />He verificado manualmente tercero, referencia e importe de esta factura.</label>}
+              {selected?._partial && <p className="text-xs text-blue-700">Se registrará un cobro o pago parcial; el resto de la factura seguirá pendiente.</p>}
+              <p className="text-[11px] text-slate-500">La puntuación solo ordena sugerencias y no autoriza conciliación automática. Un movimiento solo puede aplicarse a una factura en este flujo; si cubre varias, revísalo manualmente sin forzar una conciliación incorrecta.</p>
             </div>
           ) : (
             <div className="space-y-3">
