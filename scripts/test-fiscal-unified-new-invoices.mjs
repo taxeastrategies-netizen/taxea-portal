@@ -28,8 +28,8 @@ let allowWrites = false;
 const entities = new Proxy({}, { get: (_target, name) => ({
   async get(id) { return (records[name] || []).find(item => item.id === id) || null; },
   async filter(query) { return (records[name] || []).filter(row => Object.entries(query || {}).every(([key, value]) => row[key] === value)); },
-  async create() { writes++; throw new Error('Unexpected write'); },
-  async update() { writes++; throw new Error('Unexpected write'); },
+  async create(payload) { writes++; if (!allowWrites) throw new Error('Unexpected write'); const row = { id: `${name}-${writes}`, ...payload }; (records[name] ||= []).push(row); return row; },
+  async update(id, payload) { writes++; if (!allowWrites) throw new Error('Unexpected write'); const row = (records[name] || []).find(item => item.id === id); if (!row) throw new Error('Missing record'); Object.assign(row, payload); return row; },
 }) });
 let currentUser = { id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } };
 const client = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
