@@ -198,6 +198,18 @@ export default function TreasuryCenter({ company }) {
       : { type: 'success', text: `Sincronización completada. ${created} movimientos nuevos; los ya existentes se han omitido.${reconciliationText}` });
   };
 
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('bank_transaction_id');
+    if (!id || !transactions.length) return;
+    const target = transactions.find(item => item.id === id && item.company_id === companyId);
+    if (!target) return;
+    setReconTx(target);
+    setTab('conciliacion');
+    const url = new URL(window.location.href);
+    url.searchParams.delete('bank_transaction_id');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  }, [transactions, companyId]);
+
   const pendingConciliation = useMemo(() =>
     transactions.filter(t => t.estado_proveedor !== 'pending' && (t.estado_conciliacion === 'sin_conciliar' || t.estado_conciliacion === 'sugerida_ia')).length,
     [transactions]);
