@@ -9,7 +9,7 @@ const entry = path.resolve('base44/functions/fiscalOperations/entry.ts');
 const build = await esbuild.build({
   entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs',
   plugins: [{ name: 'sdk-stub', setup(builder) {
-    builder.onResolve({ filter: /^npm:@base44\\/sdk/ }, () => ({ path: 'sdk', namespace: 'stub' }));
+    builder.onResolve({ filter: /^npm:@base44/, }, () => ({ path: 'sdk', namespace: 'stub' }));
     builder.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
       loader: 'js', contents: 'export const createClientFromRequest=()=>globalThis.__client;',
     }));
