@@ -710,7 +710,7 @@ function normalizedTaxLines(invoices: any[], taxLines: any[], warnings: string[]
   let fallbackCount = 0;
   let pendingFallbackCount = 0;
   for (const invoice of invoices) {
-    if (invoice.anulada || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') continue;
+    if (invoice.anulada || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) continue;
     const lines = byInvoice.get(invoice.id) || [];
     if (lines.length) {
       for (const line of lines) result.push({ ...line, invoice, sourceId: `InvoiceTaxLine:${line.id}`, date: dateOf(line) || dateOf(invoice) });
