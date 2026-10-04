@@ -2,6 +2,7 @@ import { getOutstandingAmount } from './financialCore';
 
 const CLOSED = new Set(['presentado', 'domiciliado', 'pagado', 'finalizado', 'no_aplica', 'cancelado']);
 const money = value => Math.round((Number(value) || 0) * 100) / 100;
+const canaryToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const ymd = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
 const addDays = (date, days) => {
   const copy = new Date(date + 'T12:00:00Z');
@@ -9,9 +10,9 @@ const addDays = (date, days) => {
   return copy.toISOString().slice(0, 10);
 };
 
-export function buildCashForecast({ invoices = [], obligations = [], events = [], treasury = {}, treasuryError = '', today = new Date().toISOString().slice(0, 10), days = 91 } = {}) {
+export function buildCashForecast({ invoices = [], obligations = [], events = [], treasury = {}, treasuryError = '', today = canaryToday(), days = 91 } = {}) {
   const opening = Number(treasury.availableCash);
-  const hasBankBalance = !treasuryError && Number(treasury.connectedAccounts) > 0 && Number.isFinite(opening);
+  const hasBankBalance = !treasuryError && Number(treasury.connectedEuroAccounts) > 0 && Number.isFinite(opening);
   const horizon = Math.min(91, Math.max(1, Number(days) || 91));
   const lastDay = addDays(today, horizon - 1);
   const movements = [];
