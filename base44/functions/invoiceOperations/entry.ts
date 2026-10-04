@@ -425,6 +425,10 @@ Deno.serve(async (req) => {
         const previous = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, creation_idempotency_key: idempotencyKey }, '-created_date', 2);
         let pending = previous?.[0] || null;
         if (pending && pending.source_hash !== sourceHash) return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes.' }, { status: 409 });
+        if (pending && pending.fiscal_review_status === 'validado' && !pending.accounting_migration_hold) {
+          return Response.json({ ok: true, review_required: false, duplicate: true, invoice: pending,
+            journal_entry_id: pending.linked_journal_entry_id || null, source_truth_version: 'financial-source-truth-v1' });
+        }
         if (!pending) {
           const sameNumber = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, numero_factura: payload.numero_factura }, '-created_date', 20);
           if ((sameNumber || []).some(candidate => !candidate.anulada)) return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
