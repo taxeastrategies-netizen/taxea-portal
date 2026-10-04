@@ -550,12 +550,13 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
   const candidates = data.taxLines.filter((line: any) => line.taxKind === kind);
   const model: '303'|'420'|'417' = modelOverride || (kind === 'iva' ? '303' : '420');
   const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
-  for (const line of candidates) {
-    const lineRegime = clean(line.regime);
-    const invoiceRegime = clean(line.invoice?.fiscal_regime);
+  for (const candidate of candidates) {
+    const lineRegime = clean(candidate.regime);
+    const invoiceRegime = clean(candidate.invoice?.fiscal_regime);
     // Algunas líneas históricas guardaron el tipo de operación en regime. No se toma por un régimen validado.
     const legacyTreatment = ['subject_taxed', 'subject_zero', 'exempt_limited', 'exempt_full', 'special_margin'].includes(lineRegime);
     const regime = legacyTreatment ? invoiceRegime || 'general' : lineRegime || invoiceRegime;
+    const line = regime && regime !== lineRegime ? { ...candidate, regime } : candidate;
     const regimeConflict = !legacyTreatment && !!lineRegime && !!invoiceRegime && lineRegime !== invoiceRegime;
     if (regimeConflict || NON_ORDINARY_INDIRECT_REGIMES.has(regime) || clean(line.operationType) === 'special_margin' || (kind === 'igic' && regime === 'simplificado')) {
       const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
