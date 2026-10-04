@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
@@ -58,6 +57,17 @@ const income = await evaluate({ direction: 'ingreso', taxRate: 0, taxAmount: 0 }
 assert.equal(income.operationType, 'exempt_limited');
 assert.equal(income.taxAmount, 0);
 
+records.FiscalActivity[0].indirectTaxRegime = 'general';
+records.FiscalActivity[0].defaultTaxRate = 21;
+const wrongIncomeRate = await evaluate({ direction: 'ingreso', taxRate: 10, taxAmount: 10 });
+assert.equal(wrongIncomeRate.taxRate, 21);
+assert.equal(wrongIncomeRate.taxAmount, 21);
+const wrongExpenseQuota = await evaluate({ direction: 'gasto', taxRate: 21, taxAmount: 18 });
+assert.equal(wrongExpenseQuota.taxAmount, 21);
+records.FiscalActivity[0].automationLevel = 'proponer_revisar';
+assert.equal((await evaluate({ direction: 'ingreso', taxRate: 21, taxAmount: 21 })).status, 'review_required');
+records.FiscalActivity[0].automationLevel = 'automatico';
+
 records.FiscalActivity[0].indirectTax = 'igic';
 records.FiscalActivity[0].indirectTaxRegime = 'pequeno_empresario_igic';
 const repepExpense = await evaluate({ direction: 'gasto', taxRate: 7, taxAmount: 7 });
@@ -86,4 +96,4 @@ assert.equal(postedResponse.status, 409);
 assert.equal(records.Invoice[0].deductible_tax_amount, 21);
 assert.equal(writes, 0);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas'] }, null, 2));
