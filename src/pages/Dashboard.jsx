@@ -268,13 +268,13 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <DeptCard icon={Calculator} color="text-taxea-red" bgLight="bg-red-50/60" border="border-red-100" title="Tax & Accounting" to="/tax-accounting/dashboard" kpis={[
+        <DeptCard icon={Calculator} color="text-taxea-red" bgLight="bg-red-50/60" border="border-red-100" title="Fiscalidad y Contabilidad" to="/tax-accounting/dashboard" kpis={[
           { label: 'Asientos confirmados', value: quality.confirmedEntries || 0, sub: `${accounting.report?.excludedEntries || 0} excluidos del informe` },
           { label: 'Facturas sin asiento válido', value: quality.pendingInvoicePostings || 0, alert: quality.pendingInvoicePostings > 0 },
           { label: 'Obligaciones abiertas', value: derived.openObligations.length, warn: derived.urgentObligations.length > 0 },
           { label: 'Incidencias contables/fiscales', value: operations.openErrors || 0, alert: operations.criticalErrors > 0 },
         ]} tools={TAX_TOOLS} />
-        <DeptCard icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100" title="Finance" to="/finance/dashboard" kpis={[
+        <DeptCard icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100" title="Finanzas y tesorería" to="/finance/dashboard" kpis={[
           { label: 'Saldo disponible EUR', value: currency(treasury.cashEur), sub: `${treasury.connectedAccounts || 0} cuenta(s) conectada(s)` },
           { label: 'Sin conciliar', value: treasury.unreconciled || 0, warn: treasury.unreconciled > 0, sub: treasury.reconciliationRate === null ? 'Sin movimientos' : `${treasury.reconciliationRate}% conciliado` },
           { label: 'Cobros vencidos', value: currency(receivables.overdueAmount), alert: receivables.overdue > 0, sub: `${receivables.overdue || 0} factura(s)` },
@@ -282,7 +282,7 @@ export default function Dashboard() {
         ]} tools={FIN_TOOLS} />
         <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white"><div className="flex items-center gap-2"><MapPinned className="h-5 w-5 text-cyan-300" /><h3 className="font-jakarta text-sm font-bold">Subvenciones y Ayudas</h3></div><p className="mt-3 text-xs leading-relaxed text-slate-300">Mapa de España, ayudas para autónomos y búsqueda por provincia y actividad con fuente oficial.</p><Link to="/subvenciones" className="mt-5 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-50">Explorar ayudas</Link></div>
         <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 p-5 text-white"><div className="flex items-center gap-2"><Landmark className="h-5 w-5 text-cyan-300" /><h3 className="font-jakarta text-sm font-bold">Licitaciones y contratos públicos</h3></div><p className="mt-3 text-xs leading-relaxed text-slate-300">Busca expedientes abiertos, anuncios previos y consultas preliminares en las fuentes oficiales de contratación.</p><Link to="/licitaciones" className="mt-5 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-50">Explorar licitaciones</Link></div>
-        <DeptCard icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100" title="People & HR" to="/people/dashboard" kpis={[
+        <DeptCard icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100" title="Recursos humanos y personas" to="/people/dashboard" kpis={[
           { label: 'Empleados activos', value: people.activeEmployees || 0, sub: `${people.employees || 0} total plantilla` },
           { label: 'Ausencias actuales', value: people.currentAbsences || 0, sub: `${people.pendingAbsences || 0} pendientes` },
           { label: 'Docs pendientes de firma', value: people.pendingSignature || 0, warn: people.pendingSignature > 0, sub: `${people.expiredDocuments || 0} expirados` },
