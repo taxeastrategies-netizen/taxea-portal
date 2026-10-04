@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { buildInvoicePosting, commitJournalEntry, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { reconcileInvoiceGroup } from './groupReconciliation.ts';
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -470,6 +471,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === 'reconcile_multiple') {
+      const { companyId } = await authorizeCompany(base44, user, body.company_id);
+      const result = await reconcileInvoiceGroup(base44, user, companyId, body, {
+        reserveInvoicePayment, refreshInvoicePaymentState, recordTimeline,
+      });
+      return Response.json(result);
+    }
+
     const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
 
     if (action === 'mark_accounting_review') {
@@ -868,7 +877,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[invoiceOperations]', error);
     const status = Number(error?.status) || 500;
-    if (currentAction === 'reconcile' || currentAction === 'list_reconciliation_candidates') {
+    if (currentAction === 'reconcile' || currentAction === 'reconcile_multiple' || currentAction === 'list_reconciliation_candidates') {
       return businessError(error?.message || 'No se pudo completar la conciliación.', status);
     }
     return Response.json({ error: error?.message || 'Error interno.' }, { status });
