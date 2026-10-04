@@ -171,7 +171,7 @@ export default function TaxDashboard({ onNavigate }) {
       <div className="w-6 h-6 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
     </div>
   );
-  if (!company) return <NoCompanyState pageName="Tax & Accounting" />;
+  if (!company) return <NoCompanyState pageName="Fiscalidad y Contabilidad" />;
 
   const fmt = (n) => n?.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00';
   const taxLabel = company.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
