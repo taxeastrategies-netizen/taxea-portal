@@ -25,7 +25,7 @@ const records = {
   BankTransaction: [
     { id: 'tx-ok', company_id: companyId, bank_account_id: 'bank-physical', fecha_operacion: '2026-10-04', importe: 100, tipo: 'entrada', moneda: 'EUR', estado_conciliacion: 'sin_conciliar', estado_proveedor: 'booked' },
     { id: 'tx-retry', company_id: companyId, bank_account_id: 'bank-physical', fecha_operacion: '2026-10-04', importe: 50, tipo: 'entrada', moneda: 'EUR', estado_conciliacion: 'sin_conciliar', estado_proveedor: 'booked' },
-    { id: 'tx-555', company_id: companyId, bank_account_id: 'bank-physical', fecha_operacion: '2026-10-04', importe: 30, tipo: 'entrada', moneda: 'EUR', estado_conciliacion: 'revisar', estado_proveedor: 'booked' },
+    { id: 'tx-555', company_id: companyId, bank_account_id: 'bank-physical', fecha_operacion: '2026-10-04', importe: 30, tipo: 'entrada', moneda: 'EUR', estado_conciliacion: 'revisar', estado_proveedor: 'booked', entidad_tipo: 'accounting_account', entidad_id: 'pending-555', journal_entry_id: 'old-555', accounting_operation_id: 'old-op' },
     { id: 'tx-other', company_id: 'company-b', bank_account_id: 'bank-physical', importe: 100, tipo: 'entrada', moneda: 'EUR', estado_conciliacion: 'sin_conciliar' },
     { id: 'tx-fx', company_id: companyId, bank_account_id: 'bank-physical', importe: 100, tipo: 'entrada', moneda: 'USD', estado_conciliacion: 'sin_conciliar' },
   ],
@@ -34,18 +34,25 @@ const records = {
     { id: 'bank-ledger', companyId, code: '57200001', name: 'Banco', type: 'banco', status: 'activa' },
     { id: 'customer-a', companyId, code: '43000001', name: 'Cliente A', status: 'activa' },
     { id: 'customer-b', companyId, code: '43000002', name: 'Cliente B', status: 'activa' },
+    { id: 'pending-555', companyId, code: '55500000', name: 'Pendiente', status: 'activa' },
   ],
   Invoice: [
     { id: 'a', company_id: companyId, tipo: 'emitida', total_factura: 60, numero_factura: 'A', moneda: 'EUR', counterparty_account_id: 'customer-a' },
     { id: 'b', company_id: companyId, tipo: 'emitida', total_factura: 40, numero_factura: 'B', moneda: 'EUR', counterparty_account_id: 'customer-b' },
     { id: 'c', company_id: companyId, tipo: 'emitida', total_factura: 30, numero_factura: 'C', moneda: 'EUR', counterparty_account_id: 'customer-a' },
     { id: 'd', company_id: companyId, tipo: 'emitida', total_factura: 20, numero_factura: 'D', moneda: 'EUR', counterparty_account_id: 'customer-b' },
+    { id: 'e', company_id: companyId, tipo: 'emitida', total_factura: 20, numero_factura: 'E', moneda: 'EUR', counterparty_account_id: 'customer-a' },
+    { id: 'f', company_id: companyId, tipo: 'emitida', total_factura: 10, numero_factura: 'F', moneda: 'EUR', counterparty_account_id: 'customer-b' },
     { id: 'foreign', company_id: 'company-b', tipo: 'emitida', total_factura: 50, numero_factura: 'X', moneda: 'EUR' },
   ],
   InvoicePayment: [], JournalEntry: [
     { id: 'old-555', companyId, postingKey: 'bank:tx-555:pgc8-v1', accountingOperationId: 'old-op', status: 'confirmado' },
   ],
   AccountingPostingOperation: [{ id: 'old-op', companyId, operationType: 'bank_reconciliation', status: 'committed' }],
+  JournalEntryLine: [
+    { id: 'old-bank', companyId, journalEntryId: 'old-555', accountId: 'bank-ledger', accountCode: '57200001', debit: 30, credit: 0 },
+    { id: 'old-pending', companyId, journalEntryId: 'old-555', accountId: 'pending-555', accountCode: '55500000', debit: 0, credit: 30 },
+  ],
   InvoiceTimelineEvent: [],
 };
 let sequence = 0;
@@ -83,7 +90,7 @@ globalThis.__groupTest = {
     const debit = entry.lines.reduce((sum, line) => sum + line.debit, 0);
     const credit = entry.lines.reduce((sum, line) => sum + line.credit, 0);
     assert.equal(Math.round(debit * 100), Math.round(credit * 100));
-    assert.equal(entry.lines.filter(line => line.sourceLineType === 'banco').length, 1);
+    assert.equal(entry.lines.filter(line => line.sourceLineType === 'banco').length, entry.postingKey.startsWith('bank-group-reclass:') ? 0 : 1);
     return { entry: await entities.JournalEntry.update(entry.id, { status: 'confirmado' }) };
   },
   async updatePostingOperation(_svc, operation, patch) { return entities.AccountingPostingOperation.update(operation.id, patch); },
@@ -110,7 +117,7 @@ assert.throws(() => normalizeGroupAllocations(group, 99), /suma repartida/);
 assert.throws(() => normalizeGroupAllocations([{ invoice_id: 'a', amount: 60 }, { invoice_id: 'a', amount: 40 }], 100), /repetidas/);
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-other', group), helpers), /Movimiento no encontrado/);
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-fx', group), helpers), /requiere EUR/);
-await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-555', [{ invoice_id: 'c', amount: 20 }, { invoice_id: 'd', amount: 10 }]), helpers), /ya tiene un asiento bancario/);
+
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', [{ invoice_id: 'a', amount: 70 }, { invoice_id: 'b', amount: 30 }]), helpers), /supera el pendiente/);
 const first = await reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', group), helpers);
 assert.equal(first.ok, true);
@@ -130,5 +137,11 @@ const recovered = await reconcileInvoiceGroup(base44, user, companyId, request('
 assert.equal(recovered.ok, true);
 assert.equal(records.JournalEntry.filter(row => row.postingKey === 'bank:tx-retry:pgc8-v1').length, 1);
 assert.equal(records.InvoicePayment.filter(row => row.bank_transaction_id === 'tx-retry').length, 2);
-assert.equal(records.InvoiceTimelineEvent.length, 4);
-console.log('Conciliación agrupada: validación, asiento único, permisos, reintento e idempotencia OK');
+const reclassified = await reconcileInvoiceGroup(base44, user, companyId, request('tx-555', [{ invoice_id: 'e', amount: 20 }, { invoice_id: 'f', amount: 10 }]), helpers);
+assert.equal(reclassified.reclassified_555, true);
+assert.equal(records.JournalEntry.filter(row => row.postingKey === 'bank:tx-555:pgc8-v1').length, 1);
+assert.equal(records.JournalEntry.filter(row => row.postingKey === 'bank-group-reclass:tx-555:pgc8-v1').length, 1);
+assert.equal(records.BankTransaction.find(row => row.id === 'tx-555').journal_entry_id, 'old-555');
+assert.equal((await reconcileInvoiceGroup(base44, user, companyId, request('tx-555', [{ invoice_id: 'e', amount: 20 }, { invoice_id: 'f', amount: 10 }]), helpers)).duplicate, true);
+assert.equal(records.InvoiceTimelineEvent.length, 6);
+console.log('Conciliación agrupada: validación, asiento único, 555, permisos, reintento e idempotencia OK');
