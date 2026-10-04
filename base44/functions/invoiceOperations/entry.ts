@@ -414,7 +414,31 @@ Deno.serve(async (req) => {
       } catch (error) {
         return Response.json({ error: error?.response?.data?.error || 'No se pudo verificar el encuadramiento fiscal; no se ha creado la factura.' }, { status: 503 });
       }
-      if (!fiscalEvaluation || fiscalEvaluation.status !== 'ready') return Response.json({ error: fiscalEvaluation?.reasons?.join(' ') || 'La actividad fiscal requiere revisión del asesor antes de crear o contabilizar esta factura.' }, { status: 422 });
+      // En modo proponer/revisar se conserva el documento sin emitir QR, libro ni asiento.
+      // La validación profesional se hace después desde la revisión fiscal de la factura.
+      const requiresAdvisorReview = !fiscalEvaluation || fiscalEvaluation.status !== 'ready'
+        || body.confirm_fiscal_review !== true
+        || !['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user));
+      if (requiresAdvisorReview) {
+        const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
+        const sourceHash = await sha256(JSON.stringify(payload));
+        const previous = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, creation_idempotency_key: idempotencyKey }, '-created_date', 2);
+        let pending = previous?.[0] || null;
+        if (pending && pending.source_hash !== sourceHash) return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes.' }, { status: 409 });
+        if (!pending) {
+          const sameNumber = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, numero_factura: payload.numero_factura }, '-created_date', 20);
+          if ((sameNumber || []).some(candidate => !candidate.anulada)) return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
+          pending = await base44.asServiceRole.entities.Invoice.create({
+            ...payload, fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
+            accounting_review_status: 'pendiente_revision',
+            accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
+            creation_idempotency_key: idempotencyKey, source_hash: sourceHash,
+          });
+        }
+        return Response.json({ ok: true, review_required: true, duplicate: Boolean(previous?.[0]),
+          invoice: pending, journal_entry: null, accounting_warning: 'Pendiente de validación fiscal por asesor/admin; no emitida ni contabilizada.',
+          fiscal_reasons: fiscalEvaluation?.reasons || [], source_truth_version: 'financial-source-truth-v1' });
+      }
       if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
         || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) {
         return Response.json({ error: 'Esta operación requiere revisión fiscal y contable del asesor antes de emitir o contabilizar; el régimen especial se implementará en la siguiente fase.' }, { status: 422 });
