@@ -226,8 +226,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         }).catch(error => console.error('[InvoiceForm] Contact sync failed:', error));
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
-          titulo: `Nueva factura: ${payload.numero_factura}`,
-          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${payload.cliente_nombre || ''} · ${fmt(total)} €`,
+          titulo: `${result.review_required ? 'Factura pendiente de revisión' : 'Nueva factura'}: ${payload.numero_factura}`,
+          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || payload.proveedor_nombre || ''} · ${fmt(total)} €`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
 
@@ -306,13 +306,13 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         </DialogHeader>
         {form.tipo === 'emitida' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Al emitir se fija el número y se prepara un QR tributario para la factura. La remisión VERI*FACTU a la AEAT aún no está activada; este QR no acredita un envío.
+            El número quedará reservado y la factura pendiente de revisión. El QR tributario se genera tras la confirmación fiscal y contable del asesor. La remisión VERI*FACTU a la AEAT no está activada.
           </div>
         )}
 
         <div className="space-y-5 mt-2">
           {fiscalContext.loading ? <p className="text-xs text-muted-foreground">Comprobando perfil fiscal…</p> : !fiscalContext.profile || fiscalContext.profile.profileStatus !== 'validado_asesor' ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Antes de crear una factura nueva, el asesor debe validar el perfil fiscal y su actividad en Configuración fiscal. Las facturas y subcuentas anteriores no cambian.</div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Puedes guardar una propuesta, pero el asesor debe validar el perfil y la actividad en Configuración fiscal antes de confirmar la factura y su asiento. Las facturas y subcuentas anteriores no cambian.</div>
           ) : null}
           {fiscalContext.activities.length > 0 && (
             <div className="space-y-1.5">
@@ -611,7 +611,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         <div className="flex justify-end gap-3 mt-5">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
-            {saving ? 'Guardando...' : form.tipo === 'emitida' ? 'Emitir factura' : 'Registrar factura recibida'}
+            {saving ? 'Guardando...' : form.tipo === 'emitida' ? 'Guardar para revisión fiscal' : 'Guardar recibida para revisión'}
           </Button>
         </div>
       </DialogContent>
