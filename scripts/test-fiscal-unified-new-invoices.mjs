@@ -151,6 +151,11 @@ const untracedOverride = await handler(new Request('https://taxea.test/functions
 }));
 assert.equal(untracedOverride.status, 422);
 assert.equal(writes, 0);
+const invalidActivityResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_activity', companyId: 'company-a', activity: { id: 'activity-a', indirectTax: 'igic', indirectTaxRegime: 'recargo_equivalencia' } }),
+}));
+assert.equal(invalidActivityResponse.status, 422);
+assert.equal(writes, 0);
 allowWrites = true;
 const approvedExpense = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
@@ -193,4 +198,4 @@ const advisorConfirmation = await handler(new Request('https://taxea.test/functi
 assert.equal(advisorConfirmation.status, 200);
 assert.equal(proposed303.activo, true);
 assert.equal(proposed303.fuenteValidacion, 'criterio_asesor');
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda'] }, null, 2));
