@@ -628,8 +628,11 @@ Deno.serve(async (req) => {
       }
       try {
         const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
-        if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR') {
-          await base44.asServiceRole.entities.Invoice.update(invoice.id, { accounting_migration_hold: false, accounting_migration_hold_reason: '' });
+        if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' || (qrUrl && !invoice.qr_url)) {
+          await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+            accounting_migration_hold: false, accounting_migration_hold_reason: '',
+            ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
+          });
         }
         const saved = await base44.asServiceRole.entities.Invoice.get(invoice.id);
         let ocrWarning = '';
