@@ -169,6 +169,15 @@
     },
     "accounting_operation_id": {
       "type": "string"
+    },
+    "group_journal_entry_id": {
+      "type": "string"
+    },
+    "group_accounting_operation_id": {
+      "type": "string"
+    },
+    "reclassification_journal_entry_id": {
+      "type": "string"
     }
   },
   "required": [
