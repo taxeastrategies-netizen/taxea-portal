@@ -68,6 +68,7 @@ const entity = name => ({
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
 let currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
 let fiscalStatus = 'ready';
+let failPostingOnce = false;
 const testClient = {
   auth: { me: async () => currentUser }, asServiceRole: { entities },
   functions: { async invoke(name, body) {
