@@ -8,7 +8,7 @@ async function bundle(file) {
 const { buildCashForecast } = await bundle('src/lib/cashForecast.js');
 const { suggestInvoiceMatches } = await bundle('src/lib/reconciliationSuggestions.js');
 const current = '2026-10-04';
-const bank = { connectedAccounts: 1, availableCash: 1000 };
+const bank = { connectedAccounts: 1, connectedEuroAccounts: 1, availableCash: 1000 };
 const invoices = [
   { id: 'r1', company_id: 'A', tipo: 'emitida', total_factura: 200, importe_pendiente: 200, fecha_vencimiento: '2026-10-04', numero_factura: 'E-1' },
   { id: 'p1', company_id: 'A', tipo: 'recibida', total_factura: 100, importe_pendiente: 100, fecha_vencimiento: '2026-10-05', numero_factura: 'R-1' },
@@ -24,6 +24,7 @@ assert.equal(forecast.inflows, 200);
 assert.equal(forecast.outflows, 180);
 assert.equal(forecast.undated, 1);
 assert.equal(buildCashForecast({ invoices, today: current, days: 7 }).projected, null);
+assert.equal(buildCashForecast({ invoices, treasury: { connectedAccounts: 1, connectedEuroAccounts: 0, availableCash: 0 }, today: current, days: 7 }).projected, null);
 const linked = buildCashForecast({ invoices, treasury: bank, events: [{ id: 'linked', entidad_id: 'p1', tipo: 'pago_previsto', importe: 100, fecha_prevista: '2026-10-05', moneda: 'EUR' }], today: current, days: 7 });
 assert.equal(linked.outflows, 100);
 const tx = { id: 't', company_id: 'A', tipo: 'entrada', moneda: 'EUR', importe: 200, fecha_operacion: '2026-10-05', concepto: 'E-1 Cliente Acme' };
