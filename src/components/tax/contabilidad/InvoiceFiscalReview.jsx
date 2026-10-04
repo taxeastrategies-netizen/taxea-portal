@@ -53,7 +53,7 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
         base: Number(invoice.base_imponible || 0),
         taxRate: Number(invoice.tipo_iva || 0),
         taxAmount: Number(invoice.cuota_iva || 0),
-        deductiblePercent: invoice.cuota_iva ? Math.round(Number(invoice.deductible_tax_amount || invoice.cuota_iva) * 10000 / Number(invoice.cuota_iva)) / 100 : 0,
+        deductiblePercent: invoice.cuota_iva ? Math.round(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) * 10000 / Number(invoice.cuota_iva)) / 100 : 0,
         deductionCategory: existingTaxLine?.deductionCategory || '',
         withholdingRate: Number(invoice.retencion_irpf || 0),
         counterpartyIsWithholdingAgent: Boolean(invoice.retencion_irpf || invoice.importe_retencion),
