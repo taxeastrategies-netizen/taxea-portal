@@ -89,6 +89,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const [errors, setErrors] = useState(/** @type {any} */ ({}));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [saveNotice, setSaveNotice] = useState('');
   const [customRetention, setCustomRetention] = useState(false);
   const [useCustomColetilla, setUseCustomColetilla] = useState(false);
   const loadedRef = useRef(false);
@@ -229,7 +230,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
 
-        if (result.accounting_warning) {
+        if (result.accounting_warning && !result.review_required) {
           setSaveError(`La factura se guardó, pero necesita revisión contable: ${result.accounting_warning}`);
           onSaved?.();
           return;
@@ -281,6 +282,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             return;
           }
         }
+        if (result.review_required) {
+          setSaveNotice('Documento guardado como pendiente. El asesor debe confirmar su clasificación fiscal antes de emitir el QR, enviar o contabilizar.');
+          onSaved?.();
+          return;
+        }
       }
       onSaved?.();
       onOpenChange(false);
@@ -295,7 +301,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva factura definitiva</DialogTitle>
+          <DialogTitle>Nueva factura · revisión fiscal previa</DialogTitle>
         </DialogHeader>
         {form.tipo === 'emitida' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -596,6 +602,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           onSelect={handleSelectContact}
         />
 
+        {saveNotice && <p className="text-sm text-amber-900 bg-amber-50 rounded-lg px-3 py-2 mt-3">{saveNotice}</p>}
         {saveError && (
           <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-3">{saveError}</p>
         )}
