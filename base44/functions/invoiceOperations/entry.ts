@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
       } catch (error) {
         return Response.json({ error: error?.response?.data?.error || 'No se pudo verificar el encuadramiento fiscal; no se ha creado la factura.' }, { status: 503 });
       }
-      if (!fiscalEvaluation || fiscalEvaluation.status === 'blocked') return Response.json({ error: fiscalEvaluation?.reasons?.join(' ') || 'Configura y valida el perfil fiscal antes de crear la factura.' }, { status: 422 });
+      if (!fiscalEvaluation || fiscalEvaluation.status !== 'ready') return Response.json({ error: fiscalEvaluation?.reasons?.join(' ') || 'La actividad fiscal requiere revisión del asesor antes de crear o contabilizar esta factura.' }, { status: 422 });
       if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
         || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) {
         return Response.json({ error: 'Esta operación requiere revisión fiscal y contable del asesor antes de emitir o contabilizar; el régimen especial se implementará en la siguiente fase.' }, { status: 422 });
