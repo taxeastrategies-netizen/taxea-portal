@@ -56,6 +56,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
 
   const getEmpty = () => ({
     tipo: 'emitida',
+    fiscal_activity_id: '',
     numero_factura: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
     fecha_recepcion: new Date().toISOString().slice(0, 10),
@@ -95,6 +96,23 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const [favoriteNotes, setFavoriteNotes] = useState([]);
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [recurring, setRecurring] = useState(getDefaultRecurring());
+  const [fiscalContext, setFiscalContext] = useState({ profile: null, activities: [], loading: false });
+
+  useEffect(() => {
+    if (!open || !company?.id) return;
+    let active = true;
+    setFiscalContext({ profile: null, activities: [], loading: true });
+    import('@/api/base44Client').then(({ base44 }) => base44.functions.invoke('fiscalOperations', { action: 'bundle', companyId: company.id }))
+      .then(response => {
+        if (!active) return;
+        const bundle = response?.data || response;
+        const activities = (bundle?.activities || []).filter(item => item.active !== false);
+        setFiscalContext({ profile: bundle?.profile || null, activities, loading: false });
+        if (!editing && activities.length === 1) setForm(current => current.fiscal_activity_id ? current : { ...current, fiscal_activity_id: activities[0].id });
+      })
+      .catch(() => { if (active) setFiscalContext({ profile: null, activities: [], loading: false }); });
+    return () => { active = false; };
+  }, [open, company?.id, editing?.id]);
 
   const handleSelectContact = (contact) => {
     setForm(prev => ({
@@ -147,6 +165,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const validate = () => {
     const e = {};
     if (!form.numero_factura?.trim()) e.numero_factura = 'Obligatorio';
+    if (fiscalContext.activities.length > 1 && !form.fiscal_activity_id) e.fiscal_activity_id = 'Selecciona la actividad fiscal';
     if (!form.fecha_emision) e.fecha_emision = 'Obligatorio';
     if (form.tipo === 'recibida' && !form.fecha_recepcion) e.fecha_recepcion = 'Obligatorio para asignar la deducción al período correcto';
     if (form.tipo === 'recibida' && form.fecha_recepcion && form.fecha_emision && form.fecha_recepcion < form.fecha_emision) e.fecha_recepcion = 'No puede ser anterior a la fecha de emisión';
@@ -280,6 +299,24 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         )}
 
         <div className="space-y-5 mt-2">
+          {fiscalContext.loading ? <p className="text-xs text-muted-foreground">Comprobando perfil fiscal…</p> : !fiscalContext.profile || fiscalContext.profile.profileStatus !== 'validado_asesor' ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Antes de crear una factura nueva, el asesor debe validar el perfil fiscal y su actividad en Configuración fiscal. Las facturas y subcuentas anteriores no cambian.</div>
+          ) : null}
+          {fiscalContext.activities.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Actividad fiscal de esta factura</Label>
+              <Select value={form.fiscal_activity_id || ''} onValueChange={value => {
+                const activity = fiscalContext.activities.find(item => item.id === value);
+                setForm(current => ({ ...current, fiscal_activity_id: value,
+                  tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(activity?.indirectTaxRegime) ? 0 : current.tipo_iva,
+                }));
+              }}>
+                <SelectTrigger><SelectValue placeholder="Selecciona una actividad" /></SelectTrigger>
+                <SelectContent>{fiscalContext.activities.map(activity => <SelectItem key={activity.id} value={activity.id}>{activity.name} · {String(activity.indirectTax || '').toUpperCase()} · {activity.indirectTaxRegime}</SelectItem>)}</SelectContent>
+              </Select>
+              <ErrMsg msg={errors.fiscal_activity_id} />
+            </div>
+          )}
           {/* Tipo + Nº */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
