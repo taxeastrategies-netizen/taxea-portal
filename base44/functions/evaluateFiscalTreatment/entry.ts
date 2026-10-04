@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const indirectTax = primaryActivity?.indirectTax || profile.indirectTaxDefault || 'iva';
     const regime = primaryActivity?.indirectTaxRegime || 'general';
     const deductionRight = primaryActivity?.deductionRight || 'pleno';
-    const proRataPercent = primaryActivity?.proRataPercent || 100;
+    const proRataPercent = primaryActivity?.proRataPercent ?? 100;
     const isExempt = regime === 'exenta_limitada' || regime === 'exenta_plena';
     const isNotSubject = regime === 'no_sujeta';
     const isProfessionalIRPF = profile.isProfessionalWithRetention || (profile.subjectToIRPF && profile.irpfEstimation !== 'no_aplica' && profile.irpfEstimation !== 'objetiva_modulos');
@@ -67,23 +67,10 @@ Deno.serve(async (req) => {
     // 5. Detect counterparty territory from NIF/taxId
     let counterpartyTerritory = 'desconocido';
     const ctId = (counterpartyTaxId || '').toUpperCase().trim();
-    if (ctId) {
-      if (/^[A-Z]/.test(ctId)) {
-        const prefix = ctId[0];
-        if (prefix === 'X' || prefix === 'Y' || prefix === 'Z' || /^[XYZ]/.test(ctId)) {
-          counterpartyTerritory = 'extranjero_no_ue';
-        } else if (ctId.startsWith('ES') || /^[ABCDEFGHJKLMNPQRSVW]/.test(ctId)) {
-          counterpartyTerritory = 'peninsula_baleares';
-        }
-      }
-      // Check for EU VAT patterns (common foreign providers)
-      const foreignProviders = ['GOOGLE', 'META', 'FACEBOOK', 'AMAZON', 'MICROSOFT', 'STRIPE', 'AWS', 'ADOBE', 'ZOOM', 'SLACK', 'GITHUB', 'LINKEDIN', 'CLOUDFLARE', 'DROPBOX', 'NOTION', 'FIGMA'];
-      const nameUpper = (counterpartyName || '').toUpperCase();
-      if (foreignProviders.some(p => nameUpper.includes(p))) {
-        counterpartyTerritory = 'extranjero_ue';
-      }
-    }
-    if (esProveedorExtranjero) counterpartyTerritory = 'extranjero_ue';
+    // Un NIE X/Y/Z o un NIF español no acredita localización en Península o Canarias.
+    // La marca comercial tampoco prueba qué entidad jurídica facturó.
+    if (/^[A-Z]{2}/.test(ctId) && !ctId.startsWith('ES') && !/^[XYZ][0-9]/.test(ctId)) counterpartyTerritory = 'extranjero_por_verificar';
+    if (esProveedorExtranjero) counterpartyTerritory = 'extranjero_por_verificar';
 
     // 6. Detect operation type from OCR
     const opType = (detectedOperationType || ocrData?.tipo_operacion || 'interior').toLowerCase();
@@ -185,7 +172,7 @@ Deno.serve(async (req) => {
     }
 
     // ── RULE: Foreign service provider (received) ──
-    if (isRecibida && (counterpartyTerritory === 'extranjero_ue' || counterpartyTerritory === 'extranjero_no_ue' || esProveedorExtranjero)) {
+    if (isRecibida && (counterpartyTerritory === 'extranjero_por_verificar' || esProveedorExtranjero)) {
       if (opType !== 'inversion_sujeto_pasivo' && opType !== 'isp') {
         const taxName = territory === 'canarias' ? 'IGIC' : 'IVA';
         alerts.push(`Proveedor extranjero de servicios: evaluar inversion del sujeto pasivo de ${taxName}. El servicio se localiza en destino.`);
@@ -304,9 +291,11 @@ Deno.serve(async (req) => {
     }
 
     // ── RULE: Recargo de equivalencia ──
-    if (regime === 'recargo_equivalencia' && isEmitida) {
-      alerts.push('Comercio en recargo de equivalencia: revisar si procede repercutir recargo en esta venta.');
-      appliedRules.push('recargo_equivalencia_emitida');
+    if (regime === 'recargo_equivalencia') {
+      alerts.push('Recargo de equivalencia: las ventas minoristas no añaden recargo; la adquisición exige cuota y recargo del proveedor. Revisar operación y libro.');
+      reviewReasons.push('Régimen especial de recargo pendiente de validación por operación');
+      status = 'review_required';
+      appliedRules.push('recargo_equivalencia_revision');
     }
 
     // ── RULE: Apply custom company rules (highest priority) ──
@@ -315,15 +304,19 @@ Deno.serve(async (req) => {
       if (rule.direction && rule.direction !== 'ambos' && rule.direction !== direction) continue;
       if (rule.resultTreatment) {
         appliedRules.push(`regla_personalizada:${rule.resultTreatment}`);
-        if (rule.autoApprovalAllowed) {
-          status = 'ready_to_post';
-          confidence += 10;
-        }
+        if (rule.autoApprovalAllowed && status === 'ready_to_post') confidence += 10;
         if (rule.severity === 'alta' || rule.severity === 'critica') {
           reviewReasons.push(`Regla critica: ${rule.resultTreatment}`);
           if (status === 'ready_to_post') status = 'review_required';
         }
       }
+    }
+
+    const regimesRequiringSpecialEngine = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
+    if (regimesRequiringSpecialEngine.has(regime) || deductionRight === 'prorrata_especial' || deductionRight === 'sector_diferenciado') {
+      status = 'review_required';
+      reviewReasons.push('No confirmar asiento ni liquidación ordinarios: este régimen requiere un circuito fiscal específico.');
+      confidence = Math.min(confidence, 50);
     }
 
     // ── RULE: No activity configured ──
