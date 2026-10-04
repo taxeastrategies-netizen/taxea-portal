@@ -853,6 +853,14 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     });
     return { alreadyPosted: true, entry: duplicate[0] };
   }
+  // La validación fiscal de una factura nueva no puede eludirse desde OCR, banco o contabilidad.
+  if (invoice.accounting_migration_hold === true || invoice.fiscal_review_status === 'pendiente_revision') {
+    throw new Error('Factura pendiente de revisión fiscal: confirma el tratamiento con el asesor antes de contabilizar.');
+  }
+  const unsupportedFiscalRegimes = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
+  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime))) {
+    throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
+  }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
   const currency = clean(invoice.moneda || 'EUR').toUpperCase();
   const fxRate = Number(options.fxRate || invoice.exchange_rate || invoice.tipo_cambio || 1);
