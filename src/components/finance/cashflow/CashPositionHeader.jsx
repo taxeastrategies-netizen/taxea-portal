@@ -1,9 +1,9 @@
 import { RefreshCw, Download, Share2, Settings, Wifi } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export default function CashPositionHeader({ company, lastSync, loading, onRefresh }) {
-  const now = new Date();
-  const syncAgo = lastSync ? Math.round((now - lastSync) / 60000) : null;
+export default function CashPositionHeader({ company, lastSync, bankKnown, loading, onRefresh }) {
+  const parsed = lastSync ? new Date(lastSync) : null;
+  const syncAgo = parsed && !Number.isNaN(parsed.getTime()) ? Math.max(0, Math.round((Date.now() - parsed.getTime()) / 60000)) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -40,7 +40,7 @@ export default function CashPositionHeader({ company, lastSync, loading, onRefre
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-sm">
             <Wifi className="w-3 h-3 text-emerald-500" />
             <span className="text-xs text-slate-500">
-              {syncAgo !== null ? (syncAgo === 0 ? 'Ahora mismo' : `Hace ${syncAgo} min`) : 'En tiempo real'}
+              {bankKnown ? (syncAgo !== null ? (syncAgo === 0 ? 'Banco actualizado ahora' : `Banco: hace ${syncAgo} min`) : 'Banco conectado · fecha no disponible') : 'Sin banco verificado'}
             </span>
           </div>
 
