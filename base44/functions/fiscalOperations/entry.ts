@@ -318,7 +318,12 @@ Deno.serve(async (req) => {
       await svc.entities.VerifactuIssuerSetup.create({ company_id: companyId, secret_resource: secretResource, custody_status: 'referencia_registrada_sin_verificar', registered_at: new Date().toISOString(), registered_by: user.email });
       return Response.json({ success: true, certificateStatus: 'referencia_registrada_sin_verificar', activationAllowed: false });
     }
-    if (action === 'evaluate') return Response.json({ success: true, evaluation: evaluate(profile, activities, body), ruleSetVersion: RULESET });
+    if (action === 'evaluate') {
+      const evaluation = body.requireValidatedProfile === true && (profiles || []).length !== 1
+        ? { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Debe existir un único perfil fiscal activo y validado para esta empresa.'], ruleSetVersion: RULESET }
+        : evaluate(profile, activities, body);
+      return Response.json({ success: true, evaluation, ruleSetVersion: RULESET });
+    }
 
     if (action === 'save_profile') {
       const data = body.profile || {};
@@ -330,7 +335,11 @@ Deno.serve(async (req) => {
       const changeSummary = clean(data.lastChangeReason || body.changeSummary || 'Actualización del perfil fiscal').slice(0, 1000);
       const payload: any = { company_id: companyId, active: data.active !== false, ruleSetVersion: RULESET, effectiveFrom, lastChangeReason: changeSummary, reviewedAt: now, reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
-      if (payload.profileStatus === 'validado_asesor' && !canProfessionallyValidate(user)) payload.profileStatus = 'pendiente_revision';
+      if (!canProfessionallyValidate(user)) {
+        payload.profileStatus = 'pendiente_revision';
+        payload.reviewedBy = '';
+        payload.reviewedAt = undefined;
+      }
       if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
       const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key]]));
       snapshot.ruleSetVersion = RULESET;
@@ -365,6 +374,7 @@ Deno.serve(async (req) => {
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
       if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new Error('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
       const saved = existing ? await svc.entities.FiscalActivity.update(existing.id, payload) : await svc.entities.FiscalActivity.create(payload);
+      if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal modificada; requiere nueva validación del asesor.' });
       const next = existing ? activities.map(item => item.id === saved.id ? saved : item) : [...activities, saved];
       return Response.json({ success: true, activity: saved, recommendations: recommendedObligations(profile, next), ruleSetVersion: RULESET });
     }
@@ -373,6 +383,7 @@ Deno.serve(async (req) => {
       const existing = activities.find(item => item.id === body.activityId);
       if (!existing) throw new Error('Actividad no encontrada.');
       const saved = await svc.entities.FiscalActivity.update(existing.id, { active: false, reviewedAt: new Date().toISOString(), reviewedBy: user.email, notes: `${existing.notes ? `${existing.notes}\n` : ''}Desactivada sin borrar historico.`.slice(0, 4000) });
+      if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal desactivada; requiere nueva validación del asesor.' });
       return Response.json({ success: true, activity: saved });
     }
 
