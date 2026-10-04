@@ -45,4 +45,4 @@ for (const permission of ['read', 'update', 'delete']) {
 }
 const watchUi = readFileSync('src/components/OpportunityWatchPanel.jsx', 'utf8');
 assert.ok(!/OpportunityWatch\.create\(\{[^}]*created_by/.test(watchUi));
-console.log('Taxea client-unification synthetic checks: 19 assertions OK');
+console.log('Taxea client-unification synthetic checks: 22 assertions OK');
