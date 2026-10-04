@@ -157,6 +157,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     }
     setErrors({});
     setSaveError('');
+    setSaveNotice('');
     };
     run();
   }, [open, editing?.id]);
