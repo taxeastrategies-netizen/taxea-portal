@@ -429,6 +429,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'save_manual_obligation') {
+      if (!canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar una obligación fiscal.' }, { status: 403 });
+      if (!clean(body.reason)) return Response.json({ error: 'La confirmación o desactivación exige motivo trazable.' }, { status: 422 });
       const code = clean(body.code);
       const model = MODEL_CATALOG.find(item => item[0] === code);
       if (!model) throw new Error('Modelo fiscal no incluido en el catalogo oficial configurado.');
