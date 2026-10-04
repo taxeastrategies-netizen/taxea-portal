@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import OpportunityWatchPanel from '@/components/OpportunityWatchPanel';
 import { MapPinned, Search, RefreshCw, ArrowUpRight, Sparkles, AlertCircle, SlidersHorizontal, Mail, ShieldCheck } from 'lucide-react';
 
-const GEOJSON_URL = 'https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/spain-provinces.geojson';
+const GEOJSON_URL = '/data/spain-provinces.geojson';
 const COMMUNITIES = [
   { ine: '01', code: 'ES61', name: 'Andalucía' },
   { ine: '02', code: 'ES24', name: 'Aragón' },
