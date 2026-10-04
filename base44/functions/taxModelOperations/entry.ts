@@ -3839,7 +3839,7 @@ Deno.serve(async (req) => {
     else if(!validSpanishTaxId(company.nif_cif)) blockers.push('El NIF/CIF de la empresa no tiene nueve caracteres válidos para los diseños oficiales.');
     if(!company.razon_social) blockers.push('La empresa no tiene razón social legal configurada.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
-    const finalizedInvoices=invoices.filter((invoice:any)=>invoice.accounting_migration_hold_reason!=='FISCAL_ADVISOR_REVIEW_PHASE1');
+    const finalizedInvoices=invoices.filter((invoice:any)=>!['FISCAL_ADVISOR_REVIEW_PHASE1','FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason));
     const pendingFiscalCount=invoices.length-finalizedInvoices.length;
     if(pendingFiscalCount) warnings.push(`${pendingFiscalCount} propuesta(s) de factura siguen fuera de los modelos hasta validación del asesor.`);
     const taxLines=normalizedTaxLines(finalizedInvoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
