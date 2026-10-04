@@ -188,6 +188,7 @@ Deno.serve(async (req) => {
           baseAmount: Number(t.baseAmount) || 0,
           taxRate: Number(t.taxRate) || 0,
           taxType: t.taxType || 'iva',
+          fiscalActivityId: t.fiscalActivityId || '',
           retentionRate: Number(t.retentionRate) || 0,
           totalAmount: Number(t.totalAmount) || 0,
           currency: t.currency || 'EUR',
