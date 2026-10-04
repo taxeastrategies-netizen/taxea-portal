@@ -1,5 +1,6 @@
 // Cálculos de apoyo para revisión profesional; nunca contabilizan ni presentan modelos por sí solos.
 const cents = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+const EU_COUNTRIES = new Set(['AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK']);
 const finite = (value, label, { positive = false, allowZero = true } = {}) => {
   if (value === '' || value === null || value === undefined || !Number.isFinite(Number(value))) {
     throw new Error(`Falta un importe numérico válido: ${label}.`);
@@ -93,12 +94,17 @@ export function calculateSpecialRegimePreview(input) {
   if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
     if (direction !== 'ingreso') return { regime, status: 'requires_destination_trace', reason: 'La compra no se incorpora automáticamente al modelo 369 de ventas.' };
     const destinationCountry = String(input.destinationCountry || '').toUpperCase();
-    if (!/^[A-Z]{2}$/.test(destinationCountry) || destinationCountry === 'ES') throw new Error('Indica el Estado miembro de consumo con código ISO de dos letras.');
+    if (!EU_COUNTRIES.has(destinationCountry)) throw new Error('Indica un Estado miembro de consumo válido con código ISO de dos letras.');
+    if (regime === 'ioss_importacion') {
+      const intrinsicValue = finite(input.consignmentIntrinsicValue, 'valor intrínseco del envío');
+      if (intrinsicValue > 150) throw new Error('IOSS solo admite envíos cuyo valor intrínseco no supera 150 €; verifica aduana y régimen aplicable.');
+      if (input.isExcise === true) throw new Error('IOSS no admite bienes sujetos a impuestos especiales.');
+    }
     const base = finite(input.base, 'base de la venta');
     const rate = percent(taxRate, 'tipo del Estado de consumo');
     if (!input.destinationRateConfirmed) throw new Error('El tipo aplicable en destino debe estar confirmado por el asesor; no se presume el tipo español.');
     return { regime, status: 'proposal_only', destinationCountry, base, rate, destinationTax: cents(base * rate / 100),
-      destinationRateConfirmed: true, advisorConfirmationRequired: true, reason: 'Agrupar por Estado de consumo y tipo en modelo 369; no mezclar con 303/420.' };
+      destinationRateConfirmed: true, advisorConfirmationRequired: true, reason: destinationCountry === 'ES' ? 'España puede ser Estado de consumo en supuestos concretos; comprobar el tipo de operación y la inclusión en 369 antes de validar.' : 'Agrupar por Estado de consumo y tipo en modelo 369; no mezclar con 303/420.' };
   }
   if (regime === 'grupo_entidades') {
     const groupId = String(input.groupId || '').trim();
