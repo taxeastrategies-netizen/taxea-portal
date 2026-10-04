@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { allowedFeedUrl, filterRows, readFeed, validProvinceCode } from './core.ts';
+import { getSnapshot, refreshSnapshot } from './snapshot.ts';
 
 const SOURCE_KEYS = ['hosted', 'aggregated', 'consultations'] as const;
 const KINDS = ['all', 'abierta', 'anuncio_previo', 'consulta'];
@@ -33,27 +34,36 @@ Deno.serve(async req => {
       requested.push({ source, url: candidate ? allowedFeedUrl(source, candidate) : null });
     }
     if (!requested.length) return response({ ok: true, tenders: [], nextCursor: null, hasMore: false, examinedEntries: 0, checkedAt: new Date().toISOString(), sourceUpdated: {}, partial: false, coverage: 'No quedan páginas adicionales de esta búsqueda.' });
-    const fetched = await Promise.allSettled(requested.map(({ source, url }) => readFeed(source, url)));
+    const fetched = await Promise.allSettled(requested.map(async ({ source, url }) => {
+      if (url) return { ...(await readFeed(source, url)), fetchedAt: new Date().toISOString(), cached: false };
+      const snapshot = await getSnapshot(sdk, source);
+      if (snapshot) return { ...snapshot, cached: true };
+      return { ...(await refreshSnapshot(sdk, source)), cached: false };
+    }));
     const rows: any[] = [];
     const errors: string[] = [];
     const nextCursor: Record<string, string> = {};
     const sourceUpdated: Record<string, string | null> = {};
     let examinedEntries = 0;
+    const fetchedAt: Record<string, string> = {};
+    let stale = false;
     fetched.forEach((result, index) => {
       const source = requested[index].source;
       if (result.status === 'rejected') { errors.push(source); return; }
       rows.push(...result.value.rows);
       examinedEntries += result.value.examined;
       sourceUpdated[source] = result.value.updated;
+      fetchedAt[source] = result.value.fetchedAt;
+      if (Date.now() - Date.parse(result.value.fetchedAt) > 90 * 60 * 1000) stale = true;
       if (result.value.next) nextCursor[source] = result.value.next;
     });
     if (errors.length === requested.length) return response({ error: 'Las fuentes oficiales de contratación no responden en este momento.' }, 502);
     const tenders = filterRows(Array.from(new Map(rows.map(row => [row.id, row])).values()), filters);
     return response({
       ok: true, tenders, nextCursor: Object.keys(nextCursor).length ? nextCursor : null, hasMore: Object.keys(nextCursor).length > 0,
-      examinedEntries, checkedAt: new Date().toISOString(), sourceUpdated,
-      partial: errors.length > 0, failedSources: errors,
-      coverage: 'Resultados de las páginas Atom oficiales examinadas en esta consulta. Los filtros se aplican a estos registros; puede haber más coincidencias en páginas siguientes. Las consultas preliminares y los anuncios previos no son licitaciones abiertas.',
+      examinedEntries, checkedAt: new Date().toISOString(), sourceUpdated, fetchedAt,
+      stale, partial: errors.length > 0, failedSources: errors,
+      coverage: 'Resultados de las páginas Atom oficiales examinadas y guardadas temporalmente. Los filtros se aplican a estos registros; puede haber más coincidencias en páginas siguientes. Las consultas preliminares y los anuncios previos no son licitaciones abiertas.',
     });
   } catch (error) {
     if (String((error as Error)?.message || '').includes('Cursor de búsqueda inválido') || error instanceof TypeError && String((error as Error)?.message || '').includes('URL')) return response({ error: 'Cursor de búsqueda inválido.' }, 400);
