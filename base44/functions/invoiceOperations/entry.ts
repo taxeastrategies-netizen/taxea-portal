@@ -574,6 +574,10 @@ Deno.serve(async (req) => {
     }
 
     const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
+    if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1'
+      && ['add_payment', 'reconcile', 'set_qr_pdf'].includes(action)) {
+      return Response.json({ error: 'La propuesta fiscal debe aprobarse antes de cobrar, pagar o conciliar.' }, { status: 409 });
+    }
 
     if (action === 'mark_accounting_review') {
       if (!['admin', 'super_admin'].includes(roleOf(user))) {
