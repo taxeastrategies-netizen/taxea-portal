@@ -69,6 +69,7 @@ export function calculateSpecialRegimePreview(input) {
     const payments = Array.isArray(input.payments) ? input.payments : [];
     const seen = new Set();
     let applied = 0;
+    let paidTotal = 0;
     const events = [];
     for (const row of payments) {
       const id = String(row?.id || '');
@@ -77,7 +78,8 @@ export function calculateSpecialRegimePreview(input) {
       const paymentDate = date(row.date, 'fecha de cobro o pago');
       const amount = finite(row.amount, 'importe de cobro o pago', { positive: true });
       if (paymentDate < operationDate) throw new Error('Los anticipos anteriores a la operación necesitan su circuito fiscal propio.');
-      if (cents(applied + amount) > invoiceGross + 0.01) throw new Error('Los cobros/pagos superan el total de la factura.');
+      paidTotal = cents(paidTotal + amount);
+      if (paidTotal > invoiceGross + 0.01) throw new Error('Los cobros/pagos superan el total de la factura.');
       if (paymentDate <= forcedRecognitionDate) {
         events.push({ id, date: paymentDate, amount, factor: amount / invoiceGross, kind: 'payment' });
         applied = cents(applied + amount);
