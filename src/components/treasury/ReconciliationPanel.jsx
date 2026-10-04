@@ -324,7 +324,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
               })}
               {selected && selected._conf !== 'alta' && <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><input type="checkbox" checked={reviewConfirmed} onChange={event => setReviewConfirmed(event.target.checked)} />He verificado manualmente tercero, referencia e importe de esta factura.</label>}
               {selected?._partial && <p className="text-xs text-blue-700">Se registrará un cobro o pago parcial; el resto de la factura seguirá pendiente.</p>}
-              <p className="text-[11px] text-slate-500">La puntuación solo ordena sugerencias y no autoriza conciliación automática. Un movimiento solo puede aplicarse a una factura en este flujo; si cubre varias, revísalo manualmente sin forzar una conciliación incorrecta.</p>
+              <p className="text-[11px] text-slate-500">La puntuación solo ordena sugerencias y no autoriza conciliación automática. Esta pestaña aplica el movimiento a una factura. Si cubre varias, utiliza «Varias facturas» y revisa el reparto antes de confirmar.</p>
             </div>
           ) : (
             <div className="space-y-3">
