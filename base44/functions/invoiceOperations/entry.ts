@@ -576,7 +576,7 @@ Deno.serve(async (req) => {
     }
 
     const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
-    if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1'
+    if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)
       && ['add_payment', 'reconcile', 'set_qr_pdf'].includes(action)) {
       return Response.json({ error: 'La propuesta fiscal debe aprobarse antes de cobrar, pagar o conciliar.' }, { status: 409 });
     }
@@ -629,6 +629,9 @@ Deno.serve(async (req) => {
       }
       try {
         const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
+        if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR') {
+          await base44.asServiceRole.entities.Invoice.update(invoice.id, { accounting_migration_hold: false, accounting_migration_hold_reason: '' });
+        }
         const saved = await base44.asServiceRole.entities.Invoice.get(invoice.id);
         let ocrWarning = '';
         if (saved.ocr_document_id) {
