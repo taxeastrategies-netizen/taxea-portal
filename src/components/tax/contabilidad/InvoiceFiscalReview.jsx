@@ -94,6 +94,13 @@ export default function InvoiceFiscalReview({ companyId, invoice }) {
     setSaving(true); setError('');
     try {
       const result = await invoke(payload(true));
+      if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
+      if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
+        const finalized = unwrap(await base44.functions.invoke('invoiceOperations', {
+          action: 'finalize_fiscal_review', company_id: companyId, invoice_id: invoice.id,
+        }));
+        if (!finalized?.ok) throw new Error(finalized?.error || 'La factura quedó pendiente de contabilización. Reintenta la finalización.');
+      }
       setEvaluation(result.evaluation);
       window.dispatchEvent(new Event('financials:refresh'));
       setTimeout(() => setOpen(false), 650);
