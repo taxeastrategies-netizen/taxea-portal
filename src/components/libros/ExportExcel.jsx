@@ -63,8 +63,9 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
   const totalRetIRPF = emitidas.reduce((s, i) => s + pct(i.base_imponible, i.retencion_irpf), 0);
   const totalIngresos = emitidas.reduce((s, i) => s + n(i.total_factura), 0);
 
-  const totalBaseGastos = [...recibidas, ...gastos].reduce((s, e) => s + n(e.base_imponible), 0);
-  const totalIvaSop = recibidas.reduce((s, i) => s + n(i.cuota_iva), 0) + gastos.reduce((s, e) => s + n(e.cuota_impuesto), 0);
+  const totalBaseGastos = recibidas.reduce((s, i) => s + n(i.base_imponible) + n(i.non_deductible_tax_amount), 0)
+    + gastos.reduce((s, e) => s + n(e.base_imponible), 0);
+  const totalIvaSop = recibidas.reduce((s, i) => s + n(i.deductible_tax_amount), 0);
   const totalGastos = recibidas.reduce((s, i) => s + n(i.total_factura), 0) + gastos.reduce((s, e) => s + n(e.total), 0);
 
   const beneficio = totalBaseIngresos - totalBaseGastos;
@@ -72,7 +73,7 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
   const margen = totalBaseIngresos > 0 ? (beneficio / totalBaseIngresos * 100).toFixed(2) + ' %' : '0,00 %';
 
   const rows = [
-    [`RESUMEN FISCAL — ${companyName} — Ejercicio ${year}`],
+    [`RESUMEN INFORMATIVO — ${companyName} — Ejercicio ${year} · No apto para presentación fiscal`],
     [],
     ['CONCEPTO', 'IMPORTE (€)'],
     ['── INGRESOS ──', ''],
@@ -83,7 +84,7 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
     [],
     ['── GASTOS ──', ''],
     ['Base imponible compras + gastos', totalBaseGastos],
-    ['IVA/IGIC soportado deducible', totalIvaSop],
+    ['IVA/IGIC deducible clasificado (sin importes pendientes de revisión)', totalIvaSop],
     ['Total pagado / pendiente', totalGastos],
     [],
     ['── P&L (SIN IMPUESTOS) ──', ''],
@@ -91,7 +92,7 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
     ['Margen sobre ingresos', margen],
     [],
     ['── LIQUIDACIÓN IVA/IGIC ESTIMADA ──', ''],
-    ['IVA/IGIC a liquidar (repercutido − soportado)', ivaLiquidar],
+    ['Diferencia orientativa, no liquidación oficial', ivaLiquidar],
     [],
     ['── VOLUMEN OPERACIONES ──', ''],
     ['Nº facturas emitidas', emitidas.length],
@@ -124,9 +125,9 @@ function buildPnL(invoices, expenses, year) {
   let totIng = 0, totGas = 0, totIvaR = 0, totIvaS = 0;
   for (let m = 0; m < 12; m++) {
     const ing = emitidas.filter(i => new Date(i.fecha_emision || '').getMonth() === m).reduce((s, i) => s + n(i.base_imponible), 0);
-    const gas = [...gastos, ...recibidas].filter(e => new Date(e.fecha || e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.base_imponible), 0);
+    const gas = [...gastos, ...recibidas].filter(e => new Date(e.fecha || e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.base_imponible) + n(e.non_deductible_tax_amount), 0);
     const ivaR = emitidas.filter(i => new Date(i.fecha_emision || '').getMonth() === m).reduce((s, i) => s + n(i.cuota_iva), 0);
-    const ivaS = [...gastos, ...recibidas].filter(e => new Date(e.fecha || e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.cuota_impuesto || e.cuota_iva), 0);
+    const ivaS = recibidas.filter(e => new Date(e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.deductible_tax_amount), 0);
     const ben = ing - gas;
     const mar = ing > 0 ? parseFloat((ben / ing * 100).toFixed(2)) : 0;
     rows.push([MONTHS[m], ing, gas, ben, mar, ivaR, ivaS, ivaR - ivaS]);
@@ -260,8 +261,7 @@ function buildResumenIVA(invoices, expenses) {
   ['T1','T2','T3','T4'].forEach(t => {
     const rep = invoices.filter(i => i.tipo === 'emitida' && (i.trimestre === t)).reduce((s, i) => s + n(i.cuota_iva), 0);
     const baseV = invoices.filter(i => i.tipo === 'emitida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0);
-    const sop = invoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.cuota_iva), 0)
-      + expenses.filter(e => e.trimestre === t).reduce((s, e) => s + n(e.cuota_impuesto), 0);
+    const sop = invoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.deductible_tax_amount), 0);
     const baseC = invoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0)
       + expenses.filter(e => e.trimestre === t).reduce((s, e) => s + n(e.base_imponible), 0);
     rows.push([t, periodos[t], baseV, rep, baseC, sop, rep - sop]);
@@ -281,7 +281,7 @@ function buildResumenIRPF(invoices) {
     const emit = invoices.filter(i => i.tipo === 'emitida' && i.trimestre === t && n(i.retencion_irpf) > 0);
     const base = emit.reduce((s, i) => s + n(i.base_imponible), 0);
     const ret = emit.reduce((s, i) => s + pct(i.base_imponible, i.retencion_irpf), 0);
-    rows.push([t, periodos[t], base, emit[0] ? n(emit[0].retencion_irpf) : 15, ret, 'Mod. 130/111', limites[t]]);
+    rows.push([t, periodos[t], base, emit[0] ? n(emit[0].retencion_irpf) : 0, ret, 'Consultar Modelos Tributarios', '']);
   });
   return rows;
 }
