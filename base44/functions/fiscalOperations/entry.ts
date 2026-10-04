@@ -3,7 +3,7 @@ import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
-const SPECIAL_POSTING_PENDING = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
+const SPECIAL_POSTING_PENDING = new Set(['mixto', 'simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? '').trim();
 const clamp = (value: unknown, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
