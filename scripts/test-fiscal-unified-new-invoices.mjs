@@ -187,7 +187,7 @@ const ossActivity = { ...generalActivity, id: 'oss-activity', indirectTaxRegime:
 const mixedOssCodes = await recommendedCodes([generalActivity, ossActivity]);
 assert(mixedOssCodes.includes('303') && mixedOssCodes.includes('369'));
 const onlyOssCodes = await recommendedCodes([ossActivity]);
-assert(onlyOssCodes.includes('369') && !onlyOssCodes.includes('303'));
+assert(onlyOssCodes.includes('369') && !onlyOssCodes.includes('303') && !onlyOssCodes.includes('390'));
 const groupCodes = await recommendedCodes([{ ...generalActivity, indirectTaxRegime: 'grupo_entidades' }]);
 assert(groupCodes.includes('322') && groupCodes.includes('353') && !groupCodes.includes('303'));
 const igicMixedCodes = await recommendedCodes([
