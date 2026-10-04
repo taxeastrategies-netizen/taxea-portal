@@ -85,6 +85,11 @@ export function useFinancialData(companyId, options = {}) {
     } catch (err) {
       console.error('[useFinancialData] Error fetching unified financials:', err);
       if (mountedRef.current && requestId === requestIdRef.current) {
+        setInvoices([]);
+        setExpenses([]);
+        setBankAccounts([]);
+        setBankTransactions([]);
+        setTreasury(EMPTY_TREASURY);
         setError(err?.response?.data?.error || err?.message || 'No se pudieron cargar los datos financieros.');
       }
     } finally {
@@ -99,6 +104,11 @@ export function useFinancialData(companyId, options = {}) {
   useEffect(() => {
     mountedRef.current = true;
     setLoading(true);
+    setInvoices([]);
+    setExpenses([]);
+    setBankAccounts([]);
+    setBankTransactions([]);
+    setTreasury(EMPTY_TREASURY);
     fetch();
     return () => { mountedRef.current = false; };
   }, [fetch]);
