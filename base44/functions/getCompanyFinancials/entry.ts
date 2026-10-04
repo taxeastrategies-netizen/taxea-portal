@@ -70,8 +70,9 @@ Deno.serve(async (req) => {
       return Number(String(date || '').slice(0, 4)) === requestedYear;
     };
     const yearInvoices = (rawInvoices || []).filter(row => belongsToYear(row, ['fecha_emision', 'fecha_operacion', 'created_date']));
-    const fiscalPendingInvoices = yearInvoices.filter(row => row.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1');
-    const invs = yearInvoices.filter(row => row.accounting_migration_hold_reason !== 'FISCAL_ADVISOR_REVIEW_PHASE1');
+    const fiscalHoldReasons = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'];
+    const fiscalPendingInvoices = yearInvoices.filter(row => fiscalHoldReasons.includes(row.accounting_migration_hold_reason));
+    const invs = yearInvoices.filter(row => !fiscalHoldReasons.includes(row.accounting_migration_hold_reason));
     const exps = (rawExpenses || []).filter(row => belongsToYear(row, ['fecha', 'created_date']));
     const reconciled = reconcileFinancialSources(invs, exps);
     const coreSummary = buildFinancialSummary(invs, exps);
