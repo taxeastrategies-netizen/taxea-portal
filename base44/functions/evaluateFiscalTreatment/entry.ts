@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const proRataPercent = primaryActivity?.proRataPercent ?? 100;
     const isExempt = regime === 'exenta_limitada' || regime === 'exenta_plena';
     const isNotSubject = regime === 'no_sujeta';
-    const isProfessionalIRPF = profile.isProfessionalWithRetention || (profile.subjectToIRPF && profile.irpfEstimation !== 'no_aplica' && profile.irpfEstimation !== 'objetiva_modulos');
+    const isProfessionalIRPF = profile.entityType === 'autonomo' && profile.subjectToIRPF === true && primaryActivity?.activityType === 'profesional';
     const isPropertyLessor = profile.isPropertyLessor;
 
     const isEmitida = direction === 'ingreso';
@@ -220,25 +220,21 @@ Deno.serve(async (req) => {
     // ── RULE: IRPF retention for emitted invoices ──
     if (isEmitida && isProfessionalIRPF) {
       // Check if new professional (7%) vs general (15%)
-      let defaultRetention = profile.defaultWithholdingRate || 15;
-      if (profile.professionalActivityStartDate) {
-        const startDate = new Date(profile.professionalActivityStartDate);
-        const yearsSinceStart = (new Date() - startDate) / (365.25 * 24 * 60 * 60 * 1000);
-        if (yearsSinceStart <= 2) {
-          defaultRetention = 7;
-          appliedRules.push('profesional_nuevo_inicio_7%');
-        } else {
-          appliedRules.push('profesional_general_15%');
-        }
+      let defaultRetention = Number(primaryActivity?.defaultWithholdingRate) > 0 ? Number(primaryActivity.defaultWithholdingRate) : 15;
+      const startYear = Number(String(primaryActivity?.startDate || profile.professionalActivityStartDate || '').slice(0, 4));
+      const invoiceYear = Number(String(body.operationDate || body.invoiceDate || '').slice(0, 4));
+      if (primaryActivity?.newProfessionalRateConfirmed === true && startYear && invoiceYear >= startYear && invoiceYear <= startYear + 2) {
+        defaultRetention = 7;
+        appliedRules.push('profesional_nuevo_inicio_7%_confirmado');
       } else {
-        appliedRules.push('profesional_general_15%');
+        appliedRules.push('profesional_general_15%_revisar');
       }
       proposedWithholdingRate = defaultRetention;
       proposedWithholdingAmount = Math.round(((invoiceBase || 0) * defaultRetention / 100) * 100) / 100;
 
       // Alert if invoice doesn't include retention when it should
       if (!invoiceWithholdingRate || invoiceWithholdingRate === 0) {
-        alerts.push(`Factura emitida por profesional persona fisica sin retencion IRPF. Deberia incluir ${defaultRetention}%.`);
+        alerts.push(`Factura emitida por profesional sin retención: verificar si el destinatario está obligado a retener y si procede el ${defaultRetention}%.`);
         reviewReasons.push('Falta retencion IRPF en factura emitida profesional');
         if (status === 'ready_to_post') status = 'review_required';
         confidence -= 15;
