@@ -8,7 +8,7 @@ const entry = path.resolve('src/components/libros/ExportExcel.jsx');
 const build = await esbuild.build({
   entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs',
   plugins: [{ name: 'base44-client-stub', setup(builder) {
-    builder.onResolve({ filter: /^@\\/api\\/base44Client$/ }, () => ({ path: 'client', namespace: 'stub' }));
+    builder.onResolve({ filter: new RegExp('^@/api/base44Client$') }, () => ({ path: 'client', namespace: 'stub' }));
     builder.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({
       loader: 'js', contents: 'export const base44=globalThis.__base44;',
     }));
