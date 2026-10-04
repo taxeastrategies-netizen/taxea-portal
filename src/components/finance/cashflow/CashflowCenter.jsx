@@ -79,8 +79,6 @@ export default function CashflowCenter() {
       : gastoFact + gastoExp;
 
     const beneficio = totalIngresos - gastoTotal;
-    const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
-    const ebitda = beneficio;
 
     const bankKnown = treasury.connectedAccounts > 0 && !treasuryError;
     const cashDisponible = bankKnown ? treasury.availableCash : null;
@@ -138,7 +136,7 @@ export default function CashflowCenter() {
     const ingresosDelta = prevIngresos > 0 ? ((totalIngresos - prevIngresos) / prevIngresos) * 100 : 0;
 
     return {
-      totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
+      totalIngresos, gastoTotal, beneficio,
       cashDisponible, cashSource: bankKnown ? 'bank' : 'unavailable', bankKnown, bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
       burnRate, runway, dso, workingCapital, vencidas, ingresosDelta,
       filteredInvoices, filteredExpenses,
