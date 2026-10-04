@@ -208,7 +208,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
 
   y = tableHeader(doc, rHeaders, rColX, rColW, y);
 
-  let totBaseR = 0, totIvaR = 0, totDeducibleR = 0, totTotalR = 0;
+  let totBaseR = 0, totIvaR = 0, totDeducibleR = 0, totNoDeducibleR = 0, totTotalR = 0;
   recibidas.forEach((inv, idx) => {
     if (y > pageH - 25) {
       pageFooter(doc, page, totalPages, pageW, pageH);
@@ -221,7 +221,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     const base = n(inv.base_imponible);
     const iva = n(inv.cuota_iva);
     const total = n(inv.total_factura);
-    totBaseR += base; totIvaR += iva; totDeducibleR += n(inv.deductible_tax_amount); totTotalR += total;
+    totBaseR += base; totIvaR += iva; totDeducibleR += n(inv.deductible_tax_amount); totNoDeducibleR += n(inv.non_deductible_tax_amount); totTotalR += total;
     const provNombre = inv.proveedor_nombre || inv.cliente_nombre || '—';
     const provNif = inv.proveedor_nif || inv.cliente_nif || '—';
     const ctaProv = inv.counterparty_account_code || '—';
@@ -261,7 +261,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     ['IVA repercutido', fmt(totIvaE)],
     ['IVA/IGIC deducible clasificado', fmt(totDeducibleR)],
     ['Diferencia estimada, no liquidación', fmt(totIvaE - totDeducibleR)],
-    ['Beneficio estimado (base)', fmt(totBaseE - totBaseR)],
+    ['Resultado estimado, no PyG', fmt(totBaseE - totBaseR - totNoDeducibleR)],
   ];
 
   const cols = 2;
