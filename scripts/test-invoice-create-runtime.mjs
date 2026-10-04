@@ -209,11 +209,31 @@ assert.equal(pendingReview.payload.review_required, true);
 assert.equal(records.Invoice.length, 3);
 assert.equal(records.InvoiceTaxLine.length, 1);
 fiscalStatus = 'ready';
+const earlyFinalize = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
+assert.equal(earlyFinalize.response.status, 409);
+assert.equal(counters.accountingEntries, 1);
+await entities.Invoice.update(pendingReview.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test' });
+await entities.InvoiceTaxLine.create({
+  companyId: 'company-a', invoiceId: pendingReview.payload.invoice.id, lineNumber: 1,
+  reviewStatus: 'validado', regime: 'general', taxKind: 'iva', operationType: 'subject_taxed',
+  base: 100, quota: 21, deductibleQuota: 0,
+});
+const finalized = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
+assert.equal(finalized.response.status, 200);
+assert.equal(finalized.payload.ok, true);
+assert.equal(counters.accountingEntries, 2);
+assert.equal(records.Invoice[2].accounting_migration_hold, false);
+assert.equal(new URL(records.Invoice[2].qr_url).searchParams.get('importe'), '121.00');
+const finalizedAgain = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
+assert.equal(finalizedAgain.payload.duplicate, true);
+assert.equal(counters.accountingEntries, 2);
 currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
 const clientDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'client-draft', invoice: { ...validInvoice, numero_factura: 'F-2026-006' } });
 assert.equal(clientDraft.payload.review_required, true);
 assert.equal(records.Invoice.length, 4);
-assert.equal(counters.accountingEntries, 1);
+assert.equal(counters.accountingEntries, 2);
+const clientFinalize = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: clientDraft.payload.invoice.id });
+assert.equal(clientFinalize.response.status, 403);
 
 currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
