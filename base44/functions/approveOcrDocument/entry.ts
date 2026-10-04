@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
       console.error('[approveOcrDocument] Fiscal check failed:', fiscalError.message);
       return Response.json({ error: 'No se pudo verificar el encuadramiento fiscal. El documento OCR sigue pendiente y no se ha creado una factura.' }, { status: 503 });
     }
-    if (!fiscalAssessment || fiscalAssessment.status === 'blocked') {
+    if (!fiscalAssessment || fiscalAssessment.status !== 'ready') {
       return Response.json({ error: fiscalAssessment?.reasons?.join(' ') || 'Valida el perfil fiscal antes de aprobar el OCR.' }, { status: 422 });
     }
     if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalAssessment.regime)
