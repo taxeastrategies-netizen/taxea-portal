@@ -35,6 +35,18 @@
       ],
       "default": "peninsula_baleares"
     },
+    "taxGroupId": {
+      "type": "string",
+      "description": "Identificador interno del grupo IVA/IGIC validado por el asesor; no es un NIF ni activa declaraciones por s\u00ed solo."
+    },
+    "taxGroupRole": {
+      "type": "string",
+      "enum": [
+        "dominante",
+        "dependiente"
+      ],
+      "description": "La entidad dominante presenta el modelo agregado una vez presentadas las individuales."
+    },
     "taxAuthority": {
       "type": "string",
       "enum": [
