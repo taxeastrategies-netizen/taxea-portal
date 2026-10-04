@@ -543,7 +543,7 @@ const NON_ORDINARY_INDIRECT_REGIMES = new Set([
   'rebu', 'agencias_viajes', 'recargo_equivalencia', 'agricola_ganadera',
   'agricultura_ganaderia_pesca', 'oss_union', 'oss_exterior_union',
   'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic',
-  'oro_inversion', 'mixto',
+  'oro_inversion', 'mixto', 'pequeno_empresario_igic',
 ]);
 
 function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: boolean, modelOverride?: '303'|'420'|'417') {
@@ -552,7 +552,7 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
   const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
   for (const line of candidates) {
     const regime = clean(line.regime || line.invoice?.fiscal_regime);
-    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime) || (kind === 'igic' && regime === 'simplificado')) {
+    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime) || clean(line.operationType) === 'special_margin' || (kind === 'igic' && regime === 'simplificado')) {
       const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
       if (operationDate >= b.start && operationDate <= b.end) {
         excludedSpecial.push({ sourceId: line.sourceId, invoiceId: line.invoice?.id,
@@ -3636,6 +3636,7 @@ Deno.serve(async (req) => {
         ['iva','grupo_entidades'], ['iva','oro_inversion'],
         ['igic','simplificado'], ['igic','comerciante_minorista_igic'],
         ['igic','grupo_entidades'], ['igic','rebu'], ['igic','agencias_viajes'],
+        ['igic','pequeno_empresario_igic'],
       ];
       const specialTaxRoutingChecks = {
         nonOrdinaryExcluded: specialRegimeCases.every(([taxKind, regime], index) => {
