@@ -8,14 +8,14 @@ function fmt(n) {
 }
 
 function buildAlerts(financials, obligations) {
-  const { cashDisponible, cobrosPendientes, pagosPendientes, burnRate, runway, vencidas, dso, gastoTotal, totalIngresos } = financials;
+  const { cashDisponible, cobrosPendientes, pagosPendientes, runway, vencidas, dso, bankKnown } = financials;
   const alerts = [];
 
   if (runway !== null && runway < 3) {
     alerts.push({ id: 'runway', severity: 'critical', icon: Zap, title: 'Runway crítico',
       desc: `Con el burn rate actual, tu caja se agotaría en ${runway.toFixed(1)} meses. Acelera cobros o reduce gastos.` });
   }
-  if (cashDisponible < pagosPendientes) {
+  if (bankKnown && cashDisponible < pagosPendientes) {
     alerts.push({ id: 'cash_low', severity: 'high', icon: AlertTriangle, title: 'Cash insuficiente para pagos comprometidos',
       desc: `Tienes ${fmt(cashDisponible)} disponible pero ${fmt(pagosPendientes)} en pagos pendientes. Gap de ${fmt(pagosPendientes - cashDisponible)}.` });
   }
@@ -26,10 +26,10 @@ function buildAlerts(financials, obligations) {
   }
   if (dso > 60) {
     alerts.push({ id: 'dso', severity: 'medium', icon: TrendingDown, title: 'Período medio de cobro elevado',
-      desc: `Tu DSO es de ${Math.round(dso)} días. El recomendado es < 30 días. Esto impacta directamente tu liquidez.` });
+      desc: `Tu DSO es de ${Math.round(dso)} días. Revisa las fechas de emisión y cobro de la muestra para valorar el riesgo.` });
   }
   const upcomingObl = obligations.filter(o => {
-    try { const diff = (new Date(o.fecha_limite) - new Date()) / 86400000; return diff >= 0 && diff <= 15 && o.estado !== 'finalizado'; }
+    try { const diff = (new Date(o.fecha_limite) - new Date()) / 86400000; return diff >= 0 && diff <= 15 && !['finalizado', 'pagado', 'presentado', 'domiciliado', 'no_aplica'].includes(o.estado); }
     catch { return false; }
   });
   if (upcomingObl.length > 0) {
@@ -37,13 +37,12 @@ function buildAlerts(financials, obligations) {
     alerts.push({ id: 'tax_soon', severity: 'medium', icon: CreditCard, title: `${upcomingObl.length} obligaciones fiscales en 15 días`,
       desc: `${fmt(total)} en impuestos próximos. Asegúrate de tener cash disponible.` });
   }
-  if (cobrosPendientes > cashDisponible * 2) {
+  if (bankKnown && cashDisponible > 0 && cobrosPendientes > cashDisponible * 2) {
     alerts.push({ id: 'pending_high', severity: 'medium', icon: Users, title: 'Concentración alta en cobros pendientes',
       desc: `${fmt(cobrosPendientes)} en cobros pendientes supera 2x tu cash actual. Evalúa riesgo de concentración.` });
   }
   if (alerts.length === 0) {
-    alerts.push({ id: 'ok', severity: 'ok', icon: CheckCircle, title: 'Tesorería en buen estado',
-      desc: 'No se detectan alertas críticas en este momento. Sigue monitorizando tu cashflow.' });
+    alerts.push(bankKnown ? { id: 'ok', severity: 'ok', icon: CheckCircle, title: 'Sin alertas de estas reglas', desc: 'El resultado depende de los datos bancarios y vencimientos disponibles; no es una certificación financiera.' } : { id: 'unknown', severity: 'unknown', icon: AlertTriangle, title: 'Liquidez no verificable', desc: 'Conecta o revisa el banco para calcular alertas de caja con saldo real.' });
   }
   return alerts;
 }
@@ -53,6 +52,7 @@ const sevCfg = {
   high:     { border: 'border-orange-200', bg: 'bg-orange-50', icon: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', label: 'Alto' },
   medium:   { border: 'border-amber-200',  bg: 'bg-amber-50',  icon: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',  label: 'Moderado' },
   ok:       { border: 'border-emerald-200',bg: 'bg-emerald-50',icon: 'text-emerald-600',badge: 'bg-emerald-100 text-emerald-700', label: 'OK' },
+  unknown:  { border: 'border-slate-200',bg: 'bg-slate-50',icon: 'text-slate-600',badge: 'bg-slate-100 text-slate-700', label: 'Sin dato' },
 };
 
 export default function CashAlertsPanel({ financials, obligations }) {
@@ -65,7 +65,7 @@ export default function CashAlertsPanel({ financials, obligations }) {
         <AlertTriangle className="w-4 h-4 text-amber-500" />
         <h3 className="text-sm font-semibold text-foreground">Alertas IA — Tesorería</h3>
         <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-          {alerts.filter(a => a.severity !== 'ok').length} activas
+          {alerts.filter(a => !['ok', 'unknown'].includes(a.severity)).length} activas
         </span>
       </div>
       <div className="space-y-2.5">
