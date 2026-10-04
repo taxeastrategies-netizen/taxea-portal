@@ -19,7 +19,7 @@ export function buildAeatQrUrl(company, invoice) {
   const payable = Number(invoice?.total_factura);
   const retention = Number(invoice?.importe_retencion || 0);
   if (!Number.isFinite(payable) || !Number.isFinite(retention) || Math.abs(amount - retention - payable) > 0.03) {
-    throw new Error('La base, el impuesto, la retención y el total a pagar no cuadran; revisa la factura antes de emitirla.');
+    throw new Error('La base, el impuesto, el recargo, la retención y el total a pagar no cuadran; revisa la factura antes de emitirla.');
   }
   if (String(invoice?.moneda || 'EUR').toUpperCase() !== 'EUR') {
     throw new Error('El QR tributario requiere el importe en euros; revisa la conversión de la factura.');
