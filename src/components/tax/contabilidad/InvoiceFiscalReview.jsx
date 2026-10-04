@@ -35,8 +35,9 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
 
   useEffect(() => {
     if (!open) return;
+    if (advisorAccess) { setCanApprove(true); return; }
     base44.auth.me().then(identity => setCanApprove(['admin', 'super_admin', 'advisor', 'asesor'].includes(String(identity?.role || '').toLowerCase()))).catch(() => setCanApprove(false));
-  }, [open]);
+  }, [open, advisorAccess]);
 
   useEffect(() => {
     if (!open || bundle) return;
