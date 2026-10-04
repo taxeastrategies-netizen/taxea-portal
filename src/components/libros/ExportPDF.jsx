@@ -140,8 +140,6 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
 
   const emitidas = invoices.filter(i => i.tipo === 'emitida');
   const recibidas = invoices.filter(i => i.tipo === 'recibida');
-  const clienteMap = buildClienteAccounts(invoices);
-  const proveedorMap = buildProveedorAccounts(invoices);
 
   const totalPages = 2; // simple 2-page doc
   let page = 1;
@@ -175,8 +173,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     const ret = base * n(inv.retencion_irpf) / 100;
     const total = n(inv.total_factura);
     totBaseE += base; totIvaE += iva; totRetE += ret; totTotalE += total;
-    const key = inv.cliente_nif ? inv.cliente_nif.toUpperCase() : (inv.cliente_nombre || '').toLowerCase();
-    const ctaCliente = clienteMap[key] || '4300000000';
+    const ctaCliente = inv.counterparty_account_code || '—';
     y = tableRow(doc, [
       inv.numero_factura || '—', fmtDate(inv.fecha_emision), inv.cliente_nombre || '—',
       inv.cliente_nif || '—', fmt(base), fmt(iva), fmt(ret), fmt(total),
@@ -211,7 +208,7 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
 
   y = tableHeader(doc, rHeaders, rColX, rColW, y);
 
-  let totBaseR = 0, totIvaR = 0, totTotalR = 0;
+  let totBaseR = 0, totIvaR = 0, totDeducibleR = 0, totTotalR = 0;
   recibidas.forEach((inv, idx) => {
     if (y > pageH - 25) {
       pageFooter(doc, page, totalPages, pageW, pageH);
@@ -224,11 +221,10 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     const base = n(inv.base_imponible);
     const iva = n(inv.cuota_iva);
     const total = n(inv.total_factura);
-    totBaseR += base; totIvaR += iva; totTotalR += total;
+    totBaseR += base; totIvaR += iva; totDeducibleR += n(inv.deductible_tax_amount); totTotalR += total;
     const provNombre = inv.proveedor_nombre || inv.cliente_nombre || '—';
     const provNif = inv.proveedor_nif || inv.cliente_nif || '—';
-    const key = provNif !== '—' ? provNif.toUpperCase() : provNombre.toLowerCase();
-    const ctaProv = proveedorMap[key] || '4000000000';
+    const ctaProv = inv.counterparty_account_code || '—';
     const catLabel = inv.categoria_gasto ? inv.categoria_gasto.replace(/_/g, ' ') : '—';
     y = tableRow(doc, [
       inv.numero_factura || '—', fmtDate(inv.fecha_emision), provNombre,
@@ -263,8 +259,8 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     ['Base imponible ingresos', fmt(totBaseE)],
     ['Base imponible gastos', fmt(totBaseR)],
     ['IVA repercutido', fmt(totIvaE)],
-    ['IVA soportado', fmt(totIvaR)],
-    ['Resultado IVA (a liquidar)', fmt(totIvaE - totIvaR)],
+    ['IVA/IGIC deducible clasificado', fmt(totDeducibleR)],
+    ['Diferencia estimada, no liquidación', fmt(totIvaE - totDeducibleR)],
     ['Beneficio estimado (base)', fmt(totBaseE - totBaseR)],
   ];
 
