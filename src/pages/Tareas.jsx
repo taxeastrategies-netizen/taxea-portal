@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -46,8 +46,11 @@ export default function Tareas() {
   const [form, setForm] = useState(EMPTY);
   const [filterEstado, setFilterEstado] = useState('all');
   const [filterResp, setFilterResp] = useState('all');
+  const activeCompanyRef = useRef(company?.id || '');
+  activeCompanyRef.current = company?.id || '';
 
   useEffect(() => {
+    setTareas([]);
     if (company?.id) {
       load();
     } else if (!loadingCompany) {
@@ -57,11 +60,15 @@ export default function Tareas() {
 
   const load = async () => {
     setLoading(true);
-    const query = { company_id: company.id };
+    const requestedCompany = company.id;
+    const query = { company_id: requestedCompany };
     if (!isAdmin) query.interna = false;
-    const data = await base44.entities.Task.filter(query, '-created_date');
-    setTareas(data || []);
-    setLoading(false);
+    try {
+      const data = await base44.entities.Task.filter(query, '-created_date');
+      if (activeCompanyRef.current === requestedCompany) setTareas(data || []);
+    } finally {
+      if (activeCompanyRef.current === requestedCompany) setLoading(false);
+    }
   };
 
   const openNew = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
