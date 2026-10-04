@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import FiscalAssessmentPanel from './FiscalAssessmentPanel';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId }) {
-  const [form, setForm] = useState(doc.formData || {});
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [] }) {
+  const [form, setForm] = useState(() => ({ ...doc.formData, fiscal_activity_id: doc.formData?.fiscal_activity_id || (fiscalActivities.length === 1 ? fiscalActivities[0].id : '') }));
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
   const manualAccount = String(form.cuenta_contable_manual || '').trim();
   const accountPrefix = tipo === 'ingresos' ? '7' : '6';
   const invalidManualAccount = manualAccount && (!/^\d{3,8}$/.test(manualAccount) || !manualAccount.startsWith(accountPrefix));
+  const missingFiscalActivity = fiscalActivities.length > 1 && !form.fiscal_activity_id;
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -28,7 +29,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
           <Button size="sm" variant="outline" disabled={loading} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
             <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
-          <Button size="sm" disabled={loading || !!invalidManualAccount} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
+          <Button size="sm" disabled={loading || !!invalidManualAccount || missingFiscalActivity} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : 'Aprobar y guardar'}
           </Button>
           <button onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
@@ -87,6 +88,16 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             </div>
           )}
 
+          {fiscalActivities.length > 0 && (
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
+              <Label className="text-xs font-semibold">Actividad fiscal de la factura</Label>
+              <Select value={form.fiscal_activity_id || ''} onValueChange={value => set('fiscal_activity_id', value)}>
+                <SelectTrigger><SelectValue placeholder="Selecciona actividad" /></SelectTrigger>
+                <SelectContent>{fiscalActivities.map(activity => <SelectItem key={activity.id} value={activity.id}>{activity.name} · {activity.indirectTaxRegime}</SelectItem>)}</SelectContent>
+              </Select>
+              {missingFiscalActivity && <p className="text-xs text-amber-700">Hay varias actividades: elige la que corresponde a este documento.</p>}
+            </div>
+          )}
           <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2">
             <Label htmlFor="ocr-cuenta-manual" className="text-xs font-semibold">Cuenta contable manual (opcional)</Label>
             <Input
