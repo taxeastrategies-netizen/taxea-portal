@@ -485,6 +485,34 @@ Deno.serve(async (req) => {
         }
 
         const invoice = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+        try {
+          await base44.asServiceRole.entities.InvoiceTaxLine.create({
+            companyId: tmpl.ownerAccountId, invoiceId: invoice.id, lineNumber: 1,
+            operationDate: runDate, taxKind: fiscalEvaluation.taxKind,
+            regime: fiscalEvaluation.regime, operationType: fiscalEvaluation.operationType,
+            activityId: fiscalEvaluation.activityId, exemptionKey: fiscalEvaluation.exemptionKey,
+            legalBasis: fiscalEvaluation.legalBasis, base: fiscalEvaluation.base,
+            rate: fiscalEvaluation.taxRate, quota: fiscalEvaluation.taxAmount,
+            deductibleQuota: 0, nonDeductibleQuota: 0, deductiblePercent: fiscalEvaluation.deductiblePercent,
+            deductible: false, source: 'sistema', reviewStatus: 'validado',
+            reviewedAt: new Date().toISOString(), reviewedBy: triggeredByEmail || 'sistema',
+            ruleSetVersion: fiscalEvaluation.ruleSetVersion, schemaVersion: 'pgc8-v1',
+          });
+        } catch (taxLineError) {
+          await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+            estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion',
+            accounting_migration_hold: true, accounting_migration_hold_reason: 'Falló la línea fiscal de la emisión recurrente.',
+          });
+          results.errors++;
+          await base44.asServiceRole.entities.RecurringInvoiceRun.create({
+            recurringInvoiceTemplateId: tmpl.id, ownerAccountId: tmpl.ownerAccountId,
+            runType, status: 'error', runAt: new Date().toISOString(),
+            triggeredByUserId, triggeredByEmail, periodStart: runDate, periodEnd, periodKey,
+            generatedInvoiceId: invoice.id, generatedInvoiceNumber: invoiceNumber,
+            safeErrorMessage: 'Factura conservada sin contabilizar: falta su línea fiscal.',
+          });
+          break;
+        }
         await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
           action: 'sync_invoice',
           invoiceId: invoice.id,
