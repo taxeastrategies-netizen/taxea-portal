@@ -257,6 +257,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 baseAmount: Number(payload.base_imponible) || 0,
                 taxRate: Number(payload.tipo_iva) || 0,
                 taxType: taxType.toLowerCase(),
+                fiscalActivityId: payload.fiscal_activity_id || createdInvoice.fiscal_activity_id,
                 retentionRate: payload.retencion_irpf || 0,
                 totalAmount: total,
                 currency: payload.moneda || 'EUR',
