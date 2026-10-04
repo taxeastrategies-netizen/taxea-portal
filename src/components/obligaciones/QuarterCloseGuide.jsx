@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { AlertTriangle, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react';
@@ -11,26 +11,31 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
   const [quarter, setQuarter] = useState(Math.ceil((new Date().getMonth() + 1) / 3));
   const [extra, setExtra] = useState(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef(0);
   const load = async () => {
-    if (!companyId) return;
+    const requestId = ++requestRef.current;
+    if (!companyId) { setExtra(null); setLoading(false); return; }
     setLoading(true);
     const [financial, bank] = await Promise.allSettled([
       base44.functions.invoke('getCompanyFinancials', { company_id: companyId, anio: fiscalYear }),
       base44.functions.invoke('openBanking', { action: 'treasury_snapshot', company_id: companyId }),
     ]);
+    if (requestId !== requestRef.current) return;
     setExtra({
+      companyId,
       invoices: financial.status === 'fulfilled' ? (financial.value?.data || financial.value)?.invoices || [] : null,
       bank: bank.status === 'fulfilled' && (bank.value?.data || bank.value)?.ok ? bank.value?.data || bank.value : null,
     });
     setLoading(false);
   };
-  useEffect(() => { load(); }, [companyId, fiscalYear]);
+  useEffect(() => { setExtra(null); load(); return () => { requestRef.current++; }; }, [companyId, fiscalYear]);
+  const currentExtra = extra?.companyId === companyId ? extra : null;
   const modelItems = useMemo(() => (bundle?.items || []).filter(row => Number(row.fiscalYear) === Number(fiscalYear) && (row.period === 'T' + quarter || row.period === String(quarter) + 'T' || row.period === '0' + quarter + 'T' || row.period === String(quarter))), [bundle, fiscalYear, quarter]);
-  const invoices = useMemo(() => extra?.invoices?.filter(row => !row.anulada && Number(String(row.fecha_emision || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_emision) === quarter) || [], [extra, fiscalYear, quarter]);
+  const invoices = useMemo(() => currentExtra?.invoices?.filter(row => !row.anulada && Number(String(row.fecha_emision || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_emision) === quarter) || [], [extra, fiscalYear, quarter]);
   const accountingExceptions = invoices.filter(row => row.estado_contable !== 'contabilizada' || !row.linked_journal_entry_id);
-  const invoicesKnown = Array.isArray(extra?.invoices);
-  const bankKnown = Boolean(extra?.bank?.accounts?.some(row => row.estado_conexion === 'conectado' && row.origen_datos === 'open_banking'));
-  const transactions = extra?.bank?.transactions || [];
+  const invoicesKnown = Array.isArray(currentExtra?.invoices);
+  const bankKnown = Boolean(currentExtra?.bank?.accounts?.some(row => row.estado_conexion === 'conectado' && row.origen_datos === 'open_banking'));
+  const transactions = currentExtra?.bank?.transactions || [];
   const bankExceptions = transactions.filter(row => !row.es_demo && row.estado_proveedor !== 'pending' && Number(String(row.fecha_operacion || '').slice(0, 4)) === Number(fiscalYear) && quarterOf(row.fecha_operacion) === quarter && ['sin_conciliar', 'sugerida_ia', 'revisar'].includes(row.estado_conciliacion));
   const profileValid = bundle?.profile?.profileStatus === 'validado_asesor';
   const unlinked = bundle?.unlinkedDocuments?.length || 0;
