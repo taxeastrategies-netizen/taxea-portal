@@ -518,7 +518,7 @@ async function autoReconcileCompany(base44: any, companyId: string, actor: strin
     return (taxId && contactsByTaxId.get(taxId)) || (name && contactsByName.get(name)) || null;
   };
   const eligibleInvoices = (invoices || []).filter((invoice: any) => {
-    if (invoice.anulada || invoice.estado_cobro === 'cobrada' || invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') return false;
+    if (invoice.anulada || invoice.estado_cobro === 'cobrada' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) return false;
     const total = Math.abs(Number(invoice.total_factura || 0));
     invoice.__outstanding = asMoney(Math.max(0, total - (paymentsByInvoice.get(invoice.id) || 0)));
     return invoice.__outstanding > 0.01;
