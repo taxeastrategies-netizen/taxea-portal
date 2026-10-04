@@ -645,7 +645,16 @@ Deno.serve(async (req) => {
             }).catch(() => { ocrWarning = 'Asiento confirmado; actualizar el estado del documento OCR requiere reintento.'; });
           }
         }
-        return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted), ocr_warning: ocrWarning || null });
+        let recurringWarning = '';
+        if (saved.isRecurringGenerated) {
+          const runs = await base44.asServiceRole.entities.RecurringInvoiceRun.filter({ ownerAccountId: companyId, generatedInvoiceId: saved.id }, '-runAt', 20).catch(() => []);
+          for (const run of runs || []) {
+            if (run.status === 'draft_created') await base44.asServiceRole.entities.RecurringInvoiceRun.update(run.id, {
+              status: 'generated', safeErrorMessage: '',
+            }).catch(() => { recurringWarning = 'Asiento confirmado; el historial recurrente requiere actualizarse.'; });
+          }
+        }
+        return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted), ocr_warning: ocrWarning || null, recurring_warning: recurringWarning || null });
       } catch (error) {
         await base44.asServiceRole.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR',
