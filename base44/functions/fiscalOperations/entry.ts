@@ -276,7 +276,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     if (regime === 'pequeno_empresario_igic' && ['reverse_charge', 'import'].includes(operationType)) modelImpact.push('412');
   }
   return {
-    status: reviewRequired ? 'review_required' : 'ready', reviewRequired, confidence: Math.max(0, confidence),
+    status: reviewRequired ? 'review_required' : 'ready', reviewRequired, postingBlocked: SPECIAL_POSTING_PENDING.has(regime) || (direction === 'gasto' && activity.deductionRight === 'sector_diferenciado'), confidence: Math.max(0, confidence),
     ruleSetVersion: RULESET, activityId: activity.id, taxKind, regime, operationType, exemptionKey, legalBasis,
     deductionCategory: clean(body.deductionCategory), deductionUse: clean(body.deductionUse),
     base, taxRate, taxAmount, deductiblePercent, deductibleTax, nonDeductibleTax,
@@ -454,7 +454,10 @@ Deno.serve(async (req) => {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
-      if (SPECIAL_POSTING_PENDING.has(proposedEvaluation.regime) || (invoice.tipo === 'recibida' && selectedActivity?.deductionRight === 'sector_diferenciado')) return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
+      if (proposedEvaluation.postingBlocked) {
+        if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
+        return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
+      }
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
       const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
