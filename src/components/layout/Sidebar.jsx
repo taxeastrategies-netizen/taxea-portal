@@ -46,7 +46,7 @@ const DEPT_GROUPS = [
     depts: [
       {
         id: 'tax',
-        label: 'Tax & Accounting',
+        label: 'Fiscalidad y Contabilidad',
         icon: Calculator,
         activeColor: 'text-taxea-red',
         activeBg: 'bg-taxea-red/8',
@@ -55,7 +55,7 @@ const DEPT_GROUPS = [
       },
       {
         id: 'finance',
-        label: 'Finance',
+        label: 'Finanzas y tesorería',
         icon: Wallet,
         activeColor: 'text-emerald-600',
         activeBg: 'bg-emerald-50',
@@ -97,7 +97,7 @@ const DEPT_GROUPS = [
       },
       {
         id: 'people',
-        label: 'People & HR',
+        label: 'Recursos humanos y personas',
         icon: Heart,
         activeColor: 'text-rose-600',
         activeBg: 'bg-rose-50',
