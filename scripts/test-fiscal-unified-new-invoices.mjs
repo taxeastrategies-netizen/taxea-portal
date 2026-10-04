@@ -30,7 +30,8 @@ const entities = new Proxy({}, { get: (_target, name) => ({
   async create() { writes++; throw new Error('Unexpected write'); },
   async update() { writes++; throw new Error('Unexpected write'); },
 }) });
-const client = { auth: { me: async () => ({ id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } }) }, asServiceRole: { entities } };
+let currentUser = { id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } };
+const client = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
 let handler;
 vm.runInContext(build.outputFiles[0].text, vm.createContext({
   Response, Request, URL, TextEncoder, TextDecoder, crypto: webcrypto, Date, console,
@@ -92,7 +93,12 @@ records.Invoice.push({ id: 'invoice-old', company_id: 'company-a', tipo: 'recibi
 const postedResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-old', activityId: 'activity-a', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
 }));
-assert.equal(postedResponse.status, 409);
+assert.equal(postedResponse.status, 403);
+currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
+const professionalResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-old', activityId: 'activity-a', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(professionalResponse.status, 409);
 assert.equal(records.Invoice[0].deductible_tax_amount, 21);
 assert.equal(writes, 0);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
