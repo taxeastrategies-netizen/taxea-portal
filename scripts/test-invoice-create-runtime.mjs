@@ -67,13 +67,13 @@ const entity = name => ({
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
 let currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
-let fiscalBlocked = false;
+let fiscalStatus = 'ready';
 const testClient = {
   auth: { me: async () => currentUser }, asServiceRole: { entities },
   functions: { async invoke(name, body) {
     assert.equal(name, 'fiscalOperations');
     assert.equal(body.requireValidatedProfile, true);
-    if (fiscalBlocked) return { data: { evaluation: { status: 'blocked', reasons: ['Perfil pendiente de asesor.'] } } };
+    if (fiscalStatus !== 'ready') return { data: { evaluation: { status: fiscalStatus, reasons: ['Perfil pendiente de asesor.'] } } };
     const taxAmount = Math.round(body.base * body.taxRate) / 100;
     const withholdingAmount = Math.round(body.base * body.withholdingRate) / 100;
     return { data: { evaluation: {
@@ -194,11 +194,15 @@ const invalidTotal = await invoke({
 });
 assert.equal(invalidTotal.response.status, 400);
 
-fiscalBlocked = true;
+fiscalStatus = 'blocked';
 const unvalidated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'unvalidated', invoice: { ...validInvoice, numero_factura: 'F-2026-004' } });
 assert.equal(unvalidated.response.status, 422);
 assert.equal(records.Invoice.length, 1);
-fiscalBlocked = false;
+fiscalStatus = 'review_required';
+const pendingReview = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'pending-review', invoice: { ...validInvoice, numero_factura: 'F-2026-005' } });
+assert.equal(pendingReview.response.status, 422);
+assert.equal(records.Invoice.length, 1);
+fiscalStatus = 'ready';
 
 currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
@@ -216,6 +220,7 @@ console.log(JSON.stringify({
     changedPayloadCannotReuseKey: true,
     duplicateActiveNumberBlocked: true,
     inconsistentTotalBlocked: true,
+    advisorReviewRequiredBeforePosting: true,
     crossTenantCreateBlocked: true,
   },
 }, null, 2));
