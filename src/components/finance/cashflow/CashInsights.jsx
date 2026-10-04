@@ -8,8 +8,7 @@ function fmt(n) {
 }
 
 function buildInsights(financials) {
-  const { cashDisponible, burnRate, runway, cobrosPendientes, pagosPendientes,
-    totalIngresos, gastoTotal, beneficio, ingresosDelta, dso, workingCapital, bankKnown } = financials;
+  const { totalIngresos, gastoTotal, beneficio, ingresosDelta, dso, workingCapital, bankKnown } = financials;
   const insights = [];
 
   if (bankKnown && ingresosDelta !== 0) {
