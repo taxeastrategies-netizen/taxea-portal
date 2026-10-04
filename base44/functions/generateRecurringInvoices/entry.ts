@@ -405,7 +405,9 @@ Deno.serve(async (req) => {
         } catch (fiscalError) {
           fiscalErrorMessage = 'No se pudo verificar el perfil fiscal de la emisión recurrente.';
         }
-        if (fiscalErrorMessage) {
+        const pendingReview = fiscalEvaluation && (fiscalEvaluation.status !== 'ready'
+          || fiscalErrorMessage || body.confirm_fiscal_review !== true || !isAdminUser);
+        if (!fiscalEvaluation) {
           results.errors++;
           await base44.asServiceRole.entities.RecurringInvoiceRun.create({
             recurringInvoiceTemplateId: tmpl.id, ownerAccountId: tmpl.ownerAccountId,
@@ -447,21 +449,22 @@ Deno.serve(async (req) => {
           recurringPeriodEnd: periodEnd,
           recurringPeriodKey: periodKey,
           origin: 'recurring_invoice',
-          indirect_tax_kind: fiscalEvaluation.taxKind,
-          fiscal_treatment: fiscalEvaluation.operationType,
-          fiscal_regime: fiscalEvaluation.regime,
-          fiscal_activity_id: fiscalEvaluation.activityId,
-          fiscal_rule_set_version: fiscalEvaluation.ruleSetVersion,
-          fiscal_review_status: 'validado',
-          fiscal_reviewed_at: new Date().toISOString(),
-          fiscal_reviewed_by: triggeredByEmail || 'sistema',
-          fiscal_exemption_key: fiscalEvaluation.exemptionKey,
-          fiscal_legal_basis: fiscalEvaluation.legalBasis,
-          deductible_tax_amount: fiscalEvaluation.deductibleTax,
-          non_deductible_tax_amount: fiscalEvaluation.nonDeductibleTax,
+          ...(pendingReview ? {
+            fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
+            fiscal_activity_id: tmpl.fiscalActivityId || fiscalEvaluation.activityId || '',
+            accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
+          } : {
+            indirect_tax_kind: fiscalEvaluation.taxKind, fiscal_treatment: fiscalEvaluation.operationType,
+            fiscal_regime: fiscalEvaluation.regime, fiscal_activity_id: fiscalEvaluation.activityId,
+            fiscal_rule_set_version: fiscalEvaluation.ruleSetVersion, fiscal_review_status: 'validado',
+            fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: triggeredByEmail || 'sistema',
+            fiscal_exemption_key: fiscalEvaluation.exemptionKey, fiscal_legal_basis: fiscalEvaluation.legalBasis,
+            deductible_tax_amount: fiscalEvaluation.deductibleTax,
+            non_deductible_tax_amount: fiscalEvaluation.nonDeductibleTax,
+          }),
         };
 
-        try {
+        if (!pendingReview) try {
           const issuer = await base44.asServiceRole.entities.Company.get(tmpl.ownerAccountId);
           invoiceData.qr_url = buildAeatQrUrl(issuer, invoiceData);
           invoiceData.qr_mode = 'no_verifactu';
@@ -485,6 +488,18 @@ Deno.serve(async (req) => {
         }
 
         const invoice = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+        if (pendingReview) {
+          await base44.asServiceRole.entities.RecurringInvoiceRun.create({
+            recurringInvoiceTemplateId: tmpl.id, ownerAccountId: tmpl.ownerAccountId,
+            runType, status: 'draft_created', runAt: new Date().toISOString(),
+            triggeredByUserId, triggeredByEmail, periodStart: runDate, periodEnd, periodKey,
+            generatedInvoiceId: invoice.id, generatedInvoiceNumber: invoiceNumber,
+            safeErrorMessage: fiscalErrorMessage || 'Pendiente de validación fiscal del asesor. Sin QR ni asiento.',
+          });
+          results.drafts++;
+          runDate = periodEnd;
+          continue;
+        }
         try {
           await base44.asServiceRole.entities.InvoiceTaxLine.create({
             companyId: tmpl.ownerAccountId, invoiceId: invoice.id, lineNumber: 1,
