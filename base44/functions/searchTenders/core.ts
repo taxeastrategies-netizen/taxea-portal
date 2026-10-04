@@ -130,7 +130,10 @@ export function filterRows(rows: any[], filters: any) {
   const type = txt(filters.contractType, 40);
   const min = filters.minAmount === '' || filters.minAmount == null ? null : Number(filters.minAmount);
   const max = filters.maxAmount === '' || filters.maxAmount == null ? null : Number(filters.maxAmount);
+  const today = dateToday();
   return rows.filter(row => {
+    if (row.kind === 'abierta' && row.deadline && row.deadline < today) return false;
+    if (row.kind === 'consulta' && row.consultationLimit && row.consultationLimit < today) return false;
     if (kind !== 'all' && row.kind !== kind) return false;
     if (query && !fold([row.title, row.tenderId, row.contractingBody, row.province, row.cpv.join(' ')].join(' ')).includes(query)) return false;
     if (cpv && !row.cpv.some((code: string) => code.startsWith(cpv))) return false;
