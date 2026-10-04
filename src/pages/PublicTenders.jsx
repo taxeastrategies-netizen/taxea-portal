@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { base44 } from '@/api/base44Client';
+import OpportunityWatchPanel from '@/components/OpportunityWatchPanel';
 import { ArrowUpRight, BellRing, BriefcaseBusiness, CalendarClock, ChevronDown, CircleAlert, FileSearch2, Filter, Landmark, MapPinned, RefreshCw, Search, ShieldCheck, Sparkles } from 'lucide-react';
 
 const GEOJSON_URL = '/data/spain-provinces.geojson';
@@ -97,6 +98,13 @@ export default function PublicTenders() {
   }, [kind, query, cpv, contractType, community, province, minAmount, maxAmount, requestCursor, refresh]);
   const reset = () => { setPages([]); setCursor(null); setRequestCursor(null); setShow(24); setRefresh(v => v + 1); };
   const selectCommunity = (value, selectedProvince = '') => { setCommunity(value); setProvince(selectedProvince); reset(); };
+  const applySavedSearch = saved => {
+    setCommunity(COMMUNITIES.find(item => item.code === saved.communityCode) || '');
+    setProvince(saved.provinceCode || ''); setDraft(saved.query || ''); setQuery(saved.query || '');
+    setCpv(saved.cpv || ''); setContractType(saved.contractType || '');
+    setMinAmount(saved.minAmount || ''); setMaxAmount(saved.maxAmount || '');
+    setKind('all'); reset();
+  };
   const options = useMemo(() => PROVINCES.filter(item => !community || item.ine === community.ine).sort((a, b) => a.name.localeCompare(b.name, 'es')), [community]);
   const rows = useMemo(() => Array.from(new Map(pages.flatMap(item => item.tenders || []).map(row => [row.id, row])).values()), [pages]);
   const counts = useMemo(() => ({ abierta: rows.filter(row => row.kind === 'abierta').length, anuncio_previo: rows.filter(row => row.kind === 'anuncio_previo').length, consulta: rows.filter(row => row.kind === 'consulta').length }), [rows]);
@@ -132,6 +140,7 @@ export default function PublicTenders() {
         { icon: CalendarClock, value: counts.consulta, label: 'Consultas preliminares encontradas', color: 'text-amber-600' },
       ].map(item => <div key={item.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm"><item.icon className={'h-5 w-5 ' + item.color} /><p className="mt-3 font-jakarta text-3xl font-extrabold">{item.value}</p><p className="mt-1 text-xs text-muted-foreground">{item.label}</p></div>)}
     </div>
+    <OpportunityWatchPanel kind="tender" criteria={{ communityCode: community?.code || '', communityName: community?.name || '', provinceCode: province, query, cpv, contractType, minAmount, maxAmount }} onApply={applySavedSearch} />
     <div className="grid gap-5 xl:grid-cols-[minmax(310px,0.92fr)_minmax(0,1.08fr)]">
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><MapPinned className="h-4 w-4 text-taxea-red" />Mapa de oportunidades</h2><span className="text-xs text-muted-foreground">Selecciona provincia</span></div>
