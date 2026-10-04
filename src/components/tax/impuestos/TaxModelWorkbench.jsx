@@ -346,10 +346,11 @@ function HistoryAndCarryforwardPanel({ result, modelCode }) {
   const applied = carryforward?.carry || [];
   const review = carryforward?.review || [];
   const deferred = carryforward?.deferred || [];
+  const excludedSpecial = result?.calculation?.carryforward?.excludedSpecial || [];
   const prior130 = carryforward?.type === 'irpf_cumulative' ? carryforward.previousFilings || [] : [];
   const missing130 = carryforward?.type === 'irpf_cumulative' ? carryforward.missingPeriods || [] : [];
   const indirectCarry = ['iva_deduction', 'igic_deduction'].includes(carryforward?.type) ? carryforward : null;
-  const hasContent = history?.presented || history?.importedCount || applied.length || review.length || deferred.length || prior130.length || missing130.length || indirectCarry;
+  const hasContent = history?.presented || history?.importedCount || applied.length || review.length || deferred.length || excludedSpecial.length || prior130.length || missing130.length || indirectCarry;
   if (!hasContent) return null;
   return (
     <section className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
@@ -387,6 +388,12 @@ function HistoryAndCarryforwardPanel({ result, modelCode }) {
         <div className="rounded-xl border border-emerald-200 bg-white p-3"><p className="text-xs text-slate-500">Deducciones tardías aplicadas</p><p className="mt-1 text-xl font-bold text-emerald-700">{applied.length}</p><p className="text-xs text-slate-500">{formatMoney(applied.reduce((sum, row) => sum + Number(row.quota || 0), 0))}</p></div>
         <div className="rounded-xl border border-red-200 bg-white p-3"><p className="text-xs text-slate-500">Requieren revisión</p><p className="mt-1 text-xl font-bold text-red-700">{review.length}</p></div>
         <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs text-slate-500">Pendientes de período futuro</p><p className="mt-1 text-xl font-bold text-slate-700">{deferred.length}</p></div>
+      </div>}
+
+      {!!excludedSpecial.length && <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Regímenes especiales fuera del cálculo ordinario · {excludedSpecial.length}</p>
+        <p className="mt-1 text-xs leading-5 text-red-800">Estas facturas siguen guardadas. Sus importes no se han incorporado a las casillas de este modelo: el asesor debe completar su circuito fiscal específico antes de usar la exportación para presentar.</p>
+        <div className="mt-3 max-h-56 space-y-2 overflow-auto">{excludedSpecial.map((item, index) => <div key={`${item.sourceId || item.invoiceId}-${index}`} className="rounded-lg border border-red-100 bg-white p-2 text-xs text-slate-700"><span className="font-semibold">{item.invoiceNumber || item.invoiceId || item.sourceId}</span> · {item.regime} · {item.operationDate}<p className="mt-1 text-red-700">{item.reason}</p></div>)}</div>
       </div>}
 
       {!!history?.lateItems?.length && <div className="rounded-xl border border-red-200 bg-red-50 p-4">
