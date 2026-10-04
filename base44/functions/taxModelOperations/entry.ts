@@ -552,7 +552,7 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
   const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
   for (const line of candidates) {
     const regime = clean(line.regime || line.invoice?.fiscal_regime);
-    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime)) {
+    if (NON_ORDINARY_INDIRECT_REGIMES.has(regime) || (kind === 'igic' && regime === 'simplificado')) {
       const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
       if (operationDate >= b.start && operationDate <= b.end) {
         excludedSpecial.push({ sourceId: line.sourceId, invoiceId: line.invoice?.id,
@@ -3629,6 +3629,27 @@ Deno.serve(async (req) => {
         unrecognizedFiledSource:(()=>{const sample=normalizeFiledImport({rawContent:'NO ES UN REGISTRO',fileName:'prueba.111',presentationDate:'2026-04-20',presentedBoxes:{'01':1},declarationType:'sustitutiva'},company,'111',2026,'1T');return sample.preview.source==='fichero_no_reconocido'&&sample.errors.some((message:string)=>message.includes('sustitutiva'))&&sample.warnings.some((message:string)=>message.includes('no se reconoció'));})(),
         informativeCorrectionChain:(()=>{const rows=[['original',100,'a'],['complementaria',20,'b'],['complementaria',30,'c'],['sustitutiva',160,'d'],['complementaria',10,'e']].map(([type,amount,id],index)=>({id,modeloCodigo:'190',ejercicio:2026,periodo:'Anual',estadoPresentacion:'presentado',tipoDeclaracion:type,snapshotVersion:index+1,casillasPresentadas:{PERCEPTORES:amount},sourceIdsPresentados:[id],importeFinal:0}));const effective=latestFiling(rows,'190',2026,'Anual');const orphan=effectiveFiledVersion([rows[1]],'190');const rectified=latestFiling([{id:'v1',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',tipoDeclaracion:'original',snapshotVersion:1,casillasPresentadas:{'71':10}},{id:'v2',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',tipoDeclaracion:'rectificativa',snapshotVersion:2,casillasPresentadas:{'71':15}}],'303',2026,'1T');return boxMap(effective.casillasPresentadas).PERCEPTORES===170&&effective.activeVersionIds.join('|')==='d|e'&&effective.sourceIdsPresentados.join('|')==='d|e'&&orphan.correctionIncomplete===true&&boxMap(rectified.casillasPresentadas)['71']===15;})(),
       };
+      const specialRegimeCases = [
+        ['iva','rebu'], ['iva','agencias_viajes'], ['iva','recargo_equivalencia'],
+        ['iva','agricultura_ganaderia_pesca'], ['iva','oss_union'],
+        ['iva','oss_exterior_union'], ['iva','ioss_importacion'],
+        ['iva','grupo_entidades'], ['iva','oro_inversion'],
+        ['igic','simplificado'], ['igic','comerciante_minorista_igic'],
+        ['igic','grupo_entidades'], ['igic','rebu'], ['igic','agencias_viajes'],
+      ];
+      const specialTaxRoutingChecks = {
+        nonOrdinaryExcluded: specialRegimeCases.every(([taxKind, regime], index) => {
+          const invoice = { id: `special-${index}`, tipo: 'emitida', numero_factura: `ESPECIAL-${index}`, fecha_emision: '2026-02-10', fiscal_regime: regime };
+          const taxLines = [{ sourceId: `InvoiceTaxLine:special-${index}`, invoice, date: '2026-02-10', taxKind, regime, operationType: 'subject_taxed', rate: 21, base: 100, quota: 21, reviewStatus: 'validado' }];
+          const result = calculateIndirectTax({ ...extensionBase, taxLines, warnings: [], blockers: [] }, bounds(2026,'1T'), taxKind as 'iva'|'igic', false, { previousCompensationBalance: 0 });
+          return result.operations.outputQuota === 0 && result.carryforward.excludedSpecial.length === 1 && result.carryforward.excludedSpecial[0].sourceId === taxLines[0].sourceId;
+        }),
+        ordinaryUnaffected: (() => {
+          const taxLines = [{ sourceId: 'InvoiceTaxLine:ordinary', invoice: { id: 'ordinary', tipo: 'emitida', fecha_emision: '2026-02-10' }, date: '2026-02-10', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed', rate: 21, base: 100, quota: 21, reviewStatus: 'validado' }];
+          const result = calculateIndirectTax({ ...extensionBase, taxLines, warnings: [], blockers: [] }, bounds(2026,'1T'), 'iva', false, { previousCompensationBalance: 0 });
+          return result.operations.outputQuota === 21 && result.carryforward.excludedSpecial.length === 0;
+        })(),
+      };
       const profileRegressionChecks={
         autonomoIva:fieldMap(result130Q2)['01']===1500,
         professionalWithRetentions:fieldMap(calculated111Q1)['09']===7.5,
@@ -3639,7 +3660,7 @@ Deno.serve(async (req) => {
         mixedTerritories:TARGET_MODELS.includes('303')&&TARGET_MODELS.includes('420'),
         intraCommunity:result349.details?.length===1,
       };
-      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope&&c.valid)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&Object.values(annualCoverageChecks).every(Boolean)&&authorizationCheck.valid&&Object.values(historyChecks).every(Boolean)&&Object.values(temporalChecks).every(Boolean)&&Object.values(traceabilityChecks).every(Boolean)&&Object.values(extensionChecks).every(Boolean)&&Object.values(profileRegressionChecks).every(Boolean); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,annualCoverageChecks,authorizationCheck,historyChecks,temporalChecks,temporalDiagnostics,traceabilityChecks,extensionChecks,profileRegressionChecks});
+      const ok=checks.every((c:any)=>c.validLength&&c.hasEndMarker&&!c.hasNaN)&&wrappedChecks.every((c:any)=>c.validEnvelope&&c.valid)&&transferChecks.every(item=>item.valid)&&handoffCheck.valid&&Object.values(annualCoverageChecks).every(Boolean)&&authorizationCheck.valid&&Object.values(historyChecks).every(Boolean)&&Object.values(temporalChecks).every(Boolean)&&Object.values(traceabilityChecks).every(Boolean)&&Object.values(extensionChecks).every(Boolean)&&Object.values(specialTaxRoutingChecks).every(Boolean)&&Object.values(profileRegressionChecks).every(Boolean); return Response.json({ok,engineVersion:ENGINE_VERSION,checks,wrappedChecks,transferChecks,handoffCheck,annualCoverageChecks,authorizationCheck,historyChecks,temporalChecks,temporalDiagnostics,traceabilityChecks,extensionChecks,specialTaxRoutingChecks,profileRegressionChecks});
     }
     if(action==='context') {
       const companyId=clean(body.companyId); if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
