@@ -1,7 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 
-const RULESET = 'taxea-fiscal-es-2026.09.12-v2';
+const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
+// Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
+const SPECIAL_POSTING_PENDING = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 const clean = (value: unknown) => String(value ?? '').trim();
 const clamp = (value: unknown, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
@@ -193,6 +195,9 @@ function evaluate(profile: any, activities: any[], body: any) {
   const direction = body.direction === 'gasto' ? 'gasto' : 'ingreso';
   const taxKind = body.taxKind || activity.indirectTax || profile.indirectTaxDefault || 'iva';
   const regime = body.regime || activity.indirectTaxRegime || 'general';
+  if (taxKind === 'mixto') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La actividad mixta exige elegir IVA, IGIC o no aplica para esta operación.'], ruleSetVersion: RULESET };
+  if (taxKind !== 'no_aplica' && !REGIMES[taxKind]?.some(([code]) => code === regime)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El régimen elegido no corresponde al impuesto de esta operación.'], ruleSetVersion: RULESET };
+  if (taxKind === 'no_aplica' && regime !== 'no_sujeta') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Sin impuesto indirecto solo se admite una operación no sujeta, con fundamento legal.'], ruleSetVersion: RULESET };
   let operationType = body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed';
   const manualOverride = body.manualOverride === true;
   const reasons: string[] = [];
@@ -207,6 +212,8 @@ function evaluate(profile: any, activities: any[], body: any) {
   }
   if (body.requireValidatedProfile === true && !manualOverride && operationType === 'subject_taxed') taxAmount = money(base * taxRate / 100);
   let deductiblePercent = clamp(body.deductiblePercent ?? (activity.deductionRight === 'sin_derecho' ? 0 : activity.proRataPercent ?? 100));
+  if (direction === 'gasto' && activity.deductionRight === 'sin_derecho') deductiblePercent = 0;
+  if (direction === 'gasto' && ['prorrata_general', 'limitado'].includes(activity.deductionRight) && body.deductiblePercent == null) deductiblePercent = clamp(activity.proRataPercent);
   let exemptionKey = clean(body.exemptionKey || activity.exemptionKey);
   let legalBasis = clean(body.legalBasis || activity.exemptionLegalBasis);
 
@@ -234,7 +241,8 @@ function evaluate(profile: any, activities: any[], body: any) {
     reasons.push('Regimen especial: la regla general no basta para validar esta operacion.');
   }
   if (taxKind === 'mixto' || activity.deductionRight === 'sector_diferenciado') { reviewRequired = true; reasons.push('Actividad mixta o sector diferenciado: seleccionar impuesto y sector en la operacion.'); }
-  if (activity.deductionRight === 'prorrata_especial') { reviewRequired = true; reasons.push('Prorrata especial: la afectacion debe resolverse por operacion.'); }
+  if (activity.deductionRight === 'prorrata_especial') { reviewRequired = true; reasons.push('Prorrata especial: falta clasificación del destino exclusivo o común de cada adquisición; no aplicar un porcentaje uniforme.'); }
+  if (SPECIAL_POSTING_PENDING.has(regime)) { reviewRequired = true; alerts.push('Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'); }
   const deductibleTax = direction === 'gasto' ? money(taxAmount * deductiblePercent / 100) : 0;
   const nonDeductibleTax = direction === 'gasto' ? money(taxAmount - deductibleTax) : 0;
 
@@ -243,7 +251,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     const startYear = Number(String(activity.startDate || profile.professionalActivityStartDate || '').slice(0, 4));
     const invoiceYear = Number(String(body.operationDate || new Date().toISOString()).slice(0, 4));
     const newProfessional = startYear && invoiceYear >= startYear && invoiceYear <= startYear + 2 && activity.newProfessionalRateConfirmed === true;
-    withholdingRate = Number(body.withholdingRate ?? activity.defaultWithholdingRate ?? (newProfessional ? 7 : 15));
+    withholdingRate = Number(body.withholdingRate ?? (Number(activity.defaultWithholdingRate) > 0 ? activity.defaultWithholdingRate : (newProfessional ? 7 : 15)));
     if (!body.counterpartyIsWithholdingAgent) { withholdingRate = 0; alerts.push('La retencion profesional solo se propone cuando el destinatario esta obligado a retener.'); }
   } else if (body.withholdingRate != null) withholdingRate = Number(body.withholdingRate);
   const withholdingAmount = money(base * withholdingRate / 100);
@@ -440,6 +448,7 @@ Deno.serve(async (req) => {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
+      if (SPECIAL_POSTING_PENDING.has(proposedEvaluation.regime) || (invoice.tipo === 'recibida' && ['prorrata_especial', 'sector_diferenciado'].includes(selectedActivity?.deductionRight))) return Response.json({ error: 'Este régimen o derecho de deducción requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
       const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
