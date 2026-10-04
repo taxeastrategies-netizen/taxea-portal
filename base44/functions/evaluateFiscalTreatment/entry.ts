@@ -108,8 +108,7 @@ Deno.serve(async (req) => {
     // ── RULE: Exempt activity ──
     if (isExempt) {
       proposedTreatment = 'exento';
-      proposedTaxRate = 0;
-      proposedTaxAmount = 0;
+      if (isEmitida) { proposedTaxRate = 0; proposedTaxAmount = 0; }
       appliedRules.push(`actividad_exenta_${regime}`);
       if (isEmitida && invoiceTaxAmount && invoiceTaxAmount > 0) {
         alerts.push('CONFLICTO: La actividad del cliente es exenta pero el OCR detecto IVA/IGIC repercutido en factura emitida. No deberia llevar impuesto.');
@@ -117,7 +116,7 @@ Deno.serve(async (req) => {
         status = 'blocked_conflict_ocr_vs_config';
         confidence -= 30;
       }
-      if (isRecibida && deductionRight === 'sin_derecho') {
+      if (isRecibida && (deductionRight === 'sin_derecho' || regime === 'exenta_limitada')) {
         nonDeductibleAmount = invoiceTaxAmount || 0;
         deductibleAmount = 0;
         appliedRules.push('gasto_actividad_exenta_sin_deduccion');
@@ -175,7 +174,7 @@ Deno.serve(async (req) => {
     if (isRecibida && (counterpartyTerritory === 'extranjero_por_verificar' || esProveedorExtranjero)) {
       if (opType !== 'inversion_sujeto_pasivo' && opType !== 'isp') {
         const taxName = territory === 'canarias' ? 'IGIC' : 'IVA';
-        alerts.push(`Proveedor extranjero de servicios: evaluar inversion del sujeto pasivo de ${taxName}. El servicio se localiza en destino.`);
+        alerts.push(`Proveedor extranjero: verificar bienes o servicios, localización y si procede inversión del sujeto pasivo de ${taxName}; el NIF no basta.`);
         reviewReasons.push('Proveedor extranjero sin regla ISP evaluada');
         status = status === 'ready_to_post' ? 'review_required' : status;
         confidence -= 15;
@@ -313,9 +312,14 @@ Deno.serve(async (req) => {
     }
 
     const regimesRequiringSpecialEngine = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
-    if (regimesRequiringSpecialEngine.has(regime) || deductionRight === 'prorrata_especial' || deductionRight === 'sector_diferenciado') {
+    if (regimesRequiringSpecialEngine.has(regime) || deductionRight === 'sector_diferenciado') {
       status = 'review_required';
       reviewReasons.push('No confirmar asiento ni liquidación ordinarios: este régimen requiere un circuito fiscal específico.');
+      confidence = Math.min(confidence, 50);
+    }
+    if (deductionRight === 'prorrata_especial') {
+      status = 'review_required';
+      reviewReasons.push('Clasificar destino exclusivo o común del gasto en la revisión fiscal de la factura.');
       confidence = Math.min(confidence, 50);
     }
 
