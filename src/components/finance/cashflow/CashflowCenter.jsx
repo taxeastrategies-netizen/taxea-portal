@@ -20,17 +20,22 @@ export default function CashflowCenter() {
   const { company } = ctx;
   const companyId = company?.id;
 
-  const { invoices, expenses, bankTransactions, treasury, loading: financialLoading, lastSync, refresh } = useFinancialData(companyId);
+  const { invoices, expenses, bankTransactions, treasury, treasuryError, loading: financialLoading, lastSync, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
+  const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
   const loading = financialLoading || supportLoading;
 
   const loadObligations = () => {
     if (!companyId) { setSupportLoading(false); return; }
     setSupportLoading(true);
-    base44.entities.TaxObligation.filter({ company_id: companyId })
-      .then(obl => setObligations(obl || []))
-      .finally(() => setSupportLoading(false));
+    Promise.allSettled([
+      base44.entities.TaxObligation.filter({ company_id: companyId }),
+      base44.entities.TreasuryEvent.filter({ company_id: companyId }),
+    ]).then(([obligationsResult, eventsResult]) => {
+      setObligations(obligationsResult.status === 'fulfilled' ? obligationsResult.value || [] : []);
+      setTreasuryEvents(eventsResult.status === 'fulfilled' ? eventsResult.value || [] : []);
+    }).finally(() => setSupportLoading(false));
   };
 
   useEffect(() => { loadObligations(); }, [companyId]);
@@ -172,7 +177,7 @@ export default function CashflowCenter() {
       <CashKpiGrid financials={financials} />
 
       {/* Main chart */}
-      <CashflowForecastChart invoices={invoices} expenses={expenses} obligations={obligations} />
+      <CashflowForecastChart invoices={invoices} obligations={obligations} events={treasuryEvents} treasury={treasury} treasuryError={treasuryError} />
 
       {/* Risk + Survival side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
