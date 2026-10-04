@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import * as esbuild from 'esbuild';
@@ -46,9 +45,10 @@ const fakeDocument = {
   body: { appendChild() {}, removeChild() {} },
   createElement() { return { click() {}, set href(value) { this._href = value; }, set download(value) { this._download = value; } }; },
 };
+const module = { exports: {} };
 const context = vm.createContext({
   console, Blob, URL: objectUrl, document: fakeDocument,
-  setTimeout, clearTimeout, __base44: base44,
+  setTimeout, clearTimeout, __base44: base44, module, exports: module.exports,
 });
 vm.runInContext(build.outputFiles[0].text, context, { filename: 'ExportExcel.bundle.cjs' });
 const exported = context.exports?.exportarLibros || context.module?.exports?.exportarLibros;
