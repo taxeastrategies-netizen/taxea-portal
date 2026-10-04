@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
     if (regime === 'recargo_equivalencia') {
       alerts.push('Recargo de equivalencia: las ventas minoristas no añaden recargo; la adquisición exige cuota y recargo del proveedor. Revisar operación y libro.');
       reviewReasons.push('Régimen especial de recargo pendiente de validación por operación');
-      status = 'review_required';
+      if (status === 'ready_to_post') status = 'review_required';
       appliedRules.push('recargo_equivalencia_revision');
     }
 
