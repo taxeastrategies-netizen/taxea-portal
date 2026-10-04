@@ -3651,6 +3651,13 @@ Deno.serve(async (req) => {
           const result = calculateIndirectTax({ ...extensionBase, taxLines, warnings: [], blockers: [] }, bounds(2026,'1T'), taxKind as 'iva'|'igic', false, { previousCompensationBalance: 0 });
           return result.operations.outputQuota === 0 && result.carryforward.excludedSpecial.length === 1 && result.carryforward.excludedSpecial[0].sourceId === taxLines[0].sourceId;
         }),
+        legacyRegimeAndConflictSafe: (() => {
+          const common = { sourceId: 'InvoiceTaxLine:legacy', date: '2026-02-10', taxKind: 'iva', operationType: 'subject_taxed', rate: 21, base: 100, quota: 21, reviewStatus: 'validado' };
+          const legacy = { ...common, regime: 'subject_taxed', invoice: { id: 'legacy', tipo: 'emitida', fecha_emision: '2026-02-10', fiscal_regime: 'rebu' } };
+          const conflict = { ...common, sourceId: 'InvoiceTaxLine:conflict', regime: 'general', invoice: { id: 'conflict', tipo: 'emitida', fecha_emision: '2026-02-10', fiscal_regime: 'oss_union' } };
+          const result = calculateIndirectTax({ ...extensionBase, taxLines: [legacy, conflict], warnings: [], blockers: [] }, bounds(2026,'1T'), 'iva', false, { previousCompensationBalance: 0 });
+          return result.operations.outputQuota === 0 && result.carryforward.excludedSpecial.length === 2 && result.carryforward.excludedSpecial.some((row: any) => row.reason.includes('La línea indica general'));
+        })(),
         ordinaryUnaffected: (() => {
           const taxLines = [{ sourceId: 'InvoiceTaxLine:ordinary', invoice: { id: 'ordinary', tipo: 'emitida', fecha_emision: '2026-02-10' }, date: '2026-02-10', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed', rate: 21, base: 100, quota: 21, reviewStatus: 'validado' }];
           const result = calculateIndirectTax({ ...extensionBase, taxLines, warnings: [], blockers: [] }, bounds(2026,'1T'), 'iva', false, { previousCompensationBalance: 0 });
