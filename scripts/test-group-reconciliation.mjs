@@ -117,6 +117,16 @@ assert.throws(() => normalizeGroupAllocations(group, 99), /suma repartida/);
 assert.throws(() => normalizeGroupAllocations([{ invoice_id: 'a', amount: 60 }, { invoice_id: 'a', amount: 40 }], 100), /repetidas/);
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-other', group), helpers), /Movimiento no encontrado/);
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-fx', group), helpers), /requiere EUR/);
+const pendingInvoice = records.Invoice.find(row => row.id === 'b');
+pendingInvoice.fiscal_review_status = 'pendiente_revision';
+pendingInvoice.accounting_migration_hold_reason = 'FISCAL_ADVISOR_REVIEW_PHASE1';
+await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', group), helpers), /pendiente de validación fiscal/);
+assert.equal(records.InvoicePayment.length, 0);
+assert.equal(records.JournalEntry.filter(row => row.postingKey === 'bank:tx-ok:pgc8-v1').length, 0);
+pendingInvoice.fiscal_review_status = 'validado';
+pendingInvoice.accounting_migration_hold_reason = 'FISCAL_POSTING_ERROR';
+await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', group), helpers), /pendiente de validación fiscal o contabilización/);
+pendingInvoice.accounting_migration_hold_reason = '';
 
 await assert.rejects(() => reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', [{ invoice_id: 'a', amount: 70 }, { invoice_id: 'b', amount: 30 }]), helpers), /supera el pendiente/);
 const first = await reconcileInvoiceGroup(base44, user, companyId, request('tx-ok', group), helpers);
