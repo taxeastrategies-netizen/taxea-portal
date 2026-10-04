@@ -422,7 +422,14 @@ Deno.serve(async (req) => {
       if ((profiles || []).length !== 1 || profile?.profileStatus !== 'validado_asesor') return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
-      const proposedEvaluation = evaluate(profile, activities, { ...body, direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso', base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva, taxAmount: body.taxAmount ?? invoice.cuota_iva, operationDate: body.operationDate ?? invoice.fecha_emision });
+      const proposedEvaluation = evaluate(profile, activities, { ...body,
+        requireValidatedProfile: true, requireExactActivity: true,
+        activityId: body.activityId || invoice.fiscal_activity_id,
+        direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso',
+        base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
+        taxAmount: body.taxAmount ?? invoice.cuota_iva,
+        operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
+      });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
