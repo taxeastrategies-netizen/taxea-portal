@@ -17,7 +17,7 @@
     "test:document-backup": "node scripts/test-document-backup-security.mjs && node scripts/test-document-backup-runtime.mjs && node scripts/test-document-backup-verification.mjs",
     "test:invoice-qr": "node scripts/test-verifactu-qr.mjs && node scripts/test-invoice-create-runtime.mjs && node scripts/test-invoice-qr-email-runtime.mjs",
     "test:verifactu-foundation": "npm run test:invoice-qr && node scripts/test-verifactu-hash.mjs && node scripts/test-issued-invoice-qr-guard.mjs && node scripts/test-verifactu-vault-reference.mjs && node scripts/test-client-setup-runtime.mjs",
-    "test:tax-accounting-phase2": "npm run test:tax-accounting-phase1 && npm run test:document-backup && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-scanner-auth-gates.mjs",
+    "test:tax-accounting-phase2": "npm run test:tax-accounting-phase1 && node scripts/test-special-regime-preview.mjs && npm run test:document-backup && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-scanner-auth-gates.mjs",
     "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-financial-report-truth.mjs && node scripts/test-tax-artifact-integrity.mjs && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs"
   },
   "dependencies": {
