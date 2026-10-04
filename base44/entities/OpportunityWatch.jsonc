@@ -25,6 +25,10 @@
       "type": "string",
       "format": "date-time"
     },
+    "seen_signatures": {
+      "type": "object",
+      "description": "Identificadores y fechas oficiales vistos en la \u00faltima revisi\u00f3n de esta b\u00fasqueda."
+    },
     "enabled": {
       "type": "boolean",
       "default": true
