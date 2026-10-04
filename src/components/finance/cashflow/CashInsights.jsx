@@ -9,34 +9,25 @@ function fmt(n) {
 
 function buildInsights(financials) {
   const { cashDisponible, burnRate, runway, cobrosPendientes, pagosPendientes,
-    totalIngresos, gastoTotal, beneficio, margenNeto, ingresosDelta, dso, workingCapital } = financials;
+    totalIngresos, gastoTotal, beneficio, ingresosDelta, dso, workingCapital, bankKnown } = financials;
   const insights = [];
 
-  if (ingresosDelta !== 0) {
+  if (bankKnown && ingresosDelta !== 0) {
     insights.push({ trend: ingresosDelta > 0 ? 'up' : 'down',
-      text: `Tus ingresos ${ingresosDelta > 0 ? 'crecen' : 'caen'} un ${Math.abs(ingresosDelta).toFixed(1)}% respecto al período anterior. ${ingresosDelta > 0 ? 'Tendencia positiva.' : 'Atención al pipeline comercial.'}` });
+      text: `Las entradas bancarias observadas ${ingresosDelta > 0 ? 'aumentan' : 'disminuyen'} un ${Math.abs(ingresosDelta).toFixed(1)}% frente a los 30 días anteriores. No equivale a ventas devengadas.` });
   }
-  if (gastoTotal > 0 && totalIngresos > 0) {
-    const taxShare = (pagosPendientes / gastoTotal) * 100;
-    if (taxShare > 15) {
-      insights.push({ trend: 'down', text: `Los pagos comprometidos representan el ${taxShare.toFixed(0)}% de tus gastos. Optimiza plazos de pago con proveedores.` });
-    }
-  }
+  if (bankKnown && gastoTotal > totalIngresos) insights.push({ trend: 'down', text: `En los últimos 30 días las salidas bancarias superan las entradas en ${fmt(Math.abs(beneficio))}. Revisa conceptos y fechas antes de proyectar una tendencia.` });
   if (dso > 30) {
-    insights.push({ trend: 'down', text: `Tu período medio de cobro es de ${Math.round(dso)} días. Cada día de mejora en DSO libera ${fmt(totalIngresos / 365)} de liquidez adicional.` });
+    insights.push({ trend: 'down', text: `Las facturas con cobros registrados tardaron de media ${Math.round(dso)} días desde emisión. La muestra puede no cubrir todas las ventas.` });
   }
   if (workingCapital > 0) {
-    insights.push({ trend: 'up', text: `Tu capital de trabajo es positivo (${fmt(workingCapital)}). Tienes capacidad de maniobra financiera a corto plazo.` });
+    insights.push({ trend: 'up', text: `Los cobros pendientes superan las facturas por pagar en ${fmt(workingCapital)}. No equivale al capital circulante contable ni garantiza su cobro.` });
   } else if (workingCapital < 0) {
-    insights.push({ trend: 'down', text: `Capital de trabajo negativo (${fmt(workingCapital)}). Los cobros pendientes no cubren los pagos comprometidos.` });
+    insights.push({ trend: 'down', text: `Las facturas por pagar superan los cobros pendientes en ${fmt(Math.abs(workingCapital))}. Revisa otras obligaciones no incluidas.` });
   }
-  if (margenNeto > 20) {
-    insights.push({ trend: 'up', text: `Margen neto del ${margenNeto.toFixed(1)}%. Excelente eficiencia operativa. La rentabilidad soporta bien el crecimiento.` });
-  } else if (margenNeto < 0) {
-    insights.push({ trend: 'down', text: `Margen neto negativo (${margenNeto.toFixed(1)}%). Los gastos superan los ingresos del período. Revisa la estructura de costes.` });
-  }
+  if (!bankKnown) insights.unshift({ trend: 'neutral', text: 'No hay un saldo bancario verificable. Los indicadores de liquidez quedan sin calcular hasta revisar la conexión.' });
   if (insights.length === 0) {
-    insights.push({ trend: 'neutral', text: 'Registra más facturas y gastos para obtener insights financieros personalizados basados en tus datos reales.' });
+    insights.push({ trend: 'neutral', text: 'No hay suficientes operaciones verificadas para emitir una lectura útil de tesorería.' });
   }
   return insights;
 }
@@ -50,7 +41,7 @@ export default function CashInsights({ financials }) {
       className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles className="w-4 h-4 text-violet-500" />
-        <h3 className="text-sm font-semibold text-foreground">Insights IA — Cashflow</h3>
+        <h3 className="text-sm font-semibold text-foreground">Lectura de tesorería</h3>
       </div>
       <div className="space-y-2.5">
         {insights.map((ins, i) => {
