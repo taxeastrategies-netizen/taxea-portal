@@ -39,6 +39,8 @@ const REGIMES = {
     ['exenta_limitada', 'Actividad con exencion limitada'], ['exenta_plena', 'Actividad con exencion plena'],
     ['no_sujeta', 'Actividad no sujeta'], ['mixto', 'Sectores o tratamientos mixtos'],
   ],
+  no_aplica: [['no_sujeta', 'No sujeta · fundamento legal obligatorio']],
+  mixto: [['mixto', 'Mixto · elegir impuesto y régimen por operación']],
 };
 
 const OPERATIONS = [
@@ -306,7 +308,7 @@ Deno.serve(async (req) => {
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
 
-    if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
+    if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, postingSupport: Object.fromEntries(Object.values(REGIMES).flat().map(([code]) => [code, SPECIAL_POSTING_PENDING.has(code) || code === 'mixto' ? 'pendiente_circuito_especial' : 'revision_asesor'])), operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
