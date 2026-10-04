@@ -398,6 +398,12 @@ Deno.serve(async (req) => {
       const payload: any = { company_id: companyId, fiscalProfileId: profile?.id || data.fiscalProfileId || '', active: data.active !== false, ruleSetVersion: RULESET, reviewedAt: new Date().toISOString(), reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
       if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new Error('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
+      const selectedTax = clean(payload.indirectTax || existing?.indirectTax);
+      const selectedRegime = clean(payload.indirectTaxRegime || existing?.indirectTaxRegime || 'general');
+      if (!REGIMES[selectedTax]?.some(([code]) => code === selectedRegime)) throw new Error('El régimen especial no corresponde al impuesto indirecto de la actividad.');
+      if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw new Error('La actividad mixta debe clasificarse por operación antes de contabilizar.');
+      const proRata = payload.proRataPercent ?? existing?.proRataPercent;
+      if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw new Error('La prorrata debe estar entre 0 y 100 %.');
       const saved = existing ? await svc.entities.FiscalActivity.update(existing.id, payload) : await svc.entities.FiscalActivity.create(payload);
       if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal modificada; requiere nueva validación del asesor.' });
       const next = existing ? activities.map(item => item.id === saved.id ? saved : item) : [...activities, saved];
