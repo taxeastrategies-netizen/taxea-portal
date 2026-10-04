@@ -492,7 +492,17 @@ Deno.serve(async (req) => {
           return Response.json({ error: 'La clasificación difiere de la actividad validada. Marca modificación manual e indica su motivo.' }, { status: 422 });
         }
       }
-      const proposedEvaluation = evaluate(profile, activities, { ...body,
+      const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
+        const payments = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'payment_date', 500);
+        specialInputs.invoiceGross = Number(invoice.total_factura || 0);
+        specialInputs.payments = (payments || []).filter(item => !item.operation_status || item.operation_status === 'committed').map(item => ({ id: item.id, date: item.payment_date, amount: item.amount }));
+      }
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'grupo_entidades') {
+        specialInputs.groupId = profile.taxGroupId || '';
+        specialInputs.groupRole = profile.taxGroupRole || '';
+      }
+      const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
         direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso',
