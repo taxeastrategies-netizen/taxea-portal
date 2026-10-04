@@ -24,6 +24,7 @@ const records = {
 };
 const accountSnapshot = JSON.stringify([records.AccountingAccount, records.ClientAccount]);
 let writes = 0;
+let allowWrites = false;
 const entities = new Proxy({}, { get: (_target, name) => ({
   async get(id) { return (records[name] || []).find(item => item.id === id) || null; },
   async filter(query) { return (records[name] || []).filter(row => Object.entries(query || {}).every(([key, value]) => row[key] === value)); },
