@@ -200,16 +200,20 @@ function buildLibroVentas(invoices) {
 
 // ─── Hoja 6: Libro Compras y Gastos (AEAT 303) ──────────────────────────────
 function buildLibroCompras(invoices, expenses) {
-  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA %','Cuota IVA (€)','Retención IRPF %','Importe Retención (€)','Total (€)','Deducible','Trimestre','Año','Cuenta Contable'];
+  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota Soportada (€)','Cuota Deducible (€)','Cuota No Deducible (€)','Retención IRPF %','Importe Retención (€)','Total (€)','Deducible','Régimen','Tratamiento','Trimestre','Año','Cuenta Contable'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     rows.push([
       i.fecha_emision || '', i.numero_factura || '',
-      i.cliente_nombre || '', i.cliente_nif || '', i.concepto || '', 'Factura recibida',
+      i.proveedor_nombre || '', i.proveedor_nif || '', i.concepto || '', i.categoria_gasto || '',
       n(i.base_imponible), n(i.tipo_iva), n(i.cuota_iva),
+      i.deductible_tax_amount == null ? '' : n(i.deductible_tax_amount),
+      i.non_deductible_tax_amount == null ? '' : n(i.non_deductible_tax_amount),
       n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
       n(i.total_factura),
-      'Sí', i.trimestre || quarter(i.fecha_emision), i.anio || '', '6000000000',
+      i.deductible_tax_amount == null ? 'Sin validar' : n(i.deductible_tax_amount) === 0 ? 'No' : 'Sí',
+      i.fiscal_regime || '', i.fiscal_treatment || '',
+      i.trimestre || quarter(i.fecha_emision), i.anio || '', ctaGasto(i),
     ]);
   });
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
@@ -217,9 +221,8 @@ function buildLibroCompras(invoices, expenses) {
       e.fecha || '', '',
       e.proveedor_cliente || '', '', e.concepto || '', e.categoria || '',
       n(e.base_imponible), n(e.tipo_impuesto), n(e.cuota_impuesto),
-      n(e.retencion_irpf), pct(e.base_imponible, e.retencion_irpf || 0),
-      n(e.total),
-      'Sí', e.trimestre || quarter(e.fecha), e.anio || '', '6000000000',
+      '', '', n(e.retencion_irpf), pct(e.base_imponible, e.retencion_irpf || 0),
+      n(e.total), 'Sin validar', '', '', e.trimestre || quarter(e.fecha), e.anio || '', '',
     ]);
   });
   return rows;
@@ -400,7 +403,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '3. Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: newEmitidaIdx },
         { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
         { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8], newRowIndices: newEmitidaIdx },
-        { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 10, 14, 10, 14, 14, 10, 10, 8, 12], newRowIndices: newComprasIdx },
+        { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: newComprasIdx },
         { name: '7. Libro Diario', rows: buildLibroDiario(invoices, expenses), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
         { name: '8. Libro Mayor', rows: buildLibroMayor(invoices, expenses), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
