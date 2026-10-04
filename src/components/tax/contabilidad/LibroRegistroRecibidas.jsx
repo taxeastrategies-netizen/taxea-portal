@@ -172,7 +172,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
                   <td className="px-3 py-2 text-right font-mono text-muted-foreground">{fmt(inv.cuota_iva)}</td>
                   {isComercianteMinorista && (
                     <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">
-                      {fmt((inv.base_imponible || 0) + (inv.cuota_iva || 0))}
+                      {fmt(inv.total_factura ?? ((inv.base_imponible || 0) + (inv.cuota_iva || 0) + (inv.cuota_recargo || 0) - (inv.importe_retencion || 0)))}
                     </td>
                   )}
                   <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
