@@ -275,7 +275,9 @@
   ],
   "rls": {
     "create": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "read": {
       "$or": [
@@ -290,10 +292,14 @@
       ]
     },
     "update": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "data.company_id": "{{user.data.company_id}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
