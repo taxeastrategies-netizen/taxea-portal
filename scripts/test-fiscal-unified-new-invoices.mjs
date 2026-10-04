@@ -122,6 +122,15 @@ records.Invoice.push({ id: 'invoice-pending', company_id: 'company-a', tipo: 're
   fecha_emision: '2026-04-10', fecha_recepcion: '2026-04-11',
   fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
   base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121 });
+records.FiscalActivity[0].indirectTaxRegime = 'rebu';
+const blockedPosting = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
+    invoiceId: 'invoice-pending', activityId: 'activity-a', base: 100, taxRate: 21,
+    taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(blockedPosting.status, 422);
+assert.equal(writes, 0);
+records.FiscalActivity[0].indirectTaxRegime = 'exenta_limitada';
 const untracedOverride = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
     invoiceId: 'invoice-pending', activityId: 'activity-a', taxKind: 'iva',
@@ -144,4 +153,4 @@ assert.equal(records.InvoiceTaxLine[0].nonDeductibleQuota, 21);
 assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[1].total_factura, 121);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100'] }, null, 2));
