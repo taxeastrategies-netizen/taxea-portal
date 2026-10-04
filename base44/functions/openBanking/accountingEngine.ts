@@ -857,9 +857,12 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   if (invoice.accounting_migration_hold === true || invoice.fiscal_review_status === 'pendiente_revision') {
     throw new Error('Factura pendiente de revisión fiscal: confirma el tratamiento con el asesor antes de contabilizar.');
   }
-  const unsupportedFiscalRegimes = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
+  const unsupportedFiscalRegimes = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic', 'mixto']);
   if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime))) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
+  }
+  if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
+    throw new Error('La inversión de sujeto pasivo, el margen o el recargo requieren asientos fiscales específicos.');
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
   const currency = clean(invoice.moneda || 'EUR').toUpperCase();
