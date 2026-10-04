@@ -229,95 +229,26 @@ function buildLibroCompras(invoices, expenses) {
   return rows;
 }
 
-// ─── Hoja 7: Libro Diario ────────────────────────────────────────────────────
-function buildLibroDiario(invoices, expenses) {
-  const header = ['Fecha','Nº Asiento','Cuenta','Descripción Cuenta','Concepto','Debe (€)','Haber (€)','Contrapartida','Documento Ref.','NIF/CIF','Trimestre','Año'];
-  const rows = [header];
-  let asiento = 1;
-
-  invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-    const base = n(i.base_imponible);
-    const iva = n(i.cuota_iva);
-    const ret = pct(i.base_imponible, i.retencion_irpf);
-    const total = n(i.total_factura);
-    const q = i.trimestre || quarter(i.fecha_emision);
-    const yr = i.anio || '';
-    // Clientes
-    rows.push([i.fecha_emision || '', asiento, '4300000000', 'Clientes', i.concepto || '', total, '', '7000000000', i.numero_factura || '', i.cliente_nif || '', q, yr]);
-    // Ventas
-    rows.push([i.fecha_emision || '', asiento, '7000000000', 'Ventas de servicios', i.concepto || '', '', base, '4300000000', i.numero_factura || '', '', q, yr]);
-    // IVA repercutido
-    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4770000000', 'H.P. IVA repercutido', 'IVA ' + (n(i.tipo_iva) || 21) + '%', '', iva, '4300000000', i.numero_factura || '', '', q, yr]);
-    // IRPF
-    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4751000000', 'H.P. IRPF retenido', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4300000000', i.numero_factura || '', '', q, yr]);
-    asiento++;
-  });
-
-  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
-    const base = n(i.base_imponible);
-    const iva = n(i.cuota_iva);
-    const ret = pct(i.base_imponible, i.retencion_irpf);
-    const total = n(i.total_factura);
-    const q = i.trimestre || quarter(i.fecha_emision);
-    const yr = i.anio || '';
-    rows.push([i.fecha_emision || '', asiento, '6000000000', 'Compras', i.concepto || '', base, '', '4000000000', i.numero_factura || '', i.proveedor_nif || '', q, yr]);
-    if (iva > 0) rows.push([i.fecha_emision || '', asiento, '4720000000', 'H.P. IVA soportado', 'IVA ' + (n(i.tipo_iva) || 21) + '%', iva, '', '4000000000', i.numero_factura || '', '', q, yr]);
-    if (ret > 0) rows.push([i.fecha_emision || '', asiento, '4730000000', 'H.P. IRPF soportado', 'Retención ' + n(i.retencion_irpf) + '%', ret, '', '4000000000', i.numero_factura || '', '', q, yr]);
-    rows.push([i.fecha_emision || '', asiento, '4000000000', 'Proveedores', i.proveedor_nombre || '', '', total, '6000000000', i.numero_factura || '', '', q, yr]);
-    asiento++;
-  });
-
-  expenses.filter(e => e.tipo === 'gasto').forEach(e => {
-    const base = n(e.base_imponible);
-    const iva = n(e.cuota_impuesto);
-    const total = n(e.total);
-    const q = e.trimestre || quarter(e.fecha);
-    const yr = e.anio || '';
-    const ret = pct(e.base_imponible, e.retencion_irpf);
-    rows.push([e.fecha || '', asiento, '6000000000', 'Compras y gastos', e.concepto || '', base, '', '4000000000', '', '', q, yr]);
-    if (iva > 0) rows.push([e.fecha || '', asiento, '4720000000', 'H.P. IVA soportado', 'IVA ' + n(e.tipo_impuesto) + '%', iva, '', '4000000000', '', '', q, yr]);
-    if (ret > 0) rows.push([e.fecha || '', asiento, '4730000000', 'H.P. IRPF soportado', 'Retención ' + n(e.retencion_irpf) + '%', ret, '', '4000000000', '', '', q, yr]);
-    rows.push([e.fecha || '', asiento, '4000000000', 'Proveedores', e.proveedor_cliente || '', '', total, '6000000000', '', '', q, yr]);
-    asiento++;
-  });
-
+// ─── Hojas 7 y 8: asientos y saldos confirmados del motor contable ─────────
+function buildLibroDiario(entries) {
+  const rows = [['Fecha','Nº Asiento','Cuenta','Descripción Cuenta','Concepto','Debe (€)','Haber (€)','Contrapartida','Documento Ref.','NIF/CIF','Trimestre','Año']];
+  for (const entry of entries) {
+    for (const line of entry.lines || []) rows.push([
+      line.entryDate || entry.date || '', entry.entryNumber || '',
+      line.accountCode || line.subcuenta || '', line.accountName || '',
+      line.description || entry.description || '', n(line.debit ?? line.debeE), n(line.credit ?? line.haberE),
+      line.counterpartyAccountCode || '', line.documentId || entry.documentId || '',
+      '', quarter(entry.date), Number(String(entry.date || '').slice(0, 4)) || '',
+    ]);
+  }
   return rows;
 }
 
-// ─── Hoja 8: Libro Mayor (simplificado) ─────────────────────────────────────
-function buildLibroMayor(invoices, expenses) {
-  const cuentas = {};
-  const addCuenta = (cuenta, descripcion, debe, haber) => {
-    if (!cuentas[cuenta]) cuentas[cuenta] = { descripcion, debe: 0, haber: 0 };
-    cuentas[cuenta].debe += n(debe);
-    cuentas[cuenta].haber += n(haber);
-  };
-
-  invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-    addCuenta('4300000000', 'Clientes', n(i.total_factura), 0);
-    addCuenta('7000000000', 'Ventas de servicios', 0, n(i.base_imponible));
-    addCuenta('4770000000', 'H.P. IVA repercutido', 0, n(i.cuota_iva));
-    if (n(i.retencion_irpf) > 0) addCuenta('4751000000', 'H.P. IRPF retenido', pct(i.base_imponible, i.retencion_irpf), 0);
-  });
-  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
-    addCuenta('6000000000', 'Compras', n(i.base_imponible), 0);
-    addCuenta('4720000000', 'H.P. IVA soportado', n(i.cuota_iva), 0);
-    if (n(i.retencion_irpf) > 0) addCuenta('4730000000', 'H.P. IRPF soportado', pct(i.base_imponible, i.retencion_irpf), 0);
-    addCuenta('4000000000', 'Proveedores', 0, n(i.total_factura));
-  });
-  expenses.filter(e => e.tipo === 'gasto').forEach(e => {
-    addCuenta('6000000000', 'Compras y gastos', n(e.base_imponible), 0);
-    addCuenta('4720000000', 'H.P. IVA soportado', n(e.cuota_impuesto), 0);
-    if (n(e.retencion_irpf) > 0) addCuenta('4730000000', 'H.P. IRPF soportado', pct(e.base_imponible, e.retencion_irpf), 0);
-    addCuenta('4000000000', 'Proveedores', 0, n(e.total));
-  });
-
-  const header = ['Cuenta', 'Descripción', 'Debe Acumulado (€)', 'Haber Acumulado (€)', 'Saldo (€)'];
-  const rows = [header];
-  Object.entries(cuentas).sort((a, b) => a[0].localeCompare(b[0])).forEach(([cuenta, { descripcion, debe, haber }]) => {
-    rows.push([cuenta, descripcion, debe, haber, debe - haber]);
-  });
-  return rows;
+function buildLibroMayor(accounts) {
+  return [
+    ['Cuenta', 'Descripción', 'Debe Acumulado (€)', 'Haber Acumulado (€)', 'Saldo (€)'],
+    ...accounts.map(account => [account.code, account.name || '', n(account.debit), n(account.credit), n(account.balance)]),
+  ];
 }
 
 // ─── Hoja 9: Resumen IVA/IGIC ────────────────────────────────────────────────
