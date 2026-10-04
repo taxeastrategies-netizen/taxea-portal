@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
-import { suggestInvoiceMatches } from '@/lib/reconciliationSuggestions';
+import { groupInvoiceCandidates, suggestInvoiceMatches } from '@/lib/reconciliationSuggestions';
+import GroupReconciliationChooser from './GroupReconciliationChooser';
 
 function fmt(value, currency = 'EUR') {
   if (!value && value !== 0) return '—';
@@ -35,6 +36,8 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [selected, setSelected] = useState(null);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [groupAllocations, setGroupAllocations] = useState({});
+  const [groupConfirmed, setGroupConfirmed] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedBankLedgerId, setSelectedBankLedgerId] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
@@ -47,6 +50,8 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     setMode('invoice');
     setSelected(null);
     setReviewConfirmed(false);
+    setGroupAllocations({});
+    setGroupConfirmed(false);
     setSelectedAccountId('');
     setSelectedBankLedgerId('');
     setAccountSearch('');
@@ -71,6 +76,8 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     if (!transaction) return [];
     return suggestInvoiceMatches(transaction, invoices);
   }, [transaction, invoices]);
+
+  const groupCandidates = useMemo(() => groupInvoiceCandidates(transaction, invoices), [transaction, invoices]);
 
   const filteredAccounts = useMemo(() => {
     const query = accountSearch.trim().toLowerCase();
@@ -122,6 +129,31 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGroupConfirm = async () => {
+    setError('');
+    if (loading) return;
+    const allocations = Object.entries(groupAllocations).map(([invoice_id, amount]) => ({ invoice_id, amount: Number(amount) }));
+    const allocatedCents = allocations.reduce((sum, row) => sum + Math.round(row.amount * 100), 0);
+    if (allocations.length < 2 || !allocations.every(row => Number.isFinite(row.amount) && row.amount > 0 && Math.abs(row.amount * 100 - Math.round(row.amount * 100)) < 0.0001)) {
+      setError('Selecciona al menos dos facturas e indica importes positivos con dos decimales.');
+      return;
+    }
+    if (allocatedCents !== Math.round(amount * 100)) { setError('La suma repartida debe coincidir exactamente con el importe bancario.'); return; }
+    if (!groupConfirmed) { setError('Confirma la revisión manual de las facturas y del movimiento.'); return; }
+    if (!selectedBankLedgerId) { setError('Selecciona la subcuenta contable del banco.'); return; }
+    setLoading(true);
+    try {
+      const response = await base44.functions.invoke('invoiceOperations', {
+        action: 'reconcile_multiple', company_id: transaction.company_id,
+        bank_transaction_id: transaction.id, bank_accounting_account_id: selectedBankLedgerId, allocations,
+      });
+      const payload = response?.data ?? response;
+      if (!payload?.ok) throw new Error(payload?.error || 'No se pudo completar el reparto bancario.');
+      await finish();
+    } catch (caught) { setError(caught?.response?.data?.error || caught?.message || 'No se pudo completar el reparto bancario.'); }
+    finally { setLoading(false); }
   };
 
   const handleAccountConfirm = async () => {
@@ -204,12 +236,18 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+          <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 rounded-xl">
             <button type="button" onClick={() => {
               setError('');
               setMode('invoice');
             }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'invoice' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
               <FileText className="w-3.5 h-3.5" /> Asociar factura
+            </button>
+            <button type="button" onClick={() => {
+              setError('');
+              setMode('group');
+            }} className={cn('flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold', mode === 'group' ? 'bg-white shadow-sm text-foreground' : 'text-slate-500')}>
+              <SplitSquareHorizontal className="w-3.5 h-3.5" /> Varias facturas
             </button>
             <button type="button" onClick={() => {
               setError('');
@@ -235,7 +273,9 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
 
           {error && <div aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
 
-          {mode === 'invoice' ? (
+          {mode === 'group' ? (
+            <GroupReconciliationChooser transaction={transaction} candidates={groupCandidates} allocations={groupAllocations} onChange={setGroupAllocations} confirmed={groupConfirmed} onConfirm={setGroupConfirmed} />
+          ) : mode === 'invoice' ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-slate-100" />
@@ -335,10 +375,10 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
 
         <div className="flex flex-wrap gap-2 px-6 py-4 border-t border-slate-100 flex-shrink-0">
           <button type="button" disabled={loading || loadingAccounts}
-            onClick={mode === 'invoice' ? handleInvoiceConfirm : handleAccountConfirm}
+            onClick={mode === 'invoice' ? handleInvoiceConfirm : mode === 'group' ? handleGroupConfirm : handleAccountConfirm}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold bg-taxea-red text-white disabled:opacity-40 hover:bg-taxea-red/90 transition-all">
             {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-            {mode === 'invoice' ? 'Conciliar con factura' : 'Crear asiento y conciliar'}
+            {mode === 'invoice' ? 'Conciliar con factura' : mode === 'group' ? 'Repartir y conciliar' : 'Crear asiento y conciliar'}
           </button>
           <button onClick={() => classifyTransaction('movimiento_interno')} disabled={loading}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40">
