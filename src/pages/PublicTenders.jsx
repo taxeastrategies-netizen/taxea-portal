@@ -102,7 +102,8 @@ export default function PublicTenders() {
   const counts = useMemo(() => ({ abierta: rows.filter(row => row.kind === 'abierta').length, anuncio_previo: rows.filter(row => row.kind === 'anuncio_previo').length, consulta: rows.filter(row => row.kind === 'consulta').length }), [rows]);
   const examined = pages.reduce((sum, item) => sum + (item.examinedEntries || 0), 0);
   const partial = pages.some(item => item.partial);
-  const checkedAt = pages.at(-1)?.checkedAt;
+  const fetchedAt = Object.values(pages.at(-1)?.fetchedAt || {}).filter(Boolean).sort()[0];
+  const stale = pages.some(item => item.stale);
   const chooseProvince = feature => {
     const value = COMMUNITIES.find(item => item.ine === feature.properties.cod_ccaa);
     if (value) selectCommunity(value, PROVINCES.find(item => item.ine === value.ine && normal(item.name).split('/').some(name => name === normal(feature.properties.name)))?.code || '');
@@ -120,7 +121,7 @@ export default function PublicTenders() {
         <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-cyan-200"><Sparkles className="h-3.5 w-3.5" /> Radar de contratación pública</span>
         <h1 className="mt-4 max-w-3xl font-jakarta text-3xl font-extrabold tracking-tight md:text-5xl">Licitaciones y<br/><span className="text-cyan-300">contratos públicos</span></h1>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300">Encuentra oportunidades reales de contratación en España. Filtra por territorio, CPV, tipo e importe, consulta el expediente y verifica sus pliegos en la fuente oficial.</p>
-        <div className="mt-6 flex flex-wrap items-center gap-3 text-[11px] text-slate-300"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-400" /> Datos abiertos oficiales PLACSP</span><span>Actualizados al consultar · caché máxima 10 min</span>{checkedAt && <span>Última consulta: {new Date(checkedAt).toLocaleString('es-ES')}</span>}</div>
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-[11px] text-slate-300"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-400" /> Datos abiertos oficiales PLACSP</span><span>Fuentes oficiales · copia temporal renovada cada 30 min</span>{fetchedAt && <span>Última actualización: {new Date(fetchedAt).toLocaleString('es-ES')}</span>}</div>
       </div>
     </section>
     <div className="grid gap-4 sm:grid-cols-3">
@@ -155,11 +156,12 @@ export default function PublicTenders() {
       <div className="mt-4 flex flex-wrap gap-2">{TABS.map(tab => <button key={tab.id} onClick={() => { setKind(tab.id); reset(); }} className={'rounded-full border px-3 py-2 text-xs font-semibold transition-colors ' + (kind === tab.id ? 'border-taxea-red bg-taxea-red text-white' : 'border-border bg-card text-muted-foreground hover:text-foreground')}>{tab.label}</button>)}</div>
       {error && <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><CircleAlert className="h-4 w-4 shrink-0" />{error}</div>}
       {partial && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Una fuente oficial no respondió. La lista es parcial; vuelve a actualizar para completar la búsqueda.</div>}
-      {loading && !rows.length && <p className="mt-6 text-sm text-muted-foreground">Consultando ficheros oficiales de contratación…</p>}
+      {stale && <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900">Los datos de alguna fuente tienen más de 90 minutos. Comprueba plazo y estado en el expediente oficial antes de actuar.</div>}
+      {loading && !rows.length && <p className="mt-6 text-sm text-muted-foreground">Cargando oportunidades recientes de las fuentes oficiales… La primera carga puede tardar mientras se prepara la copia temporal.</p>}
       {!loading && !error && !rows.length && <div className="mt-5 rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Sin coincidencias en las páginas examinadas. Cambia los filtros o sigue consultando páginas oficiales.</div>}
       <div className="mt-5 grid gap-4 lg:grid-cols-2">{rows.slice(0, show).map(row => <TenderCard key={row.id} row={row} />)}</div>
       <div className="mt-6 flex flex-wrap justify-center gap-3">{show < rows.length && <button onClick={() => setShow(value => value + 24)} className="rounded-xl border border-border bg-card px-5 py-2.5 text-xs font-semibold hover:bg-secondary">Mostrar más resultados cargados</button>}{cursor && <button disabled={loading} onClick={() => setRequestCursor(cursor)} className="rounded-xl bg-taxea-red px-5 py-2.5 text-xs font-semibold text-white disabled:opacity-50">{loading ? 'Consultando…' : 'Buscar en más páginas oficiales'}</button>}</div>
-      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Fuente: datos abiertos de la Plataforma de Contratación del Sector Público (perfiles alojados, plataformas agregadas y consultas preliminares). Se consultan páginas Atom en vivo, con caché temporal de diez minutos, sin copiar expedientes a la base de datos de Taxea. Los filtros se aplican a las páginas examinadas, no a todo el histórico. Comprueba plazo, pliegos, lotes, solvencia y trámites en el expediente original. <a className="font-semibold text-taxea-red hover:underline" target="_blank" rel="noopener noreferrer" href="https://contrataciondelestado.es/wps/portal/plataforma/buscadores/busqueda/">Abrir buscador oficial completo <ArrowUpRight className="inline h-3.5 w-3.5" /></a></p>
+      <p className="mt-5 text-xs leading-relaxed text-muted-foreground">Fuente: datos abiertos de la Plataforma de Contratación del Sector Público (perfiles alojados, plataformas agregadas y consultas preliminares). Se guarda temporalmente la primera página Atom de cada fuente oficial y se renueva cada 30 minutos; las páginas adicionales se consultan en directo. No se importan ni almacenan expedientes completos de contratación. Los filtros se aplican a las páginas examinadas, no a todo el histórico. Comprueba plazo, pliegos, lotes, solvencia y trámites en el expediente original. <a className="font-semibold text-taxea-red hover:underline" target="_blank" rel="noopener noreferrer" href="https://contrataciondelestado.es/wps/portal/plataforma/buscadores/busqueda/">Abrir buscador oficial completo <ArrowUpRight className="inline h-3.5 w-3.5" /></a></p>
     </section>
   </main>;
 }
