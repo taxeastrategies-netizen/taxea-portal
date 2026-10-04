@@ -2356,7 +2356,7 @@ Deno.serve(async (req) => {
           continue;
         }
         const party = invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre;
-        const totalExpected = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) - Number(invoice.importe_retencion || 0));
+        const totalExpected = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + Number(invoice.cuota_recargo || 0) - Number(invoice.importe_retencion || 0));
         const totalMatches = Math.abs(totalExpected - money(invoice.total_factura)) <= 0.02;
         const valid = /^\d{4}-\d{2}-\d{2}$/.test(String(invoice.fecha_emision || ''))
           && ['emitida', 'recibida'].includes(invoice.tipo)
