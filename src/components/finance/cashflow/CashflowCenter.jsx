@@ -64,7 +64,7 @@ export default function CashflowCenter() {
     const invoiceIngresos = filteredInvoices
       .filter(i => i.tipo === 'emitida')
       .reduce((s, i) => s + (i.total_factura || 0), 0);
-    const totalIngresos = treasury.connectedAccounts > 0
+    const totalIngresos = treasury.connectedEuroAccounts > 0
       ? filteredBankTransactions.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
       : invoiceIngresos;
 
@@ -74,13 +74,13 @@ export default function CashflowCenter() {
     const gastoExp = filteredExpenses
       .filter(e => e.tipo === 'gasto')
       .reduce((s, e) => s + (e.total || 0), 0);
-    const gastoTotal = treasury.connectedAccounts > 0
+    const gastoTotal = treasury.connectedEuroAccounts > 0
       ? filteredBankTransactions.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
       : gastoFact + gastoExp;
 
     const beneficio = totalIngresos - gastoTotal;
 
-    const bankKnown = treasury.connectedAccounts > 0 && !treasuryError;
+    const bankKnown = treasury.connectedEuroAccounts > 0 && !treasuryError;
     const cashDisponible = bankKnown ? treasury.availableCash : null;
 
     const pendingStates = ['pendiente', 'parcial', 'vencida'];
@@ -104,13 +104,13 @@ export default function CashflowCenter() {
       .filter(value => value !== null);
     const dso = observedCollections.length
       ? observedCollections.reduce((sum, value) => sum + value, 0) / observedCollections.length
-      : 0;
+      : null;
 
     const workingCapital = cobrosPendientes - pagosPendientes;
 
-    const vencidas = invoices.filter(i => i.tipo === 'emitida' && i.estado_cobro === 'vencida');
+    const vencidas = invoices.filter(i => !i.anulada && i.tipo === 'emitida' && i.estado_cobro === 'vencida');
 
-    const prevIngresos = treasury.connectedAccounts > 0
+    const prevIngresos = treasury.connectedEuroAccounts > 0
       ? (bankTransactions || [])
         .filter(transaction => {
           try {
