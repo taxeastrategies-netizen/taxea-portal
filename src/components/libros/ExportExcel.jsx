@@ -317,6 +317,7 @@ async function loadRealAccounting(companyId, year) {
   };
   const reports = await invoke({ action: 'reports', scope: 'confirmed' });
   const accounts = reports.report?.accounts || [];
+  if (Number(reports.report?.excludedEntries || 0) > 0) throw new Error('Hay asientos confirmados excluidos del Mayor por incidencias. Revísalos antes de exportar.');
   const entries = [];
   let page = 1;
   while (page <= 1000) {
@@ -329,6 +330,7 @@ async function loadRealAccounting(companyId, year) {
   }
   if (page > 1000) throw new Error('El Diario supera el límite de exportación seguro.');
   if (entries.some(entry => entry.isBalanced === false)) throw new Error('Hay asientos confirmados descuadrados; revisa Contabilidad antes de exportar.');
+  if (entries.length !== Number(reports.report?.includedEntries || 0)) throw new Error('El Diario y el Mayor no incluyen los mismos asientos confirmados. Revisa las operaciones contables pendientes antes de exportar.');
   return { entries, accounts };
 }
 
@@ -340,8 +342,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
   const accounting = onlyNew ? { entries: [], accounts: [] } : await loadRealAccounting(companyId, year);
-  return new Promise(resolve => {
-    setTimeout(() => {
+  {
       const emitidas = invoices.filter(i => i.tipo === 'emitida');
       const recibidas = invoices.filter(i => i.tipo === 'recibida');
       const gastos = expenses.filter(e => e.tipo === 'gasto');
@@ -372,7 +373,5 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
       const filename = `Taxea_Libros_${safeName}_${year}.xls`;
       downloadSpreadsheetML(sheets, filename);
-      resolve();
-    }, 50);
-  });
+  }
 }
