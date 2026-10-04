@@ -59,7 +59,7 @@ export default function CashKpiGrid({ financials }) {
   } = financials;
 
   const liquidezNeta = bankKnown ? cashDisponible - pagosPendientes : null;
-  const runwayLabel = runway ? `${runway.toFixed(1)} meses runway` : null;
+  const runwayLabel = runway ? `${runway.toFixed(1)} meses de salidas al ritmo observado` : null;
   const deltaLabel = ingresosDelta !== 0 ? `${ingresosDelta > 0 ? '+' : ''}${ingresosDelta.toFixed(1)}% vs período anterior` : null;
 
   return (
@@ -82,7 +82,7 @@ export default function CashKpiGrid({ financials }) {
         <CashKpi label={bankKnown ? 'Salidas bancarias 30d' : 'Gastos documentados 30d'} value={gastoTotal} color="red" delay={0.22} />
         <CashKpi label={bankKnown ? 'Flujo neto 30d' : 'Diferencia documental 30d'} value={beneficio} trend={beneficio >= 0 ? 'up' : 'down'} color={beneficio >= 0 ? 'emerald' : 'red'} delay={0.24} />
         <CashKpi label="Salidas observadas / 30d" value={bankKnown ? burnRate : '—'} sub="No equivale a burn rate contable" color="amber" delay={0.26} />
-        <CashKpi label="DSO" value={`${Math.round(dso)} días`} sub="Cobro medio"
+        <CashKpi label="Plazo de cobro observado" value={dso === null ? '—' : `${Math.round(dso)} días`} sub={dso === null ? 'Sin cobros fechados suficientes' : 'Media de facturas cobradas con fecha registrada'}
           color={dso > 45 ? 'red' : dso > 30 ? 'amber' : 'emerald'} delay={0.28} />
         <CashKpi label="Cobros menos pagos pendientes" value={workingCapital} trend={workingCapital >= 0 ? 'up' : 'down'}
           color={workingCapital >= 0 ? 'emerald' : 'red'} delay={0.3} />
