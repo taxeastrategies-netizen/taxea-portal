@@ -272,7 +272,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   let specialPreviewError = '';
   if (body.specialInputs && typeof body.specialInputs === 'object') {
     try {
-      specialPreview = calculateSpecialRegimePreview({ ...body.specialInputs, regime, direction, taxKind, taxRate, base, operationDate });
+      specialPreview = calculateSpecialRegimePreview({ ...body.specialInputs, regime, direction, taxKind, taxRate, base, taxAmount, operationDate });
     } catch (error) {
       specialPreviewError = error?.message || 'No se pudo calcular la propuesta especial.';
       reviewRequired = true;
