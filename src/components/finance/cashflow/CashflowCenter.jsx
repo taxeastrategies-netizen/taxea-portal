@@ -20,7 +20,7 @@ export default function CashflowCenter() {
   const { company } = ctx;
   const companyId = company?.id;
 
-  const { invoices, expenses, bankTransactions, treasury, treasuryError, loading: financialLoading, lastSync, refresh } = useFinancialData(companyId);
+  const { invoices, expenses, bankTransactions, treasury, treasuryError, loading: financialLoading, refresh } = useFinancialData(companyId);
   const [obligations, setObligations] = useState([]);
   const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
@@ -166,7 +166,8 @@ export default function CashflowCenter() {
       {/* Header */}
       <CashPositionHeader
         company={company}
-        lastSync={lastSync}
+        lastSync={treasury.lastBankSync}
+        bankKnown={financials.bankKnown}
         loading={loading}
         onRefresh={() => { refresh(); loadObligations(); }}
       />
