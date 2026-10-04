@@ -3839,8 +3839,11 @@ Deno.serve(async (req) => {
     else if(!validSpanishTaxId(company.nif_cif)) blockers.push('El NIF/CIF de la empresa no tiene nueve caracteres válidos para los diseños oficiales.');
     if(!company.razon_social) blockers.push('La empresa no tiene razón social legal configurada.');
     if(!profile) blockers.push('Falta el perfil fiscal de la empresa.'); else if(profile.profileStatus!=='validado_asesor') warnings.push('El perfil fiscal no consta como validado por asesor.');
-    const taxLines=normalizedTaxLines(invoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
-    const data={company,profile,activities,invoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings,blockers,warnings,period,year};
+    const finalizedInvoices=invoices.filter((invoice:any)=>invoice.accounting_migration_hold_reason!=='FISCAL_ADVISOR_REVIEW_PHASE1');
+    const pendingFiscalCount=invoices.length-finalizedInvoices.length;
+    if(pendingFiscalCount) warnings.push(`${pendingFiscalCount} propuesta(s) de factura siguen fuera de los modelos hasta validación del asesor.`);
+    const taxLines=normalizedTaxLines(finalizedInvoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
+    const data={company,profile,activities,invoices:finalizedInvoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings,blockers,warnings,period,year};
     if(action==='historical_fiscal_dry_run') {
       const yearInvoices=invoices.filter((invoice:any)=>!invoice.anulada&&dateOf(invoice).slice(0,4)===String(year));
       const linesByInvoice=new Map<string,any[]>(); for(const line of rawTaxLines||[]) linesByInvoice.set(line.invoiceId,[...(linesByInvoice.get(line.invoiceId)||[]),line]);
