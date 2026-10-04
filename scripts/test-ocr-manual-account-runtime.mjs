@@ -64,7 +64,17 @@ let postingCount = 0;
 const client = {
   auth: { me: async () => user },
   asServiceRole: { entities, functions: { invoke: async () => ({}) } },
-  functions: { invoke: async () => ({ data: {} }) },
+  functions: { invoke: async (name, body) => {
+    assert.equal(name, 'fiscalOperations');
+    assert.equal(body.requireValidatedProfile, true);
+    return { data: { evaluation: {
+      status: 'ready', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed',
+      activityId: 'activity-a', ruleSetVersion: 'synthetic-v1',
+      base: 100, taxRate: 0, taxAmount: 0, withholdingRate: 0, withholdingAmount: 0,
+      total: 100, deductibleTax: 0, nonDeductibleTax: 0, deductiblePercent: 100,
+      exemptionKey: '', legalBasis: '', accounting: { reverseCharge: false },
+    } } };
+  } },
 };
 let handler;
 const context = vm.createContext({
@@ -73,6 +83,7 @@ const context = vm.createContext({
   __postInvoice: async (_svc, companyId, invoice) => {
     assert.equal(companyId, invoice.company_id);
     postingCount += 1;
+    await entities.Invoice.update(invoice.id, { estado_contable: 'contabilizada', linked_journal_entry_id: `entry-${postingCount}` });
     return { entry: { id: `entry-${postingCount}` }, proposal: { counterparty: { account: { code: '40000000' } } } };
   },
   Deno: { serve(fn) { handler = fn; } },
@@ -80,8 +91,8 @@ const context = vm.createContext({
 vm.runInContext(build.outputFiles[0].text, context);
 async function invoke(docId, invoiceType, account) {
   const form = invoiceType === 'emitida'
-    ? { numero_factura: 'F-1', fecha_emision: '2026-10-02', base_imponible: 100, total_factura: 100 }
-    : { numero_factura: 'G-1', fecha: '2026-10-02', fecha_recepcion: '2026-10-03', base_imponible: 100, total: 100 };
+    ? { numero_factura: 'F-1', fecha_emision: '2026-10-02', base_imponible: 100, tipo_iva: 0, cuota_iva: 0, total_factura: 100 }
+    : { numero_factura: 'G-1', fecha: '2026-10-02', fecha_recepcion: '2026-10-03', base_imponible: 100, tipo_impuesto: 0, cuota_impuesto: 0, total: 100 };
   if (account !== undefined) form.cuenta_contable_manual = account;
   const response = await handler(new Request('https://taxea.test/approveOcrDocument', {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -102,6 +113,8 @@ const expense = await invoke('expense-a', 'recibida', '629');
 assert.equal(expense.status, 200);
 assert.equal(records.Invoice[0].revenue_expense_account_code, '62900000');
 assert.equal(records.Invoice[0].revenue_expense_account_id, 'a-629');
+assert.equal(records.Invoice[0].tipo_iva, 0);
+assert.equal(records.InvoiceTaxLine[0].quota, 0);
 assert.equal(records.OcrInvoiceDocument[0].linkedInvoiceId, records.Invoice[0].id);
 assert.match(records.OcrInvoiceDocument[0].auditTrail[0], /manualAccount=62900000/);
 assert.equal((await invoke('expense-a', 'recibida', '629')).payload.alreadyProcessed, true);
