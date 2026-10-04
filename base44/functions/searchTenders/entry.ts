@@ -5,7 +5,7 @@ import { getSnapshot, isSource, refreshSnapshot } from './snapshot.ts';
 const SOURCE_KEYS = ['hosted', 'aggregated', 'consultations'] as const;
 const KINDS = ['all', 'abierta', 'anuncio_previo', 'consulta'];
 const TYPES = ['', 'Suministros', 'Servicios', 'Obras', 'Concesión de obras', 'Concesión de servicios', 'Administrativo especial', 'Privado', 'Contrato público'];
-const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
+const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Taxea-Tenders-Revision': 'cache-v1' } });
 const text = (v: unknown, max = 100) => String(v ?? '').trim().slice(0, max);
 
 Deno.serve(async req => {
