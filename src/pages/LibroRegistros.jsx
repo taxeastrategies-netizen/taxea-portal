@@ -136,11 +136,18 @@ export default function LibroRegistros() {
 
   const handleExportPDF = async () => {
     setExportingPDF(true);
-    await exportarLibrosPDF({
-      invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
-      companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
-    });
-    setExportingPDF(false);
+    setExportError('');
+    try {
+      if (financialError || loading) throw new Error(financialError || 'Espera a que terminen de cargar los datos antes de exportar.');
+      await exportarLibrosPDF({
+        invoices: activeInvoices, expenses: activeExpenses, year: filterAnio,
+        companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
+      });
+    } catch (error) {
+      setExportError(error?.message || 'No se pudo exportar el PDF.');
+    } finally {
+      setExportingPDF(false);
+    }
   };
 
   if (loadingCompany && loading && !invoices.length) return (
