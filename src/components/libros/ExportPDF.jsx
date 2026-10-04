@@ -9,38 +9,9 @@ function fmtDate(d) {
   return `${day}/${m}/${y}`;
 }
 
-// ── Account helpers (mirrors ExportExcel) ────────────────────────────────────
-function buildClienteAccounts(invoices) {
-  const map = {};
-  let counter = 1;
-  invoices.filter(i => i.tipo === 'emitida').forEach(i => {
-    const key = i.cliente_nif ? i.cliente_nif.toUpperCase() : (i.cliente_nombre || '').toLowerCase();
-    if (key && !map[key]) map[key] = `4300${String(counter++).padStart(6, '0')}`;
-  });
-  return map;
-}
-function buildProveedorAccounts(invoices) {
-  const map = {};
-  let counter = 1;
-  invoices.filter(i => i.tipo === 'recibida').forEach(i => {
-    const key = i.proveedor_nif ? i.proveedor_nif.toUpperCase() : (i.proveedor_nombre || '').toLowerCase();
-    if (key && !map[key]) map[key] = `4100${String(counter++).padStart(6, '0')}`;
-  });
-  return map;
-}
-const GASTO_CUENTAS = {
-  ventas_servicios: '7000000000', compras: '6000000000', suministros: '6280000000',
-  alquiler: '6210000000', publicidad_marketing: '6270000000',
-  servicios_profesionales: '6230000000', software: '6280000000',
-  transporte: '6240000000', dietas: '6250000000', gastos_financieros: '6690000000',
-  seguros: '6250000000', otros: '6290000000',
-};
-function ctaGasto(inv) {
-  return GASTO_CUENTAS[inv.categoria_gasto] || '6000000000';
-}
-function ctaIngreso(inv) {
-  return n(inv.tipo_iva) === 0 ? '7050000000' : '7000000000';
-}
+// Las subcuentas proceden de los asientos guardados, nunca de secuencias inventadas.
+function ctaGasto(inv) { return inv.revenue_expense_account_code || '—'; }
+function ctaIngreso(inv) { return inv.revenue_expense_account_code || '—'; }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 function drawTaxeaHeader(doc, companyName, period, pageW) {
