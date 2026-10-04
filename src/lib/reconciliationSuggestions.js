@@ -10,6 +10,20 @@ const daysApart = (left, right) => {
   return Number.isFinite(a) && Number.isFinite(b) ? Math.abs(Math.round((a - b) / 86400000)) : null;
 };
 
+export function groupInvoiceCandidates(transaction, invoices = []) {
+  if (!transaction || transaction.estado_proveedor === 'pending' || transaction.es_demo) return [];
+  const currency = String(transaction.moneda || 'EUR').toUpperCase();
+  if (currency !== 'EUR') return [];
+  return invoices.flatMap(invoice => {
+    if (invoice.anulada || invoice.company_id !== transaction.company_id) return [];
+    const credit = Number(invoice.total_factura) < 0;
+    const expected = invoice.tipo === 'recibida' ? (credit ? 'entrada' : 'salida') : (credit ? 'salida' : 'entrada');
+    if (expected !== transaction.tipo || String(invoice.moneda || 'EUR').toUpperCase() !== currency) return [];
+    const outstanding = getOutstandingAmount(invoice);
+    return outstanding > 0.009 ? [{ ...invoice, _groupOutstanding: outstanding }] : [];
+  }).sort((a, b) => String(b.fecha_emision || '').localeCompare(String(a.fecha_emision || '')));
+}
+
 export function suggestInvoiceMatches(transaction, invoices = []) {
   if (!transaction || transaction.estado_proveedor === 'pending' || transaction.es_demo) return [];
   const amount = cents(transaction.importe);
