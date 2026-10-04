@@ -29,6 +29,33 @@
     "enabled": {
       "type": "boolean",
       "default": true
+    },
+    "last_attempt_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_alert_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_error": {
+      "type": "string"
+    },
+    "last_examined_count": {
+      "type": "number"
+    },
+    "last_coverage_limited": {
+      "type": "boolean"
+    },
+    "unread_count": {
+      "type": "number",
+      "default": 0
+    },
+    "unread_items": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [
