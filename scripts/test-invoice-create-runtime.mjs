@@ -66,7 +66,7 @@ const entity = name => ({
   },
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
-let currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
+let currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
 let fiscalStatus = 'ready';
 const testClient = {
   auth: { me: async () => currentUser }, asServiceRole: { entities },
@@ -142,7 +142,7 @@ const validInvoice = {
   importe_retencion: 0, total_factura: 121,
 };
 
-const created = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', invoice: validInvoice });
+const created = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', confirm_fiscal_review: true, invoice: validInvoice });
 assert.equal(created.response.status, 200);
 assert.equal(created.payload.ok, true);
 assert.equal(records.Invoice.length, 1);
@@ -173,7 +173,7 @@ const repeatedQrPdf = await invoke({
 assert.equal(repeatedQrPdf.payload.duplicate, true);
 assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
 
-const repeated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', invoice: validInvoice });
+const repeated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', confirm_fiscal_review: true, invoice: validInvoice });
 assert.equal(repeated.response.status, 200);
 assert.equal(repeated.payload.duplicate, true);
 assert.equal(records.Invoice.length, 1);
@@ -196,13 +196,24 @@ assert.equal(invalidTotal.response.status, 400);
 
 fiscalStatus = 'blocked';
 const unvalidated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'unvalidated', invoice: { ...validInvoice, numero_factura: 'F-2026-004' } });
-assert.equal(unvalidated.response.status, 422);
-assert.equal(records.Invoice.length, 1);
+assert.equal(unvalidated.response.status, 200);
+assert.equal(unvalidated.payload.review_required, true);
+assert.equal(records.Invoice.length, 2);
+assert.equal(records.Invoice[1].qr_url, undefined);
+assert.equal(records.Invoice[1].linked_journal_entry_id, undefined);
+assert.equal(records.InvoiceTaxLine.length, 1);
 fiscalStatus = 'review_required';
 const pendingReview = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'pending-review', invoice: { ...validInvoice, numero_factura: 'F-2026-005' } });
-assert.equal(pendingReview.response.status, 422);
-assert.equal(records.Invoice.length, 1);
+assert.equal(pendingReview.response.status, 200);
+assert.equal(pendingReview.payload.review_required, true);
+assert.equal(records.Invoice.length, 3);
+assert.equal(records.InvoiceTaxLine.length, 1);
 fiscalStatus = 'ready';
+currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
+const clientDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'client-draft', invoice: { ...validInvoice, numero_factura: 'F-2026-006' } });
+assert.equal(clientDraft.payload.review_required, true);
+assert.equal(records.Invoice.length, 4);
+assert.equal(counters.accountingEntries, 1);
 
 currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
 const crossTenant = await invoke({
@@ -210,7 +221,7 @@ const crossTenant = await invoke({
   invoice: { ...validInvoice, numero_factura: 'F-2026-003' },
 });
 assert.equal(crossTenant.response.status, 403);
-assert.equal(records.Invoice.length, 1);
+assert.equal(records.Invoice.length, 4);
 
 console.log(JSON.stringify({
   ok: true,
