@@ -613,6 +613,7 @@ Deno.serve(async (req) => {
       if (invoice.fiscal_review_status !== 'validado' || !invoice.fiscal_reviewed_by) {
         return Response.json({ error: 'Confirma primero la clasificación fiscal y sus importes.' }, { status: 409 });
       }
+      if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) return Response.json({ error: 'Factura con recargo pendiente de circuito contable y libro específicos; no se permite finalizarla con el asiento general.' }, { status: 422 });
       const taxLines = await base44.asServiceRole.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
       const line = (taxLines || []).find(row => Number(row.lineNumber) === 1 && row.reviewStatus === 'validado');
       if (!line || taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
