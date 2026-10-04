@@ -28,7 +28,7 @@ export default function LibroRegistros() {
   const [activeTab, setActiveTab] = useState('ventas');
   const [filterTrimestre, setFilterTrimestre] = useState('all');
   const [filterAnio, setFilterAnio] = useState(new Date().getFullYear().toString());
-  const { invoices, expenses, loading } = useFinancialData(company?.id, { year: filterAnio });
+  const { invoices, expenses, loading, error: financialError } = useFinancialData(company?.id, { year: filterAnio, includeTreasury: false });
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportError, setExportError] = useState('');
@@ -91,6 +91,7 @@ export default function LibroRegistros() {
     setExporting(true);
     setExportError('');
     try {
+    if (financialError || loading) throw new Error(financialError || 'Espera a que terminen de cargar los datos antes de exportar.');
     const hasBaseline = !!lastSnapshot;
     const newInvoiceIds = hasBaseline ? new Set([
       ...activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
@@ -149,7 +150,7 @@ export default function LibroRegistros() {
 
   return (
     <div>
-      <PageHeader title="Libros de Registro" subtitle="Compatibles AEAT · Excel multipestaña">
+      <PageHeader title="Libros de Registro" subtitle="Consulta y exportación informativa · Excel multipestaña">
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterAnio} onValueChange={setFilterAnio}>
             <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
@@ -191,7 +192,7 @@ export default function LibroRegistros() {
         </div>
       </PageHeader>
 
-      {exportError && <p role="alert" className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError}</p>}
+      {(exportError || financialError) && <p role="alert" className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError || financialError}</p>}
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5 overflow-x-auto">
         {TABS.map(t => (
