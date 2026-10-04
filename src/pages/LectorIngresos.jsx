@@ -146,6 +146,7 @@ export default function LectorIngresos() {
       setFiscalContext({
         profile: profiles?.[0] || null,
         activity: activities?.[0] || null,
+        activities: activities || [],
       });
     }).catch(() => {});
   }, [company?.id]);
@@ -487,6 +488,7 @@ export default function LectorIngresos() {
             onCancel={() => setReviewing(null)}
             loading={validating}
             companyId={company?.id}
+            fiscalActivities={fiscalContext.activities || []}
           />
         </div>
       )}
