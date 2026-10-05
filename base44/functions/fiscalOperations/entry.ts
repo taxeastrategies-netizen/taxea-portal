@@ -6,6 +6,17 @@ const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
 const SPECIAL_POSTING_PENDING = new Set(['mixto', 'simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
+
+async function listFiscalRows(entity: any, filter: any, sort = '-created_date') {
+  const rows: any[] = [];
+  const pageSize = 500;
+  for (let skip = 0; skip < 100000; skip += pageSize) {
+    const page = await entity.filter(filter, sort, pageSize, skip);
+    rows.push(...(page || []));
+    if (!page || page.length < pageSize) return rows;
+  }
+  throw Object.assign(new Error('El libro fiscal supera el límite seguro de consulta. Filtra o solicita una exportación segmentada.'), { status: 422 });
+}
 const clean = (value: unknown) => String(value ?? '').trim();
 const clamp = (value: unknown, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
 
@@ -359,6 +370,64 @@ Deno.serve(async (req) => {
       const activeSetup = (issuerSetups || []).find((item: any) => item.custody_status !== 'revocada') || null;
       const certificateStatus = issuerSetups === null ? 'estado_no_disponible' : activeSetup ? 'referencia_registrada_sin_verificar' : 'sin_certificado_verificado';
       return Response.json({ success: true, ruleSetVersion: RULESET, profile, profileVersions, activities, models, invoiceTaxLines, invoicePayments: invoicePaymentsTruncated ? [] : invoicePayments, invoicePaymentsTruncated, recommendations: recommendedObligations(profile, activities), verifactuReadiness: { requested: profile?.usesVeriFactu === true, obligation: profile?.verifactuObligation || 'pendiente_confirmar', authentication: 'certificado_individual_del_emisor', certificateStatus, custodyRegion: 'europe-southwest1', gatewayStatus: 'no_desplegado', aeatTestStatus: 'no_validado', transmissionStatus: 'desactivada', activationAllowed: false, secretResource: ['admin','super_admin'].includes(clean(user?.role).toLowerCase()) ? activeSetup?.secret_resource || '' : undefined }, sources: SOURCES });
+    }
+    if (action === 'recc_book') {
+      const year = Number(body.year);
+      if (!Number.isInteger(year) || year < 2014 || year > 2100) return Response.json({ error: 'Ejercicio no válido.' }, { status: 400 });
+      const allInvoices = await listFiscalRows(svc.entities.Invoice, { company_id: companyId });
+      const invoices = allInvoices.filter((invoice: any) => !invoice.anulada
+        && clean(invoice.fiscal_regime) === 'criterio_caja'
+        && ['iva', ''].includes(clean(invoice.indirect_tax_kind))
+        && [year - 1, year].includes(Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4))));
+      if (!invoices.length) return Response.json({ success: true, year, invoices: [], payments: [], issues: [], source: 'Invoice + InvoiceTaxLine + InvoicePayment', generatedAt: new Date().toISOString() });
+      const ids = new Set(invoices.map((invoice: any) => invoice.id));
+      const [allLines, allPayments] = await Promise.all([
+        listFiscalRows(svc.entities.InvoiceTaxLine, { companyId }),
+        listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId }, 'payment_date'),
+      ]);
+      const lines = allLines.filter((line: any) => ids.has(line.invoiceId));
+      const payments = allPayments.filter((payment: any) => ids.has(payment.invoice_id));
+      const operationIds = [...new Set(payments.map((payment: any) => clean(payment.accounting_operation_id)).filter(Boolean))];
+      const operations = await Promise.all(operationIds.map((id: string) => svc.entities.AccountingPostingOperation.get(id).catch(() => null)));
+      const operationById = new Map(operations.filter((operation: any) => operation?.companyId === companyId).map((operation: any) => [operation.id, operation]));
+      const transactionIds = [...new Set(payments.map((payment: any) => clean(payment.bank_transaction_id)).filter(Boolean))];
+      const transactions = await Promise.all(transactionIds.map((id: string) => svc.entities.BankTransaction.get(id).catch(() => null)));
+      const transactionById = new Map(transactions.filter((transaction: any) => transaction?.company_id === companyId).map((transaction: any) => [transaction.id, transaction]));
+      const bankIds = [...new Set([...transactionById.values()].map((transaction: any) => clean(transaction.bank_account_id)).filter(Boolean))];
+      const banks = await Promise.all(bankIds.map((id: string) => svc.entities.BankAccount.get(id).catch(() => null)));
+      const bankById = new Map(banks.filter((bank: any) => bank?.company_id === companyId).map((bank: any) => [bank.id, bank]));
+      const issues: any[] = [];
+      const bookInvoices = invoices.map((invoice: any) => {
+        const invoiceLines = lines.filter((line: any) => line.invoiceId === invoice.id);
+        const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length === 1
+          && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja';
+        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin línea fiscal única y validada por asesor.' });
+        const invoicePayments = payments.filter((payment: any) => payment.invoice_id === invoice.id);
+        const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
+          .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
+        if (totalPaid > money(invoice.total_factura) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
+        if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
+        return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
+          issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre,
+          counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : invoice.proveedor_nif,
+          base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura),
+          forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
+      });
+      const bookPayments = payments.map((payment: any) => {
+        const operationId = clean(payment.accounting_operation_id);
+        const operationConfirmed = !operationId || operationById.get(operationId)?.status === 'committed';
+        const confirmed = (!payment.operation_status || payment.operation_status === 'committed') && operationConfirmed;
+        const transaction = transactionById.get(clean(payment.bank_transaction_id));
+        const bank = transaction ? bankById.get(clean(transaction.bank_account_id)) : null;
+        if (!confirmed) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Pago o asiento asociado no confirmado.' });
+        if (payment.bank_transaction_id && !transaction) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Movimiento bancario de origen no localizado.' });
+        if (!clean(payment.method)) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Falta el medio de cobro o pago.' });
+        return { id: payment.id, invoiceId: payment.invoice_id, date: payment.payment_date, amount: money(payment.amount), method: payment.method || '',
+          reference: payment.reference || '', origin: payment.origin || '', bankTransactionId: payment.bank_transaction_id || '',
+          bankAccount: bank?.iban || '', confirmed };
+      });
+      return Response.json({ success: true, year, invoices: bookInvoices, payments: bookPayments, issues,
+        source: 'Invoice + InvoiceTaxLine + InvoicePayment + BankTransaction', generatedAt: new Date().toISOString() });
     }
     if (action === 'register_verifactu_vault_reference') {
       if (!['admin', 'super_admin'].includes(clean(user?.role).toLowerCase())) return Response.json({ error: 'Solo administración puede registrar la referencia de custodia.' }, { status: 403 });
