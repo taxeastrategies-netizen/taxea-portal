@@ -998,17 +998,30 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     if (paid > payable + 0.01) return review(`Los cobros o pagos de ${invoiceLabel} superan el total de la factura; no se recorta el exceso silenciosamente.`);
   }
   const events = allocatedInvoicePayments(invoice, payments, forcedRecognitionDate);
-  const selectedEvents = events.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end);
+  const originalAmounts = { base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota ?? line.quota), nonDeductibleQuota: money(line.nonDeductibleQuota) };
+  let cumulativeFactor = 0;
+  const allocatedAmounts = { base: 0, quota: 0, deductibleQuota: 0, nonDeductibleQuota: 0 };
+  const allocatedEvents = events.map((event: any) => {
+    cumulativeFactor = Math.min(1, cumulativeFactor + event.factor);
+    const amounts: any = {};
+    for (const key of Object.keys(originalAmounts)) {
+      const cumulativeAmount = money(originalAmounts[key] * cumulativeFactor);
+      amounts[key] = money(cumulativeAmount - allocatedAmounts[key]);
+      allocatedAmounts[key] = cumulativeAmount;
+    }
+    return { ...event, amounts };
+  });
+  const selectedEvents = allocatedEvents.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end);
   const factor = selectedEvents.reduce((sum: number, event: any) => sum + event.factor, 0);
   if (factor <= 0) return { line: null, deferred: { sourceId: line.sourceId, invoiceId: invoice.id, operationDate, forcedRecognitionDate } };
-  const deductibleQuota = money(line.deductibleQuota ?? line.quota);
+  const selectedAmount = (key: string) => money(selectedEvents.reduce((sum: number, event: any) => sum + money(event.amounts[key]), 0));
   return {
     line: {
       ...line,
-      base: money(money(line.base) * factor),
-      quota: money(money(line.quota) * factor),
-      deductibleQuota: money(deductibleQuota * factor),
-      nonDeductibleQuota: money(money(line.nonDeductibleQuota) * factor),
+      base: selectedAmount('base'),
+      quota: selectedAmount('quota'),
+      deductibleQuota: selectedAmount('deductibleQuota'),
+      nonDeductibleQuota: selectedAmount('nonDeductibleQuota'),
       fiscalSourceIds: unique([line.sourceId, ...selectedEvents.flatMap((event: any) => event.sourceIds)]),
       cashRecognition: { factor, events: selectedEvents, operationDate, forcedRecognitionDate },
     },
