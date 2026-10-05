@@ -57,7 +57,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       setForm({
         activityId: activity?.id || '',
         taxKind: invoice.indirect_tax_kind || activity?.indirectTax || bundleData.profile?.indirectTaxDefault || 'iva',
-        regime: activity?.indirectTaxRegime || 'general',
+        regime: existingTaxLine?.regime || invoice.fiscal_regime || activity?.indirectTaxRegime || 'general',
         operationType: invoice.fiscal_treatment || activity?.[invoice.tipo === 'recibida' ? 'expenseDefaultTreatment' : 'incomeDefaultTreatment'] || 'subject_taxed',
         base: Number(invoice.base_imponible || 0),
         taxRate: Number(invoice.tipo_iva || 0),
@@ -78,8 +78,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
           groupId: bundleData.profile?.taxGroupId || '', groupRole: bundleData.profile?.taxGroupRole || '',
           payments: (bundleData.invoicePayments || []).filter(item => item.operation_status === 'committed' || !item.operation_status).map(item => ({ id: item.id, date: item.payment_date, amount: item.amount })),
         },
-        manualOverride: false,
-        manualOverrideReason: '',
+        manualOverride: Boolean(existingTaxLine?.manualOverride || invoice.fiscal_manual_override),
+        manualOverrideReason: existingTaxLine?.manualOverrideReason || invoice.fiscal_manual_override_reason || '',
       });
     }).catch(err => setError(err.message)).finally(() => setLoading(false));
   }, [open, bundle, companyId, invoice]);
