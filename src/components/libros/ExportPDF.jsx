@@ -251,16 +251,20 @@ export async function exportarLibrosPDF({ invoices: rawInvoices, expenses: rawEx
     drawTaxeaHeader(doc, companyName, period, pageW); y = 35;
   }
   y = sectionTitle(doc, '📊  RESUMEN GENERAL', y, pageW);
-  y += 4;
+  if (invoices.some(inv => inv.fiscal_regime === 'criterio_caja')) {
+    doc.setFont('helvetica', 'italic').setFontSize(7).setTextColor(130, 15, 30);
+    doc.text('RECC: consulta cobros/pagos y devengo legal en el Excel auxiliar y el modelo 303; este PDF solo refleja facturas.', 12, y);
+    y += 7;
+  } else y += 4;
 
   const summaryData = [
     ['Total facturas emitidas', emitidas.length],
     ['Total facturas recibidas', recibidas.length],
     ['Base imponible ingresos', fmt(totBaseE)],
     ['Base imponible gastos', fmt(totBaseR)],
-    ['IVA repercutido', fmt(totIvaE)],
+    ['IVA facturado (devengo, no liquidación)', fmt(totIvaE)],
     ['IVA/IGIC deducible clasificado', fmt(totDeducibleR)],
-    ['Diferencia estimada, no liquidación', fmt(totIvaE - totDeducibleR)],
+    ['Diferencia por fecha de factura (no 303)', fmt(totIvaE - totDeducibleR)],
     ['Resultado estimado, no PyG', fmt(totBaseE - totBaseR - totNoDeducibleR)],
   ];
 
