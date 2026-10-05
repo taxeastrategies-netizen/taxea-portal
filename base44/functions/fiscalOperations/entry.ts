@@ -374,9 +374,8 @@ Deno.serve(async (req) => {
     if (action === 'recc_book') {
       const year = Number(body.year);
       if (!Number.isInteger(year) || year < 2014 || year > 2100) return Response.json({ error: 'Ejercicio no válido.' }, { status: 400 });
-      const allInvoices = await listFiscalRows(svc.entities.Invoice, { company_id: companyId });
+      const allInvoices = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
       const invoices = allInvoices.filter((invoice: any) => !invoice.anulada
-        && clean(invoice.fiscal_regime) === 'criterio_caja'
         && ['iva', ''].includes(clean(invoice.indirect_tax_kind))
         && [year - 1, year].includes(Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4))));
       if (!invoices.length) return Response.json({ success: true, year, invoices: [], payments: [], issues: [], source: 'Invoice + InvoiceTaxLine + InvoicePayment', generatedAt: new Date().toISOString() });
@@ -400,8 +399,10 @@ Deno.serve(async (req) => {
       const bookInvoices = invoices.map((invoice: any) => {
         const invoiceLines = lines.filter((line: any) => line.invoiceId === invoice.id);
         const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length === 1
-          && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja';
-        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin línea fiscal única y validada por asesor.' });
+          && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja'
+          && clean(invoiceLines[0].taxKind) === 'iva';
+        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin línea IVA única y validada por asesor.' });
+        if (invoice.tipo === 'recibida' && !clean(invoice.fecha_recepcion)) issues.push({ invoiceId: invoice.id, reason: 'Falta fecha de recepción de la factura recibida.' });
         const invoicePayments = payments.filter((payment: any) => payment.invoice_id === invoice.id);
         const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
@@ -413,7 +414,20 @@ Deno.serve(async (req) => {
           base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura),
           forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
+      const paymentIds = new Set<string>();
+      const invoiceById = new Map(invoices.map((invoice: any) => [invoice.id, invoice]));
       const bookPayments = payments.map((payment: any) => {
+        const invoice = invoiceById.get(payment.invoice_id);
+        const operationDate = clean(invoice?.fecha_operacion || invoice?.fecha_emision).slice(0, 10);
+        const paymentDate = clean(payment.payment_date).slice(0, 10);
+        if (!clean(payment.id) || paymentIds.has(payment.id)) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Identificador de pago duplicado o vacío.' });
+        paymentIds.add(payment.id);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || Number.isNaN(Date.parse(paymentDate))
+          || new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate || paymentDate < operationDate
+          || !Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0
+          || (clean(payment.currency) && clean(payment.currency).toUpperCase() !== 'EUR')) {
+          issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Fecha, importe o moneda del pago incompatible con RECC.' });
+        }
         const operationId = clean(payment.accounting_operation_id);
         const operationConfirmed = !operationId || operationById.get(operationId)?.status === 'committed';
         const confirmed = (!payment.operation_status || payment.operation_status === 'committed') && operationConfirmed;
