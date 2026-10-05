@@ -967,15 +967,37 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   if (!invoice?.id || !operationYear) return { line: null, review: { sourceId: line.sourceId, invoiceId: invoice?.id, reason: 'Falta la fecha de realización necesaria para aplicar el límite del criterio de caja.' } };
   const forcedRecognitionDate = `${operationYear + 1}-12-31`;
   const payments = (data.invoicePayments || []).filter((payment: any) => payment.invoice_id === invoice.id);
-  let events = allocatedInvoicePayments(invoice, payments, forcedRecognitionDate);
-  if (!payments.length && invoice.ultimo_pago_at && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) {
-    const fallbackDate = clean(invoice.ultimo_pago_at).slice(0, 10);
-    const fallbackAmount = Math.abs(money(invoice.importe_pagado)) || (invoice.estado_cobro === 'cobrada' ? invoicePayable(invoice) : 0);
-    const factor = invoicePayable(invoice) ? Math.min(1, fallbackAmount / invoicePayable(invoice)) : 0;
-    events = factor > 0 ? [{ date: fallbackDate, factor, sourceIds: [`Invoice:${invoice.id}`], type: 'payment_fallback' }] : [];
-    if (factor < 1) events.push({ date: forcedRecognitionDate, factor: Math.max(0, 1 - factor), sourceIds: [`Invoice:${invoice.id}`], type: 'forced_deadline' });
-    data.warnings.push(`La factura ${clean(invoice.numero_factura) || invoice.id} en criterio de caja usa ultimo_pago_at/importe_pagado porque no tiene movimientos InvoicePayment trazados.`);
+  const review = (reason: string) => ({ line: null, review: { sourceId: line.sourceId, invoiceId: invoice.id, reason } });
+  const invoiceLabel = clean(invoice.numero_factura) || invoice.id;
+  const payable = invoicePayable(invoice);
+  if (money(invoice.importe_retencion) !== 0 || !payable || Math.abs(money(line.base) + money(line.quota) - payable) > 0.02) {
+    return review(`La factura ${invoiceLabel} en criterio de caja requiere reconstruir su total fiscal, retenciones y pagos antes de asignar cuotas.`);
   }
+  if (payments.some((payment: any) => (payment.operation_status && payment.operation_status !== 'committed')
+    || (payment.accounting_operation_id && payment.operation_status !== 'committed'))) {
+    return review(`La factura ${invoiceLabel} tiene cobros o pagos contables no confirmados; no se imputan cuotas hasta resolverlos.`);
+  }
+  if (!payments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) {
+    return review(`La factura ${invoiceLabel} consta cobrada o pagada sin movimientos InvoicePayment trazados; no se infiere el devengo desde un resumen.`);
+  }
+  const seenPaymentIds = new Set<string>();
+  let paid = 0;
+  for (const payment of payments) {
+    const paymentId = clean(payment.id);
+    const paymentDate = clean(payment.payment_date).slice(0, 10);
+    const amount = Number(payment.amount);
+    const parsedDate = Date.parse(paymentDate);
+    if (!paymentId || seenPaymentIds.has(paymentId) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(paymentDate)
+      || !Number.isFinite(parsedDate) || new Date(parsedDate).toISOString().slice(0, 10) !== paymentDate
+      || paymentDate < operationDate || !Number.isFinite(amount) || amount <= 0
+      || (clean(payment.currency) && clean(payment.currency) !== 'EUR')) {
+      return review(`La factura ${invoiceLabel} tiene un cobro o pago inválido, duplicado, anterior a la operación o en moneda sin convertir.`);
+    }
+    seenPaymentIds.add(paymentId);
+    paid = money(paid + amount);
+    if (paid > payable + 0.01) return review(`Los cobros o pagos de ${invoiceLabel} superan el total de la factura; no se recorta el exceso silenciosamente.`);
+  }
+  const events = allocatedInvoicePayments(invoice, payments, forcedRecognitionDate);
   const selectedEvents = events.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end);
   const factor = selectedEvents.reduce((sum: number, event: any) => sum + event.factor, 0);
   if (factor <= 0) return { line: null, deferred: { sourceId: line.sourceId, invoiceId: invoice.id, operationDate, forcedRecognitionDate } };
