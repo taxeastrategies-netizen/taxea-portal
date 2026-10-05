@@ -954,7 +954,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       && Math.abs(money(line.base) - money(invoice.base_imponible)) <= 0.01
       && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
       && Math.abs(money(line.deductibleQuota) - money(invoice.deductible_tax_amount)) <= 0.01
-      && (invoice.tipo === 'emitida' || clean(activity.indirectTaxRegime) === 'criterio_caja'
+      && (invoice.tipo === 'emitida' || clean(activity?.indirectTaxRegime) === 'criterio_caja'
         || (invoice.fiscal_manual_override === true && !!clean(invoice.fiscal_manual_override_reason)));
     if (!validProfile || (validatedRecc ? !validReccActivity || !validReccLine : !validActivity || !validTaxLine)) {
       throw new Error(validatedRecc
