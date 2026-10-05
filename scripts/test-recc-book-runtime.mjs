@@ -17,12 +17,20 @@ const records = {
   Invoice: [{ id: 'recc-a', company_id: 'company-a', tipo: 'emitida', numero_factura: 'TEST-RECC',
     fecha_emision: '2025-06-10', fecha_operacion: '2025-06-10', fiscal_regime: 'criterio_caja', indirect_tax_kind: 'iva',
     fiscal_review_status: 'validado', coletilla_fiscal: 'Régimen especial del criterio de caja', cliente_nombre: 'Cliente sintético', cliente_nif: 'B12345678',
-    base_imponible: 100, cuota_iva: 21, total_factura: 121, estado_cobro: 'parcial' }],
+    base_imponible: 100, cuota_iva: 21, total_factura: 121, estado_cobro: 'parcial' },
+    { id: 'recc-old', company_id: 'company-a', tipo: 'emitida', numero_factura: 'TEST-RECC-OLD',
+      fecha_emision: '2024-06-10', fecha_operacion: '2024-06-10', fiscal_regime: 'criterio_caja', indirect_tax_kind: 'iva',
+      fiscal_review_status: 'validado', coletilla_fiscal: 'Régimen especial del criterio de caja', cliente_nombre: 'Cliente antiguo',
+      base_imponible: 100, cuota_iva: 21, total_factura: 121, estado_cobro: 'cobrada' }],
   InvoiceTaxLine: [{ id: 'line-a', companyId: 'company-a', invoiceId: 'recc-a', lineNumber: 1, taxKind: 'iva',
-    regime: 'criterio_caja', reviewStatus: 'validado' }],
+    regime: 'criterio_caja', reviewStatus: 'validado' },
+    { id: 'line-old', companyId: 'company-a', invoiceId: 'recc-old', lineNumber: 1, taxKind: 'iva',
+      regime: 'criterio_caja', reviewStatus: 'validado' }],
   InvoicePayment: [{ id: 'payment-a', company_id: 'company-a', invoice_id: 'recc-a', amount: 60.5,
     payment_date: '2026-03-31', method: 'transferencia', origin: 'bank_reconciliation', reference: 'Cobro 1',
-    bank_transaction_id: 'bank-tx-a', operation_status: 'committed', accounting_operation_id: 'op-a' }],
+    bank_transaction_id: 'bank-tx-a', operation_status: 'committed', accounting_operation_id: 'op-a' },
+    { id: 'payment-old', company_id: 'company-a', invoice_id: 'recc-old', amount: 121,
+      payment_date: '2026-02-02', method: 'transferencia', origin: 'manual', operation_status: 'committed' }],
   AccountingPostingOperation: [{ id: 'op-a', companyId: 'company-a', status: 'committed' }],
   BankTransaction: [{ id: 'bank-tx-a', company_id: 'company-a', bank_account_id: 'bank-a' }],
   BankAccount: [{ id: 'bank-a', company_id: 'company-a', iban: 'ES0000000000000000000000' }],
@@ -48,11 +56,12 @@ async function call(companyId = 'company-a') {
 }
 const own = await call();
 assert.equal(own.status, 200);
-assert.equal(own.data.invoices.length, 1);
-assert.equal(own.data.invoices[0].forcedRecognitionDate, '2026-12-31');
-assert.equal(own.data.payments.length, 1);
-assert.equal(own.data.payments[0].bankAccount, 'ES0000000000000000000000');
-assert.equal(own.data.payments[0].confirmed, true);
+assert.equal(own.data.invoices.length, 2);
+assert.equal(own.data.invoices.find(invoice => invoice.id === 'recc-a')?.forcedRecognitionDate, '2026-12-31');
+assert.equal(own.data.invoices.find(invoice => invoice.id === 'recc-old')?.forcedRecognitionDate, '2025-12-31');
+assert.equal(own.data.payments.length, 2);
+assert.equal(own.data.payments.find(payment => payment.id === 'payment-a')?.bankAccount, 'ES0000000000000000000000');
+assert.equal(own.data.payments.find(payment => payment.id === 'payment-old')?.confirmed, true);
 assert.equal(own.data.issues.length, 0);
 const crossCompany = await call('company-b');
 assert.equal(crossCompany.status, 403);
@@ -65,4 +74,4 @@ const pending = await call();
 assert.ok(pending.data.issues.some(issue => issue.paymentId === 'payment-b'));
 assert.equal(writes, 0);
 console.log(JSON.stringify({ ok: true, checks: ['own-company-book', 'previous-year-invoice', 'bank-account-source',
-  'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
+  'late-payment-of-older-invoice-traced', 'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
