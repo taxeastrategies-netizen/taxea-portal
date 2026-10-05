@@ -2,6 +2,7 @@
 // Inspirada en la factura real F260009 de Taxea Strategies
 import { QRCodeSVG } from 'qrcode.react';
 import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
+import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -301,9 +302,9 @@ export default function InvoiceTemplate({ invoice, company }) {
         )}
 
         {/* Coletilla fiscal */}
-        {invoice?.coletilla_fiscal && (
+        {invoiceFiscalLegend(invoice) && (
           <div style={s.footerColetilla}>
-            <div style={s.footerColetillaText}>"{invoice.coletilla_fiscal}"</div>
+            <div style={s.footerColetillaText}>{invoiceFiscalLegend(invoice)}</div>
           </div>
         )}
 
