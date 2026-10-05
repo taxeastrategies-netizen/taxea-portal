@@ -398,6 +398,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const resultCode = invoice.revenue_expense_account_code
     ? canonical8(invoice.revenue_expense_account_code)
     : configuredCode || CATEGORY_ACCOUNT[category] || (invoice.tipo === 'emitida' ? '70500000' : '62900000');
+  if (validatedRecargoRetailSale && !/^70/.test(resultCode)) throw new Error('La venta minorista en recargo necesita una cuenta de ingresos de explotación 70 validada.');
   const resultDef = ACCOUNT_DEFS[resultCode] || [configuredName || (invoice.tipo === 'emitida' ? 'Ingresos' : 'Gastos'), invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'];
   const resultAccount = await ensureAccount(svc, companyId, resultCode, resultDef[0], resultDef[1]);
   const taxCode = taxKind === 'igic'
@@ -903,6 +904,28 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
   if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
+  }
+  if (validatedRecargoPurchase || validatedRecargoRetailSale) {
+    const activityId = clean(invoice.fiscal_activity_id);
+    const activity = activityId ? await svc.entities.FiscalActivity.get(activityId).catch(() => null) : null;
+    const profiles = await svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-created_date', 3);
+    const taxLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+    const line = taxLines?.[0];
+    const validActivity = activity && activity.company_id === companyId && activity.active !== false
+      && clean(activity.activityType) === 'comercial_minorista'
+      && clean(activity.indirectTaxRegime) === 'recargo_equivalencia' && clean(activity.indirectTax) === 'iva';
+    const validProfile = profiles?.length === 1 && profiles[0].profileStatus === 'validado_asesor';
+    const validTaxLine = taxLines?.length === 1 && Number(line.lineNumber) === 1
+      && clean(line.regime) === 'recargo_equivalencia' && clean(line.taxKind) === 'iva'
+      && clean(line.operationType) === 'subject_taxed' && clean(line.reviewStatus) === 'validado'
+      && clean(line.reviewedBy) === clean(invoice.fiscal_reviewed_by)
+      && clean(line.activityId) === activityId
+      && Math.abs(money(line.base) - money(invoice.base_imponible)) <= 0.01
+      && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
+      && Math.abs(money(line.surchargeQuota) - money(invoice.cuota_recargo)) <= 0.01;
+    if (!validActivity || !validProfile || !validTaxLine) {
+      throw new Error('El recargo requiere actividad minorista, perfil y línea fiscal validados por asesor antes del asiento.');
+    }
   }
   if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase)) {
     throw new Error('La inversión de sujeto pasivo, el margen o el recargo requieren asientos fiscales específicos.');
