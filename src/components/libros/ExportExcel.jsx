@@ -255,19 +255,42 @@ function buildLibroMayor(accounts) {
 // ─── Hoja 9: Resumen IVA/IGIC ────────────────────────────────────────────────
 function buildResumenIVA(invoices, expenses) {
   const header = ['Trimestre','Periodo','Base Imponible Ventas (€)','IVA/IGIC Repercutido (€)','Base Imponible Compras (€)','IVA/IGIC Deducible clasificado (€)','Diferencia orientativa (€)'];
-  const rows = [header];
+  const rows = [['Resumen orientativo por fecha de operación. No sustituye el 303/420; las facturas RECC se excluyen y se detallan en la hoja RECC IVA.'], header];
+  const ordinaryInvoices = invoices.filter(i => i.fiscal_regime !== 'criterio_caja');
   const periodos = { T1: 'Ene-Mar', T2: 'Abr-Jun', T3: 'Jul-Sep', T4: 'Oct-Dic' };
   let totRep = 0, totSop = 0, totBaseV = 0, totBaseC = 0;
   ['T1','T2','T3','T4'].forEach(t => {
-    const rep = invoices.filter(i => i.tipo === 'emitida' && (i.trimestre === t)).reduce((s, i) => s + n(i.cuota_iva), 0);
-    const baseV = invoices.filter(i => i.tipo === 'emitida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0);
-    const sop = invoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.deductible_tax_amount), 0);
-    const baseC = invoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0)
+    const rep = ordinaryInvoices.filter(i => i.tipo === 'emitida' && (i.trimestre === t)).reduce((s, i) => s + n(i.cuota_iva), 0);
+    const baseV = ordinaryInvoices.filter(i => i.tipo === 'emitida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0);
+    const sop = ordinaryInvoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.deductible_tax_amount), 0);
+    const baseC = ordinaryInvoices.filter(i => i.tipo === 'recibida' && i.trimestre === t).reduce((s, i) => s + n(i.base_imponible), 0)
       + expenses.filter(e => e.trimestre === t).reduce((s, e) => s + n(e.base_imponible), 0);
     rows.push([t, periodos[t], baseV, rep, baseC, sop, rep - sop]);
     totRep += rep; totSop += sop; totBaseV += baseV; totBaseC += baseC;
   });
   rows.push(['ANUAL', 'Total', totBaseV, totRep, totBaseC, totSop, totRep - totSop]);
+  return rows;
+}
+
+// ─── Libro auxiliar RECC: operación original y cada cobro/pago confirmado ──
+function buildLibroRecc(recc, year) {
+  const rows = [
+    [`RECC IVA ${year} · Libro auxiliar de fechas e importes. La liquidación corresponde al cálculo validado del modelo 303, no a sumar esta hoja.`],
+    ['Tipo','Factura','Fecha operación','Fecha factura','Fecha recepción','Tercero','NIF','Base original (€)','Cuota original (€)','Total factura (€)','Fecha cobro/pago','Importe cobro/pago (€)','Medio','Referencia','Cuenta bancaria','Fecha límite legal','Estado'],
+  ];
+  const byInvoice = new Map((recc.payments || []).filter(payment => payment.confirmed).map(payment => [payment.invoiceId, []]));
+  for (const payment of (recc.payments || []).filter(payment => payment.confirmed)) byInvoice.get(payment.invoiceId).push(payment);
+  for (const invoice of recc.invoices || []) {
+    const payments = (byInvoice.get(invoice.id) || []).filter(payment => String(payment.date).slice(0, 4) === String(year));
+    const relevant = String(invoice.operationDate).slice(0, 4) === String(year)
+      || String(invoice.forcedRecognitionDate).slice(0, 4) === String(year) || payments.length > 0;
+    if (!relevant) continue;
+    const common = [invoice.type, invoice.number, invoice.operationDate, invoice.issueDate, invoice.receiptDate,
+      invoice.counterpartyName, invoice.counterpartyNif, invoice.base, invoice.quota, invoice.total];
+    if (!payments.length) rows.push([...common, '', '', '', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus]);
+    for (const payment of payments) rows.push([...common, payment.date, payment.amount, payment.method, payment.reference,
+      payment.bankAccount, invoice.forcedRecognitionDate, invoice.reviewStatus]);
+  }
   return rows;
 }
 
@@ -306,6 +329,16 @@ function buildCajaBancos(entries) {
 }
 
 // Solo se exporta el diario confirmado que devuelve Contabilidad; nunca se simulan asientos.
+async function loadReccBook(companyId, year) {
+  if (!companyId) throw new Error('Falta la empresa para consultar el libro RECC.');
+  const { base44 } = await import('@/api/base44Client');
+  const response = await base44.functions.invoke('fiscalOperations', { action: 'recc_book', companyId, year: Number(year) });
+  const book = response?.data || response;
+  if (!book?.success) throw new Error(book?.error || 'No se pudo consultar el libro de criterio de caja.');
+  if (book.issues?.length) throw new Error(`El libro RECC tiene ${book.issues.length} incidencia(s) de revisión. Revisa pagos y clasificación fiscal antes de exportar.`);
+  return book;
+}
+
 async function loadRealAccounting(companyId, year) {
   if (!companyId) throw new Error('Falta la empresa para obtener el Diario y Mayor reales.');
   const { base44 } = await import('@/api/base44Client');
@@ -341,7 +374,10 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
-  const accounting = onlyNew ? { entries: [], accounts: [] } : await loadRealAccounting(companyId, year);
+  const [accounting, reccBook] = await Promise.all([
+    onlyNew ? { entries: [], accounts: [] } : loadRealAccounting(companyId, year),
+    loadReccBook(companyId, year),
+  ]);
   {
       const emitidas = invoices.filter(i => i.tipo === 'emitida');
       const recibidas = invoices.filter(i => i.tipo === 'recibida');
@@ -366,6 +402,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
           { name: '8. Libro Mayor', rows: buildLibroMayor(accounting.accounts), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
         ] : []),
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
+        { name: '12. RECC IVA', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
         { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
         ...(!onlyNew ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
       ];
