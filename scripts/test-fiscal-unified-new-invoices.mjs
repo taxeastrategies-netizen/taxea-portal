@@ -190,6 +190,17 @@ assert.equal(recargoLine.deductibleQuota, 0);
 assert.equal(recargoLine.nonDeductibleQuota, 21);
 assert.equal(records.Invoice.find(item => item.id === 'invoice-recargo-valid').total_factura, 126.2);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
+records.FiscalActivity[0].activityType = 'comercial_minorista';
+records.Invoice.push({ id: 'invoice-recargo-sale', company_id: 'company-a', tipo: 'emitida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, tipo_recargo: 0, cuota_recargo: 0, total_factura: 121, importe_retencion: 0 });
+const approvedRecargoSale = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recargo-sale', activityId: 'activity-a', regime: 'recargo_equivalencia', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(approvedRecargoSale.status, 200);
+const recargoSaleLine = records.InvoiceTaxLine.find(item => item.invoiceId === 'invoice-recargo-sale');
+assert.equal(recargoSaleLine.regime, 'recargo_equivalencia');
+assert.equal(recargoSaleLine.surchargeQuota, 0);
+assert.equal(records.Invoice.find(item => item.id === 'invoice-recargo-sale').total_factura, 121);
+assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
 records.FiscalActivity[0].indirectTaxRegime = 'general';
 async function recommendedCodes(activities) {
   const before = records.FiscalActivity;
@@ -252,4 +263,4 @@ const advisorConfirmation = await handler(new Request('https://taxea.test/functi
 assert.equal(advisorConfirmation.status, 200);
 assert.equal(proposed303.activo, true);
 assert.equal(proposed303.fuenteValidacion, 'criterio_asesor');
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda', 'oss_y_nacional_303_mas_369', 'oss_solo_369', 'grupo_322_y_353', 'igic_mixto_421_mas_420'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'recargo_venta_minorista_revisada', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda', 'oss_y_nacional_303_mas_369', 'oss_solo_369', 'grupo_322_y_353', 'igic_mixto_421_mas_420'] }, null, 2));
