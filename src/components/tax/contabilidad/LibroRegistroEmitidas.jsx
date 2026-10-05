@@ -41,6 +41,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
     refetchOnWindowFocus: true,
   });
   const invoices = query.data || [];
+  const hasRecargoSales = invoices.some(inv => inv.fiscal_regime === 'recargo_equivalencia');
   const isLoading = query.isLoading;
 
   useEffect(() => {
@@ -64,9 +65,10 @@ export default function LibroRegistroEmitidas({ companyId }) {
   const totales = filtered.reduce((acc, inv) => ({
     base: acc.base + (inv.base_imponible || 0),
     iva: acc.iva + (inv.cuota_iva || 0),
+    ingresoContable: acc.ingresoContable + Number(inv.base_imponible || 0) + (inv.fiscal_regime === 'recargo_equivalencia' ? Number(inv.cuota_iva || 0) : 0),
     retencion: acc.retencion + getWithholdingAmount(inv),
     total: acc.total + (inv.total_factura || 0),
-  }), { base: 0, iva: 0, retencion: 0, total: 0 });
+  }), { base: 0, iva: 0, ingresoContable: 0, retencion: 0, total: 0 });
 
   if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando...</div>;
 
@@ -81,6 +83,8 @@ export default function LibroRegistroEmitidas({ companyId }) {
           </div>
         </div>
       </div>
+
+      {hasRecargoSales && <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">En ventas minoristas ordinarias confirmadas bajo recargo de equivalencia, el IVA repercutido forma parte del ingreso contable; no se liquida en el 303 ordinario. Las excepciones requieren revisión específica.</p>}
 
       <div className="flex flex-wrap gap-2">
         <div className="relative flex-1 min-w-48">
@@ -112,7 +116,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
       ) : (
         <>
           <div className="bg-card border border-border rounded-xl overflow-auto">
-            <table className="w-full text-xs min-w-[900px]">
+            <table className={cn('w-full text-xs', hasRecargoSales ? 'min-w-[1100px]' : 'min-w-[900px]')}>
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fecha</th>
@@ -122,6 +126,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Base imp.</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Tipo IVA/IGIC</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA/IGIC</th>
+                  {hasRecargoSales && <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Ingreso contable</th>}
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Retención</th>
                   <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Total</th>
                   <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Estado cont.</th>
@@ -139,6 +144,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
                     <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.cuota_iva)}</td>
+                    {hasRecargoSales && <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">{fmt(Number(inv.base_imponible || 0) + (inv.fiscal_regime === 'recargo_equivalencia' ? Number(inv.cuota_iva || 0) : 0))}</td>}
                     <td className="px-3 py-2 text-right font-mono">{getWithholdingAmount(inv) ? fmt(getWithholdingAmount(inv)) : '—'}</td>
                     <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
                     <td className="px-3 py-2">
@@ -163,6 +169,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                   <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.base)}</td>
                   <td />
                   <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.iva)}</td>
+                  {hasRecargoSales && <td className="px-3 py-2 text-right font-mono font-bold text-amber-700">{fmt(totales.ingresoContable)}</td>}
                   <td className="px-3 py-2 text-right font-mono font-bold">{totales.retencion ? fmt(totales.retencion) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.total)}</td>
                   <td colSpan={3} />
