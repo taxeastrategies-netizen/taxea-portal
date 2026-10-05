@@ -298,6 +298,18 @@ const repeatedRecargoSale = await invoke({ action: 'finalize_fiscal_review', com
 assert.equal(repeatedRecargoSale.payload.duplicate, true);
 assert.equal(counters.accountingEntries, 5);
 
+const reccDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recc-sale-ok', invoice: { ...validInvoice, numero_factura: 'E-2026-RECC' } });
+assert.equal(reccDraft.response.status, 200);
+assert.equal(reccDraft.payload.review_required, true);
+await entities.Invoice.update(reccDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'criterio_caja', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva', deductible_tax_amount: 0, fiscal_activity_id: 'activity-a' });
+await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: reccDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, deductibleQuota: 0 });
+const completedRecc = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id });
+assert.equal(completedRecc.response.status, 200);
+assert.equal(counters.accountingEntries, 6);
+assert.equal(new URL(completedRecc.payload.invoice.qr_url).searchParams.get('importe'), '121.00');
+assert.equal((await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id })).payload.duplicate, true);
+assert.equal(counters.accountingEntries, 6);
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
