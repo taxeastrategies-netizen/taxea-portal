@@ -28,11 +28,12 @@ const accounts = [
   { code: '47700000', name: 'IVA repercutido', debit: 0, credit: 21, balance: -21 },
 ];
 const calls = [];
+let reccFixture = { success: true, year: 2026, invoices: [], payments: [], issues: [] };
 const base44 = { functions: { async invoke(name, payload) {
   assert.ok(['accountingOperations', 'fiscalOperations'].includes(name));
   assert.equal(payload.companyId, 'company-a');
   calls.push(`${name}:${payload.action}`);
-  if (name === 'fiscalOperations' && payload.action === 'recc_book') return { data: { success: true, year: 2026, invoices: [], payments: [], issues: [] } };
+  if (name === 'fiscalOperations' && payload.action === 'recc_book') return { data: reccFixture };
   if (payload.action === 'reports') return { data: { success: true, report: { accounts, includedEntries: 1, excludedEntries: 0 } } };
   if (payload.action === 'journal') return { data: { success: true, journal: { total: 1, entries: [entryRow] } } };
   throw new Error('Unexpected action');
@@ -71,4 +72,18 @@ assert.match(xml, /exenta_limitada/);
 assert.match(xml, /Libro Diario/);
 assert.doesNotMatch(xml, /4300000000|4000000000|4100000000/);
 assert.match(xml, /Cuota No Deducible/);
-console.log(JSON.stringify({ ok: true, realJournal: true, historicalSubaccountsPreservedInExport: true, nonDeductibleQuotaVisible: true }));
+reccFixture = { success: true, year: 2026, issues: [], invoices: [{ id: 'recc-a', type: 'emitida', number: 'RECC-TEST',
+  operationDate: '2025-06-10', issueDate: '2025-06-10', receiptDate: '', counterpartyName: 'Tercero sintético',
+  counterpartyNif: 'B12345678', base: 100, quota: 21, total: 121, forcedRecognitionDate: '2026-12-31', reviewStatus: 'validado' }],
+  payments: [{ id: 'recc-pay', invoiceId: 'recc-a', date: '2026-03-31', amount: 60.5, method: 'transferencia',
+    reference: 'TEST', bankAccount: 'ES0000000000000000000000', confirmed: true }] };
+await exported({ companyId: 'company-a', companyName: 'Empresa sintética', year: 2026, invoices: [], expenses: [] });
+const reccXml = await savedBlob.text();
+assert.match(reccXml, /12\. RECC IVA/);
+assert.match(reccXml, /RECC-TEST/);
+assert.match(reccXml, /ES0000000000000000000000/);
+assert.match(reccXml, /DEVENGO LEGAL \(sin cobro\/pago\)/);
+reccFixture.issues = [{ invoiceId: 'recc-a', reason: 'Pago pendiente' }];
+await assert.rejects(exported({ companyId: 'company-a', year: 2026, invoices: [], expenses: [] }), /incidencia/);
+console.log(JSON.stringify({ ok: true, realJournal: true, historicalSubaccountsPreservedInExport: true,
+  nonDeductibleQuotaVisible: true, reccCashAndForcedDeadlineVisible: true, reccIssuesBlockExport: true }));
