@@ -163,6 +163,12 @@ function InvoicePublicRender({ invoice, company }) {
         </div>
       )}
 
+      {invoice.coletilla_fiscal && (
+        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
+          {invoice.coletilla_fiscal}
+        </div>
+      )}
+
       {/* Pie */}
       <div className="border-t border-slate-100 mt-6 pt-4 text-[10px] text-slate-400 text-center">
         Documento gestionado con Taxea Strategies · Portal de gestión financiera y fiscal
