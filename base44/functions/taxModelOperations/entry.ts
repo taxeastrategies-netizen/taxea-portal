@@ -3678,6 +3678,10 @@ Deno.serve(async (req) => {
       const reccOverpayment=cashTaxLineForPeriod(reccLine,{invoicePayments:[{id:'recc-over',invoice_id:reccInvoice.id,amount:122,payment_date:'2026-03-31'}],warnings:[]},bounds(2026,'1T'));
       const reccUntraced=cashTaxLineForPeriod({...reccLine,invoice:{...reccInvoice,estado_cobro:'cobrada',ultimo_pago_at:'2026-03-31',importe_pagado:121}},{invoicePayments:[],warnings:[]},bounds(2026,'1T'));
       const reccReviewSafety=!!reccPending.review&&!reccPending.line&&!!reccDuplicate.review&&!reccDuplicate.line&&!!reccOverpayment.review&&!reccOverpayment.line&&!!reccUntraced.review&&!reccUntraced.line;
+      const reccCentsData={invoicePayments:[{id:'cent-1',invoice_id:reccInvoice.id,amount:40.33,payment_date:'2026-03-31'},{id:'cent-2',invoice_id:reccInvoice.id,amount:40.33,payment_date:'2026-04-01'},{id:'cent-3',invoice_id:reccInvoice.id,amount:40.34,payment_date:'2026-07-01'}],warnings:[]};
+      const reccCentsQ1=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'1T')).line;
+      const reccCentsQ2=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'2T')).line;
+      const reccCentsQ3=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'3T')).line;
       const reccReceivedInvoice={...reccInvoice,id:'invoice-recc-received',tipo:'recibida',numero_factura:'R-RECC'};
       const reccReceivedLine={...reccLine,id:'recc-received-line',sourceId:'InvoiceTaxLine:recc-received-line',invoice:reccReceivedInvoice};
       const reccModelData:any={invoices:[reccInvoice,reccReceivedInvoice],taxLines:[reccLine,reccReceivedLine],invoicePayments:[...reccData.invoicePayments,{id:'recc-r-p1',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'recc-r-p2',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-04-01'}],filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],period:'1T',year:2026};
@@ -3725,6 +3729,7 @@ Deno.serve(async (req) => {
         model111EconomicBoxes:fieldMap(calculated111Q1)['07']===1&&fieldMap(calculated111Q1)['08']===50&&fieldMap(calculated111Q1)['09']===7.5&&samples['111'].slice(192,200)==='00000001'&&samples['111'].slice(200,217).endsWith('10000'),
         reccPartialAndDeadline:reccQ1?.base===50&&reccQ1?.quota===10.5&&reccQ2?.base===50&&reccQ2?.quota===10.5&&reccForced?.base===100&&reccForced?.cashRecognition?.events?.[0]?.date==='2026-12-31',
         reccInvalidPaymentsNeedReview:reccReviewSafety,
+        reccPartialCentsExhaustInvoice:money(reccCentsQ1?.base+reccCentsQ2?.base+reccCentsQ3?.base)===100&&money(reccCentsQ1?.quota+reccCentsQ2?.quota+reccCentsQ3?.quota)===21&&reccCentsQ3?.base===33.34,
         recc303InformationByOperationDate:recc303FieldsQ1['62']===100&&recc303FieldsQ1['63']===21&&recc303FieldsQ1['74']===100&&recc303FieldsQ1['75']===21&&recc303FieldsQ2['62']===0&&recc303FieldsQ2['74']===0&&recc303Q1.operations?.outputQuota===10.5&&recc303Q2.operations?.outputQuota===10.5&&recc303Q1.fields.find((field:any)=>field.code==='62')?.sourceIds?.includes('InvoiceTaxLine:recc-line'),
         recc303ExportOfficialPositions:recc303Page3.slice(113,130)===numeric(100,17,true)&&recc303Page3.slice(130,147)===numeric(21,17,true)&&recc303Page3.slice(147,164)===numeric(100,17,true)&&recc303Page3.slice(164,181)===numeric(21,17,true)&&recc303ExportQ2[112]==='2'&&recc303ExportQ2[113]==='1'&&transferLayoutErrors('303',wrap('303',2026,'1T',recc303Export,'B12345678')).length===0,
         cumulative130ByQuarterEnd:fieldMap(result130Q2)['01']===1500&&fieldMap(result130Q2)['02']===200,
