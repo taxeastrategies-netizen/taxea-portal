@@ -540,7 +540,7 @@ Deno.serve(async (req) => {
         const base = Number(invoice.base_imponible || 0);
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
-        const valid = ['comercial_minorista', 'empresarial'].includes(clean(selectedActivity.activityType))
+        const valid = clean(selectedActivity.activityType) === 'comercial_minorista'
           && [21, 10, 4].includes(rate) && base > 0
           && Math.abs(money(base * rate / 100) - quota) <= 0.01
           && Math.abs(Number(invoice.tipo_recargo || 0)) <= 0.001
