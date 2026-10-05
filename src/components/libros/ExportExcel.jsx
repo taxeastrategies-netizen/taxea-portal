@@ -343,7 +343,6 @@ async function loadReccBook(companyId, year) {
   const response = await base44.functions.invoke('fiscalOperations', { action: 'recc_book', companyId, year: Number(year) });
   const book = response?.data || response;
   if (!book?.success) throw new Error(book?.error || 'No se pudo consultar el libro de criterio de caja.');
-  if (book.issues?.length) throw new Error(`El libro RECC tiene ${book.issues.length} incidencia(s) de revisión. Revisa pagos y clasificación fiscal antes de exportar.`);
   return book;
 }
 
@@ -410,9 +409,14 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
           { name: '8. Libro Mayor', rows: buildLibroMayor(accounting.accounts), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
         ] : []),
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
-        { name: '12. RECC IVA', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
         { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
         ...(!onlyNew ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
+        { name: '12. RECC IVA', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
+        ...(reccBook.issues?.length ? [{ name: '13. Alertas RECC', rows: [
+          ['Pendiente de revisión por asesor. Estas incidencias no alteran el Diario ni impiden descargar el libro informativo.'],
+          ['Factura ID', 'Pago ID', 'Incidencia'],
+          ...reccBook.issues.map(issue => [issue.invoiceId || '', issue.paymentId || '', issue.reason || '']),
+        ], colWidths: [28, 28, 90], newRowIndices: [] }] : []),
       ];
 
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
