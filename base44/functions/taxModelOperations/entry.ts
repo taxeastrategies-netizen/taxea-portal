@@ -3670,6 +3670,7 @@ Deno.serve(async (req) => {
         partialRetentionOnce:retainedQ1.length===1&&retainedQ2.length===1&&retainedQ1[0].base===50&&retainedQ2[0].base===50&&money(retainedQ1[0].withholding+retainedQ2[0].withholding)===15,
         model111EconomicBoxes:fieldMap(calculated111Q1)['07']===1&&fieldMap(calculated111Q1)['08']===50&&fieldMap(calculated111Q1)['09']===7.5&&samples['111'].slice(192,200)==='00000001'&&samples['111'].slice(200,217).endsWith('10000'),
         reccPartialAndDeadline:reccQ1?.base===50&&reccQ1?.quota===10.5&&reccQ2?.base===50&&reccQ2?.quota===10.5&&reccForced?.base===100&&reccForced?.cashRecognition?.events?.[0]?.date==='2026-12-31',
+        reccInvalidPaymentsNeedReview:reccReviewSafety,
         cumulative130ByQuarterEnd:fieldMap(result130Q2)['01']===1500&&fieldMap(result130Q2)['02']===200,
         model130PaymentAndBoxes:fieldMap(retainedIncomeQ1)['06']===7.5&&fieldMap(retainedIncomeQ2)['06']===15&&fieldMap(retainedIncomeQ2)['18']===10&&fieldMap(negative130)['12']===0,
         model130CashBasis:fieldMap(cash130Q1)['01']===50&&fieldMap(cash130Q1)['02']===20&&fieldMap(cash130Q2)['01']===100&&fieldMap(cash130Q2)['02']===40,
