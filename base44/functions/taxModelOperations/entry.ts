@@ -2784,7 +2784,7 @@ function export390(company: any, profile: any, activities: any[], year: number, 
   };
   const p1 = pages['01000'];
   place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,60,normalizedText(company.razon_social,60)); place(p1,103,4,String(year));
-  place(p1,109,1,profile?.isREDEME?'1':'0'); place(p1,110,1,profile?.isGroupEntity?'1':'0'); place(p1,130,1,profile?.hasInsolvencyProceedings?'1':'0'); place(p1,131,1,(calculation.operations?.criterionCash||0)?'1':'0'); place(p1,132,1,(calculation.operations?.criterionCashReceived||0)?'1':'0');
+  place(p1,109,1,profile?.isREDEME?'1':'0'); place(p1,110,1,profile?.isGroupEntity?'1':'0'); place(p1,130,1,profile?.hasInsolvencyProceedings?'1':'0'); place(p1,131,1,calculation.operations?.criterionCashTaxpayer?'1':'0'); place(p1,132,1,calculation.operations?.criterionCashRecipient?'1':'0');
   const activeActivities = (activities || []).filter(activity => activity.active !== false).slice(0, 6);
   activeActivities.forEach((activity, index) => {
     const start = 148 + index * 47;
