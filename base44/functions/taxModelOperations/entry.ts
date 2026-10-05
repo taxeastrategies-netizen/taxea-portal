@@ -1133,9 +1133,11 @@ function calculate130(data: any, b: any, adjustments: any) {
         && money(invoice.cuota_recargo) > 0
         && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva) + money(invoice.cuota_recargo));
       const recargoRetailSale = invoice.tipo === 'emitida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia'
-        && clean(invoice.fiscal_review_status) === 'validado' && /^7/.test(clean(invoice.revenue_expense_account_code))
+        && invoice.es_rectificativa !== true && clean(invoice.fiscal_review_status) === 'validado'
+        && !!clean(invoice.fiscal_reviewed_by) && /^70/.test(clean(invoice.revenue_expense_account_code))
+        && [21, 10, 4].includes(Number(invoice.tipo_iva || 0))
         && money(invoice.cuota_recargo) === 0 && money(invoice.importe_retencion) === 0
-        && money(invoice.cuota_iva) > 0
+        && money(invoice.cuota_iva) === money(money(invoice.base_imponible) * Number(invoice.tipo_iva || 0) / 100)
         && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva));
       const fiscalExpenseBase = recargoPurchase
         ? money(money(invoice.base_imponible) + money(invoice.non_deductible_tax_amount) + money(invoice.cuota_recargo))
@@ -3618,7 +3620,7 @@ Deno.serve(async (req) => {
       const recargo130Data={...cash130Data,invoices:[recargo130Invoice],invoicePayments:[{id:'cash-recargo-q1',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-03-31'},{id:'cash-recargo-q2',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-04-01'}],period:'1T',warnings:[],blockers:[]};
       const recargo130Q1=calculate130(recargo130Data,bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const recargo130Q2=calculate130({...recargo130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
-      const recargoSale130Invoice={id:'cash-130-recargo-sale',tipo:'emitida',numero_factura:'E-RECARGO-130',fecha_emision:'2026-01-16',base_imponible:100,cuota_iva:21,cuota_recargo:0,total_factura:121,fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',revenue_expense_account_code:'700000'};
+      const recargoSale130Invoice={id:'cash-130-recargo-sale',tipo:'emitida',numero_factura:'E-RECARGO-130',fecha_emision:'2026-01-16',base_imponible:100,cuota_iva:21,cuota_recargo:0,total_factura:121,fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',fiscal_reviewed_by:'advisor@taxea.test',tipo_iva:21,revenue_expense_account_code:'700000'};
       const recargoSale130Data={...cash130Data,invoices:[recargoSale130Invoice],invoicePayments:[{id:'cash-recargo-sale-q1',invoice_id:recargoSale130Invoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'cash-recargo-sale-q2',invoice_id:recargoSale130Invoice.id,amount:60.5,payment_date:'2026-04-01'}],period:'1T',warnings:[],blockers:[]};
       const recargoSale130Q1=calculate130(recargoSale130Data,bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const recargoSale130Q2=calculate130({...recargoSale130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
