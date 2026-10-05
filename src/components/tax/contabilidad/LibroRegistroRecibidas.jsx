@@ -62,6 +62,8 @@ export default function LibroRegistroRecibidas({ companyId }) {
     refetchOnWindowFocus: true,
   });
   const invoices = query.data || [];
+  const hasRecargoPurchases = invoices.some(inv => inv.fiscal_regime === 'recargo_equivalencia' && Number(inv.cuota_recargo || 0) > 0);
+  const showFullCost = isComercianteMinorista || hasRecargoPurchases;
   const isLoading = query.isLoading;
 
   useEffect(() => {
@@ -89,10 +91,11 @@ export default function LibroRegistroRecibidas({ companyId }) {
       base: acc.base + base,
       iva: acc.iva + cuota,
       // La cuota no deducible aumenta el gasto; prevalece la revisión fiscal de la factura.
-      gastoTotal: acc.gastoTotal + base + Number(inv.non_deductible_tax_amount ?? (isComercianteMinorista ? cuota : 0)),
+      gastoTotal: acc.gastoTotal + base + Number(inv.non_deductible_tax_amount ?? (isComercianteMinorista ? cuota : 0)) + Number(inv.cuota_recargo || 0),
+      recargo: acc.recargo + Number(inv.cuota_recargo || 0),
       total: acc.total + (inv.total_factura || 0),
     };
-  }, { base: 0, iva: 0, gastoTotal: 0, total: 0 });
+  }, { base: 0, iva: 0, gastoTotal: 0, recargo: 0, total: 0 });
 
   if (isLoading) return <div className="p-10 text-center text-muted-foreground text-sm">Cargando...</div>;
 
@@ -138,7 +141,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-auto">
-          <table className={cn("w-full text-xs", isComercianteMinorista ? "min-w-[1100px]" : "min-w-[1000px]")}>
+          <table className={cn("w-full text-xs", showFullCost ? "min-w-[1200px]" : "min-w-[1000px]")}>
             <thead className="bg-muted/40 border-b border-border">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fecha</th>
@@ -149,8 +152,9 @@ export default function LibroRegistroRecibidas({ companyId }) {
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Base</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">IVA/IGIC %</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Cuota IVA/IGIC</th>
-                {isComercianteMinorista && (
-                  <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Gasto total</th>
+                {hasRecargoPurchases && <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Recargo</th>}
+                {showFullCost && (
+                  <th className="px-3 py-2.5 text-right font-semibold text-amber-700">Coste contable</th>
                 )}
                 <th className="px-3 py-2.5 text-right font-semibold text-muted-foreground">Total</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Categoría</th>
@@ -170,9 +174,10 @@ export default function LibroRegistroRecibidas({ companyId }) {
                   <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
                   <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono text-muted-foreground">{fmt(inv.cuota_iva)}</td>
-                  {isComercianteMinorista && (
+                  {hasRecargoPurchases && <td className="px-3 py-2 text-right font-mono">{Number(inv.cuota_recargo || 0) ? fmt(inv.cuota_recargo) : '—'}</td>}
+                  {showFullCost && (
                     <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">
-                      {fmt(inv.total_factura ?? ((inv.base_imponible || 0) + (inv.cuota_iva || 0) + (inv.cuota_recargo || 0) - (inv.importe_retencion || 0)))}
+                      {fmt(Number(inv.base_imponible || 0) + Number(inv.non_deductible_tax_amount ?? (isComercianteMinorista ? inv.cuota_iva || 0 : 0)) + Number(inv.cuota_recargo || 0))}
                     </td>
                   )}
                   <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(inv.total_factura)}</td>
@@ -199,7 +204,8 @@ export default function LibroRegistroRecibidas({ companyId }) {
                 <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.base)}</td>
                 <td />
                 <td className="px-3 py-2 text-right font-mono font-bold text-muted-foreground">{fmt(totales.iva)}</td>
-                {isComercianteMinorista && (
+                {hasRecargoPurchases && <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.recargo)}</td>}
+                {showFullCost && (
                   <td className="px-3 py-2 text-right font-mono font-bold text-amber-700">{fmt(totales.gastoTotal)}</td>
                 )}
                 <td className="px-3 py-2 text-right font-mono font-bold">{fmt(totales.total)}</td>
