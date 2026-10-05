@@ -190,9 +190,9 @@ export async function exportInvoiceToPdf(invoice, company) {
   if (fiscalLegend) {
     doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(71, 85, 105);
     const coletillaLines = doc.splitTextToSize(fiscalLegend, W - M * 2);
-    const coletillaY = Math.min(y, 291 - coletillaLines.length * 3.6 - 8);
-    doc.text(coletillaLines, M, coletillaY);
-    y = coletillaY + coletillaLines.length * 3.6 + 3;
+    if (y + coletillaLines.length * 3.6 > 282) { doc.addPage(); y = 20; }
+    doc.text(coletillaLines, M, y);
+    y += coletillaLines.length * 3.6 + 3;
   }
 
   // ── Observaciones ─────────────────────────────────────────────────────────
