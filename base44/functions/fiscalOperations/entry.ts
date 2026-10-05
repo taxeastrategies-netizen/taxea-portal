@@ -402,6 +402,9 @@ Deno.serve(async (req) => {
           && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja'
           && clean(invoiceLines[0].taxKind) === 'iva';
         if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin línea IVA única y validada por asesor.' });
+        if (invoice.tipo === 'emitida' && !clean(invoice.coletilla_fiscal).toLocaleLowerCase('es-ES').includes('régimen especial del criterio de caja')) {
+          issues.push({ invoiceId: invoice.id, reason: 'Factura emitida RECC sin la mención obligatoria en el documento guardado; revisar el PDF existente sin sobrescribirlo.' });
+        }
         if (invoice.tipo === 'recibida' && !clean(invoice.fecha_recepcion)) issues.push({ invoiceId: invoice.id, reason: 'Falta fecha de recepción de la factura recibida.' });
         const invoicePayments = payments.filter((payment: any) => payment.invoice_id === invoice.id);
         const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
