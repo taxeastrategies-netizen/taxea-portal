@@ -642,6 +642,15 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Este tratamiento especial aún no permite asiento automático; requiere revisión contable específica.' }, { status: 422 });
       }
       let qrUrl = invoice.qr_url || '';
+      const reccLegend = 'Régimen especial del criterio de caja';
+      const existingLegend = cleanText(invoice.coletilla_fiscal, 2000);
+      const issuedReccLegend = invoice.tipo === 'emitida' && line.regime === 'criterio_caja'
+        && !existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
+        ? [reccLegend, existingLegend].filter(Boolean).join(' · ') : existingLegend;
+      if (invoice.tipo === 'emitida' && line.regime === 'criterio_caja' && invoice.qr_pdf_url
+        && issuedReccLegend !== existingLegend) {
+        return Response.json({ error: 'Existe un PDF ya emitido sin la mención del criterio de caja; requiere revisión documental antes de finalizar.' }, { status: 409 });
+      }
       if (invoice.tipo === 'emitida' && !qrUrl) {
         const company = await base44.asServiceRole.entities.Company.get(companyId);
         try { qrUrl = buildAeatQrUrl(company, invoice); }
@@ -655,9 +664,11 @@ Deno.serve(async (req) => {
       }
       try {
         const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
-        if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' || (qrUrl && !invoice.qr_url)) {
+        if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' || (qrUrl && !invoice.qr_url)
+          || issuedReccLegend !== existingLegend) {
           await base44.asServiceRole.entities.Invoice.update(invoice.id, {
             accounting_migration_hold: false, accounting_migration_hold_reason: '',
+            ...(issuedReccLegend !== existingLegend ? { coletilla_fiscal: issuedReccLegend } : {}),
             ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
           });
         }
