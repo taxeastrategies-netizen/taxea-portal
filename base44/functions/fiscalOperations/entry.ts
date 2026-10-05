@@ -534,6 +534,27 @@ Deno.serve(async (req) => {
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.modelImpact = [];
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Compra del minorista: IVA y recargo íntegros como mayor coste, sin 472 ni deducción en 303. Asiento y libro separados tras confirmar el asesor.'];
+      } else if (invoice.tipo === 'emitida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
+        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed') {
+        const base = Number(invoice.base_imponible || 0);
+        const rate = Number(invoice.tipo_iva || 0);
+        const quota = Number(invoice.cuota_iva || 0);
+        const valid = ['comercial_minorista', 'empresarial'].includes(clean(selectedActivity.activityType))
+          && [21, 10, 4].includes(rate) && base > 0
+          && Math.abs(money(base * rate / 100) - quota) <= 0.01
+          && Math.abs(Number(invoice.tipo_recargo || 0)) <= 0.001
+          && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
+          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
+          && Math.abs(proposedEvaluation.base - base) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
+          && Math.abs(proposedEvaluation.taxRate - rate) < 0.001
+          && proposedEvaluation.specialPreview?.status === 'proposal_only';
+        if (!valid) return Response.json({ error: 'La venta minorista en recargo no cuadra con el IVA o la factura, o su actividad no está confirmada. Solo se admite venta nacional ordinaria sin retención ni recargo repercutido al cliente.' }, { status: 422 });
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.modelImpact = [];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Venta minorista ordinaria: el IVA repercutido forma parte del ingreso contable; no se usa 477 ni se liquida en 303. Confirmación del asesor obligatoria.'];
       } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
         proposedEvaluation.postingBlocked = true;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
