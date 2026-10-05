@@ -457,7 +457,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     const fiscalLegend = invoiceFiscalLegend(invoice);
     if (fiscalLegend) {
       const legendLines = doc.splitTextToSize(fiscalLegend, W);
-      if (Y + legendLines.length * 4 > 279) doc.addPage();
+      if (Y + legendLines.length * 4 > 279) { doc.addPage(); Y = 20; }
       else Y += 7;
       doc.setFontSize(8).setTextColor(...dark).setFont(undefined, 'normal');
       doc.text(legendLines, M, Y);
