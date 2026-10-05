@@ -555,6 +555,27 @@ Deno.serve(async (req) => {
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.modelImpact = [];
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Venta minorista ordinaria: el IVA repercutido forma parte del ingreso contable; no se usa 477 ni se liquida en 303. Confirmación del asesor obligatoria.'];
+      } else if (proposedEvaluation.regime === 'criterio_caja' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed') {
+        const base = Number(invoice.base_imponible || 0);
+        const rate = Number(invoice.tipo_iva || 0);
+        const quota = Number(invoice.cuota_iva || 0);
+        const simpleRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
+          && selectedActivity?.indirectTax === 'iva' && [21, 10, 4].includes(rate)
+          && base > 0 && quota > 0 && Math.abs(money(base * rate / 100) - quota) <= 0.01
+          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
+          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
+          && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
+          && invoice.es_rectificativa !== true
+          && Math.abs(proposedEvaluation.base - base) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
+          && proposedEvaluation.deductibleTax >= 0 && proposedEvaluation.deductibleTax <= quota
+          && !proposedEvaluation.specialPreviewError
+          && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only');
+        if (!simpleRecc) return Response.json({ error: 'El criterio de caja solo admite por ahora factura nacional ordinaria en euros, sin rectificación, anticipo, retención ni recargo, validada por el asesor. El resto permanece en revisión.', evaluation: proposedEvaluation }, { status: 422 });
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
       } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
         proposedEvaluation.postingBlocked = true;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
