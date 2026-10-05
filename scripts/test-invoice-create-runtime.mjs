@@ -275,6 +275,15 @@ assert.equal(counters.accountingEntries, 3);
 const prematureSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
 assert.equal(prematureSurcharge.response.status, 409);
 assert.equal(counters.accountingEntries, 3);
+await entities.Invoice.update(surchargeDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva', deductible_tax_amount: 0, non_deductible_tax_amount: 21 });
+await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: surchargeDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, deductibleQuota: 0, nonDeductibleQuota: 21, surchargeRate: 5.2, surchargeQuota: 5.2 });
+const completedSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
+assert.equal(completedSurcharge.response.status, 200);
+assert.equal(counters.accountingEntries, 4);
+assert.equal(completedSurcharge.payload.invoice.qr_url || '', '');
+const repeatedSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
+assert.equal(repeatedSurcharge.payload.duplicate, true);
+assert.equal(counters.accountingEntries, 4);
 
 console.log(JSON.stringify({
   ok: true,
