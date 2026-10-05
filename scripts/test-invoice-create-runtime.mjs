@@ -307,6 +307,7 @@ const completedRecc = await invoke({ action: 'finalize_fiscal_review', company_i
 assert.equal(completedRecc.response.status, 200);
 assert.equal(counters.accountingEntries, 6);
 assert.equal(new URL(completedRecc.payload.invoice.qr_url).searchParams.get('importe'), '121.00');
+assert.match(completedRecc.payload.invoice.coletilla_fiscal, /Régimen especial del criterio de caja/);
 assert.equal((await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id })).payload.duplicate, true);
 assert.equal(counters.accountingEntries, 6);
 
@@ -321,5 +322,6 @@ console.log(JSON.stringify({
     advisorReviewRequiredBeforePosting: true,
     crossTenantCreateBlocked: true,
     reviewedRecargoRetailSaleQrAndPostingOnce: true,
+    reccLegalLegendPersistsOnIssue: true,
   },
 }, null, 2));
