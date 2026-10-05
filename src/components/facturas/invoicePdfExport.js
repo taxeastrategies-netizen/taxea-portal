@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
 import { invoiceQrPng } from '@/lib/aeatInvoiceQr';
+import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
 
 /** @type {[number, number, number]} */
 const BRAND = [185, 28, 28]; // #b91c1c
@@ -185,9 +186,10 @@ export async function exportInvoiceToPdf(invoice, company) {
 
   // ── Coletilla fiscal ──────────────────────────────────────────────────────
   y += 18;
-  if (invoice.coletilla_fiscal) {
+  const fiscalLegend = invoiceFiscalLegend(invoice);
+  if (fiscalLegend) {
     doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(71, 85, 105);
-    const coletillaLines = doc.splitTextToSize(String(invoice.coletilla_fiscal), W - M * 2);
+    const coletillaLines = doc.splitTextToSize(fiscalLegend, W - M * 2);
     const coletillaY = Math.min(y, 291 - coletillaLines.length * 3.6 - 8);
     doc.text(coletillaLines, M, coletillaY);
     y = coletillaY + coletillaLines.length * 3.6 + 3;
