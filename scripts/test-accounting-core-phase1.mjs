@@ -59,7 +59,7 @@ const records = {
   DocumentAccountingSource: [],
   BankTransaction: [],
   FiscalProfile: [{ id: 'fp', company_id: 'company-a', active: true, profileStatus: 'validado_asesor', reviewedAt: '2024-01-01' }],
-  FiscalActivity: [{ id: 'fa', company_id: 'company-a', active: true, name: 'Actividad' }],
+  FiscalActivity: [{ id: 'fa', company_id: 'company-a', active: true, name: 'Comercio minorista sintético', activityType: 'comercial_minorista', indirectTax: 'iva', indirectTaxRegime: 'recargo_equivalencia' }],
 };
 const counters = {};
 let failBulkCreateAfter = 0;
@@ -198,8 +198,10 @@ const recargoPurchase = await entity('Invoice').create({
   tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2, importe_retencion: 0,
   deductible_tax_amount: 0, non_deductible_tax_amount: 21, indirect_tax_kind: 'iva',
   fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed',
-  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', moneda: 'EUR',
+  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_activity_id: 'fa', moneda: 'EUR',
 });
+await assert.rejects(() => postInvoice(svc, 'company-a', recargoPurchase, 'advisor@taxea.test'), /línea fiscal validados/);
+await entity('InvoiceTaxLine').create({ companyId: 'company-a', invoiceId: recargoPurchase.id, lineNumber: 1, regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'fa', base: 100, quota: 21, deductibleQuota: 0, nonDeductibleQuota: 21, surchargeRate: 5.2, surchargeQuota: 5.2 });
 const recargoPosting = await postInvoice(svc, 'company-a', recargoPurchase, 'advisor@taxea.test', { status: 'confirmado' });
 assert.equal(recargoPosting.entry.status, 'confirmado');
 const recargoLines = records.JournalEntryLine.filter(item => item.journalEntryId === recargoPosting.entry.id);
@@ -219,8 +221,9 @@ const recargoRetailSale = await entity('Invoice').create({
   categoria_gasto: 'ventas_servicios', base_imponible: 100, tipo_iva: 21, cuota_iva: 21,
   tipo_recargo: 0, cuota_recargo: 0, total_factura: 121, importe_retencion: 0,
   indirect_tax_kind: 'iva', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed',
-  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', moneda: 'EUR',
+  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_activity_id: 'fa', moneda: 'EUR',
 });
+await entity('InvoiceTaxLine').create({ companyId: 'company-a', invoiceId: recargoRetailSale.id, lineNumber: 1, regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'fa', base: 100, quota: 21, surchargeRate: 0, surchargeQuota: 0 });
 const recargoSalePosting = await postInvoice(svc, 'company-a', recargoRetailSale, 'advisor@taxea.test', { status: 'confirmado' });
 const recargoSaleLines = records.JournalEntryLine.filter(item => item.journalEntryId === recargoSalePosting.entry.id);
 assert.equal(recargoSaleLines.reduce((sum, item) => sum + Number(item.debit || 0), 0), 121);
