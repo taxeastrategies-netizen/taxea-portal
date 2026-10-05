@@ -377,7 +377,8 @@ Deno.serve(async (req) => {
       const allInvoices = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
       const invoices = allInvoices.filter((invoice: any) => !invoice.anulada
         && ['iva', ''].includes(clean(invoice.indirect_tax_kind))
-        && [year - 1, year].includes(Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4))));
+        && Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) <= year);
+      // Cobros posteriores al límite legal también deben permanecer trazables en el libro del año del cobro.
       if (!invoices.length) return Response.json({ success: true, year, invoices: [], payments: [], issues: [], source: 'Invoice + InvoiceTaxLine + InvoicePayment', generatedAt: new Date().toISOString() });
       const ids = new Set(invoices.map((invoice: any) => invoice.id));
       const [allLines, allPayments] = await Promise.all([
@@ -386,6 +387,16 @@ Deno.serve(async (req) => {
       ]);
       const lines = allLines.filter((line: any) => ids.has(line.invoiceId));
       const payments = allPayments.filter((payment: any) => ids.has(payment.invoice_id));
+      const linesByInvoice = new Map<string, any[]>();
+      const paymentsByInvoice = new Map<string, any[]>();
+      for (const line of lines) {
+        if (!linesByInvoice.has(line.invoiceId)) linesByInvoice.set(line.invoiceId, []);
+        linesByInvoice.get(line.invoiceId)!.push(line);
+      }
+      for (const payment of payments) {
+        if (!paymentsByInvoice.has(payment.invoice_id)) paymentsByInvoice.set(payment.invoice_id, []);
+        paymentsByInvoice.get(payment.invoice_id)!.push(payment);
+      }
       const operationIds = [...new Set(payments.map((payment: any) => clean(payment.accounting_operation_id)).filter(Boolean))];
       const operations = await Promise.all(operationIds.map((id: string) => svc.entities.AccountingPostingOperation.get(id).catch(() => null)));
       const operationById = new Map(operations.filter((operation: any) => operation?.companyId === companyId).map((operation: any) => [operation.id, operation]));
@@ -397,7 +408,7 @@ Deno.serve(async (req) => {
       const bankById = new Map(banks.filter((bank: any) => bank?.company_id === companyId).map((bank: any) => [bank.id, bank]));
       const issues: any[] = [];
       const bookInvoices = invoices.map((invoice: any) => {
-        const invoiceLines = lines.filter((line: any) => line.invoiceId === invoice.id);
+        const invoiceLines = linesByInvoice.get(invoice.id) || [];
         const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length === 1
           && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja'
           && clean(invoiceLines[0].taxKind) === 'iva';
@@ -406,7 +417,7 @@ Deno.serve(async (req) => {
           issues.push({ invoiceId: invoice.id, reason: 'Factura emitida RECC sin la mención obligatoria en el documento guardado; revisar el PDF existente sin sobrescribirlo.' });
         }
         if (invoice.tipo === 'recibida' && !clean(invoice.fecha_recepcion)) issues.push({ invoiceId: invoice.id, reason: 'Falta fecha de recepción de la factura recibida.' });
-        const invoicePayments = payments.filter((payment: any) => payment.invoice_id === invoice.id);
+        const invoicePayments = paymentsByInvoice.get(invoice.id) || [];
         const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
         if (totalPaid > money(invoice.total_factura) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
