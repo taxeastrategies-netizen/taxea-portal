@@ -1128,13 +1128,21 @@ function calculate130(data: any, b: any, adjustments: any) {
         && money(invoice.non_deductible_tax_amount) === money(invoice.cuota_iva)
         && money(invoice.cuota_recargo) > 0
         && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva) + money(invoice.cuota_recargo));
+      const recargoRetailSale = invoice.tipo === 'emitida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia'
+        && clean(invoice.fiscal_review_status) === 'validado' && /^7/.test(clean(invoice.revenue_expense_account_code))
+        && money(invoice.cuota_recargo) === 0 && money(invoice.importe_retencion) === 0
+        && money(invoice.cuota_iva) > 0
+        && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva));
       const fiscalExpenseBase = recargoPurchase
         ? money(money(invoice.base_imponible) + money(invoice.non_deductible_tax_amount) + money(invoice.cuota_recargo))
         : money(invoice.base_imponible);
       if (invoice.tipo === 'recibida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia' && !recargoPurchase) {
         data.blockers.push(`Factura ${clean(invoice.numero_factura || invoice.id)} en recargo sin coste fiscal y cuenta de gasto 6 confirmados; la casilla 02 requiere revisión manual.`);
       }
-      const base = money(fiscalExpenseBase * factor);
+      if (invoice.tipo === 'emitida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia' && !recargoRetailSale) {
+        data.blockers.push(`Factura ${clean(invoice.numero_factura || invoice.id)} en recargo sin ingreso fiscal y cuenta 7 confirmados; la casilla 01 requiere revisión manual.`);
+      }
+      const base = money((recargoRetailSale ? money(money(invoice.base_imponible) + money(invoice.cuota_iva)) : fiscalExpenseBase) * factor);
       cashEvents.push({ invoice, factor, base, paymentDates: selected.map((event: any) => event.date), sourceIds: unique([`Invoice:${invoice.id}`, ...selected.flatMap((event: any) => event.sourceIds || [])]) });
     }
   }
@@ -1218,7 +1226,7 @@ function calculate130(data: any, b: any, adjustments: any) {
   const housingIds = manualSource('housingDeduction');
   const previousSamePeriodIds = manualSource('previousSamePeriodResult');
   const fields: any[] = [];
-  addField(fields, '01', 'Ingresos fiscalmente computables acumulados', revenue, revenueFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Bases de facturas emitidas reconocidas proporcionalmente por cobros acumulados, más ingresos fiscales adicionales y menos ingresos no computables.' : 'Ingresos contables acumulados de grupo 7, más ingresos fiscales no contabilizados y menos ingresos contables no computables confirmados.', dependsOn: [] });
+  addField(fields, '01', 'Ingresos fiscalmente computables acumulados', revenue, revenueFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Ingreso fiscal de facturas emitidas proporcional a cobros acumulados (incluido IVA repercutido en ventas minoristas en recargo validadas), más ingresos adicionales y menos ingresos no computables.' : 'Ingresos contables acumulados de grupo 7, más ingresos fiscales no contabilizados y menos ingresos contables no computables confirmados.', dependsOn: [] });
   addField(fields, '02', 'Gastos fiscalmente deducibles acumulados', expense, expenseFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Coste fiscal de facturas recibidas reconocido proporcionalmente por pagos acumulados (incluidos IVA no deducible y recargo validado cuando corresponda), más deducciones fiscales adicionales, menos gastos no deducibles y ajustes de estimación simplificada confirmados.' : 'Gastos contables acumulados de grupo 6, más deducciones fiscales adicionales, menos gastos no deducibles y, si se confirma, provisiones y difícil justificación de estimación directa simplificada.', dependsOn: [] });
   addField(fields, '03', 'Rendimiento neto', net, accountingIds, 'Liquidación', { formula: 'Casilla 01 − casilla 02.', dependsOn: ['01', '02'] });
   addField(fields, '04', `${sectionOneRate}% del rendimiento neto`, grossPayment, unique([...accountingIds, ...sectionOneRateIds]), 'Liquidación', { formula: `${sectionOneRate}% de la casilla 03 cuando el rendimiento es positivo. El porcentaje ordinario es 20%; puede ser 8% en los supuestos territoriales legalmente habilitados o uno superior por opción.`, dependsOn: ['03'] });
@@ -3606,6 +3614,10 @@ Deno.serve(async (req) => {
       const recargo130Data={...cash130Data,invoices:[recargo130Invoice],invoicePayments:[{id:'cash-recargo-q1',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-03-31'},{id:'cash-recargo-q2',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-04-01'}],period:'1T',warnings:[],blockers:[]};
       const recargo130Q1=calculate130(recargo130Data,bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const recargo130Q2=calculate130({...recargo130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
+      const recargoSale130Invoice={id:'cash-130-recargo-sale',tipo:'emitida',numero_factura:'E-RECARGO-130',fecha_emision:'2026-01-16',base_imponible:100,cuota_iva:21,cuota_recargo:0,total_factura:121,fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',revenue_expense_account_code:'700000'};
+      const recargoSale130Data={...cash130Data,invoices:[recargoSale130Invoice],invoicePayments:[{id:'cash-recargo-sale-q1',invoice_id:recargoSale130Invoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'cash-recargo-sale-q2',invoice_id:recargoSale130Invoice.id,amount:60.5,payment_date:'2026-04-01'}],period:'1T',warnings:[],blockers:[]};
+      const recargoSale130Q1=calculate130(recargoSale130Data,bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
+      const recargoSale130Q2=calculate130({...recargoSale130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
       const special130=calculate130({entries:[{id:'e130-special',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-special',journalEntryId:'e130-special',accountCode:'705000',credit:1000,debit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal',mainTerritory:'ceuta_melilla',model130TerritorialRelief:'ceuta',model130TerritorialReliefConfirmed:true},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0,agricultureRevenue:1000,agricultureWithholdings:0});
       const unconfirmedSpecial130=calculate130({entries:[{id:'e130-special-unconfirmed',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-special-unconfirmed',journalEntryId:'e130-special-unconfirmed',accountCode:'705000',credit:1000,debit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal',mainTerritory:'ceuta_melilla'},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const negative130=calculate130({entries:[{id:'e130-loss',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-loss',journalEntryId:'e130-loss',accountCode:'629000',debit:1000,credit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal'},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0,agricultureRevenue:0,agricultureWithholdings:10});
@@ -3629,6 +3641,7 @@ Deno.serve(async (req) => {
         model130PaymentAndBoxes:fieldMap(retainedIncomeQ1)['06']===7.5&&fieldMap(retainedIncomeQ2)['06']===15&&fieldMap(retainedIncomeQ2)['18']===10&&fieldMap(negative130)['12']===0,
         model130CashBasis:fieldMap(cash130Q1)['01']===50&&fieldMap(cash130Q1)['02']===20&&fieldMap(cash130Q2)['01']===100&&fieldMap(cash130Q2)['02']===40,
         model130RecargoCashCost:fieldMap(recargo130Q1)['02']===63.1&&fieldMap(recargo130Q2)['02']===126.2&&recargo130Data.blockers.length===0,
+        model130RecargoCashRevenue:fieldMap(recargoSale130Q1)['01']===60.5&&fieldMap(recargoSale130Q2)['01']===121&&recargoSale130Data.blockers.length===0,
         model130TerritorialRates:fieldMap(special130)['04']===80&&fieldMap(special130)['09']===8&&fieldMap(unconfirmedSpecial130)['04']===200,
         thirdPartyDates:third347.details?.[0]?.fullQuarters?.T2===4000&&third415.details?.[0]?.fullQuarters?.T1===4000,
         cashThirdPartiesDualAccrual:[cash347Year1,cash415Year1].every((result:any)=>result.details?.[0]?.total===4000&&result.details?.[0]?.cashAccountingAnnualAmount===2500&&Object.values(result.details?.[0]?.quarters||{}).every((value:any)=>value===0))&&[cash347Year2,cash415Year2].every((result:any)=>result.details?.[0]?.total===0&&result.details?.[0]?.cashAccountingAnnualAmount===1500),
