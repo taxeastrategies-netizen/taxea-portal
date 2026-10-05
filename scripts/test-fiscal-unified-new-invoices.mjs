@@ -215,6 +215,18 @@ const approvedReccSale = await handler(new Request('https://taxea.test/functions
 assert.equal(approvedReccSale.status, 200);
 assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === 'invoice-recc-sale')?.regime, 'criterio_caja');
 assert.equal(records.Invoice.find(item => item.id === 'invoice-recc-sale')?.fiscal_review_status, 'validado');
+records.InvoicePayment = Array.from({ length: 501 }, (_, index) => ({ id: `payment-${index}`, company_id: 'company-a', invoice_id: 'invoice-recc-sale', amount: 0.01, payment_date: '2026-04-11' }));
+const overloadedReccBundle = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'bundle', companyId: 'company-a', invoiceId: 'invoice-recc-sale' }),
+}));
+assert.equal((await overloadedReccBundle.json()).invoicePaymentsTruncated, true);
+const writesBeforeOverloadedRecc = writes;
+const overloadedReccSave = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recc-sale', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(overloadedReccSave.status, 422);
+assert.equal(writes, writesBeforeOverloadedRecc);
+records.InvoicePayment = [];
 records.Invoice.push({ id: 'invoice-recc-invalid', company_id: 'company-a', tipo: 'emitida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 106, importe_retencion: 15, moneda: 'EUR' });
 const invalidReccSale = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recc-invalid', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, withholdingRate: 15, confirmReviewed: true }),
