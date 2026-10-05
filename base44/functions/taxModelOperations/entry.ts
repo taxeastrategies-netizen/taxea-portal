@@ -3596,6 +3596,9 @@ Deno.serve(async (req) => {
       const simplified303Calculation=calculateIndirectTax({year:2026,period:'4T',profile:{},activities:[{indirectTaxRegime:'simplificado'}],taxLines:[],invoicePayments:[],filings:[],declarables:[{id:'d303-simplified',modeloCodigo:'303',recordKey:'Simplified303:test',reviewStatus:'validado_asesor',payload:{activityType:'other',iaeCode:'722',auxIndicator:'1',module1Units:1,module1Amount:1000,currentOutputQuota:1000,advancePercentage:4,quarterAdvance:40,currentInputQuota:100,seasonalIndex:1,minimumQuotaPercentage:30,minimumQuota:300,annualDerivedQuota:900,fixedAssetsDeductibleQuota:50,specialDataConfirmed:true}}],warnings:[],blockers:[]},bounds(2026,'4T'),'iva',false,{previousCompensationBalance:0,simplifiedPreviousQuarterAdvances:300});
       const simplified303Content=export303(company,profile,2026,'4T',simplified303Calculation); const simplified303Wrapped=wrap('303',2026,'4T',simplified303Content,'B12345678');
       const record347=export347(company,2025,thirdParties,'3471234567890').split('\r\n');
+      const record347_2026=export347(company,2026,thirdParties,'3471234567890');
+      const validation347Data={profile:{indirectTaxDefault:'iva',usesSII:false},year:2026,blockers:[],warnings:[]};
+      applyModelValidation('347',validation347Data,thirdParties);
       const record349Content=export349(company,2026,'1T',info349,'3491234567890'); const record349=record349Content.split('\r\n');
       const import415Content=export415Import(company,2025,thirdParties); const import415=import415Content.split('\r\n');
       const model390Content=wrap('390',2025,'0A',export390(company,profile,[],2025,standard,[]),'B12345678');
@@ -3626,6 +3629,7 @@ Deno.serve(async (req) => {
         model190InKindAndForal:record190Full[1].slice(108,121)===numeric(250,13)&&record190Full[2].slice(389,394)==='10000'&&record190Full[5].slice(322,335)===numeric(20,13),
         model193ExpenseAnnex:record193Expense.length===3&&record193Expense.every((line:string)=>line.length===500)&&record193Expense[0].slice(219,234)===numeric(321.45,15)&&record193Expense[2].slice(194,207)===numeric(321.45,13)&&record193Expense[0][234]===' '&&transferLayoutErrors('193',record193ExpenseContent).length===0,
         model303SimplifiedPages:simplified303Content.length===4498&&simplified303Content[110]==='1'&&simplified303Content.includes('<T30302000>')&&fieldMap(simplified303Calculation)['58']===550&&transferLayoutErrors('303',simplified303Wrapped).length===0,
+        model347Design2025AndFollowing:validation347Data.blockers.length===0&&record347_2026.split('\r\n').every((row:string)=>row.length===500)&&transferLayoutErrors('347',record347_2026).length===0,
       };
       const accessCompany={id:'company-test',owner_email:'owner@example.test',usuarios_autorizados:['authorized@example.test']};
       const authorizationCheck:any={model:'legacy user authorization',owner:false,authorized:false,directCompany:false,crossCompanyDenied:false,developerIdentityValidation:false};
