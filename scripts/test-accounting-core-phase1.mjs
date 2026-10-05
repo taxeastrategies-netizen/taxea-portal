@@ -191,6 +191,28 @@ await assert.rejects(() => postInvoice(svc, 'company-a', reverseChargeInvoice, '
 const surchargeInvoice = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-RECARGO', cuota_recargo: 5.2 });
 await assert.rejects(() => postInvoice(svc, 'company-a', surchargeInvoice, 'tester@taxea.test'), /asientos fiscales específicos/);
 assert.equal(records.JournalEntry.length, postingCountBeforeFiscalGuard, 'Los casos fiscales bloqueados no deben crear asientos.');
+const recargoPurchase = await entity('Invoice').create({
+  company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-RECARGO-VALIDO', fecha_emision: '2024-07-05',
+  proveedor_nombre: 'Proveedor ficticio', proveedor_nif: 'B33333333', concepto: 'Mercancía de prueba',
+  categoria_gasto: 'compras_mercaderias', base_imponible: 100, tipo_iva: 21, cuota_iva: 21,
+  tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2, importe_retencion: 0,
+  deductible_tax_amount: 0, non_deductible_tax_amount: 21, indirect_tax_kind: 'iva',
+  fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed',
+  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', moneda: 'EUR',
+});
+const recargoPosting = await postInvoice(svc, 'company-a', recargoPurchase, 'advisor@taxea.test', { status: 'confirmado' });
+assert.equal(recargoPosting.entry.status, 'confirmado');
+const recargoLines = records.JournalEntryLine.filter(item => item.journalEntryId === recargoPosting.entry.id);
+assert.equal(recargoLines.reduce((sum, item) => sum + Number(item.debit || 0), 0), 126.2);
+assert.equal(recargoLines.reduce((sum, item) => sum + Number(item.credit || 0), 0), 126.2);
+assert.equal(recargoLines.some(item => item.accountCode.startsWith('472')), false);
+assert.equal(recargoLines.find(item => item.sourceLineType === 'gasto')?.debit, 126.2);
+assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoPurchase.id)?.surchargeQuota, 5.2);
+assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoPurchase.id)?.deductibleQuota, 0);
+assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoPurchase.id)?.regime, 'recargo_equivalencia');
+const recargoRetry = await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === recargoPurchase.id), 'advisor@taxea.test');
+assert.equal(recargoRetry.alreadyPosted, true);
+assert.equal(records.JournalEntry.filter(item => item.documentId === recargoPurchase.id).length, 1);
 
 const close = await executeClosing(svc, 'company-a', { year: 2024, confirmation: 'CERRAR 2024', reason: 'Prueba de cierre' }, 'tester@taxea.test');
 assert.equal(close.cycle, 1);
