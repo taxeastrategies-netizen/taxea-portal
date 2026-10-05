@@ -290,6 +290,14 @@ function buildLibroRecc(recc, year) {
     if (!payments.length) rows.push([...common, '', '', '', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus]);
     for (const payment of payments) rows.push([...common, payment.date, payment.amount, payment.method, payment.reference,
       payment.bankAccount, invoice.forcedRecognitionDate, invoice.reviewStatus]);
+    if (String(invoice.forcedRecognitionDate).slice(0, 4) === String(year)) {
+      const paidBeforeLimit = (byInvoice.get(invoice.id) || [])
+        .filter(payment => String(payment.date) <= String(invoice.forcedRecognitionDate))
+        .reduce((sum, payment) => sum + n(payment.amount), 0);
+      const forcedRemainder = Math.round(Math.max(0, n(invoice.total) - paidBeforeLimit) * 100) / 100;
+      if (forcedRemainder > 0) rows.push([...common, invoice.forcedRecognitionDate, forcedRemainder,
+        'DEVENGO LEGAL (sin cobro/pago)', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus]);
+    }
   }
   return rows;
 }
