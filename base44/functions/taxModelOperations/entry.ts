@@ -1116,7 +1116,19 @@ function calculate130(data: any, b: any, adjustments: any) {
       const selected = allocatedInvoicePayments(invoice, payments).filter((event: any) => event.date >= b.cumulativeStart && event.date <= b.end);
       const factor = selected.reduce((sum: number, event: any) => sum + event.factor, 0);
       if (factor <= 0) continue;
-      const base = money(money(invoice.base_imponible) * factor);
+      const recargoPurchase = invoice.tipo === 'recibida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia'
+        && clean(invoice.fiscal_review_status) === 'validado' && /^6/.test(clean(invoice.revenue_expense_account_code))
+        && money(invoice.deductible_tax_amount) === 0
+        && money(invoice.non_deductible_tax_amount) === money(invoice.cuota_iva)
+        && money(invoice.cuota_recargo) > 0
+        && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva) + money(invoice.cuota_recargo));
+      const fiscalExpenseBase = recargoPurchase
+        ? money(money(invoice.base_imponible) + money(invoice.non_deductible_tax_amount) + money(invoice.cuota_recargo))
+        : money(invoice.base_imponible);
+      if (invoice.tipo === 'recibida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia' && !recargoPurchase) {
+        data.blockers.push(`Factura ${clean(invoice.numero_factura || invoice.id)} en recargo sin coste fiscal y cuenta de gasto 6 confirmados; la casilla 02 requiere revisión manual.`);
+      }
+      const base = money(fiscalExpenseBase * factor);
       cashEvents.push({ invoice, factor, base, paymentDates: selected.map((event: any) => event.date), sourceIds: unique([`Invoice:${invoice.id}`, ...selected.flatMap((event: any) => event.sourceIds || [])]) });
     }
   }
@@ -1201,7 +1213,7 @@ function calculate130(data: any, b: any, adjustments: any) {
   const previousSamePeriodIds = manualSource('previousSamePeriodResult');
   const fields: any[] = [];
   addField(fields, '01', 'Ingresos fiscalmente computables acumulados', revenue, revenueFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Bases de facturas emitidas reconocidas proporcionalmente por cobros acumulados, más ingresos fiscales adicionales y menos ingresos no computables.' : 'Ingresos contables acumulados de grupo 7, más ingresos fiscales no contabilizados y menos ingresos contables no computables confirmados.', dependsOn: [] });
-  addField(fields, '02', 'Gastos fiscalmente deducibles acumulados', expense, expenseFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Bases de facturas recibidas reconocidas proporcionalmente por pagos acumulados, más deducciones fiscales adicionales, menos gastos no deducibles y los ajustes de estimación simplificada confirmados.' : 'Gastos contables acumulados de grupo 6, más deducciones fiscales adicionales, menos gastos no deducibles y, si se confirma, provisiones y difícil justificación de estimación directa simplificada.', dependsOn: [] });
+  addField(fields, '02', 'Gastos fiscalmente deducibles acumulados', expense, expenseFiscalIds, 'Liquidación', { formula: cashMethodConfirmed ? 'Coste fiscal de facturas recibidas reconocido proporcionalmente por pagos acumulados (incluidos IVA no deducible y recargo validado cuando corresponda), más deducciones fiscales adicionales, menos gastos no deducibles y ajustes de estimación simplificada confirmados.' : 'Gastos contables acumulados de grupo 6, más deducciones fiscales adicionales, menos gastos no deducibles y, si se confirma, provisiones y difícil justificación de estimación directa simplificada.', dependsOn: [] });
   addField(fields, '03', 'Rendimiento neto', net, accountingIds, 'Liquidación', { formula: 'Casilla 01 − casilla 02.', dependsOn: ['01', '02'] });
   addField(fields, '04', `${sectionOneRate}% del rendimiento neto`, grossPayment, unique([...accountingIds, ...sectionOneRateIds]), 'Liquidación', { formula: `${sectionOneRate}% de la casilla 03 cuando el rendimiento es positivo. El porcentaje ordinario es 20%; puede ser 8% en los supuestos territoriales legalmente habilitados o uno superior por opción.`, dependsOn: ['03'] });
   addField(fields, '05', 'Pagos fraccionados anteriores', previous, previousIds, 'Liquidación', { formula: previousProvided ? 'Importe confirmado manualmente.' : 'Suma de los pagos fraccionados de modelos 130 anteriores importados.', dependsOn: [] });
@@ -3581,6 +3593,10 @@ Deno.serve(async (req) => {
       const cash130Data:any={entries:[],entryLines:[],invoices:[{id:'cash-130-income',tipo:'emitida',fecha_emision:'2026-01-10',base_imponible:100,total_factura:100},{id:'cash-130-expense',tipo:'recibida',fecha_emision:'2026-01-15',base_imponible:40,total_factura:40}],invoicePayments:[{id:'cash-130-income-q1',invoice_id:'cash-130-income',amount:50,payment_date:'2026-03-31'},{id:'cash-130-income-q2',invoice_id:'cash-130-income',amount:50,payment_date:'2026-04-01'},{id:'cash-130-expense-q1',invoice_id:'cash-130-expense',amount:20,payment_date:'2026-03-31'},{id:'cash-130-expense-q2',invoice_id:'cash-130-expense',amount:20,payment_date:'2026-04-01'}],filings:[],profile:{entityType:'autonomo',irpfEstimation:'directa_normal',irpfImputationMethod:'cash',irpfImputationMethodConfirmed:true,irpfCashMethodEffectiveFrom:'2026-01-01',irpfCashMethodMinimumUntil:'2028-12-31'},year:2026,warnings:[],blockers:[]};
       const cash130Q1=calculate130({...cash130Data,period:'1T',warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const cash130Q2=calculate130({...cash130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
+      const recargo130Invoice={id:'cash-130-recargo',tipo:'recibida',numero_factura:'R-RECARGO-130',fecha_emision:'2026-01-15',base_imponible:100,cuota_iva:21,cuota_recargo:5.2,total_factura:126.2,fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',revenue_expense_account_code:'600000',deductible_tax_amount:0,non_deductible_tax_amount:21};
+      const recargo130Data={...cash130Data,invoices:[recargo130Invoice],invoicePayments:[{id:'cash-recargo-q1',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-03-31'},{id:'cash-recargo-q2',invoice_id:recargo130Invoice.id,amount:63.1,payment_date:'2026-04-01'}],period:'1T',warnings:[],blockers:[]};
+      const recargo130Q1=calculate130(recargo130Data,bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
+      const recargo130Q2=calculate130({...recargo130Data,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),{previousPayments:0,priorNegativeResults:0,previousYearNetIncome:13000,article110Reduction:0});
       const special130=calculate130({entries:[{id:'e130-special',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-special',journalEntryId:'e130-special',accountCode:'705000',credit:1000,debit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal',mainTerritory:'ceuta_melilla',model130TerritorialRelief:'ceuta',model130TerritorialReliefConfirmed:true},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0,agricultureRevenue:1000,agricultureWithholdings:0});
       const unconfirmedSpecial130=calculate130({entries:[{id:'e130-special-unconfirmed',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-special-unconfirmed',journalEntryId:'e130-special-unconfirmed',accountCode:'705000',credit:1000,debit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal',mainTerritory:'ceuta_melilla'},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0});
       const negative130=calculate130({entries:[{id:'e130-loss',date:'2026-01-10',status:'confirmado',isBalanced:true}],entryLines:[{id:'l130-loss',journalEntryId:'e130-loss',accountCode:'629000',debit:1000,credit:0}],invoices:[],invoicePayments:[],filings:[],profile:{irpfEstimation:'directa_normal'},period:'1T',year:2026,warnings:[],blockers:[]},bounds(2026,'1T'),{previousYearNetIncome:13000,article110Reduction:0,agricultureRevenue:0,agricultureWithholdings:10});
@@ -3603,6 +3619,7 @@ Deno.serve(async (req) => {
         cumulative130ByQuarterEnd:fieldMap(result130Q2)['01']===1500&&fieldMap(result130Q2)['02']===200,
         model130PaymentAndBoxes:fieldMap(retainedIncomeQ1)['06']===7.5&&fieldMap(retainedIncomeQ2)['06']===15&&fieldMap(retainedIncomeQ2)['18']===10&&fieldMap(negative130)['12']===0,
         model130CashBasis:fieldMap(cash130Q1)['01']===50&&fieldMap(cash130Q1)['02']===20&&fieldMap(cash130Q2)['01']===100&&fieldMap(cash130Q2)['02']===40,
+        model130RecargoCashCost:fieldMap(recargo130Q1)['02']===63.1&&fieldMap(recargo130Q2)['02']===126.2&&recargo130Data.blockers.length===0,
         model130TerritorialRates:fieldMap(special130)['04']===80&&fieldMap(special130)['09']===8&&fieldMap(unconfirmedSpecial130)['04']===200,
         thirdPartyDates:third347.details?.[0]?.fullQuarters?.T2===4000&&third415.details?.[0]?.fullQuarters?.T1===4000,
         cashThirdPartiesDualAccrual:[cash347Year1,cash415Year1].every((result:any)=>result.details?.[0]?.total===4000&&result.details?.[0]?.cashAccountingAnnualAmount===2500&&Object.values(result.details?.[0]?.quarters||{}).every((value:any)=>value===0))&&[cash347Year2,cash415Year2].every((result:any)=>result.details?.[0]?.total===0&&result.details?.[0]?.cashAccountingAnnualAmount===1500),
