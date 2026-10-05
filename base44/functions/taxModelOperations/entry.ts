@@ -3667,7 +3667,7 @@ Deno.serve(async (req) => {
       const reccReviewSafety=!!reccPending.review&&!reccPending.line&&!!reccDuplicate.review&&!reccDuplicate.line&&!!reccOverpayment.review&&!reccOverpayment.line&&!!reccUntraced.review&&!reccUntraced.line;
       const reccReceivedInvoice={...reccInvoice,id:'invoice-recc-received',tipo:'recibida',numero_factura:'R-RECC'};
       const reccReceivedLine={...reccLine,id:'recc-received-line',sourceId:'InvoiceTaxLine:recc-received-line',invoice:reccReceivedInvoice};
-      const reccModelData:any={invoices:[reccInvoice,reccReceivedInvoice],taxLines:[reccLine,reccReceivedLine],invoicePayments:[...reccData.invoicePayments,{id:'recc-r-p1',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-03-31'}],filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],period:'1T',year:2026};
+      const reccModelData:any={invoices:[reccInvoice,reccReceivedInvoice],taxLines:[reccLine,reccReceivedLine],invoicePayments:[...reccData.invoicePayments,{id:'recc-r-p1',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'recc-r-p2',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-04-01'}],filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],period:'1T',year:2026};
       const recc303Q1=calculateIndirectTax(reccModelData,bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
       const recc303Q2=calculateIndirectTax({...reccModelData,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),'iva',false,{previousCompensationBalance:0});
       const recc303FieldsQ1=fieldMap(recc303Q1), recc303FieldsQ2=fieldMap(recc303Q2);
