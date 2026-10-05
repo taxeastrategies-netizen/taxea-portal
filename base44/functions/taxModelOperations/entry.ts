@@ -3663,6 +3663,12 @@ Deno.serve(async (req) => {
       const reccOverpayment=cashTaxLineForPeriod(reccLine,{invoicePayments:[{id:'recc-over',invoice_id:reccInvoice.id,amount:122,payment_date:'2026-03-31'}],warnings:[]},bounds(2026,'1T'));
       const reccUntraced=cashTaxLineForPeriod({...reccLine,invoice:{...reccInvoice,estado_cobro:'cobrada',ultimo_pago_at:'2026-03-31',importe_pagado:121}},{invoicePayments:[],warnings:[]},bounds(2026,'1T'));
       const reccReviewSafety=!!reccPending.review&&!reccPending.line&&!!reccDuplicate.review&&!reccDuplicate.line&&!!reccOverpayment.review&&!reccOverpayment.line&&!!reccUntraced.review&&!reccUntraced.line;
+      const reccReceivedInvoice={...reccInvoice,id:'invoice-recc-received',tipo:'recibida',numero_factura:'R-RECC'};
+      const reccReceivedLine={...reccLine,id:'recc-received-line',sourceId:'InvoiceTaxLine:recc-received-line',invoice:reccReceivedInvoice};
+      const reccModelData:any={invoices:[reccInvoice,reccReceivedInvoice],taxLines:[reccLine,reccReceivedLine],invoicePayments:[...reccData.invoicePayments,{id:'recc-r-p1',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-03-31'}],filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],period:'1T',year:2026};
+      const recc303Q1=calculateIndirectTax(reccModelData,bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
+      const recc303Q2=calculateIndirectTax({...reccModelData,period:'2T',warnings:[],blockers:[]},bounds(2026,'2T'),'iva',false,{previousCompensationBalance:0});
+      const recc303FieldsQ1=fieldMap(recc303Q1), recc303FieldsQ2=fieldMap(recc303Q2);
       const entries130=[{id:'e130-jan',date:'2026-01-10',status:'confirmado',isBalanced:true},{id:'e130-may',date:'2026-05-10',status:'confirmado',isBalanced:true},{id:'e130-jul',date:'2026-07-10',status:'confirmado',isBalanced:true}];
       const lines130=[{id:'l130-jan-r',journalEntryId:'e130-jan',accountCode:'705000',credit:1000,debit:0},{id:'l130-jan-e',journalEntryId:'e130-jan',accountCode:'629000',debit:200,credit:0},{id:'l130-may-r',journalEntryId:'e130-may',accountCode:'705000',credit:500,debit:0},{id:'l130-jul-r',journalEntryId:'e130-jul',accountCode:'705000',credit:900,debit:0}];
       const result130Q2=calculate130({entries:entries130,entryLines:lines130,invoices:[],filings:[],profile:{irpfEstimation:'directa_normal'},period:'2T',year:2026,warnings:[],blockers:[]},bounds(2026,'2T'),{additionalComputableIncome:0,nonComputableAccountingIncome:0,additionalDeductibleExpenses:0,nonDeductibleAccountingExpenses:0,previousPayments:0,priorNegativeResults:0,applyDifficultJustificationExpenses:false});
@@ -3701,6 +3707,7 @@ Deno.serve(async (req) => {
         model111EconomicBoxes:fieldMap(calculated111Q1)['07']===1&&fieldMap(calculated111Q1)['08']===50&&fieldMap(calculated111Q1)['09']===7.5&&samples['111'].slice(192,200)==='00000001'&&samples['111'].slice(200,217).endsWith('10000'),
         reccPartialAndDeadline:reccQ1?.base===50&&reccQ1?.quota===10.5&&reccQ2?.base===50&&reccQ2?.quota===10.5&&reccForced?.base===100&&reccForced?.cashRecognition?.events?.[0]?.date==='2026-12-31',
         reccInvalidPaymentsNeedReview:reccReviewSafety,
+        recc303InformationByOperationDate:recc303FieldsQ1['62']===100&&recc303FieldsQ1['63']===21&&recc303FieldsQ1['74']===100&&recc303FieldsQ1['75']===21&&recc303FieldsQ2['62']===0&&recc303FieldsQ2['74']===0&&recc303Q1.operations?.outputQuota===10.5&&recc303Q2.operations?.outputQuota===10.5&&recc303Q1.fields.find((field:any)=>field.code==='62')?.sourceIds?.includes('InvoiceTaxLine:recc-line'),
         cumulative130ByQuarterEnd:fieldMap(result130Q2)['01']===1500&&fieldMap(result130Q2)['02']===200,
         model130PaymentAndBoxes:fieldMap(retainedIncomeQ1)['06']===7.5&&fieldMap(retainedIncomeQ2)['06']===15&&fieldMap(retainedIncomeQ2)['18']===10&&fieldMap(negative130)['12']===0,
         model130CashBasis:fieldMap(cash130Q1)['01']===50&&fieldMap(cash130Q1)['02']===20&&fieldMap(cash130Q2)['01']===100&&fieldMap(cash130Q2)['02']===40,
