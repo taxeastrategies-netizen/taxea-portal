@@ -3,6 +3,7 @@
  * Taxea Strategies · No requiere librerías externas
  */
 import { invoiceQrPng } from '@/lib/aeatInvoiceQr';
+import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 const BRAND_COLOR = '#b91c1c'; // taxea-red — usar solo como acento, nunca como fondo masivo
@@ -450,6 +451,16 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
       if (invoice.metodo_pago) doc.text(`Método: ${invoice.metodo_pago}`, M + 3, Y + 9);
       if (company?.iban) doc.text(`IBAN: ${company.iban}`, M + 3, Y + (invoice.metodo_pago ? 14 : 9));
       Y += invoice.metodo_pago && company?.iban ? 22 : 16;
+    }
+
+    // Mención fiscal visible en el PDF que se adjunta al correo.
+    const fiscalLegend = invoiceFiscalLegend(invoice);
+    if (fiscalLegend) {
+      const legendLines = doc.splitTextToSize(fiscalLegend, W);
+      if (Y + legendLines.length * 4 > 279) doc.addPage();
+      else Y += 7;
+      doc.setFontSize(8).setTextColor(...dark).setFont(undefined, 'normal');
+      doc.text(legendLines, M, Y);
     }
 
     // Pie
