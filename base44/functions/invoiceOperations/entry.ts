@@ -622,13 +622,21 @@ Deno.serve(async (req) => {
         && Math.abs(Number(line.surchargeRate || 0) - Number(invoice.tipo_recargo || 0)) < 0.001
         && Math.abs(Number(line.deductibleQuota || 0)) <= 0.001
         && Math.abs(Number(line.nonDeductibleQuota || 0) - Number(line.quota || 0)) <= 0.01;
+      const recargoRetailSale = invoice.tipo === 'emitida' && line?.regime === 'recargo_equivalencia'
+        && invoice.fiscal_regime === 'recargo_equivalencia' && line?.taxKind === 'iva'
+        && line?.operationType === 'subject_taxed' && [21, 10, 4].includes(Number(invoice.tipo_iva || 0))
+        && Number(invoice.base_imponible || 0) > 0
+        && Math.abs(asMoney(Number(invoice.base_imponible || 0) * Number(invoice.tipo_iva || 0) / 100) - Number(invoice.cuota_iva || 0)) <= 0.01
+        && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
+        && Math.abs(Number(line.surchargeQuota || 0)) <= 0.001
+        && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001;
       if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !recargoPurchase) return Response.json({ error: 'Factura con recargo fuera del circuito validado de compra minorista; no se puede contabilizar como asiento general.' }, { status: 422 });
       if (!line || taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
         || Math.abs(Number(line.quota || 0) - Number(invoice.cuota_iva || 0)) > 0.02
         || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + (recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
         return Response.json({ error: 'La línea fiscal o el total no cuadran con la factura. Revisa antes de contabilizar.' }, { status: 422 });
       }
-      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(line.regime) || recargoPurchase)
+      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(line.regime) || recargoPurchase || recargoRetailSale)
         || ['reverse_charge', 'intra_eu_acquisition'].includes(line.operationType)
         || !['iva', 'igic'].includes(line.taxKind)) {
         return Response.json({ error: 'Este tratamiento especial aún no permite asiento automático; requiere revisión contable específica.' }, { status: 422 });
