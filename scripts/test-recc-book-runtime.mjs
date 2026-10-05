@@ -16,7 +16,7 @@ const records = {
   FiscalProfile: [], FiscalProfileVersion: [], FiscalActivity: [], TaxModel: [],
   Invoice: [{ id: 'recc-a', company_id: 'company-a', tipo: 'emitida', numero_factura: 'TEST-RECC',
     fecha_emision: '2025-06-10', fecha_operacion: '2025-06-10', fiscal_regime: 'criterio_caja', indirect_tax_kind: 'iva',
-    fiscal_review_status: 'validado', cliente_nombre: 'Cliente sintético', cliente_nif: 'B12345678',
+    fiscal_review_status: 'validado', coletilla_fiscal: 'Régimen especial del criterio de caja', cliente_nombre: 'Cliente sintético', cliente_nif: 'B12345678',
     base_imponible: 100, cuota_iva: 21, total_factura: 121, estado_cobro: 'parcial' }],
   InvoiceTaxLine: [{ id: 'line-a', companyId: 'company-a', invoiceId: 'recc-a', lineNumber: 1, taxKind: 'iva',
     regime: 'criterio_caja', reviewStatus: 'validado' }],
