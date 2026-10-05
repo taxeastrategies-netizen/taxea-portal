@@ -107,7 +107,7 @@ export function calculateSpecialRegimePreview(input) {
       return { ...event, taxableBase: base, taxQuota: quota };
     });
     return { regime, status: 'proposal_only', invoiceGross, taxableBase, taxQuota, operationDate, forcedRecognitionDate, events: taxEvents,
-      advisorConfirmationRequired: true, reason: 'El impuesto se reconoce según cobros/pagos trazados y, por el saldo restante, en la fecha límite legal; el asiento exige cuentas transitorias y libro de cobros/pagos.' };
+      advisorConfirmationRequired: true, reason: 'El impuesto se liquida según cobros/pagos trazados y, por el saldo restante, en la fecha límite legal. La factura se contabiliza al devengo; el desglose de subcuentas 472/477 es opcional según el ICAC.' };
   }
   if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
     if (direction !== 'ingreso') return { regime, status: 'requires_destination_trace', reason: 'La compra no se incorpora automáticamente al modelo 369 de ventas.' };
