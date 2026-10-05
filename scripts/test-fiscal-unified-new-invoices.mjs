@@ -177,6 +177,19 @@ assert.equal(records.InvoiceTaxLine[0].nonDeductibleQuota, 21);
 assert.equal(records.Invoice[1].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[1].total_factura, 121);
 assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
+records.FiscalActivity[0].indirectTaxRegime = 'recargo_equivalencia';
+records.FiscalActivity[0].deductionRight = 'sin_derecho';
+records.Invoice.push({ id: 'invoice-recargo-valid', company_id: 'company-a', tipo: 'recibida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2, importe_retencion: 0 });
+const approvedRecargo = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recargo-valid', activityId: 'activity-a', regime: 'recargo_equivalencia', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
+}));
+assert.equal(approvedRecargo.status, 200);
+const recargoLine = records.InvoiceTaxLine.find(item => item.invoiceId === 'invoice-recargo-valid');
+assert.equal(recargoLine.surchargeQuota, 5.2);
+assert.equal(recargoLine.deductibleQuota, 0);
+assert.equal(recargoLine.nonDeductibleQuota, 21);
+assert.equal(records.Invoice.find(item => item.id === 'invoice-recargo-valid').total_factura, 126.2);
+assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]), accountSnapshot);
 records.FiscalActivity[0].indirectTaxRegime = 'general';
 async function recommendedCodes(activities) {
   const before = records.FiscalActivity;
