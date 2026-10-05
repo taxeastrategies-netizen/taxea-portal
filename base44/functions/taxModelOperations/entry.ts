@@ -3691,6 +3691,11 @@ Deno.serve(async (req) => {
       const recc303Export=export303(company,profile,2026,'1T',recc303Q1);
       const recc303Page3=recc303Export.slice(1581);
       const recc303ExportQ2=export303(company,profile,2026,'2T',recc303Q2);
+      const reccActivities=[{id:'activity-recc',active:true,indirectTax:'iva',indirectTaxRegime:'criterio_caja'}];
+      const recc390=calculateIndirectTax({...reccModelData,activities:reccActivities,warnings:[],blockers:[]},bounds(2026,'Anual'),'iva',true,{previousCompensationBalance:0});
+      const recc390Export=export390(company,profile,reccActivities,2026,recc390,[]);
+      const recc390WithoutInvoices=calculateIndirectTax({...reccModelData,invoices:[],taxLines:[],invoicePayments:[],activities:reccActivities,warnings:[],blockers:[]},bounds(2026,'Anual'),'iva',true,{previousCompensationBalance:0});
+      const recc390EmptyExport=export390(company,profile,reccActivities,2026,recc390WithoutInvoices,[]);
       const entries130=[{id:'e130-jan',date:'2026-01-10',status:'confirmado',isBalanced:true},{id:'e130-may',date:'2026-05-10',status:'confirmado',isBalanced:true},{id:'e130-jul',date:'2026-07-10',status:'confirmado',isBalanced:true}];
       const lines130=[{id:'l130-jan-r',journalEntryId:'e130-jan',accountCode:'705000',credit:1000,debit:0},{id:'l130-jan-e',journalEntryId:'e130-jan',accountCode:'629000',debit:200,credit:0},{id:'l130-may-r',journalEntryId:'e130-may',accountCode:'705000',credit:500,debit:0},{id:'l130-jul-r',journalEntryId:'e130-jul',accountCode:'705000',credit:900,debit:0}];
       const result130Q2=calculate130({entries:entries130,entryLines:lines130,invoices:[],filings:[],profile:{irpfEstimation:'directa_normal'},period:'2T',year:2026,warnings:[],blockers:[]},bounds(2026,'2T'),{additionalComputableIncome:0,nonComputableAccountingIncome:0,additionalDeductibleExpenses:0,nonDeductibleAccountingExpenses:0,previousPayments:0,priorNegativeResults:0,applyDifficultJustificationExpenses:false});
@@ -3732,6 +3737,7 @@ Deno.serve(async (req) => {
         reccPartialCentsExhaustInvoice:money(reccCentsQ1?.base+reccCentsQ2?.base+reccCentsQ3?.base)===100&&money(reccCentsQ1?.quota+reccCentsQ2?.quota+reccCentsQ3?.quota)===21&&reccCentsQ3?.base===33.34,
         recc303InformationByOperationDate:recc303FieldsQ1['62']===100&&recc303FieldsQ1['63']===21&&recc303FieldsQ1['74']===100&&recc303FieldsQ1['75']===21&&recc303FieldsQ2['62']===0&&recc303FieldsQ2['74']===0&&recc303Q1.operations?.outputQuota===10.5&&recc303Q2.operations?.outputQuota===10.5&&recc303Q1.fields.find((field:any)=>field.code==='62')?.sourceIds?.includes('InvoiceTaxLine:recc-line'),
         recc303ExportOfficialPositions:recc303Page3.slice(113,130)===numeric(100,17,true)&&recc303Page3.slice(130,147)===numeric(21,17,true)&&recc303Page3.slice(147,164)===numeric(100,17,true)&&recc303Page3.slice(164,181)===numeric(21,17,true)&&recc303ExportQ2[112]==='2'&&recc303ExportQ2[113]==='1'&&transferLayoutErrors('303',wrap('303',2026,'1T',recc303Export,'B12345678')).length===0,
+        recc390AnnualAndCensusFlags:recc390.operations?.outputQuota===21&&recc390.operations?.deductibleQuota===21&&recc390.operations?.criterionCash===100&&recc390.operations?.criterionCashReceived===100&&recc390Export[130]==='1'&&recc390Export[131]==='1'&&recc390EmptyExport[130]==='1',
         cumulative130ByQuarterEnd:fieldMap(result130Q2)['01']===1500&&fieldMap(result130Q2)['02']===200,
         model130PaymentAndBoxes:fieldMap(retainedIncomeQ1)['06']===7.5&&fieldMap(retainedIncomeQ2)['06']===15&&fieldMap(retainedIncomeQ2)['18']===10&&fieldMap(negative130)['12']===0,
         model130CashBasis:fieldMap(cash130Q1)['01']===50&&fieldMap(cash130Q1)['02']===20&&fieldMap(cash130Q2)['01']===100&&fieldMap(cash130Q2)['02']===40,
