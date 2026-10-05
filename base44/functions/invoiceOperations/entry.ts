@@ -636,7 +636,7 @@ Deno.serve(async (req) => {
         || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + (recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
         return Response.json({ error: 'La línea fiscal o el total no cuadran con la factura. Revisa antes de contabilizar.' }, { status: 422 });
       }
-      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(line.regime) || recargoPurchase || recargoRetailSale)
+      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic', 'criterio_caja'].includes(line.regime) || recargoPurchase || recargoRetailSale)
         || ['reverse_charge', 'intra_eu_acquisition'].includes(line.operationType)
         || !['iva', 'igic'].includes(line.taxKind)) {
         return Response.json({ error: 'Este tratamiento especial aún no permite asiento automático; requiere revisión contable específica.' }, { status: 422 });
