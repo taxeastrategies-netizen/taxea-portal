@@ -213,6 +213,24 @@ assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoPurch
 const recargoRetry = await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === recargoPurchase.id), 'advisor@taxea.test');
 assert.equal(recargoRetry.alreadyPosted, true);
 assert.equal(records.JournalEntry.filter(item => item.documentId === recargoPurchase.id).length, 1);
+const recargoRetailSale = await entity('Invoice').create({
+  company_id: 'company-a', tipo: 'emitida', numero_factura: 'E-RECARGO-VALIDA', fecha_emision: '2024-07-06',
+  cliente_nombre: 'Cliente ficticio', cliente_nif: 'B44444444', concepto: 'Venta minorista de prueba',
+  categoria_gasto: 'ventas_servicios', base_imponible: 100, tipo_iva: 21, cuota_iva: 21,
+  tipo_recargo: 0, cuota_recargo: 0, total_factura: 121, importe_retencion: 0,
+  indirect_tax_kind: 'iva', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed',
+  fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', moneda: 'EUR',
+});
+const recargoSalePosting = await postInvoice(svc, 'company-a', recargoRetailSale, 'advisor@taxea.test', { status: 'confirmado' });
+const recargoSaleLines = records.JournalEntryLine.filter(item => item.journalEntryId === recargoSalePosting.entry.id);
+assert.equal(recargoSaleLines.reduce((sum, item) => sum + Number(item.debit || 0), 0), 121);
+assert.equal(recargoSaleLines.reduce((sum, item) => sum + Number(item.credit || 0), 0), 121);
+assert.equal(recargoSaleLines.some(item => item.accountCode.startsWith('477')), false);
+assert.equal(recargoSaleLines.find(item => item.sourceLineType === 'ingreso')?.credit, 121);
+assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoRetailSale.id)?.quota, 21);
+const recargoSaleRetry = await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === recargoRetailSale.id), 'advisor@taxea.test');
+assert.equal(recargoSaleRetry.alreadyPosted, true);
+assert.equal(records.JournalEntry.filter(item => item.documentId === recargoRetailSale.id).length, 1);
 
 const close = await executeClosing(svc, 'company-a', { year: 2024, confirmation: 'CERRAR 2024', reason: 'Prueba de cierre' }, 'tester@taxea.test');
 assert.equal(close.cycle, 1);
