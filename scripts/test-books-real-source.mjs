@@ -84,6 +84,10 @@ assert.match(reccXml, /RECC-TEST/);
 assert.match(reccXml, /ES0000000000000000000000/);
 assert.match(reccXml, /DEVENGO LEGAL \(sin cobro\/pago\)/);
 reccFixture.issues = [{ invoiceId: 'recc-a', reason: 'Pago pendiente' }];
-await assert.rejects(exported({ companyId: 'company-a', year: 2026, invoices: [], expenses: [] }), /incidencia/);
+await exported({ companyId: 'company-a', year: 2026, invoices: [], expenses: [] });
+const reccWithIssuesXml = await savedBlob.text();
+assert.match(reccWithIssuesXml, /13\. Alertas RECC/);
+assert.match(reccWithIssuesXml, /Pago pendiente/);
 console.log(JSON.stringify({ ok: true, realJournal: true, historicalSubaccountsPreservedInExport: true,
-  nonDeductibleQuotaVisible: true, reccCashAndForcedDeadlineVisible: true, reccIssuesBlockExport: true }));
+  nonDeductibleQuotaVisible: true, reccCashAndForcedDeadlineVisible: true,
+  reccIssuesFlaggedWithoutBlocking: true }));
