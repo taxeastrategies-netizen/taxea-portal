@@ -8,6 +8,7 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import PnLPanel from '@/components/libros/PnLPanel.jsx';
+import ReccBookPanel from '@/components/libros/ReccBookPanel.jsx';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';
 import { exportarLibrosPDF } from '@/components/libros/ExportPDF.jsx';
 import { useFinancialData } from '@/hooks/useFinancialData';
@@ -20,6 +21,7 @@ const TABS = [
   { key: 'ventas', label: 'Libro Ventas' },
   { key: 'compras', label: 'Libro Compras' },
   { key: 'gastos', label: 'Gastos' },
+  { key: 'recc', label: 'Criterio de caja' },
   { key: 'pnl', label: 'P&L' },
 ];
 
@@ -209,6 +211,8 @@ export default function LibroRegistros() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'recc' && <ReccBookPanel companyId={company?.id} year={filterAnio} />}
 
       {/* P&L */}
       {activeTab === 'pnl' && (
