@@ -29,9 +29,10 @@ const accounts = [
 ];
 const calls = [];
 const base44 = { functions: { async invoke(name, payload) {
-  assert.equal(name, 'accountingOperations');
+  assert.ok(['accountingOperations', 'fiscalOperations'].includes(name));
   assert.equal(payload.companyId, 'company-a');
-  calls.push(payload.action);
+  calls.push(`${name}:${payload.action}`);
+  if (name === 'fiscalOperations' && payload.action === 'recc_book') return { data: { success: true, year: 2026, invoices: [], payments: [], issues: [] } };
   if (payload.action === 'reports') return { data: { success: true, report: { accounts, includedEntries: 1, excludedEntries: 0 } } };
   if (payload.action === 'journal') return { data: { success: true, journal: { total: 1, entries: [entryRow] } } };
   throw new Error('Unexpected action');
@@ -63,7 +64,7 @@ await exported({
   expenses: [],
 });
 const xml = await savedBlob.text();
-assert.deepEqual(calls, ['reports', 'journal']);
+assert.deepEqual([...calls].sort(), ['accountingOperations:reports', 'accountingOperations:journal', 'fiscalOperations:recc_book'].sort());
 assert.match(xml, /43000007/);
 assert.match(xml, /40000009/);
 assert.match(xml, /exenta_limitada/);
