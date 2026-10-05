@@ -356,6 +356,25 @@ function isValidatedRecargoRetailSale(invoice) {
     && Math.abs(Number(invoice.total_factura || 0) - money(base + tax)) <= 0.02;
 }
 
+function isValidatedSimpleReccInvoice(invoice) {
+  const base = money(invoice.base_imponible);
+  const quota = money(invoice.cuota_iva);
+  const rate = Number(invoice.tipo_iva || 0);
+  return clean(invoice.fiscal_regime) === 'criterio_caja'
+    && clean(invoice.fiscal_treatment) === 'subject_taxed'
+    && clean(invoice.indirect_tax_kind) === 'iva'
+    && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)
+    && ['emitida', 'recibida'].includes(clean(invoice.tipo))
+    && invoice.es_rectificativa !== true && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
+    && [21, 10, 4].includes(rate) && base > 0 && quota > 0
+    && Math.abs(money(base * rate / 100) - quota) <= 0.01
+    && Math.abs(money(invoice.total_factura) - money(base + quota)) <= 0.02
+    && Math.abs(money(invoice.importe_retencion)) <= 0.001
+    && Math.abs(money(invoice.cuota_recargo)) <= 0.001
+    && money(invoice.deductible_tax_amount) >= 0
+    && money(invoice.deductible_tax_amount) <= quota;
+}
+
 export async function buildInvoicePosting(svc, companyId, invoice) {
   const counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
@@ -902,10 +921,11 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   const unsupportedFiscalRegimes = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic', 'mixto']);
   const validatedRecargoPurchase = isValidatedRecargoPurchase(invoice);
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
-  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale) {
+  const validatedRecc = isValidatedSimpleReccInvoice(invoice);
+  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale && !validatedRecc) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
   }
-  if (validatedRecargoPurchase || validatedRecargoRetailSale) {
+  if (validatedRecargoPurchase || validatedRecargoRetailSale || validatedRecc) {
     const activityId = clean(invoice.fiscal_activity_id);
     const activity = activityId ? await svc.entities.FiscalActivity.get(activityId).catch(() => null) : null;
     const profiles = await svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-created_date', 3);
@@ -923,8 +943,23 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       && Math.abs(money(line.base) - money(invoice.base_imponible)) <= 0.01
       && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
       && Math.abs(money(line.surchargeQuota) - money(invoice.cuota_recargo)) <= 0.01;
-    if (!validActivity || !validProfile || !validTaxLine) {
-      throw new Error('El recargo requiere actividad minorista, perfil y línea fiscal validados por asesor antes del asiento.');
+    const validReccActivity = validatedRecc && activity && activity.company_id === companyId && activity.active !== false
+      && clean(activity.indirectTax) === 'iva'
+      && (invoice.tipo === 'recibida' || clean(activity.indirectTaxRegime) === 'criterio_caja');
+    const validReccLine = validatedRecc && taxLines?.length === 1 && Number(line.lineNumber) === 1
+      && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === 'iva'
+      && clean(line.operationType) === 'subject_taxed' && clean(line.reviewStatus) === 'validado'
+      && clean(line.reviewedBy) === clean(invoice.fiscal_reviewed_by)
+      && clean(line.activityId) === activityId
+      && Math.abs(money(line.base) - money(invoice.base_imponible)) <= 0.01
+      && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
+      && Math.abs(money(line.deductibleQuota) - money(invoice.deductible_tax_amount)) <= 0.01
+      && (invoice.tipo === 'emitida' || clean(activity.indirectTaxRegime) === 'criterio_caja'
+        || (invoice.fiscal_manual_override === true && !!clean(invoice.fiscal_manual_override_reason)));
+    if (!validProfile || (validatedRecc ? !validReccActivity || !validReccLine : !validActivity || !validTaxLine)) {
+      throw new Error(validatedRecc
+        ? 'El criterio de caja exige perfil, actividad, factura y línea fiscal validados por asesor antes del asiento.'
+        : 'El recargo requiere actividad minorista, perfil y línea fiscal validados por asesor antes del asiento.');
     }
   }
   if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase)) {
