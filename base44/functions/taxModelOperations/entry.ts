@@ -2101,7 +2101,7 @@ function applyModelValidation(model: string, data: any, calculation: any) {
   const year = Number(data.year);
   if (model === '347' && indirect === 'igic') data.blockers.push('El perfil está en territorio IGIC: corresponde el modelo 415, no el 347.');
   if (model === '347' && indirect === 'mixto') data.blockers.push('El perfil fiscal es mixto: separa y confirma manualmente las operaciones de territorio IVA antes de exportar el 347.');
-  if (model === '347' && year > 2025) data.blockers.push('El diseño anual AEAT del ejercicio 2026 todavía no está publicado; solo se habilita el último diseño oficialmente disponible.');
+  // El diseño 347 aprobado para 2025 se declara expresamente aplicable a 2025 y siguientes.
   if (model === '415' && year > 2025) data.blockers.push('La ATC todavía no ha publicado el programa anual 415 del ejercicio 2026.');
   if (model === '130') {
     if (profile?.entityType !== 'autonomo' || !profile?.subjectToIRPF || profile?.irpfEstimation === 'no_aplica') data.blockers.push('El modelo 130 solo es aplicable a personas físicas en estimación directa sujetas a pago fraccionado.');
