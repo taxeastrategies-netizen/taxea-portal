@@ -317,6 +317,28 @@ async function getTaxKind(svc, companyId, invoice) {
   return defaultKind;
 }
 
+function isValidatedRecargoPurchase(invoice) {
+  const base = money(invoice.base_imponible);
+  const tax = money(invoice.cuota_iva);
+  const surcharge = money(invoice.cuota_recargo);
+  const rate = Number(invoice.tipo_iva || 0);
+  const surchargeRate = Number(invoice.tipo_recargo || 0);
+  const expectedRate = ({ 21: 5.2, 10: 1.4, 4: 0.5 })[rate];
+  return invoice.tipo === 'recibida' && invoice.es_rectificativa !== true
+    && clean(invoice.fiscal_regime) === 'recargo_equivalencia'
+    && clean(invoice.fiscal_treatment) === 'subject_taxed'
+    && clean(invoice.indirect_tax_kind) === 'iva'
+    && invoice.fiscal_review_status === 'validado' && !!invoice.fiscal_reviewed_by
+    && base > 0 && tax > 0 && surcharge > 0 && expectedRate != null
+    && Math.abs(surchargeRate - expectedRate) < 0.001
+    && Math.abs(money(base * rate / 100) - tax) <= 0.01
+    && Math.abs(money(base * surchargeRate / 100) - surcharge) <= 0.01
+    && Math.abs(Number(invoice.deductible_tax_amount || 0)) <= 0.001
+    && Math.abs(Number(invoice.non_deductible_tax_amount || 0) - tax) <= 0.01
+    && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+    && Math.abs(Number(invoice.total_factura || 0) - money(base + tax + surcharge)) <= 0.02;
+}
+
 export async function buildInvoicePosting(svc, companyId, invoice) {
   const counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
