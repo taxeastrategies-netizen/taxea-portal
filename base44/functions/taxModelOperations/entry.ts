@@ -565,7 +565,13 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
       && clean(line.reviewStatus) === 'validado' && clean(line.operationType) === 'subject_taxed'
       && money(line.deductibleQuota) === 0 && money(line.nonDeductibleQuota) === money(line.quota)
       && money(line.surchargeQuota) > 0 && money(line.surchargeQuota) === money(line.invoice?.cuota_recargo);
-    if (validatedRecargoPurchase) continue;
+    const validatedRecargoRetailSale = kind === 'iva' && regime === 'recargo_equivalencia' && !regimeConflict
+      && line.invoice?.tipo === 'emitida' && clean(line.invoice?.fiscal_review_status) === 'validado'
+      && clean(line.reviewStatus) === 'validado' && clean(line.operationType) === 'subject_taxed'
+      && money(line.base) > 0 && money(line.quota) > 0
+      && money(line.surchargeQuota) === 0 && money(line.invoice?.cuota_recargo) === 0
+      && money(line.invoice?.total_factura) === money(money(line.base) + money(line.quota));
+    if (validatedRecargoPurchase || validatedRecargoRetailSale) continue;
     if (regimeConflict || NON_ORDINARY_INDIRECT_REGIMES.has(regime) || clean(line.operationType) === 'special_margin' || (kind === 'igic' && regime === 'simplificado')) {
       const operationDate = clean(line.date || dateOf(line.invoice)).slice(0, 10);
       if (operationDate >= b.start && operationDate <= b.end) {
@@ -3559,6 +3565,8 @@ Deno.serve(async (req) => {
       const carrySelection=selectIndirectTaxLines({year:2026,period:'2T',profile:{},filings:[{id:'303-q1',modeloCodigo:'303',ejercicio:2026,periodo:'1T',estadoPresentacion:'presentado',fechaPresentacion:'2026-04-20'}],taxLines:[lateReceivedLine]},bounds(2026,'2T'),'iva',false);
       const recargoPurchaseLine={sourceId:'InvoiceTaxLine:recargo-purchase',date:'2026-02-10',taxKind:'iva',regime:'recargo_equivalencia',operationType:'subject_taxed',base:100,quota:21,deductibleQuota:0,nonDeductibleQuota:21,surchargeQuota:5.2,reviewStatus:'validado',invoice:{id:'recargo-purchase',tipo:'recibida',fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',cuota_recargo:5.2}};
       const recargoPurchaseSelection=selectIndirectTaxLines({year:2026,period:'1T',profile:{},filings:[],taxLines:[recargoPurchaseLine]},bounds(2026,'1T'),'iva',false);
+      const recargoRetailSaleLine={sourceId:'InvoiceTaxLine:recargo-sale',date:'2026-02-11',taxKind:'iva',regime:'recargo_equivalencia',operationType:'subject_taxed',base:100,quota:21,surchargeQuota:0,reviewStatus:'validado',invoice:{id:'recargo-sale',tipo:'emitida',fiscal_regime:'recargo_equivalencia',fiscal_review_status:'validado',cuota_recargo:0,total_factura:121}};
+      const recargoRetailSaleSelection=selectIndirectTaxLines({year:2026,period:'1T',profile:{},filings:[],taxLines:[recargoRetailSaleLine]},bounds(2026,'1T'),'iva',false);
       const lateOutputItems=lateItemsAfterFiling({taxLines:[{id:'tax-line-output',sourceId:'InvoiceTaxLine:tax-line-output',date:'2026-03-10',created_date:'2026-04-25',taxKind:'iva',quota:42,invoice:{id:'invoice-output',tipo:'emitida',numero_factura:'E-LATE-1'}}],invoices:[],invoicePayments:[],payrolls:[],entries:[]},'303',2026,'1T',{fechaPresentacion:'2026-04-20'});
       const historyChecks={
         parsedFiledReturn:parsed130?.model==='130'&&parsed130?.year===2026&&parsed130?.period==='1T'&&money(parsed130?.boxes?.['19'])===20&&parsed131?.model==='131'&&money(parsed131?.boxes?.['15'])===200&&parsed202?.model==='202'&&parsed202?.year===2026&&parsed202?.period==='1P'&&money(parsed202?.boxes?.['34'])===1400&&parsed216?.model==='216'&&parsed216?.period==='1T'&&money(parsed216?.boxes?.['21'])===21&&money(parsed303?.boxes?.['71'])===21&&money(parsed303?.boxes?.['110'])===0,
@@ -3568,6 +3576,7 @@ Deno.serve(async (req) => {
         compensationWallet303:prior303.complete&&prior303.amount===60,
         lateDeduction:carrySelection.lines.length===1&&carrySelection.carry.length===1&&carrySelection.carry[0].targetPeriod==='2T'&&carrySelection.review.length===0,
         validatedRecargoPurchaseOutside303:recargoPurchaseSelection.lines.length===0&&recargoPurchaseSelection.excludedSpecial.length===0,
+        validatedRecargoRetailSaleOutside303:recargoRetailSaleSelection.lines.length===0&&recargoRetailSaleSelection.excludedSpecial.length===0,
         outputCorrection:lateOutputItems.length===1&&lateOutputItems[0].treatment==='rectificar_periodo_origen',
       };
       const retainedInvoice={id:'invoice-retained-partial',tipo:'recibida',numero_factura:'R-PARTIAL',categoria_gasto:'servicios_profesionales',base_imponible:100,cuota_iva:21,importe_retencion:15,total_factura:106,estado_cobro:'parcial'};
