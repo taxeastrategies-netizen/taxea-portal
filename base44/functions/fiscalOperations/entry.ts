@@ -502,6 +502,9 @@ Deno.serve(async (req) => {
         specialInputs.groupId = profile.taxGroupId || '';
         specialInputs.groupRole = profile.taxGroupRole || '';
       }
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'recargo_equivalencia' && invoice.tipo === 'recibida') {
+        specialInputs.surchargeRate = Number(invoice.tipo_recargo || 0);
+      }
       const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
@@ -511,9 +514,28 @@ Deno.serve(async (req) => {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
-      if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
+      const recargoPurchase = invoice.tipo === 'recibida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
+        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed' && Number(invoice.cuota_recargo || 0) > 0;
+      if (recargoPurchase) {
+        const expectedRate = ({ 21: 5.2, 10: 1.4, 4: 0.5 } as Record<number, number>)[Number(invoice.tipo_iva || 0)];
+        const surcharge = money(Number(invoice.base_imponible || 0) * Number(invoice.tipo_recargo || 0) / 100);
+        const expectedTotal = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + Number(invoice.cuota_recargo || 0));
+        const valid = expectedRate != null && Math.abs(expectedRate - Number(invoice.tipo_recargo || 0)) < 0.001
+          && Math.abs(surcharge - Number(invoice.cuota_recargo || 0)) <= 0.01
+          && Math.abs(expectedTotal - Number(invoice.total_factura || 0)) <= 0.02
+          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && Math.abs(proposedEvaluation.base - Number(invoice.base_imponible || 0)) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - Number(invoice.cuota_iva || 0)) <= 0.02
+          && proposedEvaluation.deductibleTax === 0
+          && proposedEvaluation.specialPreview?.status === 'proposal_only';
+        if (!valid) return Response.json({ error: 'La compra en recargo no cuadra con factura, IVA, tipo de recargo o total. Solo se admite compra nacional ordinaria a tipos vigentes, sin retención; el asesor debe corregir el documento antes de contabilizar.' }, { status: 422 });
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.modelImpact = [];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Compra del minorista: IVA y recargo íntegros como mayor coste, sin 472 ni deducción en 303. Asiento y libro separados tras confirmar el asesor.'];
+      } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
         proposedEvaluation.postingBlocked = true;
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La cuota de recargo de la factura se conserva separada, pero su asiento, libro y liquidación específicos aún no están habilitados.'];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
       }
       if (proposedEvaluation.postingBlocked) {
         if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
@@ -532,7 +554,7 @@ Deno.serve(async (req) => {
         evaluation.accounting?.reverseCharge
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       await svc.entities.Invoice.update(invoice.id, { indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: payload.deductibleQuota, non_deductible_tax_amount: payload.nonDeductibleQuota, tipo_iva: payload.rate, cuota_iva: payload.quota, retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: evaluation.total, importe_pendiente: Math.abs(evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
