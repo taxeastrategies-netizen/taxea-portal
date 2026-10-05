@@ -397,17 +397,24 @@ Deno.serve(async (req) => {
         if (!paymentsByInvoice.has(payment.invoice_id)) paymentsByInvoice.set(payment.invoice_id, []);
         paymentsByInvoice.get(payment.invoice_id)!.push(payment);
       }
-      const operationIds = [...new Set(payments.map((payment: any) => clean(payment.accounting_operation_id)).filter(Boolean))];
+      const relevantInvoices = invoices.filter((invoice: any) => {
+        const operationYear = Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4));
+        return operationYear === year || operationYear === year - 1
+          || (paymentsByInvoice.get(invoice.id) || []).some((payment: any) => clean(payment.payment_date).slice(0, 4) === String(year));
+      });
+      const relevantIds = new Set(relevantInvoices.map((invoice: any) => invoice.id));
+      const relevantPayments = payments.filter((payment: any) => relevantIds.has(payment.invoice_id));
+      const operationIds = [...new Set(relevantPayments.map((payment: any) => clean(payment.accounting_operation_id)).filter(Boolean))];
       const operations = await Promise.all(operationIds.map((id: string) => svc.entities.AccountingPostingOperation.get(id).catch(() => null)));
       const operationById = new Map(operations.filter((operation: any) => operation?.companyId === companyId).map((operation: any) => [operation.id, operation]));
-      const transactionIds = [...new Set(payments.map((payment: any) => clean(payment.bank_transaction_id)).filter(Boolean))];
+      const transactionIds = [...new Set(relevantPayments.map((payment: any) => clean(payment.bank_transaction_id)).filter(Boolean))];
       const transactions = await Promise.all(transactionIds.map((id: string) => svc.entities.BankTransaction.get(id).catch(() => null)));
       const transactionById = new Map(transactions.filter((transaction: any) => transaction?.company_id === companyId).map((transaction: any) => [transaction.id, transaction]));
       const bankIds = [...new Set([...transactionById.values()].map((transaction: any) => clean(transaction.bank_account_id)).filter(Boolean))];
       const banks = await Promise.all(bankIds.map((id: string) => svc.entities.BankAccount.get(id).catch(() => null)));
       const bankById = new Map(banks.filter((bank: any) => bank?.company_id === companyId).map((bank: any) => [bank.id, bank]));
       const issues: any[] = [];
-      const bookInvoices = invoices.map((invoice: any) => {
+      const bookInvoices = relevantInvoices.map((invoice: any) => {
         const invoiceLines = linesByInvoice.get(invoice.id) || [];
         const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length === 1
           && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja'
@@ -429,8 +436,8 @@ Deno.serve(async (req) => {
           forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
       const paymentIds = new Set<string>();
-      const invoiceById = new Map(invoices.map((invoice: any) => [invoice.id, invoice]));
-      const bookPayments = payments.map((payment: any) => {
+      const invoiceById = new Map(relevantInvoices.map((invoice: any) => [invoice.id, invoice]));
+      const bookPayments = relevantPayments.map((payment: any) => {
         const invoice = invoiceById.get(payment.invoice_id);
         const operationDate = clean(invoice?.fecha_operacion || invoice?.fecha_emision).slice(0, 10);
         const paymentDate = clean(payment.payment_date).slice(0, 10);
