@@ -561,6 +561,8 @@ Deno.serve(async (req) => {
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
         const simpleRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
+          && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
+            || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
           && selectedActivity?.indirectTax === 'iva' && [21, 10, 4].includes(rate)
           && base > 0 && quota > 0 && Math.abs(money(base * rate / 100) - quota) <= 0.01
           && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
