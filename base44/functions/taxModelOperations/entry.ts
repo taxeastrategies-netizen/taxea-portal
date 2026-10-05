@@ -1385,6 +1385,29 @@ function calculate303Simplified(data: any, adjustments: any, fields: any[]) {
   return { active: true, details, agriculture, other, result: values['58'], fields: values, sourceIds, previousQuarterAdvances };
 }
 
+function reccGeneralAccrualInformation(data: any, b: any) {
+  const issued: any[] = [], received: any[] = [], pending: any[] = [];
+  for (const line of data.taxLines || []) {
+    const invoice = line.invoice;
+    const regime = clean(line.regime || invoice?.fiscal_regime);
+    if (clean(line.taxKind) !== 'iva' || regime !== 'criterio_caja' || !invoice?.id
+      || !['emitida', 'recibida'].includes(clean(invoice.tipo))) continue;
+    const operationDate = clean(line.date || dateOf(invoice)).slice(0, 10);
+    if (operationDate < b.start || operationDate > b.end) continue;
+    if (clean(line.reviewStatus) !== 'validado' || clean(line.operationType) !== 'subject_taxed') {
+      pending.push(line.sourceId || `InvoiceTaxLine:${line.id}`);
+      continue;
+    }
+    (invoice.tipo === 'emitida' ? issued : received).push(line);
+  }
+  const totals = (lines: any[]) => ({
+    base: money(lines.reduce((sum, line) => sum + money(line.base), 0)),
+    quota: money(lines.reduce((sum, line) => sum + money(line.quota), 0)),
+    sourceIds: unique(lines.map(line => line.sourceId || `InvoiceTaxLine:${line.id}`)),
+  });
+  return { issued: totals(issued), received: totals(received), pending: unique(pending) };
+}
+
 function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = false, adjustments: any = {}, modelOverride?: '303'|'420'|'417') {
   const selection = selectIndirectTaxLines(data, b, kind, annual, modelOverride);
   const model: '303'|'420'|'417' = modelOverride || (kind === 'iva' ? '303' : '420');
@@ -1412,7 +1435,13 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
     row.base += base; row.quota += quota; row.sourceIds.push(...ids); categorizedOutputRates.set(key, row);
   };
   let deductibleBase = 0, deductibleQuota = 0, nonDeductibleBase = 0, reverseBase = 0, reverseQuota = 0, intraBase = 0, intraQuota = 0;
-  let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0, criterionCash = 0, criterionCashQuota = 0, criterionCashReceived = 0, criterionCashReceivedQuota = 0;
+  let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0;
+  const reccInformation = kind === 'iva' ? reccGeneralAccrualInformation(data, b) : null;
+  const criterionCash = reccInformation?.issued.base || 0;
+  const criterionCashQuota = reccInformation?.issued.quota || 0;
+  const criterionCashReceived = reccInformation?.received.base || 0;
+  const criterionCashReceivedQuota = reccInformation?.received.quota || 0;
+  if (reccInformation?.pending.length) data.blockers.push(`${reccInformation.pending.length} línea(s) RECC del período necesitan validación para las casillas informativas; no se han sumado sin revisión.`);
   let annualClassificationPending = 0;
   let pendingReviewLines = 0;
   for (const line of lines) {
@@ -1432,7 +1461,6 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       else if (op === 'exempt_limited') exemptLimited += base;
       else if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(op)) nonSubject += base;
       else if (op === 'reverse_charge') reverseBase += base;
-      if (line.regime === 'criterio_caja') criterionCash += base;
     } else {
       if (op === 'intra_eu_acquisition') { intraBase += base; intraQuota += quota; }
       else if (op === 'reverse_charge') { reverseBase += base; reverseQuota += quota; }
@@ -1447,9 +1475,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       const category = explicitCategory || (op === 'import' ? (investment ? 'import_investment' : 'import_current') : op === 'intra_eu_acquisition' ? (investment ? 'intra_goods_investment' : 'intra_goods_current') : (investment ? 'interior_investment' : 'interior_current'));
       addDeductibleRate(category, Number(line.rate || 0), base, deductibleLineQuota, ids);
       if (annual && !explicitCategory) annualClassificationPending += 1;
-      if (line.regime === 'criterio_caja') { criterionCashReceived += base; criterionCashReceivedQuota += deductibleLineQuota; }
     }
-    if (invoice.tipo === 'emitida' && line.regime === 'criterio_caja') criterionCashQuota += quota;
     if (line.reviewStatus !== 'validado') pendingReviewLines += 1;
   }
   if (pendingReviewLines) data.blockers.push(`${pendingReviewLines} línea(s) fiscales incluidas tienen su clasificación o deducibilidad pendiente de revisión.`);
@@ -1474,6 +1500,10 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   if (selection.carry.length) addField(fields, 'DEDUCIBLE_ARRASTRADO', 'Cuota recibida tarde deducida en este período', selection.carry.reduce((sum: number, row: any) => sum + money(row.quota), 0), selection.carry.map((row: any) => row.sourceId), 'Deducciones de períodos anteriores');
   if (!annual && model === '303') {
+    addField(fields, '62', 'RECC: base de operaciones emitidas según devengo general', criterionCash, reccInformation?.issued.sourceIds || [], 'Información adicional', { formula: 'Base completa de facturas RECC emitidas en el período de operación, con independencia del cobro.' });
+    addField(fields, '63', 'RECC: cuota de operaciones emitidas según devengo general', criterionCashQuota, reccInformation?.issued.sourceIds || [], 'Información adicional');
+    addField(fields, '74', 'RECC: base de operaciones recibidas según devengo general', criterionCashReceived, reccInformation?.received.sourceIds || [], 'Información adicional', { formula: 'Base completa de facturas RECC recibidas en el período de operación, con independencia del pago.' });
+    addField(fields, '75', 'RECC: cuota de operaciones recibidas según devengo general', criterionCashReceivedQuota, reccInformation?.received.sourceIds || [], 'Información adicional');
     addField(fields, '110', 'Cuotas a compensar pendientes de períodos anteriores', previousBalance, balanceSourceIds, 'Compensación', { formula: manualBalanceProvided ? 'Saldo anterior confirmado manualmente.' : 'Saldo reconstruido desde el modelo 303 anterior presentado.' });
     addField(fields, '78', 'Cuotas anteriores aplicadas en este período', appliedPrevious, balanceSourceIds, 'Compensación', { formula: 'Menor entre la casilla 110 y el resultado positivo previo a compensaciones.', dependsOn: ['110', 'DEVENGADO', 'DEDUCIBLE'] });
     addField(fields, '87', 'Cuotas anteriores pendientes para períodos posteriores', previousPending, balanceSourceIds, 'Compensación', { formula: 'Casilla 110 − casilla 78.', dependsOn: ['110', '78'] });
