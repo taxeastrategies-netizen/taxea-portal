@@ -339,6 +339,23 @@ function isValidatedRecargoPurchase(invoice) {
     && Math.abs(Number(invoice.total_factura || 0) - money(base + tax + surcharge)) <= 0.02;
 }
 
+function isValidatedRecargoRetailSale(invoice) {
+  const base = money(invoice.base_imponible);
+  const tax = money(invoice.cuota_iva);
+  const rate = Number(invoice.tipo_iva || 0);
+  return invoice.tipo === 'emitida' && invoice.es_rectificativa !== true
+    && clean(invoice.fiscal_regime) === 'recargo_equivalencia'
+    && clean(invoice.fiscal_treatment) === 'subject_taxed'
+    && clean(invoice.indirect_tax_kind) === 'iva'
+    && invoice.fiscal_review_status === 'validado' && !!invoice.fiscal_reviewed_by
+    && [21, 10, 4].includes(rate) && base > 0 && tax > 0
+    && Math.abs(money(base * rate / 100) - tax) <= 0.01
+    && Math.abs(Number(invoice.tipo_recargo || 0)) <= 0.001
+    && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
+    && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+    && Math.abs(Number(invoice.total_factura || 0) - money(base + tax)) <= 0.02;
+}
+
 export async function buildInvoicePosting(svc, companyId, invoice) {
   const counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
@@ -359,8 +376,9 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const absTax = Math.abs(tax);
   const absDeductibleTax = Math.abs(deductibleTax);
   const absNonDeductibleTax = Math.abs(nonDeductibleTax);
-  const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : absTax;
-  const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax + Math.abs(surcharge) : absBase;
+  const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
+  const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : validatedRecargoRetailSale ? 0 : absTax;
+  const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax + Math.abs(surcharge) : absBase + (validatedRecargoRetailSale ? absTax : 0);
   const absWithholding = Math.abs(withholding);
   const absTotal = Math.abs(total);
   const category = invoice.categoria_gasto || (invoice.tipo === 'emitida' ? 'ventas_servicios' : 'otros');
@@ -882,7 +900,8 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   }
   const unsupportedFiscalRegimes = new Set(['simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic', 'mixto']);
   const validatedRecargoPurchase = isValidatedRecargoPurchase(invoice);
-  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase) {
+  const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
+  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
   }
   if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase)) {
