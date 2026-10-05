@@ -284,6 +284,19 @@ assert.equal(completedSurcharge.payload.invoice.qr_url || '', '');
 const repeatedSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
 assert.equal(repeatedSurcharge.payload.duplicate, true);
 assert.equal(counters.accountingEntries, 4);
+const recargoSaleDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-sale-ok', invoice: { ...validInvoice, numero_factura: 'E-2026-RECARGO-VENTA', tipo_recargo: 0, cuota_recargo: 0 } });
+assert.equal(recargoSaleDraft.response.status, 200);
+assert.equal(recargoSaleDraft.payload.review_required, true);
+assert.equal(recargoSaleDraft.payload.invoice.qr_url || '', '');
+await entities.Invoice.update(recargoSaleDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva' });
+await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: recargoSaleDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, surchargeQuota: 0 });
+const completedRecargoSale = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: recargoSaleDraft.payload.invoice.id });
+assert.equal(completedRecargoSale.response.status, 200);
+assert.equal(counters.accountingEntries, 5);
+assert.equal(new URL(completedRecargoSale.payload.invoice.qr_url).searchParams.get('importe'), '121.00');
+const repeatedRecargoSale = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: recargoSaleDraft.payload.invoice.id });
+assert.equal(repeatedRecargoSale.payload.duplicate, true);
+assert.equal(counters.accountingEntries, 5);
 
 console.log(JSON.stringify({
   ok: true,
@@ -295,5 +308,6 @@ console.log(JSON.stringify({
     inconsistentTotalBlocked: true,
     advisorReviewRequiredBeforePosting: true,
     crossTenantCreateBlocked: true,
+    reviewedRecargoRetailSaleQrAndPostingOnce: true,
   },
 }, null, 2));
