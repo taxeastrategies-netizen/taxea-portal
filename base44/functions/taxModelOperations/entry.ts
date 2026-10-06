@@ -1674,7 +1674,6 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
         } catch(error) { data.warnings.push(`RECC ${invoice.numero_factura || invoice.id}: ${error.message}`); }
       }
     }
-    const cashFactor = cashEvents.reduce((sum: number, event: any) => sum + event.factor, 0);
     const generalInYear = operationDate >= b.start && operationDate <= b.end;
     if (cashAccounting ? !generalInYear && cashRecognizedGross === 0 : !generalInYear) continue;
     const cp = invoiceCounterparty(invoice);
