@@ -205,7 +205,7 @@ assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summ
 assert.equal(records.JournalEntry.filter(item=>item.postingKey?.startsWith('payment:invoice-summary')).length,1);
 failNextOperationRead = true;
 const temporaryRead = await invoke({action:'list_payments',company_id:'company-a',invoice_id:'invoice-summary'});
-assert.equal(temporaryRead.response.status,500);
+assert.equal(temporaryRead.response.status,429);
 assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
 
 console.log(JSON.stringify({
