@@ -240,12 +240,20 @@ async function ensureCounterparty(svc, companyId, invoice) {
   const name = clean(isCustomer ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre)) || (isCustomer ? 'Cliente sin identificar' : 'Proveedor sin identificar');
   const taxId = normalizeTaxId(isCustomer ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif));
   const role = isCustomer ? 'cliente' : (invoice.categoria_gasto === 'compras' ? 'proveedor' : 'acreedor');
+  if (invoice.linked_journal_entry_id && invoice.counterparty_account_id) {
+    const historical = await svc.entities.AccountingAccount.get(invoice.counterparty_account_id).catch(() => null);
+    if (historical?.companyId === companyId) return { profile: null, account: historical, role };
+    throw new Error('La subcuenta histórica de la factura no pertenece a esta empresa; revisión necesaria.');
+  }
   const prefix = role === 'cliente' ? '4300' : role === 'proveedor' ? '4000' : '4100';
   let profiles = taxId
     ? await svc.entities.CounterpartyFiscalProfile.filter({ company_id: companyId, taxId }, '-created_date', 10)
     : await svc.entities.CounterpartyFiscalProfile.filter({ company_id: companyId, name }, '-created_date', 10);
-  let profile = (profiles || []).find(p => p.accountingAccountCode && p.accountingRole === role)
-    || (profiles || []).find(p => p.accountingAccountCode);
+  // Un mismo NIF puede ser cliente y proveedor: nunca reutilizar 430 para una compra,
+  // ni sobrescribir la ficha/subcuenta histórica de la otra relación.
+  const compatibleCode = code => isCustomer ? /^430/.test(clean(code)) : /^(400|410)/.test(clean(code));
+  let profile = (profiles || []).find(p => p.accountingRole === role && compatibleCode(p.accountingAccountCode))
+    || (profiles || []).find(p => compatibleCode(p.accountingAccountCode));
   if (profile?.accountingAccountCode) {
     const account = await ensureAccount(svc, companyId, profile.accountingAccountCode, name, isCustomer ? 'cliente' : 'proveedor', {
       nif: taxId,
