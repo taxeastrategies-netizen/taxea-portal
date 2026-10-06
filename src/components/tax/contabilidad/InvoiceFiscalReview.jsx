@@ -246,7 +246,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                 {form.regime === 'criterio_caja' && <fieldset className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 text-xs">
                   <legend className="px-1 font-semibold">Control RECC del asesor</legend>
                   <label className="block">Fecha de realización de la operación<input type="date" className="mt-1 block rounded border p-2" value={form.operationDate || ''} onChange={event => update('operationDate', event.target.value)} /></label>
-                  <p>La fecha determina el límite legal, no la fecha del cobro. Los anticipos requieren su propia factura y cuenta 438/407; no se duplican en la factura final.</p>
+                  <p>La fecha determina el límite legal, no la fecha del cobro. La factura de anticipo usa 438/407, no ingresos/gastos. La factura final debe contener solo la base y cuota nuevas, ya descontado lo facturado por anticipos.</p>
+                  <label className="block">Tipo de documento RECC<select className="mt-1 w-full rounded border p-2" value={form.recc?.documentKind || 'ordinary'} onChange={event => update('recc', { ...form.recc, documentKind: event.target.value, advanceAllocations: [] })}>
+                    <option value="ordinary">Factura ordinaria</option><option value="advance">Factura de anticipo · 438/407</option><option value="final">Factura final por saldo · aplicar anticipos</option>
+                  </select></label>
+                  {form.recc?.documentKind === 'advance' && <p>Indica como fecha de operación la del anticipo, no la entrega futura. El cobro/pago se registra por separado y solo se puede aplicar cuando tenga asiento confirmado.</p>}
+                  {form.recc?.documentKind === 'final' && <div className="space-y-2">
+                    <label className="block">Anticipos aplicados · ID de factura ; base aplicada (€), uno por línea<textarea className="mt-1 w-full rounded border p-2" value={(form.recc?.advanceAllocations || []).map(row => `${row.invoiceId};${row.base}`).join('\n')} onChange={event => update('recc', { ...form.recc, advanceAllocations: event.target.value.split('\n').filter(row => row.trim()).map(row => { const [invoiceId, base] = row.split(';'); return { invoiceId: invoiceId.trim(), base }; }) })} placeholder="Identificador del anticipo;100.00" /></label>
+                    <p>Permite varias aplicaciones parciales, sin superar el anticipo cobrado/pagado ni volver a aplicarlo. El asiento final libera 438/407 contra ingreso/gasto, sin otra cuota IVA. La base de esta factura corresponde únicamente al saldo nuevo.</p>
+                  </div>
                   <label className="flex gap-2"><input type="checkbox" checked={Boolean(form.recc?.advanceConfirmed)} onChange={event => update('recc', { ...form.recc, advanceConfirmed: event.target.checked })} />Anticipos trazados, sin duplicar importes ya facturados por separado</label>
                   <label className="block">Fecha del auto de concurso (solo hechos anteriores)<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.insolvencyDate || ''} onChange={event => update('recc', { ...form.recc, insolvencyDate: event.target.value })} /></label>
                   {invoice.es_rectificativa && <>
