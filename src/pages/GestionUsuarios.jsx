@@ -644,7 +644,7 @@ export default function GestionUsuarios() {
   const pendingActivation = useMemo(() =>
     users.filter(u => {
       const sub = subscriptions.find(s => s.userId === u.id);
-      return sub?.status === 'paid_pending_activation' && !u.isPortalActive;
+      return sub?.status === 'paid_pending_activation' && sub?.firstPaymentStatus === 'paid' && !u.isPortalActive;
     }),
     [users, subscriptions]);
 
