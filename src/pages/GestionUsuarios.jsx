@@ -557,8 +557,8 @@ function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }
     <ModalShell title="Activar cuenta" onClose={onClose}>
       <div className="py-4 space-y-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm text-green-800 font-medium">{isReccQaTrial ? 'Prueba interna RECC' : 'Pago verificado'}</p>
-          <p className="text-sm text-green-700 mt-1">{isReccQaTrial ? 'Cuenta y empresa ficticias aisladas, sin pago ni facturación. Activación autorizada para QA.' : 'Primer pago confirmado por Stripe. La cuenta está lista para activarse.'}</p>
+          <p className="text-sm text-green-800 font-medium">Pago verificado</p>
+          <p className="text-sm text-green-700 mt-1">La suscripción consta pagada y pendiente de activación. El servidor volverá a comprobarlo antes de activar la cuenta.</p>
         </div>
         <div className="bg-secondary/40 rounded-xl p-4 space-y-2 text-sm">
           {[
