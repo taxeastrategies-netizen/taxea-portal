@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
-import { reccAdvanceMetadata, validateReccAdvanceLinks } from './reccAdvances.mjs';
+import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
@@ -723,17 +723,18 @@ Deno.serve(async (req) => {
         const validReccSurcharge = Math.abs(reccSurcharge) <= 0.001 || (invoice.tipo === 'emitida' && breakdown.length === 1
           && expectedSurchargeRate != null && Math.abs(reccSurchargeRate - expectedSurchargeRate) <= 0.001
           && Math.abs(money(base * reccSurchargeRate / 100) - reccSurcharge) <= 0.01);
+        const zeroResidualFinal = isZeroResidualReccFinal(invoice, metadata);
         const validRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
           && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
             || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
-          && selectedActivity?.indirectTax === 'iva' && validBreakdown && Math.abs(base) > 0
+          && selectedActivity?.indirectTax === 'iva' && validBreakdown && (Math.abs(base) > 0 || zeroResidualFinal)
           && Math.abs(Number(invoice.total_factura || 0) - money(base + quota + reccSurcharge - Number(invoice.importe_retencion || 0))) <= 0.02
           && validReccSurcharge
           && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
           && Math.abs(proposedEvaluation.base - base) <= 0.02
           && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
           && Math.abs(proposedEvaluation.deductibleTax) <= Math.abs(quota)
-          && (invoice.es_rectificativa === true || (!proposedEvaluation.specialPreviewError
+          && (zeroResidualFinal || invoice.es_rectificativa === true || (!proposedEvaluation.specialPreviewError
             && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only')));
         if (!validRecc) return Response.json({ error: 'RECC: desglose, precio, retención o clasificación incoherentes. Corrige la factura antes de confirmar.', evaluation: proposedEvaluation }, { status: 422 });
         if (selectedActivity?.indirectTaxRegime === 'criterio_caja' && invoice.fiscal_review_status !== 'validado') {
