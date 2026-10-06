@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { buildInvoicePosting, commitJournalEntry, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
+import { buildInvoicePosting, commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
@@ -307,13 +307,28 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
 async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
   const svc = queuedAccountingClient(base44.asServiceRole);
   const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
-  const proposal = await buildInvoicePosting(svc, companyId, invoice);
-  await seedOperationalPgc(svc, companyId);
+  // Settle the actual posted receivable/payable, never a newly inferred third-party account.
+  const entry = invoicePosting.entry;
+  if (!entry || entry.companyId !== companyId || entry.status !== 'confirmado' || entry.reversalEntryId)
+    throw Object.assign(new Error('El asiento de la factura no está confirmado o ha sido revertido.'), { status: 409 });
+  let originalLines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5001);
+  if (!originalLines?.length && entry.importKey)
+    originalLines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5001);
+  const thirdLines = (originalLines || []).filter(row => row.sourceLineType === 'tercero' || /^(430|400|410)/.test(String(row.accountCode || '')));
+  const codes = [...new Set(thirdLines.map(row => String(row.accountCode || '')))];
+  const postedDue = asMoney(thirdLines.reduce((sum, row) => sum + Number(row.debit || 0) - Number(row.credit || 0), 0));
+  const expectedDue = asMoney(Number(invoice.total_factura) * (invoice.tipo === 'emitida' ? 1 : -1));
+  if (originalLines?.length >= 5001 || codes.length !== 1 || Math.abs(postedDue - expectedDue) > 0.02)
+    throw Object.assign(new Error('Revisa la cuenta de tercero del asiento original antes de registrar el cobro/pago. No se cambia su subcuenta.'), { status: 409 });
+  const counterpartyMatches = await svc.entities.AccountingAccount.filter({ companyId, code: codes[0] }, '-created_date', 2);
+  if (counterpartyMatches.length !== 1 || counterpartyMatches[0].status === 'inactiva')
+    throw Object.assign(new Error('La subcuenta original requiere revisión; no se crea otra cuenta para cobrar/pagar.'), { status: 409 });
+  const counterparty = counterpartyMatches[0];
   const ledgerCode = method === 'efectivo' ? '57000000' : '57200000';
-  const ledgerMatches = await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 1);
-  const ledger = ledgerMatches?.[0];
-  const counterparty = proposal.counterparty?.account;
-  if (!ledger || !counterparty) throw Object.assign(new Error('No se pudieron resolver las cuentas de tesorería y tercero.'), { status: 409 });
+  const ledgerMatches = await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 2);
+  if (ledgerMatches.length > 1 || ledgerMatches[0]?.status === 'inactiva')
+    throw Object.assign(new Error('Revisa la cuenta de tesorería antes de registrar el cobro/pago.'), { status: 409 });
+  const ledger = ledgerMatches[0] || await ensureAccount(svc, companyId, ledgerCode, method === 'efectivo' ? 'Caja, euros' : 'Bancos', 'banco');
   const postingKey = `payment:${invoice.id}:${idempotencyKey}:${SCHEMA_VERSION}`;
   const isCreditNote = Number(invoice.total_factura) < 0;
   const incoming = (invoice.tipo === 'emitida' && !isCreditNote) || (invoice.tipo === 'recibida' && isCreditNote);
