@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const groups = [
+  { canonical: 'base44/functions/fiscalOperations/reccRules.mjs', copies: ['base44/functions/taxModelOperations/reccRules.mjs'] },
   {
     canonical: 'base44/functions/accountingOperations/accountingEngine.ts',
     copies: [
