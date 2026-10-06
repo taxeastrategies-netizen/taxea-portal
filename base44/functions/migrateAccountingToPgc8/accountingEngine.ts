@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
-import { validateReccAdvanceLinks } from './reccAdvances.mjs';
+import { validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
 
 export const SCHEMA_VERSION = 'pgc8-v1';
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -374,7 +374,7 @@ function isValidatedSimpleReccInvoice(invoice) {
     && ['emitida', 'recibida'].includes(clean(invoice.tipo))
     && (invoice.es_rectificativa !== true || !!clean(invoice.recc_metadata))
     && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
-    && [0,21,10,4].includes(rate) && Math.abs(base) > 0 && Math.abs(quota) > 0
+    && [0,21,10,4].includes(rate) && ((Math.abs(base) > 0 && Math.abs(quota) > 0) || isZeroResidualReccFinal(invoice))
     && (rate === 0 || Math.abs(money(base * rate / 100) - quota) <= 0.01)
     && Math.abs(money(invoice.total_factura) - money(base + quota + money(invoice.cuota_recargo) - money(invoice.importe_retencion))) <= 0.02
     && (Math.abs(money(invoice.cuota_recargo)) <= 0.001 || (invoice.tipo === 'emitida'
@@ -399,7 +399,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
   const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) ? money(invoice.cuota_recargo) : 0;
   const total = money(invoice.total_factura || base + tax + surcharge - withholding);
-  if (!invoice.es_rectificativa && base <= 0) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
+  if (!invoice.es_rectificativa && base <= 0 && !isZeroResidualReccFinal(invoice)) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
   const absBase = Math.abs(base);
   const absTax = Math.abs(tax);
@@ -481,7 +481,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
       : [line(resultAccount, amount, 0, 'gasto'), line(account, 0, amount, 'ajuste')];
     lines.push(...released.map(row => ({ ...row, description })));
   }
-  return { lines, counterparty, resultAccount, taxKind, base, tax, withholding, total, advance };
+  return { lines: lines.filter(row => row.debit > 0 || row.credit > 0), counterparty, resultAccount, taxKind, base, tax, withholding, total, advance };
 }
 
 function validateLines(lines) {

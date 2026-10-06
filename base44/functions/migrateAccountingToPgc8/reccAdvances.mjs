@@ -40,10 +40,17 @@ export async function assertReccAdvanceCanReverse(svc, companyId, invoice) {
     && reccAdvanceMetadata(metadata(row)).advanceAllocations.some(link => link.invoiceId === invoice.id)))
     throw new Error('El anticipo tiene aplicaciones activas. Revierte primero la factura final y después revisa el anticipo; no se rompe el vínculo contable.');
 }
+// Una liquidación final sin saldo no genera otro cobro ni otra cuota: solo aplica el anticipo.
+export function isZeroResidualReccFinal(invoice, input = metadata(invoice)) {
+  const result = reccAdvanceMetadata(input);
+  return result.documentKind === 'final' && result.advanceAllocations.length > 0
+    && ['base_imponible','cuota_iva','total_factura','importe_retencion','cuota_recargo'].every(key => Number(invoice[key] || 0) === 0)
+    && cents(result.finalOperationBase) === result.advanceAllocations.reduce((sum, row) => sum + cents(row.base), 0);
+}
 export async function validateReccAdvanceLinks(svc, companyId, invoice, input = metadata(invoice)) {
   const result = reccAdvanceMetadata(input);
   if (result.documentKind === 'ordinary') return { ...result, applications: [] };
-  if (invoice.es_rectificativa || Number(invoice.base_imponible) <= 0 || clean(invoice.moneda || 'EUR') !== 'EUR')
+  if (invoice.es_rectificativa || (Number(invoice.base_imponible) <= 0 && !isZeroResidualReccFinal(invoice, result)) || clean(invoice.moneda || 'EUR') !== 'EUR')
     throw new Error('El circuito de anticipos requiere factura positiva en EUR. Las devoluciones deben revisar su rectificativa y ajuste contable.');
   if (!taxId(invoice)) throw new Error('Identifica fiscalmente al cliente/proveedor del anticipo.');
   if (result.documentKind === 'advance') return { ...result, applications: [] };
