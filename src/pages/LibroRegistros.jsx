@@ -1,3 +1,4 @@
+import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -322,7 +323,7 @@ function LibroTable({ data, tipo, loading }) {
                 {!esGasto && <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell text-xs">{item.cliente_nif || '—'}</td>}
                 <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell max-w-[180px] truncate text-xs">{item.concepto || '—'}</td>
                 <td className="px-3 py-2.5 text-right text-xs">{(item.base_imponible || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{item.tipo_iva ?? item.tipo_impuesto ?? 0}%</td>
+                <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{invoiceTaxRateLabel(item)}</td>
                 <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{(item.cuota_iva || item.cuota_impuesto || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
                 {!esGasto && <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{item.retencion_irpf ?? 0}%</td>}
                 <td className="px-3 py-2.5 text-right font-semibold text-xs">{(item.total_factura || item.total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
