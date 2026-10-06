@@ -984,7 +984,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
         : 'El recargo requiere actividad minorista, perfil y línea fiscal validados por asesor antes del asiento.');
     }
   }
-  if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase)) {
+  if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase && !(validatedRecc && invoice.tipo === 'emitida'))) {
     throw new Error('La inversión de sujeto pasivo, el margen o el recargo requieren asientos fiscales específicos.');
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
