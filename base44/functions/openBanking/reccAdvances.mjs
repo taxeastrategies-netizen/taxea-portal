@@ -30,6 +30,13 @@ async function all(entity, query, sort = '-created_date') {
   }
   throw new Error('El histórico de anticipos requiere consulta segmentada antes de aplicar importes.');
 }
+export async function assertReccAdvanceCanReverse(svc, companyId, invoice) {
+  if (clean(invoice.fiscal_regime) !== 'criterio_caja' || reccAdvanceMetadata(metadata(invoice)).documentKind !== 'advance') return;
+  const consumers = await all(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
+  if (consumers.some(row => row.id !== invoice.id && !row.anulada && row.fiscal_review_status === 'validado'
+    && reccAdvanceMetadata(metadata(row)).advanceAllocations.some(link => link.invoiceId === invoice.id)))
+    throw new Error('El anticipo tiene aplicaciones activas. Revierte primero la factura final y después revisa el anticipo; no se rompe el vínculo contable.');
+}
 export async function validateReccAdvanceLinks(svc, companyId, invoice, input = metadata(invoice)) {
   const result = reccAdvanceMetadata(input);
   if (result.documentKind === 'ordinary') return { ...result, applications: [] };
