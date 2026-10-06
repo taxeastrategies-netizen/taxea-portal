@@ -1045,7 +1045,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
     }
   } catch (error) { return review(`Factura ${invoiceLabel}: ${error.message}`); }
-  const originalAmounts = { base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota ?? line.quota), nonDeductibleQuota: money(line.nonDeductibleQuota) };
+  const originalAmounts = { base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota ?? line.quota), nonDeductibleQuota: money(line.nonDeductibleQuota), surchargeQuota: money(line.surchargeQuota) };
   let cumulativeFactor = 0;
   const allocatedAmounts = { base: 0, quota: 0, deductibleQuota: 0, nonDeductibleQuota: 0 };
   const allocatedEvents = events.map((event: any) => {
@@ -1069,6 +1069,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       quota: selectedAmount('quota'),
       deductibleQuota: selectedAmount('deductibleQuota'),
       nonDeductibleQuota: selectedAmount('nonDeductibleQuota'),
+      surchargeQuota: selectedAmount('surchargeQuota'),
       fiscalSourceIds: unique([line.sourceId, ...selectedEvents.flatMap((event: any) => event.sourceIds)]),
       cashRecognition: { factor, events: selectedEvents, operationDate, forcedRecognitionDate: schedule.forcedRecognitionDate, cancelledFactor: schedule.cancelledFactor || 0 },
     },
@@ -1478,6 +1479,9 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (simplifiedTaggedLines.length) data.warnings.push(`${simplifiedTaggedLines.length} línea(s) marcadas como régimen simplificado no se suman al régimen general; su liquidación procede de módulos y de la página 2.`);
   const rates = new Map<number, any>();
   const categorizedOutputRates = new Map<string, any>();
+  const surchargeRates = new Map<number, any>();
+  let outputAdjustmentBase = 0, outputAdjustmentQuota = 0, surchargeAdjustmentBase = 0, surchargeAdjustmentQuota = 0;
+  const outputAdjustmentIds: string[] = [], surchargeAdjustmentIds: string[] = [];
   const deductibleRates = new Map<string, any>();
   const sourceIdsOf = (line: any) => unique(Array.isArray(line.fiscalSourceIds) ? line.fiscalSourceIds : [line.sourceId]);
   const addRate = (rate: number, base: number, quota: number, ids: string[]) => {
@@ -1513,7 +1517,14 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
     if (invoice.tipo === 'emitida') {
       if (['subject_taxed', 'subject_zero', 'special_margin'].includes(op)) {
         const rate = Number(line.rate || 0);
-        addRate(rate, base, quota, ids);
+        const adjustment = !annual && invoice.es_rectificativa === true;
+        if (adjustment) { outputAdjustmentBase += base; outputAdjustmentQuota += quota; outputAdjustmentIds.push(...ids); }
+        else addRate(rate, base, quota, ids);
+        if (money(line.surchargeQuota)) {
+          if (adjustment) { surchargeAdjustmentBase += base; surchargeAdjustmentQuota += money(line.surchargeQuota); surchargeAdjustmentIds.push(...ids); }
+          else { const surchargeRate = Number(line.surchargeRate || invoice.tipo_recargo); const row = surchargeRates.get(surchargeRate) || {rate:surchargeRate,base:0,quota:0,sourceIds:[]};
+            row.base += base; row.quota += money(line.surchargeQuota); row.sourceIds.push(...ids); surchargeRates.set(surchargeRate,row); }
+        }
         const regime = clean(line.regime);
         const category = op === 'special_margin' || ['rebu','bienes_usados'].includes(regime) ? 'margin' : regime === 'criterio_caja' ? 'cash' : regime === 'agencias_viajes' ? 'travel' : regime === 'grupo_entidades' ? 'intragroup' : 'ordinary';
         addCategorizedOutputRate(category, rate, base, quota, ids);
@@ -1542,7 +1553,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   }
   if (pendingReviewLines) data.blockers.push(`${pendingReviewLines} línea(s) fiscales incluidas tienen su clasificación o deducibilidad pendiente de revisión.`);
   for (const row of [...rates.values()].sort((a, z) => a.rate - z.rate)) addField(fields, `RATE_${row.rate}`, `Base y cuota al ${row.rate}%`, row.quota, row.sourceIds, `Devengado: base ${money(row.base).toFixed(2)} €`);
-  const outputQuota = money([...rates.values()].reduce((s, r) => s + r.quota, 0) + intraQuota + reverseQuota);
+  const outputQuota = money([...rates.values()].reduce((s, r) => s + r.quota, 0) + [...surchargeRates.values()].reduce((s,r)=>s+r.quota,0)
+    + outputAdjustmentQuota + surchargeAdjustmentQuota + intraQuota + reverseQuota);
   const generalRawResult = money(outputQuota - deductibleQuota);
   const simplified = model === '303' && !annual ? calculate303Simplified(data, adjustments, fields) : { active: false, details: [], result: 0, fields: {}, sourceIds: [] };
   const rawResult = money(generalRawResult + money(simplified.result));
@@ -1562,6 +1574,16 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   if (selection.carry.length) addField(fields, 'DEDUCIBLE_ARRASTRADO', 'Cuota recibida tarde deducida en este período', selection.carry.reduce((sum: number, row: any) => sum + money(row.quota), 0), selection.carry.map((row: any) => row.sourceId), 'Deducciones de períodos anteriores');
   if (!annual && model === '303') {
+    addField(fields, '13', 'Modificaciones de bases imponibles', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '14', 'Modificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
+    for (const [rate, boxes] of [[0.5,['16','17','18']],[1.4,['19','20','21']],[5.2,['22','23','24']]] as any[]) {
+      const row = surchargeRates.get(rate);
+      addField(fields, boxes[0], `Base recargo ${rate}%`, row?.base || 0, row?.sourceIds || [], 'Recargo repercutido');
+      addField(fields, boxes[1], `Tipo recargo ${rate}%`, row ? rate : 0, row?.sourceIds || [], 'Recargo repercutido');
+      addField(fields, boxes[2], `Cuota recargo ${rate}%`, row?.quota || 0, row?.sourceIds || [], 'Recargo repercutido');
+    }
+    addField(fields, '25', 'Modificaciones de bases de recargo', surchargeAdjustmentBase, surchargeAdjustmentIds, 'Rectificaciones');
+    addField(fields, '26', 'Modificaciones de cuotas de recargo', surchargeAdjustmentQuota, surchargeAdjustmentIds, 'Rectificaciones');
     addField(fields, '62', 'RECC: base de operaciones emitidas según devengo general', criterionCash, reccInformation?.issued.sourceIds || [], 'Información adicional', { formula: 'Base completa de facturas RECC emitidas en el período de operación, con independencia del cobro.' });
     addField(fields, '63', 'RECC: cuota de operaciones emitidas según devengo general', criterionCashQuota, reccInformation?.issued.sourceIds || [], 'Información adicional');
     addField(fields, '74', 'RECC: base de operaciones recibidas según devengo general', criterionCashReceived, reccInformation?.received.sourceIds || [], 'Información adicional', { formula: 'Base completa de facturas RECC recibidas en el período de operación, con independencia del pago.' });
@@ -1576,7 +1598,10 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (!annual && !manualBalanceProvided && !historicalBalance.complete) data.blockers.push(`${historicalBalance.reason} Importa el período anterior o confirma manualmente el saldo, incluso si es cero.`);
   if (!annual && result < 0 && !['a_compensar','a_devolver'].includes(resultDisposition)) data.blockers.push('Confirma si el resultado negativo queda a compensar o se solicita a devolver.');
   if (!annual && result < 0 && resultDisposition === 'a_devolver' && !['4T','12'].includes(clean(data.period))) data.blockers.push('La devolución del saldo no se habilita fuera del último período del año salvo supuesto especial revisado.');
-  const operations = { rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), categorizedOutputRates: [...categorizedOutputRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), deductibleRates: [...deductibleRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), nonDeductibleBase: money(nonDeductibleBase), generalRawResult, rawResult, simplified, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash), criterionCashQuota: money(criterionCashQuota), criterionCashReceived: money(criterionCashReceived), criterionCashReceivedQuota: money(criterionCashReceivedQuota), criterionCashTaxpayer, criterionCashRecipient };
+  const operations = { surchargeRates: [...surchargeRates.values()].map(r=>({...r,base:money(r.base),quota:money(r.quota)})),
+    outputAdjustmentBase: money(outputAdjustmentBase), outputAdjustmentQuota: money(outputAdjustmentQuota),
+    surchargeAdjustmentBase: money(surchargeAdjustmentBase), surchargeAdjustmentQuota: money(surchargeAdjustmentQuota),
+    rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), categorizedOutputRates: [...categorizedOutputRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), deductibleRates: [...deductibleRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), nonDeductibleBase: money(nonDeductibleBase), generalRawResult, rawResult, simplified, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash), criterionCashQuota: money(criterionCashQuota), criterionCashReceived: money(criterionCashReceived), criterionCashReceivedQuota: money(criterionCashReceivedQuota), criterionCashTaxpayer, criterionCashRecipient };
   if (selection.review.length) data.blockers.push(`${selection.review.length} operación(es) requieren confirmar la fecha de devengo, cobro, pago o deducción antes de presentar.`);
   if (selection.carry.some((row: any) => row.receiptDateInferred)) data.warnings.push('Hay deducciones diferidas asignadas mediante la fecha de alta en Taxea porque no consta la fecha acreditada de recepción. Confírmala antes de presentar.');
   if (annual) {
@@ -2795,6 +2820,7 @@ function export303(company: any, profile: any, year: number, period: string, cal
   const simplifiedFlag=hasSimplified?(hasGeneral?'2':'1'):'3';
   const p1=page(1581,1570,'</T30301000>'); place(p1,1,11,'<T30301000>'); place(p1,13,1,declarationType(calculation.result)); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,80,normalizedText(company.razon_social,80)); place(p1,103,4,String(year)); place(p1,107,2,period); place(p1,109,1,'2'); place(p1,110,1,profile?.isREDEME?'1':'2'); place(p1,111,1,simplifiedFlag); place(p1,112,1,'2'); place(p1,113,1,(o.criterionCashTaxpayer||o.criterionCash)?'1':'2'); place(p1,114,1,(o.criterionCashRecipient||o.criterionCashReceived)?'1':'2'); place(p1,115,1,profile?.usesSpecialProrata?'1':'2'); place(p1,116,1,'2'); place(p1,117,1,profile?.hasInsolvencyProceedings?'1':'2'); place(p1,127,1,profile?.usesSII?'1':'2'); place(p1,128,1,['4T','12'].includes(period)?'2':'0'); place(p1,129,1,['4T','12'].includes(period)?'1':'0'); place(p1,130,1,['01','1T','2T','3T','4T'].includes(period)?'0':'2');
   const rateFields:Record<string, number[]>={0:[131,148,153],4:[209,226,231],10:[287,304,309],21:[326,343,348]}; for(const [rate,positions] of Object.entries(rateFields)){const row:any=rates.get(Number(rate))||{}; place(p1,positions[0],17,numeric(row.base,17)); place(p1,positions[1],5,numeric(Number(rate),5,false,2)); place(p1,positions[2],17,numeric(row.quota,17));}
+  for (const [box,position,length] of [['13',433,17],['14',450,17],['16',540,17],['17',557,5],['18',562,17],['19',579,17],['20',596,5],['21',601,17],['22',618,17],['23',635,5],['24',640,17],['25',657,17],['26',674,17]] as any[]) place(p1,position,length,numeric(values[box],length,true,2));
   place(p1,365,17,numeric(o.intraBase,17)); place(p1,382,17,numeric(o.intraQuota,17)); place(p1,399,17,numeric(o.reverseBase,17)); place(p1,416,17,numeric(o.reverseQuota,17)); place(p1,696,17,numeric(o.outputQuota,17,true)); place(p1,713,17,numeric(o.deductibleBase,17)); place(p1,730,17,numeric(o.deductibleQuota,17)); place(p1,1002,17,numeric(o.deductibleQuota,17,true)); place(p1,1019,17,numeric(o.generalRawResult??money((o.outputQuota||0)-(o.deductibleQuota||0)),17,true));
   const simplifiedPages:string[]=[];
   if(hasSimplified){
