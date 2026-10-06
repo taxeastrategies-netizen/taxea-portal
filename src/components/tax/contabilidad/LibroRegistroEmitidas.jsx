@@ -1,3 +1,4 @@
+import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -142,7 +143,7 @@ export default function LibroRegistroEmitidas({ companyId }) {
                     <td className="px-3 py-2">{inv.cliente_nombre || '—'}</td>
                     <td className="px-3 py-2 font-mono text-muted-foreground">{inv.cliente_nif || '—'}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
-                    <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
+                    <td className="px-3 py-2 text-right">{invoiceTaxRateLabel(inv)}</td>
                     <td className="px-3 py-2 text-right font-mono">{fmt(inv.cuota_iva)}</td>
                     {hasRecargoSales && <td className="px-3 py-2 text-right font-mono font-semibold text-amber-700">{fmt(Number(inv.base_imponible || 0) + (inv.fiscal_regime === 'recargo_equivalencia' ? Number(inv.cuota_iva || 0) : 0))}</td>}
                     <td className="px-3 py-2 text-right font-mono">{getWithholdingAmount(inv) ? fmt(getWithholdingAmount(inv)) : '—'}</td>
