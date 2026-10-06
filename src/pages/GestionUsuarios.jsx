@@ -531,8 +531,6 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
 }
 
 function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }) {
-  const isReccQaTrial = targetUser.id === '6ac4ad29f474f30e0e2968ce' &&
-    String(targetUser.email || '').trim().toLowerCase() === 'taxeastrategies+qa-recc-2026@gmail.com';
   const [activating, setActivating] = useState(false);
   const [note, setNote] = useState('');
   const [activationError, setActivationError] = useState('');
@@ -544,7 +542,6 @@ function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }
       const response = await base44.functions.invoke('activateUnlimitedUser', {
         userId: targetUser.id,
         note,
-        ...(isReccQaTrial ? { qaTrial: true } : {}),
       });
       const payload = response?.data ?? response;
       if (!payload?.success) throw new Error(payload?.error || 'No se pudo activar la cuenta.');
