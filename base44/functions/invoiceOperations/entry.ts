@@ -618,6 +618,18 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'La propuesta fiscal debe aprobarse antes de cobrar, pagar o conciliar.' }, { status: 409 });
     }
 
+    if (action === 'get_accounting_entry') {
+      if (!invoice.linked_journal_entry_id) return Response.json({ ok: true, entry: null, lines: [], reason: 'Pendiente de confirmación contable por el asesor.' });
+      const svc = queuedAccountingClient(base44.asServiceRole);
+      const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
+      if (!entry || entry.companyId !== companyId) throw Object.assign(new Error('El asiento vinculado no pertenece a la empresa o no está disponible.'), { status: 409 });
+      let rows = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5001);
+      if (!rows.length && entry.importKey) rows = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.importKey }, 'lineNumber', 5001);
+      if (rows.length > 5000) throw Object.assign(new Error('El asiento requiere consulta segmentada en el Diario.'), { status: 422 });
+      const lines = rows.map(row => ({ id: row.id, accountCode: row.accountCode || row.subcuenta, accountName: row.accountName || row.accountLabel || '', description: row.description || '', debit: Number(row.debit || row.debeE || 0), credit: Number(row.credit || row.haberE || 0) }));
+      const debit = asMoney(lines.reduce((sum, row) => sum + row.debit, 0)), credit = asMoney(lines.reduce((sum, row) => sum + row.credit, 0));
+      return Response.json({ ok: true, entry: { id: entry.id, number: entry.entryNumber, date: entry.date, status: entry.status, reversed: !!entry.reversalEntryId, totalDebit: debit, totalCredit: credit, balanced: lines.length >= 2 && Math.abs(debit-credit) <= MONEY_EPSILON }, lines, source: 'JournalEntry + JournalEntryLine' });
+    }
     if (action === 'mark_accounting_review') {
       if (!['admin', 'super_admin'].includes(roleOf(user))) {
         return Response.json({ error: 'Solo administración puede cambiar el estado de revisión contable.' }, { status: 403 });
