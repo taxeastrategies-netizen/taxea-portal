@@ -1047,7 +1047,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   } catch (error) { return review(`Factura ${invoiceLabel}: ${error.message}`); }
   const originalAmounts = { base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota ?? line.quota), nonDeductibleQuota: money(line.nonDeductibleQuota), surchargeQuota: money(line.surchargeQuota) };
   let cumulativeFactor = 0;
-  const allocatedAmounts = { base: 0, quota: 0, deductibleQuota: 0, nonDeductibleQuota: 0 };
+  const allocatedAmounts = { base: 0, quota: 0, deductibleQuota: 0, nonDeductibleQuota: 0, surchargeQuota: 0 };
   const allocatedEvents = events.map((event: any) => {
     cumulativeFactor = Math.min(1, cumulativeFactor + event.factor);
     const amounts: any = {};
