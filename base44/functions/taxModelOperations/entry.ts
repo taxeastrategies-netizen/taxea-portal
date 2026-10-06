@@ -1057,7 +1057,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       deductibleQuota: selectedAmount('deductibleQuota'),
       nonDeductibleQuota: selectedAmount('nonDeductibleQuota'),
       fiscalSourceIds: unique([line.sourceId, ...selectedEvents.flatMap((event: any) => event.sourceIds)]),
-      cashRecognition: { factor, events: selectedEvents, operationDate, forcedRecognitionDate },
+      cashRecognition: { factor, events: selectedEvents, operationDate, forcedRecognitionDate: schedule.forcedRecognitionDate, cancelledFactor: schedule.cancelledFactor || 0 },
     },
     review: null,
   };
