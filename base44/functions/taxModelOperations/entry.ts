@@ -1,8 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { isZeroResidualReccFinal } from './reccAdvances.mjs';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v27-recc-advances';
+const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v28-recc-final-zero';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -981,6 +982,9 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   if (rawPayments.length !== payments.length) {
     return review(`La factura ${invoiceLabel} tiene cobros o pagos no confirmados u omitidos; reconcilia su estado antes de calcular el criterio de caja.`);
   }
+  // El IVA está en los anticipos originales; la final totalmente anticipada no vuelve a liquidarlo.
+  if (!invoice.es_rectificativa && invoice.fiscal_review_status === 'validado' && isZeroResidualReccFinal(invoice)
+    && Number(line.base || 0) === 0 && Number(line.quota || 0) === 0 && rawPayments.length === 0) return { line: null };
   const payable = invoicePayable(invoice);
   const siblingLines = (data.taxLines || []).filter((candidate: any) => candidate.invoice?.id === invoice.id || candidate.invoiceId === invoice.id);
   const invoiceLines = siblingLines.length ? siblingLines : [line];
