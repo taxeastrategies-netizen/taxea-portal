@@ -429,7 +429,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             <Section title="Cobro y pagos" icon={CheckCircle2}>
               <div className="space-y-2 mb-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Estado cobro</span>
+                  <span className="text-xs text-muted-foreground">{invoice.tipo === 'recibida' ? 'Estado del pago' : 'Estado del cobro'}</span>
                   <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", ps.color)}>{ps.label}</span>
                 </div>
                 {invoice.estado_cobro !== 'cobrada' && (
