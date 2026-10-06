@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.09.20-v25';
+const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v26-recc';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -1574,6 +1574,18 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   addField(fields, 'DEDUCIBLE_BASE', 'Base de cuotas deducibles', deductibleBase, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   if (selection.carry.length) addField(fields, 'DEDUCIBLE_ARRASTRADO', 'Cuota recibida tarde deducida en este período', selection.carry.reduce((sum: number, row: any) => sum + money(row.quota), 0), selection.carry.map((row: any) => row.sourceId), 'Deducciones de períodos anteriores');
+  if (annual && model === '390') {
+    addField(fields, '29', 'Rectificaciones de bases repercutidas', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '30', 'Rectificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '62', 'Rectificación de deducciones', inputAdjustmentQuota, inputAdjustmentIds, 'Rectificaciones');
+    for (const [rate, boxes] of [[0.5,['35','36']],[1.4,['599','600']],[5.2,['601','602']]] as any[]) {
+      const row = surchargeRates.get(rate);
+      addField(fields, boxes[0], `Base recargo ${rate}%`, row?.base || 0, row?.sourceIds || [], 'Recargo repercutido');
+      addField(fields, boxes[1], `Cuota recargo ${rate}%`, row?.quota || 0, row?.sourceIds || [], 'Recargo repercutido');
+    }
+    addField(fields, '43', 'Modificaciones de bases de recargo', surchargeAdjustmentBase, surchargeAdjustmentIds, 'Rectificaciones');
+    addField(fields, '44', 'Modificaciones de cuotas de recargo', surchargeAdjustmentQuota, surchargeAdjustmentIds, 'Rectificaciones');
+  }
   if (!annual && model === '303') {
     addField(fields, '14', 'Modificaciones de bases imponibles', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
     addField(fields, '15', 'Modificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
