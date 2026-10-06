@@ -246,6 +246,22 @@ assert.equal(reccSaleLines.find(item => item.sourceLineType === 'ingreso')?.cred
 assert.equal(reccSaleLines.reduce((sum, item) => sum + Number(item.debit || 0), 0), 121);
 assert.equal((await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === reccSale.id), 'advisor@taxea.test')).alreadyPosted, true);
 assert.equal(records.JournalEntry.filter(item => item.documentId === reccSale.id).length, 1);
+const reccSurchargeSale = await entity('Invoice').create({
+  ...reccSale, id: 'recc-surcharge-retention', numero_factura: 'E-RECC-RECARGO',
+  tipo_recargo: 5.2, cuota_recargo: 5.2, retencion_irpf: 15, importe_retencion: 15, total_factura: 111.2,
+});
+await entity('InvoiceTaxLine').create({ companyId: 'company-a', invoiceId: reccSurchargeSale.id, lineNumber: 1,
+  rate: 21, regime: 'criterio_caja', taxKind: 'iva', operationType: 'subject_taxed',
+  reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'fa',
+  base: 100, quota: 21, deductibleQuota: 0, surchargeRate: 5.2, surchargeQuota: 5.2 });
+const surchargePosting = await postInvoice(svc, 'company-a', reccSurchargeSale, 'advisor@taxea.test');
+const surchargePostingLines = records.JournalEntryLine.filter(item => item.journalEntryId === surchargePosting.entry.id);
+assert.equal(surchargePostingLines.find(item => item.accountCode === '47700000')?.credit, 26.2);
+assert.equal(surchargePostingLines.find(item => item.accountCode === '47300000')?.debit, 15);
+assert.equal(surchargePostingLines.find(item => item.sourceLineType === 'ingreso')?.credit, 100);
+assert.equal(surchargePostingLines.find(item => item.accountCode.startsWith('430'))?.debit, 111.2);
+assert.equal((await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === reccSurchargeSale.id), 'advisor@taxea.test')).alreadyPosted, true);
+assert.equal(records.JournalEntry.filter(item => item.documentId === reccSurchargeSale.id).length, 1);
 const reccPurchase = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'R-RECC-VALIDA', fecha_emision: '2024-07-07', proveedor_nombre: 'Proveedor RECC sintético', proveedor_nif: 'B66666666', concepto: 'Compra RECC', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121, importe_retencion: 0, deductible_tax_amount: 21, non_deductible_tax_amount: 0, indirect_tax_kind: 'iva', fiscal_regime: 'criterio_caja', fiscal_treatment: 'subject_taxed', fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_activity_id: 'fa', moneda: 'EUR' });
 await entity('InvoiceTaxLine').create({ companyId: 'company-a', invoiceId: reccPurchase.id, lineNumber: 1, rate: 21, regime: 'criterio_caja', taxKind: 'iva', operationType: 'subject_taxed', reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'fa', base: 100, quota: 21, deductibleQuota: 21 });
 const reccPurchasePosting = await postInvoice(svc, 'company-a', reccPurchase, 'advisor@taxea.test', { status: 'confirmado' });
