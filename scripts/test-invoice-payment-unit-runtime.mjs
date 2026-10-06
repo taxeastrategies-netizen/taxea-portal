@@ -47,7 +47,7 @@ const records = {
   InvoiceTimelineEvent: [],
   AccountingPostingOperation: [],
   JournalEntry: [],
-  JournalEntryLine: [{id:'original-third',journalEntryId:'invoice-entry-1',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:121,credit:0}],
+  JournalEntryLine: [{id:'original-third',journalEntryId:'invoice-entry-1',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:121,credit:0}, {id:'original-bank-third',journalEntryId:'invoice-entry-2',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:50,credit:0}],
   AccountingAccount: [
     { id: 'account-bank-generic', companyId: 'company-a', code: '57200000', name: 'Bancos', type: 'banco', status: 'activa' },
     { id: 'account-bank-real', companyId: 'company-a', code: '57200001', name: 'Banco prueba', type: 'banco', status: 'activa' },
@@ -196,6 +196,7 @@ assert.equal(records.JournalEntry.filter(item => item.postingKey === 'bank:bank-
 assert.equal(records.BankTransaction[0].estado_conciliacion, 'conciliada_manual');
 assert.equal(records.Invoice.find(item => item.id === 'invoice-bank').importe_pendiente, 0);
 assert.equal(records.InvoiceTimelineEvent.filter(item => item.invoice_id === 'invoice-bank' && item.event_type === 'conciliacion_bancaria').length, 1);
+assert.equal(records.BankTransaction[0].accounting_account_code,'43000001','La conciliación también cancela la subcuenta original del diario');
 
 records.Invoice.push({ id:'invoice-summary', company_id:'company-a', tipo:'emitida', numero_factura:'F-SUMMARY', fecha_emision:'2026-09-01', total_factura:121, moneda:'EUR', estado_cobro:'pendiente', linked_journal_entry_id:'invoice-entry-summary' });
 records.JournalEntryLine.push({id:'original-summary-third',journalEntryId:'invoice-entry-summary',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:121,credit:0});
