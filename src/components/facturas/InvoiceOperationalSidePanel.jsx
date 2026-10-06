@@ -774,7 +774,7 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
         onOpenChange={open => { if (!open) setActionMode(null); }}
         onChanged={async data => {
           if (data?.ok) {
-            setPaymentProjection({ invoiceId: sourceInvoice.id, estado_cobro: data.estado_cobro, importe_pagado: data.paid, importe_pendiente: data.outstanding });
+            setPaymentProjection({ invoiceId: sourceInvoice.id, estado_cobro: data.estado_cobro || (Number(data.outstanding) <= 0.01 ? 'cobrada' : Number(data.paid) > 0 ? 'parcial' : 'pendiente'), importe_pagado: data.paid, importe_pendiente: data.outstanding });
             setPaymentSyncError(data.summary_warning || '');
           }
           await onRefresh?.();
