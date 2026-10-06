@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { SCHEMA_VERSION, canonical8, createJournalEntry } from './accountingEngine.ts';
+import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
 
     const reason = String(motivo || '').trim();
     if (!reason) return Response.json({ error: 'El motivo de anulación es obligatorio.' }, { status: 400 });
-    const svc = base44.asServiceRole;
+    const svc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 750 });
     const now = new Date().toISOString();
     const accountingDate = String(body.accountingDate || now.slice(0, 10));
     if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
