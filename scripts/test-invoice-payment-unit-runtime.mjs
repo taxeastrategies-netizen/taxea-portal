@@ -209,7 +209,6 @@ assert.equal(temporaryRead.response.status,429);
 assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
 
 await entities.JournalEntry.create({id:'invoice-entry-1',companyId:'company-a',entryNumber:'QA-1',date:'2026-09-01',status:'confirmado'});
-await entities.JournalEntryLine.bulkCreate?.([]); // El proxy no necesita escrituras masivas para esta lectura.
 await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'43000001',debit:121,credit:0});
 await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'70500000',debit:0,credit:100});
 await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'47700000',debit:0,credit:21});
