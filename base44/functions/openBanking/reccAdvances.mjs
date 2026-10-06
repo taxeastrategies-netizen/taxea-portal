@@ -40,6 +40,39 @@ export async function assertReccAdvanceCanReverse(svc, companyId, invoice) {
     && reccAdvanceMetadata(metadata(row)).advanceAllocations.some(link => link.invoiceId === invoice.id)))
     throw new Error('El anticipo tiene aplicaciones activas. Revierte primero la factura final y después revisa el anticipo; no se rompe el vínculo contable.');
 }
+
+export async function acquireReccAdvanceLocks(svc, companyId, input, finalInvoiceId) {
+  const result = reccAdvanceMetadata(input);
+  if (result.documentKind !== 'final') return async () => {};
+  const token = crypto.randomUUID();
+  const acquired = [];
+  const release = async () => {
+    for (const id of acquired.slice().reverse()) {
+      const released = await svc.entities.Invoice.updateMany(
+        { id, company_id: companyId, recc_application_lock_token: token },
+        { $set: { recc_application_lock_token: '', recc_application_lock_started_at: '', recc_application_lock_document_id: '' } });
+      if (!released?.success || Number(released.updated) !== 1)
+        throw new Error('No se pudo liberar el bloqueo RECC. El asesor debe revisar la incidencia antes de reutilizar el anticipo.');
+    }
+  };
+  try {
+    for (const id of result.advanceAllocations.map(row => row.invoiceId).sort()) {
+      // CAS sobre el anticipo existente, no un comprobar-y-crear ni una cola de una sola instancia.
+      // No caduca automáticamente: un proceso interrumpido queda protegido para revisión del asesor.
+      const claim = await svc.entities.Invoice.updateMany(
+        { id, company_id: companyId, $or: [{ recc_application_lock_token: { $exists: false } }, { recc_application_lock_token: null }, { recc_application_lock_token: '' }] },
+        { $set: { recc_application_lock_token: token, recc_application_lock_started_at: new Date().toISOString(), recc_application_lock_document_id: finalInvoiceId } });
+      if (!claim?.success || Number(claim.updated) !== 1)
+        throw Object.assign(new Error('Otro proceso está confirmando este anticipo, o no pertenece a esta empresa. Espera a que termine; no se ha aplicado dos veces.'), { status: 409 });
+      acquired.push(id);
+    }
+    return release;
+  } catch (error) {
+    try { await release(); } catch (releaseError) { console.error('[RECC lock]', releaseError.message); }
+    throw error;
+  }
+}
+
 // Una liquidación final sin saldo no genera otro cobro ni otra cuota: solo aplica el anticipo.
 export function isZeroResidualReccFinal(invoice, input = metadata(invoice)) {
   const result = reccAdvanceMetadata(input);
