@@ -21,7 +21,7 @@
     "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-financial-report-truth.mjs && node scripts/test-tax-artifact-integrity.mjs && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs"
   },
   "dependencies": {
-    "@base44/sdk": "^0.8.52",
+    "@base44/sdk": "^0.8.53",
     "@base44/vite-plugin": "^1.0.44",
     "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^4.1.2",
