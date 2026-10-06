@@ -180,6 +180,9 @@ const configurationCount = records.AccountingConfiguration.length;
 const yearCount = records.AccountingFiscalYear.length;
 const denied = await invoke({ action: 'ensure_accounting_ready', companyId: 'company-new' });
 assert.equal(denied.response.status, 403);
+currentUser = { id:'user-other', email:'other@qa.test', role:'user', company_id:'company-new', data:{company_id:'company-new'} };
+const manipulated = await invoke({action:'ensure_accounting_ready',companyId:'company-new'});
+assert.equal(manipulated.response.status,403,'Un company_id manipulable no autoriza otra empresa');
 assert.equal(records.AccountingConfiguration.length, configurationCount);
 assert.equal(records.AccountingFiscalYear.length, yearCount);
 
@@ -191,6 +194,7 @@ console.log(JSON.stringify({
     bootstrapRetryDoesNotDuplicateConfigurationYearOrBankLedger: true,
     existingCompanyConfigurationAndYearArePreserved: true,
     crossTenantBootstrapIsBlockedBeforeWrites: true,
+    manipulatedUserCompanyIdNeverGrantsMembership: true,
   },
 }, null, 2));
 
