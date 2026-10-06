@@ -531,6 +531,8 @@ function ChangeRoleModal({ targetUser, currentUser, onClose, onChanged }) {
 }
 
 function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }) {
+  const isReccQaTrial = targetUser.id === '6ac4ad29f474f30e0e2968ce' &&
+    String(targetUser.email || '').trim().toLowerCase() === 'taxeastrategies+qa-recc-2026@gmail.com';
   const [activating, setActivating] = useState(false);
   const [note, setNote] = useState('');
   const [activationError, setActivationError] = useState('');
@@ -542,6 +544,7 @@ function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }
       const response = await base44.functions.invoke('activateUnlimitedUser', {
         userId: targetUser.id,
         note,
+        ...(isReccQaTrial ? { qaTrial: true } : {}),
       });
       const payload = response?.data ?? response;
       if (!payload?.success) throw new Error(payload?.error || 'No se pudo activar la cuenta.');
@@ -557,8 +560,8 @@ function ActivateAccountModal({ targetUser, subscription, onClose, onActivated }
     <ModalShell title="Activar cuenta" onClose={onClose}>
       <div className="py-4 space-y-4">
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <p className="text-sm text-green-800 font-medium">Pago verificado</p>
-          <p className="text-sm text-green-700 mt-1">Primer pago confirmado por Stripe. La cuenta está lista para activarse.</p>
+          <p className="text-sm text-green-800 font-medium">{isReccQaTrial ? 'Prueba interna RECC' : 'Pago verificado'}</p>
+          <p className="text-sm text-green-700 mt-1">{isReccQaTrial ? 'Cuenta y empresa ficticias aisladas, sin pago ni facturación. Activación autorizada para QA.' : 'Primer pago confirmado por Stripe. La cuenta está lista para activarse.'}</p>
         </div>
         <div className="bg-secondary/40 rounded-xl p-4 space-y-2 text-sm">
           {[
@@ -800,7 +803,10 @@ export default function GestionUsuarios() {
                         <div className="flex items-center gap-0.5">
                           <ActionBtn title="Editar usuario" onClick={() => setEditingUser(u)}><Pencil className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Acceder al perfil" onClick={() => setViewingUser(u)}><UserCheck className="w-3.5 h-3.5" /></ActionBtn>
-                          {sub?.status === 'paid_pending_activation' && (
+                          {(sub?.status === 'paid_pending_activation' || (
+                            u.id === '6ac4ad29f474f30e0e2968ce' &&
+                            String(u.email || '').trim().toLowerCase() === 'taxeastrategies+qa-recc-2026@gmail.com' && !u.isPortalActive
+                          )) && (
                             <ActionBtn title="Activar cuenta" onClick={() => setActivatingUser(u)}><Unlock className="w-3.5 h-3.5" /></ActionBtn>
                           )}
                           <ActionBtn title={u.status === 'bloqueado' ? 'Desbloquear cuenta' : 'Bloquear cuenta (BAN)'} onClick={() => setBlockingUser(u)} danger><Ban className="w-3.5 h-3.5" /></ActionBtn>
