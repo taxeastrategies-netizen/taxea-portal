@@ -1,3 +1,4 @@
+import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -172,7 +173,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
                   <td className="px-3 py-2 font-mono text-muted-foreground">{inv.proveedor_nif || inv.cliente_nif || '—'}</td>
                   <td className="px-3 py-2 max-w-32 truncate text-muted-foreground">{inv.concepto || '—'}</td>
                   <td className="px-3 py-2 text-right font-mono">{fmt(inv.base_imponible)}</td>
-                  <td className="px-3 py-2 text-right">{inv.tipo_iva != null ? `${inv.tipo_iva}%` : '—'}</td>
+                  <td className="px-3 py-2 text-right">{invoiceTaxRateLabel(inv)}</td>
                   <td className="px-3 py-2 text-right font-mono text-muted-foreground">{fmt(inv.cuota_iva)}</td>
                   {hasRecargoPurchases && <td className="px-3 py-2 text-right font-mono">{Number(inv.cuota_recargo || 0) ? fmt(inv.cuota_recargo) : '—'}</td>}
                   {showFullCost && (
