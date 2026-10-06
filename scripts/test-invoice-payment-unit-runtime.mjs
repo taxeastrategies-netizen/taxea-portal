@@ -198,7 +198,7 @@ assert.equal(summaryPending.response.status,200);
 assert.equal(summaryPending.payload.ok,true);
 assert.equal(summaryPending.payload.paid,121);
 assert.equal(summaryPending.payload.outstanding,0);
-assert.match(summaryPending.payload.summary_warning,/Pago confirmado/);
+assert.match(summaryPending.payload.summary_warning,/pagos confirmados/);
 assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summary').length,1);
 assert.equal(records.InvoicePayment.find(item=>item.invoice_id==='invoice-summary').operation_status,'committed');
 const summaryRecovered = await invoke(summaryRequest);
