@@ -59,6 +59,7 @@ const matches = (row, query) => Object.entries(query || {}).every(([key, value])
 let failNextCommit = false;
 let failNextBankLink = false;
 let failNextSummary = false;
+let failSummaryRemaining = 0;
 let failNextOperationRead = false;
 const entity = name => ({
   async get(id) {
@@ -76,8 +77,9 @@ const entity = name => ({
     return row;
   },
   async update(id, payload) {
-    if (name === 'Invoice' && Number(payload.importe_pagado) > 0 && failNextSummary) {
+    if (name === 'Invoice' && Number(payload.importe_pagado) > 0 && (failNextSummary || failSummaryRemaining > 0)) {
       failNextSummary = false;
+      if (failSummaryRemaining > 0) failSummaryRemaining--;
       throw Object.assign(new Error('Rate limit exceeded'), { status: 429 });
     }
     if (name === 'BankTransaction' && failNextBankLink && payload.estado_conciliacion === 'conciliada_manual') {
@@ -189,7 +191,7 @@ assert.equal(records.Invoice.find(item => item.id === 'invoice-bank').importe_pe
 assert.equal(records.InvoiceTimelineEvent.filter(item => item.invoice_id === 'invoice-bank' && item.event_type === 'conciliacion_bancaria').length, 1);
 
 records.Invoice.push({ id:'invoice-summary', company_id:'company-a', tipo:'emitida', numero_factura:'F-SUMMARY', fecha_emision:'2026-09-01', total_factura:121, moneda:'EUR', estado_cobro:'pendiente', linked_journal_entry_id:'invoice-entry-summary' });
-failNextSummary = true;
+failSummaryRemaining = 2;
 const summaryRequest = { action:'add_payment', company_id:'company-a', invoice_id:'invoice-summary', amount:121, payment_date:'2026-09-10', method:'transferencia', idempotency_key:'summary-commit-once' };
 const summaryPending = await invoke(summaryRequest);
 assert.equal(summaryPending.response.status,200);
