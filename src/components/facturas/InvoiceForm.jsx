@@ -59,6 +59,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     fiscal_activity_id: '',
     numero_factura: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
+    fecha_operacion: '',
     fecha_recepcion: new Date().toISOString().slice(0, 10),
     fecha_vencimiento: '',
     cliente_nombre: '',
@@ -148,7 +149,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const cuota = quotaRows.length ? Math.round(quotaRows.reduce((sum, row) => sum + Math.round(Number(row.base || 0) * Number(row.rate) + Number.EPSILON) / 100, 0) * 100) / 100 : ordinaryQuota;
   const ordinaryTotal = Number(form.base_imponible || 0) + cuota - retencionImporte;
   const updateQuotaRows = rows => setForm(current => ({ ...current, tax_breakdown_rows: rows,
-    base_imponible: rows.length ? Math.round(rows.reduce((sum, row) => sum + Number(row.base || 0), 0) * 100) / 100 : current.base_imponible,
+    base_imponible: rows.length ? String(Math.round(rows.reduce((sum, row) => sum + Number(row.base || 0), 0) * 100) / 100) : current.base_imponible,
     tipo_iva: rows.length > 1 ? 0 : rows[0]?.rate ?? current.tipo_iva }));
   const recargoImporte = form.aplica_recargo ? Math.round((Number(form.base_imponible || 0) * Number(form.tipo_recargo || 0) / 100 + Number.EPSILON) * 100) / 100 : 0;
   const total = ordinaryTotal + recargoImporte;
@@ -370,6 +371,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <Label>Fecha emisión *</Label>
               <Input type="date" value={form.fecha_emision} onChange={set('fecha_emision')} className={errors.fecha_emision ? 'border-destructive' : ''} />
               <ErrMsg msg={errors.fecha_emision} />
+              <Label>Fecha de operación (si difiere)</Label><Input type="date" value={form.fecha_operacion || ''} onChange={set('fecha_operacion')} />
             </div>
             <div className="space-y-1.5">
               <Label>Fecha vencimiento</Label>
