@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
+import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
@@ -610,6 +611,10 @@ Deno.serve(async (req) => {
         const payments = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'payment_date', 501);
         if (payments.length > 500) return Response.json({ error: 'La factura supera 500 cobros o pagos. No se valida criterio de caja con una lista truncada; el asesor debe revisar el histórico completo.' }, { status: 422 });
         specialInputs.invoiceGross = Number(invoice.total_factura || 0);
+        specialInputs.withholdingAmount = Number(invoice.importe_retencion || 0);
+        specialInputs.surchargeAmount = Number(invoice.cuota_recargo || 0);
+        specialInputs.advanceConfirmed = body.recc?.advanceConfirmed === true || reccMetadata(invoice).advanceConfirmed === true;
+        specialInputs.insolvencyDate = body.recc?.insolvencyDate || reccMetadata(invoice).insolvencyDate || '';
         specialInputs.payments = (payments || []).filter(item => !item.operation_status || item.operation_status === 'committed').map(item => ({ id: item.id, date: item.payment_date, amount: item.amount }));
       }
       if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'grupo_entidades') {
@@ -674,22 +679,45 @@ Deno.serve(async (req) => {
         const base = Number(invoice.base_imponible || 0);
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
-        const simpleRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
+        const metadata = { ...reccMetadata(invoice), ...(body.recc || {}) };
+        const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
+        const validBreakdown = breakdown.length <= 20 && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate))
+          && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
+          && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
+          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - base) <= 0.01
+          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - quota) <= 0.01;
+        const validRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
           && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
             || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
-          && selectedActivity?.indirectTax === 'iva' && [21, 10, 4].includes(rate)
-          && base > 0 && quota > 0 && Math.abs(money(base * rate / 100) - quota) <= 0.01
-          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
-          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && selectedActivity?.indirectTax === 'iva' && validBreakdown && Math.abs(base) > 0
+          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota - Number(invoice.importe_retencion || 0))) <= 0.02
           && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
           && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
-          && invoice.es_rectificativa !== true
           && Math.abs(proposedEvaluation.base - base) <= 0.02
           && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
-          && proposedEvaluation.deductibleTax >= 0 && proposedEvaluation.deductibleTax <= quota
-          && !proposedEvaluation.specialPreviewError
-          && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only');
-        if (!simpleRecc) return Response.json({ error: 'El criterio de caja solo admite por ahora factura nacional ordinaria en euros, sin rectificación, anticipo, retención ni recargo, validada por el asesor. El resto permanece en revisión.', evaluation: proposedEvaluation }, { status: 422 });
+          && Math.abs(proposedEvaluation.deductibleTax) <= Math.abs(quota)
+          && (invoice.es_rectificativa === true || (!proposedEvaluation.specialPreviewError
+            && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only')));
+        if (!validRecc) return Response.json({ error: 'RECC: desglose, precio, retención o clasificación incoherentes. Corrige la factura antes de confirmar.', evaluation: proposedEvaluation }, { status: 422 });
+        if (body.recc?.eligibility) checkReccEligibility(body.recc.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision);
+        if (metadata.insolvencyDate && !clean(metadata.reason)) return Response.json({ error: 'El auto de concurso requiere fecha y referencia documental confirmadas por asesor.' }, { status: 422 });
+        if (invoice.es_rectificativa === true) {
+          const original = await svc.entities.Invoice.get(metadata.originalInvoiceId).catch(() => null);
+          if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
+            || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
+            || !clean(metadata.reason) || !metadata.adjustmentDate || base >= 0)
+            return Response.json({ error: 'La rectificativa RECC de reducción exige original validado de la misma empresa y tipo, fecha del ajuste y causa documentada por asesor.' }, { status: 422 });
+          reccDate(metadata.adjustmentDate);
+          const previousCorrections = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
+          const proposed = { ...invoice, recc_metadata: JSON.stringify(metadata), fiscal_review_status: 'validado', fiscal_regime: 'criterio_caja' };
+          const corrections = reccCorrections(original, [...previousCorrections.filter((row: any) => row.id !== invoice.id), proposed]);
+          const originalPayments = await listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: original.id }, 'payment_date');
+          reccSchedule({ invoiceNet: Math.abs(Number(original.total_factura)), operationDate: original.fecha_operacion || original.fecha_emision,
+            ...reccMetadata(original), corrections, payments: originalPayments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
+          proposedEvaluation.specialPreview = { regime: 'criterio_caja', status: 'proposal_only',
+            reason: 'Rectificativa vinculada: se corrige solo IVA reconocido; la reducción no cobrada cancela cuota diferida del original. No se sobrescribe el asiento histórico.' };
+          proposedEvaluation.specialPreviewError = '';
+        }
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
       } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
