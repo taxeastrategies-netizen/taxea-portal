@@ -210,7 +210,7 @@ assert.equal(JSON.stringify([records.AccountingAccount, records.ClientAccount]),
 records.FiscalActivity[0].indirectTaxRegime = 'criterio_caja';
 records.Invoice.push({ id: 'invoice-recc-sale', company_id: 'company-a', tipo: 'emitida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121, importe_retencion: 0, moneda: 'EUR' });
 const approvedReccSale = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
-  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recc-sale', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, specialInputs: {}, confirmReviewed: true }),
+  method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-recc-sale', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, specialInputs: {}, recc: { eligibility: { year: 2026, newActivity: true, confirmed: true, censusOptionConfirmed: true } }, confirmReviewed: true }),
 }));
 assert.equal(approvedReccSale.status, 200);
 assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === 'invoice-recc-sale')?.regime, 'criterio_caja');
