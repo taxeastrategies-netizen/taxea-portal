@@ -702,7 +702,7 @@ Deno.serve(async (req) => {
           reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
         if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
           return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
-        try { await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); }
+        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
         const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
@@ -821,10 +821,14 @@ Deno.serve(async (req) => {
         adjustmentMode: clean(body.recc?.adjustmentMode ?? previousRecc.adjustmentMode),
         adjustmentCause: clean(body.recc?.adjustmentCause ?? previousRecc.adjustmentCause ?? 'other'),
         reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
+        advanceReferences: (evaluation.advanceApplications || []).map((row: any) => ({ number: row.advanceNumber, base: row.base })),
         reviewedBy: user.email, reviewedAt: new Date().toISOString(),
       } : null;
       const reccLegend = 'Régimen especial del criterio de caja';
-      const existingLegend = String(invoice.coletilla_fiscal || '').trim();
+      const advanceLegend = confirmedRecc?.documentKind === 'advance' ? 'Factura de anticipo: aplicación posterior mediante vínculo revisado por asesor.'
+        : confirmedRecc?.documentKind === 'final' ? `Factura final por saldo nuevo. Anticipos ya facturados y descontados: ${(confirmedRecc.advanceReferences || []).map((row: any) => `${row.number} (base ${money(row.base).toFixed(2)} EUR)`).join('; ')}. Su aplicación no genera otra cuota de IVA.` : '';
+      const previousLegend = String(invoice.coletilla_fiscal || '').trim();
+      const existingLegend = advanceLegend && !previousLegend.includes(advanceLegend) ? [previousLegend, advanceLegend].filter(Boolean).join(' · ') : previousLegend;
       const issuedReccLegend = invoice.tipo === 'emitida' && payload.taxKind === 'iva' && payload.regime === 'criterio_caja'
         ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
           ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
