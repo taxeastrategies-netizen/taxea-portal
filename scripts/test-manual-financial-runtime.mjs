@@ -70,7 +70,7 @@ const build = await esbuild.build({
 
 const records = {
   Company: [
-    { id: 'company-a', tipo_impuesto: 'iva', owner_email: 'owner@a.test', usuarios_autorizados: [] },
+    { id: 'company-a', tipo_impuesto: 'iva', owner_email: 'owner@a.test', usuarios_autorizados: ['user@a.test'] },
     { id: 'company-b', tipo_impuesto: 'iva', owner_email: 'owner@b.test', usuarios_autorizados: [] },
   ],
   Expense: [],
