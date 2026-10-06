@@ -151,9 +151,11 @@ export async function exportInvoiceToPdf(invoice, company) {
 
   // ── Totales ───────────────────────────────────────────────────────────────
   y += 4;
+  let taxBreakdown = [];
+  try { taxBreakdown = JSON.parse(invoice.tax_breakdown || '[]'); } catch { /* Legacy invoice: total quota remains authoritative. */ }
   const totalRows = [
     ['Base imponible', `${fmtEUR(invoice.base_imponible)} €`],
-    [`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} €`],
+    ...(taxBreakdown.length > 1 ? taxBreakdown.map(row => [`${taxLabel} ${row.rate}% · base ${fmtEUR(Number(row.base))} €`, `${fmtEUR(Number(row.quota))} €`]) : [[`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} €`]]),
   ];
   if (getWithholdingAmount(invoice) > 0) {
     if (qrPng) totalRows.push(['Importe fiscal del QR', `${fmtEUR(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} €`]);
