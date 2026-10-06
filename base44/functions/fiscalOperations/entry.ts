@@ -348,12 +348,14 @@ Deno.serve(async (req) => {
     const action = clean(body.action || 'bundle');
     const companyId = clean(body.companyId || user.data?.company_id || user.company_id);
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
-    const svc = ['save_invoice_tax_line', 'recc_advance_candidates'].includes(action) ? queuedAccountingClient(base44.asServiceRole) : base44.asServiceRole;
+    let svc = base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
+    if (action === 'save_invoice_tax_line' && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
+    if (['save_invoice_tax_line', 'recc_advance_candidates'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, postingSupport: Object.fromEntries(Object.values(REGIMES).flat().map(([code]) => [code, code === 'criterio_caja' ? 'revision_asesor_recc_v2' : SPECIAL_POSTING_PENDING.has(code) || code === 'mixto' ? 'pendiente_circuito_especial' : 'revision_asesor'])), operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
