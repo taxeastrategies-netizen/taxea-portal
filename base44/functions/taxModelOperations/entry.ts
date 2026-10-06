@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
+import { reccSchedule, reccMetadata, reccCorrections } from './reccRules.mjs';
 
 const ENGINE_VERSION = 'taxea-modelos-2026.09.20-v25';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
@@ -990,34 +991,47 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     return review(`La factura ${invoiceLabel} combina líneas fiscales no homogéneas o incompletas; requiere revisión antes de repartir los pagos del criterio de caja.`);
   }
   const fiscalTotal = money(invoiceLines.reduce((sum: number, candidate: any) => sum + money(candidate.base) + money(candidate.quota), 0));
-  if (money(invoice.importe_retencion) !== 0 || !payable || Math.abs(fiscalTotal - payable) > 0.02) {
-    return review(`La factura ${invoiceLabel} en criterio de caja requiere reconstruir su total fiscal, retenciones y pagos antes de asignar cuotas.`);
+  const surcharge = money(invoice.cuota_recargo);
+  if (!payable || Math.abs(Math.abs(fiscalTotal + surcharge - money(invoice.importe_retencion)) - payable) > 0.02) {
+    return review(`La factura ${invoiceLabel} RECC no reconcilia precio, retención y recargo.`);
   }
   if (payments.some((payment: any) => (payment.operation_status && payment.operation_status !== 'committed')
     || (payment.accounting_operation_id && payment.operation_status !== 'committed'))) {
-    return review(`La factura ${invoiceLabel} tiene cobros o pagos contables no confirmados; no se imputan cuotas hasta resolverlos.`);
+    return review(`La factura ${invoiceLabel} tiene cobros o pagos contables no confirmados.`);
   }
   if (!payments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) {
-    return review(`La factura ${invoiceLabel} consta cobrada o pagada sin movimientos InvoicePayment trazados; no se infiere el devengo desde un resumen.`);
+    return review(`La factura ${invoiceLabel} consta cobrada o pagada sin movimientos InvoicePayment trazados.`);
   }
-  const seenPaymentIds = new Set<string>();
-  let paid = 0;
-  for (const payment of payments) {
-    const paymentId = clean(payment.id);
-    const paymentDate = clean(payment.payment_date).slice(0, 10);
-    const amount = Number(payment.amount);
-    const parsedDate = Date.parse(paymentDate);
-    if (!paymentId || seenPaymentIds.has(paymentId) || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(paymentDate)
-      || !Number.isFinite(parsedDate) || new Date(parsedDate).toISOString().slice(0, 10) !== paymentDate
-      || paymentDate < operationDate || !Number.isFinite(amount) || amount <= 0
-      || (clean(payment.currency) && clean(payment.currency) !== 'EUR')) {
-      return review(`La factura ${invoiceLabel} tiene un cobro o pago inválido, duplicado, anterior a la operación o en moneda sin convertir.`);
+  let schedule: any;
+  let events: any[];
+  try {
+    const metadata = reccMetadata(invoice);
+    if (invoice.es_rectificativa === true) {
+      const original = (data.invoices || []).find((row: any) => row.id === metadata.originalInvoiceId && !row.anulada && row.fiscal_review_status === 'validado');
+      if (!original || !metadata.adjustmentDate || !metadata.reason) throw new Error('Rectificativa sin original y criterio temporal confirmado por asesor.');
+      if (money(invoice.base_imponible) < 0) {
+        const originalMetadata = reccMetadata(original);
+        schedule = reccSchedule({ invoiceId: original.id, invoiceNet: invoicePayable(original),
+          operationDate: clean(original.fecha_operacion || original.fecha_emision), advanceConfirmed: originalMetadata.advanceConfirmed,
+          insolvencyDate: originalMetadata.insolvencyDate,
+          payments: (data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id).map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })),
+          corrections: reccCorrections(original, data.invoices) });
+        const correction = schedule.correctionRecognitions.find((row: any) => row.id === invoice.id);
+        if (!correction) throw new Error('La rectificativa no se ha podido relacionar con el saldo original.');
+        events = [{ ...correction, sourceIds: unique([line.sourceId, `Invoice:${original.id}`, `Invoice:${invoice.id}`]), type: 'rectification' }];
+      } else {
+        throw new Error('Una rectificativa de aumento exige revisar la causa y el período del artículo 89; no se imputa por la fecha de cobro sin criterio profesional.');
+      }
+    } else {
+      schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable, operationDate,
+        advanceConfirmed: metadata.advanceConfirmed, insolvencyDate: metadata.insolvencyDate,
+        payments: payments.map((payment: any) => {
+          if (clean(payment.currency) && clean(payment.currency) !== 'EUR') throw new Error('Pago RECC en moneda sin convertir.');
+          return { id: payment.id, date: payment.payment_date, amount: payment.amount, status: payment.operation_status };
+        }), corrections: reccCorrections(invoice, data.invoices) });
+      events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
     }
-    seenPaymentIds.add(paymentId);
-    paid = money(paid + amount);
-    if (paid > payable + 0.01) return review(`Los cobros o pagos de ${invoiceLabel} superan el total de la factura; no se recorta el exceso silenciosamente.`);
-  }
-  const events = allocatedInvoicePayments(invoice, payments, forcedRecognitionDate);
+  } catch (error) { return review(`Factura ${invoiceLabel}: ${error.message}`); }
   const originalAmounts = { base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota ?? line.quota), nonDeductibleQuota: money(line.nonDeductibleQuota) };
   let cumulativeFactor = 0;
   const allocatedAmounts = { base: 0, quota: 0, deductibleQuota: 0, nonDeductibleQuota: 0 };
