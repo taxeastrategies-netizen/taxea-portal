@@ -233,14 +233,21 @@ async function refreshInvoicePaymentState(base44, invoice, companyId) {
     .slice()
     .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')))[0];
 
-  await base44.asServiceRole.entities.Invoice.update(invoice.id, {
-    estado_cobro: estado,
-    importe_pagado: paid,
-    importe_pendiente: outstanding,
-    ultimo_pago_at: lastPayment?.created_at || null,
-  });
+  const summary = { estado_cobro: estado, importe_pagado: paid, importe_pendiente: outstanding, ultimo_pago_at: lastPayment?.created_at || null };
+  const needsSummary = invoice.estado_cobro !== estado || asMoney(invoice.importe_pagado) !== paid || asMoney(invoice.importe_pendiente) !== outstanding || (invoice.ultimo_pago_at || null) !== summary.ultimo_pago_at;
+  let summaryWarning = '';
+  if (needsSummary) for (let attempt = 0; attempt < 2; attempt++) {
+    try { await base44.asServiceRole.entities.Invoice.update(invoice.id, summary); break; }
+    catch (error) {
+      // Solo se reintenta esta proyección idempotente, nunca un pago o un asiento.
+      if (attempt === 0 && (Number(error?.status || error?.response?.status) === 429 || /rate limit/i.test(String(error?.message || '')))) { await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
+      summaryWarning = 'Saldo calculado desde pagos confirmados; el resumen guardado requiere actualizarse. No vuelvas a registrar el pago.';
+      console.warn('[invoiceOperations] payment projection pending:', error?.message || 'summary update failed');
+      break;
+    }
+  }
   const pendingAmount = asMoney((pending || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
-  return { payments, paid, outstanding, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount };
+  return { payments, paid, outstanding, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount, ...(summaryWarning ? { summary_warning: summaryWarning } : {}) };
 }
 
 async function stateAfterCommittedPayment(base44, invoice, companyId, current, payment) {
