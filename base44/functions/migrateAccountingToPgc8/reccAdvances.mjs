@@ -73,6 +73,35 @@ export async function acquireReccAdvanceLocks(svc, companyId, input, finalInvoic
   }
 }
 
+
+export async function recoverReccAdvanceLock(svc, companyId, invoiceId, input, actor) {
+  const invoice = await svc.entities.Invoice.get(invoiceId);
+  if (!invoice || invoice.company_id !== companyId) throw Object.assign(new Error('Anticipo no accesible.'), {status:403});
+  const started = clean(invoice.recc_application_lock_started_at);
+  const token = clean(invoice.recc_application_lock_token);
+  if (!token) return { success:true, released:false, alreadyReleased:true };
+  if (input.confirmProcessingStopped !== true || clean(input.reason).length < 12)
+    throw Object.assign(new Error('Confirma que el proceso ha terminado e indica el motivo de la recuperación.'), {status:422});
+  if (!started || started !== input.expectedStartedAt || !Number.isFinite(Date.parse(started)) || Date.now()-Date.parse(started)<3600000)
+    throw Object.assign(new Error('El bloqueo ha cambiado o tiene menos de una hora. No se interrumpe una confirmación activa.'), {status:409});
+  const operations = await all(svc.entities.AccountingPostingOperation, {companyId,documentId:invoice.recc_application_lock_document_id});
+  if (operations.some(row=>['preparing','recovery_required'].includes(row.status)))
+    throw Object.assign(new Error('Hay una unidad contable pendiente. Revisa primero su recuperación, sin liberar el anticipo.'), {status:409});
+  const audit = await svc.entities.AccountingAuditLog.create({
+    companyId, eventType:'recc_advance_lock_recovery', eventKey:'recc-lock-recovery:'+crypto.randomUUID(),
+    fiscalYear:Number(String(invoice.fecha_emision||'').slice(0,4))||new Date().getUTCFullYear(),
+    reason:clean(input.reason), actor, occurredAt:new Date().toISOString(),
+    beforeJson:JSON.stringify({invoiceId,startedAt:started,documentId:invoice.recc_application_lock_document_id}),
+    afterJson:JSON.stringify({status:'attempt_approved'}), schemaVersion:'pgc8-v1',
+  });
+  const result = await svc.entities.Invoice.updateMany(
+    {id:invoiceId,company_id:companyId,recc_application_lock_token:token,recc_application_lock_started_at:started},
+    {$set:{recc_application_lock_token:'',recc_application_lock_started_at:'',recc_application_lock_document_id:''}});
+  if (!result?.success || Number(result.updated)!==1) throw Object.assign(new Error('El bloqueo cambió durante la revisión; no se ha forzado su liberación.'),{status:409});
+  await svc.entities.AccountingAuditLog.update(audit.id,{afterJson:JSON.stringify({status:'released',invoiceId})});
+  return {success:true,released:true,invoiceId};
+}
+
 // Una liquidación final sin saldo no genera otro cobro ni otra cuota: solo aplica el anticipo.
 export function isZeroResidualReccFinal(invoice, input = metadata(invoice)) {
   const result = reccAdvanceMetadata(input);
