@@ -296,7 +296,7 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
-            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tipo_iva ?? 0}%)</span>
+            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tax_breakdown && invoice.tipo_iva === 0 ? 'varios tipos' : `${invoice.tipo_iva ?? 0}%`})</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {qrUrl && getWithholdingAmount(invoice) > 0 && (
