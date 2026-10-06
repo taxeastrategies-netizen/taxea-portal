@@ -282,7 +282,7 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
 }
 
 async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
-  const svc = base44.asServiceRole;
+  const svc = queuedAccountingClient(base44.asServiceRole);
   const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
   const proposal = await buildInvoicePosting(svc, companyId, invoice);
   await seedOperationalPgc(svc, companyId);
@@ -352,7 +352,7 @@ async function reserveInvoicePayment(base44, companyId, invoice, payload) {
 }
 
 async function commitPaymentPostingUnit(base44, companyId, payment, paymentPosting, user, transaction = null, transactionPatch = null) {
-  const svc = base44.asServiceRole;
+  const svc = queuedAccountingClient(base44.asServiceRole);
   const operation = paymentPosting?.operation;
   if (!operation?.id) throw Object.assign(new Error('No se pudo reservar la operación contable del pago.'), { status: 409 });
   try {
