@@ -58,8 +58,16 @@ const counters = {};
 const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row?.[key] === value);
 let failNextCommit = false;
 let failNextBankLink = false;
+let failNextSummary = false;
+let failNextOperationRead = false;
 const entity = name => ({
-  async get(id) { return (records[name] || []).find(item => item.id === id) || null; },
+  async get(id) {
+    if (name === 'AccountingPostingOperation' && failNextOperationRead) {
+      failNextOperationRead = false;
+      throw Object.assign(new Error('Rate limit exceeded'), { status: 429 });
+    }
+    return (records[name] || []).find(item => item.id === id) || null;
+  },
   async filter(query) { return (records[name] || []).filter(row => matches(row, query)); },
   async create(payload) {
     counters[name] = (counters[name] || 0) + 1;
@@ -68,6 +76,10 @@ const entity = name => ({
     return row;
   },
   async update(id, payload) {
+    if (name === 'Invoice' && Number(payload.importe_pagado) > 0 && failNextSummary) {
+      failNextSummary = false;
+      throw Object.assign(new Error('Rate limit exceeded'), { status: 429 });
+    }
     if (name === 'BankTransaction' && failNextBankLink && payload.estado_conciliacion === 'conciliada_manual') {
       failNextBankLink = false;
       throw new Error('Fallo simulado enlazando el banco');
@@ -176,6 +188,26 @@ assert.equal(records.BankTransaction[0].estado_conciliacion, 'conciliada_manual'
 assert.equal(records.Invoice.find(item => item.id === 'invoice-bank').importe_pendiente, 0);
 assert.equal(records.InvoiceTimelineEvent.filter(item => item.invoice_id === 'invoice-bank' && item.event_type === 'conciliacion_bancaria').length, 1);
 
+records.Invoice.push({ id:'invoice-summary', company_id:'company-a', tipo:'emitida', numero_factura:'F-SUMMARY', fecha_emision:'2026-09-01', total_factura:121, moneda:'EUR', estado_cobro:'pendiente', linked_journal_entry_id:'invoice-entry-summary' });
+failNextSummary = true;
+const summaryRequest = { action:'add_payment', company_id:'company-a', invoice_id:'invoice-summary', amount:121, payment_date:'2026-09-10', method:'transferencia', idempotency_key:'summary-commit-once' };
+const summaryPending = await invoke(summaryRequest);
+assert.equal(summaryPending.response.status,200);
+assert.equal(summaryPending.payload.ok,true);
+assert.equal(summaryPending.payload.paid,121);
+assert.equal(summaryPending.payload.outstanding,0);
+assert.match(summaryPending.payload.summary_warning,/Pago confirmado/);
+assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summary').length,1);
+assert.equal(records.InvoicePayment.find(item=>item.invoice_id==='invoice-summary').operation_status,'committed');
+const summaryRecovered = await invoke(summaryRequest);
+assert.equal(summaryRecovered.response.status,200);
+assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summary').length,1);
+assert.equal(records.JournalEntry.filter(item=>item.postingKey?.startsWith('payment:invoice-summary')).length,1);
+failNextOperationRead = true;
+const temporaryRead = await invoke({action:'list_payments',company_id:'company-a',invoice_id:'invoice-summary'});
+assert.equal(temporaryRead.response.status,500);
+assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
@@ -184,6 +216,9 @@ console.log(JSON.stringify({
     interruptedBankLinkReturnsUnitToRecovery: true,
     bankReconciliationRetryCommitsOnce: true,
     successfulRecoveryLeavesOneAuditEvent: true,
+    summaryFailureNeverReportsCommittedPaymentAsFailed: true,
+    summaryRecoveryDoesNotDuplicatePayment: true,
+    transientOperationReadNeverHidesCommittedCash: true,
   },
   counts: { payments: records.InvoicePayment.length, journalEntries: records.JournalEntry.length, operations: records.AccountingPostingOperation.length },
 }, null, 2));
