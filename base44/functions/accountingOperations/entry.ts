@@ -1470,7 +1470,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
     const svc = action === 'ensure_accounting_ready'
-      ? queuedAccountingClient(base44.asServiceRole, { intervalMs: 350 })
+      ? queuedAccountingClient(base44.asServiceRole, { intervalMs: 750 })
       : base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(error => {
       if (Number(error?.response?.status || error?.status) === 404) return null;
