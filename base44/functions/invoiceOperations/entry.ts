@@ -623,7 +623,8 @@ Deno.serve(async (req) => {
       if (invoice.fiscal_review_status !== 'validado' || !invoice.fiscal_reviewed_by) {
         return Response.json({ error: 'Confirma primero la clasificación fiscal y sus importes.' }, { status: 409 });
       }
-      const taxLines = await base44.asServiceRole.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+      const finalizerSvc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 750 });
+      const taxLines = await finalizerSvc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
       const line = (taxLines || []).find(row => Number(row.lineNumber) === 1 && row.reviewStatus === 'validado');
       const recargoPurchase = invoice.tipo === 'recibida' && line?.regime === 'recargo_equivalencia'
         && invoice.fiscal_regime === 'recargo_equivalencia' && line?.taxKind === 'iva'
@@ -672,13 +673,13 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Existe un PDF ya emitido sin la mención del criterio de caja; requiere revisión documental antes de finalizar.' }, { status: 409 });
       }
       if (invoice.tipo === 'emitida' && !qrUrl) {
-        const company = await base44.asServiceRole.entities.Company.get(companyId);
+        const company = await finalizerSvc.entities.Company.get(companyId);
         try { qrUrl = buildAeatQrUrl(company, invoice); }
         catch (error) { return Response.json({ error: error.message || 'No se pudo preparar el QR.' }, { status: 422 }); }
       }
       let approved = invoice;
       if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1') {
-        approved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+        approved = await finalizerSvc.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: false, accounting_migration_hold_reason: '',
         });
       } else if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR') {
@@ -686,21 +687,21 @@ Deno.serve(async (req) => {
         approved = { ...invoice, accounting_migration_hold: false };
       }
       try {
-        const posting = await postInvoice(queuedAccountingClient(base44.asServiceRole), companyId, approved, user.email, { status: 'confirmado' });
+        const posting = await postInvoice(finalizerSvc, companyId, approved, user.email, { status: 'confirmado' });
         if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' || (qrUrl && !invoice.qr_url)
           || issuedReccLegend !== existingLegend) {
-          await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+          await finalizerSvc.entities.Invoice.update(invoice.id, {
             accounting_migration_hold: false, accounting_migration_hold_reason: '',
             ...(issuedReccLegend !== existingLegend ? { coletilla_fiscal: issuedReccLegend } : {}),
             ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
           });
         }
-        const saved = await base44.asServiceRole.entities.Invoice.get(invoice.id);
+        const saved = await finalizerSvc.entities.Invoice.get(invoice.id);
         let ocrWarning = '';
         if (saved.ocr_document_id) {
-          const doc = await base44.asServiceRole.entities.OcrInvoiceDocument.get(saved.ocr_document_id).catch(() => null);
+          const doc = await finalizerSvc.entities.OcrInvoiceDocument.get(saved.ocr_document_id).catch(() => null);
           if (doc && doc.company_id === companyId && doc.linkedInvoiceId === saved.id) {
-            await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
+            await finalizerSvc.entities.OcrInvoiceDocument.update(doc.id, {
               status: 'accounted', accountedAt: new Date().toISOString(), linkedJournalEntryId: posting.entry.id,
               reviewedAt: new Date().toISOString(), reviewedByAdminId: user.id,
             }).catch(() => { ocrWarning = 'Asiento confirmado; actualizar el estado del documento OCR requiere reintento.'; });
@@ -708,16 +709,16 @@ Deno.serve(async (req) => {
         }
         let recurringWarning = '';
         if (saved.isRecurringGenerated) {
-          const runs = await base44.asServiceRole.entities.RecurringInvoiceRun.filter({ ownerAccountId: companyId, generatedInvoiceId: saved.id }, '-runAt', 20).catch(() => []);
+          const runs = await finalizerSvc.entities.RecurringInvoiceRun.filter({ ownerAccountId: companyId, generatedInvoiceId: saved.id }, '-runAt', 20).catch(() => []);
           for (const run of runs || []) {
-            if (run.status === 'draft_created') await base44.asServiceRole.entities.RecurringInvoiceRun.update(run.id, {
+            if (run.status === 'draft_created') await finalizerSvc.entities.RecurringInvoiceRun.update(run.id, {
               status: 'generated', safeErrorMessage: '',
             }).catch(() => { recurringWarning = 'Asiento confirmado; el historial recurrente requiere actualizarse.'; });
           }
         }
         return Response.json({ ok: true, invoice: saved, journal_entry: posting.entry, duplicate: Boolean(posting.alreadyPosted), ocr_warning: ocrWarning || null, recurring_warning: recurringWarning || null });
       } catch (error) {
-        await base44.asServiceRole.entities.Invoice.update(invoice.id, {
+        await finalizerSvc.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR',
           estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion',
         });
