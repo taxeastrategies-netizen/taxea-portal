@@ -321,7 +321,9 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
   const days = daysUntil(invoice?.fecha_vencimiento);
   const overdue = isOverdue(invoice?.fecha_vencimiento) && invoice?.estado_cobro !== 'cobrada';
   const basePaymentStatus = PAYMENT_STATUS[invoice?.estado_cobro] || PAYMENT_STATUS.pendiente;
-  const ps = invoice?.tipo === 'recibida' && invoice?.estado_cobro === 'cobrada'
+  const ps = Number(invoice?.total_factura) < 0 && invoice?.estado_cobro === 'cobrada'
+    ? { ...basePaymentStatus, label: 'Devolución completada' }
+    : invoice?.tipo === 'recibida' && invoice?.estado_cobro === 'cobrada'
     ? { ...basePaymentStatus, label: 'Pagada' }
     : basePaymentStatus;
   const lastEmail = emailLogs[0];
@@ -451,7 +453,7 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
             <Section title="Cobro y pagos" icon={CheckCircle2}>
               <div className="space-y-2 mb-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{invoice.tipo === 'recibida' ? 'Estado del pago' : 'Estado del cobro'}</span>
+                  <span className="text-xs text-muted-foreground">{Number(invoice.total_factura) < 0 ? 'Estado de la devolución' : invoice.tipo === 'recibida' ? 'Estado del pago' : 'Estado del cobro'}</span>
                   <span className={cn("text-xs px-2 py-0.5 rounded-full border font-medium", ps.color)}>{ps.label}</span>
                 </div>
                 {invoice.estado_cobro !== 'cobrada' && (
@@ -476,7 +478,7 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
               <div className="flex gap-2">
                 <button onClick={() => setActionMode('payment')} disabled={invoice.anulada}
                   className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed">
-                  {invoice.tipo === 'recibida' ? '+ Añadir pago' : '+ Añadir cobro'}
+                  {Number(invoice.total_factura) < 0 ? '+ Registrar devolución' : invoice.tipo === 'recibida' ? '+ Añadir pago' : '+ Añadir cobro'}
                 </button>
                 <button onClick={() => setActionMode('reconcile')} disabled={invoice.anulada}
                   className="flex-1 text-xs border border-border rounded-lg py-1.5 hover:bg-secondary transition-colors text-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed">
