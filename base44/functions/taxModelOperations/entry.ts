@@ -1517,7 +1517,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
     if (invoice.tipo === 'emitida') {
       if (['subject_taxed', 'subject_zero', 'special_margin'].includes(op)) {
         const rate = Number(line.rate || 0);
-        const adjustment = !annual && invoice.es_rectificativa === true;
+        const adjustment = kind === 'iva' && invoice.es_rectificativa === true;
         if (adjustment) { outputAdjustmentBase += base; outputAdjustmentQuota += quota; outputAdjustmentIds.push(...ids); }
         else addRate(rate, base, quota, ids);
         if (money(line.surchargeQuota)) {
@@ -1527,7 +1527,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
         }
         const regime = clean(line.regime);
         const category = op === 'special_margin' || ['rebu','bienes_usados'].includes(regime) ? 'margin' : regime === 'criterio_caja' ? 'cash' : regime === 'agencias_viajes' ? 'travel' : regime === 'grupo_entidades' ? 'intragroup' : 'ordinary';
-        addCategorizedOutputRate(category, rate, base, quota, ids);
+        if (!adjustment) addCategorizedOutputRate(category, rate, base, quota, ids);
       }
       else if (op === 'intra_eu_supply') intraSupplies += base;
       else if (['export', 'exempt_full'].includes(op)) exports += base;
@@ -1546,7 +1546,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       const investmentHint = /INMOVILIZADO|ACTIVO FIJO|BIEN(?:ES)? DE INVERSION/.test(canonical(`${invoice.categoria_gasto || ''} ${invoice.concepto || ''}`));
       const investment = explicitCategory.includes('investment') || (!explicitCategory && investmentHint);
       const category = explicitCategory || (op === 'import' ? (investment ? 'import_investment' : 'import_current') : op === 'intra_eu_acquisition' ? (investment ? 'intra_goods_investment' : 'intra_goods_current') : (investment ? 'interior_investment' : 'interior_current'));
-      if (!annual && invoice.es_rectificativa === true) { inputAdjustmentBase += base; inputAdjustmentQuota += deductibleLineQuota; inputAdjustmentIds.push(...ids); }
+      if (kind === 'iva' && invoice.es_rectificativa === true) { inputAdjustmentBase += base; inputAdjustmentQuota += deductibleLineQuota; inputAdjustmentIds.push(...ids); }
       else addDeductibleRate(category, Number(line.rate || 0), base, deductibleLineQuota, ids);
       if (annual && !explicitCategory) annualClassificationPending += 1;
     }
@@ -2908,7 +2908,8 @@ function export390(company: any, profile: any, activities: any[], year: number, 
   const intraRate = calculation.operations?.intraBase ? Number(((calculation.operations.intraQuota / calculation.operations.intraBase) * 100).toFixed(2)) : 0;
   if (calculation.operations?.intraBase && intraOutputBoxes[String(intraRate)]) { putBox(intraOutputBoxes[String(intraRate)][0],calculation.operations.intraBase); putBox(intraOutputBoxes[String(intraRate)][1],calculation.operations.intraQuota); }
   putBox('27',calculation.operations?.reverseBase||0); putBox('28',calculation.operations?.reverseQuota||0);
-  const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0));
+  const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0)+(calculation.operations?.outputAdjustmentBase||0));
+  putBox('29',calculation.operations?.outputAdjustmentBase||0); putBox('30',calculation.operations?.outputAdjustmentQuota||0);
   const surchargeRows = calculation.operations?.surchargeRates || [];
   const surchargeBoxes: Record<string,string[]> = {'0.5':['35','36'],'1.4':['599','600'],'5.2':['601','602'],'1.75':['41','42']};
   for (const row of surchargeRows) { const boxes = surchargeBoxes[String(Number(row.rate))]; if (boxes) { putBox(boxes[0],row.base); putBox(boxes[1],row.quota); } }
@@ -2933,6 +2934,7 @@ function export390(company: any, profile: any, activities: any[], year: number, 
     const total = categoryTotals.get(row.category) || {base:0,quota:0}; total.base += money(row.base); total.quota += money(row.quota); categoryTotals.set(row.category,total);
   }
   for (const [category,total] of categoryTotals) { const boxes=deductionTotals[category]; if(boxes){putBox(boxes[0],total.base);putBox(boxes[1],total.quota);} }
+  putBox('62',calculation.operations?.inputAdjustmentQuota||0);
   putBox('64',calculation.operations?.deductibleQuota||0); putBox('65',calculation.result||0);
 
   const filed303 = (filings || []).filter(row => row.modeloCodigo === '303' && Number(row.ejercicio) === year && FILED_STATUSES.has(clean(row.estadoPresentacion)));
