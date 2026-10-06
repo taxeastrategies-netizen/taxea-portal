@@ -57,7 +57,8 @@ async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, d
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    let user;
+    try { user = await base44.auth.me(); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     const userCompanyId = user.data?.company_id;
     const isPlatformAdmin = ['admin', 'super_admin'].includes(user.role);
     // Los administradores de plataforma gestionan varias empresas: pueden operar con la empresa indicada.
-    const effectiveCompanyId = userCompanyId || (isPlatformAdmin ? companyId : '');
+    const effectiveCompanyId = isPlatformAdmin ? (companyId || userCompanyId) : userCompanyId;
     if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
     if (companyId && companyId !== userCompanyId && !isPlatformAdmin) return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
     if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) return Response.json({ error: 'invoiceIds required' }, { status: 400 });
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
             const reversal = await reverseConfirmedEntry(svc, effectiveCompanyId, entry, reason, user.email, accountingDate);
             reversalEntryId = reversal.id;
           } else if (entry.status !== 'anulado') {
-            const lines = await resolveLines(svc, userCompanyId, entry);
+            const lines = await resolveLines(svc, effectiveCompanyId, entry);
             await svc.entities.JournalEntry.update(entry.id, {
               status: 'anulado', annulledAt: now, annulledBy: user.email,
               annulmentReason: reason, validationStatus: 'ANULADO',
