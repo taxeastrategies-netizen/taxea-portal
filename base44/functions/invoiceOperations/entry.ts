@@ -128,6 +128,15 @@ function invoiceCreationPayload(input, companyId, user) {
   for (const field of allowed) {
     if (input?.[field] !== undefined && input?.[field] !== null) payload[field] = input[field];
   }
+  // El formulario manual histórico guarda el tercero en cliente_* también para recibidas.
+  // Conservar esos campos para lectores antiguos y completar proveedor_* para libros y contabilidad.
+  if (type === 'recibida') {
+    for (const suffix of ['nombre', 'nif', 'email', 'telefono', 'direccion', 'codigo_postal', 'ciudad', 'provincia', 'pais']) {
+      const supplierKey = `proveedor_${suffix}`;
+      const legacyKey = `cliente_${suffix}`;
+      if (!payload[supplierKey] && payload[legacyKey]) payload[supplierKey] = payload[legacyKey];
+    }
+  }
   return {
     ...payload,
     company_id: companyId,
