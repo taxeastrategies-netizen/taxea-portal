@@ -72,6 +72,9 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     cliente_pais: 'España',
     concepto: '',
     base_imponible: '',
+    tax_breakdown_rows: [],
+    es_rectificativa: false,
+    factura_rectificada: '',
     tipo_iva: taxType === 'IGIC' ? 7 : 21,
     cuota_iva: '',
     aplica_recargo: false,
@@ -136,11 +139,17 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     }));
   };
 
-  const { cuota, retencionImporte, total: ordinaryTotal } = calcTotals(
+  const { cuota: ordinaryQuota, retencionImporte } = calcTotals(
     form.base_imponible,
     form.tipo_iva,
     form.aplica_retencion ? form.retencion_irpf : 0
   );
+  const quotaRows = form.tax_breakdown_rows || [];
+  const cuota = quotaRows.length ? Math.round(quotaRows.reduce((sum, row) => sum + Math.round(Number(row.base || 0) * Number(row.rate) + Number.EPSILON) / 100, 0) * 100) / 100 : ordinaryQuota;
+  const ordinaryTotal = Number(form.base_imponible || 0) + cuota - retencionImporte;
+  const updateQuotaRows = rows => setForm(current => ({ ...current, tax_breakdown_rows: rows,
+    base_imponible: rows.length ? Math.round(rows.reduce((sum, row) => sum + Number(row.base || 0), 0) * 100) / 100 : current.base_imponible,
+    tipo_iva: rows.length > 1 ? 0 : rows[0]?.rate ?? current.tipo_iva }));
   const recargoImporte = form.aplica_recargo ? Math.round((Number(form.base_imponible || 0) * Number(form.tipo_recargo || 0) / 100 + Number.EPSILON) * 100) / 100 : 0;
   const total = ordinaryTotal + recargoImporte;
 
@@ -180,7 +189,9 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (form.tipo === 'recibida' && !form.fecha_recepcion) e.fecha_recepcion = 'Obligatorio para asignar la deducción al período correcto';
     if (form.tipo === 'recibida' && form.fecha_recepcion && form.fecha_emision && form.fecha_recepcion < form.fecha_emision) e.fecha_recepcion = 'No puede ser anterior a la fecha de emisión';
     if (form.base_imponible === '' || isNaN(Number(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
-    else if (Number(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
+    else if (Number(form.base_imponible) < 0 && !form.es_rectificativa) e.base_imponible = 'Una base negativa requiere factura rectificativa';
+    if (form.es_rectificativa && !form.factura_rectificada?.trim()) e.base_imponible = 'Indica la factura original que rectificas';
+    if (quotaRows.some(row => !Number.isFinite(Number(row.base)) || ![4,10,21].includes(Number(row.rate)))) e.base_imponible = 'Revisa cada línea del desglose IVA';
     if (form.aplica_recargo && (taxType !== 'IVA' || !Number.isFinite(Number(form.tipo_recargo)) || Number(form.tipo_recargo) <= 0 || Number(form.tipo_recargo) > 100)) e.tipo_recargo = 'Indica un tipo de recargo IVA válido';
     if (form.aplica_recargo && recurring.enabled) e.tipo_recargo = 'El recargo necesita revisión individual: desactiva la recurrencia.';
     if (form.aplica_retencion && (String(form.retencion_irpf) === '' || isNaN(Number(form.retencion_irpf)))) {
@@ -204,6 +215,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       base_imponible: Number(form.base_imponible) || 0,
       tipo_iva: Number(form.tipo_iva) || 0,
       cuota_iva: cuota,
+      tax_breakdown: quotaRows.length ? JSON.stringify(quotaRows.map(row => ({ base: Number(row.base), rate: Number(row.rate), quota: Math.round(Number(row.base) * Number(row.rate) + Number.EPSILON) / 100 }))) : '',
       tipo_recargo: form.aplica_recargo ? Number(form.tipo_recargo) : 0,
       cuota_recargo: recargoImporte,
       retencion_irpf: form.aplica_retencion ? (Number(form.retencion_irpf) || 0) : 0,
@@ -432,10 +444,21 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           {/* Importes */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Importes</p>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.es_rectificativa)} onChange={event => setForm(current => ({ ...current, es_rectificativa: event.target.checked }))} />Factura rectificativa (requiere revisión del asesor)</label>
+            {form.es_rectificativa && <Input value={form.factura_rectificada} onChange={set('factura_rectificada')} placeholder="Número de la factura original" aria-label="Factura original rectificada" />}
+            {taxType === 'IVA' && <div className="rounded-xl border p-3 space-y-2">
+              <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva) || 21 }])}>{quotaRows.length ? 'Volver a un tipo único' : 'Desglosar varios tipos de IVA'}</button>
+              {quotaRows.map((row, index) => <div key={index} className="flex items-center gap-2">
+                <Input aria-label={`Base IVA línea ${index + 1}`} type="number" step="0.01" value={row.base} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, base: event.target.value } : item))} />
+                <select aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{[4,10,21].map(rate => <option key={rate} value={rate}>{rate}%</option>)}</select>
+                <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
+              </div>)}
+              {quotaRows.length > 0 && quotaRows.length < 20 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: 21 }])}>Añadir tipo de IVA</button>}
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Base imponible (€) *</Label>
-                <Input type="number" step="0.01" min="0" value={form.base_imponible}
+                <Input type="number" step="0.01" min={form.es_rectificativa ? undefined : 0} disabled={quotaRows.length > 0} value={form.base_imponible}
                   onChange={set('base_imponible')} placeholder="0,00"
                   className={errors.base_imponible ? 'border-destructive' : ''} />
                 <ErrMsg msg={errors.base_imponible} />
