@@ -9,7 +9,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, userId: directUserId, note = '' } = body;
+    const { email, userId: directUserId, note = '', qaTrial = false } = body;
     const admin = base44.asServiceRole;
 
     // 1. Find user by email or direct ID
@@ -26,6 +26,11 @@ Deno.serve(async (req) => {
     }
 
     const targetUserId = targetUser.id;
+    const isReccQaTrial = qaTrial === true && targetUserId === '6ac4ad29f474f30e0e2968ce' &&
+      String(targetUser.email || '').trim().toLowerCase() === 'taxeastrategies+qa-recc-2026@gmail.com';
+    if (qaTrial && !isReccQaTrial) {
+      return Response.json({ error: 'La activación de prueba solo está autorizada para la cuenta RECC aislada.' }, { status: 403 });
+    }
 
     // Resolver una empresa real antes de modificar acceso, suscripción o cuota.
     let companyId = targetUser.data?.company_id || targetUser.company_id || '';
@@ -40,7 +45,9 @@ Deno.serve(async (req) => {
     let companyCreated = false;
     if (!companyId) {
       const normalizedEmail = String(targetUser.email || '').trim().toLowerCase();
-      const provisionalName = String(targetUser.full_name || normalizedEmail.split('@')[0] || 'Nueva empresa').trim();
+      const provisionalName = isReccQaTrial
+        ? 'TAXEA QA RECC 2026 — DATOS FICTICIOS'
+        : String(targetUser.full_name || normalizedEmail.split('@')[0] || 'Nueva empresa').trim();
       const provisionalCompany = await admin.entities.Company.create({
         razon_social: provisionalName,
         nombre_comercial: provisionalName,
@@ -72,25 +79,25 @@ Deno.serve(async (req) => {
     if (subs && subs.length > 0) {
       subResult = await admin.entities.Subscription.update(subs[0].id, {
         status: 'activa',
-        firstPaymentStatus: 'paid',
+        firstPaymentStatus: isReccQaTrial ? 'unpaid' : 'paid',
         planCode: 'personalizado',
         plan: 'personalizado',
-        planName: 'Personalizado (Ilimitado)',
+        planName: isReccQaTrial ? 'Prueba interna RECC (Ilimitado)' : 'Personalizado (Ilimitado)',
         startedAt: subs[0].startedAt || new Date().toISOString(),
-        lastPaymentAt: new Date().toISOString(),
-        notes: 'Acceso ilimitado activado por administrador',
+        lastPaymentAt: isReccQaTrial ? null : new Date().toISOString(),
+        notes: isReccQaTrial ? 'Empresa ficticia aislada para QA RECC; sin pago ni facturación.' : 'Acceso ilimitado activado por administrador',
       });
     } else {
       subResult = await admin.entities.Subscription.create({
         userId: targetUserId,
         status: 'activa',
-        firstPaymentStatus: 'paid',
+        firstPaymentStatus: isReccQaTrial ? 'unpaid' : 'paid',
         planCode: 'personalizado',
         plan: 'personalizado',
-        planName: 'Personalizado (Ilimitado)',
+        planName: isReccQaTrial ? 'Prueba interna RECC (Ilimitado)' : 'Personalizado (Ilimitado)',
         startedAt: new Date().toISOString(),
-        lastPaymentAt: new Date().toISOString(),
-        notes: 'Acceso ilimitado activado por administrador',
+        lastPaymentAt: isReccQaTrial ? null : new Date().toISOString(),
+        notes: isReccQaTrial ? 'Empresa ficticia aislada para QA RECC; sin pago ni facturación.' : 'Acceso ilimitado activado por administrador',
       });
     }
 
@@ -130,7 +137,7 @@ Deno.serve(async (req) => {
       actionType: 'suscripcion_activada',
       actionBy: user.email || 'admin',
       actionAt: new Date().toISOString(),
-      details: `Cuenta activada por administrador.${note ? ` Nota: ${String(note).slice(0, 500)}` : ''}`,
+      details: `${isReccQaTrial ? 'Cuenta ficticia de prueba RECC activada sin pago.' : 'Cuenta activada por administrador.'}${note ? ` Nota: ${String(note).slice(0, 500)}` : ''}`,
     }).catch(() => null);
 
     return Response.json({
