@@ -139,16 +139,16 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
               />
             </div>
           ) : (
-            // Sin PDF: mostrar resumen de datos extraídos por OCR
+            // Sin PDF: mostrar los datos guardados, independientemente de su origen
             <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg">
               <div className="flex items-center gap-2 mb-6">
                 <FileText className="w-5 h-5 text-muted-foreground" />
-                <h3 className="text-base font-semibold text-foreground">Datos extraídos de la factura</h3>
+                <h3 className="text-base font-semibold text-foreground">Datos de la factura recibida</h3>
               </div>
               <div className="space-y-0">
                 {[
-                  ['Proveedor', invoice.cliente_nombre],
-                  ['NIF proveedor', invoice.cliente_nif],
+                  ['Proveedor', invoice.proveedor_nombre || invoice.cliente_nombre],
+                  ['NIF proveedor', invoice.proveedor_nif || invoice.cliente_nif],
                   ['Nº Factura', invoice.numero_factura],
                   ['Fecha emisión', invoice.fecha_emision ? new Date(invoice.fecha_emision).toLocaleDateString('es-ES') : null],
                   ['Fecha vencimiento', invoice.fecha_vencimiento ? new Date(invoice.fecha_vencimiento).toLocaleDateString('es-ES') : null],
@@ -164,7 +164,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
                 ))}
               </div>
               <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                <p className="text-xs text-amber-700">No hay PDF original adjunto. Los datos fueron extraídos por OCR.</p>
+                <p className="text-xs text-amber-700">No hay PDF original adjunto. Se muestra la información registrada en Taxea, que no sustituye al documento original.</p>
               </div>
             </div>
           )
