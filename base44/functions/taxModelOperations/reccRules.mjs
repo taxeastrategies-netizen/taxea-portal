@@ -40,12 +40,12 @@ export function reccSchedule(input) {
   let paid = 0;
   for (const row of payments) {
     const id = String(row.id || '');
-    if (!id || seen.has('payment:' + id)) throw new Error('Identificador de pago RECC vacío o duplicado.');
+    if (!id || seen.has('payment:' + id)) throw new Error('Cada pago RECC exige identificador único, no vacío ni duplicado.');
     seen.add('payment:' + id);
     const when = reccDate(row.date);
     const amount = round(row.amount);
     if (!Number.isFinite(amount) || amount <= 0) throw new Error('Importe de pago RECC no válido.');
-    if (when < operationDate && input.advanceConfirmed !== true) throw new Error('El anticipo anterior a la operación debe estar identificado y confirmado por asesor.');
+    if (when < operationDate && input.advanceConfirmed !== true) throw new Error('Los anticipos anteriores a la operación deben estar identificados y confirmados por asesor.');
     if (row.status && row.status !== 'committed') throw new Error('Pago RECC pendiente de confirmación contable.');
     paid = round(paid + amount);
     if (paid > net + 0.01) throw new Error('Los pagos superan el precio de la factura.');
