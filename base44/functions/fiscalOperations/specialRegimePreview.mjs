@@ -1,3 +1,4 @@
+import { reccSchedule } from './reccRules.mjs';
 // Cálculos de apoyo para revisión profesional; nunca contabilizan ni presentan modelos por sí solos.
 const cents = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const EU_COUNTRIES = new Set(['AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK']);
@@ -64,50 +65,28 @@ export function calculateSpecialRegimePreview(input) {
       reason: 'IVA y recargo de la compra son mayor coste; no se trasladan a la deducción ordinaria del comerciante.' };
   }
   if (regime === 'criterio_caja') {
-    const invoiceGross = finite(input.invoiceGross, 'total de la factura', { positive: true });
+    const invoiceGross = finite(input.invoiceGross, 'total neto de la factura', { positive: true });
     const taxableBase = finite(input.base, 'base de la factura');
     const taxQuota = finite(input.taxAmount, 'cuota de impuesto de la factura');
-    if (taxQuota > invoiceGross) throw new Error('La cuota del impuesto no puede superar el total de la factura.');
-    if (Math.abs(cents(taxableBase + taxQuota) - invoiceGross) > 0.02) return {
-      regime, status: 'requires_total_reconciliation', invoiceGross, taxableBase, taxQuota,
-      advisorConfirmationRequired: true,
-      reason: 'El total cobrado/pagado no equivale a base más impuesto (posibles retenciones u otros conceptos). Hay que reconstruir el precio y sus pagos antes de repartir la cuota fiscal.',
+    const withholding = finite(input.withholdingAmount ?? 0, 'retención');
+    const surcharge = finite(input.surchargeAmount ?? 0, 'recargo repercutido');
+    if (Math.abs(cents(taxableBase + taxQuota + surcharge - withholding) - invoiceGross) > 0.02) return {
+      regime, status: 'requires_total_reconciliation', invoiceGross, taxableBase, taxQuota, advisorConfirmationRequired: true,
+      reason: 'El precio neto no coincide con base, IVA, recargo y retención. Corrige el documento antes de repartir la cuota.',
     };
-    const operationDate = date(input.operationDate, 'fecha de operación');
-    const forcedRecognitionDate = `${Number(operationDate.slice(0, 4)) + 1}-12-31`;
-    const payments = Array.isArray(input.payments) ? input.payments : [];
-    const seen = new Set();
-    let applied = 0;
-    let paidTotal = 0;
-    const events = [];
-    for (const row of [...payments].sort((a, b) => String(a?.date || '').localeCompare(String(b?.date || '')) || String(a?.id || '').localeCompare(String(b?.id || '')))) {
-      const id = String(row?.id || '');
-      if (!id || seen.has(id)) throw new Error('Cada cobro o pago necesita un identificador único.');
-      seen.add(id);
-      const paymentDate = date(row.date, 'fecha de cobro o pago');
-      const amount = finite(row.amount, 'importe de cobro o pago', { positive: true });
-      if (paymentDate < operationDate) throw new Error('Los anticipos anteriores a la operación necesitan su circuito fiscal propio.');
-      paidTotal = cents(paidTotal + amount);
-      if (paidTotal > invoiceGross + 0.01) throw new Error('Los cobros/pagos superan el total de la factura.');
-      if (paymentDate <= forcedRecognitionDate) {
-        events.push({ id, date: paymentDate, amount, factor: amount / invoiceGross, kind: 'payment' });
-        applied = cents(applied + amount);
-      }
-    }
-    const remaining = cents(invoiceGross - applied);
-    if (remaining > 0) events.push({ id: 'forced_deadline', date: forcedRecognitionDate, amount: remaining, factor: remaining / invoiceGross, kind: 'forced_deadline' });
-    let allocatedQuota = 0;
-    let allocatedBase = 0;
-    const taxEvents = events.map((event, index) => {
-      const last = index === events.length - 1;
-      const quota = last ? cents(taxQuota - allocatedQuota) : cents(taxQuota * event.amount / invoiceGross);
-      const base = last ? cents(taxableBase - allocatedBase) : cents(taxableBase * event.amount / invoiceGross);
-      allocatedQuota = cents(allocatedQuota + quota);
-      allocatedBase = cents(allocatedBase + base);
-      return { ...event, taxableBase: base, taxQuota: quota };
+    const schedule = reccSchedule({ invoiceNet: invoiceGross, operationDate: input.operationDate, payments: input.payments,
+      advanceConfirmed: input.advanceConfirmed, insolvencyDate: input.insolvencyDate });
+    let factor = 0, allocatedBase = 0, allocatedQuota = 0, allocatedSurcharge = 0;
+    const events = schedule.events.map(event => {
+      factor = Math.min(1, factor + event.factor);
+      const base = cents(cents(taxableBase * factor) - allocatedBase);
+      const quota = cents(cents(taxQuota * factor) - allocatedQuota);
+      const recargo = cents(cents(surcharge * factor) - allocatedSurcharge);
+      allocatedBase = cents(allocatedBase + base); allocatedQuota = cents(allocatedQuota + quota); allocatedSurcharge = cents(allocatedSurcharge + recargo);
+      return { ...event, taxableBase: base, taxQuota: quota, surchargeQuota: recargo };
     });
-    return { regime, status: 'proposal_only', invoiceGross, taxableBase, taxQuota, operationDate, forcedRecognitionDate, events: taxEvents,
-      advisorConfirmationRequired: true, reason: 'El impuesto se liquida según cobros/pagos trazados y, por el saldo restante, en la fecha límite legal. La factura se contabiliza al devengo; el desglose de subcuentas 472/477 es opcional según el ICAC.' };
+    return { regime, status: 'proposal_only', invoiceGross, taxableBase, taxQuota, ...schedule, events,
+      advisorConfirmationRequired: true, reason: 'IVA por precio satisfecho (incluida retención proporcional), anticipos trazados y límite legal o auto de concurso confirmado. La contabilidad conserva el devengo de la factura.' };
   }
   if (['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
     if (direction !== 'ingreso') return { regime, status: 'requires_destination_trace', reason: 'La compra no se incorpora automáticamente al modelo 369 de ventas.' };
