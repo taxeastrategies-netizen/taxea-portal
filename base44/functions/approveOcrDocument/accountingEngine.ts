@@ -386,7 +386,20 @@ function isValidatedSimpleReccInvoice(invoice) {
 export async function buildInvoicePosting(svc, companyId, invoice) {
   const advance = clean(invoice.fiscal_regime) === 'criterio_caja'
     ? await validateReccAdvanceLinks(svc, companyId, invoice) : { documentKind: 'ordinary', applications: [] };
-  const counterparty = await ensureCounterparty(svc, companyId, invoice);
+  let counterparty;
+  if (advance.originalAdvanceId) {
+    const original = await svc.entities.Invoice.get(advance.originalAdvanceId);
+    const rows = await svc.entities.JournalEntryLine.filter({companyId,journalEntryId:advance.originalJournalEntryId},'lineNumber',5001);
+    const third = rows.filter(row=>row.sourceLineType==='tercero' || /^(430|400|410)/.test(clean(row.accountCode)));
+    const codes = [...new Set(third.map(row=>clean(row.accountCode)))];
+    const expected = money(Number(original.total_factura)*(invoice.tipo==='emitida'?1:-1));
+    const balance = money(third.reduce((sum,row)=>sum+Number(row.debit||0)-Number(row.credit||0),0));
+    if (rows.length>=5001 || codes.length!==1 || Math.abs(balance-expected)>0.01)
+      throw new Error('La devolución necesita una subcuenta original inequívoca; no crea ni cambia la cuenta histórica.');
+    const accounts = await svc.entities.AccountingAccount.filter({companyId,code:codes[0]},'-created_date',2);
+    if (accounts.length!==1 || accounts[0].status==='inactiva') throw new Error('Revisa la subcuenta original antes de devolver el anticipo.');
+    counterparty = {profile:null,account:accounts[0],role:invoice.tipo==='emitida'?'cliente':'acreedor'};
+  } else counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
   const base = money(invoice.base_imponible);
   const tax = money(invoice.cuota_iva);
