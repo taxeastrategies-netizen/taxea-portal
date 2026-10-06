@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import * as esbuild from 'esbuild';
 
 const protectedFunctions = [
+  'anularFacturas',
   'invoiceOperations',
   'fiscalOperations',
   'documentBackupToDrive',
@@ -50,4 +51,4 @@ for (const name of protectedFunctions) {
   assert.equal(response.status, 401, name + ' must reject an anonymous caller');
   assert.equal(privilegedCalls, 0, name + ' must not access service role, network or secrets first');
 }
-console.log('Siete funciones sensibles: anónimo 401 antes de datos, red o secretos.');
+console.log('Ocho funciones sensibles: anónimo 401 antes de datos, red o secretos.');
