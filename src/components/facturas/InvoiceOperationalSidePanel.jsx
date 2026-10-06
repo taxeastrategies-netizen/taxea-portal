@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { generateInvoiceAccountingEntry } from './invoicePremiumEmail';
+import InvoicePostedEntry from './InvoicePostedEntry';
 import InvoicePaymentReconciliationModal from './InvoicePaymentReconciliationModal';
 import TraceChainDrawer from '@/components/tax/TraceChainDrawer';
 
@@ -583,57 +583,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
 
             {/* Asiento contable — generado automáticamente */}
             <Section title="Asiento contable" icon={BookOpen} defaultOpen={false}>
-              {(() => {
-                const entry = generateInvoiceAccountingEntry(invoice);
-                if (!entry) return (
-                  <div className="flex items-start gap-2 bg-slate-50 border border-border rounded-lg p-2.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-muted-foreground">Sin datos suficientes para generar el asiento.</p>
-                  </div>
-                );
-                const statusCfg = {
-                  generado:          { color: 'text-emerald-600', icon: CheckCircle2, label: 'Asiento cuadrado' },
-                  pendiente_validar:  { color: 'text-amber-600', icon: AlertTriangle, label: 'Pendiente de validar' },
-                  descuadrado:        { color: 'text-red-600', icon: AlertTriangle, label: 'Descuadrado' },
-                };
-                const sc = statusCfg[entry.status] || statusCfg.pendiente_validar;
-                const StatusIcon = sc.icon;
-                return (
-                  <div>
-                    <table className="w-full text-xs mb-2">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="text-left py-1 text-muted-foreground font-medium w-24">Cuenta</th>
-                          <th className="text-left py-1 text-muted-foreground font-medium">Descripción</th>
-                          <th className="text-right py-1 text-muted-foreground font-medium">Debe</th>
-                          <th className="text-right py-1 text-muted-foreground font-medium">Haber</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entry.lines.map((line, i) => (
-                          <tr key={i} className="border-b border-border/40">
-                            <td className="py-1 font-mono text-[10px] text-muted-foreground">{line.cuenta}</td>
-                            <td className="py-1 text-[10px] text-foreground truncate max-w-[80px]">{line.descripcion}</td>
-                            <td className="py-1 text-right font-medium">{line.debe > 0 ? fmt(line.debe) : '—'}</td>
-                            <td className="py-1 text-right font-medium">{line.haber > 0 ? fmt(line.haber) : '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div className={`flex items-center gap-1 text-[10px] font-semibold ${sc.color} mb-1.5`}>
-                      <StatusIcon className="w-3 h-3" /> {sc.label}
-                    </div>
-                    {entry.warnings.length > 0 && (
-                      <div className="space-y-1">
-                        {entry.warnings.map((w, i) => (
-                          <p key={i} className="text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1">{w}</p>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-[10px] text-muted-foreground mt-1">Asiento sugerido basado en PGC. Valida con tu plan contable.</p>
-                  </div>
-                );
-              })()}
+              <InvoicePostedEntry invoice={invoice} />
             </Section>
 
             {/* Enlace público sin login */}
