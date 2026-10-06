@@ -159,7 +159,9 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (!open) { loadedRef.current = false; creationKeyRef.current = ''; return; }
     if (editing && !loadedRef.current) {
       loadedRef.current = true;
-      setForm({ ...getEmpty(), ...editing, aplica_retencion: (Number(editing.retencion_irpf) || 0) > 0, aplica_recargo: Number(editing.cuota_recargo || 0) !== 0 });
+      let savedBreakdown = [];
+      try { savedBreakdown = JSON.parse(editing.tax_breakdown || '[]'); } catch { /* Documento heredado sin desglose. */ }
+      setForm({ ...getEmpty(), ...editing, tax_breakdown_rows: Array.isArray(savedBreakdown) ? savedBreakdown : [], aplica_retencion: (Number(editing.retencion_irpf) || 0) > 0, aplica_recargo: Number(editing.cuota_recargo || 0) !== 0 });
       setCustomRetention(!RETENTION_RATES.includes(Number(editing.retencion_irpf)));
       setUseCustomColetilla(Boolean(editing.coletilla_fiscal && !COLETILLAS.includes(editing.coletilla_fiscal)));
       setRecurring(getDefaultRecurring());
@@ -192,7 +194,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (form.base_imponible === '' || isNaN(Number(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
     else if (Number(form.base_imponible) < 0 && !form.es_rectificativa) e.base_imponible = 'Una base negativa requiere factura rectificativa';
     if (form.es_rectificativa && !form.factura_rectificada?.trim()) e.base_imponible = 'Indica la factura original que rectificas';
-    if (quotaRows.some(row => !Number.isFinite(Number(row.base)) || ![4,10,21].includes(Number(row.rate)))) e.base_imponible = 'Revisa cada línea del desglose IVA';
+    if (quotaRows.length > 3 || new Set(quotaRows.map(row => Number(row.rate))).size !== quotaRows.length || quotaRows.some(row => row.base === '' || !Number.isFinite(Number(row.base)) || ![4,10,21].includes(Number(row.rate)) || (Number(row.base) !== 0 && Math.sign(Number(row.base)) !== Math.sign(Number(form.base_imponible))))) e.base_imponible = 'Revisa el desglose: un máximo de tres tipos distintos y bases del mismo signo';
+    if (quotaRows.length > 1 && form.aplica_recargo) e.tipo_recargo = 'El recargo necesita un documento con un único tipo de IVA revisado por asesor.';
     if (form.aplica_recargo && (taxType !== 'IVA' || !Number.isFinite(Number(form.tipo_recargo)) || Number(form.tipo_recargo) <= 0 || Number(form.tipo_recargo) > 100)) e.tipo_recargo = 'Indica un tipo de recargo IVA válido';
     if (form.aplica_recargo && recurring.enabled) e.tipo_recargo = 'El recargo necesita revisión individual: desactiva la recurrencia.';
     if (form.aplica_retencion && (String(form.retencion_irpf) === '' || isNaN(Number(form.retencion_irpf)))) {
@@ -455,7 +458,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 <select aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{[4,10,21].map(rate => <option key={rate} value={rate}>{rate}%</option>)}</select>
                 <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
               </div>)}
-              {quotaRows.length > 0 && quotaRows.length < 20 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: 21 }])}>Añadir tipo de IVA</button>}
+              {quotaRows.length > 0 && quotaRows.length < 3 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: [21,10,4].find(rate => !quotaRows.some(row => Number(row.rate) === rate)) }])}>Añadir tipo de IVA</button>}
             </div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
