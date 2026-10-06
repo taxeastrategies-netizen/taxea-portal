@@ -800,10 +800,7 @@ export default function GestionUsuarios() {
                         <div className="flex items-center gap-0.5">
                           <ActionBtn title="Editar usuario" onClick={() => setEditingUser(u)}><Pencil className="w-3.5 h-3.5" /></ActionBtn>
                           <ActionBtn title="Acceder al perfil" onClick={() => setViewingUser(u)}><UserCheck className="w-3.5 h-3.5" /></ActionBtn>
-                          {(sub?.status === 'paid_pending_activation' || (
-                            u.id === '6ac4ad29f474f30e0e2968ce' &&
-                            String(u.email || '').trim().toLowerCase() === 'taxeastrategies+qa-recc-2026@gmail.com' && !u.isPortalActive
-                          )) && (
+                          {(sub?.status === 'paid_pending_activation' && sub?.firstPaymentStatus === 'paid' && !u.isPortalActive) && (
                             <ActionBtn title="Activar cuenta" onClick={() => setActivatingUser(u)}><Unlock className="w-3.5 h-3.5" /></ActionBtn>
                           )}
                           <ActionBtn title={u.status === 'bloqueado' ? 'Desbloquear cuenta' : 'Bloquear cuenta (BAN)'} onClick={() => setBlockingUser(u)} danger><Ban className="w-3.5 h-3.5" /></ActionBtn>
