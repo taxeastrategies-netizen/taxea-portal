@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
-import { reccSchedule, reccMetadata, reccCorrections } from './reccRules.mjs';
+import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
 const ENGINE_VERSION = 'taxea-modelos-2026.09.20-v25';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
