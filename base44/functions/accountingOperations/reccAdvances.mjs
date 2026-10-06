@@ -62,6 +62,7 @@ function advanceCorrections(rows, originalId, exceptId = '') {
 async function validateAdvanceCorrection(svc, companyId, invoice, input, result) {
   const original = await svc.entities.Invoice.get(clean(input.originalInvoiceId));
   if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
+    || !taxId(invoice) || clean(invoice.moneda || 'EUR') !== 'EUR' || clean(original.moneda || 'EUR') !== 'EUR'
     || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
     || original.es_rectificativa || reccAdvanceMetadata(metadata(original)).documentKind !== 'advance'
     || taxId(original) !== taxId(invoice) || !original.linked_journal_entry_id)
