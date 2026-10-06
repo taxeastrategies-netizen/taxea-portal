@@ -983,8 +983,10 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     return review(`La factura ${invoiceLabel} tiene cobros o pagos no confirmados u omitidos; reconcilia su estado antes de calcular el criterio de caja.`);
   }
   // El IVA está en los anticipos originales; la final totalmente anticipada no vuelve a liquidarlo.
-  if (!invoice.es_rectificativa && invoice.fiscal_review_status === 'validado' && isZeroResidualReccFinal(invoice)
-    && Number(line.base || 0) === 0 && Number(line.quota || 0) === 0 && rawPayments.length === 0) return { line: null };
+  try {
+    if (!invoice.es_rectificativa && invoice.fiscal_review_status === 'validado' && isZeroResidualReccFinal(invoice)
+      && Number(line.base || 0) === 0 && Number(line.quota || 0) === 0 && rawPayments.length === 0) return { line: null };
+  } catch (error) { return review(`Factura ${invoiceLabel}: ${error.message}`); }
   const payable = invoicePayable(invoice);
   const siblingLines = (data.taxLines || []).filter((candidate: any) => candidate.invoice?.id === invoice.id || candidate.invoiceId === invoice.id);
   const invoiceLines = siblingLines.length ? siblingLines : [line];
