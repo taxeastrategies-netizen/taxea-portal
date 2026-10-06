@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
 import { reccAdvanceMetadata, validateReccAdvanceLinks } from './reccAdvances.mjs';
+import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
@@ -346,7 +347,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
-    const svc = base44.asServiceRole;
+    const svc = ['save_invoice_tax_line', 'recc_advance_candidates'].includes(action) ? queuedAccountingClient(base44.asServiceRole) : base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const action = clean(body.action || 'bundle');
