@@ -442,7 +442,7 @@ Deno.serve(async (req) => {
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
           base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
-          forcedRecognitionDate: reccMetadata(invoice).insolvencyDate || `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
+          forcedRecognitionDate: (() => { const op = clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 10), deadline = `${Number(op.slice(0, 4)) + 1}-12-31`, insolvency = clean(reccMetadata(invoice).insolvencyDate); return insolvency > op && insolvency < deadline ? insolvency : deadline; })(), reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
       const paymentIds = new Set<string>();
       const invoiceById = new Map(relevantInvoices.map((invoice: any) => [invoice.id, invoice]));
@@ -684,9 +684,11 @@ Deno.serve(async (req) => {
           insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
           originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
           adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
+          adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
           reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
-        const validBreakdown = breakdown.length <= 20 && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate))
+        const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
+          && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
           && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
           && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
           && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - base) <= 0.01
@@ -712,17 +714,32 @@ Deno.serve(async (req) => {
           const original = await svc.entities.Invoice.get(metadata.originalInvoiceId).catch(() => null);
           if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
             || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
-            || !clean(metadata.reason) || !metadata.adjustmentDate || base >= 0)
-            return Response.json({ error: 'La rectificativa RECC de reducción exige original validado de la misma empresa y tipo, fecha del ajuste y causa documentada por asesor.' }, { status: 422 });
-          reccDate(metadata.adjustmentDate);
+            || !clean(metadata.reason) || !metadata.adjustmentDate
+            || !['price_change','tax_adjustment'].includes(metadata.adjustmentMode)
+            || clean(invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif)).toUpperCase()
+              !== clean(original.tipo === 'emitida' ? original.cliente_nif : (original.proveedor_nif || original.cliente_nif)).toUpperCase())
+            return Response.json({ error: 'La rectificativa RECC exige original validado de la misma empresa, tipo y contraparte, fecha, tratamiento temporal y causa documentada por asesor.' }, { status: 422 });
+          try { reccDate(metadata.adjustmentDate); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
           const previousCorrections = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
           const proposed = { ...invoice, recc_metadata: JSON.stringify(metadata), fiscal_review_status: 'validado', fiscal_regime: 'criterio_caja' };
-          const corrections = reccCorrections(original, [...previousCorrections.filter((row: any) => row.id !== invoice.id), proposed]);
           const originalPayments = await listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: original.id }, 'payment_date');
-          reccSchedule({ invoiceNet: Math.abs(Number(original.total_factura)), operationDate: original.fecha_operacion || original.fecha_emision,
-            ...reccMetadata(original), corrections, payments: originalPayments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
+          const allTaxLines = await listFiscalRows(svc.entities.InvoiceTaxLine, { companyId });
+          const originalLines = allTaxLines.filter((row: any) => row.invoiceId === original.id && row.reviewStatus === 'validado');
+          const proposedLines = breakdown.map((row: any) => ({ ...row, invoiceId: invoice.id }));
+          if (metadata.adjustmentMode === 'price_change' && breakdown.some((row: any) => !originalLines.some((part: any) => Number(part.rate) === Number(row.rate))))
+            return Response.json({ error: 'La variación de precio debe conservar los tipos de IVA originales; un cambio de cuota requiere ajuste fiscal revisado.' }, { status: 422 });
+          try {
+            if (metadata.adjustmentMode === 'price_change' && base < 0) for (const originalLine of originalLines) {
+              const corrections = reccCorrections(original, [...previousCorrections.filter((row: any) => row.id !== invoice.id), proposed], originalLine,
+                [...allTaxLines.filter((row: any) => row.invoiceId !== invoice.id), ...proposedLines]);
+              reccSchedule({ invoiceNet: Math.abs(Number(original.total_factura)), operationDate: original.fecha_operacion || original.fecha_emision,
+                ...reccMetadata(original), corrections, payments: originalPayments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
+            }
+          } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
           proposedEvaluation.specialPreview = { regime: 'criterio_caja', status: 'proposal_only',
-            reason: 'Rectificativa vinculada: se corrige solo IVA reconocido; la reducción no cobrada cancela cuota diferida del original. No se sobrescribe el asiento histórico.' };
+            reason: metadata.adjustmentMode === 'tax_adjustment'
+              ? 'Ajuste de cuotas en fecha fiscal confirmada por asesor (artículos 89 y 114); revisar autoliquidación rectificativa si corresponde. No se sobrescribe el historial.'
+              : base < 0 ? 'Reducción vinculada por tipo de IVA: corrige lo reconocido y cancela el pendiente del original.' : 'Aumento de precio: cobros propios de la rectificativa y límite legal de la operación original.' };
           proposedEvaluation.specialPreviewError = '';
         }
         proposedEvaluation.postingBlocked = false;
@@ -776,6 +793,7 @@ Deno.serve(async (req) => {
         insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
         originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
         adjustmentDate: clean(body.recc?.adjustmentDate ?? previousRecc.adjustmentDate),
+        adjustmentMode: clean(body.recc?.adjustmentMode ?? previousRecc.adjustmentMode),
         reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
         reviewedBy: user.email, reviewedAt: new Date().toISOString(),
       } : null;
