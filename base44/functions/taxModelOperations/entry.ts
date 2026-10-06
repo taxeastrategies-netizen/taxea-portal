@@ -1648,24 +1648,43 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
     const originYear = thirdPartyOperationDate(invoice, model).slice(0, 4);
     if (!originYear) continue;
     const thresholdKey = `${normalizedTaxId}|${operationKey}|${originYear}`;
-    thresholdTotals.set(thresholdKey, money((thresholdTotals.get(thresholdKey) || 0) + money(invoice.total_factura)));
+    thresholdTotals.set(thresholdKey, money((thresholdTotals.get(thresholdKey) || 0) + money(invoice.total_factura) + retentionAmount(invoice)));
   }
   let excluded347 = 0;
   for (const invoice of data.invoices.filter((f: any) => !f.anulada)) {
     const cashAccounting = cashInvoiceIds.has(invoice.id) || clean(invoice.indirect_tax_regime || invoice.regimen_iva) === 'criterio_caja';
     const operationDate = thirdPartyOperationDate(invoice, model);
     const operationYear = Number(clean(invoice.fecha_operacion || invoice.fecha_emision || dateOf(invoice)).slice(0, 4));
-    const cashEvents = cashAccounting && operationYear ? allocatedInvoicePayments(invoice, allPaymentsByInvoice.get(invoice.id) || [], `${operationYear + 1}-12-31`).filter((event: any) => event.date >= b.start && event.date <= b.end) : [];
+    let cashEvents: any[] = [], cashRecognizedGross = 0;
+    if (cashAccounting && operationYear) {
+      const completeLines = (data.taxLines || []).filter((line:any)=>(line.invoice?.id || line.invoiceId) === invoice.id && line.base !== undefined && line.quota !== undefined);
+      if (completeLines.length) {
+        for (const rawLine of completeLines) {
+          const cash = cashTaxLineForPeriod({...rawLine, invoice, date:rawLine.date || invoice.fecha_operacion || invoice.fecha_emision},data,b);
+          if (cash.review) { data.warnings.push(cash.review.reason); continue; }
+          if (cash.line) { cashRecognizedGross += money(cash.line.base) + money(cash.line.quota) + money(cash.line.surchargeQuota); cashEvents.push(...(cash.line.cashRecognition?.events || [])); }
+        }
+      } else {
+        try {
+          const metadata = reccMetadata(invoice);
+          const schedule = reccSchedule({invoiceId:invoice.id,invoiceNet:invoicePayable(invoice),operationDate:clean(invoice.fecha_operacion || invoice.fecha_emision),advanceConfirmed:metadata.advanceConfirmed,insolvencyDate:metadata.insolvencyDate,
+            payments:(allPaymentsByInvoice.get(invoice.id)||[]).map((payment:any)=>({id:payment.id,date:payment.payment_date,amount:payment.amount,status:payment.operation_status})),corrections:reccCorrections(invoice,data.invoices)});
+          cashEvents = schedule.events.filter((event:any)=>event.date>=b.start&&event.date<=b.end);
+          cashRecognizedGross = money((money(invoice.total_factura)+retentionAmount(invoice))*cashEvents.reduce((sum:number,event:any)=>sum+event.factor,0));
+        } catch(error) { data.warnings.push(`RECC ${invoice.numero_factura || invoice.id}: ${error.message}`); }
+      }
+    }
     const cashFactor = cashEvents.reduce((sum: number, event: any) => sum + event.factor, 0);
     const generalInYear = operationDate >= b.start && operationDate <= b.end;
-    if (cashAccounting ? !generalInYear && cashFactor <= 0 : !generalInYear) continue;
+    if (cashAccounting ? !generalInYear && cashRecognizedGross === 0 : !generalInYear) continue;
     const cp = invoiceCounterparty(invoice);
-    const generalAmount = money(generalInYear ? invoice.total_factura : 0);
-    const cashAccountingAmount = money(money(invoice.total_factura) * cashFactor);
-    const amount = cashAccounting ? generalAmount : money(invoice.total_factura);
+    const grossAmount = money(money(invoice.total_factura) + retentionAmount(invoice));
+    const generalAmount = money(generalInYear ? grossAmount : 0);
+    const cashAccountingAmount = money(cashRecognizedGross);
+    const amount = cashAccounting ? generalAmount : grossAmount;
     if (!cp.id) {
       const missingKey = cp.name || 'CONTRAPARTE_SIN_IDENTIFICAR';
-      const thresholdAmount = cashAccounting ? money(invoice.total_factura) : amount;
+      const thresholdAmount = cashAccounting ? grossAmount : amount;
       missingGroups.set(missingKey, money((missingGroups.get(missingKey) || 0) + thresholdAmount));
       continue;
     }
@@ -2891,7 +2910,12 @@ function export390(company: any, profile: any, activities: any[], year: number, 
   if (calculation.operations?.intraBase && intraOutputBoxes[String(intraRate)]) { putBox(intraOutputBoxes[String(intraRate)][0],calculation.operations.intraBase); putBox(intraOutputBoxes[String(intraRate)][1],calculation.operations.intraQuota); }
   putBox('27',calculation.operations?.reverseBase||0); putBox('28',calculation.operations?.reverseQuota||0);
   const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0));
-  putBox('33',totalOutputBase); putBox('34',calculation.operations?.outputQuota||0); putBox('47',calculation.operations?.outputQuota||0);
+  const surchargeRows = calculation.operations?.surchargeRates || [];
+  const surchargeBoxes: Record<string,string[]> = {'0.5':['35','36'],'1.4':['599','600'],'5.2':['601','602'],'1.75':['41','42']};
+  for (const row of surchargeRows) { const boxes = surchargeBoxes[String(Number(row.rate))]; if (boxes) { putBox(boxes[0],row.base); putBox(boxes[1],row.quota); } }
+  const surchargeTotal = money(surchargeRows.reduce((sum:number,row:any)=>sum+money(row.quota),0));
+  putBox('43',calculation.operations?.surchargeAdjustmentBase||0); putBox('44',calculation.operations?.surchargeAdjustmentQuota||0);
+  putBox('33',totalOutputBase); putBox('34',money((calculation.operations?.outputQuota||0)-surchargeTotal-(calculation.operations?.surchargeAdjustmentQuota||0))); putBox('47',calculation.operations?.outputQuota||0);
 
   const deductionRateBoxes: Record<string, Record<string, string[]>> = {
     interior_current: {'2':['695','696'],'4':['190','191'],'5':['724','725'],'7.5':['697','698'],'10':['603','604'],'21':['605','606']},
