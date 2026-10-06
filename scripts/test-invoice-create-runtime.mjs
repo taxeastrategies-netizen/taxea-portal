@@ -335,5 +335,6 @@ console.log(JSON.stringify({
     crossTenantCreateBlocked: true,
     reviewedRecargoRetailSaleQrAndPostingOnce: true,
     reccLegalLegendPersistsOnIssue: true,
+    legacyReceivedCounterpartyNormalized: true,
   },
 }, null, 2));
