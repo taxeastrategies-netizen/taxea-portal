@@ -29,6 +29,11 @@ const DEFINITIONS: Record<string, any> = {
   '425': { name: 'Resumen anual IGIC', authority: 'ATC', frequency: 'anual', kind: 'informative', design: 'Programa de ayuda ATC 2025 v6.3.1', designYear: '2025', officialExport: false, exportMode: 'atc_guided_packet', handoffExport: true, designWarning: 'La ATC no publica un formato de importación externo para este modelo y el programa anual 2026 aún no está disponible. El .dec presentable debe generarse y validarse en el programa oficial.' },
 };
 
+// El diseño anual 390 publicado para 2025 no acredita importación para 2026.
+// Los borradores y cálculos siguen disponibles, pero no se presentan como fichero oficial.
+const officialExportAvailable = (model: string, year: number) =>
+  !!DEFINITIONS[model]?.officialExport && !(model === '390' && year > 2025);
+
 // Extracted from AEAT's official DR390e2025 v1.02 workbook. Positions are
 // one-based. Numeric tuples contain [position, length, decimalPlaces] and box
 // tuples contain [box, position, length, decimalPlaces].
@@ -3946,7 +3951,7 @@ Deno.serve(async (req) => {
         ok:true,engineVersion:draft.engineVersion||ENGINE_VERSION,frozen:true,
         definition:savedDefinition,company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},
         period:{year:draftYear,period:draftPeriod,...bounds(draftYear,draftPeriod),policy:periodPolicy(draftModel,draftYear,draftPeriod)},calculation:savedCalculation,history:draft.resumen?.history||null,
-        validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:DEFINITIONS[draftModel]?.officialExport||DEFINITIONS[draftModel]?.handoffExport,canExportOfficial:!!DEFINITIONS[draftModel]?.officialExport,requiresReview:recommendations.length>0},
+        validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:officialExportAvailable(draftModel,draftYear)||DEFINITIONS[draftModel]?.handoffExport,canExportOfficial:officialExportAvailable(draftModel,draftYear),requiresReview:recommendations.length>0},
         source:savedSource,sources:SOURCES,adjustments:savedAdjustments,
         draft:{id:draft.id,modeloCodigo:draftModel,ejercicio:draftYear,periodo:draftPeriod,version:Number(draft.version||1),estado:draft.estado||'borrador',engineVersion:draft.engineVersion||'',snapshotHash:draft.snapshotHash||'',sourceHash:draft.sourceHash||savedSource.hash||'',frozenAt:draft.frozenAt||draft.created_date||'',usuarioCreador:draft.usuarioCreador||''},
       });
@@ -4272,7 +4277,7 @@ Deno.serve(async (req) => {
     const recommendations=unique(frozenDraft?[...savedRecommendations,...warnings]:[...blockers,...warnings]);
     const sourceStart=model==='130'?b.cumulativeStart:b.start;
     const sourceSnapshot=frozenDraft?.resumen?.source||{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,sourceStart,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,sourceStart,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,sourceStart,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,sourceStart,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,sourceStart,b.end)).length,filings:filings.length}};
-    const result={ok:true,engineVersion:frozenDraft?.engineVersion||ENGINE_VERSION,frozen:!!frozenDraft,definition:frozenDraft?.resumen?.definition||{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b,policy:periodPolicy(model,year,period)},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:DEFINITIONS[model].officialExport||DEFINITIONS[model].handoffExport,canExportOfficial:DEFINITIONS[model].officialExport,requiresReview:recommendations.length>0},source:sourceSnapshot,sources:SOURCES,...(frozenDraft?{draft:{id:frozenDraft.id,version:Number(frozenDraft.version||1),estado:frozenDraft.estado||'borrador',snapshotHash:frozenDraft.snapshotHash||'',sourceHash,frozenAt:frozenDraft.frozenAt||frozenDraft.created_date||''}}:{})};
+    const result={ok:true,engineVersion:frozenDraft?.engineVersion||ENGINE_VERSION,frozen:!!frozenDraft,definition:frozenDraft?.resumen?.definition||{code:model,...DEFINITIONS[model]},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b,policy:periodPolicy(model,year,period)},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:officialExportAvailable(model,year)||DEFINITIONS[model].handoffExport,canExportOfficial:officialExportAvailable(model,year),requiresReview:recommendations.length>0},source:sourceSnapshot,sources:SOURCES,...(frozenDraft?{draft:{id:frozenDraft.id,version:Number(frozenDraft.version||1),estado:frozenDraft.estado||'borrador',snapshotHash:frozenDraft.snapshotHash||'',sourceHash,frozenAt:frozenDraft.frozenAt||frozenDraft.created_date||''}}:{})};
     if(action==='calculate') return Response.json(result);
     if(action==='export_handoff') {
       if(!DEFINITIONS[model]?.handoffExport) return Response.json({error:'El traspaso guiado no está disponible para este modelo.'},{status:400});
@@ -4303,7 +4308,7 @@ Deno.serve(async (req) => {
       return Response.json({...result,draft,alreadySaved:false});
     }
     if(action==='export') {
-      if(!DEFINITIONS[model].officialExport) return Response.json({ok:false,error:'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
+      if(!officialExportAvailable(model,year)) return Response.json({ok:false,error:model==='390'&&year>2025?'La AEAT aún no ha publicado el diseño oficial del modelo 390 para este ejercicio. El borrador interno sigue disponible, pero no se puede generar un fichero presentable con el diseño de 2025.':'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
       let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
       if(model==='180') {
         content=export180(company,year,calculation,sequentialDeclarationNumber('180'));
