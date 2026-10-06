@@ -438,8 +438,8 @@ Deno.serve(async (req) => {
         if (totalPaid > money(invoice.total_factura) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
         if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
         return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
-          issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre,
-          counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : invoice.proveedor_nif,
+          issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
+          counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
           base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
           forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
