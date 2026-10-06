@@ -237,8 +237,8 @@ async function nextCounterpartyCode(svc, companyId, prefix) {
 
 async function ensureCounterparty(svc, companyId, invoice) {
   const isCustomer = invoice.tipo === 'emitida';
-  const name = clean(isCustomer ? invoice.cliente_nombre : invoice.proveedor_nombre) || (isCustomer ? 'Cliente sin identificar' : 'Proveedor sin identificar');
-  const taxId = normalizeTaxId(isCustomer ? invoice.cliente_nif : invoice.proveedor_nif);
+  const name = clean(isCustomer ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre)) || (isCustomer ? 'Cliente sin identificar' : 'Proveedor sin identificar');
+  const taxId = normalizeTaxId(isCustomer ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif));
   const role = isCustomer ? 'cliente' : (invoice.categoria_gasto === 'compras' ? 'proveedor' : 'acreedor');
   const prefix = role === 'cliente' ? '4300' : role === 'proveedor' ? '4000' : '4100';
   let profiles = taxId
