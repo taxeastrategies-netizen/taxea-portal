@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '../src/lib/invoiceTaxBreakdown.js';
+const source={base_imponible:300,cuota_iva:41,tipo_iva:0,tax_breakdown:JSON.stringify([{rate:21,base:100,quota:21},{rate:10,base:200,quota:20}])};
+const before=JSON.stringify(source);
+assert.equal(invoiceTaxRateLabel(source),'21% · 10%');
+assert.equal(invoiceTaxBreakdown(source).length,2);
+assert.equal(JSON.stringify(source),before);
+assert.equal(invoiceTaxBreakdown({...source,tax_breakdown:'invalid'}).length,0);
+assert.equal(invoiceTaxBreakdown({...source,cuota_iva:42}).length,0);
+assert.equal(invoiceTaxBreakdown({...source,base_imponible:'invalid'}).length,0);
+assert.equal(invoiceTaxRateLabel({tipo_iva:21}),'21%');
+const credit={...source,base_imponible:-300,cuota_iva:-41,tax_breakdown:[{rate:21,base:-100,quota:-21},{rate:10,base:-200,quota:-20}]};
+assert.equal(invoiceTaxBreakdown(credit).length,2);
+console.log(JSON.stringify({ok:true,multipleRatesShownWithoutZeroPercent:true,invalidBreakdownRejected:true,creditNotesSupported:true,sourceUnchanged:true}));
