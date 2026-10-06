@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
+import { reccAdvanceMetadata, validateReccAdvanceLinks } from './reccAdvances.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
@@ -680,13 +681,17 @@ Deno.serve(async (req) => {
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
         const previousMetadata = reccMetadata(invoice);
-        const metadata = { version: 'recc-v2', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
+        const metadata = { ...reccAdvanceMetadata({ ...previousMetadata, ...body.recc }), version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
           insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
           originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
           adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
           adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
           adjustmentCause: clean(body.recc?.adjustmentCause ?? previousMetadata.adjustmentCause ?? 'other'),
           reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
+        if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
+          return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
+        try { await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); }
+        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
         const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
           && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
@@ -796,7 +801,8 @@ Deno.serve(async (req) => {
       } else taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       const previousRecc = reccMetadata(invoice);
       const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
-        version: 'recc-v2', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
+        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc }),
+        version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
         insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
         originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
         adjustmentDate: clean(body.recc?.adjustmentDate ?? previousRecc.adjustmentDate),
