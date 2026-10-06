@@ -42,13 +42,13 @@ for(let i=1;i<=200;i++){
  assert.equal(schedule.events.some(e=>e.kind==='forced_deadline'),false);
 }
 const modelPath=path.resolve('base44/functions/taxModelOperations/entry.ts');
-const compiled=await esbuild.build({stdin:{contents:fs.readFileSync(modelPath,'utf8')+'\nexport {cashTaxLineForPeriod,calculateIndirectTax,bounds};',loader:'ts',resolveDir:path.dirname(modelPath)},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){
+const compiled=await esbuild.build({stdin:{contents:fs.readFileSync(modelPath,'utf8')+'\nexport {cashTaxLineForPeriod,calculateIndirectTax,bounds,export303,export390,transferLayoutErrors};',loader:'ts',resolveDir:path.dirname(modelPath)},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){
  builder.onResolve({filter:new RegExp('^npm:@base44')},()=>({path:'sdk',namespace:'stub'}));
  builder.onLoad({filter:/.*/,namespace:'stub'},()=>({loader:'js',contents:'export const createClientFromRequest=()=>({});'}));
 }}]});
 const context=vm.createContext({console,exports:{},module:{exports:{}},Deno:{serve(){}},TextEncoder,TextDecoder,Date,Response,Request,setTimeout,clearTimeout});
 vm.runInContext(compiled.outputFiles[0].text,context);
-const {cashTaxLineForPeriod:cash,bounds,calculateIndirectTax:calculate303}=context.module.exports;
+const {cashTaxLineForPeriod:cash,bounds,calculateIndirectTax:calculate303,export303,export390}=context.module.exports;
 const original={id:'original',tipo:'emitida',numero_factura:'QA',fecha_emision:'2026-01-15',base_imponible:100,cuota_iva:21,total_factura:121,fiscal_regime:'criterio_caja',fiscal_review_status:'validado'};
 const line={id:'line',sourceId:'InvoiceTaxLine:line',invoice:original,invoiceId:original.id,date:original.fecha_emision,base:100,quota:21,rate:21,deductibleQuota:0,nonDeductibleQuota:0,taxKind:'iva',regime:'criterio_caja',operationType:'subject_taxed',reviewStatus:'validado'};
 const data=(invoice=original,lines=[line],payments=[])=>({invoices:[invoice],taxLines:lines,invoicePayments:payments,rawInvoicePayments:payments,filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],year:2026,period:'1T'});
@@ -71,4 +71,35 @@ assert.equal(result.operations.outputQuota,16.8);
 const insolvencyInvoice={...original,recc_metadata:JSON.stringify({insolvencyDate:'2026-03-01',reason:'Auto documentado'})};
 const insolvencyLine={...line,invoice:insolvencyInvoice};
 assert.equal(cash(insolvencyLine,data(insolvencyInvoice,[insolvencyLine]),bounds(2026,'1T')).line.quota,21);
+// Reducción heterogénea: solo la línea al 21%, sin reducir la cuota al 10%.
+const mixed={...original,id:'mixed',tipo_iva:0,base_imponible:200,cuota_iva:31,total_factura:231};
+const mixed21={...line,id:'mixed21',sourceId:'InvoiceTaxLine:mixed21',invoice:mixed,invoiceId:'mixed'};
+const mixed10={...mixed21,id:'mixed10',sourceId:'InvoiceTaxLine:mixed10',rate:10,quota:10};
+const mixedCredit={...credit,recc_metadata:JSON.stringify({...JSON.parse(credit.recc_metadata),originalInvoiceId:'mixed',adjustmentMode:'price_change'})};
+const mixedCreditLine={...creditLine,invoice:mixedCredit};
+const mixedData={...data(),invoices:[mixed,mixedCredit],taxLines:[mixed21,mixed10,mixedCreditLine],
+ invoicePayments:[{id:'m1',invoice_id:'mixed',payment_date:'2026-02-01',amount:115.5},{id:'m2',invoice_id:'mixed',payment_date:'2026-03-01',amount:91.3}]};
+mixedData.rawInvoicePayments=mixedData.invoicePayments;
+const mixedResult=calculate303(mixedData,bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
+assert.equal(mixedResult.operations.outputQuota,26.8);
+assert.equal(mixedResult.fields.find(row=>row.code==='15').value,-2.1);
+const raw303=export303({nif_cif:'B00000000',razon_social:'QA FICTICIA'}, {},2026,'1T',mixedResult);
+const num=(content,position,length)=>Number(content.slice(position-1,position-1+length).trim())/100;
+assert.equal(num(raw303,450,17),-2.1);
+const surchargeInvoice={...original,id:'surcharge',tipo_iva:21,cuota_recargo:5.2,tipo_recargo:5.2,total_factura:126.2};
+const surchargeLine={...line,invoice:surchargeInvoice,invoiceId:'surcharge',surchargeQuota:5.2,surchargeRate:5.2};
+const surchargeData=data(surchargeInvoice,[surchargeLine],[{id:'s',invoice_id:'surcharge',payment_date:'2026-02-01',amount:63.1}]);
+const surchargeResult=calculate303(surchargeData,bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
+assert.equal(surchargeResult.operations.outputQuota,13.1);
+assert.equal(surchargeResult.fields.find(row=>row.code==='24').value,2.6);
+const surcharge303=export303({nif_cif:'B00000000',razon_social:'QA FICTICIA'}, {},2026,'1T',surchargeResult);
+assert.equal(num(surcharge303,623,17),50);assert.equal(num(surcharge303,640,5),5.2);assert.equal(num(surcharge303,645,17),2.6);
+const increase={...credit,id:'increase',base_imponible:20,cuota_iva:4.2,total_factura:24.2,
+ recc_metadata:JSON.stringify({...JSON.parse(credit.recc_metadata),adjustmentMode:'price_change'})};
+const increaseLine={...creditLine,invoice:increase,invoiceId:'increase',base:20,quota:4.2};
+const increaseData={...data(),invoices:[original,increase],taxLines:[line,increaseLine],invoicePayments:[{id:'increasep',invoice_id:'increase',payment_date:'2026-03-01',amount:12.1}]};
+increaseData.rawInvoicePayments=increaseData.invoicePayments;
+assert.equal(cash(increaseLine,increaseData,bounds(2026,'1T')).line.quota,2.1);
+const reviewed={...increase,recc_metadata:JSON.stringify({...JSON.parse(increase.recc_metadata),adjustmentMode:'tax_adjustment',adjustmentDate:'2026-03-01'})};
+assert.equal(cash({...increaseLine,invoice:reviewed},{...increaseData,invoices:[original,reviewed]},bounds(2026,'1T')).line.quota,4.2);
 console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity'],writes:0},null,2));
