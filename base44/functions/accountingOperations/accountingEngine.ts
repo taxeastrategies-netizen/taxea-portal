@@ -399,7 +399,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
   const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) ? money(invoice.cuota_recargo) : 0;
   const total = money(invoice.total_factura || base + tax + surcharge - withholding);
-  if (!invoice.es_rectificativa && base <= 0 && !isZeroResidualReccFinal(invoice)) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
+  if (!invoice.es_rectificativa && base <= 0 && !(advance.documentKind === 'final' && isZeroResidualReccFinal(invoice))) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
   const absBase = Math.abs(base);
   const absTax = Math.abs(tax);
