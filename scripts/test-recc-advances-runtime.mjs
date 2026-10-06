@@ -160,4 +160,23 @@ await assert.rejects(()=>assertReccAdvanceCanReverse(svc,'company-a',records.Inv
 records.Invoice.find(row=>row.id===final.id).anulada=true;
 const released=await validateReccAdvanceLinks(svc,'company-a',doubled);
 assert.equal(released.applications[0].accountingAmount,1);
-console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation','cannot-annul-consumed-advance' ],realWrites:0},null,2));
+// Cierre íntegramente anticipado: dos líneas de aplicación, sin IVA ni pago adicional.
+for (const type of ['emitida', 'recibida']) {
+  const prepaid = await invoice(type, 'PREPAID-' + type, 25, { documentKind: 'advance' });
+  await postInvoice(svc, 'company-a', prepaid, 'advisor@test');
+  await paidAdvance(prepaid, 30.25);
+  const finalZero = await invoice(type, 'FINAL-ZERO-' + type, 0, { documentKind: 'final', finalOperationBase: 25, advanceAllocations: [{invoiceId:prepaid.id,base:25}] });
+  const applied = await postInvoice(svc, 'company-a', finalZero, 'advisor@test');
+  const rows = records.JournalEntryLine.filter(row=>row.journalEntryId===applied.entry.id);
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(row=>row.debit>0 || row.credit>0));
+  assert.ok(!rows.some(row=>/^47[27]|^43[01]|^40[01]|^410/.test(row.accountCode)));
+  assert.equal(rows.find(row=>row.accountCode===(type==='emitida'?'43800000':'40700000'))[type==='emitida'?'debit':'credit'],25);
+  assert.equal(applied.entry.totalDebit,25);
+  assert.equal(applied.entry.totalCredit,25);
+  assert.ok(!records.InvoicePayment.some(row=>row.invoice_id===finalZero.id));
+  assert.equal((await postInvoice(svc,'company-a',records.Invoice.find(row=>row.id===finalZero.id),'advisor@test')).alreadyPosted,true);
+}
+const invalidZero = await invoice('emitida','INVALID-ZERO',0,{documentKind:'ordinary'});
+await assert.rejects(()=>postInvoice(svc,'company-a',invalidZero,'advisor@test'),/sin circuito|positiva/);
+console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation','cannot-annul-consumed-advance','zero-residual-customer-final','zero-residual-supplier-final','zero-ordinary-rejected' ],realWrites:0},null,2));
