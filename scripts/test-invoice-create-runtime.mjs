@@ -31,6 +31,7 @@ const build = await esbuild.build({
           export const postBankReconciliation = (...args) => globalThis.__postBankReconciliation(...args);
           export const postInvoice = (...args) => globalThis.__postInvoice(...args);
           export const seedOperationalPgc = (...args) => globalThis.__seedOperationalPgc(...args);
+          export const ensureAccount = async () => { throw new Error('La creación de factura no debe crear cuentas de pago'); };
           export const updatePostingOperation = (...args) => globalThis.__updatePostingOperation(...args);
         `,
       }));
