@@ -469,13 +469,13 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 <ErrMsg msg={errors.base_imponible} />
               </div>
               <div className="space-y-1.5">
-                <Label>% {taxType}</Label>
-                <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(Number(v))}>
+                <Label>{quotaRows.length ? 'Tipos IVA por línea' : `% ${taxType}`}</Label>
+                {quotaRows.length ? <div className="flex h-9 items-center rounded-md border border-border bg-secondary/60 px-3 text-sm">{quotaRows.map(row => `${row.rate} %`).join(' · ')}</div> : <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {taxRates.map(r => <SelectItem key={r} value={String(r)}>{r} %</SelectItem>)}
                   </SelectContent>
-                </Select>
+                </Select>}
               </div>
               <div className="space-y-1.5">
                 <Label>Cuota {taxType}</Label>
@@ -533,7 +533,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <span className="font-medium">{fmt(Number(form.base_imponible) || 0)} €</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{taxType} {form.tipo_iva} %</span>
+                  <span className="text-muted-foreground">{quotaRows.length ? `IVA (${quotaRows.map(row => `${row.rate} %`).join(' · ')})` : `${taxType} ${form.tipo_iva} %`}</span>
                   <span className="font-medium">+ {fmt(cuota)} €</span>
                 </div>
                 {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} €</span></div>}
