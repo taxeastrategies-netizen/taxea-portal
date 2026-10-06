@@ -999,7 +999,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     }),
   };
   const created = await createJournalEntry(svc, companyId, {
-    date: options.date || invoice.fecha_emision,
+    date: options.date || (validatedRecc ? invoice.fecha_operacion : '') || invoice.fecha_emision,
     description: options.description || invoice.concepto || `Factura ${invoice.numero_factura}`,
     type: invoice.tipo === 'emitida' ? 'ingreso' : 'gasto',
     source: options.source || (invoice.origin === 'ocr' ? 'OCR' : invoice.tipo === 'emitida' ? 'factura_emitida' : 'factura_recibida'),
