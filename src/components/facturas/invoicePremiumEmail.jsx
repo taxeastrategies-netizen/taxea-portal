@@ -4,6 +4,7 @@
  */
 import { invoiceQrPng } from '@/lib/aeatInvoiceQr';
 import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
+import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 
 const LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 const BRAND_COLOR = '#b91c1c'; // taxea-red — usar solo como acento, nunca como fondo masivo
@@ -66,10 +67,12 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
   const invDue = invoice?.fecha_vencimiento ? escapeHtml(fmtDate(invoice.fecha_vencimiento)) : null;
   const invBase = fmt(invoice?.base_imponible);
   const invIva = fmt(invoice?.cuota_iva);
-  const invIvaPct = invoice?.tipo_iva ?? 0;
+  const invIvaPct = invoiceTaxRateLabel(invoice);
+  const taxParts = invoiceTaxBreakdown(invoice);
+  const invSurcharge = Number(invoice?.cuota_recargo || 0);
   const taxLabel = invoice?.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const invRetention = withholdingAmount(invoice) > 0 ? fmt(withholdingAmount(invoice)) : null;
-  const fiscalQrAmount = invoice?.qr_url && invRetention ? fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva)) : null;
+  const fiscalQrAmount = invoice?.qr_url && invRetention ? fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva) + invSurcharge) : null;
   const invTotal = fmt(invoice?.total_factura);
   const invConcept = escapeHtml(invoice?.concepto || '');
   const paymentMethod = escapeHtml(invoice?.forma_pago || 'Transferencia bancaria');
@@ -213,7 +216,9 @@ export function buildPremiumInvoiceEmail(invoice, company, publicLink, templateI
       <div class="section-title">Desglose de importes</div>
       <table class="totals-table">
         <tr><td>Base imponible</td><td>${invBase}</td></tr>
-        <tr><td>${taxLabel} (${invIvaPct}%)</td><td>${invIva}</td></tr>
+        <tr><td>${taxLabel} (${invIvaPct})</td><td>${invIva}</td></tr>
+        ${taxParts.map(part => `<tr><td>Base ${fmt(part.base)} · ${taxLabel} ${part.rate}%</td><td>${fmt(part.quota)}</td></tr>`).join('')}
+        ${invSurcharge ? `<tr><td>Recargo (${Number(invoice.tipo_recargo || 0)}%)</td><td>${fmt(invSurcharge)}</td></tr>` : ''}
         ${fiscalQrAmount ? `<tr><td>Importe fiscal del QR</td><td>${fiscalQrAmount}</td></tr>` : ''}
         ${invRetention ? `<tr><td>Retención IRPF</td><td>−${invRetention}</td></tr>` : ''}
         <tr class="total-row"><td>${invRetention ? 'Total a pagar' : 'Total'}</td><td>${invTotal}</td></tr>
@@ -432,9 +437,11 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     Y += 4;
     addTotRow('Base imponible', fmtN(invoice.base_imponible));
     const taxLabel = invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
-    addTotRow(`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, fmtN(invoice.cuota_iva));
+    addTotRow(`${taxLabel} (${invoiceTaxRateLabel(invoice)})`, fmtN(invoice.cuota_iva));
+    for (const part of invoiceTaxBreakdown(invoice)) addTotRow(`Base ${fmtN(part.base)} · ${taxLabel} ${part.rate}%`, fmtN(part.quota));
+    if (Number(invoice.cuota_recargo || 0)) addTotRow(`Recargo ${Number(invoice.tipo_recargo || 0)}%`, fmtN(invoice.cuota_recargo));
     if (withholdingAmount(invoice) > 0) {
-      if (qrPng) addTotRow('Importe fiscal del QR', fmtN(Number(invoice.base_imponible) + Number(invoice.cuota_iva)));
+      if (qrPng) addTotRow('Importe fiscal del QR', fmtN(Number(invoice.base_imponible) + Number(invoice.cuota_iva) + Number(invoice.cuota_recargo || 0)));
       addTotRow('Retención IRPF', `−${fmtN(withholdingAmount(invoice))}`, false, [220, 38, 38]);
     }
     doc.line(totX, Y, totX + totW, Y); Y += 4;
