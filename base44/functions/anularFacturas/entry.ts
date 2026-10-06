@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
-import { SCHEMA_VERSION, canonical8, createJournalEntry } from './accountingEngine.ts';
+import { SCHEMA_VERSION, canonical8, createJournalEntry, commitJournalEntry, assertAccountingDateOpen } from './accountingEngine.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -15,13 +15,19 @@ async function resolveLines(svc, companyId, entry) {
 async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, date) {
   if (entry.reversalEntryId) {
     const existing = await svc.entities.JournalEntry.get(entry.reversalEntryId).catch(() => null);
-    if (existing) return existing;
+    if (existing) {
+      await assertAccountingDateOpen(svc, companyId, existing.date);
+      return (await commitJournalEntry(svc, companyId, existing, userEmail)).entry;
+    }
   }
   const postingKey = `reversal:${entry.id}:${SCHEMA_VERSION}`;
   const duplicate = await svc.entities.JournalEntry.filter({ companyId, postingKey }, '-created_date', 1);
-  if (duplicate?.[0]) {
-    await svc.entities.JournalEntry.update(entry.id, { reversalEntryId: duplicate[0].id, validationStatus: 'REVERTIDO' });
-    return duplicate[0];
+  const pendingOrConfirmed = (duplicate || []).find(item => item.status !== 'anulado');
+  if (pendingOrConfirmed) {
+    await assertAccountingDateOpen(svc, companyId, pendingOrConfirmed.date);
+    const recovered = await commitJournalEntry(svc, companyId, pendingOrConfirmed, userEmail);
+    await svc.entities.JournalEntry.update(entry.id, { reversalEntryId: recovered.entry.id, validationStatus: 'REVERTIDO' });
+    return recovered.entry;
   }
   const lines = await resolveLines(svc, companyId, entry);
   if (lines.length < 2) throw new Error(`El asiento ${entry.entryNumber || entry.id} no tiene líneas suficientes para revertirse.`);
@@ -45,14 +51,15 @@ async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, d
       sourceLineType: line.sourceLineType || 'ajuste',
     })),
   }, userEmail);
+  const committedReversal = await commitJournalEntry(svc, companyId, reversed.entry, userEmail);
   await svc.entities.JournalEntry.update(entry.id, {
-    reversalEntryId: reversed.entry.id,
+    reversalEntryId: committedReversal.entry.id,
     annulledAt: new Date().toISOString(),
     annulledBy: userEmail,
     annulmentReason: reason,
     validationStatus: 'REVERTIDO',
   });
-  return reversed.entry;
+  return committedReversal.entry;
 }
 
 Deno.serve(async (req) => {
@@ -86,8 +93,9 @@ Deno.serve(async (req) => {
     for (const invoice of targets) {
       let reversalEntryId = '';
       if (invoice.linked_journal_entry_id) {
-        const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id).catch(() => null);
-        if (entry && entry.companyId === effectiveCompanyId) {
+        const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
+        if (!entry || entry.companyId !== effectiveCompanyId) throw new Error('No se puede anular: el asiento original no existe o no pertenece a esta empresa.');
+        if (entry.companyId === effectiveCompanyId) {
           if (entry.status === 'confirmado') {
             const reversal = await reverseConfirmedEntry(svc, effectiveCompanyId, entry, reason, user.email, accountingDate);
             reversalEntryId = reversal.id;
