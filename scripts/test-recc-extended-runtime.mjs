@@ -43,7 +43,7 @@ for(let i=1;i<=200;i++){
 }
 const modelPath=path.resolve('base44/functions/taxModelOperations/entry.ts');
 const compiled=await esbuild.build({stdin:{contents:fs.readFileSync(modelPath,'utf8')+'\nexport {cashTaxLineForPeriod,calculateIndirectTax,bounds};',loader:'ts',resolveDir:path.dirname(modelPath)},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){
- builder.onResolve({filter:/^npm:@base44\\/sdk/},()=>({path:'sdk',namespace:'stub'}));
+ builder.onResolve({filter:new RegExp('^npm:@base44')},()=>({path:'sdk',namespace:'stub'}));
  builder.onLoad({filter:/.*/,namespace:'stub'},()=>({loader:'js',contents:'export const createClientFromRequest=()=>({});'}));
 }}]});
 const context=vm.createContext({console,exports:{},module:{exports:{}},Deno:{serve(){}},TextEncoder,TextDecoder,Date,Response,Request,setTimeout,clearTimeout});
