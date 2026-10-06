@@ -364,6 +364,18 @@ Deno.serve(async (req) => {
     ]);
     const profile = profiles?.[0] || null;
 
+    if (action === 'recc_advance_candidates') {
+      const target = await svc.entities.Invoice.get(clean(body.invoiceId));
+      if (!target || target.company_id !== companyId) return Response.json({ error: 'Factura no accesible.' }, { status: 403 });
+      const nif = clean(target.tipo === 'emitida' ? target.cliente_nif : (target.proveedor_nif || target.cliente_nif)).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const rows = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
+      const candidates = rows.filter((row: any) => row.id !== target.id && !row.anulada && row.tipo === target.tipo
+        && row.fiscal_review_status === 'validado' && !!row.linked_journal_entry_id
+        && clean(row.tipo === 'emitida' ? row.cliente_nif : (row.proveedor_nif || row.cliente_nif)).toUpperCase().replace(/[^A-Z0-9]/g, '') === nif
+        && reccAdvanceMetadata(reccMetadata(row)).documentKind === 'advance')
+        .map((row: any) => ({ id: row.id, number: row.numero_factura, date: row.fecha_operacion || row.fecha_emision, base: row.base_imponible }));
+      return Response.json({ success: true, candidates });
+    }
     if (action === 'bundle') {
       const invoiceTaxLines=body.invoiceId?await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:clean(body.invoiceId)},'lineNumber',100):[];
       const invoicePayments=body.invoiceId?await svc.entities.InvoicePayment.filter({company_id:companyId,invoice_id:clean(body.invoiceId)},'payment_date',501):[];
