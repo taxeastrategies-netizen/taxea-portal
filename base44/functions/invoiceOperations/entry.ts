@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { buildInvoicePosting, commitJournalEntry, createJournalEntry, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
 
 const MONEY_EPSILON = 0.01;
@@ -685,7 +686,7 @@ Deno.serve(async (req) => {
         approved = { ...invoice, accounting_migration_hold: false };
       }
       try {
-        const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
+        const posting = await postInvoice(queuedAccountingClient(base44.asServiceRole), companyId, approved, user.email, { status: 'confirmado' });
         if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR' || (qrUrl && !invoice.qr_url)
           || issuedReccLegend !== existingLegend) {
           await base44.asServiceRole.entities.Invoice.update(invoice.id, {
