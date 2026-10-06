@@ -52,6 +52,14 @@ const {cashTaxLineForPeriod:cash,bounds,calculateIndirectTax:calculate303,export
 const original={id:'original',tipo:'emitida',numero_factura:'QA',fecha_emision:'2026-01-15',base_imponible:100,cuota_iva:21,total_factura:121,fiscal_regime:'criterio_caja',fiscal_review_status:'validado'};
 const line={id:'line',sourceId:'InvoiceTaxLine:line',invoice:original,invoiceId:original.id,date:original.fecha_emision,base:100,quota:21,rate:21,deductibleQuota:0,nonDeductibleQuota:0,taxKind:'iva',regime:'criterio_caja',operationType:'subject_taxed',reviewStatus:'validado'};
 const data=(invoice=original,lines=[line],payments=[])=>({invoices:[invoice],taxLines:lines,invoicePayments:payments,rawInvoicePayments:payments,filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],year:2026,period:'1T'});
+const finalZero={...original,id:'zero-final',base_imponible:0,cuota_iva:0,total_factura:0,recc_metadata:JSON.stringify({documentKind:'final',finalOperationBase:100,advanceAllocations:[{invoiceId:'advance-zero',base:100}]})};
+const zeroLine={...line,invoice:finalZero,invoiceId:finalZero.id,base:0,quota:0};
+const zeroResult=cash(zeroLine,data(finalZero,[zeroLine]),bounds(2026,'1T'));
+assert.equal(zeroResult.line,null);assert.equal(zeroResult.review,undefined);
+const zero303=calculate303(data(finalZero,[zeroLine]),bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
+assert.equal(zero303.operations.outputQuota,0);
+const brokenZero={...finalZero,recc_metadata:'invalid-json'};
+assert.ok(cash({...zeroLine,invoice:brokenZero},data(brokenZero,[zeroLine]),bounds(2026,'1T')).review);
 const retained={...original,id:'retained',importe_retencion:15,total_factura:106};
 const retainedLine={...line,invoice:retained};
 const retainedData=data(retained,[retainedLine],[{id:'rp',invoice_id:'retained',payment_date:'2026-03-01',amount:53,operation_status:'committed'}]);
