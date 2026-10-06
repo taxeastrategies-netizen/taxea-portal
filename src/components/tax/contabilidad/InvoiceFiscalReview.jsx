@@ -28,6 +28,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const [evaluation, setEvaluation] = useState(/** @type {any} */ (null));
   const [error, setError] = useState('');
   const [canApprove, setCanApprove] = useState(false);
+  const [classificationSaved, setClassificationSaved] = useState(false);
   const [form, setForm] = useState(/** @type {Record<string, any>} */ ({}));
 
   const activeActivities = useMemo(() => (bundle?.activities || []).filter(item => item.active !== false), [bundle]);
@@ -57,6 +58,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       let metadata = {}, breakdown = [];
       try { metadata = JSON.parse(invoice.recc_metadata || '{}'); breakdown = JSON.parse(invoice.tax_breakdown || '[]'); } catch { /* Documento heredado sin desglose utilizable. */ }
       const existingTaxLine = (bundleData.invoiceTaxLines || [])[0];
+      setClassificationSaved(invoice.fiscal_review_status === 'validado' && invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR');
       setForm({
         activityId: activity?.id || '',
         operationDate: invoice.fecha_operacion || invoice.fecha_emision,
@@ -92,11 +94,13 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   }, [open, bundle, companyId, invoice]);
 
   const update = (key, value) => {
+    setClassificationSaved(false);
     setForm(current => ({ ...current, [key]: value }));
     setEvaluation(null);
   };
 
   const updateSpecial = (key, value) => {
+    setClassificationSaved(false);
     setForm(current => ({ ...current, specialInputs: { ...(current.specialInputs || {}), [key]: value } }));
     setEvaluation(null);
   };
@@ -124,8 +128,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
     }
     setSaving(true); setError('');
     try {
-      const result = await invoke(payload(true));
-      if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
+      if (!classificationSaved) {
+        const result = await invoke(payload(true));
+        if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
+        setClassificationSaved(true);
+      }
       if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
         const finalized = unwrap(await base44.functions.invoke('invoiceOperations', {
           action: 'finalize_fiscal_review', company_id: companyId, invoice_id: invoice.id,
@@ -273,7 +280,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                 </div>}
                 {canApprove ? <div className="flex flex-wrap justify-end gap-2">
                   <button type="button" onClick={review} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Analizar propuesta</button>
-                  <button type="button" onClick={confirm} disabled={saving || evaluation?.postingBlocked} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Confirmar y guardar</button>
+                  <button type="button" onClick={confirm} disabled={saving || evaluation?.postingBlocked} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{classificationSaved ? 'Reintentar contabilización' : 'Confirmar y guardar'}</button>
                 </div> : <p className="text-xs text-amber-800">Solo el asesor o administrador puede confirmar esta clasificación.</p>}
                 <p className="text-[11px] leading-relaxed text-slate-400">La confirmación guarda regla, actividad, fundamento legal, usuario y versión. No presenta ningún modelo tributario.</p>
               </div>
