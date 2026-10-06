@@ -661,6 +661,9 @@ Deno.serve(async (req) => {
         approved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
           accounting_migration_hold: false, accounting_migration_hold_reason: '',
         });
+      } else if (invoice.accounting_migration_hold_reason === 'FISCAL_POSTING_ERROR') {
+        // Permitir reanudar el asiento preparado sin levantar la retención persistida hasta confirmar.
+        approved = { ...invoice, accounting_migration_hold: false };
       }
       try {
         const posting = await postInvoice(base44.asServiceRole, companyId, approved, user.email, { status: 'confirmado' });
