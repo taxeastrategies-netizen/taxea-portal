@@ -1,0 +1,94 @@
+// Anticipos RECC: se factura solo el saldo nuevo; la aplicación no crea otra cuota de IVA.
+const clean = value => String(value ?? '').trim();
+const cents = value => Math.round(Number(value) * 100);
+const taxId = invoice => clean(invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif)).toUpperCase().replace(/[^A-Z0-9]/g, '');
+export function reccAdvanceMetadata(value = {}) {
+  const kind = clean(value.documentKind || 'ordinary');
+  if (!['ordinary', 'advance', 'final'].includes(kind)) throw new Error('Tipo de documento RECC no válido.');
+  const source = value.advanceAllocations ?? [];
+  if (!Array.isArray(source) || source.length > 20) throw new Error('Revisa la lista de anticipos RECC.');
+  const allocations = source.map(row => {
+    const invoiceId = clean(row.invoiceId), baseCents = cents(row.base);
+    if (!invoiceId || !Number.isFinite(baseCents) || baseCents <= 0 || Math.abs(Number(row.base) * 100 - baseCents) > 0.00001)
+      throw new Error('Cada aplicación requiere ID de anticipo y base positiva con dos decimales.');
+    return { invoiceId, base: baseCents / 100 };
+  });
+  if (new Set(allocations.map(row => row.invoiceId)).size !== allocations.length) throw new Error('El mismo anticipo no puede repetirse en la factura final.');
+  if ((kind !== 'final' && allocations.length) || (kind === 'final' && !allocations.length)) throw new Error('Solo la factura final debe indicar anticipos aplicados.');
+  return { documentKind: kind, advanceAllocations: allocations };
+}
+function metadata(invoice) {
+  try { return JSON.parse(invoice.recc_metadata || '{}'); } catch { throw new Error('Metadatos RECC inválidos.'); }
+}
+async function all(entity, query, sort = '-created_date') {
+  const rows = [];
+  for (let skip = 0; skip < 100000; skip += 500) {
+    const page = await entity.filter(query, sort, 500, skip);
+    if (!Array.isArray(page)) throw new Error('No se ha podido comprobar el histórico completo de anticipos.');
+    rows.push(...page);
+    if (page.length < 500) return rows;
+  }
+  throw new Error('El histórico de anticipos requiere consulta segmentada antes de aplicar importes.');
+}
+export async function validateReccAdvanceLinks(svc, companyId, invoice, input = metadata(invoice)) {
+  const result = reccAdvanceMetadata(input);
+  if (result.documentKind === 'ordinary') return { ...result, applications: [] };
+  if (invoice.es_rectificativa || Number(invoice.base_imponible) <= 0 || clean(invoice.moneda || 'EUR') !== 'EUR')
+    throw new Error('El circuito de anticipos requiere factura positiva en EUR. Las devoluciones deben revisar su rectificativa y ajuste contable.');
+  if (!taxId(invoice)) throw new Error('Identifica fiscalmente al cliente/proveedor del anticipo.');
+  if (result.documentKind === 'advance') return { ...result, applications: [] };
+  const consumers = await all(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
+  const applications = [];
+  for (const allocation of result.advanceAllocations) {
+    if (allocation.invoiceId === invoice.id) throw new Error('Una factura no puede aplicarse a sí misma.');
+    const advance = await svc.entities.Invoice.get(allocation.invoiceId);
+    if (!advance || advance.company_id !== companyId || advance.tipo !== invoice.tipo || advance.anulada
+      || advance.fiscal_review_status !== 'validado' || advance.fiscal_regime !== 'criterio_caja'
+      || advance.es_rectificativa || taxId(advance) !== taxId(invoice)
+      || reccAdvanceMetadata(metadata(advance)).documentKind !== 'advance'
+      || Number(advance.base_imponible) <= 0 || !advance.linked_journal_entry_id)
+      throw new Error('El anticipo debe estar validado y contabilizado, sin anular, en esta empresa y con la misma contraparte.');
+    const advanceDate = clean(advance.fecha_operacion || advance.fecha_emision);
+    const finalDate = clean(invoice.fecha_operacion || invoice.fecha_emision);
+    if (advanceDate > finalDate) throw new Error('La factura final no puede preceder al anticipo.');
+    const journal = await svc.entities.JournalEntry.get(advance.linked_journal_entry_id);
+    if (!journal || journal.companyId !== companyId || journal.status !== 'confirmado' || journal.reversalEntryId)
+      throw new Error('El asiento del anticipo no está confirmado o ha sido revertido.');
+    const advanceCode = invoice.tipo === 'emitida' ? '43800000' : '40700000';
+    const lines = await all(svc.entities.JournalEntryLine, { companyId, journalEntryId: journal.id }, 'lineNumber');
+    const accountLine = lines.find(row => row.accountCode === advanceCode);
+    const originalCost = Number(advance.base_imponible) + (invoice.tipo === 'recibida' ? Number(advance.non_deductible_tax_amount || 0) : 0);
+    if (!accountLine || Math.abs(cents(invoice.tipo === 'emitida' ? accountLine.credit : accountLine.debit) - cents(originalCost)) > 1)
+      throw new Error('El anticipo no tiene una contrapartida 438/407 coherente. No se modifica su asiento histórico.');
+    const payments = await all(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: advance.id }, 'payment_date');
+    let paidCents = 0;
+    for (const payment of payments) {
+      if (payment.operation_status !== 'committed' || !payment.journal_entry_id) continue;
+      const paymentEntry = await svc.entities.JournalEntry.get(payment.journal_entry_id);
+      if (!paymentEntry || paymentEntry.companyId !== companyId || paymentEntry.status !== 'confirmado' || paymentEntry.reversalEntryId)
+        throw new Error('El cobro/pago del anticipo no tiene un asiento confirmado.');
+      if (payment.accounting_operation_id) {
+        const operation = await svc.entities.AccountingPostingOperation.get(payment.accounting_operation_id);
+        if (!operation || operation.companyId !== companyId || operation.status !== 'committed')
+          throw new Error('La unidad de cobro/pago del anticipo aún no está confirmada.');
+      }
+      if (clean(payment.payment_date) > finalDate) throw new Error('El anticipo debe cobrarse/pagarse antes de su aplicación.');
+      if (!Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0) throw new Error('Importe de anticipo no válido.');
+      paidCents += cents(payment.amount);
+    }
+    const invoiceCents = cents(advance.total_factura), baseCents = cents(advance.base_imponible);
+    if (invoiceCents <= 0 || paidCents > invoiceCents + 1) throw new Error('El saldo cobrado del anticipo no es coherente.');
+    const availableCents = paidCents >= invoiceCents ? baseCents : Math.floor(baseCents * paidCents / invoiceCents);
+    let reservedCents = 0;
+    for (const consumer of consumers) {
+      if (consumer.id === invoice.id || consumer.anulada || consumer.fiscal_review_status !== 'validado') continue;
+      const links = reccAdvanceMetadata(metadata(consumer));
+      reservedCents += links.advanceAllocations.filter(row => row.invoiceId === advance.id).reduce((sum, row) => sum + cents(row.base), 0);
+    }
+    if (reservedCents + cents(allocation.base) > availableCents)
+      throw new Error('El anticipo ya se ha aplicado o reservado, o la base supera el cobro/pago confirmado disponible.');
+    const costCents = Math.round(cents(originalCost) * cents(allocation.base) / baseCents);
+    applications.push({ ...allocation, accountingAmount: costCents / 100, advanceCode, advanceNumber: advance.numero_factura || advance.id });
+  }
+  return { ...result, applications };
+}

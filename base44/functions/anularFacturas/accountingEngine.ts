@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
+import { validateReccAdvanceLinks } from './reccAdvances.mjs';
 
 export const SCHEMA_VERSION = 'pgc8-v1';
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -35,6 +36,7 @@ const ACCOUNT_DEFS = {
   '28170000': ['Amortización acumulada de equipos informáticos', 'amortizacion'],
   '30000000': ['Mercaderías', 'activo'],
   '40000000': ['Proveedores', 'proveedor'],
+  '40700000': ['Anticipos a proveedores', 'activo'],
   '41000000': ['Acreedores por prestaciones de servicios', 'proveedor'],
   '43000000': ['Clientes', 'cliente'],
   '43100000': ['Clientes, efectos comerciales a cobrar', 'cliente'],
@@ -382,6 +384,8 @@ function isValidatedSimpleReccInvoice(invoice) {
 }
 
 export async function buildInvoicePosting(svc, companyId, invoice) {
+  const advance = clean(invoice.fiscal_regime) === 'criterio_caja'
+    ? await validateReccAdvanceLinks(svc, companyId, invoice) : { documentKind: 'ordinary', applications: [] };
   const counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
   const base = money(invoice.base_imponible);
@@ -420,9 +424,12 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   } catch (error) {
     console.warn('[accountingEngine] Configuración contable no aplicable:', error.message);
   }
-  const resultCode = invoice.revenue_expense_account_code
+  const configuredResultCode = invoice.revenue_expense_account_code
     ? canonical8(invoice.revenue_expense_account_code)
     : configuredCode || CATEGORY_ACCOUNT[category] || (invoice.tipo === 'emitida' ? '70500000' : '62900000');
+  const resultCode = advance.documentKind === 'advance' ? (invoice.tipo === 'emitida' ? '43800000' : '40700000') : configuredResultCode;
+  if (advance.documentKind === 'final' && !(invoice.tipo === 'emitida' ? /^70/.test(resultCode) : /^[26]/.test(resultCode)))
+    throw new Error('La aplicación del anticipo necesita una cuenta final de ingreso, gasto o inmovilizado confirmada, no 438/407.');
   if (validatedRecargoRetailSale && !/^70/.test(resultCode)) throw new Error('La venta minorista en recargo necesita una cuenta de ingresos de explotación 70 validada.');
   const resultDef = ACCOUNT_DEFS[resultCode] || [configuredName || (invoice.tipo === 'emitida' ? 'Ingresos' : 'Gastos'), invoice.tipo === 'emitida' ? 'ingreso' : 'gasto'];
   const resultAccount = await ensureAccount(svc, companyId, resultCode, resultDef[0], resultDef[1]);
@@ -454,18 +461,27 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     lines = [
       line(counterparty.account, sign * absTotal > 0 ? absTotal : 0, sign * absTotal < 0 ? absTotal : 0, 'tercero'),
       ...(absWithholding ? [line(retentionAccount, sign > 0 ? absWithholding : 0, sign < 0 ? absWithholding : 0, 'retencion')] : []),
-      line(resultAccount, sign < 0 ? resultPostingAmount : 0, sign > 0 ? resultPostingAmount : 0, 'ingreso'),
+      line(resultAccount, sign < 0 ? resultPostingAmount : 0, sign > 0 ? resultPostingAmount : 0, advance.documentKind === 'advance' ? 'ajuste' : 'ingreso'),
       ...(taxAccount ? [line(taxAccount, sign < 0 ? taxPostingAmount : 0, sign > 0 ? taxPostingAmount : 0, 'impuesto')] : []),
     ];
   } else {
     lines = [
-      line(resultAccount, sign > 0 ? resultPostingAmount : 0, sign < 0 ? resultPostingAmount : 0, 'gasto'),
+      line(resultAccount, sign > 0 ? resultPostingAmount : 0, sign < 0 ? resultPostingAmount : 0, advance.documentKind === 'advance' ? 'ajuste' : 'gasto'),
       ...(taxAccount ? [line(taxAccount, sign > 0 ? taxPostingAmount : 0, sign < 0 ? taxPostingAmount : 0, 'impuesto')] : []),
       line(counterparty.account, sign < 0 ? absTotal : 0, sign > 0 ? absTotal : 0, 'tercero'),
       ...(absWithholding ? [line(retentionAccount, sign < 0 ? absWithholding : 0, sign > 0 ? absWithholding : 0, 'retencion')] : []),
     ];
   }
-  return { lines, counterparty, resultAccount, taxKind, base, tax, withholding, total };
+  for (const application of advance.applications) {
+    const account = await ensureAccount(svc, companyId, application.advanceCode, ACCOUNT_DEFS[application.advanceCode][0], ACCOUNT_DEFS[application.advanceCode][1]);
+    const description = `Aplicación anticipo ${application.advanceNumber} · base ${application.base.toFixed(2)} · sin nueva cuota IVA`;
+    const amount = application.accountingAmount;
+    const released = invoice.tipo === 'emitida'
+      ? [line(account, amount, 0, 'ajuste'), line(resultAccount, 0, amount, 'ingreso')]
+      : [line(resultAccount, amount, 0, 'gasto'), line(account, 0, amount, 'ajuste')];
+    lines.push(...released.map(row => ({ ...row, description })));
+  }
+  return { lines, counterparty, resultAccount, taxKind, base, tax, withholding, total, advance };
 }
 
 function validateLines(lines) {
@@ -993,6 +1009,8 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate === 1)) {
     throw new Error(`La factura está en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarla.`);
   }
+  if (generatedProposal.advance?.documentKind !== 'ordinary' && options.lines?.length)
+    throw new Error('El asiento del anticipo/aplicación se genera desde el vínculo validado; no admite sustituir sus líneas por una propuesta manual.');
   const sourceLines = options.lines?.length ? options.lines : generatedProposal.lines;
   const proposal = {
     ...generatedProposal,
