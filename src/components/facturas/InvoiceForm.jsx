@@ -374,7 +374,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           {/* Cliente */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Datos del cliente</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{form.tipo === 'recibida' ? 'Datos del proveedor' : 'Datos del cliente'}</p>
               <button
                 type="button"
                 onClick={() => setShowContactPicker(true)}
