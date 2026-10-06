@@ -103,9 +103,8 @@ assert.equal(cash(increaseLine,increaseData,bounds(2026,'1T')).line.quota,2.1);
 const reviewed={...increase,recc_metadata:JSON.stringify({...JSON.parse(increase.recc_metadata),adjustmentMode:'tax_adjustment',adjustmentDate:'2026-03-01'})};
 assert.equal(cash({...increaseLine,invoice:reviewed},{...increaseData,invoices:[original,reviewed]},bounds(2026,'1T')).line.quota,4.2);
 const annualSurcharge=calculate303({...surchargeData,year:2025,period:'Anual'},bounds(2026,'Anual'),'iva',true,{});
-const annual390=export390({nif_cif:'B00000000',razon_social:'QA FICTICIA'},{},[],[],2025,annualSurcharge);
-const page02B=annual390.slice(390*0); // Cada página mantiene su cabecera oficial.
-const pageStart=annual390.indexOf('<39002B0000>');
+const annual390=export390({nif_cif:'B00000000',razon_social:'QA FICTICIA'},{},[],2025,annualSurcharge,[]);
+const pageStart=annual390.indexOf('<T39002B00>');
 assert.ok(pageStart>=0,'Página oficial 2 bis del 390');
 assert.equal(num(annual390.slice(pageStart),217,17),50);
 assert.equal(num(annual390.slice(pageStart),234,17),2.6);
@@ -113,4 +112,4 @@ const thirdInvoice={...original,id:'third',cliente_nif:'B00000000',cliente_nombr
 const thirdLine={...line,invoice:thirdInvoice,invoiceId:'third',base:4000,quota:840};
 const thirdResult=calculateThirdParties(data(thirdInvoice,[thirdLine]),bounds(2026,'Anual'),'347');
 assert.equal(thirdResult.details[0].cashAccountingAnnualAmount,4840);
-console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots'],writes:0},null,2));
+console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots','surcharge-390-official-slots','347-concurso-shared-cash-rules'],writes:0},null,2));
