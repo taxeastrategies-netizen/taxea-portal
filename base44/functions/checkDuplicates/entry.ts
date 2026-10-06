@@ -3,7 +3,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    let user;
+    try { user = await base44.auth.me(); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
@@ -14,8 +15,11 @@ Deno.serve(async (req) => {
     }
 
     const isAdmin = ['admin', 'super_admin'].includes(user.role);
-    const userCompanyId = user.data?.company_id;
-    if (!isAdmin && (!userCompanyId || company_id !== userCompanyId)) {
+    const company = await base44.asServiceRole.entities.Company.get(company_id);
+    if (!company) return Response.json({ error: 'Empresa no encontrada' }, { status: 404 });
+    const email = String(user.email || '').trim().toLowerCase();
+    const authorized = (Array.isArray(company.usuarios_autorizados) ? company.usuarios_autorizados : []).map(value => String(value).trim().toLowerCase());
+    if (!isAdmin && (!email || (String(company.owner_email || '').trim().toLowerCase() !== email && !authorized.includes(email)))) {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
