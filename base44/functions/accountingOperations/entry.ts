@@ -1464,7 +1464,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
-    const companyId = body.companyId || user.data?.company_id;
+    const companyId = body.companyId || user.data?.company_id || user.company_id;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     if (!companyId) {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
@@ -1478,13 +1478,12 @@ Deno.serve(async (req) => {
     });
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const userEmail = String(user.email || '').trim().toLowerCase();
-    const assignedCompanyId = String(user.data?.company_id || user.company_id || '').trim();
     const ownerEmail = String(company.owner_email || '').trim().toLowerCase();
     const authorizedEmails = Array.isArray(company.usuarios_autorizados)
       ? company.usuarios_autorizados.map(email => String(email || '').trim().toLowerCase())
       : [];
+    // A client-editable company_id locates the company; only server-side membership grants access.
     const hasCompanyAccess = isAdmin
-      || assignedCompanyId === companyId
       || (userEmail && ownerEmail === userEmail)
       || (userEmail && authorizedEmails.includes(userEmail));
     if (!hasCompanyAccess) {
