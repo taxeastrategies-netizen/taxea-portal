@@ -3,7 +3,7 @@ import { isZeroResidualReccFinal } from './reccAdvances.mjs';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v28-recc-final-zero';
+const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v29-recc-advance-refund';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
