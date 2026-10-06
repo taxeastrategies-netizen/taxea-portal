@@ -121,7 +121,7 @@ async function invoice(type, number, base, meta, nonDeductible = 0) {
 }
 async function paidAdvance(doc, amount) {
  const persisted=records.Invoice.find(row=>row.id===doc.id);
- const entry=await createJournalEntry(svc,'company-a',{date:'2024-08-01',documentId:doc.id,type:doc.tipo==='emitida'?'cobro':'pago',postingKey:'cash:'+doc.id,status:'confirmado',lines:doc.tipo==='emitida'?[{accountCode:'57200000',debit:amount,credit:0},{accountCode:persisted.counterparty_account_code,debit:0,credit:amount}]:[{accountCode:persisted.counterparty_account_code,debit:amount,credit:0},{accountCode:'57200000',debit:0,credit:amount}]},'advisor@test');
+ const entry=await createJournalEntry(svc,'company-a',{date:'2024-08-01',documentId:doc.id,type:doc.tipo==='emitida'?'cobro':'pago',postingKey:'cash:'+doc.id,status:'confirmado',lines:((doc.tipo==='emitida' && Number(doc.total_factura)>0)||(doc.tipo==='recibida' && Number(doc.total_factura)<0))?[{accountCode:'57200000',debit:amount,credit:0},{accountCode:persisted.counterparty_account_code,debit:0,credit:amount}]:[{accountCode:persisted.counterparty_account_code,debit:amount,credit:0},{accountCode:'57200000',debit:0,credit:amount}]},'advisor@test');
  await entity('InvoicePayment').create({company_id:'company-a',invoice_id:doc.id,payment_date:'2024-08-01',amount,operation_status:'committed',journal_entry_id:entry.entry.id,accounting_operation_id:entry.operation.id});
 }
 const advance=await invoice('emitida','ADV',100,{documentKind:'advance'});
@@ -179,4 +179,33 @@ for (const type of ['emitida', 'recibida']) {
 }
 const invalidZero = await invoice('emitida','INVALID-ZERO',0,{documentKind:'ordinary'});
 await assert.rejects(()=>postInvoice(svc,'company-a',invalidZero,'advisor@test'),/sin circuito|positiva/);
-console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation','cannot-annul-consumed-advance','zero-residual-customer-final','zero-residual-supplier-final','zero-ordinary-rejected' ],realWrites:0},null,2));
+// Devolución parcial del anticipo pagado: 438/407, subcuenta histórica y saldo neto aplicable.
+for (const type of ['emitida', 'recibida']) {
+  const prepaid = await invoice(type, 'REFUND-ADV-'+type,100,{documentKind:'advance'},type==='recibida'?10.5:0);
+  await postInvoice(svc,'company-a',prepaid,'advisor@test');
+  await paidAdvance(prepaid,121);
+  const beforeProfiles = JSON.stringify(records.CounterpartyFiscalProfile);
+  const originalAccount = records.Invoice.find(row=>row.id===prepaid.id).counterparty_account_code;
+  const meta = {documentKind:'advance',originalInvoiceId:prepaid.id,adjustmentMode:'price_change',adjustmentDate:'2024-08-01',reason:'Anulación parcial ficticia del anticipo'};
+  const credit = await invoice(type,'REFUND-CREDIT-'+type,-20,meta,type==='recibida'?-2.1:0);
+  await entity('Invoice').update(credit.id,{es_rectificativa:true});
+  const corrected = records.Invoice.find(row=>row.id===credit.id);
+  await assert.rejects(()=>validateReccAdvanceLinks(svc,'company-a',{...corrected,recc_metadata:JSON.stringify({...meta,documentKind:'ordinary'})}),/438\/407/);
+  const posted = await postInvoice(svc,'company-a',corrected,'advisor@test');
+  const correctionRows = records.JournalEntryLine.filter(row=>row.journalEntryId===posted.entry.id);
+  assert.ok(!correctionRows.some(row=>/^[67]/.test(row.accountCode)));
+  assert.equal(correctionRows.find(row=>row.sourceLineType==='tercero').accountCode,originalAccount);
+  assert.equal(correctionRows.find(row=>row.accountCode===(type==='emitida'?'43800000':'40700000'))[type==='emitida'?'debit':'credit'],type==='emitida'?20:22.1);
+  assert.equal(JSON.stringify(records.CounterpartyFiscalProfile),beforeProfiles);
+  const remaining = await invoice(type,'REFUND-FINAL-'+type,0,{documentKind:'final',finalOperationBase:80,advanceAllocations:[{invoiceId:prepaid.id,base:80}]});
+  await assert.rejects(()=>postInvoice(svc,'company-a',remaining,'advisor@test'),/devolución confirmada/);
+  await paidAdvance(corrected,24.2);
+  const finalPosted = await postInvoice(svc,'company-a',remaining,'advisor@test');
+  const application = records.JournalEntryLine.find(row=>row.journalEntryId===finalPosted.entry.id && row.accountCode===(type==='emitida'?'43800000':'40700000'));
+  assert.equal(application[type==='emitida'?'debit':'credit'],type==='emitida'?80:88.4);
+  assert.equal((await postInvoice(svc,'company-a',records.Invoice.find(row=>row.id===credit.id),'advisor@test')).alreadyPosted,true);
+  await assert.rejects(()=>assertReccAdvanceCanReverse(svc,'company-a',records.Invoice.find(row=>row.id===prepaid.id)),/devoluciones activas/);
+  const excess = {...corrected,id:'excess-'+type,base_imponible:-81,cuota_iva:-17.01,total_factura:-98.01,linked_journal_entry_id:null};
+  await assert.rejects(()=>validateReccAdvanceLinks(svc,'company-a',excess),/aplicaciones|superan/);
+}
+console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation','cannot-annul-consumed-advance','zero-residual-customer-final','zero-residual-supplier-final','zero-ordinary-rejected','advance-refund-438-407','refund-keeps-historical-subaccount','refund-does-not-rewrite-thirdparty','refund-must-settle-before-final-application','refunded-advance-releases-only-net-balance','refund-idempotency' ],realWrites:0},null,2));
