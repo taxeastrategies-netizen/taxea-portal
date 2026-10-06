@@ -78,8 +78,8 @@ export default function ReccBookPanel({ companyId, year }) {
                 <td className="px-3 py-3"><span className="font-medium">{invoice.number || 'Sin número'}</span><br/><span className="text-xs text-muted-foreground">{invoice.counterpartyName || 'Sin tercero'}</span></td>
                 <td className="px-3 py-3">{invoice.type === 'emitida' ? 'Emitida' : 'Recibida'}</td>
                 <td className="px-3 py-3">{date(invoice.operationDate)}</td>
-                <td className="px-3 py-3 text-right">{eur(invoice.base)}</td>
-                <td className="px-3 py-3 text-right">{eur(invoice.quota)}</td>
+                <td className="px-3 py-3 text-right">{eur(invoice.base)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.base)}</div>)}</div>}</td>
+                <td className="px-3 py-3 text-right">{eur(invoice.quota)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.quota)}</div>)}</div>}</td>
                 <td className="px-3 py-3 text-right font-medium">{eur(invoice.total)}</td>
                 <td className="px-3 py-3">{payments.length ? payments.map(payment =>
                   <div key={payment.id} className="mb-1 text-xs">{date(payment.date)} · {eur(payment.amount)} · {payment.method || 'Medio sin indicar'}{!payment.confirmed ? ' · pendiente de confirmar' : ''}</div>
