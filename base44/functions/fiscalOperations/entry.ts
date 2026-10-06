@@ -345,12 +345,12 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json().catch(() => ({}));
-    const companyId = clean(body.companyId || user.data?.company_id);
+    const action = clean(body.action || 'bundle');
+    const companyId = clean(body.companyId || user.data?.company_id || user.company_id);
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
     const svc = ['save_invoice_tax_line', 'recc_advance_candidates'].includes(action) ? queuedAccountingClient(base44.asServiceRole) : base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
-    const action = clean(body.action || 'bundle');
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
