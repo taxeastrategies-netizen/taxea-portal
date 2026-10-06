@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const groups = [
-  { canonical: 'base44/functions/invoiceOperations/accountingRequestQueue.mjs', copies: ['base44/functions/fiscalOperations/accountingRequestQueue.mjs', 'base44/functions/anularFacturas/accountingRequestQueue.mjs'] },
+  { canonical: 'base44/functions/invoiceOperations/accountingRequestQueue.mjs', copies: ['base44/functions/fiscalOperations/accountingRequestQueue.mjs', 'base44/functions/anularFacturas/accountingRequestQueue.mjs', 'base44/functions/accountingOperations/accountingRequestQueue.mjs'] },
   { canonical: 'base44/functions/accountingOperations/reccAdvances.mjs', copies: ['base44/functions/fiscalOperations/reccAdvances.mjs', 'base44/functions/anularFacturas/reccAdvances.mjs', 'base44/functions/approveOcrDocument/reccAdvances.mjs', 'base44/functions/invoiceOperations/reccAdvances.mjs', 'base44/functions/migrateAccountingToPgc8/reccAdvances.mjs', 'base44/functions/openBanking/reccAdvances.mjs'] },
   { canonical: 'base44/functions/fiscalOperations/reccRules.mjs', copies: ['base44/functions/taxModelOperations/reccRules.mjs'] },
   {
