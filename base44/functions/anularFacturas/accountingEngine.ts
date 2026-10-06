@@ -357,22 +357,18 @@ function isValidatedRecargoRetailSale(invoice) {
 }
 
 function isValidatedSimpleReccInvoice(invoice) {
-  const base = money(invoice.base_imponible);
-  const quota = money(invoice.cuota_iva);
-  const rate = Number(invoice.tipo_iva || 0);
+  const base = money(invoice.base_imponible), quota = money(invoice.cuota_iva), rate = Number(invoice.tipo_iva || 0);
   return clean(invoice.fiscal_regime) === 'criterio_caja'
-    && clean(invoice.fiscal_treatment) === 'subject_taxed'
-    && clean(invoice.indirect_tax_kind) === 'iva'
+    && clean(invoice.fiscal_treatment) === 'subject_taxed' && clean(invoice.indirect_tax_kind) === 'iva'
     && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)
     && ['emitida', 'recibida'].includes(clean(invoice.tipo))
-    && invoice.es_rectificativa !== true && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
-    && [21, 10, 4].includes(rate) && base > 0 && quota > 0
-    && Math.abs(money(base * rate / 100) - quota) <= 0.01
-    && Math.abs(money(invoice.total_factura) - money(base + quota)) <= 0.02
-    && Math.abs(money(invoice.importe_retencion)) <= 0.001
+    && (invoice.es_rectificativa !== true || !!clean(invoice.recc_metadata))
+    && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
+    && [0,21,10,4].includes(rate) && Math.abs(base) > 0 && Math.abs(quota) > 0
+    && (rate === 0 || Math.abs(money(base * rate / 100) - quota) <= 0.01)
+    && Math.abs(money(invoice.total_factura) - money(base + quota - money(invoice.importe_retencion))) <= 0.02
     && Math.abs(money(invoice.cuota_recargo)) <= 0.001
-    && money(invoice.deductible_tax_amount) >= 0
-    && money(invoice.deductible_tax_amount) <= quota;
+    && Math.abs(money(invoice.deductible_tax_amount)) <= Math.abs(quota);
 }
 
 export async function buildInvoicePosting(svc, companyId, invoice) {
@@ -959,14 +955,16 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
     const validReccActivity = validatedRecc && activity && activity.company_id === companyId && activity.active !== false
       && clean(activity.indirectTax) === 'iva'
       && (invoice.tipo === 'recibida' || clean(activity.indirectTaxRegime) === 'criterio_caja');
-    const validReccLine = validatedRecc && taxLines?.length === 1 && Number(line.lineNumber) === 1
-      && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === 'iva'
-      && clean(line.operationType) === 'subject_taxed' && clean(line.reviewStatus) === 'validado'
-      && clean(line.reviewedBy) === clean(invoice.fiscal_reviewed_by)
-      && clean(line.activityId) === activityId
-      && Math.abs(money(line.base) - money(invoice.base_imponible)) <= 0.01
-      && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
-      && Math.abs(money(line.deductibleQuota) - money(invoice.deductible_tax_amount)) <= 0.01
+    const validReccLine = validatedRecc && taxLines?.length > 0
+      && new Set(taxLines.map((row: any) => Number(row.lineNumber))).size === taxLines.length
+      && taxLines.every((row: any) => clean(row.regime) === 'criterio_caja' && clean(row.taxKind) === 'iva'
+        && clean(row.operationType) === 'subject_taxed' && clean(row.reviewStatus) === 'validado'
+        && clean(row.reviewedBy) === clean(invoice.fiscal_reviewed_by) && clean(row.activityId) === activityId
+        && [21,10,4].includes(Number(row.rate))
+        && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - money(row.quota)) <= 0.01)
+      && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - money(invoice.base_imponible)) <= 0.01
+      && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - money(invoice.cuota_iva)) <= 0.01
+      && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.deductibleQuota || 0), 0)) - money(invoice.deductible_tax_amount)) <= 0.01
       && (invoice.tipo === 'emitida' || clean(activity?.indirectTaxRegime) === 'criterio_caja'
         || (invoice.fiscal_manual_override === true && !!clean(invoice.fiscal_manual_override_reason)));
     if (!validProfile || (validatedRecc ? !validReccActivity || !validReccLine : !validActivity || !validTaxLine)) {
