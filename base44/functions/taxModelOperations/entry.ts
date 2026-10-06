@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v26-recc';
+const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v27-recc-advances';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -1224,7 +1224,7 @@ function calculate130(data: any, b: any, adjustments: any) {
         && money(invoice.total_factura) === money(money(invoice.base_imponible) + money(invoice.cuota_iva));
       const fiscalExpenseBase = recargoPurchase
         ? money(money(invoice.base_imponible) + money(invoice.non_deductible_tax_amount) + money(invoice.cuota_recargo))
-        : money(invoice.base_imponible);
+        : money(Number(invoice.base_imponible || 0) + (invoice.tipo === 'recibida' && clean(invoice.fiscal_regime) === 'criterio_caja' && invoice.fiscal_review_status === 'validado' ? Number(invoice.non_deductible_tax_amount || 0) : 0));
       if (invoice.tipo === 'recibida' && clean(invoice.fiscal_regime) === 'recargo_equivalencia' && !recargoPurchase) {
         data.blockers.push(`Factura ${clean(invoice.numero_factura || invoice.id)} en recargo sin coste fiscal y cuenta de gasto 6 confirmados; la casilla 02 requiere revisión manual.`);
       }
