@@ -280,7 +280,7 @@ export default function Facturas() {
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${kpis.vencidas > 0 ? 'bg-red-500/10' : 'bg-orange-400/10'}`}>
                 <AlertCircle className={`w-3.5 h-3.5 ${kpis.vencidas > 0 ? 'text-red-500' : 'text-orange-400'}`} />
               </div>
-              <p className="text-xs font-medium text-muted-foreground">Pendientes de Cobro</p>
+              <p className="text-xs font-medium text-muted-foreground">{filterTipo === 'emitida' ? 'Pendientes de cobro' : 'Pendientes de pago'}</p>
             </div>
             <p className={`text-3xl font-bold mb-1 ${kpis.vencidas > 0 ? 'text-red-500' : 'text-foreground'}`}>{kpis.pendientes}</p>
             <p className="text-xs text-muted-foreground">
