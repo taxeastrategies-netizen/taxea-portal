@@ -749,7 +749,7 @@ Deno.serve(async (req) => {
           proposedEvaluation.specialPreviewError = '';
         }
         proposedEvaluation.postingBlocked = false;
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
       } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
         proposedEvaluation.postingBlocked = true;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
