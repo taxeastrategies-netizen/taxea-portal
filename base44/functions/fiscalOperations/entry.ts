@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
-import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal, acquireReccAdvanceLocks } from './reccAdvances.mjs';
+import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal, acquireReccAdvanceLocks, recoverReccAdvanceLock } from './reccAdvances.mjs';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
@@ -355,8 +355,10 @@ Deno.serve(async (req) => {
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
-    if (action === 'save_invoice_tax_line' && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
-    if (['save_invoice_tax_line', 'recc_advance_candidates'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
+    if (['save_invoice_tax_line','recover_recc_advance_lock'].includes(action) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
+    if (['save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
+
+    if (action === 'recover_recc_advance_lock') return Response.json(await recoverReccAdvanceLock(svc,companyId,clean(body.invoiceId),body,user.email));
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, postingSupport: Object.fromEntries(Object.values(REGIMES).flat().map(([code]) => [code, code === 'criterio_caja' ? 'revision_asesor_recc_v2' : SPECIAL_POSTING_PENDING.has(code) || code === 'mixto' ? 'pendiente_circuito_especial' : 'revision_asesor'])), operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
@@ -377,7 +379,7 @@ Deno.serve(async (req) => {
         && row.fiscal_review_status === 'validado' && !!row.linked_journal_entry_id
         && clean(row.tipo === 'emitida' ? row.cliente_nif : (row.proveedor_nif || row.cliente_nif)).toUpperCase().replace(/[^A-Z0-9]/g, '') === nif
         && reccAdvanceMetadata(reccMetadata(row)).documentKind === 'advance')
-        .map((row: any) => ({ id: row.id, number: row.numero_factura, date: row.fecha_operacion || row.fecha_emision, base: row.base_imponible }));
+        .map((row: any) => ({ id: row.id, number: row.numero_factura, date: row.fecha_operacion || row.fecha_emision, base: row.base_imponible, locked: !!clean(row.recc_application_lock_token), lockStartedAt: clean(row.recc_application_lock_started_at), recoverable: !!clean(row.recc_application_lock_token) && Date.now()-Date.parse(row.recc_application_lock_started_at)>=3600000 }));
       return Response.json({ success: true, candidates });
     }
     if (action === 'bundle') {
