@@ -3,6 +3,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
 import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
+import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,7 +18,9 @@ const TAXEA_RED = '#8B1A2C';
 const TAXEA_RED_LIGHT = '#f5e8ea';
 
 export default function InvoiceTemplate({ invoice, company }) {
-  const taxType = company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
+  const taxType = invoice?.indirect_tax_kind === 'igic' || (!invoice?.indirect_tax_kind && company?.tipo_impuesto === 'igic') ? 'IGIC' : 'IVA';
+  const taxParts = invoiceTaxBreakdown(invoice);
+  const surcharge = Number(invoice?.cuota_recargo || 0);
   const hasRetention = Number(invoice?.retencion_irpf || 0) > 0 || Number(invoice?.importe_retencion || 0) > 0;
   const base = parseFloat(invoice?.base_imponible) || 0;
   const cuota = invoice?.cuota_iva != null ? Number(invoice.cuota_iva) : base * (Number(invoice?.tipo_iva) || 0) / 100;
@@ -262,13 +265,15 @@ export default function InvoiceTemplate({ invoice, company }) {
             <span style={s.totalesValue}>{fmt(base)} €</span>
           </div>
           <div style={s.totalesRow}>
-            <span style={s.totalesLabel}>{taxType} {invoice?.tipo_iva ?? 0} %</span>
+            <span style={s.totalesLabel}>{taxType} {invoiceTaxRateLabel(invoice)}</span>
             <span style={s.totalesValue}>{fmt(cuota)} €</span>
           </div>
+          {taxParts.map(part => <div key={part.rate} style={s.totalesRow}><span style={s.totalesLabel}>Base {fmt(part.base)} € · {taxType} {part.rate}%</span><span style={s.totalesValue}>{fmt(part.quota)} €</span></div>)}
+          {surcharge !== 0 && <div style={s.totalesRow}><span style={s.totalesLabel}>Recargo {invoice.tipo_recargo}%</span><span style={s.totalesValue}>{fmt(surcharge)} €</span></div>}
           {hasRetention && qrUrl && (
             <div style={s.totalesRow}>
               <span style={s.totalesLabel}>Importe fiscal del QR</span>
-              <span style={s.totalesValue}>{fmt(base + cuota)} €</span>
+              <span style={s.totalesValue}>{fmt(base + cuota + surcharge)} €</span>
             </div>
           )}
           {hasRetention && (
