@@ -119,7 +119,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setOutstanding(nextOutstanding);
       setPaid(Number(data.paid) || 0);
       setPayments(data.payments || []);
-      setSuccess([invoice.tipo === 'recibida' ? 'Pago registrado correctamente.' : 'Cobro registrado correctamente.', data.summary_warning].filter(Boolean).join(' '));
+      setSuccess([Number(invoice.total_factura) < 0 ? 'Devolución registrada correctamente.' : invoice.tipo === 'recibida' ? 'Pago registrado correctamente.' : 'Cobro registrado correctamente.', data.summary_warning].filter(Boolean).join(' '));
       if (nextOutstanding > 0.01) {
         setAmount(String(nextOutstanding));
         setReference('');
@@ -182,7 +182,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
           <div className="flex items-center gap-2">
             {isReconciliation ? <Landmark className="w-4 h-4 text-primary" /> : <CheckCircle2 className="w-4 h-4 text-primary" />}
             <h2 className="text-base font-semibold">
-              {isReconciliation ? 'Conciliar factura' : invoice?.tipo === 'recibida' ? 'Añadir pago' : 'Añadir cobro'}
+              {isReconciliation ? 'Conciliar factura' : Number(invoice?.total_factura) < 0 ? 'Registrar devolución' : invoice?.tipo === 'recibida' ? 'Añadir pago' : 'Añadir cobro'}
             </h2>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
