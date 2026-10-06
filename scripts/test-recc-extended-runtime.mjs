@@ -42,13 +42,13 @@ for(let i=1;i<=200;i++){
  assert.equal(schedule.events.some(e=>e.kind==='forced_deadline'),false);
 }
 const modelPath=path.resolve('base44/functions/taxModelOperations/entry.ts');
-const compiled=await esbuild.build({stdin:{contents:fs.readFileSync(modelPath,'utf8')+'\nexport {cashTaxLineForPeriod,calculateIndirectTax,bounds,export303,export390,transferLayoutErrors};',loader:'ts',resolveDir:path.dirname(modelPath)},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){
+const compiled=await esbuild.build({stdin:{contents:fs.readFileSync(modelPath,'utf8')+'\nexport {cashTaxLineForPeriod,calculateIndirectTax,bounds,export303,export390,transferLayoutErrors,calculateThirdParties};',loader:'ts',resolveDir:path.dirname(modelPath)},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){
  builder.onResolve({filter:new RegExp('^npm:@base44')},()=>({path:'sdk',namespace:'stub'}));
  builder.onLoad({filter:/.*/,namespace:'stub'},()=>({loader:'js',contents:'export const createClientFromRequest=()=>({});'}));
 }}]});
 const context=vm.createContext({console,exports:{},module:{exports:{}},Deno:{serve(){}},TextEncoder,TextDecoder,Date,Response,Request,setTimeout,clearTimeout});
 vm.runInContext(compiled.outputFiles[0].text,context);
-const {cashTaxLineForPeriod:cash,bounds,calculateIndirectTax:calculate303,export303,export390}=context.module.exports;
+const {cashTaxLineForPeriod:cash,bounds,calculateIndirectTax:calculate303,export303,export390,calculateThirdParties}=context.module.exports;
 const original={id:'original',tipo:'emitida',numero_factura:'QA',fecha_emision:'2026-01-15',base_imponible:100,cuota_iva:21,total_factura:121,fiscal_regime:'criterio_caja',fiscal_review_status:'validado'};
 const line={id:'line',sourceId:'InvoiceTaxLine:line',invoice:original,invoiceId:original.id,date:original.fecha_emision,base:100,quota:21,rate:21,deductibleQuota:0,nonDeductibleQuota:0,taxKind:'iva',regime:'criterio_caja',operationType:'subject_taxed',reviewStatus:'validado'};
 const data=(invoice=original,lines=[line],payments=[])=>({invoices:[invoice],taxLines:lines,invoicePayments:payments,rawInvoicePayments:payments,filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],year:2026,period:'1T'});
@@ -102,4 +102,15 @@ increaseData.rawInvoicePayments=increaseData.invoicePayments;
 assert.equal(cash(increaseLine,increaseData,bounds(2026,'1T')).line.quota,2.1);
 const reviewed={...increase,recc_metadata:JSON.stringify({...JSON.parse(increase.recc_metadata),adjustmentMode:'tax_adjustment',adjustmentDate:'2026-03-01'})};
 assert.equal(cash({...increaseLine,invoice:reviewed},{...increaseData,invoices:[original,reviewed]},bounds(2026,'1T')).line.quota,4.2);
+const annualSurcharge=calculate303({...surchargeData,year:2025,period:'Anual'},bounds(2026,'Anual'),'iva',true,{});
+const annual390=export390({nif_cif:'B00000000',razon_social:'QA FICTICIA'},{},[],[],2025,annualSurcharge);
+const page02B=annual390.slice(390*0); // Cada página mantiene su cabecera oficial.
+const pageStart=annual390.indexOf('<39002B0000>');
+assert.ok(pageStart>=0,'Página oficial 2 bis del 390');
+assert.equal(num(annual390.slice(pageStart),217,17),50);
+assert.equal(num(annual390.slice(pageStart),234,17),2.6);
+const thirdInvoice={...original,id:'third',cliente_nif:'B00000000',cliente_nombre:'QA FICTICIA',cliente_pais:'ES',cliente_provincia:'Madrid',base_imponible:4000,cuota_iva:840,total_factura:4840,recc_metadata:JSON.stringify({insolvencyDate:'2026-05-01',reason:'Auto documentado'})};
+const thirdLine={...line,invoice:thirdInvoice,invoiceId:'third',base:4000,quota:840};
+const thirdResult=calculateThirdParties(data(thirdInvoice,[thirdLine]),bounds(2026,'Anual'),'347');
+assert.equal(thirdResult.details[0].cashAccountingAnnualAmount,4840);
 console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots'],writes:0},null,2));
