@@ -80,6 +80,17 @@ assert.equal(mixed.data.invoices.find(invoice => invoice.id === 'recc-mixed')?.r
 assert.deepEqual(mixed.data.invoices.find(invoice => invoice.id === 'recc-mixed')?.taxBreakdown.map(line => [line.rate, line.base, line.quota]),
   [[10, 2000, 200], [21, 1000, 210]]);
 assert.ok(!mixed.data.issues.some(issue => issue.invoiceId === 'recc-mixed'));
+records.Invoice.push({ id: 'recc-received-legacy', company_id: 'company-a', tipo: 'recibida', numero_factura: 'TEST-RECC-RECEIVED',
+  fecha_emision: '2026-01-10', fecha_recepcion: '2026-01-11', fiscal_regime: 'criterio_caja', indirect_tax_kind: 'iva',
+  fiscal_review_status: 'validado', cliente_nombre: 'Proveedor del formulario antiguo', cliente_nif: 'B00000000',
+  base_imponible: 200, cuota_iva: 42, total_factura: 242, estado_cobro: 'pendiente' });
+records.InvoiceTaxLine.push({ id: 'line-received-legacy', companyId: 'company-a', invoiceId: 'recc-received-legacy', lineNumber: 1,
+  taxKind: 'iva', regime: 'criterio_caja', reviewStatus: 'validado', base: 200, quota: 42 });
+const legacyReceived = await call();
+assert.equal(legacyReceived.data.invoices.find(invoice => invoice.id === 'recc-received-legacy')?.counterpartyName,
+  'Proveedor del formulario antiguo');
+assert.equal(legacyReceived.data.invoices.find(invoice => invoice.id === 'recc-received-legacy')?.counterpartyNif,
+  'B00000000');
 const crossCompany = await call('company-b');
 assert.equal(crossCompany.status, 403);
 user = { email: 'advisor@test.invalid', role: 'advisor', data: {} };
@@ -91,4 +102,4 @@ const pending = await call();
 assert.ok(pending.data.issues.some(issue => issue.paymentId === 'payment-b'));
 assert.equal(writes, 0);
 console.log(JSON.stringify({ ok: true, checks: ['own-company-book', 'previous-year-invoice', 'bank-account-source',
-  'late-payment-of-older-invoice-traced', 'mixed-rates-book-breakdown', 'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
+  'late-payment-of-older-invoice-traced', 'mixed-rates-book-breakdown', 'legacy-received-counterparty', 'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
