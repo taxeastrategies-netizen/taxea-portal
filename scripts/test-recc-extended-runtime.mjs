@@ -112,4 +112,17 @@ const thirdInvoice={...original,id:'third',cliente_nif:'B00000000',cliente_nombr
 const thirdLine={...line,invoice:thirdInvoice,invoiceId:'third',base:4000,quota:840};
 const thirdResult=calculateThirdParties(data(thirdInvoice,[thirdLine]),bounds(2026,'Anual'),'347');
 assert.equal(thirdResult.details[0].cashAccountingAnnualAmount,4840);
-console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots','surcharge-390-official-slots','347-concurso-shared-cash-rules'],writes:0},null,2));
+const ledgerCompiled=await esbuild.build({entryPoints:['base44/functions/accountingOperations/accountingEngine.ts'],bundle:true,write:false,platform:'node',format:'cjs'});
+const ledgerContext=vm.createContext({console,exports:{},module:{exports:{}},Date,crypto:(await import('node:crypto')).webcrypto,setTimeout,clearTimeout});
+vm.runInContext(ledgerCompiled.outputFiles[0].text,ledgerContext);
+const historicalAccount={id:'old-customer',companyId:'QA',code:'43000007',name:'Cliente histórico'};
+const historicalProfile={id:'old-profile',company_id:'QA',taxId:'B00000000',accountingRole:'cliente',accountingAccountCode:'43000007'};
+const tables={AccountingAccount:[historicalAccount],CounterpartyFiscalProfile:[historicalProfile]};
+const historicalSnapshot=JSON.stringify([historicalAccount,historicalProfile]);let fakeSequence=0;
+const fakeSvc={entities:new Proxy({}, {get:(_target,name)=>({get:async id=>(tables[name]||[]).find(row=>row.id===id),filter:async query=>(tables[name]||[]).filter(row=>Object.entries(query).every(([key,value])=>row[key]===value)),create:async payload=>{const row={id:`fake-${++fakeSequence}`,...payload};(tables[name]||=[]).push(row);return row;},update:async(id,payload)=>{const row=(tables[name]||[]).find(item=>item.id===id);if(!row)throw Error('missing fake');Object.assign(row,payload);return row;}})})};
+const supplierPosting=await ledgerContext.module.exports.buildInvoicePosting(fakeSvc,'QA',{id:'new-received',tipo:'recibida',proveedor_nombre:'Proveedor con mismo NIF',proveedor_nif:'B00000000',base_imponible:100,cuota_iva:21,total_factura:121,indirect_tax_kind:'iva',deductible_tax_amount:21});
+assert.match(supplierPosting.counterparty.account.code,/^410/);
+assert.equal(JSON.stringify([historicalAccount,historicalProfile]),historicalSnapshot,'No se sobrescribe cliente ni su subcuenta');
+const repeatedSupplier=await ledgerContext.module.exports.buildInvoicePosting(fakeSvc,'QA',{id:'new-received-2',tipo:'recibida',proveedor_nombre:'Proveedor con mismo NIF',proveedor_nif:'B00000000',base_imponible:100,cuota_iva:21,total_factura:121,indirect_tax_kind:'iva',deductible_tax_amount:21});
+assert.equal(repeatedSupplier.counterparty.account.id,supplierPosting.counterparty.account.id,'Reutiliza proveedor sin duplicar subcuenta');
+console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots','surcharge-390-official-slots','347-concurso-shared-cash-rules','dual-customer-supplier-separated','historical-subaccounts-unchanged','supplier-subaccount-reused'],writes:0},null,2));
