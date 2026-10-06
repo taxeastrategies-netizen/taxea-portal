@@ -132,7 +132,10 @@ function MessagePreviewDialog({ message, onClose }) {
 }
 
 // ── Panel principal ────────────────────────────────────────────────────────────
-export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, onRefresh, company }) {
+export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, onClose, onSend, onRefresh, company }) {
+  const [paymentProjection, setPaymentProjection] = useState(/** @type {any} */ (null));
+  const [paymentSyncError, setPaymentSyncError] = useState('');
+  const invoice = paymentProjection?.invoiceId === sourceInvoice?.id ? { ...sourceInvoice, ...paymentProjection } : sourceInvoice;
   const [tab, setTab] = useState('general');
   const [emailLogs, setEmailLogs] = useState([]);
   const [timeline, setTimeline] = useState([]);
@@ -149,6 +152,22 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [traceOpen, setTraceOpen] = useState(false);
   const attachmentInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!sourceInvoice?.id) return;
+    let cancelled = false;
+    setPaymentSyncError('');
+    base44.functions.invoke('invoiceOperations', { action: 'list_payments', invoice_id: sourceInvoice.id, company_id: company?.id || sourceInvoice.company_id })
+      .then(async response => {
+        const data = response?.data ?? response;
+        if (!data?.ok) throw new Error(data?.error || 'No se pudo comprobar el saldo.');
+        if (cancelled) return;
+        setPaymentProjection({ invoiceId: sourceInvoice.id, estado_cobro: data.estado_cobro, importe_pagado: data.paid, importe_pendiente: data.outstanding });
+        setPaymentSyncError(data.summary_warning || '');
+        if (!data.summary_warning && (Number(sourceInvoice.importe_pagado || 0) !== Number(data.paid) || Number(sourceInvoice.importe_pendiente || 0) !== Number(data.outstanding) || sourceInvoice.estado_cobro !== data.estado_cobro)) await onRefresh?.();
+      }).catch(error => { if (!cancelled) setPaymentSyncError(error?.response?.data?.error || 'No se pudo comprobar el saldo actual. Se conserva el último guardado.'); });
+    return () => { cancelled = true; };
+  }, [sourceInvoice?.id, sourceInvoice?.importe_pagado, sourceInvoice?.importe_pendiente, sourceInvoice?.estado_cobro]);
 
   useEffect(() => {
     if (!invoice?.id) return;
@@ -428,6 +447,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             </Section>
 
             {/* Pagos */}
+            {paymentSyncError && <p className="mx-4 my-2 rounded border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-800">{paymentSyncError}</p>}
             <Section title="Cobro y pagos" icon={CheckCircle2}>
               <div className="space-y-2 mb-3">
                 <div className="flex items-center justify-between">
