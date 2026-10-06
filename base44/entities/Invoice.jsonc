@@ -2,6 +2,27 @@
   "name": "Invoice",
   "type": "object",
   "properties": {
+    "recc_application_lock_token": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "recc_application_lock_started_at": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "recc_application_lock_document_id": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
     "recc_metadata": {
       "type": "string",
       "description": "Datos RECC confirmados por asesor: anticipo, concurso y v\u00ednculo de rectificaci\u00f3n. JSON versionado."
