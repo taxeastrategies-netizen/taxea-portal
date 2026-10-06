@@ -604,9 +604,22 @@ export async function updatePostingOperation(svc, operation, patch) {
   });
 }
 
+async function loadCompleteJournalLines(svc, companyId, entry) {
+  let lines = [];
+  for (const delay of [0, 80, 160, 320, 640, 1280]) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+    const debit = money((lines || []).reduce((sum, item) => sum + Number(item.debit ?? item.debeE ?? 0), 0));
+    const credit = money((lines || []).reduce((sum, item) => sum + Number(item.credit ?? item.haberE ?? 0), 0));
+    if ((lines || []).length >= 2 && Math.abs(debit - money(entry.totalDebit)) <= 0.01
+      && Math.abs(credit - money(entry.totalCredit)) <= 0.01) return lines;
+  }
+  throw new Error('El asiento previo no tiene todas sus líneas persistidas; se mantiene pendiente para revisión sin duplicarlo.');
+}
+
 export async function commitJournalEntry(svc, companyId, entry, userEmail) {
   if (!entry || entry.companyId !== companyId) throw new Error('El asiento que se intenta confirmar no pertenece a la empresa.');
-  const lines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5000);
+  const lines = await loadCompleteJournalLines(svc, companyId, entry);
   const totals = validateLines((lines || []).map(item => ({
     ...item,
     accountCode: canonical8(item.accountCode || item.subcuenta),
