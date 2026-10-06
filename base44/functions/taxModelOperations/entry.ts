@@ -967,8 +967,14 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   if (!invoice?.id || !operationYear) return { line: null, review: { sourceId: line.sourceId, invoiceId: invoice?.id, reason: 'Falta la fecha de realización necesaria para aplicar el límite del criterio de caja.' } };
   const forcedRecognitionDate = `${operationYear + 1}-12-31`;
   const payments = (data.invoicePayments || []).filter((payment: any) => payment.invoice_id === invoice.id);
+  const rawPayments = (data.rawInvoicePayments || data.invoicePayments || []).filter((payment: any) => payment.invoice_id === invoice.id);
   const review = (reason: string) => ({ line: null, review: { sourceId: line.sourceId, invoiceId: invoice.id, reason } });
   const invoiceLabel = clean(invoice.numero_factura) || invoice.id;
+  // El cargador omite pagos con operaciones contables sin confirmar. En RECC no se puede
+  // convertir esa omisión en un devengo forzoso o en una cuota inferior sin avisar.
+  if (rawPayments.length !== payments.length) {
+    return review(`La factura ${invoiceLabel} tiene cobros o pagos no confirmados u omitidos; reconcilia su estado antes de calcular el criterio de caja.`);
+  }
   const payable = invoicePayable(invoice);
   if (money(invoice.importe_retencion) !== 0 || !payable || Math.abs(money(line.base) + money(line.quota) - payable) > 0.02) {
     return review(`La factura ${invoiceLabel} en criterio de caja requiere reconstruir su total fiscal, retenciones y pagos antes de asignar cuotas.`);
@@ -3678,10 +3684,11 @@ Deno.serve(async (req) => {
       const forcedLine={...reccLine,id:'recc-line-forced',sourceId:'InvoiceTaxLine:recc-line-forced',date:'2025-02-01',invoice:forcedInvoice};
       const reccForced=cashTaxLineForPeriod(forcedLine,{invoicePayments:[],warnings:[]},bounds(2026,'4T')).line;
       const reccPending=cashTaxLineForPeriod(reccLine,{invoicePayments:[{id:'recc-pending',invoice_id:reccInvoice.id,amount:121,payment_date:'2026-03-31',operation_status:'preparing'}],warnings:[]},bounds(2026,'1T'));
+      const reccOmittedPending=cashTaxLineForPeriod(reccLine,{invoicePayments:[],rawInvoicePayments:[{id:'recc-pending-omitted',invoice_id:reccInvoice.id,amount:121,payment_date:'2026-03-31',operation_status:'preparing'}],warnings:[]},bounds(2026,'1T'));
       const reccDuplicate=cashTaxLineForPeriod(reccLine,{invoicePayments:[{id:'recc-dup',invoice_id:reccInvoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'recc-dup',invoice_id:reccInvoice.id,amount:60.5,payment_date:'2026-04-01'}],warnings:[]},bounds(2026,'1T'));
       const reccOverpayment=cashTaxLineForPeriod(reccLine,{invoicePayments:[{id:'recc-over',invoice_id:reccInvoice.id,amount:122,payment_date:'2026-03-31'}],warnings:[]},bounds(2026,'1T'));
       const reccUntraced=cashTaxLineForPeriod({...reccLine,invoice:{...reccInvoice,estado_cobro:'cobrada',ultimo_pago_at:'2026-03-31',importe_pagado:121}},{invoicePayments:[],warnings:[]},bounds(2026,'1T'));
-      const reccReviewSafety=!!reccPending.review&&!reccPending.line&&!!reccDuplicate.review&&!reccDuplicate.line&&!!reccOverpayment.review&&!reccOverpayment.line&&!!reccUntraced.review&&!reccUntraced.line;
+      const reccReviewSafety=!!reccPending.review&&!reccPending.line&&!!reccOmittedPending.review&&!reccOmittedPending.line&&!!reccDuplicate.review&&!reccDuplicate.line&&!!reccOverpayment.review&&!reccOverpayment.line&&!!reccUntraced.review&&!reccUntraced.line;
       const reccCentsData={invoicePayments:[{id:'cent-1',invoice_id:reccInvoice.id,amount:40.33,payment_date:'2026-03-31'},{id:'cent-2',invoice_id:reccInvoice.id,amount:40.33,payment_date:'2026-04-01'},{id:'cent-3',invoice_id:reccInvoice.id,amount:40.34,payment_date:'2026-07-01'}],warnings:[]};
       const reccCentsQ1=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'1T')).line;
       const reccCentsQ2=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'2T')).line;
@@ -4053,7 +4060,7 @@ Deno.serve(async (req) => {
     const pendingFiscalCount=invoices.length-finalizedInvoices.length;
     if(pendingFiscalCount) warnings.push(`${pendingFiscalCount} propuesta(s) de factura siguen fuera de los modelos hasta validación del asesor.`);
     const taxLines=normalizedTaxLines(finalizedInvoices,rawTaxLines,warnings,blockers); const b=bounds(year,period);
-    const data={company,profile,activities,invoices:finalizedInvoices,taxLines,invoicePayments,payrolls,employees,entries,entryLines,declarables,filings,blockers,warnings,period,year};
+    const data={company,profile,activities,invoices:finalizedInvoices,taxLines,invoicePayments,rawInvoicePayments,payrolls,employees,entries,entryLines,declarables,filings,blockers,warnings,period,year};
     if(action==='historical_fiscal_dry_run') {
       const yearInvoices=invoices.filter((invoice:any)=>!invoice.anulada&&dateOf(invoice).slice(0,4)===String(year));
       const linesByInvoice=new Map<string,any[]>(); for(const line of rawTaxLines||[]) linesByInvoice.set(line.invoiceId,[...(linesByInvoice.get(line.invoiceId)||[]),line]);
