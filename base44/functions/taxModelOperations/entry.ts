@@ -976,7 +976,16 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     return review(`La factura ${invoiceLabel} tiene cobros o pagos no confirmados u omitidos; reconcilia su estado antes de calcular el criterio de caja.`);
   }
   const payable = invoicePayable(invoice);
-  if (money(invoice.importe_retencion) !== 0 || !payable || Math.abs(money(line.base) + money(line.quota) - payable) > 0.02) {
+  const siblingLines = (data.taxLines || []).filter((candidate: any) => candidate.invoice?.id === invoice.id || candidate.invoiceId === invoice.id);
+  const invoiceLines = siblingLines.length ? siblingLines : [line];
+  if (invoiceLines.length > 1 && (invoiceLines.some((candidate: any) => clean(candidate.taxKind) !== 'iva'
+    || clean(candidate.regime || candidate.invoice?.fiscal_regime) !== 'criterio_caja'
+    || clean(candidate.operationType) !== 'subject_taxed')
+    || !invoiceLines.some((candidate: any) => candidate.sourceId === line.sourceId))) {
+    return review(`La factura ${invoiceLabel} combina líneas fiscales no homogéneas o incompletas; requiere revisión antes de repartir los pagos del criterio de caja.`);
+  }
+  const fiscalTotal = money(invoiceLines.reduce((sum: number, candidate: any) => sum + money(candidate.base) + money(candidate.quota), 0));
+  if (money(invoice.importe_retencion) !== 0 || !payable || Math.abs(fiscalTotal - payable) > 0.02) {
     return review(`La factura ${invoiceLabel} en criterio de caja requiere reconstruir su total fiscal, retenciones y pagos antes de asignar cuotas.`);
   }
   if (payments.some((payment: any) => (payment.operation_status && payment.operation_status !== 'committed')
@@ -3693,6 +3702,15 @@ Deno.serve(async (req) => {
       const reccCentsQ1=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'1T')).line;
       const reccCentsQ2=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'2T')).line;
       const reccCentsQ3=cashTaxLineForPeriod(reccLine,reccCentsData,bounds(2026,'3T')).line;
+      const reccMixedInvoice={...reccInvoice,id:'invoice-recc-mixed',numero_factura:'E-RECC-MIXED',base_imponible:3000,cuota_iva:410,total_factura:3410};
+      const reccMixedLine10={...reccLine,id:'recc-mixed-10',sourceId:'InvoiceTaxLine:recc-mixed-10',invoice:reccMixedInvoice,rate:10,base:2000,quota:200,deductibleQuota:200};
+      const reccMixedLine21={...reccLine,id:'recc-mixed-21',sourceId:'InvoiceTaxLine:recc-mixed-21',invoice:reccMixedInvoice,rate:21,base:1000,quota:210,deductibleQuota:210};
+      const reccMixedData={taxLines:[reccMixedLine10,reccMixedLine21],invoicePayments:[{id:'recc-mixed-p1',invoice_id:reccMixedInvoice.id,amount:2400,payment_date:'2026-03-31'},{id:'recc-mixed-p2',invoice_id:reccMixedInvoice.id,amount:1010,payment_date:'2026-04-01'}]};
+      const reccMixedQ1A=cashTaxLineForPeriod(reccMixedLine10,reccMixedData,bounds(2026,'1T')).line;
+      const reccMixedQ1B=cashTaxLineForPeriod(reccMixedLine21,reccMixedData,bounds(2026,'1T')).line;
+      const reccMixedQ2A=cashTaxLineForPeriod(reccMixedLine10,reccMixedData,bounds(2026,'2T')).line;
+      const reccMixedQ2B=cashTaxLineForPeriod(reccMixedLine21,reccMixedData,bounds(2026,'2T')).line;
+      const reccMixedUnsupported=cashTaxLineForPeriod(reccMixedLine10,{...reccMixedData,taxLines:[reccMixedLine10,{...reccMixedLine21,operationType:'exempt_full'}]},bounds(2026,'1T'));
       const reccReceivedInvoice={...reccInvoice,id:'invoice-recc-received',tipo:'recibida',numero_factura:'R-RECC'};
       const reccReceivedLine={...reccLine,id:'recc-received-line',sourceId:'InvoiceTaxLine:recc-received-line',invoice:reccReceivedInvoice};
       const reccModelData:any={invoices:[reccInvoice,reccReceivedInvoice],taxLines:[reccLine,reccReceivedLine],invoicePayments:[...reccData.invoicePayments,{id:'recc-r-p1',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-03-31'},{id:'recc-r-p2',invoice_id:reccReceivedInvoice.id,amount:60.5,payment_date:'2026-04-01'}],filings:[],declarables:[],activities:[],profile:{},warnings:[],blockers:[],period:'1T',year:2026};
@@ -3746,6 +3764,7 @@ Deno.serve(async (req) => {
         reccPartialAndDeadline:reccQ1?.base===50&&reccQ1?.quota===10.5&&reccQ2?.base===50&&reccQ2?.quota===10.5&&reccForced?.base===100&&reccForced?.cashRecognition?.events?.[0]?.date==='2026-12-31',
         reccInvalidPaymentsNeedReview:reccReviewSafety,
         reccPartialCentsExhaustInvoice:money(reccCentsQ1?.base+reccCentsQ2?.base+reccCentsQ3?.base)===100&&money(reccCentsQ1?.quota+reccCentsQ2?.quota+reccCentsQ3?.quota)===21&&reccCentsQ3?.base===33.34,
+        reccMixedRatesProratedByInvoice:reccMixedQ1A?.base===1407.62&&reccMixedQ1A?.quota===140.76&&reccMixedQ1B?.base===703.81&&reccMixedQ1B?.quota===147.8&&money(reccMixedQ1A?.base+reccMixedQ2A?.base)===2000&&money(reccMixedQ1A?.quota+reccMixedQ2A?.quota)===200&&money(reccMixedQ1B?.base+reccMixedQ2B?.base)===1000&&money(reccMixedQ1B?.quota+reccMixedQ2B?.quota)===210&&!!reccMixedUnsupported.review&&!reccMixedUnsupported.line,
         recc303InformationByOperationDate:recc303FieldsQ1['62']===100&&recc303FieldsQ1['63']===21&&recc303FieldsQ1['74']===100&&recc303FieldsQ1['75']===21&&recc303FieldsQ2['62']===0&&recc303FieldsQ2['74']===0&&recc303Q1.operations?.outputQuota===10.5&&recc303Q2.operations?.outputQuota===10.5&&recc303Q1.fields.find((field:any)=>field.code==='62')?.sourceIds?.includes('InvoiceTaxLine:recc-line'),
         recc303ExportOfficialPositions:recc303Page3.slice(113,130)===numeric(100,17,true)&&recc303Page3.slice(130,147)===numeric(21,17,true)&&recc303Page3.slice(147,164)===numeric(100,17,true)&&recc303Page3.slice(164,181)===numeric(21,17,true)&&recc303ExportQ2[112]==='2'&&recc303ExportQ2[113]==='1'&&transferLayoutErrors('303',wrap('303',2026,'1T',recc303Export,'B12345678')).length===0,
         recc390AnnualAndCensusFlags:recc390.operations?.outputQuota===21&&recc390.operations?.deductibleQuota===21&&recc390.operations?.criterionCash===100&&recc390.operations?.criterionCashReceived===100&&recc390Export[130]==='1'&&recc390Export[131]==='1'&&recc390EmptyExport[130]==='1',
