@@ -196,7 +196,10 @@ async function listPayments(base44, companyId, invoiceId) {
 
 async function visiblePayments(base44, companyId, payments) {
   const operationIds = [...new Set((payments || []).map(payment => cleanText(payment.accounting_operation_id, 120)).filter(Boolean))];
-  const operations = await Promise.all(operationIds.map(id => base44.asServiceRole.entities.AccountingPostingOperation.get(id).catch(() => null)));
+  const operations = await Promise.all(operationIds.map(id => base44.asServiceRole.entities.AccountingPostingOperation.get(id).catch(error => {
+    if (Number(error?.response?.status || error?.status) === 404) return null;
+    throw error; // Un fallo de lectura no convierte un pago confirmado en invisible.
+  })));
   const operationById = new Map(operations.filter(operation => operation?.companyId === companyId).map(operation => [operation.id, operation]));
   const visible = (payments || []).filter(payment => {
     const operationId = cleanText(payment.accounting_operation_id, 120);
@@ -238,6 +241,19 @@ async function refreshInvoicePaymentState(base44, invoice, companyId) {
   });
   const pendingAmount = asMoney((pending || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
   return { payments, paid, outstanding, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount };
+}
+
+async function stateAfterCommittedPayment(base44, invoice, companyId, current, payment) {
+  try { return await refreshInvoicePaymentState(base44, invoice, companyId); }
+  catch (error) {
+    // La unidad de pago ya está confirmada. No devolver un falso fallo ni repetir escrituras.
+    const payments = [...current.payments.filter(item => item.id !== payment.id), payment];
+    const paid = asMoney(payments.reduce((sum, item) => sum + Math.abs(Number(item.amount) || 0), 0));
+    const outstanding = asMoney(Math.max(0, Math.abs(Number(invoice.total_factura) || 0) - paid));
+    console.warn('[invoiceOperations] confirmed payment summary pending:', error?.message || 'read failed');
+    return { ...current, payments, paid, outstanding, estado_cobro: outstanding <= MONEY_EPSILON ? 'cobrada' : 'parcial',
+      summary_warning: 'Pago confirmado y contabilizado; el resumen de la factura requiere actualizarse. No vuelvas a registrar este pago.' };
+  }
 }
 
 async function recordTimeline(base44, data) {
@@ -942,7 +958,7 @@ Deno.serve(async (req) => {
         journal_entry_id: accounting.paymentPosting.entry.id,
       });
       const completed = await commitPaymentPostingUnit(base44, companyId, stagedPayment, accounting.paymentPosting, user);
-      const state = await refreshInvoicePaymentState(base44, invoice, companyId);
+      const state = await stateAfterCommittedPayment(base44, invoice, companyId, current, completed.payment);
       if (!wasAlreadyVisible) {
         await recordTimeline(base44, {
           invoice_id: invoice.id,
@@ -1092,7 +1108,7 @@ Deno.serve(async (req) => {
         notas: cleanText(`${transaction.notas ? `${transaction.notas}\n` : ''}Conciliado con factura ${invoice.numero_factura}.`, MAX_TEXT),
       };
       const completed = await commitPaymentPostingUnit(base44, companyId, stagedPayment, bankPosting, user, transaction, transactionPatch);
-      const state = await refreshInvoicePaymentState(base44, invoice, companyId);
+      const state = await stateAfterCommittedPayment(base44, invoice, companyId, current, completed.payment);
       if (!wasAlreadyVisible) {
         await recordTimeline(base44, {
           invoice_id: invoice.id,
