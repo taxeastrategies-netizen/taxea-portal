@@ -1,7 +1,7 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
-import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
+import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal, acquireReccAdvanceLocks } from './reccAdvances.mjs';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 
@@ -340,6 +340,7 @@ function evaluate(profile: any, activities: any[], body: any) {
 }
 
 Deno.serve(async (req) => {
+  let releaseAdvanceLocks: (() => Promise<void>) | null = null;
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -708,6 +709,7 @@ Deno.serve(async (req) => {
           reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
         if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
           return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
+        releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
         try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
@@ -848,6 +850,8 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[fiscalOperations]', error?.message || error);
     return Response.json({ error: error?.message || 'Error fiscal interno.' }, { status: error?.status || 500 });
+  } finally {
+    if (releaseAdvanceLocks) try { await releaseAdvanceLocks(); } catch (error) { console.error('[RECC lock release]', error.message); }
   }
 });
 
