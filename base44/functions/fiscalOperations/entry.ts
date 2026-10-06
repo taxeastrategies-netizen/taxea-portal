@@ -416,10 +416,18 @@ Deno.serve(async (req) => {
       const issues: any[] = [];
       const bookInvoices = relevantInvoices.map((invoice: any) => {
         const invoiceLines = linesByInvoice.get(invoice.id) || [];
-        const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length === 1
-          && clean(invoiceLines[0].reviewStatus) === 'validado' && clean(invoiceLines[0].regime) === 'criterio_caja'
-          && clean(invoiceLines[0].taxKind) === 'iva';
-        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin línea IVA única y validada por asesor.' });
+        const taxBreakdown = invoiceLines.map((line: any) => ({ lineNumber: Number(line.lineNumber || 1), rate: Number(line.rate || 0),
+          base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota) }));
+        const lineTotalsMatch = Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base + item.quota, 0)) - money(invoice.total_factura)) <= 0.02
+          && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base, 0)) - money(invoice.base_imponible)) <= 0.02
+          && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.quota, 0)) - money(invoice.cuota_iva)) <= 0.02;
+        const uniqueLineNumbers = new Set(taxBreakdown.map((item: any) => item.lineNumber)).size === taxBreakdown.length;
+        const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length > 0 && uniqueLineNumbers
+          && invoiceLines.every((line: any) => clean(line.reviewStatus) === 'validado'
+            && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === 'iva')
+          && (invoiceLines.length === 1 || (lineTotalsMatch && money(invoice.importe_retencion) === 0
+            && invoiceLines.every((line: any) => clean(line.operationType) === 'subject_taxed')));
+        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin desglose IVA completo, coherente y validado por asesor.' });
         if (invoice.tipo === 'emitida' && !clean(invoice.coletilla_fiscal).toLocaleLowerCase('es-ES').includes('régimen especial del criterio de caja')) {
           issues.push({ invoiceId: invoice.id, reason: 'Factura emitida RECC sin la mención obligatoria en el documento guardado; revisar el PDF existente sin sobrescribirlo.' });
         }
@@ -432,7 +440,7 @@ Deno.serve(async (req) => {
         return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre,
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : invoice.proveedor_nif,
-          base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura),
+          base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
           forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
       const paymentIds = new Set<string>();
