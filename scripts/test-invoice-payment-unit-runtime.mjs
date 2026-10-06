@@ -208,6 +208,20 @@ const temporaryRead = await invoke({action:'list_payments',company_id:'company-a
 assert.equal(temporaryRead.response.status,429);
 assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
 
+await entities.JournalEntry.create({id:'invoice-entry-1',companyId:'company-a',entryNumber:'QA-1',date:'2026-09-01',status:'confirmado'});
+await entities.JournalEntryLine.bulkCreate?.([]); // El proxy no necesita escrituras masivas para esta lectura.
+await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'43000001',debit:121,credit:0});
+await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'70500000',debit:0,credit:100});
+await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'47700000',debit:0,credit:21});
+const entryRead=await invoke({action:'get_accounting_entry',company_id:'company-a',invoice_id:'invoice-manual'});
+assert.equal(entryRead.response.status,200);
+assert.equal(entryRead.payload.entry.balanced,true);
+assert.equal(entryRead.payload.entry.totalDebit,121);
+assert.equal(entryRead.payload.lines[0].accountCode,'43000001');
+records.JournalEntry.find(row=>row.id==='invoice-entry-1').companyId='company-foreign';
+const foreignEntryRead=await invoke({action:'get_accounting_entry',company_id:'company-a',invoice_id:'invoice-manual'});
+assert.equal(foreignEntryRead.response.status,409);
+assert.equal(foreignEntryRead.payload.lines,undefined);
 console.log(JSON.stringify({
   ok: true,
   assertions: {
@@ -219,6 +233,7 @@ console.log(JSON.stringify({
     summaryFailureNeverReportsCommittedPaymentAsFailed: true,
     summaryRecoveryDoesNotDuplicatePayment: true,
     transientOperationReadNeverHidesCommittedCash: true,
+    realPostedJournalReadIsBalancedAndCompanyScoped: true,
   },
   counts: { payments: records.InvoicePayment.length, journalEntries: records.JournalEntry.length, operations: records.AccountingPostingOperation.length },
 }, null, 2));
