@@ -87,7 +87,8 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
     }
     if (reservedCents + cents(allocation.base) > availableCents)
       throw new Error('El anticipo ya se ha aplicado o reservado, o la base supera el cobro/pago confirmado disponible.');
-    const costCents = Math.round(cents(originalCost) * cents(allocation.base) / baseCents);
+    const costCents = Math.round(cents(originalCost) * (reservedCents + cents(allocation.base)) / baseCents)
+      - Math.round(cents(originalCost) * reservedCents / baseCents);
     applications.push({ ...allocation, accountingAmount: costCents / 100, advanceCode, advanceNumber: advance.numero_factura || advance.id });
   }
   return { ...result, applications };
