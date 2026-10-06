@@ -419,14 +419,14 @@ Deno.serve(async (req) => {
         const invoiceLines = linesByInvoice.get(invoice.id) || [];
         const taxBreakdown = invoiceLines.map((line: any) => ({ lineNumber: Number(line.lineNumber || 1), rate: Number(line.rate || 0),
           base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota) }));
-        const lineTotalsMatch = Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base + item.quota, 0)) - money(invoice.total_factura)) <= 0.02
+        const lineTotalsMatch = Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base + item.quota, 0)) - money(Number(invoice.total_factura) + Number(invoice.importe_retencion || 0))) <= 0.02
           && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base, 0)) - money(invoice.base_imponible)) <= 0.02
           && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.quota, 0)) - money(invoice.cuota_iva)) <= 0.02;
         const uniqueLineNumbers = new Set(taxBreakdown.map((item: any) => item.lineNumber)).size === taxBreakdown.length;
         const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length > 0 && uniqueLineNumbers
           && invoiceLines.every((line: any) => clean(line.reviewStatus) === 'validado'
             && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === 'iva')
-          && (invoiceLines.length === 1 || (lineTotalsMatch && money(invoice.importe_retencion) === 0
+          && (invoiceLines.length === 1 || (lineTotalsMatch
             && invoiceLines.every((line: any) => clean(line.operationType) === 'subject_taxed')));
         if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin desglose IVA completo, coherente y validado por asesor.' });
         if (invoice.tipo === 'emitida' && !clean(invoice.coletilla_fiscal).toLocaleLowerCase('es-ES').includes('régimen especial del criterio de caja')) {
@@ -436,13 +436,13 @@ Deno.serve(async (req) => {
         const invoicePayments = paymentsByInvoice.get(invoice.id) || [];
         const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
-        if (totalPaid > money(invoice.total_factura) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
+        if (totalPaid > Math.abs(money(invoice.total_factura)) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
         if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
         return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
           base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
-          forcedRecognitionDate: `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
+          forcedRecognitionDate: reccMetadata(invoice).insolvencyDate || `${Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) + 1}-12-31`, reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
       const paymentIds = new Set<string>();
       const invoiceById = new Map(relevantInvoices.map((invoice: any) => [invoice.id, invoice]));
@@ -453,7 +453,7 @@ Deno.serve(async (req) => {
         if (!clean(payment.id) || paymentIds.has(payment.id)) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Identificador de pago duplicado o vacío.' });
         paymentIds.add(payment.id);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || Number.isNaN(Date.parse(paymentDate))
-          || new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate || paymentDate < operationDate
+          || new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate || (paymentDate < operationDate && reccMetadata(invoice).advanceConfirmed !== true)
           || !Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0
           || (clean(payment.currency) && clean(payment.currency).toUpperCase() !== 'EUR')) {
           issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Fecha, importe o moneda del pago incompatible con RECC.' });
@@ -705,8 +705,8 @@ Deno.serve(async (req) => {
             && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only')));
         if (!validRecc) return Response.json({ error: 'RECC: desglose, precio, retención o clasificación incoherentes. Corrige la factura antes de confirmar.', evaluation: proposedEvaluation }, { status: 422 });
         if (selectedActivity?.indirectTaxRegime === 'criterio_caja' && invoice.fiscal_review_status !== 'validado') {
-          checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision);
-        } else if (metadata.eligibility) checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision);
+          try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        } else if (metadata.eligibility) try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         if (metadata.insolvencyDate && !clean(metadata.reason)) return Response.json({ error: 'El auto de concurso requiere fecha y referencia documental confirmadas por asesor.' }, { status: 422 });
         if (invoice.es_rectificativa === true) {
           const original = await svc.entities.Invoice.get(metadata.originalInvoiceId).catch(() => null);
@@ -752,7 +752,7 @@ Deno.serve(async (req) => {
         evaluation.accounting?.reverseCharge
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const proposedBreakdown = evaluation.regime === 'criterio_caja' && Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : null;
       let taxLine;
       if (proposedBreakdown) {
