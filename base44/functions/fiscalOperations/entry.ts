@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
         const invoiceLines = linesByInvoice.get(invoice.id) || [];
         const taxBreakdown = invoiceLines.map((line: any) => ({ lineNumber: Number(line.lineNumber || 1), rate: Number(line.rate || 0),
           base: money(line.base), quota: money(line.quota), deductibleQuota: money(line.deductibleQuota) }));
-        const lineTotalsMatch = Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base + item.quota, 0)) - money(Number(invoice.total_factura) + Number(invoice.importe_retencion || 0))) <= 0.02
+        const lineTotalsMatch = Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base + item.quota, 0)) - money(Number(invoice.total_factura) + Number(invoice.importe_retencion || 0) - Number(invoice.cuota_recargo || 0))) <= 0.02
           && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.base, 0)) - money(invoice.base_imponible)) <= 0.02
           && Math.abs(money(taxBreakdown.reduce((sum: number, item: any) => sum + item.quota, 0)) - money(invoice.cuota_iva)) <= 0.02;
         const uniqueLineNumbers = new Set(taxBreakdown.map((item: any) => item.lineNumber)).size === taxBreakdown.length;
@@ -441,7 +441,7 @@ Deno.serve(async (req) => {
         return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
-          base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
+          base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), surchargeQuota: money(invoice.cuota_recargo), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
           forcedRecognitionDate: (() => { const op = clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 10), deadline = `${Number(op.slice(0, 4)) + 1}-12-31`, insolvency = clean(reccMetadata(invoice).insolvencyDate); return insolvency > op && insolvency < deadline ? insolvency : deadline; })(), reviewStatus: valid ? 'validado' : 'pendiente_revision' };
       });
       const paymentIds = new Set<string>();
