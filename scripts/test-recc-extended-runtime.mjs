@@ -58,10 +58,12 @@ const retainedData=data(retained,[retainedLine],[{id:'rp',invoice_id:'retained',
 assert.equal(cash(retainedLine,retainedData,bounds(2026,'1T')).line.quota,10.5);
 const credit={...original,id:'credit',es_rectificativa:true,fecha_emision:'2026-02-15',base_imponible:-20,cuota_iva:-4.2,total_factura:-24.2,recc_metadata:JSON.stringify({originalInvoiceId:'original',adjustmentDate:'2026-02-15',reason:'Descuento posterior documentado art 80'})};
 assert.equal(reccCorrections(original,[credit]).length,1);
-const creditLine={...line,id:'credit-line',sourceId:'InvoiceTaxLine:credit-line',invoice:credit,date:credit.fecha_emision,base:-20,quota:-4.2};
+const creditLine={...line,id:'credit-line',sourceId:'InvoiceTaxLine:credit-line',invoice:credit,invoiceId:credit.id,date:credit.fecha_emision,base:-20,quota:-4.2};
 const correctionData={...data(),invoices:[original,credit],taxLines:[line,creditLine],invoicePayments:[{id:'p1',invoice_id:'original',payment_date:'2026-02-01',amount:60.5},{id:'p2',invoice_id:'original',payment_date:'2026-03-01',amount:36.3}]};
+correctionData.rawInvoicePayments = correctionData.invoicePayments;
 const originalResult=cash(line,correctionData,bounds(2026,'1T'));
 const creditResult=cash(creditLine,correctionData,bounds(2026,'1T'));
+assert.ok(originalResult.line, JSON.stringify(originalResult.review)); assert.ok(creditResult.line, JSON.stringify(creditResult.review));
 assert.equal(originalResult.line.base,90);assert.equal(creditResult.line.base,-10);
 assert.equal(originalResult.line.quota,18.9);assert.equal(creditResult.line.quota,-2.1);
 const result=calculate303(correctionData,bounds(2026,'1T'),'iva',false,{previousCompensationBalance:0});
