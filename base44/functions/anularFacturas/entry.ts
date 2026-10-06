@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { invoiceIds, motivo, companyId } = body || {};
-    const userCompanyId = user.data?.company_id;
+    const userCompanyId = user.data?.company_id || user.company_id;
     const isPlatformAdmin = ['admin', 'super_admin'].includes(user.role);
     // Los administradores de plataforma gestionan varias empresas: pueden operar con la empresa indicada.
     const effectiveCompanyId = isPlatformAdmin ? (companyId || userCompanyId) : userCompanyId;
