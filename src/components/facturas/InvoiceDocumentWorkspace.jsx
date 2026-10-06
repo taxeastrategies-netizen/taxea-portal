@@ -19,6 +19,7 @@ import InvoiceOperationalSidePanel from './InvoiceOperationalSidePanel';
 import { exportInvoiceToPdf } from './invoicePdfExport';
 import { QRCodeSVG } from 'qrcode.react';
 import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
+import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
 
 // ── Estado visual de factura ───────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -324,6 +325,13 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
           {invoice.forma_pago && <p><span className="text-slate-500">Método: </span>{invoice.forma_pago}</p>}
           {company?.datos_bancarios && <p><span className="text-slate-500">Datos bancarios: </span>{company.datos_bancarios}</p>}
           <p className="text-slate-500 mt-1">Indica el número <strong>{invoice.numero_factura}</strong> como referencia del pago.</p>
+        </div>
+      )}
+
+      {/* Mención fiscal del documento, también visible en el PDF y en el envío */}
+      {invoiceFiscalLegend(invoice) && (
+        <div className="mb-6 border-t border-slate-200 pt-4 text-xs italic text-slate-600">
+          {invoiceFiscalLegend(invoice)}
         </div>
       )}
 
