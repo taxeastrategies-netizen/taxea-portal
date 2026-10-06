@@ -842,7 +842,7 @@ Deno.serve(async (req) => {
         reviewedBy: user.email, reviewedAt: new Date().toISOString(),
       } : null;
       const reccLegend = 'Régimen especial del criterio de caja';
-      const advanceLegend = confirmedRecc?.documentKind === 'advance' ? 'Factura de anticipo: aplicación posterior mediante vínculo revisado por asesor.'
+      const advanceLegend = confirmedRecc?.documentKind === 'advance' ? (invoice.es_rectificativa ? `Rectificativa de anticipo ${invoice.factura_rectificada || confirmedRecc.originalInvoiceId}; devolución trazada y ajuste 438/407 sin ingreso/gasto ordinario.` : 'Factura de anticipo: aplicación posterior mediante vínculo revisado por asesor.')
         : confirmedRecc?.documentKind === 'final' ? `Factura final por saldo nuevo. Anticipos ya facturados y descontados: ${(confirmedRecc.advanceReferences || []).map((row: any) => `${row.number} (base ${money(row.base).toFixed(2)} EUR)`).join('; ')}. Su aplicación no genera otra cuota de IVA.` : '';
       const previousLegend = String(invoice.coletilla_fiscal || '').trim();
       const existingLegend = advanceLegend && !previousLegend.includes(advanceLegend) ? [previousLegend, advanceLegend].filter(Boolean).join(' · ') : previousLegend;
