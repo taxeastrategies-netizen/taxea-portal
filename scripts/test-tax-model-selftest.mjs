@@ -195,7 +195,7 @@ const workflowChecks = {
     && exactDownload.payload.file?.hash === frozenExport.payload.file?.hash
     && exactDownload.payload.file?.immutable === true,
   fullCatalogAvailable: catalog.response.ok
-    && catalog.payload.engineVersion === 'taxea-modelos-2026.10.06-v27-recc-advances'
+    && catalog.payload.engineVersion === 'taxea-modelos-2026.10.06-v28-recc-final-zero'
     && catalog.payload.models?.length === 22
     && ['349', '131', '216', '296', '417', '421', '200', '202', '232'].every(model => catalog.payload.models.some(item => item.code === model)),
   historicalAuditIsReadOnly: historicalDryRun.response.ok
