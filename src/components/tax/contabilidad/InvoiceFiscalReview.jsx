@@ -29,7 +29,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const [error, setError] = useState('');
   const [canApprove, setCanApprove] = useState(false);
   const [classificationSaved, setClassificationSaved] = useState(false);
-  const [advanceCandidates, setAdvanceCandidates] = useState([]);
+  const [advanceCandidates, setAdvanceCandidates] = useState(/** @type {any[]} */ ([]));
   const [form, setForm] = useState(/** @type {Record<string, any>} */ ({}));
 
   const activeActivities = useMemo(() => (bundle?.activities || []).filter(item => item.active !== false), [bundle]);
