@@ -21,6 +21,9 @@ assert.equal(parallel.filter(r=>r.status==='rejected'&&r.reason.status===409).le
 await parallel.find(r=>r.status==='fulfilled').value();
 assert.equal(rows[0].recc_application_lock_token,'');
 await assert.rejects(()=>acquireReccAdvanceLocks(svc,'other',metadata,'x'),/empresa|proceso/);
+const refundRelease=await acquireReccAdvanceLocks(svc,'qa',{documentKind:'advance',originalInvoiceId:'a'},'refund');
+await assert.rejects(()=>acquireReccAdvanceLocks(svc,'qa',metadata,'competing-final'),/proceso/);
+await refundRelease();
 const releaseB=await acquireReccAdvanceLocks(svc,'qa',{...metadata,advanceAllocations:[{invoiceId:'b',base:10}]},'busy');
 await assert.rejects(()=>acquireReccAdvanceLocks(svc,'qa',{...metadata,advanceAllocations:[{invoiceId:'b',base:5},{invoiceId:'a',base:5}]},'pair'),/proceso/);
 assert.equal(rows[0].recc_application_lock_token,'');await releaseB();
@@ -40,4 +43,4 @@ assert.equal(rows[0].recc_application_lock_token,'');
 assert.equal(JSON.parse(logs[0].afterJson).status,'released');
 assert.ok(!logs[0].beforeJson.includes('lock_token'));
 assert.equal((await recoverReccAdvanceLock(svc,'qa','a',old,'advisor')).alreadyReleased,true);
-console.log(JSON.stringify({ok:true,realWrites:0,cases:['parallel-single-winner','partial-acquisition-rolled-back','company-isolation','no-auto-expiry','recent-lock-protected','active-posting-unit-protected','advisor-recovery-requires-reason','recovery-audited-and-idempotent']}));
+console.log(JSON.stringify({ok:true,realWrites:0,cases:['parallel-single-winner','refund-and-final-share-lock','partial-acquisition-rolled-back','company-isolation','no-auto-expiry','recent-lock-protected','active-posting-unit-protected','advisor-recovery-requires-reason','recovery-audited-and-idempotent']}));
