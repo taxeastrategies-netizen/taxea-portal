@@ -1009,18 +1009,31 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     if (invoice.es_rectificativa === true) {
       const original = (data.invoices || []).find((row: any) => row.id === metadata.originalInvoiceId && !row.anulada && row.fiscal_review_status === 'validado');
       if (!original || !metadata.adjustmentDate || !metadata.reason) throw new Error('Rectificativa sin original y criterio temporal confirmado por asesor.');
-      if (money(invoice.base_imponible) < 0) {
+      if (metadata.adjustmentMode === 'tax_adjustment') {
+        schedule = { forcedRecognitionDate: metadata.adjustmentDate, cancelledFactor: 0 };
+        events = [{ id: invoice.id, date: reccDate(metadata.adjustmentDate), factor: 1, kind: 'reviewed_tax_adjustment',
+          sourceIds: [line.sourceId, `Invoice:${original.id}`, `Invoice:${invoice.id}`] }];
+      } else if (money(invoice.base_imponible) < 0) {
+        const originalPayments = (data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id);
+        const originalRawPayments = (data.rawInvoicePayments || data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id);
+        if (originalPayments.length !== originalRawPayments.length || originalPayments.some((row: any) => row.operation_status && row.operation_status !== 'committed')) throw new Error('La rectificativa depende de pagos originales no confirmados.');
+        const originalLine = (data.taxLines || []).find((row: any) => (row.invoiceId || row.invoice?.id) === original.id && Number(row.rate) === Number(line.rate));
+        if (!originalLine) throw new Error('No se localiza el tipo de IVA de la rectificativa en el desglose original.');
         const originalMetadata = reccMetadata(original);
         schedule = reccSchedule({ invoiceId: original.id, invoiceNet: invoicePayable(original),
           operationDate: clean(original.fecha_operacion || original.fecha_emision), advanceConfirmed: originalMetadata.advanceConfirmed,
           insolvencyDate: originalMetadata.insolvencyDate,
           payments: (data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id).map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })),
-          corrections: reccCorrections(original, data.invoices) });
+          corrections: reccCorrections(original, data.invoices, originalLine, data.taxLines) });
         const correction = schedule.correctionRecognitions.find((row: any) => row.id === invoice.id);
         if (!correction) throw new Error('La rectificativa no se ha podido relacionar con el saldo original.');
         events = [{ ...correction, sourceIds: unique([line.sourceId, `Invoice:${original.id}`, `Invoice:${invoice.id}`]), type: 'rectification' }];
       } else {
-        throw new Error('Una rectificativa de aumento exige revisar la causa y el período del artículo 89; no se imputa por la fecha de cobro sin criterio profesional.');
+        if (metadata.adjustmentMode !== 'price_change') throw new Error('El asesor debe confirmar si el aumento de precio sigue cobros o exige ajuste de cuotas en un período revisado (artículos 89 y 114).');
+        schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable,
+          operationDate: clean(original.fecha_operacion || original.fecha_emision), advanceConfirmed: metadata.advanceConfirmed,
+          insolvencyDate: metadata.insolvencyDate, payments: payments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
+        events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
       }
     } else {
       schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable, operationDate,
@@ -1028,7 +1041,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
         payments: payments.map((payment: any) => {
           if (clean(payment.currency) && clean(payment.currency) !== 'EUR') throw new Error('Pago RECC en moneda sin convertir.');
           return { id: payment.id, date: payment.payment_date, amount: payment.amount, status: payment.operation_status };
-        }), corrections: reccCorrections(invoice, data.invoices) });
+        }), corrections: reccCorrections(invoice, data.invoices, line, data.taxLines) });
       events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
     }
   } catch (error) { return review(`Factura ${invoiceLabel}: ${error.message}`); }
