@@ -1482,6 +1482,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   const surchargeRates = new Map<number, any>();
   let outputAdjustmentBase = 0, outputAdjustmentQuota = 0, surchargeAdjustmentBase = 0, surchargeAdjustmentQuota = 0, inputAdjustmentBase = 0, inputAdjustmentQuota = 0;
   const outputAdjustmentIds: string[] = [], surchargeAdjustmentIds: string[] = [], inputAdjustmentIds: string[] = [];
+  let insolvencyAdjustmentBase = 0, insolvencyAdjustmentQuota = 0, insolvencySurchargeBase = 0, insolvencySurchargeQuota = 0;
+  const insolvencyAdjustmentIds: string[] = [];
   const deductibleRates = new Map<string, any>();
   const sourceIdsOf = (line: any) => unique(Array.isArray(line.fiscalSourceIds) ? line.fiscalSourceIds : [line.sourceId]);
   const addRate = (rate: number, base: number, quota: number, ids: string[]) => {
@@ -1518,10 +1520,13 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       if (['subject_taxed', 'subject_zero', 'special_margin'].includes(op)) {
         const rate = Number(line.rate || 0);
         const adjustment = kind === 'iva' && invoice.es_rectificativa === true;
-        if (adjustment) { outputAdjustmentBase += base; outputAdjustmentQuota += quota; outputAdjustmentIds.push(...ids); }
+        const annualInsolvency = annual && adjustment && reccMetadata(invoice).adjustmentCause === 'insolvency';
+        if (annualInsolvency) { insolvencyAdjustmentBase += base; insolvencyAdjustmentQuota += quota; insolvencyAdjustmentIds.push(...ids); }
+        else if (adjustment) { outputAdjustmentBase += base; outputAdjustmentQuota += quota; outputAdjustmentIds.push(...ids); }
         else addRate(rate, base, quota, ids);
         if (money(line.surchargeQuota)) {
-          if (adjustment) { surchargeAdjustmentBase += base; surchargeAdjustmentQuota += money(line.surchargeQuota); surchargeAdjustmentIds.push(...ids); }
+          if (annualInsolvency) { insolvencySurchargeBase += base; insolvencySurchargeQuota += money(line.surchargeQuota); }
+          else if (adjustment) { surchargeAdjustmentBase += base; surchargeAdjustmentQuota += money(line.surchargeQuota); surchargeAdjustmentIds.push(...ids); }
           else { const surchargeRate = Number(line.surchargeRate || invoice.tipo_recargo); const row = surchargeRates.get(surchargeRate) || {rate:surchargeRate,base:0,quota:0,sourceIds:[]};
             row.base += base; row.quota += money(line.surchargeQuota); row.sourceIds.push(...ids); surchargeRates.set(surchargeRate,row); }
         }
@@ -1555,7 +1560,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (pendingReviewLines) data.blockers.push(`${pendingReviewLines} línea(s) fiscales incluidas tienen su clasificación o deducibilidad pendiente de revisión.`);
   for (const row of [...rates.values()].sort((a, z) => a.rate - z.rate)) addField(fields, `RATE_${row.rate}`, `Base y cuota al ${row.rate}%`, row.quota, row.sourceIds, `Devengado: base ${money(row.base).toFixed(2)} €`);
   const outputQuota = money([...rates.values()].reduce((s, r) => s + r.quota, 0) + [...surchargeRates.values()].reduce((s,r)=>s+r.quota,0)
-    + outputAdjustmentQuota + surchargeAdjustmentQuota + intraQuota + reverseQuota);
+    + outputAdjustmentQuota + surchargeAdjustmentQuota + insolvencyAdjustmentQuota + insolvencySurchargeQuota + intraQuota + reverseQuota);
   const generalRawResult = money(outputQuota - deductibleQuota);
   const simplified = model === '303' && !annual ? calculate303Simplified(data, adjustments, fields) : { active: false, details: [], result: 0, fields: {}, sourceIds: [] };
   const rawResult = money(generalRawResult + money(simplified.result));
@@ -1577,6 +1582,10 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (annual && model === '390') {
     addField(fields, '29', 'Rectificaciones de bases repercutidas', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
     addField(fields, '30', 'Rectificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '31', 'Modificación por concurso · base', insolvencyAdjustmentBase, insolvencyAdjustmentIds, 'Concurso de acreedores');
+    addField(fields, '32', 'Modificación por concurso · cuota', insolvencyAdjustmentQuota, insolvencyAdjustmentIds, 'Concurso de acreedores');
+    addField(fields, '45', 'Modificación de recargo por concurso · base', insolvencySurchargeBase, insolvencyAdjustmentIds, 'Concurso de acreedores');
+    addField(fields, '46', 'Modificación de recargo por concurso · cuota', insolvencySurchargeQuota, insolvencyAdjustmentIds, 'Concurso de acreedores');
     addField(fields, '62', 'Rectificación de deducciones', inputAdjustmentQuota, inputAdjustmentIds, 'Rectificaciones');
     for (const [rate, boxes] of [[0.5,['35','36']],[1.4,['599','600']],[5.2,['601','602']]] as any[]) {
       const row = surchargeRates.get(rate);
@@ -1615,6 +1624,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (!annual && result < 0 && resultDisposition === 'a_devolver' && !['4T','12'].includes(clean(data.period))) data.blockers.push('La devolución del saldo no se habilita fuera del último período del año salvo supuesto especial revisado.');
   const operations = { surchargeRates: [...surchargeRates.values()].map(r=>({...r,base:money(r.base),quota:money(r.quota)})),
     outputAdjustmentBase: money(outputAdjustmentBase), outputAdjustmentQuota: money(outputAdjustmentQuota),
+    insolvencyAdjustmentBase: money(insolvencyAdjustmentBase), insolvencyAdjustmentQuota: money(insolvencyAdjustmentQuota),
+    insolvencySurchargeBase: money(insolvencySurchargeBase), insolvencySurchargeQuota: money(insolvencySurchargeQuota),
     inputAdjustmentBase: money(inputAdjustmentBase), inputAdjustmentQuota: money(inputAdjustmentQuota),
     surchargeAdjustmentBase: money(surchargeAdjustmentBase), surchargeAdjustmentQuota: money(surchargeAdjustmentQuota),
     rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), categorizedOutputRates: [...categorizedOutputRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), deductibleRates: [...deductibleRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), nonDeductibleBase: money(nonDeductibleBase), generalRawResult, rawResult, simplified, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash), criterionCashQuota: money(criterionCashQuota), criterionCashReceived: money(criterionCashReceived), criterionCashReceivedQuota: money(criterionCashReceivedQuota), criterionCashTaxpayer, criterionCashRecipient };
@@ -2920,14 +2931,16 @@ function export390(company: any, profile: any, activities: any[], year: number, 
   const intraRate = calculation.operations?.intraBase ? Number(((calculation.operations.intraQuota / calculation.operations.intraBase) * 100).toFixed(2)) : 0;
   if (calculation.operations?.intraBase && intraOutputBoxes[String(intraRate)]) { putBox(intraOutputBoxes[String(intraRate)][0],calculation.operations.intraBase); putBox(intraOutputBoxes[String(intraRate)][1],calculation.operations.intraQuota); }
   putBox('27',calculation.operations?.reverseBase||0); putBox('28',calculation.operations?.reverseQuota||0);
-  const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0)+(calculation.operations?.outputAdjustmentBase||0));
+  const totalOutputBase = money(outputRows.reduce((sum:number,row:any)=>sum+money(row.base),0)+(calculation.operations?.intraBase||0)+(calculation.operations?.reverseBase||0)+(calculation.operations?.outputAdjustmentBase||0)+(calculation.operations?.insolvencyAdjustmentBase||0));
   putBox('29',calculation.operations?.outputAdjustmentBase||0); putBox('30',calculation.operations?.outputAdjustmentQuota||0);
+  putBox('31',calculation.operations?.insolvencyAdjustmentBase||0); putBox('32',calculation.operations?.insolvencyAdjustmentQuota||0);
+  putBox('45',calculation.operations?.insolvencySurchargeBase||0); putBox('46',calculation.operations?.insolvencySurchargeQuota||0);
   const surchargeRows = calculation.operations?.surchargeRates || [];
   const surchargeBoxes: Record<string,string[]> = {'0.5':['35','36'],'1.4':['599','600'],'5.2':['601','602'],'1.75':['41','42']};
   for (const row of surchargeRows) { const boxes = surchargeBoxes[String(Number(row.rate))]; if (boxes) { putBox(boxes[0],row.base); putBox(boxes[1],row.quota); } }
   const surchargeTotal = money(surchargeRows.reduce((sum:number,row:any)=>sum+money(row.quota),0));
   putBox('43',calculation.operations?.surchargeAdjustmentBase||0); putBox('44',calculation.operations?.surchargeAdjustmentQuota||0);
-  putBox('33',totalOutputBase); putBox('34',money((calculation.operations?.outputQuota||0)-surchargeTotal-(calculation.operations?.surchargeAdjustmentQuota||0))); putBox('47',calculation.operations?.outputQuota||0);
+  putBox('33',totalOutputBase); putBox('34',money((calculation.operations?.outputQuota||0)-surchargeTotal-(calculation.operations?.surchargeAdjustmentQuota||0)-(calculation.operations?.insolvencySurchargeQuota||0))); putBox('47',calculation.operations?.outputQuota||0);
 
   const deductionRateBoxes: Record<string, Record<string, string[]>> = {
     interior_current: {'2':['695','696'],'4':['190','191'],'5':['724','725'],'7.5':['697','698'],'10':['603','604'],'21':['605','606']},
