@@ -453,7 +453,7 @@ Deno.serve(async (req) => {
         const totalPaid = money(invoicePayments.filter((payment: any) => !payment.operation_status || payment.operation_status === 'committed')
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
         if (totalPaid > Math.abs(money(invoice.total_factura)) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
-        if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro))) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
+        if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro)) && !isZeroResidualReccFinal(invoice)) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
         return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
