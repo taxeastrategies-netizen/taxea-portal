@@ -36,6 +36,7 @@ const client = { auth: { me: async () => currentUser }, asServiceRole: { entitie
 let handler;
 vm.runInContext(build.outputFiles[0].text, vm.createContext({
   Response, Request, URL, TextEncoder, TextDecoder, crypto: webcrypto, Date, console,
+  setTimeout: callback => { callback(); return 0; }, clearTimeout() {},
   __client: client, Deno: { serve: fn => { handler = fn; } },
 }), { filename: 'fiscalOperations.bundle.cjs' });
 async function evaluate(body) {
