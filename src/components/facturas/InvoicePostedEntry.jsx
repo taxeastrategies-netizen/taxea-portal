@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Loader2, RefreshCw } from 'lucide-react';
 const fmt = value => Number(value || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export default function InvoicePostedEntry({ invoice }) {
-  const [result, setResult] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0);
+  const [result, setResult] = useState(/** @type {any} */ (null)), [error, setError] = useState(''), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0);
   useEffect(() => {
     let cancelled = false;
     setLoading(true); setError('');
