@@ -82,6 +82,10 @@ Deno.serve(async (req) => {
     const reason = String(motivo || '').trim();
     if (!reason) return Response.json({ error: 'El motivo de anulación es obligatorio.' }, { status: 400 });
     const svc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 750 });
+    const company = await svc.entities.Company.get(effectiveCompanyId);
+    const email = String(user.email || '').trim().toLowerCase();
+    const authorizedEmails = (Array.isArray(company?.usuarios_autorizados) ? company.usuarios_autorizados : []).map(value => String(value).trim().toLowerCase());
+    if (!company || (!isPlatformAdmin && (!email || (String(company.owner_email || '').trim().toLowerCase() !== email && !authorizedEmails.includes(email))))) return Response.json({ error: 'No tienes permiso para operar en esta empresa.' }, { status: 403 });
     const now = new Date().toISOString();
     const accountingDate = String(body.accountingDate || now.slice(0, 10));
     if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
