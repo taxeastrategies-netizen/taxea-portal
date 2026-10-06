@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
     if (['save_invoice_tax_line','recover_recc_advance_lock'].includes(action) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
-    if (['save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
+    if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 
     if (action === 'recover_recc_advance_lock') return Response.json(await recoverReccAdvanceLock(svc,companyId,clean(body.invoiceId),body,user.email));
 
