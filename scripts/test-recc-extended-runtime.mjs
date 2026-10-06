@@ -84,7 +84,7 @@ const mixedResult=calculate303(mixedData,bounds(2026,'1T'),'iva',false,{previous
 assert.equal(mixedResult.operations.outputQuota,26.8);
 assert.equal(mixedResult.fields.find(row=>row.code==='15').value,-2.1);
 const raw303=export303({nif_cif:'B00000000',razon_social:'QA FICTICIA'}, {},2026,'1T',mixedResult);
-const num=(content,position,length)=>Number(content.slice(position-1,position-1+length).trim())/100;
+const num=(content,position,length)=>{const raw=content.slice(position-1,position-1+length).trim();return (raw.startsWith('N')?-Number(raw.slice(1)):Number(raw))/100;};
 assert.equal(num(raw303,450,17),-2.1);
 const surchargeInvoice={...original,id:'surcharge',tipo_iva:21,cuota_recargo:5.2,tipo_recargo:5.2,total_factura:126.2};
 const surchargeLine={...line,invoice:surchargeInvoice,invoiceId:'surcharge',surchargeQuota:5.2,surchargeRate:5.2};
@@ -102,4 +102,4 @@ increaseData.rawInvoicePayments=increaseData.invoicePayments;
 assert.equal(cash(increaseLine,increaseData,bounds(2026,'1T')).line.quota,2.1);
 const reviewed={...increase,recc_metadata:JSON.stringify({...JSON.parse(increase.recc_metadata),adjustmentMode:'tax_adjustment',adjustmentDate:'2026-03-01'})};
 assert.equal(cash({...increaseLine,invoice:reviewed},{...increaseData,invoices:[original,reviewed]},bounds(2026,'1T')).line.quota,4.2);
-console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity'],writes:0},null,2));
+console.log(JSON.stringify({ok:true,cases:['eligibility-boundaries','census-required','advance-reviewed','withholding-net-price','insolvency-before-deadline','late-payment-no-double-tax','reduction-unpaid-partly-paid-paid','paired-correction-303','200-cent-distributions','shared-module-parity','heterogeneous-credit-by-rate','positive-price-correction','reviewed-tax-adjustment','surcharge-cash-303-official-slots'],writes:0},null,2));
