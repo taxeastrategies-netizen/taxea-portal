@@ -63,6 +63,23 @@ assert.equal(own.data.payments.length, 2);
 assert.equal(own.data.payments.find(payment => payment.id === 'payment-a')?.bankAccount, 'ES0000000000000000000000');
 assert.equal(own.data.payments.find(payment => payment.id === 'payment-old')?.confirmed, true);
 assert.equal(own.data.issues.length, 0);
+records.Invoice.push({ id: 'recc-mixed', company_id: 'company-a', tipo: 'emitida', numero_factura: 'TEST-RECC-MIXED',
+  fecha_emision: '2025-06-10', fiscal_regime: 'criterio_caja', indirect_tax_kind: 'iva', fiscal_review_status: 'validado',
+  coletilla_fiscal: 'Régimen especial del criterio de caja', cliente_nombre: 'Cliente sintético',
+  base_imponible: 3000, cuota_iva: 410, total_factura: 3410, estado_cobro: 'parcial' });
+records.InvoiceTaxLine.push(
+  { id: 'line-mixed-10', companyId: 'company-a', invoiceId: 'recc-mixed', lineNumber: 1, taxKind: 'iva',
+    regime: 'criterio_caja', operationType: 'subject_taxed', rate: 10, base: 2000, quota: 200, reviewStatus: 'validado' },
+  { id: 'line-mixed-21', companyId: 'company-a', invoiceId: 'recc-mixed', lineNumber: 2, taxKind: 'iva',
+    regime: 'criterio_caja', operationType: 'subject_taxed', rate: 21, base: 1000, quota: 210, reviewStatus: 'validado' });
+records.InvoicePayment.push({ id: 'payment-mixed', company_id: 'company-a', invoice_id: 'recc-mixed', amount: 2400,
+  payment_date: '2026-03-31', method: 'transferencia', origin: 'manual', operation_status: 'committed' });
+const mixed = await call();
+assert.equal(mixed.status, 200);
+assert.equal(mixed.data.invoices.find(invoice => invoice.id === 'recc-mixed')?.reviewStatus, 'validado');
+assert.deepEqual(mixed.data.invoices.find(invoice => invoice.id === 'recc-mixed')?.taxBreakdown.map(line => [line.rate, line.base, line.quota]),
+  [[10, 2000, 200], [21, 1000, 210]]);
+assert.ok(!mixed.data.issues.some(issue => issue.invoiceId === 'recc-mixed'));
 const crossCompany = await call('company-b');
 assert.equal(crossCompany.status, 403);
 user = { email: 'advisor@test.invalid', role: 'advisor', data: {} };
@@ -74,4 +91,4 @@ const pending = await call();
 assert.ok(pending.data.issues.some(issue => issue.paymentId === 'payment-b'));
 assert.equal(writes, 0);
 console.log(JSON.stringify({ ok: true, checks: ['own-company-book', 'previous-year-invoice', 'bank-account-source',
-  'late-payment-of-older-invoice-traced', 'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
+  'late-payment-of-older-invoice-traced', 'mixed-rates-book-breakdown', 'cross-company-denied', 'advisor-authorized', 'pending-payment-flagged', 'read-only'] }, null, 2));
