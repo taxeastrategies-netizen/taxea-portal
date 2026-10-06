@@ -718,7 +718,7 @@ Deno.serve(async (req) => {
         if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
           return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
         releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
-        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; }
+        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
         const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
@@ -830,7 +830,7 @@ Deno.serve(async (req) => {
       } else taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       const previousRecc = reccMetadata(invoice);
       const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
-        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.advanceApplications?.originalAdvanceId ? {documentKind:'advance'} : {}) }),
+        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.reccAdvanceCorrection ? {documentKind:'advance'} : {}) }),
         version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
         insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
         originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
