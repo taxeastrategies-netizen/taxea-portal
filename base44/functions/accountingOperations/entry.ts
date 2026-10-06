@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
+import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import {
   SCHEMA_VERSION,
   assertAccountingDateOpen,
@@ -1468,8 +1469,13 @@ Deno.serve(async (req) => {
     if (!companyId) {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
-    const svc = base44.asServiceRole;
-    const company = await svc.entities.Company.get(companyId).catch(() => null);
+    const svc = action === 'ensure_accounting_ready'
+      ? queuedAccountingClient(base44.asServiceRole, { intervalMs: 350 })
+      : base44.asServiceRole;
+    const company = await svc.entities.Company.get(companyId).catch(error => {
+      if (Number(error?.response?.status || error?.status) === 404) return null;
+      throw error;
+    });
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const userEmail = String(user.email || '').trim().toLowerCase();
     const assignedCompanyId = String(user.data?.company_id || user.company_id || '').trim();
