@@ -366,8 +366,10 @@ function isValidatedSimpleReccInvoice(invoice) {
     && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
     && [0,21,10,4].includes(rate) && Math.abs(base) > 0 && Math.abs(quota) > 0
     && (rate === 0 || Math.abs(money(base * rate / 100) - quota) <= 0.01)
-    && Math.abs(money(invoice.total_factura) - money(base + quota - money(invoice.importe_retencion))) <= 0.02
-    && Math.abs(money(invoice.cuota_recargo)) <= 0.001
+    && Math.abs(money(invoice.total_factura) - money(base + quota + money(invoice.cuota_recargo) - money(invoice.importe_retencion))) <= 0.02
+    && (Math.abs(money(invoice.cuota_recargo)) <= 0.001 || (invoice.tipo === 'emitida'
+      && Number(invoice.tipo_recargo) === ({21:5.2,10:1.4,4:0.5})[rate]
+      && Math.abs(money(base * Number(invoice.tipo_recargo) / 100) - money(invoice.cuota_recargo)) <= 0.01))
     && Math.abs(money(invoice.deductible_tax_amount)) <= Math.abs(quota);
 }
 
@@ -383,7 +385,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     ? money(invoice.non_deductible_tax_amount != null ? invoice.non_deductible_tax_amount : tax - deductibleTax)
     : 0;
   const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
-  const surcharge = isValidatedRecargoPurchase(invoice) ? money(invoice.cuota_recargo) : 0;
+  const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) ? money(invoice.cuota_recargo) : 0;
   const total = money(invoice.total_factura || base + tax + surcharge - withholding);
   if (!invoice.es_rectificativa && base <= 0) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
@@ -392,7 +394,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const absDeductibleTax = Math.abs(deductibleTax);
   const absNonDeductibleTax = Math.abs(nonDeductibleTax);
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
-  const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : validatedRecargoRetailSale ? 0 : absTax;
+  const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : validatedRecargoRetailSale ? 0 : absTax + Math.abs(surcharge);
   const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax + Math.abs(surcharge) : absBase + (validatedRecargoRetailSale ? absTax : 0);
   const absWithholding = Math.abs(withholding);
   const absTotal = Math.abs(total);
@@ -964,6 +966,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
         && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - money(row.quota)) <= 0.01)
       && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - money(invoice.base_imponible)) <= 0.01
       && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - money(invoice.cuota_iva)) <= 0.01
+      && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.surchargeQuota || 0), 0)) - money(invoice.cuota_recargo)) <= 0.01
       && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.deductibleQuota || 0), 0)) - money(invoice.deductible_tax_amount)) <= 0.01
       && (invoice.tipo === 'emitida' || clean(activity?.indirectTaxRegime) === 'criterio_caja'
         || (invoice.fiscal_manual_override === true && !!clean(invoice.fiscal_manual_override_reason)));
