@@ -2,6 +2,14 @@
   "name": "Invoice",
   "type": "object",
   "properties": {
+    "recc_metadata": {
+      "type": "string",
+      "description": "Datos RECC confirmados por asesor: anticipo, concurso y v\u00ednculo de rectificaci\u00f3n. JSON versionado."
+    },
+    "tax_breakdown": {
+      "type": "string",
+      "description": "Desglose de bases y cuotas propuesto en el documento; exige confirmaci\u00f3n fiscal."
+    },
     "company_id": {
       "type": "string"
     },
