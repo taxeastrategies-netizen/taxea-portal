@@ -311,6 +311,18 @@ assert.match(completedRecc.payload.invoice.coletilla_fiscal, /Régimen especial 
 assert.equal((await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id })).payload.duplicate, true);
 assert.equal(counters.accountingEntries, 6);
 
+const legacyReceived = await invoke({
+  action: 'create_invoice', company_id: 'company-a', idempotency_key: 'legacy-received-counterparty',
+  invoice: { ...validInvoice, tipo: 'recibida', numero_factura: 'R-2026-LEGACY-THIRD-PARTY',
+    fecha_recepcion: '2026-04-11', cliente_nombre: 'Proveedor en formulario legado', cliente_nif: 'B00000000' },
+});
+assert.equal(legacyReceived.response.status, 200);
+assert.equal(legacyReceived.payload.review_required, true);
+assert.equal(legacyReceived.payload.invoice.proveedor_nombre, 'Proveedor en formulario legado');
+assert.equal(legacyReceived.payload.invoice.proveedor_nif, 'B00000000');
+assert.equal(legacyReceived.payload.invoice.cliente_nombre, 'Proveedor en formulario legado');
+assert.equal(counters.accountingEntries, 6);
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
