@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
 import * as esbuild from 'esbuild';
 
-import { reccAdvanceMetadata, validateReccAdvanceLinks } from '../base44/functions/accountingOperations/reccAdvances.mjs';
+import { reccAdvanceMetadata, validateReccAdvanceLinks, assertReccAdvanceCanReverse } from '../base44/functions/accountingOperations/reccAdvances.mjs';
 const root = process.cwd();
 const source = `
   import { createJournalEntry, postInvoice } from './base44/functions/accountingOperations/accountingEngine.ts';
@@ -155,7 +155,8 @@ await assert.rejects(()=>postInvoice(svc,'company-a',excessive,'advisor@test'),/
 await assert.rejects(()=>validateReccAdvanceLinks(svc,'company-b',final),/empresa/);
 const foreign={...final,cliente_nif:'B11111111'};
 await assert.rejects(()=>validateReccAdvanceLinks(svc,'company-a',foreign),/contraparte/);
+await assert.rejects(()=>assertReccAdvanceCanReverse(svc,'company-a',records.Invoice.find(row=>row.id===advance.id)),/aplicaciones activas/);
 records.Invoice.find(row=>row.id===final.id).anulada=true;
 const released=await validateReccAdvanceLinks(svc,'company-a',doubled);
 assert.equal(released.applications[0].accountingAmount,1);
-console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation'],realWrites:0},null,2));
+console.log(JSON.stringify({ok:true,cases:['advance-438-no-income','final-release-no-extra-vat','invoice-and-entry-idempotent','same-advance-cannot-reapply','supplier-407-nondeductible-cost','partial-paid-capacity','tenant-and-counterparty-isolated','annulled-final-releases-reservation','cannot-annul-consumed-advance' ],realWrites:0},null,2));
