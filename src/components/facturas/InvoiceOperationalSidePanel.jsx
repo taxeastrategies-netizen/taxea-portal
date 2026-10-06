@@ -419,7 +419,7 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
               <InfoRow label="Base imponible" value={fmt(invoice.base_imponible)} />
               <InfoRow label={`${invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} (${invoiceTaxRateLabel(invoice)})`} value={fmt(invoice.cuota_iva)} />
               {invoiceTaxBreakdown(invoice).map((row,index) => <InfoRow key={index} label={`${row.rate}% · base ${fmt(row.base)}`} value={fmt(row.quota)} />)}
-              {invoice.qr_url && getWithholdingAmount(invoice) > 0 && <InfoRow label="Importe fiscal del QR" value={fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} />}
+              {invoice.qr_url && getWithholdingAmount(invoice) > 0 && <InfoRow label="Importe fiscal del QR" value={fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva) + Number(invoice.cuota_recargo || 0))} />}
               {getWithholdingAmount(invoice) > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
               <div className="flex items-center justify-between py-2 mt-1 bg-secondary/50 rounded-lg px-2">
                 <span className="text-sm font-semibold text-foreground">{getWithholdingAmount(invoice) > 0 ? 'Total a pagar' : 'Total factura'}</span>
