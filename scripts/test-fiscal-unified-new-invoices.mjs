@@ -233,6 +233,31 @@ const invalidReccSale = await handler(new Request('https://taxea.test/functions/
 }));
 assert.equal(invalidReccSale.status, 422);
 assert.equal(records.InvoiceTaxLine.some(item => item.invoiceId === 'invoice-recc-invalid'), false);
+records.FiscalActivity[0].deductionRight = 'pleno';
+async function approveRecc(invoice, extras = {}) {
+  records.Invoice.push({company_id:'company-a',tipo:'emitida',fecha_emision:'2026-04-10',moneda:'EUR',
+    fiscal_activity_id:'activity-a',accounting_migration_hold_reason:'FISCAL_ADVISOR_REVIEW_PHASE1',...invoice});
+  const response = await handler(new Request('https://taxea.test/functions/fiscalOperations',{method:'POST',body:JSON.stringify({
+    action:'save_invoice_tax_line',companyId:'company-a',invoiceId:invoice.id,activityId:'activity-a',taxKind:'iva',
+    regime:'criterio_caja',operationType:'subject_taxed',base:invoice.base_imponible,taxRate:invoice.tipo_iva,
+    taxAmount:invoice.cuota_iva,withholdingRate:invoice.retencion_irpf||0,counterpartyIsWithholdingAgent:!!invoice.retencion_irpf,
+    recc:{eligibility:{year:2026,newActivity:true,confirmed:true,censusOptionConfirmed:true}},confirmReviewed:true,...extras
+  })}));
+  const result=await response.json(); assert.equal(response.status,200,JSON.stringify(result)); return result;
+}
+await approveRecc({id:'recc-retention-ok',base_imponible:100,tipo_iva:21,cuota_iva:21,total_factura:106,retencion_irpf:15,importe_retencion:15});
+assert.equal(records.Invoice.find(row=>row.id==='recc-retention-ok').total_factura,106);
+await approveRecc({id:'recc-surcharge-ok',base_imponible:100,tipo_iva:21,cuota_iva:21,total_factura:126.2,tipo_recargo:5.2,cuota_recargo:5.2,importe_retencion:0});
+assert.equal(records.InvoiceTaxLine.find(row=>row.invoiceId==='recc-surcharge-ok').surchargeQuota,5.2);
+await approveRecc({id:'recc-multirate-ok',base_imponible:200,tipo_iva:0,cuota_iva:31,total_factura:231,importe_retencion:0},
+  {manualOverride:true,manualOverrideReason:'Dos tipos comprobados',taxBreakdown:[{base:100,rate:21,quota:21},{base:100,rate:10,quota:10}]});
+assert.equal(records.InvoiceTaxLine.filter(row=>row.invoiceId==='recc-multirate-ok').length,2);
+await approveRecc({id:'recc-credit-ok',es_rectificativa:true,base_imponible:-20,tipo_iva:21,cuota_iva:-4.2,total_factura:-24.2,importe_retencion:0},
+  {recc:{originalInvoiceId:'recc-multirate-ok',adjustmentDate:'2026-04-15',adjustmentMode:'price_change',reason:'Descuento posterior art 80',eligibility:{year:2026,newActivity:true,confirmed:true,censusOptionConfirmed:true}}});
+assert.equal(records.InvoiceTaxLine.find(row=>row.invoiceId==='recc-credit-ok').quota,-4.2);
+await approveRecc({id:'recc-increase-ok',es_rectificativa:true,base_imponible:20,tipo_iva:21,cuota_iva:4.2,total_factura:24.2,importe_retencion:0},
+  {recc:{originalInvoiceId:'recc-multirate-ok',adjustmentDate:'2026-04-16',adjustmentMode:'price_change',reason:'Aumento de precio documentado art 80',eligibility:{year:2026,newActivity:true,confirmed:true,censusOptionConfirmed:true}}});
+assert.equal(JSON.stringify([records.AccountingAccount,records.ClientAccount]),accountSnapshot);
 records.FiscalActivity[0].indirectTaxRegime = 'general';
 async function recommendedCodes(activities) {
   const before = records.FiscalActivity;
