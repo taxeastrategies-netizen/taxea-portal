@@ -15,7 +15,10 @@ export function reccAdvanceMetadata(value = {}) {
   });
   if (new Set(allocations.map(row => row.invoiceId)).size !== allocations.length) throw new Error('El mismo anticipo no puede repetirse en la factura final.');
   if ((kind !== 'final' && allocations.length) || (kind === 'final' && !allocations.length)) throw new Error('Solo la factura final debe indicar anticipos aplicados.');
-  return { documentKind: kind, advanceAllocations: allocations };
+  const finalOperationBase = Number(value.finalOperationBase);
+  if (kind === 'final' && (!Number.isFinite(finalOperationBase) || finalOperationBase <= 0 || Math.abs(finalOperationBase * 100 - cents(finalOperationBase)) > 0.00001))
+    throw new Error('Confirma la base total de la operación antes de descontar anticipos, con dos decimales.');
+  return { documentKind: kind, advanceAllocations: allocations, ...(kind === 'final' ? { finalOperationBase } : {}) };
 }
 function metadata(invoice) {
   try { return JSON.parse(invoice.recc_metadata || '{}'); } catch { throw new Error('Metadatos RECC inválidos.'); }
@@ -44,6 +47,8 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
     throw new Error('El circuito de anticipos requiere factura positiva en EUR. Las devoluciones deben revisar su rectificativa y ajuste contable.');
   if (!taxId(invoice)) throw new Error('Identifica fiscalmente al cliente/proveedor del anticipo.');
   if (result.documentKind === 'advance') return { ...result, applications: [] };
+  if (cents(result.finalOperationBase) !== cents(invoice.base_imponible) + result.advanceAllocations.reduce((sum, row) => sum + cents(row.base), 0))
+    throw new Error('La base de la factura final debe ser la base total menos los anticipos aplicados. No se duplica la base ni el IVA del anticipo.');
   const consumers = await all(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
   const applications = [];
   for (const allocation of result.advanceAllocations) {
