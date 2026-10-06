@@ -28,6 +28,7 @@ const build = await esbuild.build({
           export const postBankReconciliation = (...args) => globalThis.__postBankReconciliation(...args);
           export const postInvoice = (...args) => globalThis.__postInvoice(...args);
           export const seedOperationalPgc = async () => ({ created: 0 });
+          export const ensureAccount = async () => { throw new Error('No se crea otra cuenta de banco ni de tercero en este test'); };
           export const updatePostingOperation = (...args) => globalThis.__updatePostingOperation(...args);
         `,
       }));
@@ -46,10 +47,12 @@ const records = {
   InvoiceTimelineEvent: [],
   AccountingPostingOperation: [],
   JournalEntry: [],
+  JournalEntryLine: [{id:'original-third',journalEntryId:'invoice-entry-1',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:121,credit:0}],
   AccountingAccount: [
     { id: 'account-bank-generic', companyId: 'company-a', code: '57200000', name: 'Bancos', type: 'banco', status: 'activa' },
     { id: 'account-bank-real', companyId: 'company-a', code: '57200001', name: 'Banco prueba', type: 'banco', status: 'activa' },
     { id: 'account-customer', companyId: 'company-a', code: '43000000', name: 'Cliente', type: 'cliente', status: 'activa' },
+    { id: 'account-historical', companyId: 'company-a', code: '43000001', name: 'Cliente histórico; conservar', type: 'cliente', status: 'activa' },
   ],
   BankAccount: [{ id: 'bank-account-1', company_id: 'company-a', nombre_banco: 'Banco prueba', moneda: 'EUR', activa: true }],
   BankTransaction: [{ id: 'bank-tx-1', company_id: 'company-a', bank_account_id: 'bank-account-1', fecha_operacion: '2026-09-10', concepto: 'Cobro F-2', referencia: 'F-2', importe: 50, moneda: 'EUR', tipo: 'entrada', estado_conciliacion: 'sin_conciliar', estado_proveedor: 'booked', es_demo: false }],
@@ -141,7 +144,7 @@ const context = vm.createContext({
   __commitJournalEntry: commitJournalEntry,
   __createJournalEntry: createJournalEntry,
   __postBankReconciliation: postBankReconciliation,
-  __postInvoice: async (_svc, _companyId, invoice) => ({ alreadyPosted: true, entry: { id: invoice.linked_journal_entry_id, status: 'confirmado' } }),
+  __postInvoice: async (_svc, _companyId, invoice) => ({ alreadyPosted: true, entry: { id: invoice.linked_journal_entry_id, companyId: invoice.company_id, status: 'confirmado' } }),
   __updatePostingOperation: updatePostingOperation,
   Deno: { serve(fn) { handler = fn; }, env: { get() { return ''; } } },
 });
@@ -173,6 +176,10 @@ assert.equal(manualRepeated.response.status, 200);
 assert.equal(records.InvoicePayment.length, 1);
 assert.equal(records.JournalEntry.filter(item => item.postingKey?.startsWith('payment:invoice-manual')).length, 1);
 
+const manualEntry = records.JournalEntry.find(row=>row.postingKey?.startsWith('payment:invoice-manual'));
+assert.equal(manualEntry.lines.find(row=>row.sourceLineType==='tercero').accountCode,'43000001','Debe cancelar la subcuenta histórica del asiento, no inferir otra');
+assert.equal(records.AccountingAccount.filter(row=>row.type==='cliente').length,2);
+
 failNextBankLink = true;
 const bankFailed = await invoke({ action: 'reconcile', company_id: 'company-a', invoice_id: 'invoice-bank', bank_transaction_id: 'bank-tx-1', bank_accounting_account_id: 'account-bank-real' });
 assert.equal(bankFailed.response.status, 500);
@@ -191,6 +198,7 @@ assert.equal(records.Invoice.find(item => item.id === 'invoice-bank').importe_pe
 assert.equal(records.InvoiceTimelineEvent.filter(item => item.invoice_id === 'invoice-bank' && item.event_type === 'conciliacion_bancaria').length, 1);
 
 records.Invoice.push({ id:'invoice-summary', company_id:'company-a', tipo:'emitida', numero_factura:'F-SUMMARY', fecha_emision:'2026-09-01', total_factura:121, moneda:'EUR', estado_cobro:'pendiente', linked_journal_entry_id:'invoice-entry-summary' });
+records.JournalEntryLine.push({id:'original-summary-third',journalEntryId:'invoice-entry-summary',companyId:'company-a',accountId:'account-historical',accountCode:'43000001',sourceLineType:'tercero',debit:121,credit:0});
 failSummaryRemaining = 2;
 const summaryRequest = { action:'add_payment', company_id:'company-a', invoice_id:'invoice-summary', amount:121, payment_date:'2026-09-10', method:'transferencia', idempotency_key:'summary-commit-once' };
 const summaryPending = await invoke(summaryRequest);
@@ -220,7 +228,7 @@ assert.equal(temporaryRead.response.status,429);
 assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
 
 await entities.JournalEntry.create({id:'invoice-entry-1',companyId:'company-a',entryNumber:'QA-1',date:'2026-09-01',status:'confirmado'});
-await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'43000001',debit:121,credit:0});
+// La línea de tercero procede del asiento original y ya existía antes del cobro.
 await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'70500000',debit:0,credit:100});
 await entities.JournalEntryLine.create({journalEntryId:'invoice-entry-1',companyId:'company-a',accountCode:'47700000',debit:0,credit:21});
 const entryRead=await invoke({action:'get_accounting_entry',company_id:'company-a',invoice_id:'invoice-manual'});
@@ -244,6 +252,7 @@ console.log(JSON.stringify({
     summaryRecoveryDoesNotDuplicatePayment: true,
     transientOperationReadNeverHidesCommittedCash: true,
     realPostedJournalReadIsBalancedAndCompanyScoped: true,
+    paymentUsesHistoricalPostedSubaccountWithoutReinferringOrCreatingAccounts: true,
   },
   counts: { payments: records.InvoicePayment.length, journalEntries: records.JournalEntry.length, operations: records.AccountingPostingOperation.length },
 }, null, 2));
