@@ -454,7 +454,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
               </div>)}
               {quotaRows.length > 0 && quotaRows.length < 20 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: 21 }])}>Añadir tipo de IVA</button>}
-            </div>
+            </div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Base imponible (€) *</Label>
