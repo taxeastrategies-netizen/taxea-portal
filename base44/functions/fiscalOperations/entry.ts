@@ -696,7 +696,10 @@ Deno.serve(async (req) => {
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
         const previousMetadata = reccMetadata(invoice);
-        const metadata = { ...reccAdvanceMetadata({ ...previousMetadata, ...body.recc }), version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
+        let advanceFields;
+        try { advanceFields = reccAdvanceMetadata({ ...previousMetadata, ...body.recc }); }
+        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        const metadata = { ...advanceFields, version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
           insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
           originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
           adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
