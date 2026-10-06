@@ -28,7 +28,7 @@ assert.match(stripeWebhook, /stripe\.webhooks\.constructEventAsync\(body, signat
 assert.match(stripeWebhook, /existingEvent\?\.processed === true/);
 
 assert.ok(activation.includes("sub.status === 'paid_pending_activation' && sub.firstPaymentStatus === 'paid'"));
-assert.ok(activation.indexOf('if (!pendingPaidSubscription)') < activation.indexOf('admin.entities.User.update(targetUserId')));
+assert.ok(activation.indexOf('if (!pendingPaidSubscription)') < activation.indexOf('admin.entities.User.update(targetUserId'));
 assert.ok(activation.includes('Subscription.update(pendingPaidSubscription.id'));
 assert.ok(!activation.includes('qaTrial') && !activation.includes('isReccQaTrial'));
 assert.ok(!usersPage.includes('qaTrial') && !usersPage.includes('isReccQaTrial'));
