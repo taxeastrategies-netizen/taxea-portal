@@ -26,7 +26,7 @@ const build = await esbuild.build({
 
 const records = {
   Company: [
-    { id: 'company-a', owner_email: 'owner@a.test', usuarios_autorizados: ['advisor@taxea.test'] },
+    { id: 'company-a', owner_email: 'owner@a.test', usuarios_autorizados: ['advisor@taxea.test', 'user@a.test'] },
     { id: 'company-b', owner_email: 'owner@b.test', usuarios_autorizados: [] },
   ],
   Invoice: [
