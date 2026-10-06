@@ -50,5 +50,25 @@ for (const name of protectedFunctions) {
   const response = await handler(request);
   assert.equal(response.status, 401, name + ' must reject an anonymous caller');
   assert.equal(privilegedCalls, 0, name + ' must not access service role, network or secrets first');
+  if (name === 'anularFacturas') {
+    for (const [identity, companyId, expectedStatus] of [
+      [{role:'user',company_id:'QA'},'QA',200],
+      [{role:'user',data:{company_id:'QA'}},'QA',200],
+      [{role:'user',company_id:'QA'},'OTHER',403],
+      [{role:'user'},'QA',403],
+      [{role:'admin',company_id:'ADMIN'},'QA',200],
+    ]) {
+      let reads=0;
+      context.__client={auth:{me:async()=>identity},asServiceRole:{entities:{Invoice:{filter:async query=>{
+        reads++;assert.equal(query.company_id,'QA');return [];
+      }}}}};
+      const response=await handler(new Request('https://taxea.test/functions/anularFacturas',{
+        method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({companyId,invoiceIds:['FAKE'],motivo:'Prueba ficticia sin escrituras'})
+      }));
+      assert.equal(response.status,expectedStatus,'Compatibilidad de perfil y aislamiento en anulación');
+      assert.equal(reads,expectedStatus===200?1:0,'Sin lectura de empresas ajenas');
+    }
+  }
 }
 console.log('Ocho funciones sensibles: anónimo 401 antes de datos, red o secretos.');
