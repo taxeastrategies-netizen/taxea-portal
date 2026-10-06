@@ -58,12 +58,15 @@ export function reccSchedule(input) {
     const when = reccDate(row.date);
     const amount = round(row.amount);
     if (!Number.isFinite(amount) || amount <= 0 || when < operationDate) throw new Error('La reducción RECC exige fecha y precio positivos posteriores a la operación.');
-    timeline.push({ id, date: when, amount, kind: 'correction', sourceIds: ['Invoice:' + id] });
+    const lineRatio = row.lineRatio == null ? null : Number(row.lineRatio);
+    if (lineRatio != null && (!Number.isFinite(lineRatio) || lineRatio < 0 || lineRatio > 1)) throw new Error('Desglose de rectificación RECC fuera del saldo de la línea original.');
+    timeline.push({ id, date: when, amount, lineRatio, kind: 'correction', sourceIds: ['Invoice:' + id] });
   }
   timeline.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === 'correction' ? 1 : 0) - (b.kind === 'correction' ? 1 : 0) || a.id.localeCompare(b.id));
   let remainingNet = net;
   let effectiveNet = net;
   let remainingFactor = 1;
+  let effectiveLineFactor = 1;
   let cancelledFactor = 0;
   const events = [];
   const correctionRecognitions = [];
@@ -77,9 +80,11 @@ export function reccSchedule(input) {
     if (!forced && row.date > forcedRecognitionDate) { force(); forced = true; }
     if (row.kind === 'correction') {
       if (row.amount > effectiveNet + 0.01) throw new Error('Las rectificativas reducen más que el precio original.');
-      const deferred = forced ? 0 : remainingFactor * Math.min(1, row.amount / effectiveNet);
-      const ratio = row.amount / net;
-      correctionRecognitions.push({ ...row, factor: Math.max(0, Math.min(1, 1 - deferred / ratio)), deferredFactor: deferred });
+      const ratio = row.lineRatio == null ? row.amount / net : row.lineRatio;
+      if (ratio > effectiveLineFactor + 0.000001) throw new Error('Las rectificativas superan la base original de este tipo de IVA.');
+      const deferred = forced || !effectiveLineFactor ? 0 : remainingFactor * Math.min(1, ratio / effectiveLineFactor);
+      effectiveLineFactor = Math.max(0, effectiveLineFactor - ratio);
+      correctionRecognitions.push({ ...row, factor: ratio ? Math.max(0, Math.min(1, 1 - deferred / ratio)) : 0, deferredFactor: deferred });
       cancelledFactor += deferred;
       remainingFactor = Math.max(0, remainingFactor - deferred);
       remainingNet = Math.max(0, round(remainingNet - row.amount));
@@ -95,15 +100,26 @@ export function reccSchedule(input) {
   if (!forced) force();
   return { operationDate, statutoryDate, forcedRecognitionDate, events, correctionRecognitions, cancelledFactor };
 }
-export function reccCorrections(invoice, invoices) {
+export function reccCorrections(invoice, invoices, line = null, taxLines = []) {
   return (invoices || []).filter(row => !row.anulada && row.es_rectificativa === true && row.fiscal_review_status === 'validado' && row.fiscal_regime === 'criterio_caja'
     && reccMetadata(row).originalInvoiceId === invoice.id && Number(row.base_imponible) < 0)
     .map(row => {
       const metadata = reccMetadata(row);
-      const ratio = Math.abs(Number(row.base_imponible)) / Number(invoice.base_imponible);
-      if (!(ratio > 0 && ratio <= 1) || Math.abs(round(Number(invoice.cuota_iva) * ratio) + Number(row.cuota_iva)) > 0.02
-        || Math.abs(round(Number(invoice.importe_retencion || 0) * ratio) + Number(row.importe_retencion || 0)) > 0.02
-        || Math.abs(round(Number(invoice.cuota_recargo || 0) * ratio) + Number(row.cuota_recargo || 0)) > 0.02) throw new Error('La rectificativa RECC requiere desglose proporcional al original; no se reparte una reducción heterogénea.');
-      return { id: row.id, date: metadata.adjustmentDate, amount: Math.abs(Number(row.total_factura)) };
-    });
+      if (metadata.adjustmentMode === 'tax_adjustment') return null;
+      let lineRatio;
+      if (line) {
+        const parts = (taxLines || []).filter(part => (part.invoiceId || part.invoice?.id) === row.id && Number(part.rate) === Number(line.rate));
+        const base = Math.abs(parts.reduce((sum, part) => sum + Number(part.base || 0), 0));
+        if (!parts.length && Number(row.tipo_iva) === Number(line.rate)) lineRatio = Math.abs(Number(row.base_imponible)) / Math.abs(Number(line.base));
+        else lineRatio = base / Math.abs(Number(line.base));
+        if (!Number.isFinite(lineRatio) || lineRatio > 1 + 0.000001) throw new Error('La rectificativa supera el desglose del tipo de IVA original.');
+      } else {
+        const ratio = Math.abs(Number(row.base_imponible)) / Number(invoice.base_imponible);
+        // Sin desglose, solo se acepta el caso proporcional comprobable.
+        if (!(ratio > 0 && ratio <= 1) || Math.abs(round(Number(invoice.cuota_iva) * ratio) + Number(row.cuota_iva)) > 0.02
+          || Math.abs(round(Number(invoice.importe_retencion || 0) * ratio) + Number(row.importe_retencion || 0)) > 0.02
+          || Math.abs(round(Number(invoice.cuota_recargo || 0) * ratio) + Number(row.cuota_recargo || 0)) > 0.02) throw new Error('Rectificativa heterogénea: exige el desglose original y del abono por tipo de IVA.');
+      }
+      return { id: row.id, date: metadata.adjustmentDate, amount: Math.abs(Number(row.total_factura)), ...(line ? { lineRatio } : {}) };
+    }).filter(Boolean);
 }
