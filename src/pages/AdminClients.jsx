@@ -301,8 +301,8 @@ export default function AdminClients() {
                   <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
                     <p className="text-xs font-semibold text-slate-600">Enlace de acceso activo:</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500 flex-1 break-all">{`https://taxeaportal.com/setup-password?token=${encodeURIComponent(selectedClient.setupToken)}&email=${encodeURIComponent(selectedClient.email)}`}</span>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 flex-shrink-0" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(`https://taxeaportal.com/setup-password?token=${encodeURIComponent(selectedClient.setupToken)}&email=${encodeURIComponent(selectedClient.email)}`)}>
+                      <span className="text-[11px] text-slate-500 flex-1 break-all">{`https://taxeaportal.com/setup-password#token=${encodeURIComponent(selectedClient.setupToken)}`}</span>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 flex-shrink-0" aria-label="Copiar enlace de acceso" onClick={() => navigator.clipboard.writeText(`https://taxeaportal.com/setup-password#token=${encodeURIComponent(selectedClient.setupToken)}`)}>
                         <Copy className="w-3.5 h-3.5" />
                       </Button>
                     </div>
