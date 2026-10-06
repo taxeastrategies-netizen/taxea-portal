@@ -27,6 +27,12 @@ assert.match(stripeWebhook, /req\.headers\.get\("stripe-signature"\)/);
 assert.match(stripeWebhook, /stripe\.webhooks\.constructEventAsync\(body, signature, WEBHOOK_SECRET\)/);
 assert.match(stripeWebhook, /existingEvent\?\.processed === true/);
 
+assert.ok(activation.includes("sub.status === 'paid_pending_activation' && sub.firstPaymentStatus === 'paid'"));
+assert.ok(activation.indexOf('if (!pendingPaidSubscription)') < activation.indexOf('admin.entities.User.update(targetUserId')));
+assert.ok(activation.includes('Subscription.update(pendingPaidSubscription.id'));
+assert.ok(!activation.includes('qaTrial') && !activation.includes('isReccQaTrial'));
+assert.ok(!usersPage.includes('qaTrial') && !usersPage.includes('isReccQaTrial'));
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
@@ -36,6 +42,8 @@ console.log(JSON.stringify({
     stripeRejectsMissingConfigurationAndSignature: true,
     stripeVerifiesRawBodySignature: true,
     stripeRetriesAreIdempotent: true,
+    unpaidTrialBypassRemoved: true,
+    paidSubscriptionRequiredBeforeActivation: true,
   },
 }, null, 2));
 
