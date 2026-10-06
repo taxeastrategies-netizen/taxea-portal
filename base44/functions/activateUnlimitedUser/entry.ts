@@ -71,32 +71,17 @@ Deno.serve(async (req) => {
       activatedBy: 'admin',
     });
 
-    // 3. Update or create subscription
-    let subResult;
-    if (subs && subs.length > 0) {
-      subResult = await admin.entities.Subscription.update(subs[0].id, {
-        status: 'activa',
-        firstPaymentStatus: 'paid',
-        planCode: 'personalizado',
-        plan: 'personalizado',
-        planName: 'Personalizado (Ilimitado)',
-        startedAt: subs[0].startedAt || new Date().toISOString(),
-        lastPaymentAt: pendingPaidSubscription.lastPaymentAt || new Date().toISOString(),
-        notes: 'Acceso ilimitado activado por administrador tras pago verificado',
-      });
-    } else {
-      subResult = await admin.entities.Subscription.create({
-        userId: targetUserId,
-        status: 'activa',
-        firstPaymentStatus: 'paid',
-        planCode: 'personalizado',
-        plan: 'personalizado',
-        planName: 'Personalizado (Ilimitado)',
-        startedAt: new Date().toISOString(),
-        lastPaymentAt: pendingPaidSubscription.lastPaymentAt || new Date().toISOString(),
-        notes: 'Acceso ilimitado activado por administrador tras pago verificado',
-      });
-    }
+    // 3. Activar exclusivamente la suscripción cuyo pago se verificó.
+    const subResult = await admin.entities.Subscription.update(pendingPaidSubscription.id, {
+      status: 'activa',
+      firstPaymentStatus: 'paid',
+      planCode: 'personalizado',
+      plan: 'personalizado',
+      planName: 'Personalizado (Ilimitado)',
+      startedAt: pendingPaidSubscription.startedAt || new Date().toISOString(),
+      lastPaymentAt: pendingPaidSubscription.lastPaymentAt || new Date().toISOString(),
+      notes: 'Acceso ilimitado activado por administrador tras pago verificado',
+    });
 
     // 4. Update or create OCR quota (unlimited) para la empresa real.
     const quotaPeriods = await admin.entities.OcrQuotaPeriod.filter({ billingAccountId: companyId });
@@ -134,7 +119,7 @@ Deno.serve(async (req) => {
       actionType: 'suscripcion_activada',
       actionBy: user.email || 'admin',
       actionAt: new Date().toISOString(),
-      details: `${isReccQaTrial ? 'Cuenta ficticia de prueba RECC activada sin pago.' : 'Cuenta activada por administrador.'}${note ? ` Nota: ${String(note).slice(0, 500)}` : ''}`,
+      details: `Cuenta activada por administrador tras pago verificado.${note ? ` Nota: ${String(note).slice(0, 500)}` : ''}`,
     }).catch(() => null);
 
     return Response.json({
