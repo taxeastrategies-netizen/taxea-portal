@@ -121,7 +121,7 @@ function invoiceCreationPayload(input, companyId, user) {
     'proveedor_codigo_postal', 'proveedor_ciudad', 'proveedor_provincia', 'proveedor_pais', 'concepto',
     'categoria_gasto', 'fiscal_treatment', 'fiscal_activity_id', 'deductible_tax_amount',
     'non_deductible_tax_amount', 'moneda', 'exchange_rate', 'forma_pago', 'coletilla_fiscal', 'comentarios',
-    'source_document_type', 'source_document_id', 'es_rectificativa', 'factura_rectificada', 'ocr_document_id',
+    'source_document_type', 'source_document_id', 'es_rectificativa', 'factura_rectificada', 'ocr_document_id', 'tax_breakdown',
     'indirect_tax_kind', 'origin', 'source_system', 'source_record_id',
   ];
   const payload = {};
@@ -640,8 +640,14 @@ Deno.serve(async (req) => {
         && Math.abs(Number(line.surchargeQuota || 0)) <= 0.001
         && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001;
       if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !recargoPurchase) return Response.json({ error: 'Factura con recargo fuera del circuito validado de compra minorista; no se puede contabilizar como asiento general.' }, { status: 422 });
-      if (!line || taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
-        || Math.abs(Number(line.quota || 0) - Number(invoice.cuota_iva || 0)) > 0.02
+      const multiRecc = invoice.fiscal_regime === 'criterio_caja' && taxLines.length > 1
+        && taxLines.every(row => row.reviewStatus === 'validado' && row.regime === 'criterio_caja' && row.taxKind === 'iva'
+          && row.operationType === 'subject_taxed' && [21,10,4].includes(Number(row.rate))
+          && Math.abs(asMoney(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
+        && Math.abs(asMoney(taxLines.reduce((sum, row) => sum + Number(row.base), 0)) - Number(invoice.base_imponible)) <= 0.01
+        && Math.abs(asMoney(taxLines.reduce((sum, row) => sum + Number(row.quota), 0)) - Number(invoice.cuota_iva)) <= 0.01;
+      if (!line || (!multiRecc && (taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
+        || Math.abs(Number(line.quota || 0) - Number(invoice.cuota_iva || 0)) > 0.02))
         || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + (recargoPurchase ? Number(invoice.cuota_recargo || 0) : 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
         return Response.json({ error: 'La línea fiscal o el total no cuadran con la factura. Revisa antes de contabilizar.' }, { status: 422 });
       }
