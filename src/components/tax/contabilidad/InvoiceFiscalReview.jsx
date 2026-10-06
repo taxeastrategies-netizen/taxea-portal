@@ -53,9 +53,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       setCatalog(catalogData);
       const activity = (bundleData.activities || []).find(item => item.id === invoice.fiscal_activity_id)
         || (bundleData.activities || []).find(item => item.active !== false);
+      let metadata = {}, breakdown = [];
+      try { metadata = JSON.parse(invoice.recc_metadata || '{}'); breakdown = JSON.parse(invoice.tax_breakdown || '[]'); } catch { /* Documento heredado sin desglose utilizable. */ }
       const existingTaxLine = (bundleData.invoiceTaxLines || [])[0];
       setForm({
         activityId: activity?.id || '',
+        operationDate: invoice.fecha_operacion || invoice.fecha_emision,
+        taxBreakdown: breakdown.length ? breakdown : undefined,
+        recc: { ...metadata, eligibility: metadata.eligibility || { year: Number((invoice.fecha_operacion || invoice.fecha_emision).slice(0,4)),
+          previousAnnualizedTurnover: '', previousMaxCashPerRecipient: '', newActivity: false, confirmed: false, censusOptionConfirmed: false } },
         taxKind: invoice.indirect_tax_kind || activity?.indirectTax || bundleData.profile?.indirectTaxDefault || 'iva',
         regime: existingTaxLine?.regime || invoice.fiscal_regime || activity?.indirectTaxRegime || 'general',
         operationType: invoice.fiscal_treatment || activity?.[invoice.tipo === 'recibida' ? 'expenseDefaultTreatment' : 'incomeDefaultTreatment'] || 'subject_taxed',
@@ -78,8 +84,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
           groupId: bundleData.profile?.taxGroupId || '', groupRole: bundleData.profile?.taxGroupRole || '',
           payments: (bundleData.invoicePayments || []).filter(item => item.operation_status === 'committed' || !item.operation_status).map(item => ({ id: item.id, date: item.payment_date, amount: item.amount })),
         },
-        manualOverride: Boolean(existingTaxLine?.manualOverride || invoice.fiscal_manual_override),
-        manualOverrideReason: existingTaxLine?.manualOverrideReason || invoice.fiscal_manual_override_reason || '',
+        manualOverride: breakdown.length > 1 || Boolean(existingTaxLine?.manualOverride || invoice.fiscal_manual_override),
+        manualOverrideReason: existingTaxLine?.manualOverrideReason || invoice.fiscal_manual_override_reason || (breakdown.length > 1 ? 'Desglose de varios tipos IVA revisado por asesor' : ''),
       });
     }).catch(err => setError(err.message)).finally(() => setLoading(false));
   }, [open, bundle, companyId, invoice]);
@@ -227,6 +233,24 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                     <input value={form.legalBasis || ''} onChange={event => update('legalBasis', event.target.value)} placeholder="Artículo y motivo concreto revisado" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
                 </div>
+                {form.regime === 'criterio_caja' && <fieldset className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 text-xs">
+                  <legend className="px-1 font-semibold">Control RECC del asesor</legend>
+                  <label className="flex gap-2"><input type="checkbox" checked={Boolean(form.recc?.advanceConfirmed)} onChange={event => update('recc', { ...form.recc, advanceConfirmed: event.target.checked })} />Anticipos trazados, sin duplicar importes ya facturados por separado</label>
+                  <label className="block">Fecha del auto de concurso (solo hechos anteriores)<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.insolvencyDate || ''} onChange={event => update('recc', { ...form.recc, insolvencyDate: event.target.value })} /></label>
+                  {invoice.es_rectificativa && <>
+                    <label className="block">ID de factura original RECC<input className="mt-1 w-full rounded border p-2" value={form.recc?.originalInvoiceId || ''} onChange={event => update('recc', { ...form.recc, originalInvoiceId: event.target.value })} placeholder="Identificador del documento original de esta empresa" /></label>
+                    <label className="block">Fecha fiscal de la rectificación<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.adjustmentDate || ''} onChange={event => update('recc', { ...form.recc, adjustmentDate: event.target.value })} /></label>
+                  </>}
+                  <label className="block">Motivo y referencia documental<textarea className="mt-1 w-full rounded border p-2" value={form.recc?.reason || ''} onChange={event => update('recc', { ...form.recc, reason: event.target.value })} placeholder="Auto de concurso o causa legal de rectificación, revisados por asesor" /></label>
+                  <p>Elegibilidad del ejercicio {form.recc?.eligibility?.year}: información del año anterior; no se calcula desde un histórico incompleto.</p>
+                  <label className="flex gap-2"><input type="checkbox" checked={Boolean(form.recc?.eligibility?.newActivity)} onChange={event => update('recc', { ...form.recc, eligibility: { ...form.recc?.eligibility, newActivity: event.target.checked } })} />Inicio de actividad sin actividad en el año anterior</label>
+                  {!form.recc?.eligibility?.newActivity && <div className="grid gap-2 sm:grid-cols-2">
+                    <label>Volumen anterior anualizado (€)<input type="number" min="0" className="mt-1 w-full rounded border p-2" value={form.recc?.eligibility?.previousAnnualizedTurnover ?? ''} onChange={event => update('recc', { ...form.recc, eligibility: { ...form.recc?.eligibility, previousAnnualizedTurnover: event.target.value } })} /></label>
+                    <label>Máximo efectivo por destinatario (€)<input type="number" min="0" className="mt-1 w-full rounded border p-2" value={form.recc?.eligibility?.previousMaxCashPerRecipient ?? ''} onChange={event => update('recc', { ...form.recc, eligibility: { ...form.recc?.eligibility, previousMaxCashPerRecipient: event.target.value } })} /></label>
+                  </div>}
+                  <label className="flex gap-2"><input type="checkbox" checked={Boolean(form.recc?.eligibility?.confirmed)} onChange={event => update('recc', { ...form.recc, eligibility: { ...form.recc?.eligibility, confirmed: event.target.checked, censusOptionConfirmed: event.target.checked } })} />Confirmo requisitos, opción censal vigente y ausencia de renuncia o exclusión para esta operación</label>
+                  {form.taxBreakdown?.length > 0 && <p>Desglose: {form.taxBreakdown.map(row => `${row.rate}%: base ${money(row.base)}, cuota ${money(row.quota)}`).join(' · ')}</p>}
+                </fieldset>}
                 <label className="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={Boolean(form.manualOverride)} onChange={event => update('manualOverride', event.target.checked)} />Modificar manualmente la propuesta automática</label>
                 {form.manualOverride && <label className="block text-xs font-medium text-slate-700">Motivo obligatorio del cambio
                   <textarea value={form.manualOverrideReason || ''} onChange={event => update('manualOverrideReason', event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2" />
