@@ -119,7 +119,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setOutstanding(nextOutstanding);
       setPaid(Number(data.paid) || 0);
       setPayments(data.payments || []);
-      setSuccess(invoice.tipo === 'recibida' ? 'Pago registrado correctamente.' : 'Cobro registrado correctamente.');
+      setSuccess([invoice.tipo === 'recibida' ? 'Pago registrado correctamente.' : 'Cobro registrado correctamente.', data.summary_warning].filter(Boolean).join(' '));
       if (nextOutstanding > 0.01) {
         setAmount(String(nextOutstanding));
         setReference('');
@@ -165,7 +165,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       if (!data?.ok) throw new Error(data?.error || 'No se pudo conciliar el movimiento.');
       setOutstanding(Number(data.outstanding) || 0);
       setPaid(Number(data.paid) || 0);
-      setSuccess(`Movimiento conciliado con la factura${data.journal_entry?.entryNumber ? ` · asiento ${data.journal_entry.entryNumber}` : ''}.`);
+      setSuccess([`Movimiento conciliado con la factura${data.journal_entry?.entryNumber ? ` · asiento ${data.journal_entry.entryNumber}` : ''}.`, data.summary_warning].filter(Boolean).join(' '));
       setCandidates(current => current.filter(candidate => candidate.id !== selectedTransaction));
       setSelectedTransaction('');
       Promise.resolve().then(() => onChanged?.()).catch(() => {});
