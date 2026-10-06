@@ -17,7 +17,7 @@ export function checkReccEligibility(input, operationDate) {
   if (!input.newActivity) {
     const volume = Number(input.previousAnnualizedTurnover);
     const cash = Number(input.previousMaxCashPerRecipient);
-    if (!Number.isFinite(volume) || volume < 0 || !Number.isFinite(cash) || cash < 0) throw new Error('Indica volumen anualizado y máximo de efectivo por destinatario del año anterior.');
+    if (input.previousAnnualizedTurnover === '' || input.previousAnnualizedTurnover == null || input.previousMaxCashPerRecipient === '' || input.previousMaxCashPerRecipient == null || !Number.isFinite(volume) || volume < 0 || !Number.isFinite(cash) || cash < 0) throw new Error('Indica volumen anualizado y máximo de efectivo por destinatario del año anterior.');
     if (volume > 2000000 || cash > 100000) throw new Error('Los límites de 2 M€ o 100.000 € de efectivo por destinatario impiden aplicar RECC en este ejercicio.');
   }
   if (!input.censusOptionConfirmed) throw new Error('Confirma la opción censal RECC; cumplir el límite no equivale a haber optado.');
