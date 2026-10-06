@@ -126,7 +126,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         setNotes('');
         setIdempotencyKey(crypto.randomUUID());
       }
-      Promise.resolve().then(() => onChanged?.()).catch(() => {});
+      Promise.resolve().then(() => onChanged?.(data)).catch(() => {});
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo registrar el pago.');
     }
@@ -168,7 +168,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setSuccess([`Movimiento conciliado con la factura${data.journal_entry?.entryNumber ? ` · asiento ${data.journal_entry.entryNumber}` : ''}.`, data.summary_warning].filter(Boolean).join(' '));
       setCandidates(current => current.filter(candidate => candidate.id !== selectedTransaction));
       setSelectedTransaction('');
-      Promise.resolve().then(() => onChanged?.()).catch(() => {});
+      Promise.resolve().then(() => onChanged?.(data)).catch(() => {});
     } catch (e) {
       setError(e?.response?.data?.error || e?.response?.data?.message || e.message || 'No se pudo conciliar el movimiento.');
     }
