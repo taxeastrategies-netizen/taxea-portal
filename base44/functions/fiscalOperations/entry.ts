@@ -709,6 +709,12 @@ Deno.serve(async (req) => {
           adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
           adjustmentCause: clean(body.recc?.adjustmentCause ?? previousMetadata.adjustmentCause ?? 'other'),
           reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
+        // El abono hereda el circuito del anticipo desde su original, nunca desde una cuenta sugerida por IA.
+        if (invoice.es_rectificativa && metadata.originalInvoiceId) {
+          const originalForKind = await svc.entities.Invoice.get(metadata.originalInvoiceId);
+          if (originalForKind?.company_id === companyId && reccAdvanceMetadata(reccMetadata(originalForKind)).documentKind === 'advance')
+            metadata.documentKind = 'advance';
+        }
         if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
           return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
         releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
@@ -824,7 +830,7 @@ Deno.serve(async (req) => {
       } else taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
       const previousRecc = reccMetadata(invoice);
       const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
-        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc }),
+        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.advanceApplications?.originalAdvanceId ? {documentKind:'advance'} : {}) }),
         version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
         insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
         originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
