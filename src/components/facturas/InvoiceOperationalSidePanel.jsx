@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
+import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import {
   X, Send, Copy, Link, MoreVertical, ChevronRight,
   FileText, CreditCard, Clock, Mail, Tag, Paperclip,
@@ -416,7 +417,8 @@ export default function InvoiceOperationalSidePanel({ invoice, onClose, onSend, 
             {/* Importes */}
             <Section title="Importes" icon={CreditCard}>
               <InfoRow label="Base imponible" value={fmt(invoice.base_imponible)} />
-              <InfoRow label={`${invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} (${invoice.tipo_iva ?? 0}%)`} value={fmt(invoice.cuota_iva)} />
+              <InfoRow label={`${invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} (${invoiceTaxRateLabel(invoice)})`} value={fmt(invoice.cuota_iva)} />
+              {invoiceTaxBreakdown(invoice).map((row,index) => <InfoRow key={index} label={`${row.rate}% · base ${fmt(row.base)}`} value={fmt(row.quota)} />)}
               {invoice.qr_url && getWithholdingAmount(invoice) > 0 && <InfoRow label="Importe fiscal del QR" value={fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} />}
               {getWithholdingAmount(invoice) > 0 && <InfoRow label="Retención IRPF" value={`−${fmt(getWithholdingAmount(invoice))}`} valueClass="text-red-600" />}
               <div className="flex items-center justify-between py-2 mt-1 bg-secondary/50 rounded-lg px-2">
