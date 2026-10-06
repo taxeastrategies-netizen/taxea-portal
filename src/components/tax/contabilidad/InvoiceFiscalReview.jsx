@@ -235,6 +235,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                 </div>
                 {form.regime === 'criterio_caja' && <fieldset className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 text-xs">
                   <legend className="px-1 font-semibold">Control RECC del asesor</legend>
+                  <label className="block">Fecha de realización de la operación<input type="date" className="mt-1 block rounded border p-2" value={form.operationDate || ''} onChange={event => update('operationDate', event.target.value)} /></label>
+                  <p>La fecha determina el límite legal, no la fecha del cobro. Los anticipos requieren su propia factura y cuenta 438/407; no se duplican en la factura final.</p>
                   <label className="flex gap-2"><input type="checkbox" checked={Boolean(form.recc?.advanceConfirmed)} onChange={event => update('recc', { ...form.recc, advanceConfirmed: event.target.checked })} />Anticipos trazados, sin duplicar importes ya facturados por separado</label>
                   <label className="block">Fecha del auto de concurso (solo hechos anteriores)<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.insolvencyDate || ''} onChange={event => update('recc', { ...form.recc, insolvencyDate: event.target.value })} /></label>
                   {invoice.es_rectificativa && <>
