@@ -20,6 +20,7 @@ import { exportInvoiceToPdf } from './invoicePdfExport';
 import { QRCodeSVG } from 'qrcode.react';
 import { getInvoiceQrUrl } from '@/lib/aeatInvoiceQr';
 import { invoiceFiscalLegend } from '@/lib/invoiceFiscalLegend';
+import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 
 // ── Estado visual de factura ───────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -296,13 +297,14 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             <span className="font-medium">{fmt(invoice.base_imponible)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
-            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoice.tax_breakdown && invoice.tipo_iva === 0 ? 'varios tipos' : `${invoice.tipo_iva ?? 0}%`})</span>
+            <span className="text-slate-500">{invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA'} ({invoiceTaxRateLabel(invoice)})</span>
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
+          {invoiceTaxBreakdown(invoice).map((row,index) => <div key={index} className="flex justify-between py-1.5 text-xs border-b border-slate-100"><span className="text-slate-500">IVA {row.rate}% · base {fmt(row.base)}</span><span>{fmt(row.quota)}</span></div>)}
           {qrUrl && getWithholdingAmount(invoice) > 0 && (
             <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
               <span className="text-slate-500">Importe fiscal del QR</span>
-              <span className="font-medium">{fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva))}</span>
+              <span className="font-medium">{fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva) + Number(invoice.cuota_recargo || 0))}</span>
             </div>
           )}
           {getWithholdingAmount(invoice) > 0 && (
