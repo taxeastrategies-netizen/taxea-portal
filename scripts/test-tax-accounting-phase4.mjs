@@ -35,7 +35,7 @@ async function harness(entry, records, initialUser) {
   const entities = new Proxy({}, { get: (_target, name) => entity(records, String(name), writes) });
   const client = { auth: { me: async () => user }, asServiceRole: { entities } };
   const code = await compile(entry);
-  const context = vm.createContext({ Response, Request, URL, TextEncoder, TextDecoder, crypto: webcrypto, Date, console, __client: client, Deno: { serve: fn => { handler = fn; } } });
+  const context = vm.createContext({ Response, Request, URL, TextEncoder, TextDecoder, crypto: webcrypto, Date, console, setTimeout: callback => { callback(); return 0; }, clearTimeout() {}, __client: client, Deno: { serve: fn => { handler = fn; } } });
   vm.runInContext(code, context, { filename: entry });
   return {
     writes,
