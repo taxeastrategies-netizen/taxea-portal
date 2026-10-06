@@ -21,6 +21,7 @@ async function invoke(payload) {
 
 export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false }) {
   const [open, setOpen] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [bundle, setBundle] = useState(/** @type {any} */ (null));
@@ -94,7 +95,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         manualOverrideReason: existingTaxLine?.manualOverrideReason || invoice.fiscal_manual_override_reason || (breakdown.length > 1 ? 'Desglose de varios tipos IVA revisado por asesor' : ''),
       });
     }).catch(err => setError(reviewError(err))).finally(() => setLoading(false));
-  }, [open, bundle, companyId, invoice]);
+  }, [open, bundle, companyId, invoice, loadAttempt]);
 
   const update = (key, value) => {
     setClassificationSaved(false);
@@ -168,7 +169,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
             </div>
 
             {loading && <div className="flex items-center justify-center gap-2 py-14 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Cargando perfil fiscal…</div>}
-            {!loading && (!bundle?.profile || !activeActivities.length) && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Antes de automatizar esta factura, valida el perfil fiscal y al menos una actividad IAE en la pestaña Perfil fiscal.</div>}
+            {!loading && error && !bundle && <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><p>{error}</p><button type="button" className="mt-2 rounded border px-3 py-1" onClick={() => {setError('');setLoadAttempt(value=>value+1);}}>Cargar de nuevo</button></div>}
+            {!loading && !error && (!bundle?.profile || !activeActivities.length) && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Antes de automatizar esta factura, valida el perfil fiscal y al menos una actividad IAE en la pestaña Perfil fiscal.</div>}
             {!loading && bundle?.profile && activeActivities.length > 0 && (
               <div className="mt-5 space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
