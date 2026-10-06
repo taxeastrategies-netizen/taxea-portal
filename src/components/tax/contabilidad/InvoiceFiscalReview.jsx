@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Loader2, PencilLine, X } from 'lucide-reac
 import { base44 } from '@/api/base44Client';
 
 const unwrap = response => response?.data ?? response;
+const reviewError = error => error?.response?.data?.error || error?.response?.data?.message || error?.message || 'No se pudo completar la revisión fiscal.';
 const money = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
 const DEDUCTION_CATEGORIES = [
   ['interior_current', 'Operación interior corriente'], ['interior_investment', 'Operación interior · bien de inversión'],
@@ -87,7 +88,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         manualOverride: breakdown.length > 1 || Boolean(existingTaxLine?.manualOverride || invoice.fiscal_manual_override),
         manualOverrideReason: existingTaxLine?.manualOverrideReason || invoice.fiscal_manual_override_reason || (breakdown.length > 1 ? 'Desglose de varios tipos IVA revisado por asesor' : ''),
       });
-    }).catch(err => setError(err.message)).finally(() => setLoading(false));
+    }).catch(err => setError(reviewError(err))).finally(() => setLoading(false));
   }, [open, bundle, companyId, invoice]);
 
   const update = (key, value) => {
@@ -113,7 +114,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         setEvaluation(result.evaluation);
         window.dispatchEvent(new Event('financials:refresh'));
       } else setEvaluation(result.evaluation);
-    } catch (err) { setError(err.message); } finally { setSaving(false); }
+    } catch (err) { setError(reviewError(err)); } finally { setSaving(false); }
   };
 
   const confirm = async () => {
@@ -134,7 +135,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       setEvaluation(result.evaluation);
       window.dispatchEvent(new Event('financials:refresh'));
       setTimeout(() => setOpen(false), 650);
-    } catch (err) { setError(err.message); } finally { setSaving(false); }
+    } catch (err) { setError(reviewError(err)); } finally { setSaving(false); }
   };
 
   return (
