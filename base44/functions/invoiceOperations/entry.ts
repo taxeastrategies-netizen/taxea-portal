@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { buildInvoicePosting, commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
+import { commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
@@ -269,46 +269,8 @@ async function recordTimeline(base44, data) {
   });
 }
 
-async function prepareInvoiceBankAccounting(base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user) {
-  const posting = await postInvoice(base44.asServiceRole, companyId, invoice, user.email, { status: 'confirmado' });
-  const postedInvoice = await base44.asServiceRole.entities.Invoice.get(invoice.id);
-  let counterpartyAccount = postedInvoice.counterparty_account_id
-    ? await base44.asServiceRole.entities.AccountingAccount.get(postedInvoice.counterparty_account_id).catch(() => null)
-    : null;
-  if (!counterpartyAccount && postedInvoice.counterparty_account_code) {
-    const matches = await base44.asServiceRole.entities.AccountingAccount.filter({ companyId, code: postedInvoice.counterparty_account_code }, '-created_date', 1);
-    counterpartyAccount = matches?.[0] || null;
-  }
-  if (!counterpartyAccount || counterpartyAccount.companyId !== companyId) {
-    throw Object.assign(new Error('No se pudo identificar la cuenta contable del cliente o proveedor.'), { status: 409 });
-  }
-  const bankPosting = await postBankReconciliation(
-    base44.asServiceRole,
-    companyId,
-    transaction,
-    bankLedger,
-    counterpartyAccount,
-    user.email,
-    {
-      documentId: invoice.id,
-      description: `${invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${invoice.numero_factura}`,
-      counterpartyLineType: 'tercero',
-      status: 'confirmado',
-      deferCommit: true,
-    },
-  );
-  await base44.asServiceRole.entities.BankAccount.update(sourceBankAccount.id, {
-    accounting_account_id: bankLedger.id,
-    accounting_account_code: bankLedger.code,
-  });
-  return { posting, bankPosting, counterpartyAccount };
-}
-
-async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
-  const svc = queuedAccountingClient(base44.asServiceRole);
-  const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
-  // Settle the actual posted receivable/payable, never a newly inferred third-party account.
-  const entry = invoicePosting.entry;
+// Uses the saved journal as the source of truth for both bank and manual settlement.
+async function postedInvoiceCounterparty(svc, companyId, invoice, entry) {
   if (!entry || entry.companyId !== companyId || entry.status !== 'confirmado' || entry.reversalEntryId)
     throw Object.assign(new Error('El asiento de la factura no está confirmado o ha sido revertido.'), { status: 409 });
   let originalLines = await svc.entities.JournalEntryLine.filter({ companyId, journalEntryId: entry.id }, 'lineNumber', 5001);
@@ -323,7 +285,40 @@ async function prepareManualPaymentAccounting(base44, companyId, invoice, amount
   const counterpartyMatches = await svc.entities.AccountingAccount.filter({ companyId, code: codes[0] }, '-created_date', 2);
   if (counterpartyMatches.length !== 1 || counterpartyMatches[0].status === 'inactiva')
     throw Object.assign(new Error('La subcuenta original requiere revisión; no se crea otra cuenta para cobrar/pagar.'), { status: 409 });
-  const counterparty = counterpartyMatches[0];
+  return counterpartyMatches[0];
+}
+
+async function prepareInvoiceBankAccounting(base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user) {
+  const svc = queuedAccountingClient(base44.asServiceRole);
+  const posting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
+  const counterpartyAccount = await postedInvoiceCounterparty(svc, companyId, invoice, posting.entry);
+  const bankPosting = await postBankReconciliation(
+    svc,
+    companyId,
+    transaction,
+    bankLedger,
+    counterpartyAccount,
+    user.email,
+    {
+      documentId: invoice.id,
+      description: `${invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${invoice.numero_factura}`,
+      counterpartyLineType: 'tercero',
+      status: 'confirmado',
+      deferCommit: true,
+    },
+  );
+  if (sourceBankAccount.accounting_account_id !== bankLedger.id || sourceBankAccount.accounting_account_code !== bankLedger.code)
+    await svc.entities.BankAccount.update(sourceBankAccount.id, {
+      accounting_account_id: bankLedger.id,
+      accounting_account_code: bankLedger.code,
+    });
+  return { posting, bankPosting, counterpartyAccount };
+}
+
+async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
+  const svc = queuedAccountingClient(base44.asServiceRole);
+  const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
+  const counterparty = await postedInvoiceCounterparty(svc, companyId, invoice, invoicePosting.entry);
   const ledgerCode = method === 'efectivo' ? '57000000' : '57200000';
   const ledgerMatches = await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 2);
   if (ledgerMatches.length > 1 || ledgerMatches[0]?.status === 'inactiva')
