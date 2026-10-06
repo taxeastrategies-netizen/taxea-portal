@@ -6,6 +6,8 @@ const read = relative => fs.readFileSync(path.resolve(relative), 'utf8');
 const invoicePublic = read('base44/functions/getPublicInvoice/entry.ts');
 const invoiceOperations = read('base44/functions/invoiceOperations/entry.ts');
 const stripeWebhook = read('base44/functions/stripeWebhook/entry.ts');
+const activation = read('base44/functions/activateUnlimitedUser/entry.ts');
+const usersPage = read('src/pages/GestionUsuarios.jsx');
 
 assert.match(invoicePublic, /req\.method !== 'POST'/);
 assert.match(invoicePublic, /\^\[a-f0-9\]\{64\}\$/);
