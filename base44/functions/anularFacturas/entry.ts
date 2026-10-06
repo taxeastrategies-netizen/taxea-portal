@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { SCHEMA_VERSION, canonical8, createJournalEntry, commitJournalEntry, assertAccountingDateOpen } from './accountingEngine.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
+import { assertReccAdvanceCanReverse } from './reccAdvances.mjs';
 
 const money = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -93,6 +94,7 @@ Deno.serve(async (req) => {
     const targets = (allInvoices || []).filter(invoice => invoiceIds.includes(invoice.id) && !invoice.anulada);
     if (!targets.length) return Response.json({ success: true, annulled: 0, message: 'No invoices to annul' });
 
+    for (const invoice of targets) await assertReccAdvanceCanReverse(svc, effectiveCompanyId, invoice);
     const results = [];
     for (const invoice of targets) {
       let reversalEntryId = '';
