@@ -1480,8 +1480,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   const rates = new Map<number, any>();
   const categorizedOutputRates = new Map<string, any>();
   const surchargeRates = new Map<number, any>();
-  let outputAdjustmentBase = 0, outputAdjustmentQuota = 0, surchargeAdjustmentBase = 0, surchargeAdjustmentQuota = 0;
-  const outputAdjustmentIds: string[] = [], surchargeAdjustmentIds: string[] = [];
+  let outputAdjustmentBase = 0, outputAdjustmentQuota = 0, surchargeAdjustmentBase = 0, surchargeAdjustmentQuota = 0, inputAdjustmentBase = 0, inputAdjustmentQuota = 0;
+  const outputAdjustmentIds: string[] = [], surchargeAdjustmentIds: string[] = [], inputAdjustmentIds: string[] = [];
   const deductibleRates = new Map<string, any>();
   const sourceIdsOf = (line: any) => unique(Array.isArray(line.fiscalSourceIds) ? line.fiscalSourceIds : [line.sourceId]);
   const addRate = (rate: number, base: number, quota: number, ids: string[]) => {
@@ -1546,7 +1546,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
       const investmentHint = /INMOVILIZADO|ACTIVO FIJO|BIEN(?:ES)? DE INVERSION/.test(canonical(`${invoice.categoria_gasto || ''} ${invoice.concepto || ''}`));
       const investment = explicitCategory.includes('investment') || (!explicitCategory && investmentHint);
       const category = explicitCategory || (op === 'import' ? (investment ? 'import_investment' : 'import_current') : op === 'intra_eu_acquisition' ? (investment ? 'intra_goods_investment' : 'intra_goods_current') : (investment ? 'interior_investment' : 'interior_current'));
-      addDeductibleRate(category, Number(line.rate || 0), base, deductibleLineQuota, ids);
+      if (!annual && invoice.es_rectificativa === true) { inputAdjustmentBase += base; inputAdjustmentQuota += deductibleLineQuota; inputAdjustmentIds.push(...ids); }
+      else addDeductibleRate(category, Number(line.rate || 0), base, deductibleLineQuota, ids);
       if (annual && !explicitCategory) annualClassificationPending += 1;
     }
     if (line.reviewStatus !== 'validado') pendingReviewLines += 1;
@@ -1574,14 +1575,16 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   if (selection.carry.length) addField(fields, 'DEDUCIBLE_ARRASTRADO', 'Cuota recibida tarde deducida en este período', selection.carry.reduce((sum: number, row: any) => sum + money(row.quota), 0), selection.carry.map((row: any) => row.sourceId), 'Deducciones de períodos anteriores');
   if (!annual && model === '303') {
-    addField(fields, '13', 'Modificaciones de bases imponibles', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
-    addField(fields, '14', 'Modificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '14', 'Modificaciones de bases imponibles', outputAdjustmentBase, outputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '15', 'Modificaciones de cuotas repercutidas', outputAdjustmentQuota, outputAdjustmentIds, 'Rectificaciones');
     for (const [rate, boxes] of [[0.5,['16','17','18']],[1.4,['19','20','21']],[5.2,['22','23','24']]] as any[]) {
       const row = surchargeRates.get(rate);
       addField(fields, boxes[0], `Base recargo ${rate}%`, row?.base || 0, row?.sourceIds || [], 'Recargo repercutido');
       addField(fields, boxes[1], `Tipo recargo ${rate}%`, row ? rate : 0, row?.sourceIds || [], 'Recargo repercutido');
       addField(fields, boxes[2], `Cuota recargo ${rate}%`, row?.quota || 0, row?.sourceIds || [], 'Recargo repercutido');
     }
+    addField(fields, '40', 'Rectificación de deducciones · base', inputAdjustmentBase, inputAdjustmentIds, 'Rectificaciones');
+    addField(fields, '41', 'Rectificación de deducciones · cuota', inputAdjustmentQuota, inputAdjustmentIds, 'Rectificaciones');
     addField(fields, '25', 'Modificaciones de bases de recargo', surchargeAdjustmentBase, surchargeAdjustmentIds, 'Rectificaciones');
     addField(fields, '26', 'Modificaciones de cuotas de recargo', surchargeAdjustmentQuota, surchargeAdjustmentIds, 'Rectificaciones');
     addField(fields, '62', 'RECC: base de operaciones emitidas según devengo general', criterionCash, reccInformation?.issued.sourceIds || [], 'Información adicional', { formula: 'Base completa de facturas RECC emitidas en el período de operación, con independencia del cobro.' });
@@ -1600,6 +1603,7 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   if (!annual && result < 0 && resultDisposition === 'a_devolver' && !['4T','12'].includes(clean(data.period))) data.blockers.push('La devolución del saldo no se habilita fuera del último período del año salvo supuesto especial revisado.');
   const operations = { surchargeRates: [...surchargeRates.values()].map(r=>({...r,base:money(r.base),quota:money(r.quota)})),
     outputAdjustmentBase: money(outputAdjustmentBase), outputAdjustmentQuota: money(outputAdjustmentQuota),
+    inputAdjustmentBase: money(inputAdjustmentBase), inputAdjustmentQuota: money(inputAdjustmentQuota),
     surchargeAdjustmentBase: money(surchargeAdjustmentBase), surchargeAdjustmentQuota: money(surchargeAdjustmentQuota),
     rates: [...rates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), categorizedOutputRates: [...categorizedOutputRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), deductibleRates: [...deductibleRates.values()].map(r => ({ ...r, base: money(r.base), quota: money(r.quota) })), outputQuota, deductibleBase: money(deductibleBase), deductibleQuota: money(deductibleQuota), nonDeductibleBase: money(nonDeductibleBase), generalRawResult, rawResult, simplified, previousCompensationBalance: previousBalance, appliedPreviousCompensation: appliedPrevious, previousCompensationPending: previousPending, nextCompensationBalance: nextBalance, resultDisposition, reverseBase: money(reverseBase), reverseQuota: money(reverseQuota), intraBase: money(intraBase), intraQuota: money(intraQuota), exports: money(exports), intraSupplies: money(intraSupplies), exemptLimited: money(exemptLimited), nonSubject: money(nonSubject), criterionCash: money(criterionCash), criterionCashQuota: money(criterionCashQuota), criterionCashReceived: money(criterionCashReceived), criterionCashReceivedQuota: money(criterionCashReceivedQuota), criterionCashTaxpayer, criterionCashRecipient };
   if (selection.review.length) data.blockers.push(`${selection.review.length} operación(es) requieren confirmar la fecha de devengo, cobro, pago o deducción antes de presentar.`);
@@ -2820,8 +2824,14 @@ function export303(company: any, profile: any, year: number, period: string, cal
   const simplifiedFlag=hasSimplified?(hasGeneral?'2':'1'):'3';
   const p1=page(1581,1570,'</T30301000>'); place(p1,1,11,'<T30301000>'); place(p1,13,1,declarationType(calculation.result)); place(p1,14,9,normalizedText(company.nif_cif,9)); place(p1,23,80,normalizedText(company.razon_social,80)); place(p1,103,4,String(year)); place(p1,107,2,period); place(p1,109,1,'2'); place(p1,110,1,profile?.isREDEME?'1':'2'); place(p1,111,1,simplifiedFlag); place(p1,112,1,'2'); place(p1,113,1,(o.criterionCashTaxpayer||o.criterionCash)?'1':'2'); place(p1,114,1,(o.criterionCashRecipient||o.criterionCashReceived)?'1':'2'); place(p1,115,1,profile?.usesSpecialProrata?'1':'2'); place(p1,116,1,'2'); place(p1,117,1,profile?.hasInsolvencyProceedings?'1':'2'); place(p1,127,1,profile?.usesSII?'1':'2'); place(p1,128,1,['4T','12'].includes(period)?'2':'0'); place(p1,129,1,['4T','12'].includes(period)?'1':'0'); place(p1,130,1,['01','1T','2T','3T','4T'].includes(period)?'0':'2');
   const rateFields:Record<string, number[]>={0:[131,148,153],4:[209,226,231],10:[287,304,309],21:[326,343,348]}; for(const [rate,positions] of Object.entries(rateFields)){const row:any=rates.get(Number(rate))||{}; place(p1,positions[0],17,numeric(row.base,17)); place(p1,positions[1],5,numeric(Number(rate),5,false,2)); place(p1,positions[2],17,numeric(row.quota,17));}
-  for (const [box,position,length] of [['13',433,17],['14',450,17],['16',540,17],['17',557,5],['18',562,17],['19',579,17],['20',596,5],['21',601,17],['22',618,17],['23',635,5],['24',640,17],['25',657,17],['26',674,17]] as any[]) place(p1,position,length,numeric(values[box],length,true,2));
+  for (const [box,position,length] of [['14',433,17],['15',450,17],['16',545,17],['17',562,5],['18',567,17],['19',584,17],['20',601,5],['21',606,17],['22',623,17],['23',640,5],['24',645,17],['25',662,17],['26',679,17],['40',917,17],['41',934,17]] as any[]) place(p1,position,length,numeric(values[box],length,length===17,2));
   place(p1,365,17,numeric(o.intraBase,17)); place(p1,382,17,numeric(o.intraQuota,17)); place(p1,399,17,numeric(o.reverseBase,17)); place(p1,416,17,numeric(o.reverseQuota,17)); place(p1,696,17,numeric(o.outputQuota,17,true)); place(p1,713,17,numeric(o.deductibleBase,17)); place(p1,730,17,numeric(o.deductibleQuota,17)); place(p1,1002,17,numeric(o.deductibleQuota,17,true)); place(p1,1019,17,numeric(o.generalRawResult??money((o.outputQuota||0)-(o.deductibleQuota||0)),17,true));
+  // Categorías del libro: no concentrar inversiones/importaciones ni abonos en 28/29.
+  for (const [categories,basePosition,quotaPosition] of [[['interior_current'],713,730],[['interior_investment'],747,764],[['import_current'],781,798],[['import_investment'],815,832],[['intra_goods_current','intra_services'],849,866],[['intra_goods_investment'],883,900]] as any[]) {
+    const rows = (o.deductibleRates || []).filter((row:any)=>categories.includes(row.category));
+    place(p1,basePosition,17,numeric(rows.reduce((sum:number,row:any)=>sum+Number(row.base),0),17));
+    place(p1,quotaPosition,17,numeric(rows.reduce((sum:number,row:any)=>sum+Number(row.quota),0),17));
+  }
   const simplifiedPages:string[]=[];
   if(hasSimplified){
     const agriculture=simplified.agriculture||[]; const other=simplified.other||[]; const pageCount=Math.max(1,Math.ceil(Math.max(agriculture.length,other.length)/2));
