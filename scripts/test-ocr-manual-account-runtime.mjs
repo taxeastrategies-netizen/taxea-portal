@@ -89,7 +89,11 @@ const context = vm.createContext({
   },
   Deno: { serve(fn) { handler = fn; } },
 });
-vm.runInContext(build.outputFiles[0].text, context);
+vm.runInContext(build.outputFiles[0].text + '\n globalThis.__bulkForm = buildBulkCorrectedForm;', context);
+const preserved = context.__bulkForm({ base_imponible: 100, tipo_impuesto: 7, cuota_impuesto: 7, total: 89, retencion_irpf: 15, importe_retencion: 18 });
+assert.equal(preserved.total, 89);
+assert.equal(preserved.cuota_impuesto, 7);
+assert.equal(preserved.importe_retencion, 18);
 async function invoke(docId, invoiceType, account) {
   const form = invoiceType === 'emitida'
     ? { numero_factura: 'F-1', fecha_emision: '2026-10-02', base_imponible: 100, tipo_iva: 0, cuota_iva: 0, total_factura: 100 }
