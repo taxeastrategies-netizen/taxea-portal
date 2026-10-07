@@ -3,14 +3,14 @@ import { CalendarClock, Check, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { callUtility } from './DocumentTools';
-import { daysUntil, deadlinesIcs, todayLocal } from '@/lib/utilityTools.mjs';
+import { daysUntil, deadlinesIcs, todayLocal, mergeDeadlineRows } from '@/lib/utilityTools.mjs';
 import { downloadBlob } from '@/lib/utilityFiles';
 const KINDS={certificado:'Certificado digital',seguro:'Seguro',contrato:'Contrato',renovacion:'Renovación',otro:'Otro'};
 const fresh=()=>({title:'',kind:'certificado',due_date:'',remind_days:30,notes:'',status:'pending',requestKey:crypto.randomUUID()});
 export default function UtilityDeadlines({company}) {
   const [rows,setRows]=useState([]),[form,setForm]=useState(fresh),[editing,setEditing]=useState(null),[showForm,setShowForm]=useState(false);
   const [loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('pending'),[date,setDate]=useState(todayLocal);
-  const alive=useRef(true),lock=useRef(false),loadingRef=useRef(false);
+  const alive=useRef(true),lock=useRef(false),loadingRef=useRef(false),confirmed=useRef(new Map());
   const load=useCallback(async()=>{
     if(!company?.id || loadingRef.current)return;
     loadingRef.current=true;if(alive.current)setLoading(true);
@@ -21,7 +21,7 @@ export default function UtilityDeadlines({company}) {
         collected.push(...data.rows);offset=data.nextOffset;
         if(collected.length>=10000 && offset!=null)throw new Error('Hay más de 10.000 vencimientos. La lista no se ha cargado completa.');
       }while(offset!=null && alive.current);
-      if(alive.current){setRows(collected);setError('');setDate(todayLocal());}
+      if(alive.current){setRows(mergeDeadlineRows(collected,confirmed.current));setError('');setDate(todayLocal());}
     }catch(e){if(alive.current)setError(e.message);}finally{loadingRef.current=false;if(alive.current)setLoading(false);}
   },[company?.id]);
   useEffect(()=>{
@@ -33,13 +33,14 @@ export default function UtilityDeadlines({company}) {
   const mutate=async(action)=>{
     if(lock.current)return;
     lock.current=true;setSaving(true);setError('');
-    try{await action();await load();}catch(e){if(alive.current)setError(e.message);}finally{lock.current=false;if(alive.current)setSaving(false);}
+    try{const data=await action();if(data?.row && alive.current){confirmed.current.set(data.row.id,data.row);setRows(current=>mergeDeadlineRows(current,confirmed.current));}await load();}catch(e){if(alive.current)setError(e.message);}finally{lock.current=false;if(alive.current)setSaving(false);}
   };
   const save=e=>{
     e.preventDefault();
     mutate(async()=>{
-      await callUtility({action:'save',companyId:company.id,id:editing?.id || '',expectedUpdatedAt:editing?.updated_date,requestKey:form.requestKey,payload:form});
+      const data=await callUtility({action:'save',companyId:company.id,id:editing?.id || '',expectedUpdatedAt:editing?.updated_date,requestKey:form.requestKey,payload:form});
       if(alive.current){setShowForm(false);setEditing(null);setForm(fresh());}
+      return data;
     });
   };
   const open=row=>{setEditing(row || null);setForm(row?{...row,requestKey:crypto.randomUUID()}:fresh());setShowForm(true);};
