@@ -60,6 +60,8 @@ await check('acknowledged deadline writes survive stale list reads without hidin
   assert.equal(helpers.mergeDeadlineRows([],confirmed)[0].status,'done');
   const newer={...saved,status:'pending',updated_date:'2026-10-07T12:00:02'};
   assert.equal(helpers.mergeDeadlineRows([newer],confirmed)[0].status,'pending');assert.equal(confirmed.size,0);
+  const deleted=new Set(['qa']);assert.equal(helpers.mergeDeadlineRows([newer],confirmed,deleted).length,0);assert.equal(deleted.size,1);
+  assert.equal(helpers.mergeDeadlineRows([],confirmed,deleted).length,0);assert.equal(deleted.size,0);
 });
 const first=await PDFDocument.create();first.addPage([100,200]);first.addPage([300,400]).setRotation(degrees(270));
 const second=await PDFDocument.create();second.addPage([500,600]);
