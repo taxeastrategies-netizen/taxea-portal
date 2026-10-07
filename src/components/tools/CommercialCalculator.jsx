@@ -6,7 +6,7 @@ const money=value=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR
 export default function CommercialCalculator() {
   const [form,setForm]=useState({cost:'60',price:'100',margin:'40',discount:'10',fixed:'1200'});
   let result,error='';
-  try {result=commercialCalculations(Object.fromEntries(Object.entries(form).map(([key,value])=>[key,numberInput(value)])));}
+  try {result=commercialCalculations({cost:numberInput(form.cost),price:numberInput(form.price),margin:numberInput(form.margin),discount:numberInput(form.discount),fixed:numberInput(form.fixed)});}
   catch(e){error=e.message;}
   const results=result?[
     ['Beneficio unitario',money(result.profit),'Precio − coste variable'],
