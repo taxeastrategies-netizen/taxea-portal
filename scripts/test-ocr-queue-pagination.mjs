@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {loadOcrDocuments} from '../src/lib/loadOcrDocuments.mjs';
 const rows=Array.from({length:1203},(_,i)=>({id:String(i+1).padStart(8,'0'),uploadedAt:'2026-10-07',company_id:'fixture-only'}));
 let calls=0;
-const entity={filter:async(q,sort,limit)=>{calls++;assert.equal(sort,'id');assert.equal(q.company_id,'fixture-only');return rows.filter(row=>!q.id||row.id>q.id.$gt).slice(0,limit);}};
+const entity={filter:async(q,sort,limit,skip)=>{calls++;assert.equal(sort,'id');assert.equal(q.company_id,'fixture-only');assert.equal(q.id,undefined);return rows.slice(skip,skip+limit);}};
 const result=await loadOcrDocuments(entity,{company_id:'fixture-only'});
 assert.equal(result.length,1203);assert.equal(new Set(result.map(r=>r.id)).size,1203);assert.equal(calls,3);
 assert.equal((await loadOcrDocuments({filter:async()=>[]})).length,0);
