@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {loadOcrDocuments} from '../src/lib/loadOcrDocuments.mjs';
+const rows=Array.from({length:1203},(_,i)=>({id:String(i+1).padStart(8,'0'),uploadedAt:'2026-10-07',company_id:'fixture-only'}));
+let calls=0;
+const entity={filter:async(q,sort,limit)=>{calls++;assert.equal(sort,'id');assert.equal(q.company_id,'fixture-only');return rows.filter(row=>!q.id||row.id>q.id.$gt).slice(0,limit);}};
+const result=await loadOcrDocuments(entity,{company_id:'fixture-only'});
+assert.equal(result.length,1203);assert.equal(new Set(result.map(r=>r.id)).size,1203);assert.equal(calls,3);
+assert.equal((await loadOcrDocuments({filter:async()=>[]})).length,0);
+await assert.rejects(loadOcrDocuments({filter:async()=>null}),/no válida/);
+await assert.rejects(loadOcrDocuments({filter:async()=>{throw new Error('network failure');}}),/network failure/);
+let repeated=0;await assert.rejects(loadOcrDocuments({filter:async()=>{repeated++;return rows.slice(0,500);}}),/paginación/);
+assert.equal(repeated,2);
+console.log('OCR queue: full pagination 1203 rows, no duplicates, stable tenant, empty/error/stalled pages passed.');
