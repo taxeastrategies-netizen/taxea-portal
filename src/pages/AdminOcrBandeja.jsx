@@ -339,7 +339,7 @@ export default function AdminOcrBandeja() {
   };
 
   const processAll = async () => {
-    const pending = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed');
+    const pending = scopedDocuments.filter(d => d.status === 'pending' || d.status === 'analysis_failed');
     if (pending.length === 0) {
       showToast('error', 'No hay documentos pendientes para procesar.');
       return;
@@ -495,7 +495,7 @@ export default function AdminOcrBandeja() {
             </Button>
             <Button
               onClick={validateAll}
-              disabled={validatingAll || batchProcessing || counts.review_required === 0}
+              disabled={validatingAll || batchProcessing || !filtered.some(d => d.status === 'review_required')}
               size="sm"
               className="gap-2"
               variant="default"
@@ -503,7 +503,7 @@ export default function AdminOcrBandeja() {
               {validatingAll
                 ? <Loader2 className="w-4 h-4 animate-spin" />
                 : <CheckCircle className="w-4 h-4" />}
-              {validatingAll ? 'Validando...' : 'Todo validado'}
+              {validatingAll ? 'Guardando...' : 'Guardar para revisión'}
             </Button>
             <Button onClick={loadDocs} variant="outline" size="sm" className="gap-2">
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Actualizar
