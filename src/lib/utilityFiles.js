@@ -33,7 +33,7 @@ export async function transformPdfs(files,operation,selection='',rotation=0) {
       for(let i=0;i<pages.length;i++) {
         const part=await PDFDocument.create();
         const [page]=await part.copyPages(input,[pages[i]]);part.addPage(page);
-        results.push({name:'pagina_'+(pages[i]+1)+'_'+(i+1)+'.pdf',blob:new Blob([await part.save()],{type:'application/pdf'})});
+        results.push({name:'pagina_'+(pages[i]+1)+'_'+(i+1)+'.pdf',blob:new Blob([new Uint8Array(await part.save()).buffer],{type:'application/pdf'})});
       }
       return {bytes:await zipFiles(results),name:'paginas.zip',type:'application/zip'};
     }
@@ -69,6 +69,7 @@ export async function imagesPdf(files,quality=0.85,maxSide=2200) {
     const image=await jpegImage(file,quality,maxSide);
     const embedded=await doc.embedJpg(await image.blob.arrayBuffer());
     const portrait=image.height>=image.width;
+    /** @type {[number, number]} */
     const size=portrait?[595.28,841.89]:[841.89,595.28];
     const page=doc.addPage(size),scale=Math.min((size[0]-40)/image.width,(size[1]-40)/image.height);
     const width=image.width*scale,height=image.height*scale;
