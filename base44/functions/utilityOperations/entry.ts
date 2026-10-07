@@ -64,7 +64,8 @@ Deno.serve(async req => {
     if (cached[0]) return Response.json({ok:true,result:cached[0].result,cached:true});
     const now = new Date().toISOString(), dayKey=now.slice(0,10), minuteKey=now.slice(0,16);
     const events = await svc.entities.CoreIntegrationUsage.filter({userId:user.id,dayKey,operation:'extract'}, '-created_date',500);
-    const active = events.filter((row:any)=>row.status!=='error');
+    // Failed provider attempts also consume the utility quota to prevent cost abuse.
+    const active = events;
     if (active.length>=15 || active.filter((row:any)=>row.minuteKey===minuteKey).length>=4) return Response.json({error:'Límite OCR: 4 documentos por minuto y 15 al día. Puedes revisar los ya analizados y reintentar más tarde.'}, {status:429});
     usage = await svc.entities.CoreIntegrationUsage.create({userId:user.id,companyId,dayKey,minuteKey,operation:'extract',targetId:'utility:'+digest,status:'reserved'});
     const {file_uri} = await svc.integrations.Core.UploadPrivateFile({file});
