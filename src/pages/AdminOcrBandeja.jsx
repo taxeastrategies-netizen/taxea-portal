@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { loadOcrDocuments } from '@/lib/loadOcrDocuments.mjs';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import PageHeader from '@/components/ui/PageHeader';
@@ -209,12 +210,14 @@ export default function AdminOcrBandeja() {
     setLoading(true);
     try {
       const [docs, comps] = await Promise.all([
-        base44.entities.OcrInvoiceDocument.list('-uploadedAt', 500),
+        loadOcrDocuments(base44.entities.OcrInvoiceDocument),
         base44.entities.Company.list('-created_date', 200).catch(() => []),
       ]);
       setDocuments(docs || []);
       setCompanies(comps || []);
-    } catch {}
+    } catch {
+      setToast({ type: 'error', message: 'No se pudo actualizar la cola completa. Se conserva la última información; actualiza antes de procesar.' });
+    }
     setLoading(false);
   }, []);
 
