@@ -1,0 +1,62 @@
+{
+  "name": "UtilityDeadline",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "certificado",
+        "seguro",
+        "contrato",
+        "renovacion",
+        "otro"
+      ]
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "remind_days": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 365
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "done"
+      ]
+    },
+    "request_key": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "user_id",
+    "title",
+    "due_date",
+    "status"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
