@@ -410,8 +410,21 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Forbidden: solo administradores' }, { status: 403 });
       }
       const { companyId, docIds } = body;
-      if (!companyId || !Array.isArray(docIds) || docIds.length === 0) {
-        return Response.json({ error: 'Faltan parametros: companyId y docIds' }, { status: 400 });
+      if (!companyId) {
+        return Response.json({ error: 'Falta el parametro companyId' }, { status: 400 });
+      }
+      let pendingDocIds = docIds;
+      if (body.all === true) {
+        const pendingDocs = await base44.asServiceRole.entities.OcrInvoiceDocument.filter({
+          company_id: companyId,
+          status: 'review_required',
+        });
+        pendingDocIds = (pendingDocs || [])
+          .filter(d => !d.linkedInvoiceId && d.documentType === 'expense_invoice')
+          .map(d => d.id);
+      }
+      if (!Array.isArray(pendingDocIds) || pendingDocIds.length === 0) {
+        return Response.json({ success: true, approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: 0, note: 'No hay documentos pendientes en la cola.' });
       }
       const activities = await base44.asServiceRole.entities.FiscalActivity.filter({ company_id: companyId, active: true });
       const activityId = activities?.[0]?.id;
