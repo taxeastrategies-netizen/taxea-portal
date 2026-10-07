@@ -75,6 +75,16 @@ export function daysUntil(due,today=todayLocal()) {
   if (!dateOnly(due) || !dateOnly(today)) throw new Error('Fecha no válida.');
   return Math.round((Date.parse(due+'T12:00:00Z')-Date.parse(today+'T12:00:00Z'))/86400000);
 }
+// Keep acknowledged writes until the list endpoint has caught up; no optimistic data.
+export function mergeDeadlineRows(remote, confirmed) {
+  const rows = new Map(remote.map(row=>[row.id,row]));
+  for (const [id,row] of confirmed) {
+    const fetched=rows.get(id);
+    if (fetched && String(fetched.updated_date || '')>=String(row.updated_date || '')) confirmed.delete(id);
+    else rows.set(id,row);
+  }
+  return [...rows.values()].sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
+}
 const icsEscape=value=>String(value||'').replace(/\\/g,'\\\\').replace(/\r\n|\r|\n/g,'\\n').replace(/;/g,'\\;').replace(/,/g,'\\,');
 function foldIcs(line) {
   let result='',current='',size=0;
