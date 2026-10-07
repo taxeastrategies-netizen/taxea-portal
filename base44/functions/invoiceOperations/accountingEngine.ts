@@ -383,6 +383,20 @@ function isValidatedSimpleReccInvoice(invoice) {
     && Math.abs(money(invoice.deductible_tax_amount)) <= Math.abs(quota);
 }
 
+function isValidatedMinoristaIgicPurchase(invoice) {
+  const base = money(invoice.base_imponible);
+  return clean(invoice.tipo) === 'recibida'
+    && clean(invoice.fiscal_regime) === 'comerciante_minorista_igic'
+    && clean(invoice.indirect_tax_kind) === 'igic'
+    && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)
+    && money(invoice.cuota_iva) === 0
+    && money(invoice.deductible_tax_amount) === 0
+    && money(invoice.cuota_recargo) === 0
+    && Math.abs(money(invoice.total_factura)) > 0
+    && Math.abs(money(invoice.total_factura) - money(base - money(invoice.importe_retencion))) <= 0.02
+    && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR';
+}
+
 export async function buildInvoicePosting(svc, companyId, invoice) {
   const advance = clean(invoice.fiscal_regime) === 'criterio_caja'
     ? await validateReccAdvanceLinks(svc, companyId, invoice) : { documentKind: 'ordinary', applications: [] };
@@ -970,7 +984,8 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   const validatedRecargoPurchase = isValidatedRecargoPurchase(invoice);
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
   const validatedRecc = isValidatedSimpleReccInvoice(invoice);
-  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale && !validatedRecc) {
+  const validatedMinoristaIgicPurchase = isValidatedMinoristaIgicPurchase(invoice);
+  if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale && !validatedRecc && !validatedMinoristaIgicPurchase) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
   }
   if (validatedRecargoPurchase || validatedRecargoRetailSale || validatedRecc) {
