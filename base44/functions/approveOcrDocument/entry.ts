@@ -433,8 +433,10 @@ Deno.serve(async (req) => {
       const totalPending = pendingDocIds.length;
       pendingDocIds = pendingDocIds.slice(0, BATCH_LIMIT);
       const summary = { approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: Math.max(0, totalPending - pendingDocIds.length) };
-      const CHUNK = 4;
+      const CHUNK = 2;
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       for (let i = 0; i < pendingDocIds.length; i += CHUNK) {
+        if (i > 0) await sleep(800);
         const chunk = pendingDocIds.slice(i, i + CHUNK);
         const settled = await Promise.all(chunk.map(async (id) => {
           try {
