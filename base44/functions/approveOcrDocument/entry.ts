@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { postInvoice, SCHEMA_VERSION, canonical8 } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { acquireApprovalLease, resumeExistingOcr, findFinancialDuplicates } from './ocrRecovery.ts';
 
 // Formulario corregido para el régimen de comerciante minorista IGIC (confirmado por asesor):
 // el IGIC soportado no se cuenta como cuota deducible (mayor gasto), por lo que el total coincide con la base.
@@ -36,14 +37,31 @@ function buildBulkCorrectedForm(ex) {
 const ADMIN_ROLES = ['admin', 'super_admin', 'advisor', 'asesor'];
 
 // Lógica de aprobación de un documento OCR (compartida entre el flujo individual y el masivo).
-async function approveOne(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview) {
-  // 2. Idempotencia: si ya está enlazado, devolver el estado existente
-  if (doc.linkedInvoiceId) {
-    const linked = await base44.asServiceRole.entities.Invoice.get(doc.linkedInvoiceId).catch(() => null);
-    if (!linked) return { status: 409, json: { error: 'El OCR enlaza una factura que ya no se puede consultar; requiere revisión técnica.', invoiceId: doc.linkedInvoiceId } };
-    if (linked.estado_contable !== 'contabilizada') return { status: 200, json: { success: true, review_required: true, invoiceId: linked.id, message: 'La propuesta OCR ya existe y espera revisión fiscal; no se creó un duplicado.', alreadyProcessed: true } };
-    return { status: 200, json: { success: true, invoiceId: linked.id, message: 'El documento ya estaba procesado', alreadyProcessed: true } };
+async function approveOne(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview, recoveryOnly = false) {
+  const svc = base44.asServiceRole;
+  const company = await svc.entities.Company.get(doc.company_id);
+  const platformAdmin = ['admin', 'super_admin'].includes(user.role);
+  if (!company || (!platformAdmin && company.owner_email !== user.email
+    && !(Array.isArray(company.usuarios_autorizados) && company.usuarios_autorizados.includes(user.email)))) {
+    return { status: 403, json: { error: 'No tienes acceso confirmado a la empresa de este OCR.' } };
   }
+  const release = await acquireApprovalLease(svc, doc.company_id);
+  try {
+    doc = await svc.entities.OcrInvoiceDocument.get(doc.id);
+    if (!doc || doc.company_id !== company.id) return { status: 409, json: { error: 'El documento cambió de empresa; no se procesará.' } };
+    if (['rejected', 'cancelled_by_client', 'replacement_requested'].includes(doc.status)) {
+      return { status: 409, json: { error: 'Documento archivado o rechazado: no se creará otra factura.' } };
+    }
+    const resumed = await resumeExistingOcr(svc, user, doc, invoiceType, confirmFiscalReview, postInvoice, SCHEMA_VERSION);
+    if (resumed) return resumed;
+    if (recoveryOnly) return { status: 409, json: { error: 'No existe factura enlazada para recuperar. No se creó ninguna.' } };
+    return await approveNew(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview);
+  } finally {
+    await release().catch(error => console.warn('[approveOcrDocument] approval lease release failed:', error?.message));
+  }
+}
+
+async function approveNew(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview) {
 
   // 3. Validate direction and any explicit PGC override before creating an invoice.
   const expectedType = doc.documentType === 'income_invoice' ? 'emitida'
@@ -259,6 +277,15 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
       return { status: 422, json: { error: qrError.message || 'No se pudo preparar el QR tributario.' } };
     }
   }
+  const duplicates = await findFinancialDuplicates(base44.asServiceRole, doc, invoiceData);
+  if (duplicates.length) {
+    await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
+      duplicateWarning: `Posible factura ya registrada: ${duplicates.map(row => row.id).join(', ')}`,
+      safeErrorMessage: 'Coinciden empresa, número, fecha, tercero e importe. Revisar el documento existente; no se creó otra factura.',
+    });
+    return { status: 409, json: { error: 'La factura coincide con una ya registrada. Revisión de duplicado requerida.', duplicate: true, invoiceIds: duplicates.map(row => row.id) } };
+  }
+  invoiceData.creation_idempotency_key = `ocr:${doc.id}`;
   const inv = await base44.asServiceRole.entities.Invoice.create(invoiceData);
 
   if (!inv || !inv.id) {
@@ -266,6 +293,11 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
     return { status: 500, json: { error: 'No se pudo crear la factura en el core financiero' } };
   }
 
+  // Persist the link before tax/contact/posting work. If this update fails, the
+  // next request still finds the Invoice by its persisted ocr_document_id.
+  await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
+    linkedInvoiceId: inv.id, lastStatusChangedAt: new Date().toISOString(),
+  });
   console.log('[approveOcrDocument] Invoice created:', inv.id);
   if (pendingReview) {
     await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
@@ -395,13 +427,24 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
 }
 
 Deno.serve(async (req) => {
+  if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user || ['bloqueado', 'suspendido', 'eliminado'].includes(user.status) || user.is_deleted === true) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     const { docId, form, invoiceType, extractedData } = body;
+
+    if (body.action === 'recover_existing') {
+      if (!['admin', 'super_admin'].includes(user.role)) return Response.json({ error: 'Solo administradores pueden recuperar la contabilización existente.' }, { status: 403 });
+      if (!body.companyId || !docId) return Response.json({ error: 'Faltan companyId y docId.' }, { status: 400 });
+      const existingDoc = await base44.asServiceRole.entities.OcrInvoiceDocument.get(docId);
+      if (!existingDoc || existingDoc.company_id !== body.companyId) return Response.json({ error: 'Documento ajeno a la empresa.' }, { status: 403 });
+      const type = existingDoc.documentType === 'expense_invoice' ? 'recibida' : 'emitida';
+      const result = await approveOne(base44, user, existingDoc, {}, type, {}, true, true);
+      return Response.json(result.json, { status: result.status });
+    }
 
     // Modo masivo: aprobación en cola con tratamiento fiscal corregido del asesor
     // (solo admin/super_admin, limitado a la empresa indicada y a facturas recibidas).
@@ -409,6 +452,7 @@ Deno.serve(async (req) => {
       if (!['admin', 'super_admin'].includes(user.role)) {
         return Response.json({ error: 'Forbidden: solo administradores' }, { status: 403 });
       }
+      if (body.confirm_fiscal_review !== true) return Response.json({ error: 'La aprobación masiva requiere confirmación fiscal expresa del asesor.' }, { status: 422 });
       const { companyId, docIds } = body;
       if (!companyId) {
         return Response.json({ error: 'Falta el parametro companyId' }, { status: 400 });
@@ -429,14 +473,14 @@ Deno.serve(async (req) => {
       const activities = await base44.asServiceRole.entities.FiscalActivity.filter({ company_id: companyId, active: true });
       const activityId = activities?.[0]?.id;
 
-      const BATCH_LIMIT = 16;
+      const BATCH_LIMIT = 4;
       const totalPending = pendingDocIds.length;
       pendingDocIds = pendingDocIds.slice(0, BATCH_LIMIT);
       const summary = { approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: Math.max(0, totalPending - pendingDocIds.length) };
-      const CHUNK = 2;
+      const CHUNK = 1;
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       for (let i = 0; i < pendingDocIds.length; i += CHUNK) {
-        if (i > 0) await sleep(800);
+        if (i > 0) await sleep(2500);
         const chunk = pendingDocIds.slice(i, i + CHUNK);
         const settled = await Promise.all(chunk.map(async (id) => {
           try {
@@ -447,6 +491,9 @@ Deno.serve(async (req) => {
             if (!ex || !(Number(ex.base_imponible) > 0)) return { outcome: 'skipped', reason: 'Sin datos extraídos o base 0; requiere reanálisis o rechazo manual', id, name: doc.originalFileName };
             if (doc.documentType !== 'expense_invoice') return { outcome: 'skipped', reason: 'Solo facturas recibidas en la cola masiva', id, name: doc.originalFileName };
             const form = buildBulkCorrectedForm(ex);
+            if (!Number.isFinite(Number(ex.total)) || Math.abs(Math.round(form.total * 100) - Math.round(Number(ex.total) * 100)) > 2) {
+              return { outcome: 'skipped', reason: 'El tratamiento automático cambiaría el total original. Revisar impuestos no deducibles y retenciones sin borrar cuotas del gasto.', id, name: doc.originalFileName };
+            }
             form.fiscal_activity_id = activityId || undefined;
             const res = await approveOne(base44, user, doc, form, 'recibida', ex, true);
             if (res.status === 200 && res.json?.success && !res.json?.review_required) return { outcome: 'approved', invoiceId: res.json.invoiceId, name: doc.originalFileName };
@@ -487,6 +534,7 @@ Deno.serve(async (req) => {
     return Response.json(res.json, { status: res.status });
   } catch (error) {
     console.error('[approveOcrDocument] Error:', error.message, error.stack);
-    return Response.json({ error: error.message || 'Error interno del servidor' }, { status: 500 });
+    const status = Number(error?.status);
+    return Response.json({ error: error.message || 'Error interno del servidor' }, { status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500 });
   }
 });
