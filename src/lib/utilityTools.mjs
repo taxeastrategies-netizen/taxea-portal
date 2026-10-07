@@ -1,7 +1,7 @@
 export const OCR_FIELDS = ['fecha','proveedor','destinatario','numero','tipo','concepto','base','impuestos','total','resumen'];
 export const FILE_LIMIT = 15 * 1024 * 1024;
 export function safeName(value, fallback='documento') {
-  let name = String(value || '').normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,'-').replace(/\s+/g,'_').replace(/^[. ]+|[. ]+$/g,'').slice(0,150);
+  let name = String(value || '').normalize('NFKC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g,'-').replace(/\s+/g,'_').replace(/^[. ]+|[. ]+$/g,'').slice(0,150);
   if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name)) name = '_'+name;
   return name || fallback;
 }
@@ -16,7 +16,7 @@ export function renamedFile(original, fields, template) {
   if (!String(template).trim() || String(template).length>200) throw new Error('Nomenclatura vacía o demasiado larga.');
   const values = { fecha:dateOnly(fields.fecha)?fields.fecha:'sin-fecha', proveedor:fields.proveedor || 'sin-emisor', numero:fields.numero || 'sin-numero', tipo:fields.tipo || 'documento', original:String(original).replace(/\.[^.]+$/,'') };
   const name = String(template).replace(/\{([^}]+)\}/g,(_,key)=>{
-    if (!(key in values)) throw new Error('Campo desconocido: '+key);
+    if (!Object.hasOwn(values,key)) throw new Error('Campo desconocido: '+key);
     return String(values[key]);
   });
   return safeName(name)+extension;
@@ -75,7 +75,7 @@ export function daysUntil(due,today=todayLocal()) {
   if (!dateOnly(due) || !dateOnly(today)) throw new Error('Fecha no válida.');
   return Math.round((Date.parse(due+'T12:00:00Z')-Date.parse(today+'T12:00:00Z'))/86400000);
 }
-const icsEscape=value=>String(value||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/;/g,'\\;').replace(/,/g,'\\,');
+const icsEscape=value=>String(value||'').replace(/\\/g,'\\\\').replace(/\r\n|\r|\n/g,'\\n').replace(/;/g,'\\;').replace(/,/g,'\\,');
 function foldIcs(line) {
   let result='',current='',size=0;
   for(const char of line) {
