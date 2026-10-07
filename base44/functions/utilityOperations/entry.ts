@@ -14,6 +14,7 @@ Deno.serve(async req => {
     const client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({error:'No autenticado'}, {status:401});
+    if (user.is_deleted || ['eliminado','bloqueado'].includes(user.status) || (user.isPortalActive === false && !['admin','super_admin','advisor','asesor'].includes(user.role))) return Response.json({error:'Acceso al portal no disponible'}, {status:403});
     const multipart = (req.headers.get('content-type') || '').includes('multipart/form-data');
     let body: any;
     try { body = multipart ? Object.fromEntries((await req.formData()).entries()) : await req.json(); }
@@ -48,6 +49,7 @@ Deno.serve(async req => {
       const key = String(body.requestKey || '');
       if (!existing && !/^[a-zA-Z0-9-]{10,80}$/.test(key)) return Response.json({error:'Falta clave de operación'}, {status:400});
       const prior = !existing ? await entity.filter({company_id:companyId,user_id:user.id,request_key:key}, '-created_date',1) : [];
+      if (prior[0] && Object.keys(payload).some(key => prior[0][key] !== payload[key])) return Response.json({error:'Ese guardado ya existe con otros datos. Actualiza y edita el vencimiento existente.'}, {status:409});
       const row = existing ? await entity.update(id,payload) : prior[0] || await entity.create({...payload,company_id:companyId,user_id:user.id,request_key:key});
       return Response.json({ok:true,row});
     }
