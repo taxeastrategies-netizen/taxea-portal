@@ -115,6 +115,10 @@ const sandbox={Request,Response,File,FormData,URL,TextDecoder,Uint8Array,crypto,
 vm.runInNewContext(compiled.outputFiles[0].text,sandbox);
 const invoke=body=>handler(new Request('https://example.test/functions/utilityOperations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
 await check('anonymous requests are denied',async()=>{identity=null;assert.equal((await invoke({action:'list',companyId:'companyA'})).status,401);identity=normal;});
+await check('blocked and inactive normal users are denied',async()=>{
+  identity={...normal,status:'bloqueado'};assert.equal((await invoke({action:'list',companyId:'companyA'})).status,403);
+  identity={...normal,isPortalActive:false};assert.equal((await invoke({action:'list',companyId:'companyA'})).status,403);identity=normal;
+});
 await check('foreign company list, mutation and OCR rejected',async()=>{
   assert.equal((await invoke({action:'list',companyId:'companyB'})).status,403);
   assert.equal((await invoke({action:'save',companyId:'companyB'})).status,403);
@@ -125,6 +129,10 @@ await check('deadline create, read-back and sequential retry dedup',async()=>{
   saved=(await (await invoke(request)).json()).row;assert(saved?.id);
   const duplicate=await (await invoke(request)).json();assert.equal(duplicate.row.id,saved.id);assert.equal(tables.UtilityDeadline.length,1);
   const listed=await (await invoke({action:'list',companyId:'companyA'})).json();assert.equal(listed.rows.length,1);
+});
+await check('request-key retry with changed content cannot silently lose edits',async()=>{
+  const response=await invoke({action:'save',companyId:'companyA',requestKey:'qa-request-key-001',payload:{...saved,title:'Changed'}});
+  assert.equal(response.status,409);assert.equal(tables.UtilityDeadline[0].title,'Seguro QA');
 });
 await check('stale updates rejected and correct update persists',async()=>{
   assert.equal((await invoke({action:'save',companyId:'companyA',id:saved.id,expectedUpdatedAt:'stale',payload:saved})).status,409);
