@@ -484,7 +484,7 @@ export default function AdminOcrBandeja() {
           <>
             <Button
               onClick={processAll}
-              disabled={batchProcessing || counts.pending === 0 && !documents.some(d => d.status === 'analysis_failed')}
+              disabled={batchProcessing || counts.pending === 0 && !scopedDocuments.some(d => d.status === 'analysis_failed')}
               size="sm"
               className="gap-2"
             >
@@ -570,7 +570,7 @@ export default function AdminOcrBandeja() {
             <KpiCard icon={Clock} label="Pendientes" value={counts.pending} color="text-amber-600" bg="bg-amber-50" />
             <KpiCard icon={Loader2} label="En proceso" value={counts.active} color="text-blue-600" bg="bg-blue-50" />
             <KpiCard icon={CheckCircle} label="Procesados" value={counts.done} color="text-green-600" bg="bg-green-50" />
-            <KpiCard icon={Inbox} label="Total" value={documents.length} color="text-foreground" bg="bg-secondary" />
+            <KpiCard icon={Inbox} label="Total" value={counts.all} color="text-foreground" bg="bg-secondary" />
           </div>
 
           {/* Toast */}
