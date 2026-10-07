@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { loadOcrDocuments } from '@/lib/loadOcrDocuments.mjs';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -122,6 +123,8 @@ const OCR_SCHEMA = {
 export default function LectorGastos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [documents, setDocuments] = useState([]);
+  const loadVersion = useRef(0);
+  useEffect(() => { loadVersion.current++; setDocuments([]); setReviewing(null); }, [company?.id]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState([]);
@@ -148,15 +151,16 @@ export default function LectorGastos() {
 
   const loadDocs = useCallback(async () => {
     if (!company?.id) return;
+    const version = ++loadVersion.current;
     setLoading(true);
     try {
-      const data = await base44.entities.OcrInvoiceDocument.filter(
-        { company_id: company.id, documentType: DOC_TYPE },
-        '-uploadedAt'
-      );
-      setDocuments(data || []);
-    } catch {}
-    setLoading(false);
+      const data = await loadOcrDocuments(base44.entities.OcrInvoiceDocument, { company_id: company.id, documentType: DOC_TYPE });
+      if (version === loadVersion.current) setDocuments(data);
+    } catch {
+      if (version === loadVersion.current) setToast({ type: 'error', message: 'No se pudo actualizar el OCR. Se conserva la última lista; pulsa Actualizar antes de volver a aprobar.' });
+    } finally {
+      if (version === loadVersion.current) setLoading(false);
+    }
   }, [company?.id]);
 
   useEffect(() => { if (company?.id) loadDocs(); }, [company?.id, loadDocs]);
@@ -361,7 +365,7 @@ export default function LectorGastos() {
         throw new Error(result?.error || 'No se pudo crear la factura');
       }
       setReviewing(null);
-      setToast({ type: 'success', message: 'Documento OCR guardado. Pendiente de validación fiscal del asesor; aún no está contabilizado.' });
+      setToast({ type: 'success', message: result.review_required ? 'Documento OCR guardado. Pendiente de validación fiscal del asesor; aún no está contabilizado.' : 'Factura y OCR contabilizados y sincronizados, sin nueva factura duplicada.' });
       setTimeout(() => setToast(null), 6000);
       loadDocs();
     } catch (err) {
