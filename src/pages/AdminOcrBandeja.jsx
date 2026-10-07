@@ -233,11 +233,8 @@ export default function AdminOcrBandeja() {
 
   const companyMap = companies.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
-  const filtered = documents.filter(doc => {
-    if (filterStatus !== 'all') {
-      const sf = STATUS_FILTERS.find(f => f.key === filterStatus);
-      if (sf && !sf.match(doc.status)) return false;
-    }
+  // Contadores y operaciones deben pertenecer al cliente/tipo/búsqueda seleccionados.
+  const scopedDocuments = documents.filter(doc => {
     if (filterType !== 'all' && doc.documentType !== filterType) return false;
     if (filterClient !== 'all' && doc.company_id !== filterClient) return false;
     if (search) {
@@ -250,8 +247,13 @@ export default function AdminOcrBandeja() {
     return true;
   });
 
+  const filtered = scopedDocuments.filter(doc => {
+    const sf = STATUS_FILTERS.find(f => f.key === filterStatus);
+    return !sf || sf.match(doc.status);
+  });
+
   const counts = STATUS_FILTERS.reduce((acc, f) => {
-    acc[f.key] = documents.filter(d => f.match(d.status)).length;
+    acc[f.key] = scopedDocuments.filter(d => f.match(d.status)).length;
     return acc;
   }, {});
 
