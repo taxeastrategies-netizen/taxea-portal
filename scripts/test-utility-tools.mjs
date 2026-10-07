@@ -52,6 +52,15 @@ await check('ICS date alarms, Unicode folding and control injection',()=>{
   assert(!ics.includes('UID:two'));assert(!ics.includes('\rATTENDEE:'));
   for(const line of ics.split('\r\n'))assert(new TextEncoder().encode(line).length<=75);
 });
+await check('acknowledged deadline writes survive stale list reads without hiding newer edits',()=>{
+  const old={id:'qa',due_date:'2026-12-31',status:'pending',updated_date:'2026-10-07T12:00:00'};
+  const saved={...old,status:'done',updated_date:'2026-10-07T12:00:01'};
+  const confirmed=new Map([[saved.id,saved]]);
+  assert.equal(helpers.mergeDeadlineRows([old],confirmed)[0].status,'done');assert.equal(confirmed.size,1);
+  assert.equal(helpers.mergeDeadlineRows([],confirmed)[0].status,'done');
+  const newer={...saved,status:'pending',updated_date:'2026-10-07T12:00:02'};
+  assert.equal(helpers.mergeDeadlineRows([newer],confirmed)[0].status,'pending');assert.equal(confirmed.size,0);
+});
 const first=await PDFDocument.create();first.addPage([100,200]);first.addPage([300,400]).setRotation(degrees(270));
 const second=await PDFDocument.create();second.addPage([500,600]);
 const a=new File([await first.save()],'uno.pdf',{type:'application/pdf'}),b=new File([await second.save()],'dos.pdf',{type:'application/pdf'});
