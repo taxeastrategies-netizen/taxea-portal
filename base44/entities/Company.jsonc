@@ -2,6 +2,28 @@
   "name": "Company",
   "type": "object",
   "properties": {
+    "ocr_approval_lock_token": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "ocr_approval_lock_started_at": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
     "nombre_comercial": {
       "type": "string"
     },
