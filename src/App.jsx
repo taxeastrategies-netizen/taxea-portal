@@ -19,6 +19,7 @@ const IngresosGastos = lazy(() => import('./pages/IngresosGastos'));
 const Presupuestos = lazy(() => import('./pages/Presupuestos'));
 const Proformas = lazy(() => import('./pages/Proformas'));
 const Contactos = lazy(() => import('./pages/Contactos'));
+const Herramientas = lazy(() => import('./pages/Herramientas'));
 const Productos = lazy(() => import('./pages/Productos'));
 const NotasPredefinidas = lazy(() => import('./pages/NotasPredefinidas'));
 const LibroRegistros = lazy(() => import('./pages/LibroRegistros'));
@@ -97,6 +98,8 @@ function AppWithContext({ user }) {
           <Route path="/ingresos-gastos" element={<IngresosGastos />} />
           <Route path="/presupuestos" element={<Presupuestos />} />
           <Route path="/proformas" element={<Proformas />} />
+          <Route path="/herramientas" element={<Herramientas />} />
+          <Route path="/herramientas/:tool" element={<Herramientas />} />
           <Route path="/contactos" element={<Contactos />} />
           <Route path="/productos" element={<Productos />} />
           <Route path="/notas" element={<NotasPredefinidas />} />
