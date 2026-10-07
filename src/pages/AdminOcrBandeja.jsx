@@ -299,14 +299,16 @@ export default function AdminOcrBandeja() {
   };
 
   const validateAll = async () => {
-    const reviewDocs = documents.filter(d => d.status === 'review_required');
+    const reviewDocs = filtered.filter(d => d.status === 'review_required');
     if (reviewDocs.length === 0) {
       showToast('error', 'No hay documentos pendientes de revisión para validar.');
       return;
     }
     setValidatingAll(true);
     let done = 0;
-    const { succeeded: ok, failed: fail } = await runBatch(reviewDocs, async (doc) => {
+    let posted = 0;
+    let awaitingReview = 0;
+    const { failed: fail } = await runBatch(reviewDocs, async (doc) => {
       done++;
       setValidateProgress({ current: done, total: reviewDocs.length, name: doc.originalFileName || 'Documento' });
       const extracted = parseExtracted(doc.extractedData);
@@ -315,16 +317,19 @@ export default function AdminOcrBandeja() {
       const form = isExpense ? mapFormGastos(extracted) : mapFormIngresos(extracted);
       const res = await base44.functions.invoke('approveOcrDocument', { docId: doc.id, form, invoiceType, extractedData: extracted });
       const result = res?.data || res;
-      if (!result?.success) throw new Error(result?.error || 'Error al contabilizar');
-    }, { concurrency: 5 });
+      if (!result?.success) throw new Error(result?.error || 'Error al guardar');
+      if (result.review_required) awaitingReview++;
+      else posted++;
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }, { concurrency: 1 });
     setValidatingAll(false);
     setValidateProgress(null);
     window.dispatchEvent(new Event('financials:refresh'));
     loadDocs();
     if (fail === 0) {
-      showToast('success', `${ok} factura(s) contabilizada(s) automáticamente con los datos de la IA.`);
+      showToast('success', `${posted} contabilizadas; ${awaitingReview} guardadas o existentes pendientes de revisión fiscal. No se aprueba automáticamente el criterio fiscal de la IA.`, 8000);
     } else {
-      showToast('error', `${ok} contabilizadas OK, ${fail} fallaron. Revisa la lista para detalles.`, 8000);
+      showToast('error', `${posted} contabilizadas; ${awaitingReview} pendientes de revisión; ${fail} incidencias. Las facturas guardadas se conservan: no vuelvas a cargarlas.`, 8000);
     }
   };
 
@@ -398,7 +403,7 @@ export default function AdminOcrBandeja() {
         throw new Error(result?.error || 'No se pudo crear la factura');
       }
       setReviewing(null);
-      showToast('success', 'Factura revisada, aprobada y contabilizada correctamente. Ya disponible en Libros e Ingresos/Gastos del cliente.');
+      showToast('success', result.review_required ? 'Factura conservada para revisión fiscal del asesor. Todavía no está contabilizada; no vuelvas a cargarla.' : 'Factura y OCR contabilizados y sincronizados. No se ha duplicado la factura existente.');
       window.dispatchEvent(new Event('financials:refresh'));
       loadDocs();
     } catch (err) {
