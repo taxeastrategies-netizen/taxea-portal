@@ -15,7 +15,10 @@ Deno.serve(async req => {
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({error:'No autenticado'}, {status:401});
     const multipart = (req.headers.get('content-type') || '').includes('multipart/form-data');
-    const body: any = multipart ? Object.fromEntries((await req.formData()).entries()) : await req.json();
+    let body: any;
+    try { body = multipart ? Object.fromEntries((await req.formData()).entries()) : await req.json(); }
+    catch { return Response.json({error:'Solicitud no válida'}, {status:400}); }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return Response.json({error:'Solicitud no válida'}, {status:400});
     const companyId = String(body.companyId || '');
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(companyId)) return Response.json({error:'Empresa no válida'}, {status:400});
     svc = client.asServiceRole;
