@@ -3,12 +3,12 @@ import { postInvoice, SCHEMA_VERSION, canonical8 } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { acquireApprovalLease, resumeExistingOcr, findFinancialDuplicates } from './ocrRecovery.ts';
 
-// Formulario corregido para el régimen de comerciante minorista IGIC (confirmado por asesor):
-// el IGIC soportado no se cuenta como cuota deducible (mayor gasto), por lo que el total coincide con la base.
+// Preserve document amounts. A non-deductible quota is a cost, not a removed tax.
+// Fiscal validation may reject this proposal; it must never rewrite the payable.
 function buildBulkCorrectedForm(ex) {
   const base = Math.round((Number(ex?.base_imponible) || 0) * 100) / 100;
   const ret = Number(ex?.retencion_irpf) || 0;
-  const importeRet = Math.round(((base * ret) / 100) * 100) / 100;
+  const importeRet = Number(ex?.importe_retencion ?? 0);
   return {
     proveedor_cliente: ex?.proveedor || '',
     nif_proveedor: ex?.nif_proveedor || '',
@@ -23,12 +23,12 @@ function buildBulkCorrectedForm(ex) {
     fecha: ex?.fecha || '',
     fecha_recepcion: new Date().toISOString().slice(0, 10),
     base_imponible: base,
-    tipo_impuesto: 0,
-    cuota_impuesto: 0,
+    tipo_impuesto: Number(ex?.tipo_impuesto ?? 0),
+    cuota_impuesto: Number(ex?.cuota_impuesto ?? 0),
     retencion_irpf: ret,
     retencion_tipo: ex?.retencion_tipo || 'ninguna',
     importe_retencion: importeRet,
-    total: ret > 0 ? Math.round((base - importeRet) * 100) / 100 : base,
+    total: Number(ex?.total),
     categoria: ex?.categoria_sugerida || 'otros',
     es_rectificativa: ex?.es_rectificativa === true,
   };
@@ -462,7 +462,7 @@ Deno.serve(async (req) => {
         const pendingDocs = await base44.asServiceRole.entities.OcrInvoiceDocument.filter({
           company_id: companyId,
           status: 'review_required',
-        });
+        }, 'id', 5000);
         pendingDocIds = (pendingDocs || [])
           .filter(d => !d.linkedInvoiceId && d.documentType === 'expense_invoice')
           .map(d => d.id);
@@ -471,7 +471,9 @@ Deno.serve(async (req) => {
         return Response.json({ success: true, approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: 0, note: 'No hay documentos pendientes en la cola.' });
       }
       const activities = await base44.asServiceRole.entities.FiscalActivity.filter({ company_id: companyId, active: true });
-      const activityId = activities?.[0]?.id;
+      const selectedActivity = body.fiscal_activity_id ? activities?.find(row => row.id === body.fiscal_activity_id) : activities?.length === 1 ? activities[0] : null;
+      if (!selectedActivity) return Response.json({ error: 'Selecciona una actividad fiscal exacta y activa antes de aprobar el lote.' }, { status: 422 });
+      const activityId = selectedActivity.id;
 
       const BATCH_LIMIT = 4;
       const totalPending = pendingDocIds.length;
