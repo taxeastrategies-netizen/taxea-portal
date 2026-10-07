@@ -10,7 +10,7 @@ import {
   Package, BookOpen, ScanLine, ScanText, Calendar,
   Lock, Wallet, Scale, UserCog, Heart, Gavel, Building2, Target, DollarSign, CreditCard,
   Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
-  Folder, Zap, Megaphone, HardDrive, BriefcaseBusiness
+  Folder, Zap, Megaphone, HardDrive, BriefcaseBusiness, Wrench, Files, FileSpreadsheet, CalendarClock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -155,7 +155,7 @@ const DEPT_GROUPS = [
     ],
   },
   {
-    groupLabel: 'Operativo',
+    groupLabel: 'Core Operativo',
     depts: [
       {
         id: 'operations',
@@ -198,6 +198,22 @@ const DEPT_GROUPS = [
           { id: 'import',        label: 'Importación IA',       icon: ScanLine,        path: '/logistics/import' },
           { id: 'suppliers',     label: 'Proveedores',          icon: Truck,           path: '/logistics/suppliers' },
           { id: 'reports',       label: 'Informes',             icon: FileText,        path: '/logistics/reports' },
+        ],
+      },
+      {
+        id: 'tools',
+        label: 'Herramientas',
+        icon: Wrench,
+        activeColor: 'text-taxea-red',
+        activeBg: 'bg-red-50',
+        basePath: '/herramientas',
+        modules: [
+          { id: 'inicio', label: 'Todas las herramientas', icon: Wrench, path: '/herramientas' },
+          { id: 'renombrador', label: 'Renombrador OCR', icon: ScanLine, path: '/herramientas/renombrador' },
+          { id: 'pdf-imagenes', label: 'Kit PDF e imágenes', icon: Files, path: '/herramientas/pdf-imagenes' },
+          { id: 'extractor', label: 'Extractor de documentos', icon: FileSpreadsheet, path: '/herramientas/extractor' },
+          { id: 'calculadora', label: 'Calculadora comercial', icon: Calculator, path: '/herramientas/calculadora' },
+          { id: 'vencimientos', label: 'Vencimientos', icon: CalendarClock, path: '/herramientas/vencimientos' },
         ],
       },
       {
