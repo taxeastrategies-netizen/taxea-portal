@@ -95,7 +95,7 @@ export default function SubidaMasivaModelos() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, estado: 'procesando' } : i));
     
     // 1. Subir PDF primero
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
     
     // 2. IA lee el PDF completo
     const extraccion = await extraerConIA(file_url, file.name);
@@ -141,12 +141,24 @@ export default function SubidaMasivaModelos() {
     const periodo = ex.periodo || ex.trimestre || ex.ejercicio || '';
     const emailEmpresa = empresa.email || empresa.owner_email;
 
+    // Asegura una URL de archivo válida: si el PDF no se subió durante el procesamiento, se sube ahora
+    let archivoUrl = typeof item.previewUrl === 'string' && item.previewUrl.trim() !== '' ? item.previewUrl : '';
+    if (!archivoUrl && item.file) {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: item.file });
+      archivoUrl = file_url;
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, previewUrl: archivoUrl } : i));
+    }
+    if (!archivoUrl) {
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, estado: 'ignorado' } : i));
+      return;
+    }
+
     // 1. Archivar PDF en Documentos
     const docData = {
       company_id: empresa.id,
       nombre: nombreArchivo,
       carpeta,
-      archivo_url: item.previewUrl, // Ya subido durante procesamiento
+      archivo_url: archivoUrl,
       tipo_archivo: 'application/pdf',
       anio: parseInt(ex.ejercicio) || now.getFullYear(),
       trimestre: ex.trimestre,
