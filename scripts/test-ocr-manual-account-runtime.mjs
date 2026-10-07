@@ -40,10 +40,11 @@ const records = {
     { id: 'b-629', companyId: 'company-b', code: '62900000', type: 'gasto', status: 'activa' },
   ],
   FiscalProfile: [], Invoice: [], TimelineEvent: [],
-  Company: [{ id: 'company-a', nif_cif: 'B12345678' }],
+  Company: [{ id: 'company-a', nif_cif: 'B12345678', owner_email: 'user@a.test' }],
 };
-const match = (row, query) => Object.entries(query || {}).every(([key, value]) => row?.[key] === value);
+const match = (row, query) => Object.entries(query || {}).every(([key, value]) => value?.$in ? value.$in.includes(row?.[key] ?? null) : row?.[key] === value);
 const entity = name => ({
+  async updateMany(query, data) { const rows = (records[name] || []).filter(row => match(row, query)); rows.forEach(row => Object.assign(row, data.$set)); return { updated: rows.length }; },
   async get(id) { return records[name]?.find(row => row.id === id) || null; },
   async filter(query) { return (records[name] || []).filter(row => match(row, query)); },
   async create(payload) {
@@ -78,7 +79,7 @@ const client = {
 };
 let handler;
 const context = vm.createContext({
-  console, Request, Response, URL, Date,
+  console, Request, Response, URL, Date, crypto: globalThis.crypto,
   __testClient: client,
   __postInvoice: async (_svc, companyId, invoice) => {
     assert.equal(companyId, invoice.company_id);
