@@ -429,10 +429,13 @@ Deno.serve(async (req) => {
       const activities = await base44.asServiceRole.entities.FiscalActivity.filter({ company_id: companyId, active: true });
       const activityId = activities?.[0]?.id;
 
-      const summary = { approved: 0, review: 0, skipped: 0, failed: 0, errors: [] };
+      const BATCH_LIMIT = 16;
+      const totalPending = pendingDocIds.length;
+      pendingDocIds = pendingDocIds.slice(0, BATCH_LIMIT);
+      const summary = { approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: Math.max(0, totalPending - pendingDocIds.length) };
       const CHUNK = 4;
-      for (let i = 0; i < docIds.length; i += CHUNK) {
-        const chunk = docIds.slice(i, i + CHUNK);
+      for (let i = 0; i < pendingDocIds.length; i += CHUNK) {
+        const chunk = pendingDocIds.slice(i, i + CHUNK);
         const settled = await Promise.all(chunk.map(async (id) => {
           try {
             const doc = await base44.asServiceRole.entities.OcrInvoiceDocument.get(id);
