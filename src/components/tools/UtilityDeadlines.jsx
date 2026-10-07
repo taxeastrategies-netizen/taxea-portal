@@ -10,7 +10,7 @@ const fresh=()=>({title:'',kind:'certificado',due_date:'',remind_days:30,notes:'
 export default function UtilityDeadlines({company}) {
   const [rows,setRows]=useState([]),[form,setForm]=useState(fresh),[editing,setEditing]=useState(null),[showForm,setShowForm]=useState(false);
   const [loading,setLoading]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[filter,setFilter]=useState('pending'),[date,setDate]=useState(todayLocal);
-  const alive=useRef(true),lock=useRef(false),loadingRef=useRef(false),confirmed=useRef(new Map());
+  const alive=useRef(true),lock=useRef(false),loadingRef=useRef(false),confirmed=useRef(new Map()),deleted=useRef(new Set());
   const load=useCallback(async()=>{
     if(!company?.id || loadingRef.current)return;
     loadingRef.current=true;if(alive.current)setLoading(true);
@@ -21,7 +21,7 @@ export default function UtilityDeadlines({company}) {
         collected.push(...data.rows);offset=data.nextOffset;
         if(collected.length>=10000 && offset!=null)throw new Error('Hay más de 10.000 vencimientos. La lista no se ha cargado completa.');
       }while(offset!=null && alive.current);
-      if(alive.current){setRows(mergeDeadlineRows(collected,confirmed.current));setError('');setDate(todayLocal());}
+      if(alive.current){setRows(mergeDeadlineRows(collected,confirmed.current,deleted.current));setError('');setDate(todayLocal());}
     }catch(e){if(alive.current)setError(e.message);}finally{loadingRef.current=false;if(alive.current)setLoading(false);}
   },[company?.id]);
   useEffect(()=>{
@@ -33,7 +33,7 @@ export default function UtilityDeadlines({company}) {
   const mutate=async(action)=>{
     if(lock.current)return;
     lock.current=true;setSaving(true);setError('');
-    try{const data=await action();if(data?.row && alive.current){confirmed.current.set(data.row.id,data.row);setRows(current=>mergeDeadlineRows(current,confirmed.current));}await load();}catch(e){if(alive.current)setError(e.message);}finally{lock.current=false;if(alive.current)setSaving(false);}
+    try{const data=await action();if(data?.row && alive.current){confirmed.current.set(data.row.id,data.row);setRows(current=>[...current.filter(row=>row.id!==data.row.id),data.row].sort((a,b)=>a.due_date.localeCompare(b.due_date)));}if(data?.deletedId && alive.current){confirmed.current.delete(data.deletedId);deleted.current.add(data.deletedId);setRows(current=>current.filter(row=>row.id!==data.deletedId));}await load();}catch(e){if(alive.current)setError(e.message);}finally{lock.current=false;if(alive.current)setSaving(false);}
   };
   const save=e=>{
     e.preventDefault();
@@ -58,7 +58,7 @@ export default function UtilityDeadlines({company}) {
     {!loading && !visible.length && !error && <div className="rounded-2xl border bg-card p-10 text-center"><CalendarClock className="h-8 w-8 mx-auto text-muted-foreground mb-3"/><p className="text-sm text-muted-foreground">No hay vencimientos en este estado.</p></div>}
     <div className="space-y-3">{visible.map(row=>{
       const days=daysUntil(row.due_date,date),alert=row.status==='pending' && days<=row.remind_days;
-      return <article key={row.id} className={'rounded-xl border bg-card p-4 '+(alert?'border-amber-300':'')}><div className="flex flex-wrap gap-3 items-center"><div className="flex-1 min-w-0"><h2 className="text-sm font-semibold break-words">{row.title}</h2><p className="text-xs text-muted-foreground mt-1">{KINDS[row.kind]} · {row.due_date} · {row.status==='done'?'Completado':days<0?'Vencido hace '+(-days)+' días':days===0?'Vence hoy':'Quedan '+days+' días'}</p>{row.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-2 break-words">{row.notes}</p>}</div><Button size="sm" variant="outline" disabled={saving} aria-label={'Editar '+row.title} onClick={()=>open(row)}><Pencil className="h-4 w-4"/></Button><Button size="sm" variant="outline" disabled={saving} onClick={()=>mutate(()=>callUtility({action:'save',companyId:company.id,id:row.id,expectedUpdatedAt:row.updated_date,payload:{...row,status:row.status==='done'?'pending':'done'}}))}><Check className="h-4 w-4 mr-1"/>{row.status==='done'?'Reabrir':'Completar'}</Button><Button size="sm" variant="ghost" disabled={saving} aria-label={'Eliminar '+row.title} onClick={()=>{if(window.confirm('¿Eliminar el vencimiento «'+row.title+'»?'))mutate(()=>callUtility({action:'delete',companyId:company.id,id:row.id}));}}><Trash2 className="h-4 w-4"/></Button></div></article>;
+      return <article key={row.id} className={'rounded-xl border bg-card p-4 '+(alert?'border-amber-300':'')}><div className="flex flex-wrap gap-3 items-center"><div className="flex-1 min-w-0"><h2 className="text-sm font-semibold break-words">{row.title}</h2><p className="text-xs text-muted-foreground mt-1">{KINDS[row.kind]} · {row.due_date} · {row.status==='done'?'Completado':days<0?'Vencido hace '+(-days)+' días':days===0?'Vence hoy':'Quedan '+days+' días'}</p>{row.notes && <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-2 break-words">{row.notes}</p>}</div><Button size="sm" variant="outline" disabled={saving} aria-label={'Editar '+row.title} onClick={()=>open(row)}><Pencil className="h-4 w-4"/></Button><Button size="sm" variant="outline" disabled={saving} onClick={()=>mutate(()=>callUtility({action:'save',companyId:company.id,id:row.id,expectedUpdatedAt:row.updated_date,payload:{...row,status:row.status==='done'?'pending':'done'}}))}><Check className="h-4 w-4 mr-1"/>{row.status==='done'?'Reabrir':'Completar'}</Button><Button size="sm" variant="ghost" disabled={saving} aria-label={'Eliminar '+row.title} onClick={()=>{if(window.confirm('¿Eliminar el vencimiento «'+row.title+'»?'))mutate(()=>callUtility({action:'delete',companyId:company.id,id:row.id}).then(data=>({...data,deletedId:row.id})));}}><Trash2 className="h-4 w-4"/></Button></div></article>;
     })}</div>
   </section>;
 }
