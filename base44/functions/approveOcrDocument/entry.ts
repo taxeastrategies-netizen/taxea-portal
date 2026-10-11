@@ -288,20 +288,16 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   }
   invoiceData.creation_idempotency_key = `ocr:${doc.id}`;
   const created = await base44.asServiceRole.entities.Invoice.create(invoiceData);
-  // Enlazar antes de otra escritura: un fallo de huella se recupera sin crear otra factura.
-  await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, { linkedInvoiceId: created.id });
-  const inv = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, created);
-
-  if (!inv || !inv.id) {
-    console.error('[approveOcrDocument] Invoice creation returned no id:', JSON.stringify(inv));
+  if (!created || !created.id) {
+    console.error('[approveOcrDocument] Invoice creation returned no id:', JSON.stringify(created));
     return { status: 500, json: { error: 'No se pudo crear la factura en el core financiero' } };
   }
 
-  // Persist the link before tax/contact/posting work. If this update fails, the
-  // next request still finds the Invoice by its persisted ocr_document_id.
+  // Enlazar antes de la huella: un fallo se recupera por OCR sin crear otra factura.
   await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
-    linkedInvoiceId: inv.id, lastStatusChangedAt: new Date().toISOString(),
+    linkedInvoiceId: created.id, lastStatusChangedAt: new Date().toISOString(),
   });
+  const inv = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, created);
   console.log('[approveOcrDocument] Invoice created:', inv.id);
   if (pendingReview) {
     await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
