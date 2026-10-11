@@ -187,6 +187,7 @@ assert.equal(records.Invoice[0].qr_pdf_url, qrPdfUrl);
 const repeated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'create-1', confirm_fiscal_review: true, invoice: validInvoice });
 assert.equal(repeated.response.status, 200);
 assert.equal(repeated.payload.duplicate, true);
+assert.equal(records.Invoice[0].qr_integrity_hash, originalQrHash);
 assert.equal(records.Invoice.length, 1);
 assert.equal(counters.accountingEntries, 1);
 
