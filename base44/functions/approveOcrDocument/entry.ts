@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { postInvoice, SCHEMA_VERSION, canonical8 } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { acquireApprovalLease, resumeExistingOcr, findFinancialDuplicates } from './ocrRecovery.ts';
 
 // Preserve document amounts. A non-deductible quota is a cost, not a removed tax.
@@ -286,7 +287,10 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     return { status: 409, json: { error: 'La factura coincide con una ya registrada. Revisión de duplicado requerida.', duplicate: true, invoiceIds: duplicates.map(row => row.id) } };
   }
   invoiceData.creation_idempotency_key = `ocr:${doc.id}`;
-  const inv = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+  const created = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+  // Enlazar antes de otra escritura: un fallo de huella se recupera sin crear otra factura.
+  await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, { linkedInvoiceId: created.id });
+  const inv = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, created);
 
   if (!inv || !inv.id) {
     console.error('[approveOcrDocument] Invoice creation returned no id:', JSON.stringify(inv));
