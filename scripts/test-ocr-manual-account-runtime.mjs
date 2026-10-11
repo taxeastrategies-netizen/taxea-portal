@@ -83,6 +83,7 @@ const context = vm.createContext({
   __testClient: client,
   __postInvoice: async (_svc, companyId, invoice) => {
     assert.equal(companyId, invoice.company_id);
+    if (invoice.linked_journal_entry_id) return { alreadyPosted: true, entry: { id: invoice.linked_journal_entry_id } };
     postingCount += 1;
     await entities.Invoice.update(invoice.id, { estado_contable: 'contabilizada', linked_journal_entry_id: `entry-${postingCount}` });
     return { entry: { id: `entry-${postingCount}` }, proposal: { counterparty: { account: { code: '40000000' } } } };
