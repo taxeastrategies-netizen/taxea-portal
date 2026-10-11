@@ -1,3 +1,4 @@
+import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 // Recovery never creates an Invoice, tax line, contact or manual journal.
 const privileged = user => ['admin', 'super_admin'].includes(user?.role);
 const text = value => String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -62,6 +63,7 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
       return { status: 409, json: { error: 'La factura existente requiere revisar su detalle fiscal antes de recuperar el asiento.', invoiceId: invoice.id } };
     }
   }
+  invoice = await ensureInvoiceQrHash(svc.entities.Invoice, invoice);
   // The shared engine validates the real lines and reuses its stable postingKey.
   const posting = await postInvoice(svc, doc.company_id, invoice, user.email, {
     ocrDocumentId: doc.id, source: 'OCR', status: 'confirmado',
