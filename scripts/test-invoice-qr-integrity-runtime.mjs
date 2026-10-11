@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {webcrypto, createHash} from 'node:crypto';
+import * as esbuild from 'esbuild';
+const paths = ['invoiceOperations','approveOcrDocument','generateRecurringInvoices'].map(fn=>'base44/functions/'+fn+'/invoiceQrHash.ts');
+for (const p of paths.slice(1)) assert.equal(readFileSync(p,'utf8'),readFileSync(paths[0],'utf8'),'Backend helper parity');
+const built = await esbuild.build({stdin:{contents:"import * as h from './"+paths[0]+"';globalThis.h=h;",resolveDir:process.cwd()},bundle:true,write:false,platform:'node',format:'cjs'});
+const ctx=vm.createContext({crypto:webcrypto,TextEncoder,Uint8Array,Date});
+vm.runInContext(built.outputFiles[0].text,ctx);
+const {calculateInvoiceQrHash:hash,ensureInvoiceQrHash:ensure,QR_HASH_VERSION:version}=ctx.h;
+const base={id:'invoice-qa',company_id:'tenant-qa',tipo:'emitida',qr_url:'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?nif=B12345678&numserie=QA-1&fecha=11-10-2026&importe=121.00',source_hash:'legacy-source-unchanged',total_factura:121,numero_factura:'QA-1'};
+let row,writes,race;
+const match=(r,q)=>Object.entries(q).every(([k,v])=>v?.$in?v.$in.includes(r[k]??null):r[k]===v);
+const entity={
+  async updateMany(q,ops){if(race){const fn=race;race=null;fn();}if(!match(row,q))return{updated:0};writes.push(structuredClone(ops));Object.assign(row,ops.$set);return{updated:1};},
+  async get(){return row;},
+};
+const reset=()=>{row=structuredClone(base);writes=[];race=null;};
+reset();
+const expected=createHash('sha256').update(JSON.stringify([version,base.company_id,base.id,base.qr_url])).digest('hex').toUpperCase();
+assert.equal(await hash(base),expected);
+assert.match(expected,/^[A-F0-9]{64}$/);
+assert.notEqual(await hash({...base,id:'different'}),expected);
+assert.notEqual(await hash({...base,company_id:'different'}),expected);
+assert.notEqual(await hash({...base,qr_url:base.qr_url+'&different=1'}),expected);
+assert.equal(await hash({...base,total_factura:999}),expected,'Hash scope is identity + exact stored QR, not a PDF signature');
+assert.equal(await hash({...base,qr_url:''}),null);
+assert.equal((await ensure(entity,{id:'no-qr'})).id,'no-qr');assert.equal(writes.length,0);
+await assert.rejects(hash({...base,id:''}),e=>e.status===409);
+const saved=await ensure(entity,base);assert.equal(saved.qr_integrity_hash,expected);
+assert.equal(row.source_hash,base.source_hash);assert.equal(row.total_factura,121);assert.equal(row.qr_url,base.qr_url);
+assert.deepEqual(Object.keys(writes[0].$set).sort(),['qr_integrity_algorithm','qr_integrity_created_at','qr_integrity_hash','qr_integrity_version']);
+const firstDate=row.qr_integrity_created_at;
+await ensure(entity,structuredClone(row));assert.equal(writes.length,1);assert.equal(row.qr_integrity_created_at,firstDate);
+await assert.rejects(ensure(entity,{...row,qr_url:row.qr_url+'changed'}),e=>e.status===409);
+await assert.rejects(ensure(entity,{...row,qr_integrity_hash:'0'.repeat(64)}),e=>e.status===409);
+await assert.rejects(ensure(entity,{...row,qr_integrity_version:'future'}),e=>e.status===409);
+assert.equal(writes.length,1);
+reset();
+const simultaneous=await Promise.all([ensure(entity,structuredClone(row)),ensure(entity,structuredClone(row))]);
+assert.equal(writes.length,1);assert.equal(simultaneous[0].qr_integrity_hash,simultaneous[1].qr_integrity_hash);
+reset();race=()=>{row.qr_url+='changed';};await assert.rejects(ensure(entity,base),e=>e.status===409);assert.equal(writes.length,0);
+reset();row.qr_integrity_hash='bad';await assert.rejects(ensure(entity,base),e=>e.status===409);assert.equal(row.qr_integrity_hash,'bad');
+const set=new Set();for(let i=0;i<1000;i++)set.add(await hash({...base,id:'qa-'+i}));assert.equal(set.size,1000);
+console.log('QR internal hash: SHA-256 reference, 1000 unique identities, tenants, metadata, CAS race, retries, immutable mismatch, original fields and helper parity OK.');
