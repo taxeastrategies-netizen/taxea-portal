@@ -94,14 +94,14 @@ const preserved = context.__bulkForm({ base_imponible: 100, tipo_impuesto: 7, cu
 assert.equal(preserved.total, 89);
 assert.equal(preserved.cuota_impuesto, 7);
 assert.equal(preserved.importe_retencion, 18);
-async function invoke(docId, invoiceType, account) {
+async function invoke(docId, invoiceType, account, confirm = false) {
   const form = invoiceType === 'emitida'
     ? { numero_factura: 'F-1', fecha_emision: '2026-10-02', base_imponible: 100, tipo_iva: 0, cuota_iva: 0, total_factura: 100 }
     : { numero_factura: 'G-1', fecha: '2026-10-02', fecha_recepcion: '2026-10-03', base_imponible: 100, tipo_impuesto: 0, cuota_impuesto: 0, total: 100 };
   if (account !== undefined) form.cuenta_contable_manual = account;
   const response = await handler(new Request('https://taxea.test/approveOcrDocument', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ docId, form, invoiceType, extractedData: {} }),
+    body: JSON.stringify({ docId, form, invoiceType, extractedData: {}, confirm_fiscal_review: confirm }),
   }));
   return { status: response.status, payload: await response.json() };
 }
@@ -136,6 +136,21 @@ const defaultExpense = await invoke('expense-default', 'recibida');
 assert.equal(defaultExpense.status, 200);
 assert.equal(records.Invoice[2].revenue_expense_account_code, undefined);
 assert.equal(postingCount, 0);
+
+user = {id:'advisor-a',email:'advisor@test.invalid',role:'admin',data:{company_id:'company-a'}};
+records.OcrInvoiceDocument.push({id:'income-approved',company_id:'company-a',documentType:'income_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]});
+// Distinct numbering avoids deliberately triggering the duplicate financial guard.
+records.Invoice[1].numero_factura = 'F-PROPOSAL';
+const issued = await invoke('income-approved', 'emitida', '705', true);
+assert.equal(issued.status, 200);
+const issuedInvoice = records.Invoice.find(row=>row.id===issued.payload.invoiceId);
+assert.match(issuedInvoice.qr_integrity_hash, /^[A-F0-9]{64}$/);
+const stableHash = issuedInvoice.qr_integrity_hash;
+const issuedRetry = await invoke('income-approved', 'emitida', '705', true);
+assert.equal(issuedRetry.status, 200);
+assert.equal(issuedInvoice.qr_integrity_hash, stableHash);
+assert.equal(records.Invoice.length, 4);
+assert.equal(postingCount, 1);
 
 // Use the real accounting engine to verify the selected account reaches Debe/Haber.
 const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
