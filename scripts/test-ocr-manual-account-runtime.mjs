@@ -79,7 +79,7 @@ const client = {
 };
 let handler;
 const context = vm.createContext({
-  console, Request, Response, URL, Date, crypto: globalThis.crypto,
+  console, Request, Response, URL, Date, TextEncoder, Uint8Array, crypto: globalThis.crypto,
   __testClient: client,
   __postInvoice: async (_svc, companyId, invoice) => {
     assert.equal(companyId, invoice.company_id);
