@@ -36,7 +36,7 @@ let currentUser = { email: 'owner@a.test', role: 'user', data: { company_id: 'co
 const testClient = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
 let handler;
 const context = vm.createContext({
-  console, Request, Response, URL, TextEncoder, Uint8Array, crypto: globalThis.crypto,
+  console, Request, Response, URL, TextEncoder, Uint8Array, setTimeout, clearTimeout, crypto: globalThis.crypto,
   __base44TestClient: testClient, Deno: { serve(fn) { handler = fn; } },
 });
 vm.runInContext(build.outputFiles[0].text, context, { filename: 'fiscalOperations.bundle.cjs' });
