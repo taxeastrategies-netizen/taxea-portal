@@ -349,6 +349,22 @@
       "type": "string",
       "description": "URL tributaria AEAT fijada al emitir la factura; no acredita remisi\u00f3n VERI*FACTU."
     },
+    "qr_integrity_hash": {
+      "type": "string",
+      "description": "SHA-256 interno de empresa, identificador persistido y QR exacto. No es huella fiscal VERI*FACTU ni firma del PDF."
+    },
+    "qr_integrity_version": {
+      "type": "string",
+      "description": "Versi\u00f3n del algoritmo interno para verificar la huella conservada."
+    },
+    "qr_integrity_algorithm": {
+      "type": "string"
+    },
+    "qr_integrity_created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fecha real de asignaci\u00f3n; en hist\u00f3ricos no se retrofecha a la emisi\u00f3n."
+    },
     "qr_mode": {
       "type": "string",
       "enum": [
