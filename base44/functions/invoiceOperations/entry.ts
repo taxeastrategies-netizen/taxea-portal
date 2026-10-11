@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
 
@@ -573,6 +574,7 @@ Deno.serve(async (req) => {
           return Response.json({ error: 'La factura se conservó sin contabilizar porque falló el registro fiscal. Revisa la incidencia antes de reintentar.', invoice_id: createdInvoice.id }, { status: 503 });
         }
       }
+      createdInvoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, createdInvoice);
       if (createdInvoice.accounting_migration_hold) return Response.json({ error: 'Esta factura está retenida para revisión fiscal y no se contabilizará automáticamente.', invoice_id: createdInvoice.id }, { status: 409 });
       let accounting = null;
       let accountingWarning = '';
@@ -629,7 +631,9 @@ Deno.serve(async (req) => {
       return Response.json(result);
     }
 
-    const { invoice, companyId } = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
+    const owned = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
+    const companyId = owned.companyId;
+    const invoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, owned.invoice);
     if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)
       && ['add_payment', 'reconcile', 'set_qr_pdf'].includes(action)) {
       return Response.json({ error: 'La propuesta fiscal debe aprobarse antes de cobrar, pagar o conciliar.' }, { status: 409 });
@@ -741,7 +745,7 @@ Deno.serve(async (req) => {
             ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
           });
         }
-        const saved = await finalizerSvc.entities.Invoice.get(invoice.id);
+        const saved = await ensureInvoiceQrHash(finalizerSvc.entities.Invoice, await finalizerSvc.entities.Invoice.get(invoice.id));
         let ocrWarning = '';
         if (saved.ocr_document_id) {
           const doc = await finalizerSvc.entities.OcrInvoiceDocument.get(saved.ocr_document_id).catch(() => null);
