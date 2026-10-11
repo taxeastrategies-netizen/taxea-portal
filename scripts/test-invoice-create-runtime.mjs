@@ -49,8 +49,13 @@ const records = {
   InvoiceTimelineEvent: [],
 };
 const counters = { Invoice: 0, InvoiceTaxLine: 0, InvoiceTimelineEvent: 0, accountingEntries: 0 };
-const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row?.[key] === value);
+const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => value?.$in ? value.$in.includes(row?.[key] ?? null) : row?.[key] === value);
 const entity = name => ({
+  async updateMany(query, ops) {
+    const found = (records[name] || []).filter(row => matches(row, query));
+    found.forEach(row => Object.assign(row, ops.$set));
+    return { updated: found.length };
+  },
   async get(id) { return records[name]?.find(item => item.id === id) || null; },
   async filter(query) { return (records[name] || []).filter(row => matches(row, query)); },
   async create(payload) {
@@ -155,6 +160,9 @@ assert.equal(records.Invoice[0].fiscal_activity_id, 'activity-a');
 assert.equal(counters.accountingEntries, 1);
 assert.equal(new URL(records.Invoice[0].qr_url).searchParams.get('importe'), '121.00');
 assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
+assert.match(records.Invoice[0].qr_integrity_hash, /^[A-F0-9]{64}$/);
+assert.equal(records.Invoice[0].qr_integrity_version, 'taxea-qr-identity-v1');
+const originalQrHash = records.Invoice[0].qr_integrity_hash;
 const qrPdfUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/test-qr.pdf';
 const foreignPdf = await invoke({
   action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
