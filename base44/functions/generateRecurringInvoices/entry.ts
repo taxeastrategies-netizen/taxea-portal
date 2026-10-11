@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { buildAeatQrUrl } from './invoiceQr.ts';
+import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 
 // ── Date helpers ──
 
@@ -280,6 +281,12 @@ Deno.serve(async (req) => {
           recurringPeriodKey: periodKey
         });
         if (existing && existing.length > 0) {
+          if (action !== 'preview') {
+            for (const previous of existing) {
+              if (previous.company_id !== tmpl.ownerAccountId) throw new Error('Factura recurrente de otra empresa.');
+              await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, previous);
+            }
+          }
           results.skipped++;
           if (action === 'preview') {
             results.preview.push({
@@ -487,7 +494,8 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const invoice = await base44.asServiceRole.entities.Invoice.create(invoiceData);
+        const invoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice,
+          await base44.asServiceRole.entities.Invoice.create(invoiceData));
         if (pendingReview) {
           await base44.asServiceRole.entities.RecurringInvoiceRun.create({
             recurringInvoiceTemplateId: tmpl.id, ownerAccountId: tmpl.ownerAccountId,
