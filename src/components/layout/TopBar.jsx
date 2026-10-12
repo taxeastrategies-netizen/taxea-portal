@@ -33,7 +33,6 @@ const BREADCRUMBS = {
   '/herramientas/vencimientos': ['Herramientas', 'Vencimientos'],
   '/contactos': ['Contactos'],
   '/documentos': ['Documentos'],
-  '/tareas': ['Herramientas', 'Tareas'],
   '/timeline': ['Herramientas', 'Timeline'],
   '/asistente': ['Herramientas', 'Asistente IA'],
   '/': ['Dashboard'],
