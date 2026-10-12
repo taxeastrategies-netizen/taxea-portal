@@ -85,7 +85,7 @@ assert.equal(writes,userBefore);
 user={role:'advisor',email:'not-assigned@test.invalid'};
 assert.equal((await call({action:'review_context'})).status,403);
 user={role:'admin',email:'advisor@test.invalid'};
-assert.equal((await call({action:'save_invoice_tax_line',companyId:'b',invoiceId:'intra',...criteria,confirmReviewed:true})).status,500);
+assert.equal((await call({action:'save_invoice_tax_line',companyId:'b',invoiceId:'intra',...criteria,confirmReviewed:true})).status,422);
 assert.equal(writes,userBefore);
 const selection=commonReviewCriteria({...criteria,base:999,total:999,recc:{originalInvoiceId:'do-not-copy'},specialInputs:{payments:['do-not-copy']},applyTaxRate:true});
 assert(!('base'in selection)&&!('recc'in selection)&&!('specialInputs'in selection));
