@@ -94,7 +94,7 @@ Deno.serve(async req => {
       const number = normalizedNumber(record.number);
       const date = normalizedDate(record.date);
       if (!number || !date) continue; // Never infer a duplicate from an amount alone.
-      const key = `${number}|${date}`;
+      const key = JSON.stringify([number, date]);
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(record);
     }
