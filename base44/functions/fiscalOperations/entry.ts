@@ -6,6 +6,7 @@ import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 import { fiscalReviewBatch } from './fiscalReviewBatch.mjs';
 import { advisorDecision, selfAssessment, reviewFilter, commonReviewCriteria } from './advisorReview.mjs';
+import { sourceDecision, assertSourceAmounts } from './sourceCheck.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
@@ -348,11 +349,15 @@ async function saveInvoiceTaxLine(context: any, input: any) {
   let releaseAdvanceLocks: (() => Promise<void>) | null = null;
   let reviewToken = '';
   try {
-      if (!canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
+      if (!context.sourceCheck && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
       if ((profiles || []).length !== 1) return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
       const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
+      if (context.sourceCheck) {
+        if (invoice.estado_contable === 'contabilizada' || invoice.linked_journal_entry_id) return Response.json({ error: 'La factura ya está contabilizada; no se reclasifica desde el OCR.' }, { status: 409 });
+        body = sourceDecision(invoice, body, selectedActivity, profile, canProfessionallyValidate(user));
+      }
       body = advisorDecision(invoice, body, selectedActivity, user.email);
       if (!context.lockHeld && clean(invoice.fiscal_review_lock_token)) return Response.json({error:'Otra revisión está procesando la factura.'},{status:409});
       if (invoice.tipo === 'emitida' && body.operationType === 'intra_eu_acquisition') return Response.json({error:'Una factura emitida no es una adquisición intracomunitaria. Revisa el tipo de operación o separa el lote por tipo de factura.'},{status:422});
@@ -386,6 +391,15 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
       const selfAssessed = selfAssessment(invoice, body, proposedEvaluation);
+      if (context.sourceCheck) assertSourceAmounts(invoice, proposedEvaluation, selfAssessed);
+      if (proposedEvaluation.regime === 'comerciante_minorista_igic' && proposedEvaluation.taxKind === 'igic'
+        && ((invoice.tipo === 'recibida' && ['subject_taxed','subject_zero','exempt_limited','non_subject_article','non_subject_location'].includes(proposedEvaluation.operationType)
+          && proposedEvaluation.deductibleTax === 0) || (invoice.tipo === 'emitida' && proposedEvaluation.operationType === 'exempt_limited'
+          && proposedEvaluation.exemptionKey === 'IGIC_COMERCIANTE_MINORISTA' && proposedEvaluation.legalBasis))
+        && Math.abs(Number(invoice.cuota_recargo || 0)) < 0.001) {
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.alerts = (proposedEvaluation.alerts || []).filter(message => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.');
+      }
       if (body.advisorDefaultDifference) proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []),
         'El criterio confirmado para esta factura prevalece sobre el predeterminado de la actividad.'];
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
@@ -527,6 +541,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
       }
       if (proposedEvaluation.postingBlocked) {
+        if (context.sourceCheck) return Response.json({ error: 'Esta operación necesita datos o un circuito contable específico. Se conserva en este mismo OCR; no se enviará a una segunda revisión fiscal.', evaluation: proposedEvaluation }, { status: 422 });
         if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
       if (body.confirmReviewed === true && !context.lockHeld) {
         const token = crypto.randomUUID();
@@ -663,14 +678,15 @@ Deno.serve(async (req) => {
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
-      (!['save_invoice_tax_line','review_context'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
+      (!['save_invoice_tax_line','review_context','source_context','confirm_invoice_source','evaluate'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
       action === 'bundle' ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
     ]);
     const profile = profiles?.[0] || null;
 
     if (action.includes('review_batch')) return Response.json(await fiscalReviewBatch({svc:base44.asServiceRole,base44,companyId,user,
       save:(input: any,batchId: string)=>saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,lockHeld:true,batchId},input)},body));
-    if (action === 'review_context') {
+    if (action === 'confirm_invoice_source') return await saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,sourceCheck:true},body);
+    if (action === 'review_context' || action === 'source_context') {
       const invoiceTaxLines = body.invoiceId ? await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:body.invoiceId},'lineNumber',100) : [];
       const invoicePayments = body.includePayments && body.invoiceId ? await svc.entities.InvoicePayment.filter({company_id:companyId,invoice_id:body.invoiceId},'payment_date',501) : [];
       return Response.json({success:true,profile,activities,invoiceTaxLines,invoicePayments:invoicePayments.length>500?[]:invoicePayments,
