@@ -5,6 +5,9 @@ import { buildAeatQrUrl } from './invoiceQr.ts';
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
+import { completeSourceInvoice } from './sourcePosting.mjs';
+import { acquireApprovalLease } from './sourceLease.ts';
+const sourceDependencies = {postInvoice, buildAeatQrUrl, ensureInvoiceQrHash};
 
 const MONEY_EPSILON = 0.01;
 const MAX_TEXT = 500;
@@ -454,165 +457,48 @@ Deno.serve(async (req) => {
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
       const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
-      let fiscalEvaluation;
-      try {
-        const result = await base44.functions.invoke('fiscalOperations', {
-          action: 'evaluate', companyId, requireValidatedProfile: true, requireExactActivity: true,
-          activityId: payload.fiscal_activity_id || undefined,
-          direction: payload.tipo === 'recibida' ? 'gasto' : 'ingreso',
-          operationDate: payload.fecha_operacion || payload.fecha_emision,
-          base: payload.base_imponible, taxRate: payload.tipo_iva, taxAmount: payload.cuota_iva,
-          withholdingRate: payload.retencion_irpf,
-          counterpartyIsWithholdingAgent: payload.retencion_irpf > 0,
-        });
-        fiscalEvaluation = (result?.data || result)?.evaluation;
-      } catch (error) {
-        return Response.json({ error: error?.response?.data?.error || 'No se pudo verificar el encuadramiento fiscal; no se ha creado la factura.' }, { status: 503 });
-      }
-      // En modo proponer/revisar se conserva el documento sin emitir QR, libro ni asiento.
-      // La validación profesional se hace después desde la revisión fiscal de la factura.
-      const requiresAdvisorReview = !fiscalEvaluation || fiscalEvaluation.status !== 'ready'
-        || Math.abs(Number(payload.cuota_recargo || 0)) > 0.001
-        || body.confirm_fiscal_review !== true
-        || !['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user));
-      if (requiresAdvisorReview) {
-        const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
-        const sourceHash = await sha256(JSON.stringify(payload));
-        const previous = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, creation_idempotency_key: idempotencyKey }, '-created_date', 2);
-        let pending = previous?.[0] || null;
-        if (pending && pending.source_hash !== sourceHash) return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes.' }, { status: 409 });
-        if (pending && pending.fiscal_review_status === 'validado' && !pending.accounting_migration_hold) {
-          return Response.json({ ok: true, review_required: false, duplicate: true, invoice: pending,
-            journal_entry_id: pending.linked_journal_entry_id || null, source_truth_version: 'financial-source-truth-v1' });
-        }
-        if (!pending) {
-          const sameNumber = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, numero_factura: payload.numero_factura }, '-created_date', 20);
-          if ((sameNumber || []).some(candidate => !candidate.anulada)) return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
-          pending = await base44.asServiceRole.entities.Invoice.create({
-            ...payload, fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
-            accounting_review_status: 'pendiente_revision',
-            accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
-            creation_idempotency_key: idempotencyKey, source_hash: sourceHash,
-          });
-        }
-        return Response.json({ ok: true, review_required: true, duplicate: Boolean(previous?.[0]),
-          invoice: pending, journal_entry: null, accounting_warning: 'Pendiente de validación fiscal por asesor/admin; no emitida ni contabilizada.',
-          fiscal_reasons: fiscalEvaluation?.reasons || [], source_truth_version: 'financial-source-truth-v1' });
-      }
-      if (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(fiscalEvaluation.regime)
-        || fiscalEvaluation.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalEvaluation.taxKind)) {
-        return Response.json({ error: 'Esta operación requiere revisión fiscal y contable del asesor antes de emitir o contabilizar; el régimen especial se implementará en la siguiente fase.' }, { status: 422 });
-      }
-      if (fiscalEvaluation.operationType === 'exempt_limited' && (!fiscalEvaluation.exemptionKey || !fiscalEvaluation.legalBasis)) {
-        return Response.json({ error: 'La operación exenta necesita clave de exención y fundamento legal validados por el asesor.' }, { status: 422 });
-      }
-      if (Math.abs(payload.tipo_iva - fiscalEvaluation.taxRate) > 0.0001
-        || Math.abs(payload.cuota_iva - fiscalEvaluation.taxAmount) > 0.02
-        || Math.abs(payload.importe_retencion - fiscalEvaluation.withholdingAmount) > 0.02
-        || Math.abs(payload.total_factura - fiscalEvaluation.total) > 0.02) {
-        return Response.json({ error: `Los importes no coinciden con el perfil fiscal validado. Tipo ${fiscalEvaluation.taxRate} %, cuota ${fiscalEvaluation.taxAmount.toFixed(2)} €, retención ${fiscalEvaluation.withholdingAmount.toFixed(2)} € y total ${fiscalEvaluation.total.toFixed(2)} €. Revisa la factura antes de guardarla.` }, { status: 422 });
-      }
-      Object.assign(payload, {
-        indirect_tax_kind: fiscalEvaluation.taxKind, fiscal_treatment: fiscalEvaluation.operationType,
-        fiscal_regime: fiscalEvaluation.regime, fiscal_activity_id: fiscalEvaluation.activityId,
-        fiscal_rule_set_version: fiscalEvaluation.ruleSetVersion, fiscal_review_status: 'validado',
-        fiscal_reviewed_by: user.email, fiscal_exemption_key: fiscalEvaluation.exemptionKey,
-        fiscal_legal_basis: fiscalEvaluation.legalBasis,
-        deductible_tax_amount: fiscalEvaluation.deductibleTax,
-        non_deductible_tax_amount: fiscalEvaluation.nonDeductibleTax,
-      });
-      let qrUrl = '';
-      if (payload.tipo === 'emitida') {
-        try {
-          qrUrl = buildAeatQrUrl(company, payload);
-        } catch (qrError) {
-          return Response.json({ error: qrError.message || 'No se pudo preparar el QR tributario.' }, { status: 422 });
-        }
-      }
+      // Guardar manualmente ya constituye el único check: no se crea una cola fiscal posterior.
+      const idempotencyKey = cleanText(body.idempotency_key,160) || `invoice-create:${payload.canonical_document_key}`;
       const sourceHash = await sha256(JSON.stringify(payload));
-      const idempotencyKey = cleanText(body.idempotency_key, 160) || `invoice-create:${payload.canonical_document_key}`;
-      const previous = await base44.asServiceRole.entities.Invoice.filter({
-        company_id: companyId,
-        creation_idempotency_key: idempotencyKey,
-      }, '-created_date', 2);
-      let createdInvoice = previous?.[0] || null;
-      if (createdInvoice && (
-        (createdInvoice.source_hash && createdInvoice.source_hash !== sourceHash)
-        || (!createdInvoice.source_hash && createdInvoice.canonical_document_key !== payload.canonical_document_key)
-      )) {
-        return Response.json({ error: 'La misma operación ya fue utilizada con datos diferentes. Abre una nueva factura.' }, { status: 409 });
-      }
-      if (!createdInvoice) {
-        const sameNumber = await base44.asServiceRole.entities.Invoice.filter({
-          company_id: companyId,
-          numero_factura: payload.numero_factura,
-        }, '-created_date', 20);
-        if ((sameNumber || []).some(candidate => !candidate.anulada)) {
-          return Response.json({ error: 'Ya existe una factura activa con ese número.' }, { status: 409 });
-        }
-        createdInvoice = await base44.asServiceRole.entities.Invoice.create({
-          ...payload, fiscal_reviewed_at: new Date().toISOString(),
-          ...(qrUrl ? { qr_url: qrUrl, qr_mode: 'no_verifactu', qr_spec_version: 'AEAT-QR-0.5.0' } : {}),
-          creation_idempotency_key: idempotencyKey,
-          source_hash: sourceHash,
-        });
-        try {
-          await base44.asServiceRole.entities.InvoiceTaxLine.create({
-            companyId, invoiceId: createdInvoice.id, lineNumber: 1,
-            operationDate: payload.fecha_operacion, receiptDate: payload.tipo === 'recibida' ? payload.fecha_recepcion : undefined,
-            taxKind: fiscalEvaluation.taxKind, regime: fiscalEvaluation.regime,
-            operationType: fiscalEvaluation.operationType, activityId: fiscalEvaluation.activityId,
-            exemptionKey: fiscalEvaluation.exemptionKey, legalBasis: fiscalEvaluation.legalBasis,
-            base: fiscalEvaluation.base, rate: fiscalEvaluation.taxRate, quota: fiscalEvaluation.taxAmount,
-            deductibleQuota: fiscalEvaluation.deductibleTax, nonDeductibleQuota: fiscalEvaluation.nonDeductibleTax,
-            deductiblePercent: fiscalEvaluation.deductiblePercent,
-            deductible: payload.tipo === 'recibida' && fiscalEvaluation.nonDeductibleTax === 0,
-            source: 'manual', reviewStatus: 'validado', reviewedAt: new Date().toISOString(),
-            reviewedBy: user.email, ruleSetVersion: fiscalEvaluation.ruleSetVersion, schemaVersion: SCHEMA_VERSION,
-          });
-        } catch (error) {
-          await base44.asServiceRole.entities.Invoice.update(createdInvoice.id, { estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion', accounting_migration_hold: true, accounting_migration_hold_reason: 'No se pudo guardar la clasificación fiscal de la factura nueva.' });
-          return Response.json({ error: 'La factura se conservó sin contabilizar porque falló el registro fiscal. Revisa la incidencia antes de reintentar.', invoice_id: createdInvoice.id }, { status: 503 });
-        }
-      }
-      createdInvoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, createdInvoice);
-      if (createdInvoice.accounting_migration_hold) return Response.json({ error: 'Esta factura está retenida para revisión fiscal y no se contabilizará automáticamente.', invoice_id: createdInvoice.id }, { status: 409 });
-      let accounting = null;
-      let accountingWarning = '';
+      const release = await acquireApprovalLease(base44.asServiceRole, companyId);
       try {
-        accounting = await postInvoice(base44.asServiceRole, companyId, createdInvoice, user.email, { status: 'confirmado' });
-        createdInvoice = await base44.asServiceRole.entities.Invoice.get(createdInvoice.id);
-      } catch (error) {
-        accountingWarning = error?.message || 'La factura requiere revisión contable.';
-        await base44.asServiceRole.entities.Invoice.update(createdInvoice.id, {
-          estado_contable: 'requiere_correccion',
-          accounting_review_status: 'requiere_correccion',
-          accounting_migration_hold: true,
-          accounting_migration_hold_reason: accountingWarning,
-        });
-      }
-      await recordTimeline(base44, {
-        invoice_id: createdInvoice.id,
-        company_id: companyId,
-        event_type: previous?.[0] ? 'creacion_reintentada' : 'factura_creada',
-        event_label: previous?.[0]
-          ? 'Creación recuperada de forma idempotente'
-          : (payload.tipo === 'recibida' ? 'Factura recibida registrada' : 'Factura emitida registrada'),
-        event_detail: `${payload.numero_factura} · ${payload.total_factura.toFixed(2)} ${payload.moneda || 'EUR'}`,
-        created_at: new Date().toISOString(),
-        created_by: user.full_name || user.email || 'Usuario',
-        origin: 'manual',
-      });
-      return Response.json({
-        ok: true,
-        duplicate: Boolean(previous?.[0]),
-        invoice: createdInvoice,
-        journal_entry: accounting?.entry || null,
-        accounting_warning: accountingWarning || null,
-        source_truth_version: 'financial-source-truth-v1',
-      });
+        const previous = await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,creation_idempotency_key:idempotencyKey},'-created_date',2);
+        if (previous.length > 1) return businessError('La operación tiene más de una factura. Revisa la incidencia sin crear otra.',409);
+        let invoice = previous[0] || null;
+        if (invoice && invoice.source_hash !== sourceHash) return businessError('La misma operación ya se guardó con otros importes. Recupera la factura existente.',409,{invoice_id:invoice.id});
+        if (!invoice) {
+          const sameNumber = await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,tipo:payload.tipo,numero_factura:payload.numero_factura},'-created_date',100);
+          const duplicate = sameNumber.find(row=>!row.anulada && (payload.tipo==='emitida'
+            || normalizeKeyPart(row.proveedor_nif || row.proveedor_nombre)===normalizeKeyPart(payload.proveedor_nif || payload.proveedor_nombre)));
+          if (duplicate) return businessError('Ya existe una factura activa de este tercero con ese número.',409,{invoice_id:duplicate.id});
+          invoice = await base44.asServiceRole.entities.Invoice.create({...payload,creation_idempotency_key:idempotencyKey,source_hash:sourceHash,
+            fiscal_review_status:'pendiente_revision',accounting_migration_hold:true,accounting_migration_hold_reason:'SOURCE_CHECK_PENDING'});
+        }
+        try {
+          const result = await completeSourceInvoice(base44,user,companyId,invoice,body.fiscal_criteria || {},sourceDependencies);
+          await recordTimeline(base44,{invoice_id:invoice.id,company_id:companyId,event_type:'factura_creada',
+            event_label:'Factura registrada desde su documento',event_detail:payload.numero_factura,created_at:new Date().toISOString(),created_by:user.email,origin:'manual'});
+          return Response.json({...result,source_truth_version:'financial-source-truth-v1'});
+        } catch(error) {
+          return businessError(error?.response?.data?.error || error.message,Number(error?.response?.status || error.status)||422,
+            {invoice_id:invoice.id,recover_in_ocr:true});
+        }
+      } finally { await release(); }
     }
 
+    if (action === 'list_source_pending') {
+      const {companyId} = await authorizeCompany(base44,user,body.company_id);
+      const page=Math.max(0,Number(body.page)||0),pageSize=500;
+      const rows=await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,tipo:body.type==='emitida'?'emitida':'recibida',
+        anulada:{$ne:true},accounting_migration_hold_reason:{$in:['FISCAL_ADVISOR_REVIEW_PHASE1','FISCAL_POSTING_ERROR','SOURCE_CHECK_PENDING',
+          'Falló el registro fiscal OCR.','No se pudo guardar la clasificación fiscal de la factura nueva.']}},'-created_date',pageSize+1,page*pageSize);
+      return Response.json({ok:true,invoices:rows.slice(0,pageSize),hasMore:rows.length>pageSize});
+    }
+    if (action === 'confirm_source_invoice') {
+      const {invoice,companyId}=await getOwnedInvoice(base44,user,body.invoice_id,body.company_id);
+      try { return Response.json(await completeSourceInvoice(base44,user,companyId,invoice,body.criteria || {},sourceDependencies)); }
+      catch(error) { return businessError(error?.response?.data?.error || error.message,Number(error?.response?.status || error.status)||422,{invoice_id:invoice.id}); }
+    }
     if (action === 'list_fiscal_review') {
       const { companyId } = await authorizeCompany(base44, user, body.company_id);
       if (!['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user))) return Response.json({ error: 'Bandeja exclusiva del asesor o administrador.' }, { status: 403 });
@@ -633,7 +519,7 @@ Deno.serve(async (req) => {
     const owned = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
     const companyId = owned.companyId;
     const invoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, owned.invoice);
-    if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)
+    if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR', 'SOURCE_CHECK_PENDING'].includes(invoice.accounting_migration_hold_reason)
       && ['add_payment', 'reconcile', 'set_qr_pdf'].includes(action)) {
       return Response.json({ error: 'La propuesta fiscal debe aprobarse antes de cobrar, pagar o conciliar.' }, { status: 409 });
     }
@@ -776,7 +662,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'create_public_link') {
-      if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
+      if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR', 'SOURCE_CHECK_PENDING'].includes(invoice.accounting_migration_hold_reason)) {
         return Response.json({ error: 'La factura requiere validación fiscal antes de publicar el enlace.' }, { status: 409 });
       }
       if (invoice.anulada) {
