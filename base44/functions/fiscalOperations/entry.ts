@@ -358,6 +358,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         || (context.sourceCheck && !body.activityId && !invoice.fiscal_activity_id && activeForSource.length === 1 ? activeForSource[0] : null);
       if (context.sourceCheck) {
         if (invoice.estado_contable === 'contabilizada' || invoice.linked_journal_entry_id) return Response.json({ error: 'La factura ya está contabilizada; no se reclasifica desde el OCR.' }, { status: 409 });
+        const previousLines=await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',101);
+        if(previousLines.length>1 && !(Array.isArray(body.taxBreakdown) && body.taxBreakdown.length===previousLines.length))
+          return Response.json({error:'El documento tiene varias líneas fiscales. Conserva su desglose antes de confirmar; no se sustituirá por una única línea.'},{status:409});
         body = sourceDecision(invoice, body, selectedActivity, profile, canProfessionallyValidate(user));
       }
       body = advisorDecision(invoice, body, selectedActivity, user.email);
@@ -945,4 +948,3 @@ Deno.serve(async (req) => {
     if (releaseAdvanceLocks) try { await releaseAdvanceLocks(); } catch (error) { console.error('[RECC lock release]', error.message); }
   }
 });
-
