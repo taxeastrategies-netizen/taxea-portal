@@ -480,7 +480,9 @@ Deno.serve(async (req) => {
             event_label:'Factura registrada desde su documento',event_detail:payload.numero_factura,created_at:new Date().toISOString(),created_by:user.email,origin:'manual'});
           return Response.json({...result,source_truth_version:'financial-source-truth-v1'});
         } catch(error) {
-          return businessError(error?.response?.data?.error || error.message,Number(error?.response?.status || error.status)||422,
+          const reason=String(error?.response?.data?.error || error.message || 'No se pudo confirmar la factura.').slice(0,500);
+          if(!/ya está siendo confirmado/i.test(reason)) await base44.asServiceRole.entities.Invoice.update(invoice.id,{source_last_error:reason});
+          return businessError(reason,Number(error?.response?.status || error.status)||422,
             {invoice_id:invoice.id,recover_in_ocr:true});
         }
       } finally { await release(); }
@@ -497,7 +499,12 @@ Deno.serve(async (req) => {
     if (action === 'confirm_source_invoice') {
       const {invoice,companyId}=await getOwnedInvoice(base44,user,body.invoice_id,body.company_id);
       try { return Response.json(await completeSourceInvoice(base44,user,companyId,invoice,body.criteria || {},sourceDependencies)); }
-      catch(error) { return businessError(error?.response?.data?.error || error.message,Number(error?.response?.status || error.status)||422,{invoice_id:invoice.id}); }
+      catch(error) {
+        const reason=String(error?.response?.data?.error || error.message || 'No se pudo confirmar el documento.').slice(0,500);
+        if(!/ya está siendo confirmado/i.test(reason) && invoice.estado_contable!=='contabilizada')
+          await base44.asServiceRole.entities.Invoice.update(invoice.id,{source_last_error:reason});
+        return businessError(reason,Number(error?.response?.status || error.status)||422,{invoice_id:invoice.id});
+      }
     }
     if (action === 'list_fiscal_review') {
       const { companyId } = await authorizeCompany(base44, user, body.company_id);
