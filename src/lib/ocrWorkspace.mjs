@@ -42,7 +42,7 @@ export async function loadOcrWorkspace(client, companyId, documentType) {
     // Los huérfanos heredados se muestran sin crear ni modificar documentos en la carga.
     mapped.push({id:'invoice:'+invoice.id,invoiceOnly:true,invoiceSource:invoice,company_id:companyId,documentType,
       status:'review_required',originalFileName:'Completar factura '+invoice.numero_factura,fileStorageUrl:invoice.archivo_url || '',
-      uploadedAt:invoice.created_date,safeErrorMessage:'Factura ya guardada: completar su check aquí no creará otra.',
+      uploadedAt:invoice.created_date,safeErrorMessage:invoice.source_last_error || 'Factura ya guardada: completar su check aquí no creará otra.',
       extractedData:JSON.stringify(invoiceSourceData(invoice))});
   }
   return mapped;
