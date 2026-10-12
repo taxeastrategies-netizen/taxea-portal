@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, UserSearch } from 'lucide-react';
+import OcrFiscalFields from '@/components/lector/OcrFiscalFields';
 import ContactPickerModal from './ContactPickerModal';
 import RecurringFields from './RecurringFields';
 import { getDefaultRecurring, calculateNextRun } from '@/lib/recurringUtils';
@@ -57,6 +58,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const getEmpty = () => ({
     tipo: 'emitida',
     fiscal_activity_id: '',
+    fiscal_criteria: {},
     numero_factura: '',
     fecha_emision: new Date().toISOString().slice(0, 10),
     fecha_operacion: '',
@@ -109,16 +111,16 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (!open || !company?.id) return;
     let active = true;
     setFiscalContext({ profile: null, activities: [], loading: true });
-    import('@/api/base44Client').then(({ base44 }) => base44.functions.invoke('fiscalOperations', { action: 'bundle', companyId: company.id }))
+    import('@/api/base44Client').then(({ base44 }) => base44.functions.invoke('fiscalOperations', { action: 'source_context', companyId: company.id }))
       .then(response => {
         if (!active) return;
         const bundle = response?.data || response;
         const activities = (bundle?.activities || []).filter(item => item.active !== false);
-        setFiscalContext({ profile: bundle?.profile || null, activities, loading: false });
+        setFiscalContext({ ...bundle, profile: bundle?.profile || null, activities, loading: false });
         if (!editing && activities.length === 1) setForm(current => current.fiscal_activity_id ? current : {
           ...current,
           fiscal_activity_id: activities[0].id,
-          tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(activities[0].indirectTaxRegime) ? 0 : current.tipo_iva,
+          tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic','comerciante_minorista_igic'].includes(activities[0].indirectTaxRegime) ? 0 : current.tipo_iva,
         });
       })
       .catch(() => { if (active) setFiscalContext({ profile: null, activities: [], loading: false }); });
@@ -240,6 +242,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           company_id: company.id,
           idempotency_key: creationKeyRef.current,
           invoice: { ...payload, numero_factura: payload.numero_factura.trim() },
+          fiscal_criteria:{...form.fiscal_criteria,activityId:form.fiscal_activity_id || undefined,
+            ...(quotaRows.length?{taxBreakdown:quotaRows.map(row=>({base:Number(row.base),rate:Number(row.rate),quota:Math.round(Number(row.base)*Number(row.rate))/100}))}:{})},
         });
         const result = response?.data || response;
         if (!result?.ok || !result?.invoice) throw new Error(result?.error || 'No se pudo crear la factura.');
@@ -307,16 +311,12 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             return;
           }
         }
-        if (result.review_required) {
-          setSaveNotice('Documento guardado como pendiente. El asesor debe confirmar su clasificación fiscal antes de emitir el QR, enviar o contabilizar.');
-          onSaved?.();
-          return;
-        }
+        window.dispatchEvent(new Event('financials:refresh'));
       }
       onSaved?.();
       onOpenChange(false);
     } catch (error) {
-      setSaveError(error?.response?.data?.error || error?.message || 'No se pudo guardar la factura. Inténtalo de nuevo.');
+      setSaveError((error?.response?.data?.error || error?.message || 'No se pudo guardar la factura.')+(error?.response?.data?.recover_in_ocr?' La factura está guardada: completa el criterio en el OCR correspondiente sin crear otra.':''));
     } finally {
       setSaving(false);
     }
@@ -330,13 +330,13 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         </DialogHeader>
         {form.tipo === 'emitida' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            El número quedará reservado y la factura pendiente de revisión. El QR tributario se genera tras la confirmación fiscal y contable del asesor. La remisión VERI*FACTU a la AEAT no está activada.
+            Guardar registra directamente la factura y su asiento, con QR tributario y huella única. No hay un segundo check. La remisión VERI*FACTU a la AEAT sigue desactivada.
           </div>
         )}
 
         <div className="space-y-5 mt-2">
           {fiscalContext.loading ? <p className="text-xs text-muted-foreground">Comprobando perfil fiscal…</p> : !fiscalContext.profile || fiscalContext.profile.profileStatus !== 'validado_asesor' ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Puedes guardar una propuesta, pero el asesor debe validar el perfil y la actividad en Configuración fiscal antes de confirmar la factura y su asiento. Las facturas y subcuentas anteriores no cambian.</div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">El asesor debe validar el encuadramiento de la empresa en Configuración fiscal. Después, guardar registrará directamente la factura y el asiento. No modifica facturas ni subcuentas anteriores.</div>
           ) : null}
           {fiscalContext.activities.length > 0 && (
             <div className="space-y-1.5">
@@ -344,7 +344,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <Select value={form.fiscal_activity_id || ''} onValueChange={value => {
                 const activity = fiscalContext.activities.find(item => item.id === value);
                 setForm(current => ({ ...current, fiscal_activity_id: value,
-                  tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic'].includes(activity?.indirectTaxRegime) ? 0 : current.tipo_iva,
+                  tipo_iva: current.tipo === 'emitida' && ['exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic','comerciante_minorista_igic'].includes(activity?.indirectTaxRegime) ? 0 : current.tipo_iva,
                 }));
               }}>
                 <SelectTrigger><SelectValue placeholder="Selecciona una actividad" /></SelectTrigger>
@@ -353,6 +353,11 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <ErrMsg msg={errors.fiscal_activity_id} />
             </div>
           )}
+          <details className="rounded-xl border p-3">
+            <summary className="cursor-pointer text-sm font-medium">Criterio fiscal de esta factura (opcional)</summary>
+            <div className="mt-3"><OcrFiscalFields value={form.fiscal_criteria || {}} onChange={value=>setForm(current=>({...current,fiscal_criteria:value}))}
+              context={fiscalContext} direction={form.tipo==='recibida'?'gasto':'ingreso'} activityId={form.fiscal_activity_id} sourceTaxRate={form.tipo_iva} disabled={saving} /></div>
+          </details>
           {/* Tipo + Nº */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
