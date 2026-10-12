@@ -292,7 +292,7 @@ export default function Facturas() {
         )}
 
         {fiscalPendingInvoices.length > 0 && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <strong>{fiscalPendingInvoices.length} documento(s) pendientes de revisión fiscal.</strong> Todavía no figuran en los totales, libros o modelos ni admiten envío. El asesor los confirma en Contabilidad → Revisión fiscal.
+          <strong>{fiscalPendingInvoices.length} documento(s) incompletos del flujo anterior.</strong> Se completan desde el check del OCR de facturas emitidas o recibidas, reutilizando la factura existente. No se crean copias.
           <div className="mt-2 text-xs">{fiscalPendingInvoices.slice(0, 8).map(inv => inv.numero_factura || inv.id).join(' · ')}{fiscalPendingInvoices.length > 8 ? ' · …' : ''}</div>
         </div>}
 
