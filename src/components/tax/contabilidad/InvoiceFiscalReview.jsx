@@ -43,6 +43,8 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const selectedRegime = form.regime || selectedActivity?.indirectTaxRegime || 'general';
   const specialInputs = form.specialInputs || {};
 
+  useEffect(() => {setBundle(null);setEvaluation(null);setClassificationSaved(false);},[companyId,invoice.id,invoice.updated_date]);
+
   useEffect(() => {
     if (!open) return;
     if (advisorAccess) { setCanApprove(true); return; }
