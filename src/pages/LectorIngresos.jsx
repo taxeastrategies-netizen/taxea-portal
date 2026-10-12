@@ -375,6 +375,7 @@ export default function LectorIngresos() {
           }catch(error){
             failed++;
             const message=error?.response?.data?.error || error.message;
+            if(Number(error?.response?.status)===409 && /otra aprobaci[oó]n|siendo confirmado/i.test(message)) cancelBulk.current=true;
             setDocuments(rows=>rows.map(row=>row.id===id?{...row,safeErrorMessage:message}:row));
           }
           setBulkProgress({done,failed,total:bulkIds.length});
