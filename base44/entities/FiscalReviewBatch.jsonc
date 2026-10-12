@@ -1,0 +1,92 @@
+{
+  "name": "FiscalReviewBatch",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "request_id": {
+      "type": "string"
+    },
+    "criteria": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "preparing",
+        "ready",
+        "running",
+        "paused",
+        "completed",
+        "failed"
+      ]
+    },
+    "total": {
+      "type": "integer"
+    },
+    "processed": {
+      "type": "integer"
+    },
+    "succeeded": {
+      "type": "integer"
+    },
+    "failed": {
+      "type": "integer"
+    },
+    "pending_accounting": {
+      "type": "integer"
+    },
+    "chunk_index": {
+      "type": "integer"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "lock_token": {
+      "type": "string"
+    },
+    "lock_started_at": {
+      "type": "string"
+    },
+    "last_error": {
+      "type": "string"
+    },
+    "recovery_by": {
+      "type": "string"
+    },
+    "recovery_reason": {
+      "type": "string"
+    },
+    "recovery_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "request_id",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "super_admin"
+      }
+    }
+  }
+}
