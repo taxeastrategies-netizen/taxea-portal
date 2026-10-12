@@ -42,7 +42,7 @@ export default function OcrReviewWorkspace({ kind, documents, selectedId, loadin
       </header>
       <main className="min-h-0 flex-1 p-3 md:p-5">
         <div className="mx-auto h-full max-w-[1800px]">
-          {position >= 0 ? children : (
+          {position >= 0 ? (children || <div className="flex h-full items-center justify-center rounded-xl border bg-card text-sm text-muted-foreground">Preparando la siguiente factura…</div>) : (
             <div className="flex h-full flex-col items-center justify-center gap-4 rounded-xl border border-border bg-card p-8 text-center">
               {loading ? <p className="text-muted-foreground">Cargando documentos…</p> : (
                 <>
