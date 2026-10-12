@@ -7,10 +7,10 @@ import {
   Shield, CheckSquare, Clock, AlertTriangle, BarChart2,
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
-  Package, BookOpen, ScanLine, ScanText, Calendar,
-  Lock, Wallet, Scale, UserCog, Heart, Gavel, Building2, Target, DollarSign, CreditCard,
-  Warehouse, ArrowDownUp, Layers, Truck, Cpu, Map, Kanban,
-  Folder, Zap, Megaphone, HardDrive, BriefcaseBusiness, Wrench, Files, FileSpreadsheet, CalendarClock
+  BookOpen, ScanLine, ScanText, Calendar,
+  Lock, Wallet, Scale, UserCog, Heart, Gavel, Building2, Target, CreditCard,
+  Map,
+  HardDrive, BriefcaseBusiness, Wrench, Files, FileSpreadsheet, CalendarClock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
