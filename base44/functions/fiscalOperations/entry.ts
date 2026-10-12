@@ -355,6 +355,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
       body = advisorDecision(invoice, body, selectedActivity, user.email);
       if (!context.lockHeld && clean(invoice.fiscal_review_lock_token)) return Response.json({error:'Otra revisión está procesando la factura.'},{status:409});
+      if (invoice.tipo === 'emitida' && body.operationType === 'intra_eu_acquisition') return Response.json({error:'Una factura emitida no es una adquisición intracomunitaria. Revisa el tipo de operación o separa el lote por tipo de factura.'},{status:422});
       if (invoice.anulada) return Response.json({error:'La factura está anulada.'},{status:409});
       const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
       if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
