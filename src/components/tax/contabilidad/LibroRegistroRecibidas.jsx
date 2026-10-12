@@ -1,4 +1,5 @@
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
+import { fiscalTreatmentLabel } from '@/lib/fiscalTreatmentLabel';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -194,7 +195,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
                       </a>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-3 py-2"><span className="text-xs text-muted-foreground" title={inv.fiscal_legal_basis || ''}>{inv.fiscal_treatment || 'Histórico'}</span></td>
+                  <td className="px-3 py-2"><span className="text-xs text-muted-foreground" title={inv.fiscal_legal_basis || ''}>{fiscalTreatmentLabel(inv.fiscal_treatment)}</span></td>
                 </tr>
               ))}
             </tbody>
