@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { CopyCheck, Loader2, Trash2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { CopyCheck, Loader2, AlertTriangle, CheckCircle, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
@@ -38,15 +39,15 @@ const STATUS_COLORS = {
 };
 
 export default function DuplicateCheckModal({ open, onClose, companyId, scope, scopeLabel }) {
-  const [periodType, setPeriodType] = useState('quarter');
+  const navigate = useNavigate();
+  const [periodType, setPeriodType] = useState('all');
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [periodValue, setPeriodValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState(null);
 
   const currentYear = new Date().getFullYear();
-  const years = [currentYear, currentYear - 1, currentYear - 2, currentYear - 3];
+  const years = Array.from({ length: 12 }, (_, index) => currentYear - index);
 
   const periodOptions = periodType === 'month'
     ? Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][i] }))
@@ -74,40 +75,16 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
     }
   };
 
-  const handleDelete = async () => {
-    if (!result || !result.duplicateGroups) return;
-    const toDelete = result.duplicateGroups.flatMap(g => g.toDelete);
-    if (toDelete.length === 0) return;
-
-    setDeleting(true);
-    let deleted = 0;
-    let errors = 0;
-
-    for (const item of toDelete) {
-      try {
-        if (item.entityType === 'OcrInvoiceDocument') {
-          await base44.entities.OcrInvoiceDocument.delete(item.id);
-        } else if (item.entityType === 'Invoice') {
-          await base44.functions.invoke('anularFacturas', {
-            invoiceIds: [item.id],
-            motivo: 'Duplicado detectado y revisado',
-            companyId,
-          });
-        }
-        deleted++;
-      } catch {
-        errors++;
-      }
-    }
-
-    setDeleting(false);
-    if (errors === 0) {
-      toast.success(`${deleted} duplicados tratados correctamente`);
-    } else {
-      toast.warning(`${deleted} tratados, ${errors} errores`);
-    }
+  const openRecord = item => {
+    const direction = scope === 'ocr_income' || scope === 'invoices_emitida' ? 'ingresos' : 'gastos';
+    const destination = item.entityType === 'OcrInvoiceDocument'
+      ? ['review_required', 'validated'].includes(item.status)
+        ? `/tax-accounting/ocr-${direction}-revision?doc=${encodeURIComponent(item.id)}`
+        : `/tax-accounting/lector-${direction}`
+      : '/tax-accounting/facturas';
     setResult(null);
     onClose();
+    navigate(destination);
   };
 
   const handleClose = () => {
@@ -185,11 +162,12 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
               ) : (
                 <span className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
                   <AlertTriangle className="w-4 h-4" />
-                  {result.duplicateGroupsCount} grupo(s) de duplicados · {result.totalToDelete} registro(s) a eliminar · {result.totalRecordsAnalyzed} analizados
+                  {result.duplicateGroupsCount} coincidencia(s) para revisar · {result.totalRecordsAnalyzed} registros analizados
                 </span>
               )}
             </div>
 
+            {result.duplicateGroupsCount > 0 && <p className="text-xs text-muted-foreground">Solo se avisa cuando coinciden tercero, número y fecha. El importe se muestra como apoyo, pero no decide. No se elimina ningún documento ni asiento automáticamente; revisa cada pareja antes de rechazar un OCR o anular una factura.</p>}
             {result.duplicateGroups?.map((group, idx) => (
               <div key={idx} className="border border-border rounded-lg overflow-hidden">
                 <div className="bg-amber-50 border-b border-amber-200 px-4 py-2">
@@ -199,12 +177,8 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
                 </div>
                 <div className="divide-y divide-border">
                   {group.allItems.map((item, i) => (
-                    <div key={i} className={`flex items-center gap-3 px-4 py-2.5 ${item.action === 'delete' ? 'bg-red-50/50' : 'bg-green-50/50'}`}>
-                      <div className="flex-shrink-0">
-                        {item.action === 'keep'
-                          ? <CheckCircle className="w-4 h-4 text-green-600" />
-                          : <Trash2 className="w-4 h-4 text-red-500" />}
-                      </div>
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="flex-shrink-0"><AlertTriangle className="w-4 h-4 text-amber-600" /></div>
                       <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                         <div>
                           <span className="text-muted-foreground">Nº: </span>
@@ -233,32 +207,14 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
                           </span>
                         </div>
                       )}
-                      <div className="flex-shrink-0 text-xs font-medium">
-                        {item.action === 'keep'
-                          ? <span className="text-green-600">Mantener</span>
-                          : <span className="text-red-500">Eliminar</span>}
-                      </div>
+                      <Button size="sm" variant="outline" onClick={() => openRecord(item)}>Abrir {item.entityType === 'Invoice' ? 'facturas' : 'OCR'}</Button>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
 
-            {result.duplicateGroupsCount > 0 && (
-              <DialogFooter className="mt-4">
-                <Button variant="outline" onClick={handleClose} disabled={deleting}>
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="bg-red-600 hover:bg-red-700 text-white"
-                >
-                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {deleting ? 'Eliminando...' : `Eliminar ${result.totalToDelete} duplicado(s)`}
-                </Button>
-              </DialogFooter>
-            )}
+            {result.duplicateGroupsCount > 0 && <DialogFooter className="mt-4"><Button variant="outline" onClick={handleClose}>Cerrar revisión</Button></DialogFooter>}
           </div>
         )}
       </DialogContent>
