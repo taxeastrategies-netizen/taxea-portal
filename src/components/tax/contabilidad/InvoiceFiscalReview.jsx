@@ -30,6 +30,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const [catalog, setCatalog] = useState(/** @type {any} */ (null));
   const [evaluation, setEvaluation] = useState(/** @type {any} */ (null));
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [canApprove, setCanApprove] = useState(false);
   const [classificationSaved, setClassificationSaved] = useState(false);
   const [lockRecoveryReason, setLockRecoveryReason] = useState('');
@@ -42,8 +43,6 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   const taxKind = form.taxKind || selectedActivity?.indirectTax || bundle?.profile?.indirectTaxDefault || invoice.indirect_tax_kind || 'iva';
   const selectedRegime = form.regime || selectedActivity?.indirectTaxRegime || 'general';
   const specialInputs = form.specialInputs || {};
-
-  useEffect(() => {setBundle(null);setEvaluation(null);setClassificationSaved(false);},[companyId,invoice.id,invoice.updated_date]);
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +123,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   });
 
   const review = async () => {
-    setSaving(true); setError('');
+    setSaving(true); setError(''); setNotice('');
     try {
       const result = await invoke(payload(false));
       if (result.mode === 'saved') {
@@ -135,7 +134,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   };
 
   const confirm = async () => {
-    setSaving(true); setError('');
+    setSaving(true); setError(''); setNotice('');
     try {
       if (bulkCount) {
         await onBulkConfirm({...form,taxKind,applyTaxRate,applyWithholding});
@@ -146,7 +145,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       if (!classificationSaved) {
         const result = await invoke(payload(true));
         confirmedEvaluation = result.evaluation;
-        if (result.mode === 'classified_pending') {setEvaluation(result.evaluation);setError(result.warning);return;}
+        if (result.mode === 'classified_pending') {setEvaluation(result.evaluation);setNotice(result.warning);return;}
         if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
         setClassificationSaved(true);
       }
@@ -317,6 +316,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <textarea value={form.manualOverrideReason || ''} onChange={event => update('manualOverrideReason', event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2" />
                 </label>}
 
+                {notice && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{notice}</div>}
                 {error && <div className="flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700"><AlertTriangle className="h-4 w-4 flex-shrink-0" />{error}</div>}
                 {evaluation && <div className={`rounded-xl border p-4 text-xs ${evaluation.reviewRequired ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
                   <div className="flex items-center gap-2 font-bold">{evaluation.reviewRequired ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}{evaluation.reviewRequired ? 'Revisión profesional requerida' : 'Regla fiscal coherente'}</div>
