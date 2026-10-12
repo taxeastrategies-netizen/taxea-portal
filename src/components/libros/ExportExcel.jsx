@@ -1,3 +1,5 @@
+import { base44 } from '@/api/base44Client';
+
 // Excel export using SpreadsheetML (XML) for cell style support (green highlighting)
 
 function escapeXml(str) {
