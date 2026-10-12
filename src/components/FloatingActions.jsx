@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Upload, FileText, FileCheck, MessageSquare, TrendingDown } from 'lucide-react';
+import { Plus, X, Upload, FileText, FileCheck, TrendingDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const actions = [
@@ -8,7 +8,6 @@ const actions = [
 { icon: Upload, label: 'Subir ingreso', color: 'bg-blue-500', path: '/lector-ingresos' },
 { icon: FileText, label: 'Crear factura', color: 'bg-taxea-red', path: '/facturas?nueva=true' },
 { icon: FileCheck, label: 'Crear presupuesto', color: 'bg-purple-500', path: '/presupuestos?nuevo=true' },
-{ icon: MessageSquare, label: 'Mis tareas', color: 'bg-slate-600', path: '/tareas' },
 ];
 
 export default function FloatingActions() {
