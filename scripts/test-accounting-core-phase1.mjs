@@ -187,7 +187,7 @@ const specialRegimeInvoice = await entity('Invoice').create({
 });
 await assert.rejects(() => postInvoice(svc, 'company-a', specialRegimeInvoice, 'tester@taxea.test'), /Régimen especial sin circuito contable completo/);
 const reverseChargeInvoice = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-ISP', fiscal_treatment: 'reverse_charge' });
-await assert.rejects(() => postInvoice(svc, 'company-a', reverseChargeInvoice, 'tester@taxea.test'), /asientos fiscales específicos/);
+await assert.rejects(() => postInvoice(svc, 'company-a', reverseChargeInvoice, 'tester@taxea.test'), /línea fiscal confirmada coherente/);
 const surchargeInvoice = await entity('Invoice').create({ company_id: 'company-a', tipo: 'recibida', numero_factura: 'F-RECARGO', cuota_recargo: 5.2 });
 await assert.rejects(() => postInvoice(svc, 'company-a', surchargeInvoice, 'tester@taxea.test'), /asientos fiscales específicos/);
 assert.equal(records.JournalEntry.length, postingCountBeforeFiscalGuard, 'Los casos fiscales bloqueados no deben crear asientos.');
@@ -234,6 +234,30 @@ assert.equal(records.InvoiceTaxLine.find(item => item.invoiceId === recargoRetai
 const recargoSaleRetry = await postInvoice(svc, 'company-a', records.Invoice.find(item => item.id === recargoRetailSale.id), 'advisor@taxea.test');
 assert.equal(recargoSaleRetry.alreadyPosted, true);
 assert.equal(records.JournalEntry.filter(item => item.documentId === recargoRetailSale.id).length, 1);
+
+
+const intraPurchase = await entity('Invoice').create({
+  company_id:'company-a',tipo:'recibida',numero_factura:'R-INTRA-VALIDA',fecha_emision:'2024-07-06',
+  proveedor_nombre:'Proveedor UE sintético',proveedor_nif:'DETEST',concepto:'Servicio intracomunitario',
+  base_imponible:100,tipo_iva:0,cuota_iva:0,total_factura:100,importe_retencion:0,moneda:'EUR',
+  self_assessed_tax_confirmed:true,self_assessed_tax_rate:21,self_assessed_tax_amount:21,
+  deductible_tax_amount:10.5,non_deductible_tax_amount:10.5,indirect_tax_kind:'iva',
+  fiscal_regime:'general',fiscal_treatment:'intra_eu_acquisition',fiscal_review_status:'validado',
+  fiscal_reviewed_by:'advisor@taxea.test'
+});
+await entity('InvoiceTaxLine').create({companyId:'company-a',invoiceId:intraPurchase.id,lineNumber:1,
+  regime:'general',taxKind:'iva',operationType:'intra_eu_acquisition',rate:21,base:100,quota:21,
+  deductibleQuota:10.5,nonDeductibleQuota:10.5,deductionCategory:'intra_services',reviewStatus:'validado',reviewedBy:'advisor@taxea.test'});
+const intraPosting=await postInvoice(svc,'company-a',intraPurchase,'advisor@taxea.test',{status:'confirmado'});
+assert.equal(intraPosting.entry.status,'confirmado');
+const intraLines=records.JournalEntryLine.filter(row=>row.journalEntryId===intraPosting.entry.id);
+assert.equal(intraLines.find(row=>row.accountCode==='47200000').debit,10.5);
+assert.equal(intraLines.find(row=>row.accountCode==='47700000').credit,21);
+assert.equal(intraLines.find(row=>row.sourceLineType==='tercero').credit,100);
+assert.equal(intraLines.find(row=>row.sourceLineType==='gasto').debit,110.5);
+assert.equal(intraLines.reduce((sum,row)=>sum+row.debit-row.credit,0),0);
+assert.equal((await postInvoice(svc,'company-a',records.Invoice.find(row=>row.id===intraPurchase.id),'advisor@taxea.test')).alreadyPosted,true);
+assert.equal(records.JournalEntry.filter(row=>row.documentId===intraPurchase.id).length,1);
 
 records.FiscalActivity[0].indirectTaxRegime = 'criterio_caja';
 const reccSale = await entity('Invoice').create({ company_id: 'company-a', tipo: 'emitida', numero_factura: 'E-RECC-VALIDA', fecha_emision: '2024-07-07', cliente_nombre: 'Cliente RECC sintético', cliente_nif: 'B55555555', concepto: 'Servicio RECC', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121, importe_retencion: 0, deductible_tax_amount: 0, indirect_tax_kind: 'iva', fiscal_regime: 'criterio_caja', fiscal_treatment: 'subject_taxed', fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_activity_id: 'fa', moneda: 'EUR' });
@@ -306,6 +330,7 @@ console.log(JSON.stringify({
     pendingFiscalInvoiceCannotPostThroughSharedEngine: true,
     specialRegimeCannotUseGeneralPosting: true,
     reverseChargeAndSurchargeRequireDedicatedPosting: true,
+    intraServicesPostsBalanced472477Once: true,
     closeCreatesRegularizationClosingAndOpening: true,
     reopenUsesThreeImmutableReversals: true,
     closeAndReopenAreAudited: true,
