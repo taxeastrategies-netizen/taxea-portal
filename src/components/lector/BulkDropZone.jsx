@@ -10,7 +10,7 @@ const MAX_TOTAL_MB = 500;
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp';
 
 export default function BulkDropZone({ onFilesAdded }) {
-  const inputRef = useRef();
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [dragging, setDragging] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
