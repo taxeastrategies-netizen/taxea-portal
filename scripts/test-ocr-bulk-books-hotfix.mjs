@@ -30,6 +30,13 @@ assert.equal(progress.at(-1).failed,1);
 const multi=await approveStoredOcrBatch(client,'qa',documents,['a'],mapForm,'recibida',{activities:[{id:'x'},{id:'y'}]});
 assert.equal(multi.failed,1);
 assert.equal(calls.length,2);
+const largeDocs=Array.from({length:200},(_,index)=>({id:`large-${index}`,company_id:'qa',status:'review_required',
+  extractedData:JSON.stringify({numero_factura:`L-${index}`,cuenta_pgc:index%2?'629':'602',fiscal_criteria:{operationType:index%2?'subject_taxed':'intra_eu_acquisition'}})}));
+const large=await approveStoredOcrBatch(client,'qa',largeDocs,largeDocs.map(row=>row.id),mapForm,'recibida',{activities:[{id:'activity-qa'}]});
+assert.deepEqual({done:large.done,failed:large.failed,remaining:large.remaining},{done:200,failed:0,remaining:0});
+assert.equal(calls.length,202);
+assert.equal(calls[2].form.cuenta_pgc,'602');
+assert.equal(calls[3].form.cuenta_pgc,'629');
 
 let clicks=0,blob=null;
 class TestBlob { constructor(parts){this.parts=parts;} }
