@@ -378,11 +378,13 @@ export default function LectorIngresos({ reviewPage = false }) {
 
   const handleValidate = async (docId, form) => {
     if (!form.numero_factura) {
+      setReviewError('El número de factura es obligatorio.');
       setToast({ type: 'error', message: 'El número de factura es obligatorio.' });
       setTimeout(() => setToast(null), 6000);
       return;
     }
     if (!form.fecha_emision) {
+      setReviewError('La fecha de emisión es obligatoria.');
       setToast({ type: 'error', message: 'La fecha de emisión es obligatoria.' });
       setTimeout(() => setToast(null), 6000);
       return;
@@ -390,6 +392,7 @@ export default function LectorIngresos({ reviewPage = false }) {
     const baseValue = parseFloat(form.base_imponible);
     const isRectificative = form.es_rectificativa === true || form.es_rectificativa === 'true';
     if (!Number.isFinite(baseValue) || baseValue === 0 || (baseValue < 0 && !isRectificative)) {
+      setReviewError('La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.');
       setToast({ type: 'error', message: 'La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.' });
       setTimeout(() => setToast(null), 6000);
       return;
