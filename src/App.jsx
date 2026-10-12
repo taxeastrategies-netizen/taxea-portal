@@ -30,7 +30,6 @@ const Documentos = lazy(() => import('./pages/Documentos'));
 const Ajustes = lazy(() => import('./pages/Ajustes'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const Timeline = lazy(() => import('./pages/Timeline'));
-const Tareas = lazy(() => import('./pages/Tareas'));
 const DetectorErrores = lazy(() => import('./pages/DetectorErrores'));
 const Notificaciones = lazy(() => import('./pages/Notificaciones'));
 const AsistenteFiscal = lazy(() => import('./pages/AsistenteFiscal'));
@@ -89,7 +88,6 @@ function AppWithContext({ user }) {
       <Routes>
         <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} refreshCompany={refreshCompany} />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/tareas" element={<Tareas />} />
           <Route path="/timeline" element={<Timeline />} />
           <Route path="/facturas" element={<Facturas />} />
           <Route path="/ingresos-gastos" element={<IngresosGastos />} />
