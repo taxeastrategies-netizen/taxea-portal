@@ -186,6 +186,12 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <label className="mt-2 flex gap-2"><input type="checkbox" checked={applyTaxRate} onChange={e=>setApplyTaxRate(e.target.checked)} />Aplicar también el tipo indicado (necesario para autorrepercusión; conserva el total del proveedor)</label>
                   <label className="mt-2 flex gap-2"><input type="checkbox" checked={applyWithholding} onChange={e=>setApplyWithholding(e.target.checked)} />Aplicar también la retención indicada; si no, conservar la de cada documento</label>
                 </div>}
+                {!bulkCount && invoice.fiscal_review_lock_token && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+                  Hay una revisión en curso o interrumpida. Solo recupera tras diez minutos y cuando el proceso haya terminado.
+                  <input className="my-2 w-full rounded border p-2" placeholder="Motivo de recuperación" value={lockRecoveryReason} onChange={e=>setLockRecoveryReason(e.target.value)} />
+                  <label className="flex gap-2"><input type="checkbox" checked={lockProcessStopped} onChange={e=>setLockProcessStopped(e.target.checked)} />Confirmo que ya no está procesándose</label>
+                  <button type="button" className="mt-2 underline" onClick={()=>invoke({action:'recover_invoice_review_lock',companyId,invoiceId:invoice.id,expectedToken:invoice.fiscal_review_lock_token,processStopped:lockProcessStopped,reason:lockRecoveryReason}).then(()=>{setOpen(false);window.dispatchEvent(new Event('financials:refresh'));}).catch(e=>setError(reviewError(e)))}>Recuperar revisión con trazabilidad</button>
+                </div>}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-medium text-slate-700">Actividad
                     <select value={form.activityId || ''} onChange={event => update('activityId', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
@@ -238,7 +244,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                     </select>
                     <span className="mt-1 block font-normal text-slate-500">La elección queda en la línea fiscal y debe revisarla el asesor; el porcentaje general no se aplica a los gastos exclusivos.</span>
                   </label>}
-                  {invoice.tipo === 'recibida' && selectedActivity?.deductionRight !== 'prorrata_especial' && <label className="text-xs font-medium text-slate-700">Cuota deducible (%)
+                  {invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Cuota deducible (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.deductiblePercent ?? 0} onChange={event => update('deductiblePercent', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>}
                   {invoice.tipo === 'recibida' && taxKind === 'iva' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Clasificación anual para el modelo 390
