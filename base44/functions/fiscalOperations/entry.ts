@@ -4,6 +4,7 @@ import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibi
 import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal, acquireReccAdvanceLocks, recoverReccAdvanceLock } from './reccAdvances.mjs';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
+import { fiscalReviewBatch } from './fiscalReviewBatch.mjs';
 import { advisorDecision, selfAssessment, reviewFilter, commonReviewCriteria } from './advisorReview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
@@ -353,14 +354,6 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
       body = advisorDecision(invoice, body, selectedActivity, user.email);
       if (invoice.anulada) return Response.json({error:'La factura está anulada.'},{status:409});
-      if (body.confirmReviewed === true && !context.lockHeld) {
-        const token = crypto.randomUUID();
-        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
-          $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
-          {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
-        if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
-        reviewToken = token;
-      }
       const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
       if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
         const payments = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'payment_date', 501);
@@ -548,6 +541,14 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         clean(invoice.indirect_tax_kind || evaluation.taxKind) !== evaluation.taxKind ||
         evaluation.accounting?.reverseCharge
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
+      if (body.confirmReviewed === true && !context.lockHeld) {
+        const token = crypto.randomUUID();
+        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+          $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
+          {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
+        if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
+        reviewToken = token;
+      }
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
       const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const proposedBreakdown = evaluation.regime === 'criterio_caja' && Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : null;
@@ -614,7 +615,7 @@ Deno.serve(async (req) => {
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
-    if (['save_invoice_tax_line','recover_recc_advance_lock'].includes(action) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
+    if ((['save_invoice_tax_line','recover_recc_advance_lock','review_context'].includes(action) || action.includes('review_batch')) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
     if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 
     if (action === 'recover_recc_advance_lock') return Response.json(await recoverReccAdvanceLock(svc,companyId,clean(body.invoiceId),body,user.email));
@@ -624,11 +625,19 @@ Deno.serve(async (req) => {
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
-      ['bundle','save_model'].includes(action) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
+      (!['save_invoice_tax_line','review_context'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
       action === 'bundle' ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
     ]);
     const profile = profiles?.[0] || null;
 
+    if (action.includes('review_batch')) return Response.json(await fiscalReviewBatch({svc:base44.asServiceRole,base44,companyId,user,
+      save:(input: any,batchId: string)=>saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,lockHeld:true,batchId},input)},body));
+    if (action === 'review_context') {
+      const invoiceTaxLines = body.invoiceId ? await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:body.invoiceId},'lineNumber',100) : [];
+      const invoicePayments = body.includePayments && body.invoiceId ? await svc.entities.InvoicePayment.filter({company_id:companyId,invoice_id:body.invoiceId},'payment_date',501) : [];
+      return Response.json({success:true,profile,activities,invoiceTaxLines,invoicePayments:invoicePayments.length>500?[]:invoicePayments,
+        invoicePaymentsTruncated:invoicePayments.length>500,regimes:REGIMES,operations:OPERATIONS,exemptionKeys:EXEMPTION_KEYS});
+    }
     if (action === 'recc_advance_candidates') {
       const target = await svc.entities.Invoice.get(clean(body.invoiceId));
       if (!target || target.company_id !== companyId) return Response.json({ error: 'Factura no accesible.' }, { status: 403 });
