@@ -107,7 +107,7 @@ export async function findFinancialDuplicates(svc, doc, invoiceData) {
   for (let skip = 0; ; skip += 200) {
     const batch = await svc.entities.Invoice.filter({
       company_id: doc.company_id, tipo: invoiceData.tipo,
-      numero_factura: invoiceData.numero_factura, fecha_emision: invoiceData.fecha_emision,
+      fecha_emision: invoiceData.fecha_emision,
     }, '-created_date', 200, skip);
     candidates.push(...batch);
     if (batch.length < 200) break;
