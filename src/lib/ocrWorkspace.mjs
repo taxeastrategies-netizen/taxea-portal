@@ -1,4 +1,5 @@
 import { loadOcrDocuments } from './loadOcrDocuments.mjs';
+const parsed=(raw,fallback)=>{try{return JSON.parse(raw || JSON.stringify(fallback));}catch{return fallback;}};
 export function invoiceSourceData(invoice) {
   return {numero_factura:invoice.numero_factura,fecha:invoice.fecha_emision,fecha_emision:invoice.fecha_emision,
     fecha_recepcion:invoice.fecha_recepcion,fecha_vencimiento:invoice.fecha_vencimiento,
@@ -10,8 +11,8 @@ export function invoiceSourceData(invoice) {
     categoria_sugerida:invoice.categoria_gasto,es_rectificativa:invoice.es_rectificativa,factura_rectificada:invoice.factura_rectificada,
     fiscal_activity_id:invoice.fiscal_activity_id,cuenta_contable_manual:invoice.revenue_expense_account_code,
     fiscal_criteria:{...(invoice.fiscal_advisor_decision?.criteria || {}),
-      ...(invoice.recc_metadata?{recc:JSON.parse(invoice.recc_metadata)}:{}),
-      ...(invoice.tax_breakdown?{taxBreakdown:JSON.parse(invoice.tax_breakdown)}:{}),
+      ...(invoice.recc_metadata?{recc:parsed(invoice.recc_metadata,{})}:{}),
+      ...(invoice.tax_breakdown?{taxBreakdown:parsed(invoice.tax_breakdown,[])}:{}),
       ...(invoice.fiscal_treatment?{operationType:invoice.fiscal_treatment}:{}),
       ...(invoice.fiscal_regime?{regime:invoice.fiscal_regime}:{}),
       ...(invoice.indirect_tax_kind?{taxKind:invoice.indirect_tax_kind}:{}),
@@ -45,7 +46,7 @@ export async function loadOcrWorkspace(client, companyId, documentType) {
   }
   return mapped;
 }
-export async function approveWorkspaceDocument(client, companyId, doc, form, invoiceType) {
+async function approveOnce(client, companyId, doc, form, invoiceType) {
   const response=doc?.invoiceOnly
     ? await client.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',company_id:companyId,
       invoice_id:doc.invoiceSource.id,criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined,accountCode:form.cuenta_contable_manual || undefined}})
@@ -54,4 +55,15 @@ export async function approveWorkspaceDocument(client, companyId, doc, form, inv
   const result=response?.data??response;
   if(!result?.success || result.review_required) throw new Error(result?.error || result?.message || 'La factura todavía no está contabilizada.');
   return result;
+}
+
+export async function approveWorkspaceDocument(client,companyId,doc,form,invoiceType) {
+  for(let attempt=0;attempt<3;attempt++){
+    try{return await approveOnce(client,companyId,doc,form,invoiceType);}
+    catch(error){
+      const status=Number(error?.response?.status || error.status);
+      if(![429,502,503,504].includes(status) || attempt===2)throw error;
+      await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));
+    }
+  }
 }
