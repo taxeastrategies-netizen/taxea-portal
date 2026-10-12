@@ -91,7 +91,7 @@ export default function LibroRegistros() {
   const totalTotalC = [...recibidas].reduce((s, i) => s + (i.total_factura || 0), 0)
     + gastosF.reduce((s, e) => s + (e.total || 0), 0);
 
-  const handleExport = async () => {
+  const handleExport = async (onlyInvoiceBooks = false) => {
     setExporting(true);
     setExportError('');
     setExportNotice('');
@@ -108,6 +108,7 @@ export default function LibroRegistros() {
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
       newInvoiceIds, newExpenseIds,
       lastExportDate: lastSnapshot?.exportedAt,
+      onlyInvoiceBooks,
     });
     if (exportResult?.warning) setExportNotice(exportResult.warning);
     // Save snapshot
@@ -196,7 +197,10 @@ export default function LibroRegistros() {
               )}
             </div>
           )}
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExport} disabled={exporting}>
+          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={() => handleExport(true)} disabled={exporting}>
+            <Download className="w-4 h-4" /> Solo libros de facturas
+          </Button>
+          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={() => handleExport(false)} disabled={exporting}>
             {exporting
               ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando Excel…</>
               : <><Download className="w-4 h-4" /> Exportar Excel {totalNewCount > 0 ? `(+${totalNewCount} nuevos)` : ''}</>
