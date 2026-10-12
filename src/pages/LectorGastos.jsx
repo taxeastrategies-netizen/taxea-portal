@@ -352,7 +352,7 @@ export default function LectorGastos({ reviewPage = false }) {
   };
 
   useEffect(() => {
-    if (!reviewPage || loading) return;
+    if (!reviewPage || (loading && documents.length === 0)) return;
     if (!selectedReviewId && !reviewDone) {
       const first = reviewableDocuments(documents)[0];
       if (first) navigate(`${reviewPath}?doc=${encodeURIComponent(first.id)}`, { replace: true });
