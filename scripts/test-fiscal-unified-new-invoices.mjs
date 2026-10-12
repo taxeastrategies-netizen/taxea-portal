@@ -25,7 +25,9 @@ const records = {
 const accountSnapshot = JSON.stringify([records.AccountingAccount, records.ClientAccount]);
 let writes = 0;
 let allowWrites = false;
+const matches=(row,query)=>Object.entries(query||{}).every(([key,value])=>key==='$or'?value.some(q=>matches(row,q)):value&&typeof value==='object'?Object.entries(value).every(([op,v])=>op==='$exists'?(row[key]!==undefined)===v:op==='$in'?v.includes(row[key]):row[key]===value):row[key]===value);
 const entities = new Proxy({}, { get: (_target, name) => ({
+  async updateMany(query,ops) { const rows=(records[name]||[]).filter(row=>matches(row,query));for(const row of rows){writes++;if(!allowWrites) throw new Error('Unexpected write');Object.assign(row,ops.$set);}return {updated:rows.length}; },
   async get(id) { return (records[name] || []).find(item => item.id === id) || null; },
   async filter(query) { return (records[name] || []).filter(row => Object.entries(query || {}).every(([key, value]) => row[key] === value)); },
   async create(payload) { writes++; if (!allowWrites) throw new Error('Unexpected write'); const row = { id: `${name}-${writes}`, ...payload }; (records[name] ||= []).push(row); return row; },
@@ -136,29 +138,39 @@ records.Invoice.push({ id: 'invoice-pending', company_id: 'company-a', tipo: 're
   fiscal_activity_id: 'activity-a', accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
   base_imponible: 100, tipo_iva: 21, cuota_iva: 21, total_factura: 121 });
 records.FiscalActivity[0].indirectTaxRegime = 'rebu';
+allowWrites=true;
 const blockedPosting = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
     invoiceId: 'invoice-pending', activityId: 'activity-a', base: 100, taxRate: 21,
     taxAmount: 21, confirmReviewed: true }),
 }));
-assert.equal(blockedPosting.status, 422);
-assert.equal(writes, 0);
+assert.equal(blockedPosting.status,200);
+assert.equal((await blockedPosting.json()).mode,'classified_pending');
+assert.equal(records.InvoiceTaxLine.length,0);
+assert.equal(records.Invoice[1].total_factura,121);
+allowWrites=false;writes=0;
 records.FiscalActivity[0].indirectTaxRegime = 'general';
 records.Invoice.push({ id: 'invoice-surcharge', company_id: 'company-a', tipo: 'recibida', fecha_emision: '2026-04-10', fiscal_activity_id: 'activity-a', base_imponible: 100, tipo_iva: 21, cuota_iva: 21, tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2 });
+allowWrites=true;
 const surchargePosting = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a', invoiceId: 'invoice-surcharge', activityId: 'activity-a', regime: 'general', taxKind: 'iva', base: 100, taxRate: 21, taxAmount: 21, confirmReviewed: true }),
 }));
-assert.equal(surchargePosting.status, 422);
-assert.equal(writes, 0);
+assert.equal(surchargePosting.status,200);
+assert.equal((await surchargePosting.json()).mode,'classified_pending');
+assert.equal(records.InvoiceTaxLine.length,0);
+allowWrites=false;writes=0;
 records.FiscalActivity[0].indirectTaxRegime = 'exenta_limitada';
+allowWrites=true;
 const untracedOverride = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_invoice_tax_line', companyId: 'company-a',
     invoiceId: 'invoice-pending', activityId: 'activity-a', taxKind: 'iva',
     regime: 'exenta_limitada', operationType: 'exempt_full', base: 100,
     taxRate: 21, taxAmount: 21, confirmReviewed: true }),
 }));
-assert.equal(untracedOverride.status, 422);
-assert.equal(writes, 0);
+assert.equal(untracedOverride.status,200);
+assert.equal(records.InvoiceTaxLine[0].manualOverride,true);
+assert(records.InvoiceTaxLine[0].manualOverrideReason.includes('advisor@taxea.test'));
+allowWrites=false;writes=0;
 const invalidActivityResponse = await handler(new Request('https://taxea.test/functions/fiscalOperations', {
   method: 'POST', body: JSON.stringify({ action: 'save_activity', companyId: 'company-a', activity: { id: 'activity-a', name: 'Actividad de prueba', activityType: 'empresarial', indirectTax: 'igic', indirectTaxRegime: 'recargo_equivalencia' } }),
 }));
@@ -321,4 +333,4 @@ const advisorConfirmation = await handler(new Request('https://taxea.test/functi
 assert.equal(advisorConfirmation.status, 200);
 assert.equal(proposed303.activo, true);
 assert.equal(proposed303.fuenteValidacion, 'criterio_asesor');
-console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_no_acepta_confirmacion_ni_escribe', 'recc_historico_pagos_truncado_bloqueado', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'recargo_venta_minorista_revisada', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda', 'oss_y_nacional_303_mas_369', 'oss_solo_369', 'grupo_322_y_353', 'igic_mixto_421_mas_420'] }, null, 2));
+console.log(JSON.stringify({ ok: true, cases: ['exenta_gasto_con_cuota_no_deducible', 'exenta_ingreso_sin_cuota', 'repep_gasto_no_deducible', 'repep_ingreso_exento', 'actividad_ambigua_bloqueada', 'perfil_no_validado_bloqueado', 'tipo_y_cuota_contrastados', 'actividad_no_automatica_requiere_revision', 'asiento_historico_no_se_modifica', 'subcuentas_historicas_intactas', 'rebu_bloqueado', 'rebu_guarda_criterio_sin_asiento_ordinario', 'recc_historico_pagos_truncado_bloqueado', 'regimen_incompatible_bloqueado', 'prorrata_especial_0_40_100', 'recargo_equivalencia_iva_soportado_no_deducible', 'recargo_venta_minorista_revisada', 'agricultura_iva_soportado_no_deducible', 'obligaciones_propuestas_inactivas_y_confirmacion_asesor', 'actividad_regimen_incompatible_no_se_guarda', 'oss_y_nacional_303_mas_369', 'oss_solo_369', 'grupo_322_y_353', 'igic_mixto_421_mas_420'] }, null, 2));
