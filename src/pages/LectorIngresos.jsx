@@ -137,10 +137,18 @@ export default function LectorIngresos({ reviewPage = false }) {
   const selectedReviewId = new URLSearchParams(location.search).get('doc');
   const reviewDone = new URLSearchParams(location.search).get('done') === '1';
   const reviewPath = '/tax-accounting/ocr-ingresos-revision';
-  const openReviewPage = id => navigate(`${reviewPath}?doc=${encodeURIComponent(id)}`);
-  const [documents, setDocuments] = useState([]);
-  const loadVersion=useRef(0);
-  useEffect(()=>{loadVersion.current++;setDocuments([]);setReviewing(null);},[company?.id]);
+  const openReviewPage = id => navigate(`${reviewPath}?doc=${encodeURIComponent(id)}`, reviewPage ? undefined : {
+    state: { companyId: company?.id, ocrDocuments: reviewableDocuments(documents) },
+  });
+  const [documents, setDocuments] = useState(() => reviewPage && location.state?.companyId === company?.id
+    && Array.isArray(location.state?.ocrDocuments) ? location.state.ocrDocuments : []);
+  const loadVersion = useRef(0);
+  const activeCompanyId = useRef(company?.id);
+  useEffect(() => {
+    if (activeCompanyId.current === company?.id) return;
+    activeCompanyId.current = company?.id;
+    loadVersion.current++; setDocuments([]); setReviewing(null);
+  }, [company?.id]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState([]);
