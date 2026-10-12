@@ -157,7 +157,7 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
               {result.duplicateGroupsCount === 0 ? (
                 <span className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-2 rounded-lg">
                   <CheckCircle className="w-4 h-4" />
-                  No se detectaron duplicados. {result.totalRecordsAnalyzed} registros analizados.
+                  No se detectaron coincidencias con número, fecha y tercero completos. {result.totalRecordsAnalyzed} registros consultados.
                 </span>
               ) : (
                 <span className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
@@ -167,6 +167,7 @@ export default function DuplicateCheckModal({ open, onClose, companyId, scope, s
               )}
             </div>
 
+            {result.incompleteRecordsCount > 0 && <p className="text-xs text-amber-800">{result.incompleteRecordsCount} registro(s) sin número, fecha o tercero suficientes no pudieron compararse; no se consideran libres de duplicados.</p>}
             {result.duplicateGroupsCount > 0 && <p className="text-xs text-muted-foreground">Solo se avisa cuando coinciden tercero, número y fecha. El importe se muestra como apoyo, pero no decide. No se elimina ningún documento ni asiento automáticamente; revisa cada pareja antes de rechazar un OCR o anular una factura.</p>}
             {result.duplicateGroups?.map((group, idx) => (
               <div key={idx} className="border border-border rounded-lg overflow-hidden">
