@@ -19,7 +19,7 @@ async function invoke(payload) {
   return result;
 }
 
-export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false, bulkCount = 0, onBulkConfirm }) {
+export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false, bulkCount = 0, onBulkConfirm = null }) {
   const [applyTaxRate, setApplyTaxRate] = useState(false);
   const [applyWithholding, setApplyWithholding] = useState(false);
   const [open, setOpen] = useState(false);
