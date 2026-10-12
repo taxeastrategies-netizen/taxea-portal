@@ -530,7 +530,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
       if (body.confirmReviewed === true && !context.lockHeld) {
         const token = crypto.randomUUID();
-        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,...(invoice.updated_date?{updated_date:invoice.updated_date}:{}),
           $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
           {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
         if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
@@ -566,7 +566,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       if (body.confirmReviewed === true && !context.lockHeld) {
         const token = crypto.randomUUID();
-        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,...(invoice.updated_date?{updated_date:invoice.updated_date}:{}),
           $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
           {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
         if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
