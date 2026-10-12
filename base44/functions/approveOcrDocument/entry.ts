@@ -242,7 +242,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   if (duplicates.length) {
     await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
       duplicateWarning: `Posible factura ya registrada: ${duplicates.map(row => row.id).join(', ')}`,
-      safeErrorMessage: 'Coinciden empresa, número, fecha, tercero e importe. Revisar el documento existente; no se creó otra factura.',
+      safeErrorMessage: 'Coinciden empresa, dirección, tercero, número y fecha. Revisa la factura existente; no se creó otra.',
     });
     return { status: 409, json: { error: 'La factura coincide con una ya registrada. Revisión de duplicado requerida.', duplicate: true, invoiceIds: duplicates.map(row => row.id) } };
   }
@@ -273,16 +273,12 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     return {status:Number(error?.response?.status || error.status)||422,json:{error:detail,invoiceId:inv.id}};
   }
 
-  await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
-    action: 'sync_invoice',
-    invoiceId: inv.id,
-  }).catch((error) => console.warn('[approveOcrDocument] Contact sync failed:', error?.message || error));
-
   const posting = {entry:{id:completed.journalEntryId},proposal:null};
 
-  // 8. Create timeline event
-  try {
-    await base44.asServiceRole.entities.TimelineEvent.create({
+  // The invoice and journal are already committed. Independent follow-up tasks run concurrently.
+  const followUps = await Promise.allSettled([
+    base44.asServiceRole.functions.invoke('syncInvoiceContacts', { action: 'sync_invoice', invoiceId: inv.id }),
+    base44.asServiceRole.entities.TimelineEvent.create({
       company_id: doc.company_id,
       tipo: 'factura_contabilizada',
       titulo: invoiceType === 'emitida'
@@ -293,10 +289,10 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       usuario_email: user.email || '',
       automatico: true,
       visibilidad: 'ambos',
-    });
-  } catch (e) {
-    console.warn('[approveOcrDocument] Timeline event failed:', e.message);
-  }
+    }),
+  ]);
+  if (followUps[0].status === 'rejected') console.warn('[approveOcrDocument] Contact sync failed:', followUps[0].reason?.message || followUps[0].reason);
+  if (followUps[1].status === 'rejected') console.warn('[approveOcrDocument] Timeline event failed:', followUps[1].reason?.message || followUps[1].reason);
 
   return {
     status: 200,
