@@ -48,7 +48,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   try {
     const posting = await postInvoice(svc,companyId,{...invoice,accounting_migration_hold:false},user.email,
       {status:'confirmado',source:invoice.ocr_document_id?'OCR':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})});
-    const saved = await svc.entities.Invoice.update(invoice.id,{accounting_migration_hold:false,accounting_migration_hold_reason:''});
+    const saved = await svc.entities.Invoice.update(invoice.id,{accounting_migration_hold:false,accounting_migration_hold_reason:'',source_last_error:''});
     if (saved.ocr_document_id) {
       const doc = await svc.entities.OcrInvoiceDocument.get(saved.ocr_document_id);
       if (!doc || doc.company_id !== companyId || (doc.linkedInvoiceId && doc.linkedInvoiceId !== saved.id))
