@@ -91,7 +91,7 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
       const own=invoice.fiscal_review_batch_id===job.id&&invoice.fiscal_review_status==='validado'||ownPending;
       if(!own&&(invoice.updated_date||invoice.created_date)!==item.version) fail('La factura cambió después de seleccionarla. Revísala de nuevo.');
       if(!own&&!REVIEW_REASONS.includes(invoice.accounting_migration_hold_reason)) fail('La factura ya no está pendiente. No se repite ni reclasifica.');
-      const lock=await svc.entities.Invoice.updateMany({id:item.id,company_id:companyId,...free('fiscal_review_lock_token')},
+      const lock=await svc.entities.Invoice.updateMany({id:item.id,company_id:companyId,...(invoice.updated_date?{updated_date:invoice.updated_date}:{}),...free('fiscal_review_lock_token')},
         {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
       if(Number(lock?.updated||0)!==1) fail('Otra revisión está trabajando con esta factura.');
       heldInvoice=item.id;
