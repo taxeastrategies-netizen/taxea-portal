@@ -254,15 +254,30 @@ async function ensureCounterparty(svc, companyId, invoice) {
   // Un mismo NIF puede ser cliente y proveedor: nunca reutilizar 430 para una compra,
   // ni sobrescribir la ficha/subcuenta histórica de la otra relación.
   const compatibleCode = code => isCustomer ? /^430/.test(clean(code)) : /^(400|410)/.test(clean(code));
-  let profile = (profiles || []).find(p => p.accountingRole === role && compatibleCode(p.accountingAccountCode))
-    || (profiles || []).find(p => compatibleCode(p.accountingAccountCode));
+  let profile = (profiles || []).find(p => p.accountingRole === role && compatibleCode(p.accountingAccountCode));
   if (profile?.accountingAccountCode) {
-    const account = await ensureAccount(svc, companyId, profile.accountingAccountCode, name, isCustomer ? 'cliente' : 'proveedor', {
-      nif: taxId,
-      counterpartyProfileId: profile.id,
-      sequencePrefix: prefix,
+    const linked = profile.accountingAccountId
+      ? await svc.entities.AccountingAccount.get(profile.accountingAccountId).catch(() => null)
+      : null;
+    if (linked && linked.companyId === companyId && linked.status !== 'inactiva'
+      && linked.code === profile.accountingAccountCode && compatibleCode(linked.code)
+      && (taxId ? normalizeTaxId(linked.nif) === taxId : clean(linked.name).toUpperCase() === name.toUpperCase())) {
+      return { profile, account: linked, role };
+    }
+    const candidates = await svc.entities.AccountingAccount.filter({
+      companyId, code: profile.accountingAccountCode,
+    }, '-created_date', 100);
+    const matching = (candidates || []).filter(account => account.status !== 'inactiva'
+      && compatibleCode(account.code)
+      && (taxId ? normalizeTaxId(account.nif) === taxId : clean(account.name).toUpperCase() === name.toUpperCase()));
+    if (matching.length !== 1) {
+      throw new Error('La subcuenta del tercero es ambigua o está vinculada a otro NIF. Revísala antes de contabilizar.');
+    }
+    const account = matching[0];
+    await svc.entities.CounterpartyFiscalProfile.update(profile.id, {
+      accountingAccountId: account.id,
     });
-    return { profile, account, role };
+    return { profile: { ...profile, accountingAccountId: account.id }, account, role };
   }
 
   let code;
@@ -709,13 +724,19 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
   const normalized = [];
   for (const item of payload.lines || []) {
     const code = canonical8(item.accountCode || item.cuenta);
-    const existing = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
-    if (!existing?.[0]) throw new Error(`La cuenta ${code} no existe en el plan contable de la empresa.`);
+    const linked = item.accountId
+      ? await svc.entities.AccountingAccount.get(item.accountId).catch(() => null)
+      : null;
+    if (item.accountId && (!linked || linked.companyId !== companyId || linked.code !== code || linked.status === 'inactiva')) {
+      throw new Error(`La cuenta ${code} no coincide con el ID contable indicado.`);
+    }
+    const existing = linked || (await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1))?.[0];
+    if (!existing) throw new Error(`La cuenta ${code} no existe en el plan contable de la empresa.`);
     normalized.push({
       ...item,
-      accountId: existing[0].id,
+      accountId: existing.id,
       accountCode: code,
-      accountName: item.accountName || item.nombre || existing[0].name,
+      accountName: item.accountName || item.nombre || existing.name,
       debit: money(item.debit ?? item.debe),
       credit: money(item.credit ?? item.haber),
     });
