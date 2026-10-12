@@ -318,7 +318,7 @@ export default function LectorGastos({ reviewPage = false }) {
         const scan = duplicateScan.value?.data ?? duplicateScan.value;
         const warning = scan?.duplicateGroupsCount > 0
           ? 'Posible duplicado: coinciden tercero, número y fecha con otra factura o documento OCR. Revísalo antes de confirmar.' : '';
-        await base44.entities.OcrInvoiceDocument.update(doc.id, { duplicateWarning: warning });
+        await base44.entities.OcrInvoiceDocument.update(doc.id, { duplicateWarning: warning }).catch(error => console.warn('[OCR] Duplicate warning could not be saved:', error));
       } else console.warn('[OCR] Duplicate scan unavailable:', duplicateScan.reason);
     } catch {
       const failNow = new Date().toISOString();
