@@ -16,6 +16,9 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
     regime: input.regime || activity.indirectTaxRegime || 'general',
     taxRate: Number(invoice.tipo_iva || 0), taxAmount: Number(invoice.cuota_iva || 0),
     confirmReviewed: true };
+  if(!professional && ((input.taxKind && activity.indirectTax !== 'mixto' && input.taxKind!==activity.indirectTax)
+    || (input.regime && input.regime!==activity.indirectTaxRegime)))
+    throw new Error('El cambio de impuesto o régimen respecto de la actividad validada debe confirmarlo el asesor en este mismo OCR.');
   const noDeduction = activity.deductionRight === 'sin_derecho'
     || ['exenta_limitada','pequeno_empresario_igic','comerciante_minorista_igic','recargo_equivalencia','agricultura_ganaderia_pesca'].includes(body.regime);
   body.deductiblePercent = input.deductiblePercent ?? (noDeduction ? 0 : activity.proRataPercent ?? 100);
