@@ -4,6 +4,7 @@ import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibi
 import { reccAdvanceMetadata, validateReccAdvanceLinks, isZeroResidualReccFinal, acquireReccAdvanceLocks, recoverReccAdvanceLock } from './reccAdvances.mjs';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
+import { advisorDecision, selfAssessment, reviewFilter, commonReviewCriteria } from './advisorReview.mjs';
 
 const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
@@ -217,9 +218,9 @@ function evaluate(profile: any, activities: any[], body: any) {
     ? activeActivities.find(item => item.id === body.activityId)
     : body.requireExactActivity === true && activeActivities.length !== 1 ? null : activeActivities[0] || null;
   if (!profile || !activity) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: [activeActivities.length > 1 && body.requireExactActivity === true ? 'Selecciona expresamente la actividad fiscal de esta factura.' : 'Falta perfil fiscal o actividad económica para la factura.'], ruleSetVersion: RULESET };
-  if (body.requireValidatedProfile === true && profile.profileStatus !== 'validado_asesor') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El perfil fiscal debe estar validado por el asesor antes de automatizar una factura nueva.'], ruleSetVersion: RULESET };
+  if (!body.manualOverride && body.requireValidatedProfile === true && profile.profileStatus !== 'validado_asesor') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El perfil fiscal debe estar validado por el asesor antes de automatizar una factura nueva.'], ruleSetVersion: RULESET };
   const operationDate = clean(body.operationDate);
-  if (body.requireValidatedProfile === true && operationDate && ((profile.effectiveFrom && operationDate < profile.effectiveFrom) || (activity.startDate && operationDate < activity.startDate))) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La operación es anterior a la vigencia del perfil o actividad seleccionada; requiere revisión histórica del asesor.'], ruleSetVersion: RULESET };
+  if (!body.manualOverride && body.requireValidatedProfile === true && operationDate && ((profile.effectiveFrom && operationDate < profile.effectiveFrom) || (activity.startDate && operationDate < activity.startDate))) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La operación es anterior a la vigencia del perfil o actividad seleccionada; requiere revisión histórica del asesor.'], ruleSetVersion: RULESET };
   const direction = body.direction === 'gasto' ? 'gasto' : 'ingreso';
   const taxKind = body.taxKind || activity.indirectTax || profile.indirectTaxDefault || 'iva';
   const regime = body.regime || activity.indirectTaxRegime || 'general';
@@ -240,7 +241,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   }
   if (body.requireValidatedProfile === true && !manualOverride && operationType === 'subject_taxed') taxAmount = money(base * taxRate / 100);
   let deductiblePercent = clamp(body.deductiblePercent ?? (activity.deductionRight === 'sin_derecho' ? 0 : activity.proRataPercent ?? 100));
-  if (direction === 'gasto' && activity.deductionRight === 'sin_derecho') deductiblePercent = 0;
+  if (!manualOverride && direction === 'gasto' && activity.deductionRight === 'sin_derecho') deductiblePercent = 0;
   if (direction === 'gasto' && ['prorrata_general', 'limitado'].includes(activity.deductionRight) && body.deductiblePercent == null) deductiblePercent = clamp(activity.proRataPercent);
   let exemptionKey = clean(body.exemptionKey || activity.exemptionKey);
   let legalBasis = clean(body.legalBasis || activity.exemptionLegalBasis);
@@ -274,7 +275,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     reasons.push('Regimen especial: la regla general no basta para validar esta operacion.');
   }
   if (taxKind === 'mixto' || activity.deductionRight === 'sector_diferenciado') { reviewRequired = true; reasons.push('Actividad mixta o sector diferenciado: seleccionar impuesto y sector en la operacion.'); }
-  if (direction === 'gasto' && activity.deductionRight === 'prorrata_especial') {
+  if (direction === 'gasto' && activity.deductionRight === 'prorrata_especial' && !(manualOverride && body.deductiblePercent != null && !body.deductionUse)) {
     const use = clean(body.deductionUse);
     if (!['exclusive_right', 'exclusive_no_right', 'shared'].includes(use)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Prorrata especial: clasifica el destino del gasto como exclusivo con derecho, exclusivo sin derecho o común.'], ruleSetVersion: RULESET };
     deductiblePercent = use === 'exclusive_right' ? 100 : use === 'exclusive_no_right' ? 0 : clamp(activity.proRataPercent);
@@ -339,6 +340,264 @@ function evaluate(profile: any, activities: any[], body: any) {
   };
 }
 
+async function saveInvoiceTaxLine(context: any, input: any) {
+  const { svc, profile, profiles, activities, companyId, user } = context;
+  let body = { ...input };
+  let releaseAdvanceLocks: (() => Promise<void>) | null = null;
+  let reviewToken = '';
+  try {
+      if (!canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
+      if ((profiles || []).length !== 1) return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
+      const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
+      if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
+      const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
+      body = advisorDecision(invoice, body, selectedActivity, user.email);
+      if (invoice.anulada) return Response.json({error:'La factura está anulada.'},{status:409});
+      if (body.confirmReviewed === true && !context.lockHeld) {
+        const token = crypto.randomUUID();
+        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+          $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
+          {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
+        if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
+        reviewToken = token;
+      }
+      const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
+        const payments = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'payment_date', 501);
+        if (payments.length > 500) return Response.json({ error: 'La factura supera 500 cobros o pagos. No se valida criterio de caja con una lista truncada; el asesor debe revisar el histórico completo.' }, { status: 422 });
+        specialInputs.invoiceGross = Number(invoice.total_factura || 0);
+        specialInputs.withholdingAmount = Number(invoice.importe_retencion || 0);
+        specialInputs.surchargeAmount = Number(invoice.cuota_recargo || 0);
+        specialInputs.advanceConfirmed = body.recc?.advanceConfirmed === true || reccMetadata(invoice).advanceConfirmed === true;
+        specialInputs.insolvencyDate = body.recc?.insolvencyDate || reccMetadata(invoice).insolvencyDate || '';
+        specialInputs.payments = (payments || []).filter(item => !item.operation_status || item.operation_status === 'committed').map(item => ({ id: item.id, date: item.payment_date, amount: item.amount }));
+      }
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'grupo_entidades') {
+        specialInputs.groupId = profile.taxGroupId || '';
+        specialInputs.groupRole = profile.taxGroupRole || '';
+      }
+      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'recargo_equivalencia' && invoice.tipo === 'recibida') {
+        specialInputs.surchargeRate = Number(invoice.tipo_recargo || 0);
+      }
+      const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
+        requireValidatedProfile: true, requireExactActivity: true,
+        activityId: body.activityId || invoice.fiscal_activity_id,
+        direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso',
+        base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
+        taxAmount: body.taxAmount ?? invoice.cuota_iva,
+        operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
+      });
+      const selfAssessed = selfAssessment(invoice, body, proposedEvaluation);
+      if (body.advisorDefaultDifference) proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []),
+        'El criterio confirmado para esta factura prevalece sobre el predeterminado de la actividad.'];
+      if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
+      const recargoPurchase = invoice.tipo === 'recibida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
+        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed' && Number(invoice.cuota_recargo || 0) > 0;
+      if (recargoPurchase) {
+        const expectedRate = ({ 21: 5.2, 10: 1.4, 4: 0.5 } as Record<number, number>)[Number(invoice.tipo_iva || 0)];
+        const surcharge = money(Number(invoice.base_imponible || 0) * Number(invoice.tipo_recargo || 0) / 100);
+        const expectedTotal = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + Number(invoice.cuota_recargo || 0));
+        const valid = expectedRate != null && Math.abs(expectedRate - Number(invoice.tipo_recargo || 0)) < 0.001
+          && Math.abs(surcharge - Number(invoice.cuota_recargo || 0)) <= 0.01
+          && Math.abs(expectedTotal - Number(invoice.total_factura || 0)) <= 0.02
+          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && Math.abs(proposedEvaluation.base - Number(invoice.base_imponible || 0)) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - Number(invoice.cuota_iva || 0)) <= 0.02
+          && Math.abs(proposedEvaluation.taxRate - Number(invoice.tipo_iva || 0)) < 0.001
+          && proposedEvaluation.deductibleTax === 0
+          && proposedEvaluation.specialPreview?.status === 'proposal_only';
+        if (!valid) return Response.json({ error: 'La compra en recargo no cuadra con factura, IVA, tipo de recargo o total. Solo se admite compra nacional ordinaria a tipos vigentes, sin retención; el asesor debe corregir el documento antes de contabilizar.' }, { status: 422 });
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.modelImpact = [];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Compra del minorista: IVA y recargo íntegros como mayor coste, sin 472 ni deducción en 303. Asiento y libro separados tras confirmar el asesor.'];
+      } else if (invoice.tipo === 'emitida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
+        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed') {
+        const base = Number(invoice.base_imponible || 0);
+        const rate = Number(invoice.tipo_iva || 0);
+        const quota = Number(invoice.cuota_iva || 0);
+        const valid = clean(selectedActivity.activityType) === 'comercial_minorista'
+          && [21, 10, 4].includes(rate) && base > 0
+          && Math.abs(money(base * rate / 100) - quota) <= 0.01
+          && Math.abs(Number(invoice.tipo_recargo || 0)) <= 0.001
+          && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
+          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
+          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
+          && Math.abs(proposedEvaluation.base - base) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
+          && Math.abs(proposedEvaluation.taxRate - rate) < 0.001
+          && proposedEvaluation.specialPreview?.status === 'proposal_only';
+        if (!valid) return Response.json({ error: 'La venta minorista en recargo no cuadra con el IVA o la factura, o su actividad no está confirmada. Solo se admite venta nacional ordinaria sin retención ni recargo repercutido al cliente.' }, { status: 422 });
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.modelImpact = [];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Venta minorista ordinaria: el IVA repercutido forma parte del ingreso contable; no se usa 477 ni se liquida en 303. Confirmación del asesor obligatoria.'];
+      } else if (proposedEvaluation.regime === 'criterio_caja' && proposedEvaluation.taxKind === 'iva'
+        && proposedEvaluation.operationType === 'subject_taxed') {
+        const base = Number(invoice.base_imponible || 0);
+        const rate = Number(invoice.tipo_iva || 0);
+        const quota = Number(invoice.cuota_iva || 0);
+        const previousMetadata = reccMetadata(invoice);
+        let advanceFields;
+        try { advanceFields = reccAdvanceMetadata({ ...previousMetadata, ...body.recc }); }
+        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        const metadata = { ...advanceFields, version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
+          insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
+          originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
+          adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
+          adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
+          adjustmentCause: clean(body.recc?.adjustmentCause ?? previousMetadata.adjustmentCause ?? 'other'),
+          reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
+        // El abono hereda el circuito del anticipo desde su original, nunca desde una cuenta sugerida por IA.
+        if (invoice.es_rectificativa && metadata.originalInvoiceId) {
+          const originalForKind = await svc.entities.Invoice.get(metadata.originalInvoiceId);
+          if (originalForKind?.company_id === companyId && reccAdvanceMetadata(reccMetadata(originalForKind)).documentKind === 'advance')
+            metadata.documentKind = 'advance';
+        }
+        if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
+          return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
+        releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
+        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; }
+        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
+        const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
+          && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
+          && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
+          && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
+          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - base) <= 0.01
+          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - quota) <= 0.01;
+        const reccSurcharge = Number(invoice.cuota_recargo || 0);
+        const reccSurchargeRate = Number(invoice.tipo_recargo || 0);
+        const expectedSurchargeRate = ({21:5.2,10:1.4,4:0.5})[rate];
+        const validReccSurcharge = Math.abs(reccSurcharge) <= 0.001 || (invoice.tipo === 'emitida' && breakdown.length === 1
+          && expectedSurchargeRate != null && Math.abs(reccSurchargeRate - expectedSurchargeRate) <= 0.001
+          && Math.abs(money(base * reccSurchargeRate / 100) - reccSurcharge) <= 0.01);
+        const zeroResidualFinal = isZeroResidualReccFinal(invoice, metadata);
+        const validRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
+          && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
+            || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
+          && selectedActivity?.indirectTax === 'iva' && validBreakdown && (Math.abs(base) > 0 || zeroResidualFinal)
+          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota + reccSurcharge - Number(invoice.importe_retencion || 0))) <= 0.02
+          && validReccSurcharge
+          && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
+          && Math.abs(proposedEvaluation.base - base) <= 0.02
+          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
+          && Math.abs(proposedEvaluation.deductibleTax) <= Math.abs(quota)
+          && (zeroResidualFinal || invoice.es_rectificativa === true || (!proposedEvaluation.specialPreviewError
+            && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only')));
+        if (!validRecc) return Response.json({ error: 'RECC: desglose, precio, retención o clasificación incoherentes. Corrige la factura antes de confirmar.', evaluation: proposedEvaluation }, { status: 422 });
+        if (selectedActivity?.indirectTaxRegime === 'criterio_caja' && invoice.fiscal_review_status !== 'validado') {
+          try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        } else if (metadata.eligibility) try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+        if (metadata.insolvencyDate && !clean(metadata.reason)) return Response.json({ error: 'El auto de concurso requiere fecha y referencia documental confirmadas por asesor.' }, { status: 422 });
+        if (invoice.es_rectificativa === true) {
+          const original = await svc.entities.Invoice.get(metadata.originalInvoiceId).catch(() => null);
+          if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
+            || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
+            || !clean(metadata.reason) || !metadata.adjustmentDate
+            || !['price_change','tax_adjustment'].includes(metadata.adjustmentMode)
+            || clean(invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif)).toUpperCase()
+              !== clean(original.tipo === 'emitida' ? original.cliente_nif : (original.proveedor_nif || original.cliente_nif)).toUpperCase())
+            return Response.json({ error: 'La rectificativa RECC exige original validado de la misma empresa, tipo y contraparte, fecha, tratamiento temporal y causa documentada por asesor.' }, { status: 422 });
+          try { reccDate(metadata.adjustmentDate); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+          const previousCorrections = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
+          const proposed = { ...invoice, recc_metadata: JSON.stringify(metadata), fiscal_review_status: 'validado', fiscal_regime: 'criterio_caja' };
+          const originalPayments = await listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: original.id }, 'payment_date');
+          const allTaxLines = await listFiscalRows(svc.entities.InvoiceTaxLine, { companyId });
+          const originalLines = allTaxLines.filter((row: any) => row.invoiceId === original.id && row.reviewStatus === 'validado');
+          const proposedLines = breakdown.map((row: any) => ({ ...row, invoiceId: invoice.id }));
+          if (metadata.adjustmentMode === 'price_change' && breakdown.some((row: any) => !originalLines.some((part: any) => Number(part.rate) === Number(row.rate))))
+            return Response.json({ error: 'La variación de precio debe conservar los tipos de IVA originales; un cambio de cuota requiere ajuste fiscal revisado.' }, { status: 422 });
+          try {
+            if (metadata.adjustmentMode === 'price_change' && base < 0) for (const originalLine of originalLines) {
+              const corrections = reccCorrections(original, [...previousCorrections.filter((row: any) => row.id !== invoice.id), proposed], originalLine,
+                [...allTaxLines.filter((row: any) => row.invoiceId !== invoice.id), ...proposedLines]);
+              reccSchedule({ invoiceNet: Math.abs(Number(original.total_factura)), operationDate: original.fecha_operacion || original.fecha_emision,
+                ...reccMetadata(original), corrections, payments: originalPayments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
+            }
+          } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
+          proposedEvaluation.specialPreview = { regime: 'criterio_caja', status: 'proposal_only',
+            reason: metadata.adjustmentMode === 'tax_adjustment'
+              ? 'Ajuste de cuotas en fecha fiscal confirmada por asesor (artículos 89 y 114); revisar autoliquidación rectificativa si corresponde. No se sobrescribe el historial.'
+              : base < 0 ? 'Reducción vinculada por tipo de IVA: corrige lo reconocido y cancela el pendiente del original.' : 'Aumento de precio: cobros propios de la rectificativa y límite legal de la operación original.' };
+          proposedEvaluation.specialPreviewError = '';
+        }
+        proposedEvaluation.postingBlocked = false;
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
+      } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
+        proposedEvaluation.postingBlocked = true;
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
+      }
+      if (proposedEvaluation.postingBlocked) {
+        if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
+        return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
+      }
+      if (invoice.tipo === 'emitida' && proposedEvaluation.regime === 'criterio_caja'
+        && invoice.qr_pdf_url && clean(invoice.fiscal_regime) !== 'criterio_caja') {
+        return Response.json({ error: 'La factura ya tiene un PDF emitido sin la mención del criterio de caja. No se reclasifica silenciosamente: revisa y rectifica el documento antes de confirmar el régimen.' }, { status: 409 });
+      }
+      const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
+      if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
+      const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
+      if (Math.abs(Number(invoice.base_imponible || 0) - evaluation.base) > 0.02) return Response.json({ error: 'La base de la propuesta no coincide con la factura. Corrige primero el documento origen.' }, { status: 422 });
+      if (phaseOnePending && Number(invoice.importe_pagado || 0) > 0) return Response.json({ error: 'La factura pendiente de revisión no puede tener cobros o pagos antes de su validación.' }, { status: 409 });
+      if (invoice.linked_journal_entry_id && (
+        Math.abs(Number(invoice.cuota_iva || 0) - evaluation.taxAmount) > 0.01 ||
+        Math.abs(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) - evaluation.deductibleTax) > 0.01 ||
+        Math.abs(Number(invoice.importe_retencion || 0) - evaluation.withholdingAmount) > 0.01 ||
+        clean(invoice.indirect_tax_kind || evaluation.taxKind) !== evaluation.taxKind ||
+        evaluation.accounting?.reverseCharge
+      )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
+      const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
+      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const proposedBreakdown = evaluation.regime === 'criterio_caja' && Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : null;
+      let taxLine;
+      if (proposedBreakdown) {
+        const oldLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
+        if (invoice.linked_journal_entry_id || oldLines.length > proposedBreakdown.length) return Response.json({ error: 'El desglose de una factura ya contabilizada o con más líneas previas no se sustituye; requiere ajuste trazado.' }, { status: 409 });
+        const savedLines = [];
+        for (const [index, row] of proposedBreakdown.entries()) {
+          const part = { ...payload, lineNumber: index + 1, base: money(row.base), rate: Number(row.rate), quota: money(row.quota),
+            deductibleQuota: invoice.tipo === 'recibida' ? money(Number(row.quota) * evaluation.deductiblePercent / 100) : 0,
+            nonDeductibleQuota: invoice.tipo === 'recibida' ? money(Number(row.quota) - money(Number(row.quota) * evaluation.deductiblePercent / 100)) : 0 };
+          const previous = oldLines.find((line: any) => Number(line.lineNumber) === index + 1);
+          savedLines.push(previous ? await svc.entities.InvoiceTaxLine.update(previous.id, part) : await svc.entities.InvoiceTaxLine.create(part));
+        }
+        taxLine = savedLines[0];
+        evaluation.deductibleTax = money(savedLines.reduce((sum: number, line: any) => sum + Number(line.deductibleQuota || 0), 0));
+        evaluation.nonDeductibleTax = money(savedLines.reduce((sum: number, line: any) => sum + Number(line.nonDeductibleQuota || 0), 0));
+      } else taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
+      const previousRecc = reccMetadata(invoice);
+      const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
+        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.reccAdvanceCorrection ? {documentKind:'advance'} : {}) }),
+        version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
+        insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
+        originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
+        adjustmentDate: clean(body.recc?.adjustmentDate ?? previousRecc.adjustmentDate),
+        adjustmentMode: clean(body.recc?.adjustmentMode ?? previousRecc.adjustmentMode),
+        adjustmentCause: clean(body.recc?.adjustmentCause ?? previousRecc.adjustmentCause ?? 'other'),
+        reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
+        advanceReferences: (evaluation.advanceApplications || []).map((row: any) => ({ number: row.advanceNumber, base: row.base })),
+        reviewedBy: user.email, reviewedAt: new Date().toISOString(),
+      } : null;
+      const reccLegend = 'Régimen especial del criterio de caja';
+      const advanceLegend = confirmedRecc?.documentKind === 'advance' ? (invoice.es_rectificativa ? `Rectificativa de anticipo ${invoice.factura_rectificada || confirmedRecc.originalInvoiceId}; devolución trazada y ajuste 438/407 sin ingreso/gasto ordinario.` : 'Factura de anticipo: aplicación posterior mediante vínculo revisado por asesor.')
+        : confirmedRecc?.documentKind === 'final' ? `Factura final por saldo nuevo. Anticipos ya facturados y descontados: ${(confirmedRecc.advanceReferences || []).map((row: any) => `${row.number} (base ${money(row.base).toFixed(2)} EUR)`).join('; ')}. Su aplicación no genera otra cuota de IVA.` : '';
+      const previousLegend = String(invoice.coletilla_fiscal || '').trim();
+      const existingLegend = advanceLegend && !previousLegend.includes(advanceLegend) ? [previousLegend, advanceLegend].filter(Boolean).join(' · ') : previousLegend;
+      const issuedReccLegend = invoice.tipo === 'emitida' && payload.taxKind === 'iva' && payload.regime === 'criterio_caja'
+        ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
+          ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
+        : {};
+      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
+  } finally {
+    if (releaseAdvanceLocks) await releaseAdvanceLocks();
+    if (reviewToken) await svc.entities.Invoice.updateMany({id:body.invoiceId,company_id:companyId,fiscal_review_lock_token:reviewToken},
+      {$set:{fiscal_review_lock_token:'',fiscal_review_lock_started_at:''}});
+  }
+}
+
 Deno.serve(async (req) => {
   let releaseAdvanceLocks: (() => Promise<void>) | null = null;
   try {
@@ -365,8 +624,8 @@ Deno.serve(async (req) => {
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
-      svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000),
-      svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100),
+      ['bundle','save_model'].includes(action) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
+      action === 'bundle' ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
     ]);
     const profile = profiles?.[0] || null;
 
@@ -611,248 +870,7 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, model: saved, mode: current ? 'updated' : 'created' });
     }
 
-    if (action === 'save_invoice_tax_line') {
-      if (!canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
-      if ((profiles || []).length !== 1 || profile?.profileStatus !== 'validado_asesor') return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
-      const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
-      if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
-      const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
-      if (invoice.accounting_migration_hold_reason === 'FISCAL_ADVISOR_REVIEW_PHASE1' && selectedActivity && body.manualOverride !== true) {
-        const defaultOperation = selectedActivity[invoice.tipo === 'recibida' ? 'expenseDefaultTreatment' : 'incomeDefaultTreatment'] || 'subject_taxed';
-        if ((body.taxKind && body.taxKind !== selectedActivity.indirectTax)
-          || (body.regime && body.regime !== selectedActivity.indirectTaxRegime)
-          || (body.operationType && body.operationType !== defaultOperation)) {
-          return Response.json({ error: 'La clasificación difiere de la actividad validada. Marca modificación manual e indica su motivo.' }, { status: 422 });
-        }
-      }
-      const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
-      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
-        const payments = await svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'payment_date', 501);
-        if (payments.length > 500) return Response.json({ error: 'La factura supera 500 cobros o pagos. No se valida criterio de caja con una lista truncada; el asesor debe revisar el histórico completo.' }, { status: 422 });
-        specialInputs.invoiceGross = Number(invoice.total_factura || 0);
-        specialInputs.withholdingAmount = Number(invoice.importe_retencion || 0);
-        specialInputs.surchargeAmount = Number(invoice.cuota_recargo || 0);
-        specialInputs.advanceConfirmed = body.recc?.advanceConfirmed === true || reccMetadata(invoice).advanceConfirmed === true;
-        specialInputs.insolvencyDate = body.recc?.insolvencyDate || reccMetadata(invoice).insolvencyDate || '';
-        specialInputs.payments = (payments || []).filter(item => !item.operation_status || item.operation_status === 'committed').map(item => ({ id: item.id, date: item.payment_date, amount: item.amount }));
-      }
-      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'grupo_entidades') {
-        specialInputs.groupId = profile.taxGroupId || '';
-        specialInputs.groupRole = profile.taxGroupRole || '';
-      }
-      if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'recargo_equivalencia' && invoice.tipo === 'recibida') {
-        specialInputs.surchargeRate = Number(invoice.tipo_recargo || 0);
-      }
-      const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
-        requireValidatedProfile: true, requireExactActivity: true,
-        activityId: body.activityId || invoice.fiscal_activity_id,
-        direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso',
-        base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
-        taxAmount: body.taxAmount ?? invoice.cuota_iva,
-        operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
-      });
-      if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
-      const recargoPurchase = invoice.tipo === 'recibida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
-        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
-        && proposedEvaluation.operationType === 'subject_taxed' && Number(invoice.cuota_recargo || 0) > 0;
-      if (recargoPurchase) {
-        const expectedRate = ({ 21: 5.2, 10: 1.4, 4: 0.5 } as Record<number, number>)[Number(invoice.tipo_iva || 0)];
-        const surcharge = money(Number(invoice.base_imponible || 0) * Number(invoice.tipo_recargo || 0) / 100);
-        const expectedTotal = money(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + Number(invoice.cuota_recargo || 0));
-        const valid = expectedRate != null && Math.abs(expectedRate - Number(invoice.tipo_recargo || 0)) < 0.001
-          && Math.abs(surcharge - Number(invoice.cuota_recargo || 0)) <= 0.01
-          && Math.abs(expectedTotal - Number(invoice.total_factura || 0)) <= 0.02
-          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
-          && Math.abs(proposedEvaluation.base - Number(invoice.base_imponible || 0)) <= 0.02
-          && Math.abs(proposedEvaluation.taxAmount - Number(invoice.cuota_iva || 0)) <= 0.02
-          && Math.abs(proposedEvaluation.taxRate - Number(invoice.tipo_iva || 0)) < 0.001
-          && proposedEvaluation.deductibleTax === 0
-          && proposedEvaluation.specialPreview?.status === 'proposal_only';
-        if (!valid) return Response.json({ error: 'La compra en recargo no cuadra con factura, IVA, tipo de recargo o total. Solo se admite compra nacional ordinaria a tipos vigentes, sin retención; el asesor debe corregir el documento antes de contabilizar.' }, { status: 422 });
-        proposedEvaluation.postingBlocked = false;
-        proposedEvaluation.modelImpact = [];
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Compra del minorista: IVA y recargo íntegros como mayor coste, sin 472 ni deducción en 303. Asiento y libro separados tras confirmar el asesor.'];
-      } else if (invoice.tipo === 'emitida' && selectedActivity?.indirectTaxRegime === 'recargo_equivalencia'
-        && proposedEvaluation.regime === 'recargo_equivalencia' && proposedEvaluation.taxKind === 'iva'
-        && proposedEvaluation.operationType === 'subject_taxed') {
-        const base = Number(invoice.base_imponible || 0);
-        const rate = Number(invoice.tipo_iva || 0);
-        const quota = Number(invoice.cuota_iva || 0);
-        const valid = clean(selectedActivity.activityType) === 'comercial_minorista'
-          && [21, 10, 4].includes(rate) && base > 0
-          && Math.abs(money(base * rate / 100) - quota) <= 0.01
-          && Math.abs(Number(invoice.tipo_recargo || 0)) <= 0.001
-          && Math.abs(Number(invoice.cuota_recargo || 0)) <= 0.001
-          && Math.abs(Number(invoice.importe_retencion || 0)) <= 0.001
-          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota)) <= 0.02
-          && Math.abs(proposedEvaluation.base - base) <= 0.02
-          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
-          && Math.abs(proposedEvaluation.taxRate - rate) < 0.001
-          && proposedEvaluation.specialPreview?.status === 'proposal_only';
-        if (!valid) return Response.json({ error: 'La venta minorista en recargo no cuadra con el IVA o la factura, o su actividad no está confirmada. Solo se admite venta nacional ordinaria sin retención ni recargo repercutido al cliente.' }, { status: 422 });
-        proposedEvaluation.postingBlocked = false;
-        proposedEvaluation.modelImpact = [];
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Venta minorista ordinaria: el IVA repercutido forma parte del ingreso contable; no se usa 477 ni se liquida en 303. Confirmación del asesor obligatoria.'];
-      } else if (proposedEvaluation.regime === 'criterio_caja' && proposedEvaluation.taxKind === 'iva'
-        && proposedEvaluation.operationType === 'subject_taxed') {
-        const base = Number(invoice.base_imponible || 0);
-        const rate = Number(invoice.tipo_iva || 0);
-        const quota = Number(invoice.cuota_iva || 0);
-        const previousMetadata = reccMetadata(invoice);
-        let advanceFields;
-        try { advanceFields = reccAdvanceMetadata({ ...previousMetadata, ...body.recc }); }
-        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-        const metadata = { ...advanceFields, version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
-          insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
-          originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
-          adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
-          adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
-          adjustmentCause: clean(body.recc?.adjustmentCause ?? previousMetadata.adjustmentCause ?? 'other'),
-          reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
-        // El abono hereda el circuito del anticipo desde su original, nunca desde una cuenta sugerida por IA.
-        if (invoice.es_rectificativa && metadata.originalInvoiceId) {
-          const originalForKind = await svc.entities.Invoice.get(metadata.originalInvoiceId);
-          if (originalForKind?.company_id === companyId && reccAdvanceMetadata(reccMetadata(originalForKind)).documentKind === 'advance')
-            metadata.documentKind = 'advance';
-        }
-        if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
-          return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
-        releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
-        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; }
-        catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-        const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
-        const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
-          && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
-          && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
-          && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
-          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - base) <= 0.01
-          && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - quota) <= 0.01;
-        const reccSurcharge = Number(invoice.cuota_recargo || 0);
-        const reccSurchargeRate = Number(invoice.tipo_recargo || 0);
-        const expectedSurchargeRate = ({21:5.2,10:1.4,4:0.5})[rate];
-        const validReccSurcharge = Math.abs(reccSurcharge) <= 0.001 || (invoice.tipo === 'emitida' && breakdown.length === 1
-          && expectedSurchargeRate != null && Math.abs(reccSurchargeRate - expectedSurchargeRate) <= 0.001
-          && Math.abs(money(base * reccSurchargeRate / 100) - reccSurcharge) <= 0.01);
-        const zeroResidualFinal = isZeroResidualReccFinal(invoice, metadata);
-        const validRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
-          && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
-            || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
-          && selectedActivity?.indirectTax === 'iva' && validBreakdown && (Math.abs(base) > 0 || zeroResidualFinal)
-          && Math.abs(Number(invoice.total_factura || 0) - money(base + quota + reccSurcharge - Number(invoice.importe_retencion || 0))) <= 0.02
-          && validReccSurcharge
-          && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
-          && Math.abs(proposedEvaluation.base - base) <= 0.02
-          && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
-          && Math.abs(proposedEvaluation.deductibleTax) <= Math.abs(quota)
-          && (zeroResidualFinal || invoice.es_rectificativa === true || (!proposedEvaluation.specialPreviewError
-            && (!proposedEvaluation.specialPreview || proposedEvaluation.specialPreview.status === 'proposal_only')));
-        if (!validRecc) return Response.json({ error: 'RECC: desglose, precio, retención o clasificación incoherentes. Corrige la factura antes de confirmar.', evaluation: proposedEvaluation }, { status: 422 });
-        if (selectedActivity?.indirectTaxRegime === 'criterio_caja' && invoice.fiscal_review_status !== 'validado') {
-          try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-        } else if (metadata.eligibility) try { checkReccEligibility(metadata.eligibility, body.operationDate || invoice.fecha_operacion || invoice.fecha_emision); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-        if (metadata.insolvencyDate && !clean(metadata.reason)) return Response.json({ error: 'El auto de concurso requiere fecha y referencia documental confirmadas por asesor.' }, { status: 422 });
-        if (invoice.es_rectificativa === true) {
-          const original = await svc.entities.Invoice.get(metadata.originalInvoiceId).catch(() => null);
-          if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
-            || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
-            || !clean(metadata.reason) || !metadata.adjustmentDate
-            || !['price_change','tax_adjustment'].includes(metadata.adjustmentMode)
-            || clean(invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif)).toUpperCase()
-              !== clean(original.tipo === 'emitida' ? original.cliente_nif : (original.proveedor_nif || original.cliente_nif)).toUpperCase())
-            return Response.json({ error: 'La rectificativa RECC exige original validado de la misma empresa, tipo y contraparte, fecha, tratamiento temporal y causa documentada por asesor.' }, { status: 422 });
-          try { reccDate(metadata.adjustmentDate); } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-          const previousCorrections = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
-          const proposed = { ...invoice, recc_metadata: JSON.stringify(metadata), fiscal_review_status: 'validado', fiscal_regime: 'criterio_caja' };
-          const originalPayments = await listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: original.id }, 'payment_date');
-          const allTaxLines = await listFiscalRows(svc.entities.InvoiceTaxLine, { companyId });
-          const originalLines = allTaxLines.filter((row: any) => row.invoiceId === original.id && row.reviewStatus === 'validado');
-          const proposedLines = breakdown.map((row: any) => ({ ...row, invoiceId: invoice.id }));
-          if (metadata.adjustmentMode === 'price_change' && breakdown.some((row: any) => !originalLines.some((part: any) => Number(part.rate) === Number(row.rate))))
-            return Response.json({ error: 'La variación de precio debe conservar los tipos de IVA originales; un cambio de cuota requiere ajuste fiscal revisado.' }, { status: 422 });
-          try {
-            if (metadata.adjustmentMode === 'price_change' && base < 0) for (const originalLine of originalLines) {
-              const corrections = reccCorrections(original, [...previousCorrections.filter((row: any) => row.id !== invoice.id), proposed], originalLine,
-                [...allTaxLines.filter((row: any) => row.invoiceId !== invoice.id), ...proposedLines]);
-              reccSchedule({ invoiceNet: Math.abs(Number(original.total_factura)), operationDate: original.fecha_operacion || original.fecha_emision,
-                ...reccMetadata(original), corrections, payments: originalPayments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
-            }
-          } catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-          proposedEvaluation.specialPreview = { regime: 'criterio_caja', status: 'proposal_only',
-            reason: metadata.adjustmentMode === 'tax_adjustment'
-              ? 'Ajuste de cuotas en fecha fiscal confirmada por asesor (artículos 89 y 114); revisar autoliquidación rectificativa si corresponde. No se sobrescribe el historial.'
-              : base < 0 ? 'Reducción vinculada por tipo de IVA: corrige lo reconocido y cancela el pendiente del original.' : 'Aumento de precio: cobros propios de la rectificativa y límite legal de la operación original.' };
-          proposedEvaluation.specialPreviewError = '';
-        }
-        proposedEvaluation.postingBlocked = false;
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
-      } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
-        proposedEvaluation.postingBlocked = true;
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
-      }
-      if (proposedEvaluation.postingBlocked) {
-        if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
-        return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
-      }
-      if (invoice.tipo === 'emitida' && proposedEvaluation.regime === 'criterio_caja'
-        && invoice.qr_pdf_url && clean(invoice.fiscal_regime) !== 'criterio_caja') {
-        return Response.json({ error: 'La factura ya tiene un PDF emitido sin la mención del criterio de caja. No se reclasifica silenciosamente: revisa y rectifica el documento antes de confirmar el régimen.' }, { status: 409 });
-      }
-      const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
-      if (evaluation.reviewRequired && body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
-      const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
-      if (Math.abs(Number(invoice.base_imponible || 0) - evaluation.base) > 0.02) return Response.json({ error: 'La base de la propuesta no coincide con la factura. Corrige primero el documento origen.' }, { status: 422 });
-      if (phaseOnePending && Number(invoice.importe_pagado || 0) > 0) return Response.json({ error: 'La factura pendiente de revisión no puede tener cobros o pagos antes de su validación.' }, { status: 409 });
-      if (invoice.linked_journal_entry_id && (
-        Math.abs(Number(invoice.cuota_iva || 0) - evaluation.taxAmount) > 0.01 ||
-        Math.abs(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) - evaluation.deductibleTax) > 0.01 ||
-        Math.abs(Number(invoice.importe_retencion || 0) - evaluation.withholdingAmount) > 0.01 ||
-        clean(invoice.indirect_tax_kind || evaluation.taxKind) !== evaluation.taxKind ||
-        evaluation.accounting?.reverseCharge
-      )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
-      const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
-      const proposedBreakdown = evaluation.regime === 'criterio_caja' && Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : null;
-      let taxLine;
-      if (proposedBreakdown) {
-        const oldLines = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
-        if (invoice.linked_journal_entry_id || oldLines.length > proposedBreakdown.length) return Response.json({ error: 'El desglose de una factura ya contabilizada o con más líneas previas no se sustituye; requiere ajuste trazado.' }, { status: 409 });
-        const savedLines = [];
-        for (const [index, row] of proposedBreakdown.entries()) {
-          const part = { ...payload, lineNumber: index + 1, base: money(row.base), rate: Number(row.rate), quota: money(row.quota),
-            deductibleQuota: invoice.tipo === 'recibida' ? money(Number(row.quota) * evaluation.deductiblePercent / 100) : 0,
-            nonDeductibleQuota: invoice.tipo === 'recibida' ? money(Number(row.quota) - money(Number(row.quota) * evaluation.deductiblePercent / 100)) : 0 };
-          const previous = oldLines.find((line: any) => Number(line.lineNumber) === index + 1);
-          savedLines.push(previous ? await svc.entities.InvoiceTaxLine.update(previous.id, part) : await svc.entities.InvoiceTaxLine.create(part));
-        }
-        taxLine = savedLines[0];
-        evaluation.deductibleTax = money(savedLines.reduce((sum: number, line: any) => sum + Number(line.deductibleQuota || 0), 0));
-        evaluation.nonDeductibleTax = money(savedLines.reduce((sum: number, line: any) => sum + Number(line.nonDeductibleQuota || 0), 0));
-      } else taxLine = existing?.[0] ? await svc.entities.InvoiceTaxLine.update(existing[0].id, payload) : await svc.entities.InvoiceTaxLine.create(payload);
-      const previousRecc = reccMetadata(invoice);
-      const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
-        ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.reccAdvanceCorrection ? {documentKind:'advance'} : {}) }),
-        version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
-        insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
-        originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
-        adjustmentDate: clean(body.recc?.adjustmentDate ?? previousRecc.adjustmentDate),
-        adjustmentMode: clean(body.recc?.adjustmentMode ?? previousRecc.adjustmentMode),
-        adjustmentCause: clean(body.recc?.adjustmentCause ?? previousRecc.adjustmentCause ?? 'other'),
-        reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
-        advanceReferences: (evaluation.advanceApplications || []).map((row: any) => ({ number: row.advanceNumber, base: row.base })),
-        reviewedBy: user.email, reviewedAt: new Date().toISOString(),
-      } : null;
-      const reccLegend = 'Régimen especial del criterio de caja';
-      const advanceLegend = confirmedRecc?.documentKind === 'advance' ? (invoice.es_rectificativa ? `Rectificativa de anticipo ${invoice.factura_rectificada || confirmedRecc.originalInvoiceId}; devolución trazada y ajuste 438/407 sin ingreso/gasto ordinario.` : 'Factura de anticipo: aplicación posterior mediante vínculo revisado por asesor.')
-        : confirmedRecc?.documentKind === 'final' ? `Factura final por saldo nuevo. Anticipos ya facturados y descontados: ${(confirmedRecc.advanceReferences || []).map((row: any) => `${row.number} (base ${money(row.base).toFixed(2)} EUR)`).join('; ')}. Su aplicación no genera otra cuota de IVA.` : '';
-      const previousLegend = String(invoice.coletilla_fiscal || '').trim();
-      const existingLegend = advanceLegend && !previousLegend.includes(advanceLegend) ? [previousLegend, advanceLegend].filter(Boolean).join(' · ') : previousLegend;
-      const issuedReccLegend = invoice.tipo === 'emitida' && payload.taxKind === 'iva' && payload.regime === 'criterio_caja'
-        ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
-          ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
-        : {};
-      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, tipo_iva: payload.rate, cuota_iva: payload.quota, retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
-      return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
-    }
+    if (action === 'save_invoice_tax_line') return await saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user},body);
 
     return Response.json({ error: 'Accion fiscal no soportada.' }, { status: 400 });
   } catch (error) {
