@@ -42,6 +42,8 @@ export default function TaxAccounting() {
     case 'libros': return <LibroRegistros />;
     case 'lector-gastos': return <LectorGastos />;
     case 'lector-ingresos': return <LectorIngresos />;
+    case 'ocr-gastos-revision': return <LectorGastos reviewPage />;
+    case 'ocr-ingresos-revision': return <LectorIngresos reviewPage />;
     case 'obligaciones': return <ObligacionesFiscales />;
     case 'asistente': return <AsistenteFiscal />;
     case 'notificaciones': return <Notificaciones />;
