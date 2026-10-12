@@ -43,6 +43,7 @@ const client={auth:{me:async()=>user},asServiceRole:{entities},functions:{invoke
   if(response.status>=400)throw Object.assign(new Error(data.error),{response:{status:response.status,data}});
   return {data};}}};
 client.asServiceRole.functions=client.functions;
+client.entities=entities;
 for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument']){
   const build=await esbuild.build({entryPoints:['base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
     plugins:[{name:'stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));}}]});
@@ -126,6 +127,7 @@ const pro=await makeDoc('prorrata',{rate:21,quota:21,total:121});
 const proResult=await call('approveOcrDocument',{docId:pro.id,invoiceType:'recibida',form:{...form(pro),fiscal_criteria:{deductionUse:'shared'}}});
 assert.equal((await entity('Invoice').get(proResult.invoiceId)).deductible_tax_amount,8.4);
 // Borradores manuales heredados, sin OCR asociado, se completan en el mismo módulo OCR.
+records.FiscalActivity[0].deductionRight='pleno';
 const orphan=await entity('Invoice').create({company_id:'qa',tipo:'recibida',numero_factura:'orphan',
   fecha_emision:'2026-07-15',fecha_recepcion:'2026-07-16',proveedor_nombre:'Proveedor QA',
   proveedor_nif:'B98765432',base_imponible:100,tipo_iva:21,cuota_iva:21,total_factura:121,
