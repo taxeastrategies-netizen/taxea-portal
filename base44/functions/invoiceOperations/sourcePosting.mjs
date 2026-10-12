@@ -7,6 +7,11 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
     'Falló el registro fiscal OCR.','No se pudo guardar la clasificación fiscal de la factura nueva.'];
   if (invoice.accounting_migration_hold && !knownHolds.includes(invoice.accounting_migration_hold_reason))
     throw Object.assign(new Error('Esta factura tiene una incidencia contable independiente. No se levantará su retención automáticamente.'), {status:409});
+  const token=crypto.randomUUID();
+  const claimed=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+    source_confirmation_lock_token:{$in:[null,'']}},{$set:{source_confirmation_lock_token:token,source_confirmation_lock_started_at:new Date().toISOString()}});
+  if(Number(claimed?.updated)!==1) throw Object.assign(new Error('Este documento ya está siendo confirmado. Espera a que termine antes de reintentar.'),{status:409});
+  try {
   // Una factura ya contabilizada se reutiliza, nunca se reclasifica al repetir el check.
   if (invoice.estado_contable !== 'contabilizada' && !invoice.linked_journal_entry_id) {
     const response = await base44.functions.invoke('fiscalOperations', { ...criteria,
@@ -43,4 +48,6 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
       {accounting_migration_hold:true,accounting_migration_hold_reason:'FISCAL_POSTING_ERROR'});
     error.invoiceId=invoice.id; throw error;
   }
+  } finally {await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,source_confirmation_lock_token:token},
+    {$set:{source_confirmation_lock_token:'',source_confirmation_lock_started_at:''}});}
 }
