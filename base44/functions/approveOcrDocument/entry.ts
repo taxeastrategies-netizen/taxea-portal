@@ -22,7 +22,7 @@ function buildBulkCorrectedForm(ex) {
     pais_proveedor: ex?.pais_proveedor || ex?.proveedor_pais || '',
     concepto: ex?.concepto || ex?.motivo_clasificacion || '',
     fecha: ex?.fecha || '',
-    fecha_recepcion: new Date().toISOString().slice(0, 10),
+    fecha_recepcion: ex?.fecha_recepcion || new Date().toISOString().slice(0, 10),
     base_imponible: base,
     tipo_impuesto: Number(ex?.tipo_impuesto ?? 0),
     cuota_impuesto: Number(ex?.cuota_impuesto ?? 0),
@@ -355,7 +355,7 @@ Deno.serve(async (req) => {
       if (!selectedActivity) return Response.json({ error: 'Selecciona una actividad fiscal exacta y activa antes de aprobar el lote.' }, { status: 422 });
       const activityId = selectedActivity.id;
 
-      const BATCH_LIMIT = 4;
+      const BATCH_LIMIT = 8;
       const totalPending = pendingDocIds.length;
       pendingDocIds = pendingDocIds.slice(0, BATCH_LIMIT);
       const summary = { approved: 0, review: 0, skipped: 0, failed: 0, errors: [], remaining: Math.max(0, totalPending - pendingDocIds.length) };
