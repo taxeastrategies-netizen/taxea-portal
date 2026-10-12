@@ -4,6 +4,7 @@ const DEDUCTIONS=[['interior_current','Interior corriente'],['interior_investmen
   ['intra_goods_investment','Adquisición intracomunitaria · inversión'],['import_current','Importación corriente'],
   ['import_investment','Importación · inversión'],['agriculture_compensation','Compensación agraria'],
   ['deduction_adjustment','Rectificación de deducciones']];
+/** @param {{value?: Record<string, any>, onChange: Function, context?: any, direction: string, activityId?: string, sourceTaxRate?: number, disabled?: boolean}} props */
 export default function OcrFiscalFields({value={},onChange,context={},direction,activityId,sourceTaxRate=0,disabled=false}) {
   const activity=(context.activities || []).find(row=>row.id===activityId)
     || ((context.activities || []).length===1?context.activities[0]:null);
