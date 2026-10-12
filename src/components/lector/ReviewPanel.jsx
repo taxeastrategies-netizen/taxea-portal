@@ -35,6 +35,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
           <button disabled={loading} onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
         </div>
       </div>
+      {error && <p role="alert" className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">{error}</p>}
 
       <div className={expanded ? 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(160px,35vh)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)] lg:grid-rows-1' : 'grid min-h-[500px] grid-cols-1 lg:grid-cols-2'}>
         {/* Preview */}
@@ -154,7 +155,6 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             </F>
           )}
 
-          {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
           <OcrFiscalFields value={form.fiscal_criteria || {}} onChange={value=>set('fiscal_criteria',value)}
             context={fiscalContext} direction={tipo==='ingresos'?'ingreso':'gasto'} activityId={form.fiscal_activity_id}
             sourceTaxRate={tipo==='ingresos'?form.tipo_iva:form.tipo_impuesto} disabled={loading} />
