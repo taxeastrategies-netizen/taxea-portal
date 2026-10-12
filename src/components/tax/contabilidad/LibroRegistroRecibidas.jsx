@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowDownCircle, Search, Eye, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import InvoiceFiscalReview from './InvoiceFiscalReview';
 
 const fmt = (n) => n != null ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n) : '—';
 
@@ -161,7 +160,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Categoría</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Estado</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Doc.</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Fiscal</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Tratamiento</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -195,7 +194,7 @@ export default function LibroRegistroRecibidas({ companyId }) {
                       </a>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
-                  <td className="px-3 py-2"><InvoiceFiscalReview companyId={companyId} invoice={inv} /></td>
+                  <td className="px-3 py-2"><span className="text-xs text-muted-foreground" title={inv.fiscal_legal_basis || ''}>{inv.fiscal_treatment || 'Histórico'}</span></td>
                 </tr>
               ))}
             </tbody>
