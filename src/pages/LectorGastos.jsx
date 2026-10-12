@@ -132,9 +132,12 @@ export default function LectorGastos({ reviewPage = false }) {
   const selectedReviewId = new URLSearchParams(location.search).get('doc');
   const reviewDone = new URLSearchParams(location.search).get('done') === '1';
   const reviewPath = '/tax-accounting/ocr-gastos-revision';
-  const openReviewPage = id => navigate(`${reviewPath}?doc=${encodeURIComponent(id)}`, reviewPage ? undefined : {
-    state: { companyId: company?.id, ocrDocuments: reviewableDocuments(documents) },
-  });
+  const openReviewPage = id => {
+    setReviewMessage('');
+    navigate(`${reviewPath}?doc=${encodeURIComponent(id)}`, reviewPage ? undefined : {
+      state: { companyId: company?.id, ocrDocuments: reviewableDocuments(documents) },
+    });
+  };
   const [documents, setDocuments] = useState(() => reviewPage && location.state?.companyId === company?.id
     && Array.isArray(location.state?.ocrDocuments) ? location.state.ocrDocuments : []);
   const loadVersion = useRef(0);
