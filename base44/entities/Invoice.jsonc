@@ -8,6 +8,9 @@
     "source_confirmation_lock_recovery": {
       "type": "object"
     },
+    "source_last_error": {
+      "type": "string"
+    },
     "source_confirmation_lock_started_at": {
       "type": "string"
     },
