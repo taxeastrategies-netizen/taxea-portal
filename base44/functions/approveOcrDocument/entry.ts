@@ -88,6 +88,18 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
 
   const manualAccountInput = String(form.cuenta_contable_manual || '').trim();
   let manualAccount = null;
+  const suggestedAccountInput = !manualAccountInput ? String(form.cuenta_pgc || extractedData?.cuenta_pgc || '').trim() : '';
+  const expectedGroup = invoiceType === 'emitida' ? '7' : '6';
+  if (suggestedAccountInput && (!/^\d{3,8}$/.test(suggestedAccountInput) || !suggestedAccountInput.startsWith(expectedGroup))) {
+    return { status: 422, json: { error: `La cuenta ${suggestedAccountInput} propuesta por el OCR no es una cuenta válida del grupo ${expectedGroup}. Revísala individualmente.` } };
+  }
+  const suggestedAccountCode = suggestedAccountInput ? canonical8(suggestedAccountInput) : '';
+  if (suggestedAccountCode) {
+    const existing = await base44.asServiceRole.entities.AccountingAccount.filter({ companyId: doc.company_id, code: suggestedAccountCode });
+    if (existing?.some(account => account.status === 'inactiva' || account.type !== (invoiceType === 'emitida' ? 'ingreso' : 'gasto'))) {
+      return { status: 422, json: { error: `La cuenta ${suggestedAccountCode} propuesta por el OCR está inactiva o tiene otro tipo. Revísala individualmente.` } };
+    }
+  }
   if (manualAccountInput) {
     const expectedGroup = invoiceType === 'emitida' ? '7' : '6';
     const expectedAccountType = invoiceType === 'emitida' ? 'ingreso' : 'gasto';
@@ -223,6 +235,9 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   if (manualAccount) {
     invoiceData.revenue_expense_account_code = manualAccount.code;
     invoiceData.revenue_expense_account_id = manualAccount.id;
+  } else if (suggestedAccountCode) {
+    // Cada OCR conserva su propia cuenta propuesta; nunca se copia la de otra factura del lote.
+    invoiceData.revenue_expense_account_code = suggestedAccountCode;
   }
   invoiceData.accounting_review_status = 'pendiente_revision';
   invoiceData.accounting_schema_version = SCHEMA_VERSION;
