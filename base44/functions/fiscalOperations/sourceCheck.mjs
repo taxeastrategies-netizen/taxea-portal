@@ -4,6 +4,9 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   if (!professional && profile?.profileStatus !== 'validado_asesor')
     throw new Error('El asesor debe confirmar el encuadramiento de la empresa antes de registrar facturas.');
   if (!activity || activity.active === false) throw new Error('Selecciona la actividad fiscal de esta factura.');
+  let recc={},breakdown=[];
+  try{recc=JSON.parse(invoice.recc_metadata || '{}');breakdown=JSON.parse(invoice.tax_breakdown || '[]');}catch{/* Datos especiales incompletos se validan en su circuito. */}
+  input={...input,recc:input.recc || recc,...(input.taxBreakdown || breakdown.length?{taxBreakdown:input.taxBreakdown || breakdown}:{})};
   const direction = invoice.tipo === 'recibida' ? 'gasto' : 'ingreso';
   const body = { ...input, activityId: activity.id,
     base: Number(invoice.base_imponible), operationDate: invoice.fecha_operacion || invoice.fecha_emision,
