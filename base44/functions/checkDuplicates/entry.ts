@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import { normalizedDate, normalizedNumber, sameInvoiceIdentity } from './duplicateIdentity.mjs';
+import { normalizedDate, normalizedNumber, normalizedName, normalizedTaxId, sameInvoiceIdentity } from './duplicateIdentity.mjs';
 
 const parseSource = raw => {
   if (raw && typeof raw === 'object') return raw;
@@ -87,6 +87,8 @@ Deno.serve(async req => {
         : `T${Math.ceil(month / 3)}` === periodValue;
     };
     const filtered = records.filter(matchesPeriod);
+    const incompleteRecordsCount = filtered.filter(record => !normalizedNumber(record.number)
+      || !normalizedDate(record.date) || !(normalizedTaxId(record.taxId) || normalizedName(record.name))).length;
     const buckets = new Map();
     for (const record of filtered) {
       const number = normalizedNumber(record.number);
@@ -124,7 +126,7 @@ Deno.serve(async req => {
       : pairs;
     return Response.json({
       success: true, scope, period: { type: periodType, year: filterYear, value: periodValue },
-      totalRecordsAnalyzed: filtered.length, duplicateGroupsCount: duplicateGroups.length,
+      totalRecordsAnalyzed: filtered.length, incompleteRecordsCount, duplicateGroupsCount: duplicateGroups.length,
       totalToDelete: 0, duplicateGroups,
       message: 'Coincidencias para revisión individual; este chequeo no elimina ni anula asientos.',
     });
