@@ -2,6 +2,9 @@
   "name": "Company",
   "type": "object",
   "properties": {
+    "ocr_approval_lock_recovery": {
+      "type": "object"
+    },
     "ocr_approval_lock_token": {
       "type": "string",
       "rls": {
