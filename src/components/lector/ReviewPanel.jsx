@@ -155,12 +155,15 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             context={fiscalContext} direction={tipo==='ingresos'?'ingreso':'gasto'} activityId={form.fiscal_activity_id}
             sourceTaxRate={tipo==='ingresos'?form.tipo_iva:form.tipo_impuesto} disabled={loading} />
 
+          {doc.invoiceSource && <p className="text-xs text-muted-foreground">La factura ya está guardada. Aquí completas su criterio y cuenta de gasto/ingreso; sus importes originales quedan protegidos.</p>}
+          <fieldset disabled={loading || Boolean(doc.invoiceSource)}>
           {/* Campos según tipo */}
           {bulkCount > 0 ? <p className="text-xs text-muted-foreground">El lote aplica únicamente actividad, criterio fiscal y cuenta manual indicada. Cada documento conserva sus datos originales.</p> : tipo === 'ingresos' ? (
             <IngresosFields form={form} set={set} />
           ) : (
             <GastosFields form={form} set={set} />
           )}
+          </fieldset>
         </div>
       </div>
     </div>
