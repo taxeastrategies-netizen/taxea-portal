@@ -65,7 +65,7 @@ export function computeBusinessHealth(summary, fiscal) {
   const operationsReasons = [];
   if (operations.criticalErrors) { operationsScore -= Math.min(75, operations.criticalErrors * 25); operationsReasons.push(`${operations.criticalErrors} incidencia(s) críticas abiertas.`); }
   if (operations.overdueTasks) { operationsScore -= Math.min(50, operations.overdueTasks * 10); operationsReasons.push(`${operations.overdueTasks} tarea(s) vencidas.`); }
-  add('operations', 'Operaciones', 5, true, operationsScore, operationsReasons);
+  add('operations', 'Tareas e incidencias', 5, true, operationsScore, operationsReasons);
 
   const active = dimensions.filter((dimension) => dimension.active);
   const activeWeight = active.reduce((sum, dimension) => sum + dimension.weight, 0);
