@@ -464,6 +464,26 @@
         "asiento_anulado"
       ],
       "default": "pendiente_revision"
+    },
+    "self_assessed_tax_amount": {
+      "type": "number",
+      "description": "Cuota autorrepercutida confirmada. No forma parte de la deuda con el proveedor."
+    },
+    "self_assessed_tax_rate": {
+      "type": "number"
+    },
+    "self_assessed_tax_confirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "fiscal_review_lock_token": {
+      "type": "string"
+    },
+    "fiscal_review_lock_started_at": {
+      "type": "string"
+    },
+    "fiscal_review_batch_id": {
+      "type": "string"
     }
   },
   "required": [
