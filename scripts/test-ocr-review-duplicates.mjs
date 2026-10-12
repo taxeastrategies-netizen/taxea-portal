@@ -94,6 +94,15 @@ assert.equal(noPeriod.data.duplicateGroupsCount, 0);
 currentUser = { id: 'outsider', role: 'user', email: 'stranger@test.invalid' };
 assert.equal((await call(query)).status, 403);
 assert.equal(writes, 0);
+const recoveryBuild = await esbuild.build({ entryPoints: ['base44/functions/approveOcrDocument/ocrRecovery.ts'], bundle: true,
+  write: false, platform: 'node', format: 'esm' });
+const recoveryUrl = 'data:text/javascript;base64,' + Buffer.from(recoveryBuild.outputFiles[0].text).toString('base64');
+const { findFinancialDuplicates } = await import(recoveryUrl);
+const guarded = await findFinancialDuplicates({ entities },
+  { company_id: 'qa', extractedData: '{}' },
+  { tipo: 'recibida', numero_factura: 'F-001', fecha_emision: '2025-07-12',
+    proveedor_nif: 'B12345678', proveedor_nombre: 'Proveedor QA', total_factura: 999 });
+assert.deepEqual(guarded.map(row => row.id), ['historical']); // Amount does not override the strict triple.
 const modal = readFileSync('src/components/shared/DuplicateCheckModal.jsx', 'utf8');
 assert.doesNotMatch(modal, /OcrInvoiceDocument\.delete|anularFacturas|Eliminar \$\{/);
 console.log(JSON.stringify({ ok: true, checks: ['strict triple', 'historical+OCR cross-check', 'linked source ignored', 'pagination', 'tenant denied', 'read-only review', 'next/previous queue'], records: all.data.totalRecordsAnalyzed }));
