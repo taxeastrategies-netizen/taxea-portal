@@ -392,6 +392,8 @@ export default function LectorGastos({ reviewPage = false }) {
       setBulkProgress(result);
       setToast({type:result.failed?'error':'success',message:`Lote: ${result.done} contabilizadas, ${result.failed} con incidencia, ${result.remaining} pendientes.`});
       window.dispatchEvent(new Event('financials:refresh'));
+    } catch(error) {
+      setToast({type:'error',message:error?.response?.data?.error || error?.message || 'El lote se ha detenido. Los documentos no confirmados siguen pendientes.'});
     } finally {
       setBulkIds([]);setReviewing(null);setValidating(false);
       loadDocs();
@@ -586,8 +588,9 @@ export default function LectorGastos({ reviewPage = false }) {
       )}
 
       {bulkProgress && <div role="status" className="mb-3 rounded-lg border p-3 text-sm">
-        Lote: {bulkProgress.done} contabilizadas · {bulkProgress.failed} incidencias · {bulkProgress.total} seleccionadas.
+        Lote: {bulkProgress.done} contabilizadas · {bulkProgress.failed} incidencias · {bulkProgress.remaining ?? bulkProgress.total-bulkProgress.done-bulkProgress.failed} pendientes.
         {validating && <button className="ml-3 underline" onClick={()=>{cancelBulk.current=true;}}>Detener al terminar la factura actual</button>}
+        {bulkProgress.issues?.length>0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-900">{bulkProgress.issues.slice(0,10).map(issue=><li key={issue.id}>{issue.reason}</li>)}{bulkProgress.issues.length>10 && <li>Hay {bulkProgress.issues.length-10} incidencias más. Revisa los OCR que continúan pendientes.</li>}</ul>}
       </div>}
       <OcrDocumentTable
         documents={documents}
