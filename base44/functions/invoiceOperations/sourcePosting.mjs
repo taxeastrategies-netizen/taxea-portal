@@ -12,6 +12,14 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
     source_confirmation_lock_token:{$in:[null,'']}},{$set:{source_confirmation_lock_token:token,source_confirmation_lock_started_at:new Date().toISOString()}});
   if(Number(claimed?.updated)!==1) throw Object.assign(new Error('Este documento ya está siendo confirmado. Espera a que termine antes de reintentar.'),{status:409});
   try {
+  if(criteria.accountCode && invoice.estado_contable!=='contabilizada' && !invoice.linked_journal_entry_id) {
+    const raw=String(criteria.accountCode).trim(),group=invoice.tipo==='emitida'?'7':'6',type=invoice.tipo==='emitida'?'ingreso':'gasto';
+    if(!/^\d{3,8}$/.test(raw) || !raw.startsWith(group)) throw Object.assign(new Error('La cuenta manual no corresponde al grupo de esta factura.'),{status:422});
+    const code=raw.padEnd(8,'0'),rows=await svc.entities.AccountingAccount.filter({companyId,code});
+    const account=rows.find(row=>row.status!=='inactiva' && row.type===type && row.companyId===companyId);
+    if(!account) throw Object.assign(new Error('La cuenta manual debe existir y estar activa en el plan de esta empresa.'),{status:422});
+    invoice=await svc.entities.Invoice.update(invoice.id,{revenue_expense_account_code:code,revenue_expense_account_id:account.id});
+  }
   // Una factura ya contabilizada se reutiliza, nunca se reclasifica al repetir el check.
   if (invoice.estado_contable !== 'contabilizada' && !invoice.linked_journal_entry_id) {
     const response = await base44.functions.invoke('fiscalOperations', { ...criteria,
