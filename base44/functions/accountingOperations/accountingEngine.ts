@@ -416,7 +416,9 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   } else counterparty = await ensureCounterparty(svc, companyId, invoice);
   const taxKind = await getTaxKind(svc, companyId, invoice);
   const base = money(invoice.base_imponible);
-  const tax = money(invoice.cuota_iva);
+  const selfAssessed = invoice.tipo === 'recibida' && invoice.self_assessed_tax_confirmed === true
+    && ['reverse_charge','intra_eu_acquisition'].includes(clean(invoice.fiscal_treatment));
+  const tax = money(selfAssessed ? invoice.self_assessed_tax_amount : invoice.cuota_iva);
   const deductibleTax = invoice.tipo === 'recibida' && invoice.deductible_tax_amount != null
     ? money(invoice.deductible_tax_amount)
     : tax;
@@ -425,7 +427,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     : 0;
   const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
   const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) ? money(invoice.cuota_recargo) : 0;
-  const total = money(invoice.total_factura || base + tax + surcharge - withholding);
+  const total = money(invoice.total_factura || base + (selfAssessed ? 0 : tax) + surcharge - withholding);
   if (!invoice.es_rectificativa && base <= 0 && !(advance.documentKind === 'final' && isZeroResidualReccFinal(invoice))) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
   const absBase = Math.abs(base);
@@ -466,6 +468,9 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const taxAccount = taxPostingAmount > 0 && taxKind !== 'no_aplica'
     ? await ensureAccount(svc, companyId, taxCode, ACCOUNT_DEFS[taxCode][0], 'impuesto')
     : null;
+  const selfOutputCode = taxKind === 'igic' ? '47770000' : '47700000';
+  const selfOutputAccount = selfAssessed && absTax > 0
+    ? await ensureAccount(svc, companyId, selfOutputCode, ACCOUNT_DEFS[selfOutputCode][0], 'impuesto') : null;
   const retentionCode = invoice.tipo === 'emitida' ? '47300000' : '47510000';
   const retentionAccount = absWithholding > 0
     ? await ensureAccount(svc, companyId, retentionCode, ACCOUNT_DEFS[retentionCode][0], 'impuesto')
@@ -495,6 +500,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     lines = [
       line(resultAccount, sign > 0 ? resultPostingAmount : 0, sign < 0 ? resultPostingAmount : 0, advance.documentKind === 'advance' ? 'ajuste' : 'gasto'),
       ...(taxAccount ? [line(taxAccount, sign > 0 ? taxPostingAmount : 0, sign < 0 ? taxPostingAmount : 0, 'impuesto')] : []),
+      ...(selfOutputAccount ? [line(selfOutputAccount, sign < 0 ? absTax : 0, sign > 0 ? absTax : 0, 'impuesto')] : []),
       line(counterparty.account, sign < 0 ? absTotal : 0, sign > 0 ? absTotal : 0, 'tercero'),
       ...(absWithholding ? [line(retentionAccount, sign < 0 ? absWithholding : 0, sign > 0 ? absWithholding : 0, 'retencion')] : []),
     ];
@@ -1028,7 +1034,24 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
         : 'El recargo requiere actividad minorista, perfil y línea fiscal validados por asesor antes del asiento.');
     }
   }
-  if (['reverse_charge', 'intra_eu_acquisition', 'special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase && !(validatedRecc && invoice.tipo === 'emitida'))) {
+  if (['reverse_charge','intra_eu_acquisition'].includes(clean(invoice.fiscal_treatment))) {
+    const lines = await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',2);
+    const line = lines[0];
+    const incoming = invoice.tipo === 'recibida';
+    const expected = money(Number(invoice.base_imponible) * Number(invoice.self_assessed_tax_rate) / 100);
+    if (lines.length !== 1 || line?.reviewStatus !== 'validado' || !line.reviewedBy
+      || line.operationType !== invoice.fiscal_treatment || line.taxKind !== invoice.indirect_tax_kind
+      || !['iva','igic'].includes(line.taxKind) || Math.abs(Number(invoice.cuota_iva || 0)) > 0.01
+      || (line.operationType === 'intra_eu_acquisition' && line.taxKind !== 'iva')
+      || Math.abs(Number(line.base)-Number(invoice.base_imponible)) > 0.01
+      || (incoming && (invoice.self_assessed_tax_confirmed !== true || Number(invoice.self_assessed_tax_rate) <= 0
+        || Math.abs(Number(line.quota)-expected) > 0.01 || Math.abs(Number(invoice.self_assessed_tax_amount)-expected) > 0.01
+        || Math.abs(Number(line.deductibleQuota)-Number(invoice.deductible_tax_amount)) > 0.01
+        || Math.abs(Number(line.nonDeductibleQuota)-Number(invoice.non_deductible_tax_amount)) > 0.01))
+      || (!incoming && Math.abs(Number(line.quota)) > 0.01))
+      throw new Error('La inversión/autorrepercusión requiere una línea fiscal confirmada coherente; no se cambia el importe del proveedor.');
+  }
+  if (['special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase && !(validatedRecc && invoice.tipo === 'emitida'))) {
     throw new Error('La inversión de sujeto pasivo, el margen o el recargo requieren asientos fiscales específicos.');
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
