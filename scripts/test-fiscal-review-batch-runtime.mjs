@@ -66,8 +66,8 @@ assert.equal(records.Invoice[0].self_assessed_tax_amount,21);assert.equal(record
 assert.equal(records.InvoiceTaxLine[0].deductionCategory,'intra_services');assert.equal(records.Invoice[0].qr_integrity_hash,'UNCHANGED');
 assert(records.InvoiceTaxLine[0].manualOverrideReason.includes('advisor@test.invalid'));
 assert.deepEqual(saved.evaluation.modelImpact,['349','303']);
-records.AccountingAccount=[{id:'historical',companyId:'a',code:'41000077',name:'Proveedor histórico',status:'activa'}];
-records.CounterpartyFiscalProfile=[{id:'cp',company_id:'a',taxId:'DETEST',accountingRole:'acreedor',accountingAccountCode:'41000077'}];
+records.AccountingAccount=[{id:'historical',companyId:'a',code:'41000077',name:'Proveedor ficticio',nif:'DETEST',status:'activa'}];
+records.CounterpartyFiscalProfile=[{id:'cp',company_id:'a',taxId:'DETEST',accountingRole:'acreedor',accountingAccountId:'historical',accountingAccountCode:'41000077'}];
 const engine=(await bundle('base44/functions/accountingOperations/accountingEngine.ts')).exports;
 const proposal=await engine.buildInvoicePosting(svc,'a',clone(records.Invoice[0]));
 const amount=(code,side)=>proposal.lines.filter(row=>row.accountCode===code).reduce((s,row)=>s+row[side],0);
