@@ -10,7 +10,7 @@ if (result.status == null) throw new Error('El proceso de TypeScript no devolviÃ
 const output = `${result.stdout || ''}${result.stderr || ''}`;
 const lines = output.split(/\r?\n/).filter(Boolean);
 const allErrors = lines.filter(line => line.includes('error TS'));
-const taxPath = /^src[\\/](components[\\/]tax|components[\\/]facturas|components[\\/](lector|ocr)|lib[\\/]ocrWorkspace|pages[\\/](TaxAccounting|Facturas|IngresosGastos|LectorGastos|LectorIngresos|LibroRegistros|ObligacionesFiscales))/;
+const taxPath = /^src[\\/](components[\\/](tax|facturas|lector|ocr)|lib[\\/]ocrWorkspace|pages[\\/](TaxAccounting|Facturas|IngresosGastos|LectorGastos|LectorIngresos|LibroRegistros|ObligacionesFiscales))/;
 const scopedErrors = allErrors.filter(line => taxPath.test(line));
 
 console.log(JSON.stringify({
