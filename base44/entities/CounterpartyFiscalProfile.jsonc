@@ -104,6 +104,25 @@
     },
     "accountingSchemaVersion": {
       "type": "string"
+    },
+    "externalAccountCode": {
+      "type": "string",
+      "description": "C\u00f3digo del tercero en el plan contable externo; no sustituye la subcuenta interna ni el asiento."
+    },
+    "externalAccountSource": {
+      "type": "string"
+    },
+    "externalAccountYear": {
+      "type": "number"
+    },
+    "externalAccountStatus": {
+      "type": "string",
+      "enum": [
+        "verificado_nombre_unico",
+        "pendiente_ambiguedad",
+        "alta_pendiente_en_a3",
+        "pendiente_revision"
+      ]
     }
   },
   "required": [
