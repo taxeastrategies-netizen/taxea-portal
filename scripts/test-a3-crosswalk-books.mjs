@@ -20,7 +20,7 @@ const built = await esbuild.build({
   entryPoints: [path.resolve('src/components/libros/ExportExcel.jsx')],
   bundle: true, write: false, platform: 'node', format: 'cjs',
   plugins: [{ name: 'mock-base44', setup(build) {
-    build.onResolve({ filter: /^@\\/api\\/base44Client$/ }, () => ({ path: 'mock', namespace: 'test' }));
+    build.onResolve({ filter: new RegExp('^@/api/base44Client$') }, () => ({ path: 'mock', namespace: 'test' }));
     build.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const base44 = globalThis.__mockBase44;', loader: 'js' }));
   } }],
 });
