@@ -384,17 +384,20 @@ function isValidatedSimpleReccInvoice(invoice) {
 }
 
 function isValidatedMinoristaIgicPurchase(invoice) {
-  const base = money(invoice.base_imponible);
-  return clean(invoice.tipo) === 'recibida'
-    && clean(invoice.fiscal_regime) === 'comerciante_minorista_igic'
-    && clean(invoice.indirect_tax_kind) === 'igic'
-    && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)
-    && money(invoice.cuota_iva) === 0
-    && money(invoice.deductible_tax_amount) === 0
-    && money(invoice.cuota_recargo) === 0
-    && Math.abs(money(invoice.total_factura)) > 0
-    && Math.abs(money(invoice.total_factura) - money(base - money(invoice.importe_retencion))) <= 0.02
-    && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR';
+  const base=money(invoice.base_imponible),quota=money(invoice.cuota_iva);
+  const received=clean(invoice.tipo)==='recibida';
+  const sourceValid = received
+    ? ['subject_taxed','subject_zero','exempt_limited','non_subject_article','non_subject_location'].includes(clean(invoice.fiscal_treatment))
+      && money(invoice.deductible_tax_amount)===0
+      && Math.abs(money(invoice.non_deductible_tax_amount)-quota)<=0.01
+    : clean(invoice.tipo)==='emitida' && clean(invoice.fiscal_treatment)==='exempt_limited'
+      && quota===0 && clean(invoice.fiscal_exemption_key)==='IGIC_COMERCIANTE_MINORISTA' && !!clean(invoice.fiscal_legal_basis);
+  return clean(invoice.fiscal_regime)==='comerciante_minorista_igic'
+    && clean(invoice.indirect_tax_kind)==='igic' && sourceValid
+    && invoice.fiscal_review_status==='validado' && !!clean(invoice.fiscal_reviewed_by)
+    && money(invoice.cuota_recargo)===0 && Math.abs(money(invoice.total_factura))>0
+    && Math.abs(money(invoice.total_factura)-money(base+quota-money(invoice.importe_retencion)))<=0.02
+    && clean(invoice.moneda || 'EUR').toUpperCase()==='EUR';
 }
 
 export async function buildInvoicePosting(svc, companyId, invoice) {
