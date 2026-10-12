@@ -6,6 +6,7 @@ import { webcrypto } from 'node:crypto';
 import * as esbuild from 'esbuild';
 import { fiscalReviewBatch } from '../base44/functions/fiscalOperations/fiscalReviewBatch.mjs';
 import { commonReviewCriteria } from '../base44/functions/fiscalOperations/advisorReview.mjs';
+assert.equal(fs.readFileSync('base44/functions/fiscalOperations/advisorReview.mjs','utf8'),fs.readFileSync('base44/functions/invoiceOperations/advisorReview.mjs','utf8'),'Review filter copies must remain identical');
 const clone=value=>JSON.parse(JSON.stringify(value));
 const match=(row,query)=>Object.entries(query||{}).every(([key,val])=>{
   if(key==='$or') return val.some(q=>match(row,q));
