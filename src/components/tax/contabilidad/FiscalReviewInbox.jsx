@@ -16,7 +16,7 @@ export default function FiscalReviewInbox({companyId}) {
   const [batch,setBatch]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState('');
   const [results,setResults]=useState([]),[resultPage,setResultPage]=useState(0),[moreResults,setMoreResults]=useState(false);
   const [recoveryReason,setRecoveryReason]=useState(''),[stopped,setStopped]=useState(false);
-  const generation=useRef(0);
+  const generation=useRef(0),prepareKey=useRef(null);
   const query=useQuery({queryKey:['fiscal-review-inbox',companyId,filters,page],enabled:Boolean(companyId),staleTime:15000,
     queryFn:async()=>{const response=await base44.functions.invoke('invoiceOperations',{action:'list_fiscal_review',company_id:companyId,filters,page});
       const result=response?.data??response;if(!result?.ok) throw new Error(result?.error||'No se pudo cargar la bandeja.');return result;}});
@@ -56,8 +56,11 @@ export default function FiscalReviewInbox({companyId}) {
   const selectPage=checked=>{if(allFiltered){setExcluded(old=>{const next=new Set(old);rows.forEach(row=>checked?next.delete(row.id):next.add(row.id));return next;});return;}setSelected(old=>{const next=new Set(old);rows.forEach(row=>checked?next.add(row.id):next.delete(row.id));return next;});};
   const createBatch=async(criteria,invoiceIds)=>{
     setError('');
-    const data=await fiscal({action:'create_review_batch',companyId,requestId:crypto.randomUUID(),confirmReviewed:true,criteria,
+    const signature=JSON.stringify({companyId,criteria,invoiceIds:invoiceIds||[...selected],allFiltered:!invoiceIds&&allFiltered,filters,excludedIds:[...excluded]});
+    if(prepareKey.current?.signature!==signature) prepareKey.current={signature,key:crypto.randomUUID()};
+    const data=await fiscal({action:'create_review_batch',companyId,requestId:prepareKey.current.key,confirmReviewed:true,criteria,
       allFiltered:invoiceIds?false:allFiltered,excludedIds:invoiceIds?[]:[...excluded],filters,invoiceIds:invoiceIds||[...selected]});
+    prepareKey.current=null;
     setBatch(data.batch);setResults([]);setExcluded(new Set());setSelected(new Set());setAllFiltered(false);setRunning(true);await jobs.refetch();
   };
   const failedIds=results.filter(row=>row.status==='failed').map(row=>row.invoice_id);
