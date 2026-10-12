@@ -353,7 +353,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       if ((profiles || []).length !== 1) return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
-      const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
+      const activeForSource = activities.filter(item => item.active !== false);
+      const selectedActivity = activeForSource.find(item => item.id === (body.activityId || invoice.fiscal_activity_id))
+        || (context.sourceCheck && !body.activityId && !invoice.fiscal_activity_id && activeForSource.length === 1 ? activeForSource[0] : null);
       if (context.sourceCheck) {
         if (invoice.estado_contable === 'contabilizada' || invoice.linked_journal_entry_id) return Response.json({ error: 'La factura ya está contabilizada; no se reclasifica desde el OCR.' }, { status: 409 });
         body = sourceDecision(invoice, body, selectedActivity, profile, canProfessionallyValidate(user));
