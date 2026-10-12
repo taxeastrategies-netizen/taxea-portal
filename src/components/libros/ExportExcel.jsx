@@ -427,6 +427,13 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
+  let a3Rows = null;
+  let a3Warning = '';
+  try {
+    a3Rows = await loadA3Crosswalk(companyId, year, invoices);
+  } catch (error) {
+    a3Warning = 'No se pudo consultar la equivalencia A3; las cuentas Taxea siguen disponibles. ' + (error?.message || '');
+  }
   if (onlyInvoiceBooks) {
     const emitidas = invoices.filter(i => i.tipo === 'emitida');
     const recibidas = invoices.filter(i => i.tipo === 'recibida');
@@ -436,8 +443,9 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
       { name: 'Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: recibidas.map((row,i) => newInvIds.has(row.id) ? i : -1).filter(i => i >= 0) },
       { name: 'Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: [] },
       { name: 'Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: [] },
+      ...(a3Rows ? [{ name: 'Equivalencias A3', rows: a3Rows, colWidths: [12, 18, 14, 28, 18, 16, 16, 58, 20], newRowIndices: [] }] : []),
     ], `Taxea_Libros_Facturas_${safeName}_${year}.xls`);
-    return { warning: 'Se han descargado solo los libros de facturas. No incluye Diario, Mayor ni Caja/Bancos.' };
+    return { warning: 'Se han descargado solo los libros de facturas. No incluye Diario, Mayor ni Caja/Bancos.' + (a3Warning ? ' ' + a3Warning : '') };
   }
   const [accounting, reccBook] = await Promise.all([
     onlyNew ? { entries: [], accounts: [] } : loadRealAccounting(companyId, year),
@@ -481,11 +489,12 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
           ['Factura ID', 'Pago ID', 'Incidencia'],
           ...reccBook.issues.map(issue => [issue.invoiceId || '', issue.paymentId || '', issue.reason || '']),
         ], colWidths: [28, 28, 90], newRowIndices: [] }] : []),
+        ...(a3Rows ? [{ name: 'Equivalencias A3', rows: a3Rows, colWidths: [12, 18, 14, 28, 18, 16, 16, 58, 20], newRowIndices: [] }] : []),
       ];
 
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
       const filename = `Taxea_Libros_${safeName}_${year}.xls`;
       downloadSpreadsheetML(sheets, filename);
-      return { warning: accounting.warning || '' };
+      return { warning: [accounting.warning, a3Warning].filter(Boolean).join(' ') };
   }
 }
