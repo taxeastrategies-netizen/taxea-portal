@@ -23,6 +23,7 @@ export default function LibrosExportTab({ user }) {
   const [exporting, setExporting] = useState({});
   const [historyClient, setHistoryClient] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [exportAlert, setExportAlert] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,10 +86,11 @@ export default function LibrosExportTab({ user }) {
   };
 
   const handleExport = async (client, opts = {}) => {
-    const { onlyNew = false } = opts;
+    const { onlyNew = false, onlyInvoiceBooks = false } = opts;
     const key = client.id;
     setExporting(prev => ({ ...prev, [key]: true }));
     setOpenDropdown(null);
+    setExportAlert(null);
 
     try {
       const { invoices, expenses } = await fetchClientData(client);
@@ -106,17 +108,19 @@ export default function LibrosExportTab({ user }) {
       const newExpenseIds = hasBaseline ? new Set(expenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
 
       const companyName = client.razon_social || client.nombre_comercial || 'Empresa';
-      await exportarLibros({
+      const exportResult = await exportarLibros({
         invoices: onlyNew ? invoices.filter(i => newInvoiceIds.has(i.id)) : invoices,
         expenses: onlyNew ? expenses.filter(e => newExpenseIds.has(e.id)) : expenses,
         year,
         companyId: client.id,
         companyName,
         onlyNew,
+        onlyInvoiceBooks,
         newInvoiceIds,
         newExpenseIds,
         lastExportDate: snap?.exportedAt,
       });
+      if (exportResult?.warning) setExportAlert({type:'warning',message:`${companyName}: ${exportResult.warning}`});
 
       // Save snapshot
       const exportedAt = new Date().toISOString();
@@ -157,6 +161,7 @@ export default function LibrosExportTab({ user }) {
       setLiveStatus(prev => ({ ...prev, [`${client.id}-${year}`]: { newCount: 0, newEmitted: 0, newReceived: 0, newExpense: 0 } }));
     } catch (err) {
       console.error('[LibrosExport] Error:', err);
+      setExportAlert({type:'error',message:err?.response?.data?.error || err?.message || 'No se pudo descargar el Excel.'});
     }
     setExporting(prev => ({ ...prev, [key]: false }));
   };
@@ -191,6 +196,8 @@ export default function LibrosExportTab({ user }) {
           </Button>
         </div>
       </div>
+
+      {exportAlert && <p role={exportAlert.type==='error'?'alert':'status'} className={cn('rounded-lg border p-3 text-sm',exportAlert.type==='error'?'border-red-200 bg-red-50 text-red-800':'border-amber-200 bg-amber-50 text-amber-900')}>{exportAlert.message}</p>}
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -288,6 +295,7 @@ export default function LibrosExportTab({ user }) {
                         <div className="absolute right-0 top-8 z-50 bg-white border border-border rounded-xl shadow-xl min-w-[200px] py-1.5">
                           {[
                             { label: `Descargar libro ${year}`, onClick: () => handleExport(client) },
+                            { label: 'Solo libros de facturas', onClick: () => handleExport(client, { onlyInvoiceBooks: true }) },
                             hasExported && newCount > 0
                               ? { label: `Solo nuevas (${newCount})`, onClick: () => handleExport(client, { onlyNew: true }), highlight: true }
                               : null,
