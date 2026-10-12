@@ -184,6 +184,46 @@ function buildFacturasRecibidas(invoices) {
   return rows;
 }
 
+// La equivalencia A3 es un alias externo: nunca sustituye al asiento ni a la subcuenta interna.
+const taxKey = value => {
+  const key = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return ['NULL', 'NAN', 'NONE'].includes(key) ? '' : key;
+};
+const nameKey = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+async function loadA3Crosswalk(companyId, year, invoices) {
+  const profiles = await base44.entities.CounterpartyFiscalProfile.filter({ company_id: companyId }, '-created_date', 5000);
+  if (profiles.length >= 5000) throw new Error('El censo de terceros supera el límite de exportación. Acota y revisa el maestro.');
+  const relevant = profiles.filter(profile => Number(profile.externalAccountYear) === Number(year));
+  if (!relevant.length) return null;
+  const labels = {
+    verificado_nombre_unico: 'Nombre único en plan A3; NIF de A3 no disponible',
+    pendiente_ambiguedad: 'Varios códigos A3 para el mismo nombre: revisar',
+    alta_pendiente_en_a3: 'Tercero nuevo: alta pendiente en A3',
+    pendiente_revision: 'Equivalencia pendiente de revisión',
+  };
+  const rows = [
+    ['Equivalencias informativas: la subcuenta asignada no acredita que aparezca en el asiento histórico. Las cuentas nuevas deben darse de alta en A3.'],
+    ['Tipo', 'Nº factura', 'Fecha', 'Tercero', 'NIF/CIF', 'Cuenta Taxea', 'Cuenta A3', 'Estado de equivalencia', 'Estado contable'],
+  ];
+  for (const invoice of invoices) {
+    const customer = invoice.tipo === 'emitida';
+    const name = customer ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre);
+    const tax = taxKey(customer ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif));
+    const candidates = relevant.filter(profile => (customer ? profile.accountingRole === 'cliente' : profile.accountingRole !== 'cliente')
+      && ((tax && taxKey(profile.taxId) === tax) || (!tax && nameKey(profile.name) === nameKey(name))));
+    const matchingCode = candidates.filter(profile => profile.accountingAccountCode === invoice.counterparty_account_code);
+    const profile = matchingCode.length === 1 ? matchingCode[0] : candidates.length === 1 ? candidates[0] : null;
+    const status = profile ? (labels[profile.externalAccountStatus] || 'Sin equivalencia validada')
+      : customer && !tax ? 'Venta de contado sin cliente individual'
+      : candidates.length > 1 ? 'Varias fichas posibles: revisar' : 'Sin ficha A3; comprobar NIF/tercero';
+    rows.push([customer ? 'Emitida' : 'Recibida', invoice.numero_factura || '', invoice.fecha_emision || '',
+      name || '', tax || '', invoice.counterparty_account_code || '', profile?.externalAccountCode || '',
+      status, invoice.estado_contable || '']);
+  }
+  return rows;
+}
+
 // ─── Hoja 5: Libro Ventas (AEAT 303) ────────────────────────────────────────
 function buildLibroVentas(invoices) {
   const header = ['Fecha Expedición','Nº Factura','Serie','Nombre/Razón Social','NIF/CIF','Concepto','Base Imponible (€)','Tipo IVA/IGIC %','Cuota IVA/IGIC (€)','Tipo IRPF %','Cuota IRPF (€)','Total (€)','Trimestre','Año','Impuesto','Régimen','Tratamiento','Fundamento legal'];
