@@ -254,7 +254,8 @@ async function ensureCounterparty(svc, companyId, invoice) {
   // Un mismo NIF puede ser cliente y proveedor: nunca reutilizar 430 para una compra,
   // ni sobrescribir la ficha/subcuenta histórica de la otra relación.
   const compatibleCode = code => isCustomer ? /^430/.test(clean(code)) : /^(400|410)/.test(clean(code));
-  let profile = (profiles || []).find(p => p.accountingRole === role && compatibleCode(p.accountingAccountCode));
+  let profile = (profiles || []).find(p => p.accountingRole === role && compatibleCode(p.accountingAccountCode))
+    || (profiles || []).find(p => compatibleCode(p.accountingAccountCode));
   if (profile?.accountingAccountCode) {
     const linked = profile.accountingAccountId
       ? await svc.entities.AccountingAccount.get(profile.accountingAccountId).catch(() => null)
