@@ -35,6 +35,7 @@ export default function LibroRegistros() {
   const [exporting, setExporting] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [exportNotice, setExportNotice] = useState('');
   const [lastSnapshot, setLastSnapshot] = useState(null);
 
   const currentYear = new Date().getFullYear();
@@ -93,6 +94,7 @@ export default function LibroRegistros() {
   const handleExport = async () => {
     setExporting(true);
     setExportError('');
+    setExportNotice('');
     try {
     if (financialError || loading) throw new Error(financialError || 'Espera a que terminen de cargar los datos antes de exportar.');
     const hasBaseline = !!lastSnapshot;
@@ -101,12 +103,13 @@ export default function LibroRegistros() {
       ...activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
     ]) : new Set();
     const newExpenseIds = hasBaseline ? new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
-    await exportarLibros({
+    const exportResult = await exportarLibros({
       invoices: activeInvoices, expenses: activeExpenses, companyId: company?.id, year: filterAnio,
       companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
       newInvoiceIds, newExpenseIds,
       lastExportDate: lastSnapshot?.exportedAt,
     });
+    if (exportResult?.warning) setExportNotice(exportResult.warning);
     // Save snapshot
     const exportedAt = new Date().toISOString();
     const emittedIds = activeInvoices.filter(i => i.tipo === 'emitida').map(i => i.id);
@@ -203,6 +206,7 @@ export default function LibroRegistros() {
       </PageHeader>
 
       {(exportError || financialError) && <p role="alert" className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError || financialError}</p>}
+      {exportNotice && <p role="status" className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Excel descargado. {exportNotice}</p>}
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5 overflow-x-auto">
         {TABS.map(t => (
