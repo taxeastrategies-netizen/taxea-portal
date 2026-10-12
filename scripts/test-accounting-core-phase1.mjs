@@ -318,6 +318,22 @@ const secondClose = await executeClosing(svc, 'company-a', { year: 2024, confirm
 assert.equal(secondClose.cycle, 2);
 assert.notEqual(secondClose.closingEntryId, close.closingEntryId);
 
+// Una subcuenta A3 reutilizada no puede cambiar el tercero de ejercicios anteriores.
+records.Company.push({ id: 'company-year', tipo_impuesto: 'iva' });
+records.AccountingAccount.push(
+  { id: 'old430', companyId: 'company-year', code: '43000007', name: 'Cliente histórico', status: 'activa' },
+  { id: 'new430', companyId: 'company-year', code: '43000007', name: 'Cliente nuevo', nif: 'TEST-NEW', ejercicio: 2026, status: 'activa' },
+  { id: 'year705', companyId: 'company-year', code: '70500000', name: 'Ventas', status: 'activa' },
+);
+for (const [year, expected] of [[2024, 'old430'], [2026, 'new430'], [2027, 'new430']]) {
+  const created = await createJournalEntry(svc, 'company-year', {
+    date: `${year}-06-30`, description: 'Prueba tercero por ejercicio', type: 'ingreso',
+    source: 'manual', postingKey: `year-account:${year}`,
+    lines: [{ accountCode: '43000007', debit: 100, credit: 0 }, { accountCode: '70500000', debit: 0, credit: 100 }],
+  }, 'tester@taxea.test');
+  assert.equal(records.JournalEntryLine.find(line => line.journalEntryId === created.entry.id && line.accountCode === '43000007')?.accountId, expected);
+}
+
 console.log(JSON.stringify({
   ok: true,
   assertions: {
