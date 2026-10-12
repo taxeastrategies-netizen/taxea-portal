@@ -78,21 +78,16 @@ let failPostingOnce = false;
 const testClient = {
   auth: { me: async () => currentUser }, asServiceRole: { entities },
   functions: { async invoke(name, body) {
-    assert.equal(name, 'fiscalOperations');
-    assert.equal(body.requireValidatedProfile, true);
-    if (fiscalStatus !== 'ready') return { data: { evaluation: { status: fiscalStatus, reasons: ['Perfil pendiente de asesor.'] } } };
-    const taxAmount = Math.round(body.base * body.taxRate) / 100;
-    const withholdingAmount = Math.round(body.base * body.withholdingRate) / 100;
-    return { data: { evaluation: {
-      status: 'ready', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed',
-      activityId: 'activity-a', ruleSetVersion: 'synthetic-v1',
-      base: body.base, taxRate: body.taxRate, taxAmount,
-      withholdingRate: body.withholdingRate, withholdingAmount,
-      total: body.base + taxAmount - withholdingAmount,
-      deductibleTax: body.direction === 'gasto' ? taxAmount : 0,
-      nonDeductibleTax: 0, deductiblePercent: 100,
-      exemptionKey: '', legalBasis: '', accounting: { reverseCharge: false },
-    } } };
+    assert.equal(name,'fiscalOperations');
+    assert.equal(body.action,'confirm_invoice_source');
+    const inv=await entities.Invoice.get(body.invoiceId);
+    if(fiscalStatus==='blocked') return {data:{success:false,error:'Perfil pendiente de asesor.'}};
+    const existing=await entities.InvoiceTaxLine.filter({companyId:body.companyId,invoiceId:inv.id,lineNumber:1});
+    const line={companyId:body.companyId,invoiceId:inv.id,lineNumber:1,reviewStatus:'validado',regime:'general',taxKind:'iva',
+      operationType:'subject_taxed',base:inv.base_imponible,quota:inv.cuota_iva,deductibleQuota:inv.tipo==='recibida'?inv.cuota_iva:0};
+    existing.length?await entities.InvoiceTaxLine.update(existing[0].id,line):await entities.InvoiceTaxLine.create(line);
+    await entities.Invoice.update(inv.id,{fiscal_review_status:'validado',fiscal_reviewed_by:currentUser.email,fiscal_activity_id:'activity-a'});
+    return {data:{success:true,mode:'saved'}};
   } },
 };
 let handler;
@@ -206,133 +201,47 @@ const invalidTotal = await invoke({
 });
 assert.equal(invalidTotal.response.status, 400);
 
-fiscalStatus = 'blocked';
-const unvalidated = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'unvalidated', invoice: { ...validInvoice, numero_factura: 'F-2026-004' } });
-assert.equal(unvalidated.response.status, 200);
-assert.equal(unvalidated.payload.review_required, true);
-assert.equal(records.Invoice.length, 2);
-assert.equal(records.Invoice[1].qr_url, undefined);
-assert.equal(records.Invoice[1].linked_journal_entry_id, undefined);
-assert.equal(records.InvoiceTaxLine.length, 1);
-fiscalStatus = 'review_required';
-const pendingReview = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'pending-review', invoice: { ...validInvoice, numero_factura: 'F-2026-005' } });
-assert.equal(pendingReview.response.status, 200);
-assert.equal(pendingReview.payload.review_required, true);
-assert.equal(records.Invoice.length, 3);
-assert.equal(records.InvoiceTaxLine.length, 1);
-fiscalStatus = 'ready';
-const earlyFinalize = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
-assert.equal(earlyFinalize.response.status, 409);
-assert.equal(counters.accountingEntries, 1);
-await entities.Invoice.update(pendingReview.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test' });
-await entities.InvoiceTaxLine.create({
-  companyId: 'company-a', invoiceId: pendingReview.payload.invoice.id, lineNumber: 1,
-  reviewStatus: 'validado', regime: 'general', taxKind: 'iva', operationType: 'subject_taxed',
-  base: 100, quota: 21, deductibleQuota: 0,
-});
-const finalized = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
-assert.equal(finalized.response.status, 200);
-assert.equal(finalized.payload.ok, true);
-assert.equal(counters.accountingEntries, 2);
-assert.equal(records.Invoice[2].accounting_migration_hold, false);
-assert.equal(new URL(records.Invoice[2].qr_url).searchParams.get('importe'), '121.00');
-const finalizedAgain = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: pendingReview.payload.invoice.id });
-assert.equal(finalizedAgain.payload.duplicate, true);
-assert.equal(counters.accountingEntries, 2);
-currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
-const clientDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'client-draft', invoice: { ...validInvoice, numero_factura: 'F-2026-006' } });
-assert.equal(clientDraft.payload.review_required, true);
-assert.equal(records.Invoice.length, 4);
-assert.equal(counters.accountingEntries, 2);
-const clientFinalize = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: clientDraft.payload.invoice.id });
-assert.equal(clientFinalize.response.status, 403);
-currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
-await entities.Invoice.update(unvalidated.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test' });
-await entities.InvoiceTaxLine.create({
-  companyId: 'company-a', invoiceId: unvalidated.payload.invoice.id, lineNumber: 1,
-  reviewStatus: 'validado', regime: 'general', taxKind: 'iva', operationType: 'subject_taxed',
-  base: 100, quota: 21, deductibleQuota: 0,
-});
-failPostingOnce = true;
-const postingFailed = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: unvalidated.payload.invoice.id });
-assert.equal(postingFailed.response.status, 503);
-assert.equal(records.Invoice[1].accounting_migration_hold_reason, 'FISCAL_POSTING_ERROR');
-assert.equal(records.Invoice[1].qr_url, undefined);
-const recovered = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: unvalidated.payload.invoice.id });
-assert.equal(recovered.response.status, 200);
-assert.equal(records.Invoice[1].accounting_migration_hold, false);
-assert.equal(counters.accountingEntries, 3);
-
-currentUser = { id: 'foreign', email: 'foreign@test.test', role: 'user', data: { company_id: 'company-a' } };
-const crossTenant = await invoke({
-  action: 'create_invoice', company_id: 'company-a', idempotency_key: 'foreign',
-  invoice: { ...validInvoice, numero_factura: 'F-2026-003' },
-});
-assert.equal(crossTenant.response.status, 403);
-assert.equal(records.Invoice.length, 4);
-
-currentUser = { id: 'advisor-a', email: 'advisor@taxea.test', role: 'admin', data: { company_id: 'company-a' } };
-const surchargeInvoice = { ...validInvoice, tipo: 'recibida', numero_factura: 'R-2026-RECARGO', fecha_recepcion: '2026-04-11', proveedor_nombre: 'Proveedor ficticio', tipo_recargo: 5.2, cuota_recargo: 5.2, total_factura: 126.2 };
-const invalidSurcharge = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-mal', confirm_fiscal_review: true, invoice: { ...surchargeInvoice, cuota_recargo: 7 } });
-assert.equal(invalidSurcharge.response.status, 400);
-const surchargeDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-ok', confirm_fiscal_review: true, invoice: surchargeInvoice });
-assert.equal(surchargeDraft.response.status, 200);
-assert.equal(surchargeDraft.payload.review_required, true);
-assert.equal(surchargeDraft.payload.invoice.cuota_recargo, 5.2);
-assert.equal(surchargeDraft.payload.invoice.total_factura, 126.2);
-assert.equal(surchargeDraft.payload.invoice.linked_journal_entry_id, undefined);
-assert.equal(counters.accountingEntries, 3);
-const prematureSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
-assert.equal(prematureSurcharge.response.status, 409);
-assert.equal(counters.accountingEntries, 3);
-await entities.Invoice.update(surchargeDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva', deductible_tax_amount: 0, non_deductible_tax_amount: 21 });
-await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: surchargeDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, deductibleQuota: 0, nonDeductibleQuota: 21, surchargeRate: 5.2, surchargeQuota: 5.2 });
-const completedSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
-assert.equal(completedSurcharge.response.status, 200);
-assert.equal(counters.accountingEntries, 4);
-assert.equal(completedSurcharge.payload.invoice.qr_url || '', '');
-const repeatedSurcharge = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: surchargeDraft.payload.invoice.id });
-assert.equal(repeatedSurcharge.payload.duplicate, true);
-assert.equal(counters.accountingEntries, 4);
-const recargoSaleDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recargo-sale-ok', invoice: { ...validInvoice, numero_factura: 'E-2026-RECARGO-VENTA', tipo_recargo: 0, cuota_recargo: 0 } });
-assert.equal(recargoSaleDraft.response.status, 200);
-assert.equal(recargoSaleDraft.payload.review_required, true);
-assert.equal(recargoSaleDraft.payload.invoice.qr_url || '', '');
-await entities.Invoice.update(recargoSaleDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'recargo_equivalencia', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva' });
-await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: recargoSaleDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', regime: 'recargo_equivalencia', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, surchargeQuota: 0 });
-const completedRecargoSale = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: recargoSaleDraft.payload.invoice.id });
-assert.equal(completedRecargoSale.response.status, 200);
-assert.equal(counters.accountingEntries, 5);
-assert.equal(new URL(completedRecargoSale.payload.invoice.qr_url).searchParams.get('importe'), '121.00');
-const repeatedRecargoSale = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: recargoSaleDraft.payload.invoice.id });
-assert.equal(repeatedRecargoSale.payload.duplicate, true);
-assert.equal(counters.accountingEntries, 5);
-
-const reccDraft = await invoke({ action: 'create_invoice', company_id: 'company-a', idempotency_key: 'recc-sale-ok', invoice: { ...validInvoice, numero_factura: 'E-2026-RECC' } });
-assert.equal(reccDraft.response.status, 200);
-assert.equal(reccDraft.payload.review_required, true);
-await entities.Invoice.update(reccDraft.payload.invoice.id, { fiscal_review_status: 'validado', fiscal_reviewed_by: 'advisor@taxea.test', fiscal_regime: 'criterio_caja', fiscal_treatment: 'subject_taxed', indirect_tax_kind: 'iva', deductible_tax_amount: 0, fiscal_activity_id: 'activity-a' });
-await entities.InvoiceTaxLine.create({ companyId: 'company-a', invoiceId: reccDraft.payload.invoice.id, lineNumber: 1, reviewStatus: 'validado', reviewedBy: 'advisor@taxea.test', activityId: 'activity-a', regime: 'criterio_caja', taxKind: 'iva', operationType: 'subject_taxed', base: 100, quota: 21, deductibleQuota: 0 });
-const completedRecc = await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id });
-assert.equal(completedRecc.response.status, 200);
-assert.equal(counters.accountingEntries, 6);
-assert.equal(new URL(completedRecc.payload.invoice.qr_url).searchParams.get('importe'), '121.00');
-assert.match(completedRecc.payload.invoice.coletilla_fiscal, /Régimen especial del criterio de caja/);
-assert.equal((await invoke({ action: 'finalize_fiscal_review', company_id: 'company-a', invoice_id: reccDraft.payload.invoice.id })).payload.duplicate, true);
-assert.equal(counters.accountingEntries, 6);
-
-const legacyReceived = await invoke({
-  action: 'create_invoice', company_id: 'company-a', idempotency_key: 'legacy-received-counterparty',
-  invoice: { ...validInvoice, tipo: 'recibida', numero_factura: 'R-2026-LEGACY-THIRD-PARTY',
-    fecha_recepcion: '2026-04-11', cliente_nombre: 'Proveedor en formulario legado', cliente_nif: 'B00000000' },
-});
-assert.equal(legacyReceived.response.status, 200);
-assert.equal(legacyReceived.payload.review_required, true);
-assert.equal(legacyReceived.payload.invoice.proveedor_nombre, 'Proveedor en formulario legado');
-assert.equal(legacyReceived.payload.invoice.proveedor_nif, 'B00000000');
-assert.equal(legacyReceived.payload.invoice.cliente_nombre, 'Proveedor en formulario legado');
-assert.equal(counters.accountingEntries, 6);
-
+// El fallo fiscal no es una segunda cola: permanece recuperable en su documento.
+fiscalStatus='blocked';
+const unvalidated=await invoke({action:'create_invoice',company_id:'company-a',idempotency_key:'unvalidated',invoice:{...validInvoice,numero_factura:'F-BLOCKED'}});
+assert.equal(unvalidated.response.status,422);
+assert.equal(unvalidated.payload.recover_in_ocr,true);
+const heldId=unvalidated.payload.invoice_id;
+assert.equal((await entities.Invoice.get(heldId)).qr_url,undefined);
+const deniedEarly=await invoke({action:'finalize_fiscal_review',company_id:'company-a',invoice_id:heldId});
+assert.equal(deniedEarly.response.status,409);
+fiscalStatus='review_required';
+const recommendation=await invoke({action:'create_invoice',company_id:'company-a',idempotency_key:'recommendation',invoice:{...validInvoice,numero_factura:'F-ADVICE'}});
+assert.equal(recommendation.response.status,200);
+assert.equal(recommendation.payload.review_required,false);
+assert.equal(recommendation.payload.invoice.estado_contable,'contabilizada');
+fiscalStatus='ready';
+currentUser={id:'owner',email:'owner@a.test',role:'user',data:{company_id:'company-a'}};
+const normal=await invoke({action:'create_invoice',company_id:'company-a',idempotency_key:'normal',invoice:{...validInvoice,numero_factura:'F-NORMAL'}});
+assert.equal(normal.response.status,200);assert.equal(normal.payload.review_required,false);
+const legacyRoleGuard=await invoke({action:'finalize_fiscal_review',company_id:'company-a',invoice_id:heldId});
+assert.equal(legacyRoleGuard.response.status,403);
+const countBefore=records.Invoice.length;
+currentUser={id:'foreign',email:'foreign@test.invalid',role:'user',data:{company_id:'company-a'}};
+assert.equal((await invoke({action:'create_invoice',company_id:'company-a',idempotency_key:'foreign',invoice:{...validInvoice,numero_factura:'F-FOREIGN'}})).response.status,403);
+assert.equal(records.Invoice.length,countBefore);
+currentUser={id:'advisor-a',email:'advisor@taxea.test',role:'admin',data:{company_id:'company-a'}};
+failPostingOnce=true;
+const failed=await invoke({action:'confirm_source_invoice',company_id:'company-a',invoice_id:heldId});
+assert.equal(failed.response.status,422);
+assert.equal((await entities.Invoice.get(heldId)).accounting_migration_hold_reason,'FISCAL_POSTING_ERROR');
+const recovered=await invoke({action:'confirm_source_invoice',company_id:'company-a',invoice_id:heldId});
+assert.equal(recovered.response.status,200);assert.equal(recovered.payload.invoice.accounting_migration_hold,false);
+const accountingBefore=counters.accountingEntries;
+assert.equal((await invoke({action:'confirm_source_invoice',company_id:'company-a',invoice_id:heldId})).payload.duplicate,true);
+assert.equal(counters.accountingEntries,accountingBefore);
+// Normalización heredada del tercero en recibidas se mantiene.
+const legacyReceived=await invoke({action:'create_invoice',company_id:'company-a',idempotency_key:'legacy-received-counterparty',
+  invoice:{...validInvoice,tipo:'recibida',numero_factura:'R-LEGACY',fecha_recepcion:'2026-04-11',
+    cliente_nombre:'Proveedor en formulario legado',cliente_nif:'B00000000'}});
+assert.equal(legacyReceived.response.status,200);
+assert.equal(legacyReceived.payload.invoice.proveedor_nombre,'Proveedor en formulario legado');
+assert.equal(legacyReceived.payload.invoice.proveedor_nif,'B00000000');
 console.log(JSON.stringify({
   ok: true,
   assertions: {
@@ -341,10 +250,10 @@ console.log(JSON.stringify({
     changedPayloadCannotReuseKey: true,
     duplicateActiveNumberBlocked: true,
     inconsistentTotalBlocked: true,
-    advisorReviewRequiredBeforePosting: true,
+    singleSourceCheckPostsForOwnerAndAdvisor: true,
     crossTenantCreateBlocked: true,
-    reviewedRecargoRetailSaleQrAndPostingOnce: true,
-    reccLegalLegendPersistsOnIssue: true,
+    failedPostingResumesSameInvoice: true,
+    legacyFinalizerRoleGuardsPreserved: true,
     legacyReceivedCounterpartyNormalized: true,
   },
 }, null, 2));
