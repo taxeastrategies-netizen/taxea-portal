@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument } from '@/lib/ocrWorkspace.mjs';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import { Play, CheckCircle, FileText, Loader2, XCircle, CopyCheck } from 'lucide-react';
@@ -8,6 +8,8 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
+import OcrReviewWorkspace from '@/components/lector/OcrReviewWorkspace';
+import { reviewableDocuments, nextAfterConfirmation } from '@/lib/ocrReviewQueue.mjs';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
 import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail, classifyUploadError, generateTraceId, generateIdempotencyKey, validateFile } from '@/lib/ocrUploadUtils';
@@ -123,8 +125,14 @@ const OCR_SCHEMA = {
   }
 };
 
-export default function LectorGastos() {
+export default function LectorGastos({ reviewPage = false }) {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
+  const navigate = useNavigate();
+  const location = useLocation();
+  const selectedReviewId = new URLSearchParams(location.search).get('doc');
+  const reviewDone = new URLSearchParams(location.search).get('done') === '1';
+  const reviewPath = '/tax-accounting/ocr-gastos-revision';
+  const openReviewPage = id => navigate(`${reviewPath}?doc=${encodeURIComponent(id)}`);
   const [documents, setDocuments] = useState([]);
   const loadVersion = useRef(0);
   useEffect(() => { loadVersion.current++; setDocuments([]); setReviewing(null); }, [company?.id]);
@@ -139,6 +147,7 @@ export default function LectorGastos() {
   const [bulkProgress,setBulkProgress]=useState(null);
   const cancelBulk=useRef(false);
   const [reviewError,setReviewError]=useState('');
+  const [reviewMessage,setReviewMessage]=useState('');
   useEffect(()=>{cancelBulk.current=true;setBulkIds([]);setBulkProgress(null);setReviewError('');},[company?.id]);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
   const [fiscalContext, setFiscalContext] = useState(/** @type {any} */ ({}));
@@ -336,6 +345,18 @@ export default function LectorGastos() {
     });
   };
 
+  useEffect(() => {
+    if (!reviewPage || loading) return;
+    if (!selectedReviewId && !reviewDone) {
+      const first = reviewableDocuments(documents)[0];
+      if (first) navigate(`${reviewPath}?doc=${encodeURIComponent(first.id)}`, { replace: true });
+      return;
+    }
+    const selected = reviewableDocuments(documents).find(doc => doc.id === selectedReviewId);
+    if (selected && reviewing?.id !== selected.id) handleReview(selected);
+    if (!selected && reviewing) setReviewing(null);
+  }, [reviewPage, loading, selectedReviewId, reviewDone, documents, reviewing?.id, navigate]);
+
   const [validating, setValidating] = useState(false);
 
   const handleValidate = async (docId, form) => {
@@ -387,11 +408,15 @@ export default function LectorGastos() {
         return;
       }
       const doc=documents.find(row=>row.id===docId) || reviewing;
-      const result=await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
+      await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
+      const followingId = reviewPage ? nextAfterConfirmation(documents, docId) : null;
+      setDocuments(rows => rows.map(row => row.id === docId ? { ...row, status: 'accounted', safeErrorMessage: '' } : row));
       setReviewing(null);
+      setReviewMessage('Factura contabilizada. Puedes continuar con la siguiente.');
       setToast({type:'success',message:'Factura, libro y asiento confirmados desde el OCR, sin un segundo check.'});
       window.dispatchEvent(new Event('financials:refresh'));
       setTimeout(() => setToast(null), 6000);
+      if (reviewPage) navigate(followingId ? `${reviewPath}?doc=${encodeURIComponent(followingId)}` : `${reviewPath}?done=1`, { replace: true });
       loadDocs();
     } catch (err) {
       console.error('[LectorGastos] Error al aprobar:', err);
@@ -414,7 +439,11 @@ export default function LectorGastos() {
         reviewedByAdminId: user?.id,
         auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
       });
+      const followingId = reviewPage ? nextAfterConfirmation(documents, docId) : null;
+      setDocuments(rows => rows.map(row => row.id === docId ? { ...row, status: 'rejected' } : row));
       setReviewing(null);
+      setReviewMessage('Documento rechazado. Puedes continuar con el siguiente.');
+      if (reviewPage) navigate(followingId ? `${reviewPath}?doc=${encodeURIComponent(followingId)}` : `${reviewPath}?done=1`, { replace: true });
       loadDocs();
     } catch (err) {
       console.error('[LectorGastos] Error al rechazar:', err);
@@ -439,6 +468,18 @@ export default function LectorGastos() {
   if (!company) return <NoCompanyState pageName="el Lector de Gastos" />;
 
   const pendingCount = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed').length;
+
+  if (reviewPage) return (
+    <OcrReviewWorkspace kind="recibidas" documents={documents} selectedId={selectedReviewId} loading={loading}
+      busy={validating} message={reviewMessage} onNavigate={openReviewPage}
+      onExit={() => navigate('/tax-accounting/ocr-gastos')}>
+      {reviewing && reviewing.id === selectedReviewId && <ReviewPanel key={reviewing.id} expanded
+        doc={reviewing} fiscalContext={fiscalContext} error={reviewError} tipo="gastos"
+        onApprove={handleValidate} onReject={handleReject}
+        onCancel={() => navigate('/tax-accounting/ocr-gastos')} loading={validating}
+        companyId={company?.id} fiscalActivities={fiscalContext.activities || []} />}
+    </OcrReviewWorkspace>
+  );
 
   return (
     <div>
@@ -532,7 +573,7 @@ export default function LectorGastos() {
         isAdmin={isAdmin}
         onRefresh={loadDocs}
         onProcessOcr={processOcr}
-        onReview={doc=>{setBulkIds([]);handleReview(doc);}}
+        onReview={doc=>{setBulkIds([]);openReviewPage(doc.id);}}
         onBulkReview={ids=>{setBulkIds(ids);handleReview(documents.find(row=>row.id===ids[0]));}}
         busy={validating}
         onWithdraw={handleWithdraw}
