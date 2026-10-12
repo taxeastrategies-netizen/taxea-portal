@@ -45,9 +45,6 @@ const Finance = lazy(() => import('./pages/Finance'));
 const PeopleHR = lazy(() => import('./pages/PeopleHR.jsx'));
 const Grants = lazy(() => import('./pages/Grants.jsx'));
 const PublicTenders = lazy(() => import('./pages/PublicTenders.jsx'));
-const Logistics = lazy(() => import('./pages/Logistics'));
-const Operations = lazy(() => import('./pages/Operations'));
-const Growth = lazy(() => import('./pages/Growth'));
 const Law = lazy(() => import('./pages/Law'));
 const PublicInvoiceViewer = lazy(() => import('./pages/PublicInvoiceViewer'));
 const ComingSoon = lazy(() => import('./pages/ComingSoon'));
@@ -127,12 +124,6 @@ function AppWithContext({ user }) {
           <Route path="/licitaciones" element={<PublicTenders />} />
           <Route path="/people" element={<PeopleHR />} />
           <Route path="/people/:module" element={<PeopleHR />} />
-          <Route path="/logistics" element={<AdminOnlyRoute isAdmin={isAdmin}><Logistics /></AdminOnlyRoute>} />
-          <Route path="/logistics/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Logistics /></AdminOnlyRoute>} />
-          <Route path="/operations" element={<AdminOnlyRoute isAdmin={isAdmin}><Operations /></AdminOnlyRoute>} />
-          <Route path="/operations/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Operations /></AdminOnlyRoute>} />
-          <Route path="/growth" element={<AdminOnlyRoute isAdmin={isAdmin}><Growth /></AdminOnlyRoute>} />
-          <Route path="/growth/:module" element={<AdminOnlyRoute isAdmin={isAdmin}><Growth /></AdminOnlyRoute>} />
           <Route path="/law" element={<Law />} />
           <Route path="/law/:subdept" element={<Law />} />
           <Route path="/law/:subdept/:module" element={<Law />} />
