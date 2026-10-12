@@ -23,11 +23,9 @@ import PeriodosContables from './PeriodosContables';
 import ActivosContables from './ActivosContables';
 import ConfiguracionFiscal from '@/components/tax/impuestos/ConfiguracionFiscal';
 import AccountingCertification from './AccountingCertification';
-import FiscalReviewInbox from './FiscalReviewInbox';
 
 const TABS = [
   { id: 'facturas', label: 'Facturas pendientes', icon: FileText },
-  { id: 'revision_fiscal', label: 'Revisión fiscal', icon: ShieldCheck, advisorOnly: true },
   { id: 'diario', label: 'Libro diario', icon: BookOpen },
   { id: 'manuales', label: 'Asientos manuales', icon: PenLine },
   { id: 'cuentas', label: 'Cuadro de cuentas', icon: LayoutList },
@@ -135,7 +133,6 @@ export default function ContabilidadModule() {
       {/* Content */}
       <div>
         {activeTab === 'facturas' && <FacturasPendientes />}
-        {activeTab === 'revision_fiscal' && isAdvisor && <FiscalReviewInbox companyId={companyId} />}
         {activeTab === 'diario' && <LibroDiario companyId={companyId} user={user} />}
         {activeTab === 'manuales' && <AsientosManualesTab companyId={companyId} user={user} />}
         {activeTab === 'cuentas' && <CuadrosCuentas companyId={companyId} user={user} />}
