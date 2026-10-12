@@ -74,7 +74,7 @@ Deno.serve(async req => {
           : source.fecha || source.fecha_emision) === targetDate;
     }) : allDocs;
     const activeInvoices = invoices.filter(invoice => !invoice.anulada);
-    const invoiceIds = new Set(activeInvoices.map(invoice => invoice.id));
+    const invoiceIds = new Set(invoices.map(invoice => invoice.id));
     const records = [
       ...activeInvoices.map(invoice => ({
         id: invoice.id, entityType: 'Invoice', source: 'invoice', companyId, direction,
