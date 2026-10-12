@@ -2,7 +2,6 @@ import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { sameInvoiceIdentity } from './duplicateIdentity.mjs';
 // Recovery never creates an Invoice, tax line, contact or manual journal.
 const privileged = user => ['admin', 'super_admin'].includes(user?.role);
-const text = value => String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
 const cents = value => Math.round(Number(value) * 100);
 export function sourceData(doc) {
   try { return JSON.parse(doc.extractedData || '{}'); } catch { return {}; }
