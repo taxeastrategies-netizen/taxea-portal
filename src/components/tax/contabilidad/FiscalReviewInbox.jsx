@@ -11,6 +11,7 @@ async function fiscal(body) {
 }
 export default function FiscalReviewInbox({companyId}) {
   const [page,setPage]=useState(0),[filters,setFilters]=useState({type:'',from:'',to:''});
+  const [excluded,setExcluded]=useState(new Set()),[processing,setProcessing]=useState(false);
   const [selected,setSelected]=useState(new Set()),[allFiltered,setAllFiltered]=useState(false);
   const [batch,setBatch]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState('');
   const [results,setResults]=useState([]),[resultPage,setResultPage]=useState(0),[moreResults,setMoreResults]=useState(false);
@@ -21,7 +22,7 @@ export default function FiscalReviewInbox({companyId}) {
       const result=response?.data??response;if(!result?.ok) throw new Error(result?.error||'No se pudo cargar la bandeja.');return result;}});
   const jobs=useQuery({queryKey:['fiscal-review-batches',companyId],enabled:Boolean(companyId),staleTime:15000,
     queryFn:()=>fiscal({action:'list_review_batches',companyId})});
-  useEffect(()=>{generation.current++;setBatch(null);setRunning(false);setSelected(new Set());setAllFiltered(false);setPage(0);setResults([]);setError('');},[companyId]);
+  useEffect(()=>{generation.current++;setBatch(null);setRunning(false);setSelected(new Set());setExcluded(new Set());setAllFiltered(false);setPage(0);setResults([]);setError('');},[companyId]);
   useEffect(()=>{const refresh=()=>query.refetch();window.addEventListener('financials:refresh',refresh);
     return()=>window.removeEventListener('financials:refresh',refresh);},[query.refetch]);
   const loadResults=async(job,p=0)=>{
@@ -34,27 +35,30 @@ export default function FiscalReviewInbox({companyId}) {
     (async()=>{
       try{
         while(!cancelled&&generation.current===version){
+          setProcessing(true);
           const data=await fiscal({action:'process_review_batch',companyId,batchId:jobId});
+          setProcessing(false);
+          if(generation.current===version) setBatch(previous=>previous?.id===jobId?data.batch:previous);
           if(cancelled||generation.current!==version) break;
-          setBatch(data.batch);
           if(data.lastResult) setResults(previous=>[data.lastResult,...previous].slice(0,50));
           if(['completed','failed'].includes(data.batch.status)) {
             setRunning(false);await Promise.all([query.refetch(),jobs.refetch()]);await loadResults(data.batch);break;
           }
         }
       }catch(e){if(!cancelled&&generation.current===version){setError(err(e));setRunning(false);}}
+      finally{if(generation.current===version)setProcessing(false);}
     })();
     return()=>{cancelled=true;};
   },[running,batch?.id,companyId]);
   const rows=query.data?.invoices||[];
-  const changeFilter=(key,value)=>{setFilters(old=>({...old,[key]:value}));setPage(0);setSelected(new Set());setAllFiltered(false);};
-  const toggle=id=>{setAllFiltered(false);setSelected(old=>{const next=new Set(old);next.has(id)?next.delete(id):next.add(id);return next;});};
-  const selectPage=checked=>{setAllFiltered(false);setSelected(old=>{const next=new Set(old);rows.forEach(row=>checked?next.add(row.id):next.delete(row.id));return next;});};
+  const changeFilter=(key,value)=>{setFilters(old=>({...old,[key]:value}));setPage(0);setSelected(new Set());setExcluded(new Set());setAllFiltered(false);};
+  const toggle=id=>{if(allFiltered){setExcluded(old=>{const next=new Set(old);next.has(id)?next.delete(id):next.add(id);return next;});return;}setSelected(old=>{const next=new Set(old);next.has(id)?next.delete(id):next.add(id);return next;});};
+  const selectPage=checked=>{if(allFiltered){setExcluded(old=>{const next=new Set(old);rows.forEach(row=>checked?next.delete(row.id):next.add(row.id));return next;});return;}setSelected(old=>{const next=new Set(old);rows.forEach(row=>checked?next.add(row.id):next.delete(row.id));return next;});};
   const createBatch=async(criteria,invoiceIds)=>{
     setError('');
     const data=await fiscal({action:'create_review_batch',companyId,requestId:crypto.randomUUID(),confirmReviewed:true,criteria,
-      allFiltered:invoiceIds?false:allFiltered,filters,invoiceIds:invoiceIds||[...selected]});
-    setBatch(data.batch);setResults([]);setSelected(new Set());setAllFiltered(false);setRunning(true);await jobs.refetch();
+      allFiltered:invoiceIds?false:allFiltered,excludedIds:invoiceIds?[]:[...excluded],filters,invoiceIds:invoiceIds||[...selected]});
+    setBatch(data.batch);setResults([]);setExcluded(new Set());setSelected(new Set());setAllFiltered(false);setRunning(true);await jobs.refetch();
   };
   const failedIds=results.filter(row=>row.status==='failed').map(row=>row.invoice_id);
   return <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -70,16 +74,16 @@ export default function FiscalReviewInbox({companyId}) {
     {query.isLoading&&<p className="text-sm text-slate-500">Cargando pendientes…</p>}
     {(query.isError||error)&&<div role="alert" className="my-3 rounded bg-red-50 p-3 text-sm text-red-700">{error||err(query.error)}</div>}
     <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3 text-xs">
-      <label className="flex gap-2"><input type="checkbox" aria-label="Seleccionar página" checked={rows.length>0&&(allFiltered||rows.every(row=>selected.has(row.id)))} onChange={e=>selectPage(e.target.checked)} />Seleccionar página</label>
-      <button type="button" disabled={!rows.length} className="font-semibold text-cyan-700 disabled:opacity-50" onClick={()=>{setAllFiltered(true);setSelected(new Set());}}>Seleccionar TODO lo filtrado (incluye otras páginas)</button>
-      <button type="button" onClick={()=>{setAllFiltered(false);setSelected(new Set());}}>Limpiar selección</button>
-      <span>{allFiltered?'Todas las pendientes filtradas':selected.size+' seleccionadas'}</span>
-      {(allFiltered||selected.size>0)&&rows[0]&&!running&&<InvoiceFiscalReview key={companyId+filters.type} companyId={companyId} invoice={rows[0]} advisorAccess bulkCount={allFiltered?-1:selected.size} onBulkConfirm={createBatch} />}
+      <label className="flex gap-2"><input type="checkbox" aria-label="Seleccionar página" checked={rows.length>0&&rows.every(row=>allFiltered?!excluded.has(row.id):selected.has(row.id))} onChange={e=>selectPage(e.target.checked)} />Seleccionar página</label>
+      <button type="button" disabled={!rows.length} className="font-semibold text-cyan-700 disabled:opacity-50" onClick={()=>{setAllFiltered(true);setSelected(new Set());setExcluded(new Set());}}>Seleccionar TODO lo filtrado (incluye otras páginas)</button>
+      <button type="button" onClick={()=>{setAllFiltered(false);setSelected(new Set());setExcluded(new Set());}}>Limpiar selección</button>
+      <span>{allFiltered?'Todas las pendientes filtradas'+(excluded.size?' excepto '+excluded.size:''):selected.size+' seleccionadas'}</span>
+      {(allFiltered||selected.size>0)&&rows[0]&&!running&&!processing&&<InvoiceFiscalReview key={companyId+filters.type} companyId={companyId} invoice={rows[0]} advisorAccess bulkCount={allFiltered?-1:selected.size} onBulkConfirm={createBatch} />}
     </div>
     {!query.isLoading&&!rows.length&&<p className="text-sm text-slate-500">No hay propuestas pendientes con estos filtros.</p>}
     <div className="space-y-2">{rows.map(invoice=><div key={invoice.id} className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
       <label className="flex min-w-0 items-center gap-3">
-        <input type="checkbox" aria-label={'Seleccionar factura '+(invoice.numero_factura||invoice.id)} checked={allFiltered||selected.has(invoice.id)} onChange={()=>toggle(invoice.id)} />
+        <input type="checkbox" aria-label={'Seleccionar factura '+(invoice.numero_factura||invoice.id)} checked={allFiltered?!excluded.has(invoice.id):selected.has(invoice.id)} onChange={()=>toggle(invoice.id)} />
         <span><span className="block text-sm font-semibold">{invoice.numero_factura||'Sin número'} · {invoice.tipo==='recibida'?'Recibida':'Emitida'}</span>
         <span className="block text-xs text-slate-600">{invoice.fecha_emision} · {invoice.proveedor_nombre||invoice.cliente_nombre||'Sin tercero'} · {money(invoice.total_factura)}</span>
         <span className="block text-xs text-amber-800">{invoice.fiscal_review_status==='validado'?'Criterio guardado; falta finalizar asiento':'Pendiente de revisión profesional'}</span></span>
@@ -90,7 +94,7 @@ export default function FiscalReviewInbox({companyId}) {
     </div>
     <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/40 p-4">
       <h3 className="text-sm font-semibold">Lotes guardados · reanudar y revisar incidencias</h3>
-      <select aria-label="Lote guardado" className="my-2 max-w-full rounded border p-2 text-xs" value={batch?.id||''} disabled={running}
+      <select aria-label="Lote guardado" className="my-2 max-w-full rounded border p-2 text-xs" value={batch?.id||''} disabled={running||processing}
         onChange={e=>{const job=jobs.data?.batches?.find(row=>row.id===e.target.value);if(job) loadResults(job).catch(e=>setError(err(e)));}}>
         <option value="">Seleccionar lote</option>{(jobs.data?.batches||[]).map(job=><option key={job.id} value={job.id}>{job.created_date?.slice(0,16)} · {job.processed}/{job.total} · {job.status}</option>)}
       </select>
@@ -99,9 +103,9 @@ export default function FiscalReviewInbox({companyId}) {
         <p className="text-xs text-slate-500">La pestaña procesa de forma acotada. Al pausarla o cerrarla termina la factura en curso; puedes reanudar sin repetir las completadas.</p>
         <div className="my-3 flex flex-wrap gap-3 text-xs">
           {running?<button type="button" onClick={()=>setRunning(false)}>Pausar después de la factura actual</button>:<>
-            {!['completed','failed','preparing'].includes(batch.status)&&<button type="button" className="rounded bg-slate-900 px-3 py-2 text-white" onClick={()=>{setError('');setRunning(true);}}>Reanudar lote</button>}
+            {!['completed','failed','preparing'].includes(batch.status)&&<button type="button" disabled={processing} className="rounded bg-slate-900 px-3 py-2 text-white" onClick={()=>{setError('');setRunning(true);}}>Reanudar lote</button>}
             <button type="button" onClick={()=>loadResults(batch,resultPage).catch(e=>setError(err(e)))}>Actualizar estado e incidencias</button>
-            {failedIds.length>0&&<button type="button" onClick={()=>createBatch(batch.criteria,failedIds).catch(e=>setError(err(e)))}>Reintentar incidencias de esta página ({failedIds.length})</button>}
+            {failedIds.length>0&&!processing&&<button type="button" onClick={()=>createBatch(batch.criteria,failedIds).catch(e=>setError(err(e)))}>Reintentar incidencias de esta página ({failedIds.length})</button>}
           </>}
         </div>
         {batch.lock_token&&!running&&<div className="my-3 rounded border border-amber-300 p-3 text-xs">
