@@ -38,7 +38,8 @@ const document={
   body:{appendChild(){},removeChild(){}},
 };
 const source=readFileSync('src/components/libros/ExportExcel.jsx','utf8')
-  .replace('export async function exportarLibros','async function exportarLibros');
+  .replace('export async function exportarLibros','async function exportarLibros')
+  .replaceAll("const { base44 } = await import('@/api/base44Client');",'const base44 = globalThis.__fakeBase44;');
 const context=vm.createContext({Blob:TestBlob,URL:{createObjectURL(value){blob=value;return 'blob:test';},revokeObjectURL(){}},document,Date,console});
 vm.runInContext(source+'\n globalThis.exportarLibros=exportarLibros;',context);
 const invoices=[
@@ -56,4 +57,19 @@ assert.match(xml,/Libro Compras/);
 assert.match(xml,/QA-1/);
 assert.match(xml,/QA-2/);
 assert.doesNotMatch(xml,/Libro Mayor|Libro Diario|Caja y Bancos/);
-console.log(JSON.stringify({ok:true,bulkConfirmed:result.done,bulkFailures:result.failed,bookSheets:4}));
+context.__fakeBase44={functions:{invoke:async(name,body)=>{
+  if(name==='accountingOperations') {
+    assert.equal(body.action,'reports');
+    return {data:{success:true,report:{excludedEntries:2,includedEntries:0,accounts:[]}}};
+  }
+  if(name==='fiscalOperations') return {data:{success:true,invoices:[],payments:[],issues:[]}};
+  throw new Error('Unexpected service '+name);
+}}};
+const partial=await context.exportarLibros({invoices,expenses:[],companyId:'qa',year:2026,companyName:'QA'});
+assert.match(partial.warning,/2 asiento/);
+assert.equal(clicks,2);
+const partialXml=blob.parts.join('');
+assert.match(partialXml,/Facturas Emitidas|Facturas Recibidas/);
+assert.match(partialXml,/Incidencias contables/);
+assert.doesNotMatch(partialXml,/ss:Name="7\\. Libro Diario"|ss:Name="8\\. Libro Mayor"|ss:Name="11\\. Caja y Bancos"/);
+console.log(JSON.stringify({ok:true,bulkConfirmed:result.done,bulkFailures:result.failed,bookSheets:4,partialAccountingWarning:true}));
