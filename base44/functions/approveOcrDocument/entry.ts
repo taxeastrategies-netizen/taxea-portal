@@ -57,7 +57,7 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
       !recoveryOnly ? async invoice => {
         const response = await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
           company_id:doc.company_id,invoice_id:invoice.id,criteria:{...(form.fiscal_criteria || {}),
-            activityId:form.fiscal_activity_id || undefined}});
+            activityId:form.fiscal_activity_id || undefined, accountCode:form.cuenta_contable_manual || undefined}});
         const result=response?.data??response;
         if(!result?.success) throw new Error(result?.error || 'No se pudo completar el documento.');
         return result.invoice;
@@ -158,6 +158,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       tipo_iva: Number(form.tipo_iva ?? 0),
       cuota_iva: parseFloat(form.cuota_iva) || 0,
       retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+      retencion_tipo: form.retencion_tipo || 'ninguna',
       importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
       total_factura: parseFloat(form.total_factura) || 0,
       estado_cobro: form.estado_cobro || 'pendiente',
@@ -192,6 +193,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       tipo_iva: Number(form.tipo_impuesto ?? 0),
       cuota_iva: parseFloat(form.cuota_impuesto) || 0,
       retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+      retencion_tipo: form.retencion_tipo || 'ninguna',
       importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
       total_factura: parseFloat(form.total) || 0,
       estado_cobro: 'pendiente',
@@ -254,7 +256,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   try {
     const response=await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
       company_id:doc.company_id,invoice_id:inv.id,
-      criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined}});
+      criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined, accountCode:form.cuenta_contable_manual || undefined}});
     completed=response?.data??response;
     if(!completed?.success) throw new Error(completed?.error || 'No se pudo completar el asiento.');
   } catch(error) {
