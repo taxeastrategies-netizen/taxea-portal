@@ -34,7 +34,8 @@ export async function loadOcrWorkspace(client, companyId, documentType) {
     if(page===199) throw new Error('Demasiados documentos incompletos: solicita revisión segmentada.');
   }
   const byId=new Map(pending.map(row=>[row.id,row]));
-  const mapped=docs.map(doc=>({...doc,invoiceSource:byId.get(doc.linkedInvoiceId) || pending.find(row=>row.ocr_document_id===doc.id)}));
+  const byOcrId=new Map(pending.filter(row=>row.ocr_document_id).map(row=>[row.ocr_document_id,row]));
+  const mapped=docs.map(doc=>({...doc,invoiceSource:byId.get(doc.linkedInvoiceId) || byOcrId.get(doc.id)}));
   const docIds=new Set(docs.map(doc=>doc.id)), linkedIds=new Set(docs.map(doc=>doc.linkedInvoiceId).filter(Boolean));
   for(const invoice of pending){
     if(linkedIds.has(invoice.id) || (invoice.ocr_document_id && docIds.has(invoice.ocr_document_id))) continue;
