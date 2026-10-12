@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument } from '@/lib/ocrWorkspace.mjs';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -28,6 +29,9 @@ const parseExtracted = (raw) => {
 };
 
 const mapForm = (r) => ({
+  
+  fiscal_activity_id:r?.fiscal_activity_id || '',fiscal_criteria:r?.fiscal_criteria || {},
+  cuenta_contable_manual:r?.cuenta_contable_manual || '',
   numero_factura: r?.numero_factura || '',
   fecha_emision: r?.fecha || '',
   cliente_nombre: r?.cliente_nombre || '',
@@ -127,6 +131,8 @@ const OCR_SCHEMA = {
 export default function LectorIngresos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [documents, setDocuments] = useState([]);
+  const loadVersion=useRef(0);
+  useEffect(()=>{loadVersion.current++;setDocuments([]);setReviewing(null);},[company?.id]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState([]);
@@ -134,35 +140,33 @@ export default function LectorIngresos() {
   const [processingIds, setProcessingIds] = useState(new Set());
   const [toast, setToast] = useState(null);
   const [validatingAll, setValidatingAll] = useState(false);
+  const [bulkIds,setBulkIds]=useState([]);
+  const [bulkProgress,setBulkProgress]=useState(null);
+  const cancelBulk=useRef(false);
+  const [reviewError,setReviewError]=useState('');
+  useEffect(()=>{cancelBulk.current=true;setBulkIds([]);setBulkProgress(null);setReviewError('');},[company?.id]);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
   const [fiscalContext, setFiscalContext] = useState(/** @type {any} */ ({}));
 
   useEffect(() => {
     if (!company?.id) return;
-    Promise.all([
-      base44.entities.FiscalProfile.filter({ company_id: company.id, active: true }),
-      base44.entities.FiscalActivity.filter({ company_id: company.id, active: true }),
-    ]).then(([profiles, activities]) => {
-      setFiscalContext({
-        profile: profiles?.[0] || null,
-        activity: activities?.[0] || null,
-        activities: activities || [],
-      });
-    }).catch(() => {});
+    let cancelled=false;
+    base44.functions.invoke('fiscalOperations',{action:'source_context',companyId:company.id}).then(response=>{
+      const result=response?.data??response;
+      if(!cancelled && result?.success) setFiscalContext({...result,activity:result.activities?.find(row=>row.active!==false),
+        activities:(result.activities || []).filter(row=>row.active!==false)});
+    }).catch(()=>{if(!cancelled)setFiscalContext({});});
+    return ()=>{cancelled=true;};
   }, [company?.id]);
 
-  const loadDocs = useCallback(async () => {
-    if (!company?.id) return;
-    setLoading(true);
-    try {
-      const data = await base44.entities.OcrInvoiceDocument.filter(
-        { company_id: company.id, documentType: DOC_TYPE },
-        '-uploadedAt'
-      );
-      setDocuments(data || []);
-    } catch {}
-    setLoading(false);
-  }, [company?.id]);
+  const loadDocs=useCallback(async()=>{
+    if(!company?.id)return;
+    const version=++loadVersion.current;setLoading(true);
+    try{const data=await loadOcrWorkspace(base44,company.id,DOC_TYPE);
+      if(version===loadVersion.current)setDocuments(data);
+    }catch{if(version===loadVersion.current)setToast({type:'error',message:'No se pudo actualizar el OCR. Se conserva la última lista.'});}
+    finally{if(version===loadVersion.current)setLoading(false);}
+  },[company?.id]);
 
   useEffect(() => { if (company?.id) loadDocs(); }, [company?.id, loadDocs]);
 
@@ -320,8 +324,10 @@ export default function LectorIngresos() {
   };
 
   const handleReview = (doc) => {
-    const extracted = parseExtracted(doc.extractedData);
+    const extracted = doc.invoiceSource ? invoiceSourceData(doc.invoiceSource) : parseExtracted(doc.extractedData);
+    setReviewError('');
     setReviewing({
+      ...doc,
       id: doc.id,
       file: { name: doc.originalFileName, size: doc.fileSize },
       fileUrl: doc.fileStorageUrl,
@@ -352,29 +358,47 @@ export default function LectorIngresos() {
     }
     setValidating(true);
     try {
-      const res = await Promise.race([
-        base44.functions.invoke('approveOcrDocument', {
-          docId,
-          form,
-          invoiceType: 'emitida',
-          extractedData: reviewing?.extracted,
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('El servidor tarda demasiado en responder.')), 45000)),
-      ]);
-      const result = res?.data || res;
-      if (!result?.success) {
-        throw new Error(result?.error || 'No se pudo crear la factura');
+      if(bulkIds.length){
+        cancelBulk.current=false;
+        let done=0,failed=0;
+        for(const id of bulkIds){
+          if(cancelBulk.current) break;
+          const doc=documents.find(row=>row.id===id);
+          if(!doc) {failed++;continue;}
+          const original=mapForm(doc.invoiceSource?invoiceSourceData(doc.invoiceSource):parseExtracted(doc.extractedData));
+          try{
+            await approveWorkspaceDocument(base44,company.id,doc,{...original,
+              fiscal_activity_id:form.fiscal_activity_id,fiscal_criteria:form.fiscal_criteria,
+              cuenta_contable_manual:form.cuenta_contable_manual},INVOICE_TIPO);
+            done++;
+            setDocuments(rows=>rows.map(row=>row.id===id?{...row,status:'accounted',safeErrorMessage:''}:row));
+          }catch(error){
+            failed++;
+            const message=error?.response?.data?.error || error.message;
+            setDocuments(rows=>rows.map(row=>row.id===id?{...row,safeErrorMessage:message}:row));
+          }
+          setBulkProgress({done,failed,total:bulkIds.length});
+        }
+        setBulkIds([]);setReviewing(null);
+        setToast({type:failed?'error':'success',message:`Lote: ${done} contabilizadas, ${failed} con incidencia.${cancelBulk.current?' Proceso detenido; el resto sigue pendiente.':''}`});
+        window.dispatchEvent(new Event('financials:refresh'));
+        await loadDocs();
+        return;
       }
+      const doc=documents.find(row=>row.id===docId) || reviewing;
+      const result=await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
       setReviewing(null);
-      setToast({ type: 'success', message: 'Documento OCR guardado. Pendiente de validación fiscal del asesor; aún no está emitido ni contabilizado.' });
+      setToast({type:'success',message:'Factura, libro y asiento confirmados desde el OCR, sin un segundo check.'});
+      window.dispatchEvent(new Event('financials:refresh'));
       setTimeout(() => setToast(null), 6000);
       loadDocs();
     } catch (err) {
       console.error('[LectorIngresos] Error al aprobar:', err);
-      setToast({ type: 'error', message: `No se ha podido guardar la factura en el area financiera. El documento sigue pendiente de revision. (${err?.message || 'inténtalo de nuevo'})` });
+      const message=err?.response?.data?.error || err?.message || 'No se pudo completar el documento.';
+      setReviewError(message);
+      setToast({type:'error',message});
       setTimeout(() => setToast(null), 8000);
-    }
-    setValidating(false);
+    } finally {setValidating(false);}
   };
 
   const handleReject = async (docId) => {
@@ -481,11 +505,15 @@ export default function LectorIngresos() {
       {reviewing && (
         <div className="mb-5">
           <ReviewPanel
+            key={`${reviewing.id}:${bulkIds.length}`}
             doc={reviewing}
+            fiscalContext={fiscalContext}
+            bulkCount={bulkIds.length}
+            error={reviewError}
             tipo="ingresos"
             onApprove={handleValidate}
             onReject={handleReject}
-            onCancel={() => setReviewing(null)}
+            onCancel={() => {setReviewing(null);setBulkIds([]);}}
             loading={validating}
             companyId={company?.id}
             fiscalActivities={fiscalContext.activities || []}
@@ -493,13 +521,19 @@ export default function LectorIngresos() {
         </div>
       )}
 
+      {bulkProgress && <div role="status" className="mb-3 rounded-lg border p-3 text-sm">
+        Lote: {bulkProgress.done} contabilizadas · {bulkProgress.failed} incidencias · {bulkProgress.total} seleccionadas.
+        {validating && <button className="ml-3 underline" onClick={()=>{cancelBulk.current=true;}}>Detener al terminar la factura actual</button>}
+      </div>}
       <OcrDocumentTable
         documents={documents}
         loading={loading}
         isAdmin={isAdmin}
         onRefresh={loadDocs}
         onProcessOcr={processOcr}
-        onReview={handleReview}
+        onReview={doc=>{setBulkIds([]);handleReview(doc);}}
+        onBulkReview={ids=>{setBulkIds(ids);handleReview(documents.find(row=>row.id===ids[0]));}}
+        busy={validating}
         onWithdraw={handleWithdraw}
         processingIds={processingIds}
         emptyMessage="Todavia no hay facturas de ingreso entregadas en este apartado."
