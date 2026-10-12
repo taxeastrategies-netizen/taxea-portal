@@ -357,7 +357,11 @@ async function loadRealAccounting(companyId, year) {
   };
   const reports = await invoke({ action: 'reports', scope: 'confirmed' });
   const accounts = reports.report?.accounts || [];
-  if (Number(reports.report?.excludedEntries || 0) > 0) throw new Error('Hay asientos confirmados excluidos del Mayor por incidencias. Revísalos antes de exportar.');
+  const excludedEntries = Number(reports.report?.excludedEntries || 0);
+  if (excludedEntries > 0) return {
+    entries: [], accounts: [],
+    warning: `${excludedEntries} asiento(s) confirmado(s) excluido(s) del Mayor por incidencias. Se exportan los libros de facturas, pero se omiten Diario, Mayor y Caja/Bancos hasta su revisión.`,
+  };
   const entries = [];
   let page = 1;
   while (page <= 1000) {
@@ -397,6 +401,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
       ];
       const newGastosCount = gastos.filter(e => newExpIds.has(e.id)).length;
 
+      const includeAccounting = !onlyNew && !accounting.warning;
       const sheets = [
         { name: '1. Resumen Fiscal', rows: buildResumenFiscal(invoices, expenses, year, companyName, lastExportDate, newEmitidaIdx.length, newRecibidaIdx.length, newGastosCount), colWidths: [40, 20], newRowIndices: [] },
         { name: '2. P&L', rows: buildPnL(invoices, expenses, year), colWidths: [16, 20, 20, 22, 12, 20, 20, 20], newRowIndices: [] },
@@ -404,15 +409,20 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '4. Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: newRecibidaIdx },
         { name: '5. Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: newEmitidaIdx },
         { name: '6. Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: newComprasIdx },
-        ...(!onlyNew ? [
+        ...(includeAccounting ? [
           { name: '7. Libro Diario', rows: buildLibroDiario(accounting.entries), colWidths: [14, 10, 10, 26, 28, 14, 14, 12, 14, 14, 10, 8], newRowIndices: [] },
           { name: '8. Libro Mayor', rows: buildLibroMayor(accounting.accounts), colWidths: [12, 28, 20, 20, 18], newRowIndices: [] },
         ] : []),
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
         { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
-        ...(!onlyNew ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
+        ...(includeAccounting ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
         { name: '12. RECC IVA', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
-        ...(reccBook.issues?.length ? [{ name: '13. Alertas RECC', rows: [
+        ...(accounting.warning ? [{ name: '13. Incidencias contables', rows: [
+          ['Exportación parcial de libros · requiere revisión contable'],
+          [accounting.warning],
+          ['Las hojas de facturas y libros de IVA/IGIC proceden de los documentos activos; no certifican el Diario ni el Mayor.'],
+        ], colWidths: [110], newRowIndices: [] }] : []),
+        ...(reccBook.issues?.length ? [{ name: '14. Alertas RECC', rows: [
           ['Pendiente de revisión por asesor. Estas incidencias no alteran el Diario ni impiden descargar el libro informativo.'],
           ['Factura ID', 'Pago ID', 'Incidencia'],
           ...reccBook.issues.map(issue => [issue.invoiceId || '', issue.paymentId || '', issue.reason || '']),
@@ -422,5 +432,6 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
       const filename = `Taxea_Libros_${safeName}_${year}.xls`;
       downloadSpreadsheetML(sheets, filename);
+      return { warning: accounting.warning || '' };
   }
 }
