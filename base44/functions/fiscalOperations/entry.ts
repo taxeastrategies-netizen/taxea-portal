@@ -269,6 +269,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   if (operationType === 'exempt_full' || operationType === 'export' || operationType === 'intra_eu_supply') { taxRate = 0; taxAmount = 0; }
   if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(operationType)) { taxRate = 0; taxAmount = 0; deductiblePercent = 0; if (!legalBasis) { reviewRequired = true; reasons.push('La no sujecion exige motivo y fundamento legal.'); } }
   if (operationType === 'subject_zero') { taxRate = 0; taxAmount = 0; }
+  if (direction === 'ingreso' && operationType === 'reverse_charge') { taxRate = 0; taxAmount = 0; }
   if (['reverse_charge', 'intra_eu_acquisition'].includes(operationType)) { reviewRequired = true; alerts.push(`Autorrepercusion de ${taxKind.toUpperCase()}: registrar cuota devengada y deducible solo en la proporcion permitida.`); }
   if (['canary_peninsula_goods', 'canary_peninsula_service'].includes(operationType)) { reviewRequired = true; confidence -= 20; alerts.push('Canarias no forma parte del territorio IVA: revisar localizacion, importacion/exportacion e inversion del sujeto pasivo.'); }
   if (['recargo_equivalencia', 'comerciante_minorista_igic', 'agricultura_ganaderia_pesca', 'simplificado', 'rebu', 'agencias_viajes', 'oro_inversion', 'grupo_entidades', 'criterio_caja', 'oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(regime)) {
@@ -353,6 +354,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
       const selectedActivity = activities.find(item => item.id === (body.activityId || invoice.fiscal_activity_id) && item.active !== false);
       body = advisorDecision(invoice, body, selectedActivity, user.email);
+      if (!context.lockHeld && clean(invoice.fiscal_review_lock_token)) return Response.json({error:'Otra revisión está procesando la factura.'},{status:409});
       if (invoice.anulada) return Response.json({error:'La factura está anulada.'},{status:409});
       const specialInputs = { ...(body.specialInputs && typeof body.specialInputs === 'object' ? body.specialInputs : {}) };
       if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'criterio_caja') {
@@ -523,7 +525,21 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       }
       if (proposedEvaluation.postingBlocked) {
         if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation: proposedEvaluation });
-        return Response.json({ error: 'Este régimen o sector diferenciado requiere un circuito específico de cálculo, libro y modelo. La factura queda pendiente; no se contabilizará con reglas ordinarias.', evaluation: proposedEvaluation }, { status: 422 });
+      if (body.confirmReviewed === true && !context.lockHeld) {
+        const token = crypto.randomUUID();
+        const acquired = await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+          $or:[{fiscal_review_lock_token:{$exists:false}},{fiscal_review_lock_token:''},{fiscal_review_lock_token:null}]},
+          {$set:{fiscal_review_lock_token:token,fiscal_review_lock_started_at:new Date().toISOString()}});
+        if (Number(acquired?.updated || 0) !== 1) return Response.json({error:'Otra revisión está procesando esta factura. Espera o revisa el lote activo.'},{status:409});
+        reviewToken = token;
+      }
+
+        const warning='Criterio del asesor guardado. El asiento queda pendiente del circuito contable específico; no se han aplicado reglas ordinarias.';
+        await svc.entities.Invoice.update(invoice.id,{fiscal_advisor_decision:{criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true}),
+          reviewedBy:user.email,reviewedAt:new Date().toISOString(),ruleSetVersion:RULESET,status:'pending_accounting'},
+          ...(context.batchId?{fiscal_review_batch_id:context.batchId}:{})});
+        return Response.json({success:true,mode:'classified_pending',warning,evaluation:proposedEvaluation});
+
       }
       if (invoice.tipo === 'emitida' && proposedEvaluation.regime === 'criterio_caja'
         && invoice.qr_pdf_url && clean(invoice.fiscal_regime) !== 'criterio_caja') {
@@ -531,6 +547,8 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       }
       const evaluation = guardIssuedQrInvoiceTaxChange(invoice, proposedEvaluation, body);
       if (body.confirmReviewed !== true) return Response.json({ success: true, mode: 'preview', evaluation });
+      if (context.batchId && Math.abs(Number(invoice.total_factura) - money(evaluation.total + Number(invoice.cuota_recargo || 0))) > 0.02)
+        return Response.json({error:'Este criterio alteraría el importe original. Revisa esta factura individualmente; el lote no cambia precios.'},{status:422});
       const phaseOnePending = ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason);
       if (Math.abs(Number(invoice.base_imponible || 0) - evaluation.base) > 0.02) return Response.json({ error: 'La base de la propuesta no coincide con la factura. Corrige primero el documento origen.' }, { status: 422 });
       if (phaseOnePending && Number(invoice.importe_pagado || 0) > 0) return Response.json({ error: 'La factura pendiente de revisión no puede tener cobros o pagos antes de su validación.' }, { status: 409 });
