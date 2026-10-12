@@ -192,8 +192,9 @@ const taxKey = value => {
 const nameKey = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 async function loadA3Crosswalk(companyId, year, invoices) {
-  const profiles = await base44.entities.CounterpartyFiscalProfile.filter({ company_id: companyId }, '-created_date', 5000);
-  if (profiles.length >= 5000) throw new Error('El censo de terceros supera el límite de exportación. Acota y revisa el maestro.');
+  const response = await base44.functions.invoke('getAccountingCrosswalk', { company_id: companyId });
+  const profiles = response?.data?.profiles;
+  if (!Array.isArray(profiles)) throw new Error('El maestro de terceros no devolvió datos válidos.');
   const relevant = profiles.filter(profile => Number(profile.externalAccountYear) === Number(year));
   if (!relevant.length) return null;
   const labels = {
