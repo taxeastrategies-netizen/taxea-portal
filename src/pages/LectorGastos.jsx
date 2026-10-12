@@ -309,11 +309,17 @@ export default function LectorGastos({ reviewPage = false }) {
         lastStatusChangedAt: doneNow,
         auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
       });
-      await base44.functions.invoke('syncInvoiceContacts', {
-        action: 'sync_ocr',
-        docId: doc.id,
-        extractedData: result,
-      }).catch(error => console.error('[OCR] Contact sync failed:', error));
+      const [contactSync, duplicateScan] = await Promise.allSettled([
+        base44.functions.invoke('syncInvoiceContacts', { action: 'sync_ocr', docId: doc.id, extractedData: result }),
+        base44.functions.invoke('checkDuplicates', { action: 'check_one', company_id: company.id, scope: SOURCE_MODULE, docId: doc.id, period_type: 'all' }),
+      ]);
+      if (contactSync.status === 'rejected') console.warn('[OCR] Contact sync failed:', contactSync.reason);
+      if (duplicateScan.status === 'fulfilled') {
+        const scan = duplicateScan.value?.data ?? duplicateScan.value;
+        const warning = scan?.duplicateGroupsCount > 0
+          ? 'Posible duplicado: coinciden tercero, número y fecha con otra factura o documento OCR. Revísalo antes de confirmar.' : '';
+        await base44.entities.OcrInvoiceDocument.update(doc.id, { duplicateWarning: warning });
+      } else console.warn('[OCR] Duplicate scan unavailable:', duplicateScan.reason);
     } catch {
       const failNow = new Date().toISOString();
       await base44.entities.OcrInvoiceDocument.update(doc.id, {
