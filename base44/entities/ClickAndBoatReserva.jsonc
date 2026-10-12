@@ -1,0 +1,212 @@
+{
+  "name": "ClickAndBoatReserva",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string",
+      "description": "Sociedad propietaria de la reserva (UTH TIME SL)."
+    },
+    "reserva_id": {
+      "type": "string",
+      "description": "ID externo de reserva Click&Boat. Clave estable sociedad + reserva_id."
+    },
+    "tenant_documental": {
+      "type": "string",
+      "description": "Nombre del arrendatario tal como consta en la factura de comisi\u00f3n."
+    },
+    "bruto_eur": {
+      "type": "number",
+      "description": "Renter total (incl. insurances) documentado en la captura. Precio total del servicio, no base imponible."
+    },
+    "comision_eur": {
+      "type": "number",
+      "description": "Comisi\u00f3n documentada en la factura Click&Boat aportada."
+    },
+    "neto_eur": {
+      "type": "number",
+      "description": "Neto contractual del propietario. Control: bruto - comisi\u00f3n = neto."
+    },
+    "liquidado_eur": {
+      "type": "number",
+      "description": "Importe neto liquidado por la plataforma seg\u00fan la captura."
+    },
+    "factura_cboat": {
+      "type": "string",
+      "description": "N\u00famero de factura de comisi\u00f3n Click&Boat (documento externo)."
+    },
+    "factura_candidata": {
+      "type": "string",
+      "description": "Factura propuesta por el cruce previo. NO es prueba del v\u00ednculo."
+    },
+    "factura_candidata_id": {
+      "type": "string"
+    },
+    "vinculo_confirmado": {
+      "type": "boolean",
+      "default": false,
+      "description": "Solo true con ID de reserva ya almacenado, documento original u otra evidencia expl\u00edcita."
+    },
+    "fuente_vinculo": {
+      "type": "string",
+      "description": "Evidencia que confirma el v\u00ednculo, cuando existe."
+    },
+    "accion_propuesta": {
+      "type": "string",
+      "enum": [
+        "actualizacion_borrador_pendiente_cruce",
+        "rectificacion_propuesta",
+        "borrador_nuevo_propuesto",
+        "sin_accion"
+      ],
+      "description": "Acci\u00f3n preparada sobre la factura candidata, pendiente de confirmaci\u00f3n."
+    },
+    "numero_borrador_propuesto": {
+      "type": "string",
+      "description": "Numeraci\u00f3n propuesta para un borrador nuevo. No se reserva si ya est\u00e1 utilizada."
+    },
+    "total_anterior": {
+      "type": "number",
+      "description": "Total anterior de la factura candidata (snapshot previo a cualquier cambio)."
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente_cruce",
+        "borrador_propuesto",
+        "pendiente_confirmacion",
+        "aplicado",
+        "descartado"
+      ],
+      "default": "pendiente_cruce"
+    },
+    "incidencias": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "fecha_captura": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de la captura del listado."
+    },
+    "fecha_comision": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de la factura de comisi\u00f3n en su PDF."
+    },
+    "fecha_liquidacion_propietario": {
+      "type": "string",
+      "format": "date"
+    },
+    "proveedor_comision": {
+      "type": "string"
+    },
+    "nif_iva_proveedor": {
+      "type": "string"
+    },
+    "iva_facturado_comision": {
+      "type": "number",
+      "default": 0
+    },
+    "literal_fiscal_comision": {
+      "type": "string"
+    },
+    "extra_uth_confirmado_a_sumar_eur": {
+      "type": "number",
+      "default": 0
+    },
+    "skipper_extra_eur": {
+      "type": "number",
+      "description": "Extra Skipper documentado. Excluido del bruto; atribuci\u00f3n pendiente de confirmaci\u00f3n."
+    },
+    "snapshot_anterior": {
+      "type": "string",
+      "description": "Copia de seguridad de los valores anteriores del registro tocado, con ID interno y estado."
+    },
+    "propuesto_por": {
+      "type": "string"
+    },
+    "applied_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "reserva_id"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.company_id": "{{user.data.company_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
+    }
+  }
+}
