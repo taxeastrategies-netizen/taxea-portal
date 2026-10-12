@@ -68,3 +68,39 @@ export async function approveWorkspaceDocument(client,companyId,doc,form,invoice
     }
   }
 }
+
+// A bulk click only confirms each document's persisted OCR proposal. It never
+// applies the first document's fiscal treatment or account to its neighbours.
+export async function approveStoredOcrBatch(client,companyId,documents,ids,mapForm,invoiceType,options={}) {
+  const selected=[...new Set(ids || [])];
+  const byId=new Map((documents || []).map(doc=>[doc.id,doc]));
+  const activeActivities=(options.activities || []).filter(row=>row.active!==false);
+  let done=0,failed=0,stopped=false;
+  const issues=[];
+  for(const id of selected) {
+    if(options.shouldStop?.()) { stopped=true; break; }
+    const doc=byId.get(id);
+    try {
+      if(!doc || doc.company_id!==companyId || !['review_required','validated'].includes(doc.status))
+        throw new Error('El documento ya no está pendiente en esta empresa. Actualiza la cola.');
+      const source=doc.invoiceSource ? invoiceSourceData(doc.invoiceSource) : parsed(doc.extractedData,null);
+      if(!source || typeof source!=='object') throw new Error('Faltan los datos OCR guardados. Revísalo individualmente.');
+      const form=mapForm(source);
+      if(!form.fiscal_activity_id && activeActivities.length===1) form.fiscal_activity_id=activeActivities[0].id;
+      if(!form.fiscal_activity_id && activeActivities.length>1)
+        throw new Error('Hay varias actividades fiscales y este OCR no tiene una asignada. Revísalo individualmente.');
+      await approveWorkspaceDocument(client,companyId,doc,form,invoiceType);
+      done++;
+      options.onSuccess?.(doc);
+    } catch(error) {
+      failed++;
+      const reason=error?.response?.data?.error || error?.message || 'No se pudo aprobar el documento.';
+      issues.push({id,reason});
+      options.onFailure?.(doc,reason);
+      if(Number(error?.response?.status || error?.status)===409 && /otra aprobaci[oó]n|siendo confirmado/i.test(reason)) stopped=true;
+    }
+    options.onProgress?.({done,failed,total:selected.length,remaining:selected.length-done-failed,stopped,issues});
+    if(stopped) break;
+  }
+  return {done,failed,total:selected.length,remaining:selected.length-done-failed,stopped,issues};
+}
