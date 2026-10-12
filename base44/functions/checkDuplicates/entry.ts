@@ -49,10 +49,30 @@ Deno.serve(async req => {
         if (batch.length < 200) return result;
       }
     };
-    const [invoices, docs] = await Promise.all([
-      fetchAll('Invoice', { company_id: companyId, tipo: direction }),
+    const single = body.action === 'check_one';
+    if (single && !body.docId) return Response.json({ error: 'docId es obligatorio.' }, { status: 400 });
+    const target = single ? await base44.asServiceRole.entities.OcrInvoiceDocument.get(body.docId) : null;
+    if (single && (!target || target.company_id !== companyId || target.documentType !== docType))
+      return Response.json({ error: 'Documento OCR no encontrado en esta empresa.' }, { status: 404 });
+    const targetSource = parseSource(target?.extractedData);
+    const targetNumber = normalizedNumber(targetSource.numero_factura || targetSource.numero);
+    const targetDate = normalizedDate(direction === 'emitida' ? targetSource.fecha_emision || targetSource.fecha
+      : targetSource.fecha || targetSource.fecha_emision);
+    if (single && (!targetNumber || !targetDate)) return Response.json({
+      success: true, scope, period: { type: periodType, year: filterYear, value: periodValue },
+      totalRecordsAnalyzed: 1, incompleteRecordsCount: 1, duplicateGroupsCount: 0,
+      totalToDelete: 0, duplicateGroups: [], message: 'Falta número o fecha para comparar el documento.' });
+    const [invoices, allDocs] = await Promise.all([
+      fetchAll('Invoice', single ? { company_id: companyId, tipo: direction, fecha_emision: targetDate }
+        : { company_id: companyId, tipo: direction }),
       fetchAll('OcrInvoiceDocument', { company_id: companyId, documentType: docType }),
     ]);
+    const docs = single ? allDocs.filter(doc => {
+      const source = parseSource(doc.extractedData);
+      return normalizedNumber(source.numero_factura || source.numero) === targetNumber
+        && normalizedDate(direction === 'emitida' ? source.fecha_emision || source.fecha
+          : source.fecha || source.fecha_emision) === targetDate;
+    }) : allDocs;
     const activeInvoices = invoices.filter(invoice => !invoice.anulada);
     const invoiceIds = new Set(activeInvoices.map(invoice => invoice.id));
     const records = [
@@ -119,9 +139,7 @@ Deno.serve(async req => {
         }
       }
     }
-    if (body.action === 'check_one' && !body.docId)
-      return Response.json({ error: 'docId es obligatorio.' }, { status: 400 });
-    const duplicateGroups = body.action === 'check_one' && body.docId
+    const duplicateGroups = single
       ? pairs.filter(pair => pair.allItems.some(item => item.id === body.docId && item.entityType === 'OcrInvoiceDocument'))
       : pairs;
     return Response.json({
