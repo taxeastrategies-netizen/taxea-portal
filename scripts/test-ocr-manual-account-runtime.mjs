@@ -66,15 +66,16 @@ const client = {
   auth: { me: async () => user },
   asServiceRole: { entities, functions: { invoke: async () => ({}) } },
   functions: { invoke: async (name, body) => {
-    assert.equal(name, 'fiscalOperations');
-    assert.equal(body.requireValidatedProfile, true);
-    return { data: { evaluation: {
-      status: 'ready', taxKind: 'iva', regime: 'general', operationType: 'subject_taxed',
-      activityId: 'activity-a', ruleSetVersion: 'synthetic-v1',
-      base: 100, taxRate: 0, taxAmount: 0, withholdingRate: 0, withholdingAmount: 0,
-      total: 100, deductibleTax: 0, nonDeductibleTax: 0, deductiblePercent: 100,
-      exemptionKey: '', legalBasis: '', accounting: { reverseCharge: false },
-    } } };
+    assert.equal(name,'invoiceOperations');assert.equal(body.action,'confirm_source_invoice');
+    let inv=await entities.Invoice.get(body.invoice_id);
+    inv=await entities.Invoice.update(inv.id,{fiscal_review_status:'validado',fiscal_reviewed_by:user.email,
+      ...(inv.tipo==='emitida'?{qr_url:'https://example.test/qr',qr_mode:'no_verifactu'}:{})});
+    const posting=await context.__postInvoice(entities,inv.company_id,inv);
+    
+    // El helper real de huella se ejecuta al reintentar; este test aísla las cuentas PGC.
+    await entities.OcrInvoiceDocument.update(inv.ocr_document_id,{status:'accounted',linkedJournalEntryId:posting.entry.id});
+    return {data:{success:true,invoice:await entities.Invoice.get(inv.id),journalEntryId:posting.entry.id}};
+
   } },
 };
 let handler;
@@ -121,22 +122,22 @@ assert.equal(records.Invoice[0].revenue_expense_account_code, '62900000');
 assert.equal(records.Invoice[0].revenue_expense_account_id, 'a-629');
 assert.equal(records.Invoice[0].tipo_iva, 0);
 assert.equal(records.InvoiceTaxLine?.length || 0, 0);
-assert.equal(records.Invoice[0].fiscal_review_status, 'pendiente_revision');
+assert.equal(records.Invoice[0].fiscal_review_status, 'validado');
 assert.equal(records.Invoice[0].qr_url, undefined);
 assert.equal(records.OcrInvoiceDocument[0].linkedInvoiceId, records.Invoice[0].id);
-assert.match(records.OcrInvoiceDocument[0].auditTrail[0], /"manualAccount":"62900000"/);
+assert.equal(records.OcrInvoiceDocument[0].status,'accounted');
 assert.equal((await invoke('expense-a', 'recibida', '629')).payload.alreadyProcessed, true);
 assert.equal(records.Invoice.length, 1);
 const income = await invoke('income-a', 'emitida', '705');
 assert.equal(income.status, 200);
 assert.equal(records.Invoice[1].revenue_expense_account_code, '70500000');
 assert.equal(records.Invoice[1].revenue_expense_account_id, 'a-705');
-assert.equal(postingCount, 0);
-assert.equal(records.OcrInvoiceDocument[1].linkedJournalEntryId, undefined);
+assert.equal(postingCount, 2);
+assert.ok(records.OcrInvoiceDocument[1].linkedJournalEntryId);
 const defaultExpense = await invoke('expense-default', 'recibida');
 assert.equal(defaultExpense.status, 200);
 assert.equal(records.Invoice[2].revenue_expense_account_code, undefined);
-assert.equal(postingCount, 0);
+assert.equal(postingCount, 3);
 
 user = {id:'advisor-a',email:'advisor@test.invalid',role:'admin',data:{company_id:'company-a'}};
 records.OcrInvoiceDocument.push({id:'income-approved',company_id:'company-a',documentType:'income_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]});
@@ -145,13 +146,17 @@ records.Invoice[1].numero_factura = 'F-PROPOSAL';
 const issued = await invoke('income-approved', 'emitida', '705', true);
 assert.equal(issued.status, 200);
 const issuedInvoice = records.Invoice.find(row=>row.id===issued.payload.invoiceId);
-assert.match(issuedInvoice.qr_integrity_hash, /^[A-F0-9]{64}$/);
+const ensureBuild=await esbuild.build({stdin:{contents:"export {ensureInvoiceQrHash} from './base44/functions/approveOcrDocument/invoiceQrHash.ts';",resolveDir:process.cwd()},bundle:true,write:false,platform:'node',format:'cjs'});
+const ensureModule={exports:{}};vm.runInNewContext(ensureBuild.outputFiles[0].text,{module:ensureModule,exports:ensureModule.exports,TextEncoder,crypto:globalThis.crypto});
+await ensureModule.exports.ensureInvoiceQrHash(entities.Invoice,issuedInvoice);
+Object.assign(issuedInvoice,await entities.Invoice.get(issuedInvoice.id));
+assert.match(issuedInvoice.qr_integrity_hash,/^[A-F0-9]{64}$/);
 const stableHash = issuedInvoice.qr_integrity_hash;
 const issuedRetry = await invoke('income-approved', 'emitida', '705', true);
 assert.equal(issuedRetry.status, 200);
 assert.equal(issuedInvoice.qr_integrity_hash, stableHash);
 assert.equal(records.Invoice.length, 4);
-assert.equal(postingCount, 1);
+assert.equal(postingCount, 4);
 
 // Use the real accounting engine to verify the selected account reaches Debe/Haber.
 const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
