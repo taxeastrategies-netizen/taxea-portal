@@ -731,8 +731,15 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
     if (item.accountId && (!linked || linked.companyId !== companyId || linked.code !== code || linked.status === 'inactiva')) {
       throw new Error(`La cuenta ${code} no coincide con el ID contable indicado.`);
     }
-    const existing = linked || (await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1))?.[0];
-    if (!existing) throw new Error(`La cuenta ${code} no existe en el plan contable de la empresa.`);
+    const candidates = linked ? [] : await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 100);
+    const entryYear = Number(String(payload.date || '').slice(0, 4));
+    const dated = candidates.filter(account => Number(account.ejercicio) === entryYear && account.status !== 'inactiva');
+    const timeless = candidates.filter(account => account.ejercicio == null && account.status !== 'inactiva');
+    const eligible = dated.length ? dated : timeless;
+    const identities = new Set(eligible.map(account => `${normalizeTaxId(account.nif)}:${clean(account.name).toUpperCase()}`));
+    if (!linked && identities.size > 1) throw new Error(`La cuenta ${code} pertenece a varios terceros; indica su ID contable.`);
+    const existing = linked || eligible[0];
+    if (!existing) throw new Error(`La cuenta ${code} no existe para este ejercicio o está inactiva.`);
     normalized.push({
       ...item,
       accountId: existing.id,
