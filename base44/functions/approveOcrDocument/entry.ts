@@ -53,7 +53,8 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
     if (['rejected', 'cancelled_by_client', 'replacement_requested'].includes(doc.status)) {
       return { status: 409, json: { error: 'Documento archivado o rechazado: no se creará otra factura.' } };
     }
-    const resumed = await resumeExistingOcr(svc, user, doc, invoiceType, confirmFiscalReview, postInvoice, SCHEMA_VERSION,
+    let resumed;
+    try { resumed = await resumeExistingOcr(svc, user, doc, invoiceType, confirmFiscalReview, postInvoice, SCHEMA_VERSION,
       !recoveryOnly ? async invoice => {
         const response = await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
           company_id:doc.company_id,invoice_id:invoice.id,criteria:{...(form.fiscal_criteria || {}),
@@ -61,7 +62,13 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
         const result=response?.data??response;
         if(!result?.success) throw new Error(result?.error || 'No se pudo completar el documento.');
         return result.invoice;
-      } : null);
+      } : null); }
+    catch(error) {
+      const detail=String(error?.response?.data?.error || error.message || 'No se pudo completar el OCR.').slice(0,500);
+      const current=await svc.entities.OcrInvoiceDocument.get(doc.id);
+      if(current?.status!=='accounted') await svc.entities.OcrInvoiceDocument.update(doc.id,{status:'review_required',safeErrorMessage:detail,lastStatusChangedAt:new Date().toISOString()});
+      return {status:Number(error?.response?.status || error.status)||422,json:{error:detail,invoiceId:doc.linkedInvoiceId || null}};
+    }
     if (resumed) return resumed;
     if (recoveryOnly) return { status: 409, json: { error: 'No existe factura enlazada para recuperar. No se creó ninguna.' } };
     return await approveNew(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview);
