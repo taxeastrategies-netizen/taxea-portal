@@ -378,6 +378,8 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
         direction: invoice.tipo === 'recibida' ? 'gasto' : 'ingreso',
+        withholdingRate: body.withholdingRate ?? invoice.retencion_irpf ?? 0,
+        counterpartyIsWithholdingAgent: body.counterpartyIsWithholdingAgent ?? Boolean(invoice.retencion_irpf || invoice.importe_retencion),
         base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
         taxAmount: body.taxAmount ?? invoice.cuota_iva,
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
