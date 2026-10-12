@@ -70,6 +70,16 @@ records.AccountingAccount=[{id:'historical',companyId:'a',code:'41000077',name:'
 records.CounterpartyFiscalProfile=[{id:'cp',company_id:'a',taxId:'DETEST',accountingRole:'acreedor',accountingAccountId:'historical',accountingAccountCode:'41000077'}];
 const engine=(await bundle('base44/functions/accountingOperations/accountingEngine.ts')).exports;
 const proposal=await engine.buildInvoicePosting(svc,'a',clone(records.Invoice[0]));
+assert.equal(proposal.counterparty.account.id,'historical');
+records.AccountingAccount.push({id:'collision',companyId:'a',code:'41000077',name:'Otro proveedor',nif:'OTHER',status:'activa',created_date:'z'});
+const collisionProposal=await engine.buildInvoicePosting(svc,'a',clone(records.Invoice[0]));
+assert.equal(collisionProposal.counterparty.account.id,'historical','El código antiguo de otro NIF no puede sustituir al vínculo del perfil.');
+records.CounterpartyFiscalProfile[0].accountingAccountId='collision';
+const recoveredProposal=await engine.buildInvoicePosting(svc,'a',clone(records.Invoice[0]));
+assert.equal(recoveredProposal.counterparty.account.id,'historical','El vínculo inválido debe recuperarse solo por NIF inequívoco.');
+records.AccountingAccount[0].nif='OTHER-TWO';
+await assert.rejects(()=>engine.buildInvoicePosting(svc,'a',clone(records.Invoice[0])),/ambigua|otro NIF/);
+records.AccountingAccount[0].nif='DETEST';
 const amount=(code,side)=>proposal.lines.filter(row=>row.accountCode===code).reduce((s,row)=>s+row[side],0);
 assert.equal(amount('41000077','credit'),100);assert.equal(amount('62910007','debit'),100);
 assert.equal(amount('47200000','debit'),21);assert.equal(amount('47700000','credit'),21);
