@@ -52,6 +52,9 @@ for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument'])
 }
 async function api(name,body){return handlers[name](new Request('https://qa.invalid/'+name,{method:'POST',body:JSON.stringify(body)}));}
 async function call(name,body,status=200){const response=await api(name,body),data=await response.json();assert.equal(response.status,status,JSON.stringify(data));return data;}
+const {sourceDecision}=await import('../base44/functions/fiscalOperations/sourceCheck.mjs');
+assert.throws(()=>sourceDecision({tipo:'recibida',base_imponible:100,fecha_emision:'2026-07-12',cuota_iva:7,retencion_irpf:0,tipo_iva:7},
+  {taxKind:'iva',regime:'general'},records.FiscalActivity[0],records.FiscalProfile[0],false),/asesor/);
 const makeDoc=async(id,{base=100,rate=7,quota=7,total=107,company='qa',type='expense_invoice',rect=false}={})=>{
   const ex={numero_factura:id,fecha:'2026-07-12',base_imponible:base,tipo_impuesto:rate,cuota_impuesto:quota,total,
     proveedor:'Proveedor QA',nif_proveedor:'B98765432',es_rectificativa:rect};
