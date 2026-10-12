@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
  * Al confirmar, llama onCapture(files[]) con los archivos resultantes.
  */
 export default function MobileScanner({ onCapture, onClose }) {
-  const cameraInputRef = useRef();
+  const cameraInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [pages, setPages] = useState([]); // [{dataUrl, rotation}]
   const [current, setCurrent] = useState(0);
   const [mode, setMode] = useState('capture'); // 'capture' | 'preview'
