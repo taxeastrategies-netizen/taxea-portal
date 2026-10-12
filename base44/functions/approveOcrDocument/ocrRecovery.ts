@@ -25,7 +25,7 @@ export async function acquireApprovalLease(svc, companyId) {
       { $set: { ocr_approval_lock_token: '', ocr_approval_lock_started_at: '' } });
   };
 }
-export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmReview, postInvoice, schemaVersion) {
+export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmReview, postInvoice, schemaVersion, confirmSource = null) {
   const expected = doc.documentType === 'expense_invoice' ? 'recibida' : doc.documentType === 'income_invoice' ? 'emitida' : null;
   if (!expected || invoiceType !== expected) return { status: 422, json: { error: 'El tipo de factura no coincide con el documento OCR.' } };
   const found = await svc.entities.Invoice.filter({ company_id: doc.company_id, ocr_document_id: doc.id }, '-created_date', 10);
@@ -51,6 +51,7 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
     await svc.entities.OcrInvoiceDocument.update(doc.id, { safeErrorMessage: message, duplicateWarning: 'SOURCE_TOTAL_MISMATCH', lastStatusChangedAt: new Date().toISOString() });
     return { status: 409, json: { error: message, invoiceId: invoice.id, alreadyProcessed: true, review_required: true } };
   }
+  if (invoice.estado_contable !== 'contabilizada' && confirmSource && confirmReview === true) invoice = await confirmSource(invoice);
   if (invoice.estado_contable !== 'contabilizada' && (
     !privileged(user) || confirmReview !== true || invoice.fiscal_review_status !== 'validado'
     || invoice.accounting_migration_hold === true)) {
