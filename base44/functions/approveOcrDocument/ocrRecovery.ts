@@ -1,4 +1,5 @@
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
+import { sameInvoiceIdentity } from './duplicateIdentity.mjs';
 // Recovery never creates an Invoice, tax line, contact or manual journal.
 const privileged = user => ['admin', 'super_admin'].includes(user?.role);
 const text = value => String(value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -95,16 +96,25 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
     invoiceId: invoice.id, journalEntryId: posting.entry.id, message: 'Factura existente y OCR sincronizados, sin duplicar.' } };
 }
 export async function findFinancialDuplicates(svc, doc, invoiceData) {
-  const identity = invoiceData.tipo === 'recibida' ? 'proveedor_nif' : 'cliente_nif';
-  const name = invoiceData.tipo === 'recibida' ? 'proveedor_nombre' : 'cliente_nombre';
-  const candidates = await svc.entities.Invoice.filter({
-    company_id: doc.company_id, tipo: invoiceData.tipo,
-    numero_factura: invoiceData.numero_factura, fecha_emision: invoiceData.fecha_emision,
-  }, '-created_date', 100);
-  const source = sourceData(doc);
-  const totals = [invoiceData.total_factura, source.total].filter(value => value != null && Number.isFinite(Number(value))).map(cents);
-  return (candidates || []).filter(row => !row.anulada
-    && (text(invoiceData[identity]) ? text(row[identity]) === text(invoiceData[identity])
-      : text(invoiceData[name]) && text(row[name]) === text(invoiceData[name]))
-    && totals.some(total => Math.abs(cents(row.total_factura) - total) <= 2));
+  const received = invoiceData.tipo === 'recibida';
+  const proposed = {
+    companyId: doc.company_id, direction: invoiceData.tipo,
+    number: invoiceData.numero_factura, date: invoiceData.fecha_emision,
+    taxId: received ? invoiceData.proveedor_nif : invoiceData.cliente_nif,
+    name: received ? invoiceData.proveedor_nombre : invoiceData.cliente_nombre,
+  };
+  const candidates = [];
+  for (let skip = 0; ; skip += 200) {
+    const batch = await svc.entities.Invoice.filter({
+      company_id: doc.company_id, tipo: invoiceData.tipo,
+      numero_factura: invoiceData.numero_factura, fecha_emision: invoiceData.fecha_emision,
+    }, '-created_date', 200, skip);
+    candidates.push(...batch);
+    if (batch.length < 200) break;
+  }
+  return candidates.filter(row => !row.anulada && sameInvoiceIdentity(proposed, {
+    companyId: row.company_id, direction: row.tipo, number: row.numero_factura,
+    date: row.fecha_emision, taxId: received ? row.proveedor_nif : row.cliente_nif,
+    name: received ? row.proveedor_nombre : row.cliente_nombre,
+  }));
 }
