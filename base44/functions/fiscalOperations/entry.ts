@@ -249,18 +249,18 @@ function evaluate(profile: any, activities: any[], body: any) {
 
   if (regime === 'pequeno_empresario_igic') {
     if (direction === 'ingreso' && !['reverse_charge', 'import'].includes(operationType)) { operationType = 'exempt_limited'; exemptionKey = exemptionKey || 'IGIC_REPEP'; taxRate = 0; taxAmount = 0; deductiblePercent = 0; }
-    if (direction === 'gasto') deductiblePercent = 0;
+    if (direction === 'gasto' && !(manualOverride && body.deductiblePercent != null)) deductiblePercent = 0;
     reasons.push('REPEP: operaciones propias exentas y cuotas soportadas sin derecho a deduccion.');
     if (operationType === 'reverse_charge' || operationType === 'import') alerts.push('Puede existir autoliquidacion ocasional IGIC modelo 412.');
   }
   if (['exenta_limitada', 'exenta_plena', 'no_sujeta'].includes(regime) && !manualOverride && direction === 'ingreso') {
     operationType = regime === 'exenta_limitada' ? 'exempt_limited' : regime === 'exenta_plena' ? 'exempt_full' : 'non_subject_article';
   }
-  if (direction === 'gasto' && regime === 'exenta_limitada') {
+  if (direction === 'gasto' && regime === 'exenta_limitada' && !(manualOverride && body.deductiblePercent != null)) {
     deductiblePercent = 0;
     reasons.push('Actividad exenta limitada: la cuota soportada se conserva, pero no se deduce y aumenta el coste o gasto.');
   }
-  if (direction === 'gasto' && taxKind === 'iva' && ['recargo_equivalencia', 'agricultura_ganaderia_pesca'].includes(regime)) {
+  if (direction === 'gasto' && taxKind === 'iva' && ['recargo_equivalencia', 'agricultura_ganaderia_pesca'].includes(regime) && !(manualOverride && body.deductiblePercent != null)) {
     deductiblePercent = 0;
     reasons.push('En esta actividad especial el IVA soportado no se deduce en la autoliquidación periódica; integra el coste o gasto según la naturaleza de la adquisición.');
     if (regime === 'recargo_equivalencia') alerts.push('Comprueba el recargo repercutido por el proveedor: su cuota y el mayor coste requieren desglose específico antes de contabilizar.');
@@ -280,7 +280,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   if (direction === 'gasto' && activity.deductionRight === 'prorrata_especial' && !(manualOverride && body.deductiblePercent != null && !body.deductionUse)) {
     const use = clean(body.deductionUse);
     if (!['exclusive_right', 'exclusive_no_right', 'shared'].includes(use)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Prorrata especial: clasifica el destino del gasto como exclusivo con derecho, exclusivo sin derecho o común.'], ruleSetVersion: RULESET };
-    deductiblePercent = use === 'exclusive_right' ? 100 : use === 'exclusive_no_right' ? 0 : clamp(activity.proRataPercent);
+    deductiblePercent = manualOverride && body.deductiblePercent != null ? clamp(body.deductiblePercent) : use === 'exclusive_right' ? 100 : use === 'exclusive_no_right' ? 0 : clamp(activity.proRataPercent);
     reviewRequired = true;
     reasons.push(`Prorrata especial: destino ${use}; deducción propuesta ${deductiblePercent}%, sujeta a revisión del asesor.`);
   }
@@ -557,7 +557,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         Math.abs(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) - evaluation.deductibleTax) > 0.01 ||
         Math.abs(Number(invoice.importe_retencion || 0) - evaluation.withholdingAmount) > 0.01 ||
         clean(invoice.indirect_tax_kind || evaluation.taxKind) !== evaluation.taxKind ||
-        evaluation.accounting?.reverseCharge
+        (evaluation.accounting?.reverseCharge && Math.abs(Number(invoice.self_assessed_tax_amount || 0) - evaluation.taxAmount) > 0.01) ||
+        clean(invoice.fiscal_treatment || evaluation.operationType) !== evaluation.operationType ||
+        clean(invoice.fiscal_regime || evaluation.regime) !== evaluation.regime
       )) return Response.json({ error: 'La factura ya tiene un asiento. No se puede cambiar su cuota, deducción, retención o impuesto sin un ajuste contable trazado; la factura y el diario permanecen intactos.' }, { status: 409 });
       if (body.confirmReviewed === true && !context.lockHeld) {
         const token = crypto.randomUUID();
@@ -608,7 +610,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
           ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
         : {};
-      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
   } finally {
     if (releaseAdvanceLocks) await releaseAdvanceLocks();
@@ -640,6 +642,20 @@ Deno.serve(async (req) => {
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, postingSupport: Object.fromEntries(Object.values(REGIMES).flat().map(([code]) => [code, code === 'criterio_caja' ? 'revision_asesor_recc_v2' : SPECIAL_POSTING_PENDING.has(code) || code === 'mixto' ? 'pendiente_circuito_especial' : 'revision_asesor'])), operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
 
+    if (action.includes('review_batch') && action !== 'process_review_batch') return Response.json(await fiscalReviewBatch({
+      svc:base44.asServiceRole,base44,companyId,user,save:()=>{throw new Error('Acción de lote sin procesamiento.');}},body));
+    if (action === 'recover_invoice_review_lock') {
+      if (!canProfessionallyValidate(user)) return Response.json({error:'Solo asesor o administrador.'},{status:403});
+      const invoice=await svc.entities.Invoice.get(clean(body.invoiceId));
+      if(!invoice||invoice.company_id!==companyId) return Response.json({error:'Factura no accesible.'},{status:403});
+      if(!body.processStopped||!clean(body.reason)||!body.expectedToken||body.expectedToken!==invoice.fiscal_review_lock_token
+        || !Number.isFinite(Date.parse(invoice.fiscal_review_lock_started_at))
+        || Date.now()-Date.parse(invoice.fiscal_review_lock_started_at)<600000)
+        return Response.json({error:'Espera diez minutos, confirma que el proceso terminó e indica motivo.'},{status:422});
+      const result=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,fiscal_review_lock_token:body.expectedToken},
+        {$set:{fiscal_review_lock_token:'',fiscal_review_lock_started_at:'',fiscal_review_lock_recovery:{by:user.email,at:new Date().toISOString(),reason:clean(body.reason)}}});
+      return Response.json({success:Number(result?.updated||0)===1});
+    }
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
