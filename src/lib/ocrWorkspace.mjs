@@ -9,7 +9,9 @@ export function invoiceSourceData(invoice) {
     retencion_irpf:invoice.retencion_irpf,importe_retencion:invoice.importe_retencion,retencion_tipo:invoice.retencion_tipo,
     categoria_sugerida:invoice.categoria_gasto,es_rectificativa:invoice.es_rectificativa,factura_rectificada:invoice.factura_rectificada,
     fiscal_activity_id:invoice.fiscal_activity_id,cuenta_contable_manual:invoice.revenue_expense_account_code,
-    fiscal_criteria:invoice.fiscal_advisor_decision?.criteria || {
+    fiscal_criteria:{...(invoice.fiscal_advisor_decision?.criteria || {}),
+      ...(invoice.recc_metadata?{recc:JSON.parse(invoice.recc_metadata)}:{}),
+      ...(invoice.tax_breakdown?{taxBreakdown:JSON.parse(invoice.tax_breakdown)}:{}),
       ...(invoice.fiscal_treatment?{operationType:invoice.fiscal_treatment}:{}),
       ...(invoice.fiscal_regime?{regime:invoice.fiscal_regime}:{}),
       ...(invoice.indirect_tax_kind?{taxKind:invoice.indirect_tax_kind}:{}),
@@ -46,7 +48,7 @@ export async function loadOcrWorkspace(client, companyId, documentType) {
 export async function approveWorkspaceDocument(client, companyId, doc, form, invoiceType) {
   const response=doc?.invoiceOnly
     ? await client.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',company_id:companyId,
-      invoice_id:doc.invoiceSource.id,criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined}})
+      invoice_id:doc.invoiceSource.id,criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined,accountCode:form.cuenta_contable_manual || undefined}})
     : await client.functions.invoke('approveOcrDocument',{docId:doc.id,form,invoiceType,
       extractedData:typeof doc.extractedData==='string'?JSON.parse(doc.extractedData || '{}'):doc.extractedData,confirm_fiscal_review:true});
   const result=response?.data??response;
