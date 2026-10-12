@@ -2,6 +2,9 @@
   "name": "Invoice",
   "type": "object",
   "properties": {
+    "fiscal_review_lock_recovery": {
+      "type": "object"
+    },
     "fiscal_advisor_decision": {
       "type": "object",
       "description": "Criterio confirmado por asesor, separado de la disponibilidad del circuito contable."
