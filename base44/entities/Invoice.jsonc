@@ -2,6 +2,10 @@
   "name": "Invoice",
   "type": "object",
   "properties": {
+    "fiscal_advisor_decision": {
+      "type": "object",
+      "description": "Criterio confirmado por asesor, separado de la disponibilidad del circuito contable."
+    },
     "recc_application_lock_token": {
       "type": "string",
       "rls": {
