@@ -104,8 +104,9 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
     setForm(current => ({ ...current, [key]: value,
       ...(key === 'taxRate' ? {taxAmount: Math.round(Number(current.base || 0) * Number(value)) / 100} : {}),
       ...(key === 'deductionCategory' && ['intra_services','intra_goods_current','intra_goods_investment'].includes(value)
-        ? {operationType:'intra_eu_acquisition'} : {}) }));
-    if (key === 'deductionCategory' && String(value).startsWith('intra_')) setApplyTaxRate(true);
+        ? {operationType:'intra_eu_acquisition',taxRate:Number(current.taxRate||selectedActivity?.defaultTaxRate||bundle?.profile?.defaultVatRate||21)} : {}),
+      ...(key==='operationType'&&['reverse_charge','intra_eu_acquisition'].includes(value)?{taxRate:Number(current.taxRate||selectedActivity?.defaultTaxRate||(taxKind==='igic'?bundle?.profile?.defaultIgicRate:bundle?.profile?.defaultVatRate)||0)}:{}) }));
+    if ((key === 'deductionCategory' && String(value).startsWith('intra_')) || (key==='operationType' && ['reverse_charge','intra_eu_acquisition'].includes(value))) setApplyTaxRate(true);
     setEvaluation(null);
   };
 
@@ -216,7 +217,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   {!bulkCount && <label className="text-xs font-medium text-slate-700">Base imponible
                     <input type="number" step="0.01" value={form.base ?? 0} onChange={event => update('base', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>}
-                  <label className="text-xs font-medium text-slate-700">Tipo (%)
+                  <label className="text-xs font-medium text-slate-700">{['reverse_charge','intra_eu_acquisition'].includes(form.operationType) && invoice.tipo==='recibida' ? 'Tipo de autorrepercusión (%) · no se añade al proveedor' : 'Tipo (%)'}
                     <input type="number" step="0.01" value={form.taxRate ?? 0} onChange={event => update('taxRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
                   {!bulkCount && ['rebu', 'agencias_viajes'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-2">
