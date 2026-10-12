@@ -48,7 +48,7 @@ export default function OcrDocumentTable({
   const activeFilter = FILTERS.find(f => f.key === filter);
   const filtered = documents.filter(d => activeFilter.match(d.status));
 
-  const selectable=filtered.filter(doc=>doc.status==='review_required');
+  const selectable=filtered.filter(doc=>['review_required','validated'].includes(doc.status));
   const selectedIds=selectable.filter(doc=>selected.has(doc.id)).map(doc=>doc.id);
   const pageCount=Math.max(1,Math.ceil(filtered.length/50)),currentPage=Math.min(page,pageCount-1);
   const visible=filtered.slice(currentPage*50,(currentPage+1)*50);
@@ -114,7 +114,7 @@ export default function OcrDocumentTable({
             return (
               <div key={doc.id} className="px-5 py-3 hover:bg-secondary/20 transition-colors">
                 <div className="flex items-center gap-3">
-                  {onBulkReview && doc.status==='review_required' && <input aria-label={`Seleccionar ${doc.originalFileName}`} type="checkbox" disabled={busy} checked={selected.has(doc.id)} onChange={()=>toggle(doc.id)} />}
+                  {onBulkReview && ['review_required','validated'].includes(doc.status) && <input aria-label={`Seleccionar ${doc.originalFileName}`} type="checkbox" disabled={busy} checked={selected.has(doc.id)} onChange={()=>toggle(doc.id)} />}
                   <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
