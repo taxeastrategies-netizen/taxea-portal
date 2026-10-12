@@ -434,7 +434,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
           [accounting.warning],
           ['Las hojas de facturas y libros de IVA/IGIC proceden de los documentos activos; no certifican el Diario ni el Mayor.'],
         ], colWidths: [110], newRowIndices: [] }] : []),
-        ...(reccBook.issues?.length ? [{ name: '14. Alertas RECC', rows: [
+        ...(reccBook.issues?.length ? [{ name: accounting.warning ? '14. Alertas RECC' : '13. Alertas RECC', rows: [
           ['Pendiente de revisión por asesor. Estas incidencias no alteran el Diario ni impiden descargar el libro informativo.'],
           ['Factura ID', 'Pago ID', 'Incidencia'],
           ...reccBook.issues.map(issue => [issue.invoiceId || '', issue.paymentId || '', issue.reason || '']),
