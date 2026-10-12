@@ -8,8 +8,19 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   if (invoice.accounting_migration_hold && !knownHolds.includes(invoice.accounting_migration_hold_reason))
     throw Object.assign(new Error('Esta factura tiene una incidencia contable independiente. No se levantará su retención automáticamente.'), {status:409});
   const token=crypto.randomUUID();
-  const claimed=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+  let claimed=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
     source_confirmation_lock_token:{$in:[null,'']}},{$set:{source_confirmation_lock_token:token,source_confirmation_lock_started_at:new Date().toISOString()}});
+  if(Number(claimed?.updated)!==1) {
+    const previous=await svc.entities.Invoice.get(invoice.id);
+    const started=Date.parse(previous?.source_confirmation_lock_started_at || '');
+    const previousToken=String(previous?.source_confirmation_lock_token || '');
+    if(previousToken && Number.isFinite(started) && Date.now()-started>600000)
+      claimed=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,
+        source_confirmation_lock_token:previousToken,
+        source_confirmation_lock_started_at:previous.source_confirmation_lock_started_at},
+        {$set:{source_confirmation_lock_token:token,source_confirmation_lock_started_at:new Date().toISOString(),
+          source_confirmation_lock_recovery:{previousToken,staleSince:previous.source_confirmation_lock_started_at,recoveredAt:new Date().toISOString()}}});
+  }
   if(Number(claimed?.updated)!==1) throw Object.assign(new Error('Este documento ya está siendo confirmado. Espera a que termine antes de reintentar.'),{status:409});
   try {
   if(criteria.accountCode && invoice.estado_contable!=='contabilizada' && !invoice.linked_journal_entry_id) {
