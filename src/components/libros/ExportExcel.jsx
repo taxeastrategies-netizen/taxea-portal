@@ -379,12 +379,24 @@ async function loadRealAccounting(companyId, year) {
 }
 
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
-export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, companyId, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate, onlyNew = false }) {
+export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, companyId, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate, onlyNew = false, onlyInvoiceBooks = false }) {
   // Filtrar facturas y gastos anulados — única fuente de datos activos
   const invoices = (rawInvoices || []).filter(i => !i.anulada);
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
+  if (onlyInvoiceBooks) {
+    const emitidas = invoices.filter(i => i.tipo === 'emitida');
+    const recibidas = invoices.filter(i => i.tipo === 'recibida');
+    const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
+    downloadSpreadsheetML([
+      { name: 'Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: emitidas.map((row,i) => newInvIds.has(row.id) ? i : -1).filter(i => i >= 0) },
+      { name: 'Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: recibidas.map((row,i) => newInvIds.has(row.id) ? i : -1).filter(i => i >= 0) },
+      { name: 'Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: [] },
+      { name: 'Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: [] },
+    ], `Taxea_Libros_Facturas_${safeName}_${year}.xls`);
+    return { warning: 'Se han descargado solo los libros de facturas. No incluye Diario, Mayor ni Caja/Bancos.' };
+  }
   const [accounting, reccBook] = await Promise.all([
     onlyNew ? { entries: [], accounts: [] } : loadRealAccounting(companyId, year),
     loadReccBook(companyId, year),
