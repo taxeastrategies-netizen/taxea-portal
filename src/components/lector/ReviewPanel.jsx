@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import OcrFiscalFields from './OcrFiscalFields';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '' }) {
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '', expanded = false }) {
   const [form, setForm] = useState(() => ({ ...doc.formData, fiscal_activity_id: doc.formData?.fiscal_activity_id || (fiscalActivities.length === 1 ? fiscalActivities[0].id : '') }));
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
@@ -19,8 +19,8 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
-    <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/40">
+    <div className={expanded ? 'flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card' : 'overflow-hidden rounded-xl border border-border bg-card shadow-card'}>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/40 px-4 py-3">
         <div>
           <p className="font-jakarta font-semibold text-foreground text-sm">{doc.file?.name || 'Documento'}</p>
           <p className="text-xs text-muted-foreground">{bulkCount ? `Criterio común para ${bulkCount} documentos · los importes individuales no se cambian` : 'Una aprobación: factura, libro y asiento contable'}</p>
@@ -30,13 +30,13 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
           <Button size="sm" disabled={loading || !!invalidManualAccount || missingFiscalActivity} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : (bulkCount ? `Aprobar lote (${bulkCount})` : 'Aprobar y contabilizar')}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Confirmando asiento...' : (bulkCount ? `Aprobar lote (${bulkCount})` : expanded ? 'Confirmar y siguiente' : 'Aprobar y contabilizar')}
           </Button>
           <button disabled={loading} onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 min-h-[500px]">
+      <div className={expanded ? 'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(160px,35vh)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)] lg:grid-rows-1' : 'grid min-h-[500px] grid-cols-1 lg:grid-cols-2'}>
         {/* Preview */}
         <div className="border-b lg:border-b-0 lg:border-r border-border bg-secondary/20 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -47,12 +47,12 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
               <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-1 rounded hover:bg-secondary text-muted-foreground"><ZoomIn className="w-3.5 h-3.5" /></button>
             </div>
           </div>
-          <div className="flex-1 overflow-auto p-4 flex items-start justify-center">
+          <div className={expanded ? 'flex min-h-0 flex-1 items-start justify-center overflow-auto p-4' : 'flex flex-1 items-start justify-center overflow-auto p-4'}>
             {isPDF ? (
               <iframe
                 src={doc.fileUrl}
                 className="w-full rounded border border-border"
-                style={{ height: '460px', transform: `scale(${zoom})`, transformOrigin: 'top center' }}
+                style={{ height: expanded ? 'calc(100vh - 195px)' : '460px', transform: `scale(${zoom})`, transformOrigin: 'top center' }}
                 title="Preview"
               />
             ) : doc.fileUrl ? (
@@ -60,7 +60,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
                 src={doc.fileUrl}
                 alt="Preview"
                 className="max-w-full rounded border border-border object-contain"
-                style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', maxHeight: '460px' }}
+                style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', maxHeight: expanded ? 'calc(100vh - 195px)' : '460px' }}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
@@ -72,7 +72,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
         </div>
 
         {/* Formulario */}
-        <div className="overflow-y-auto p-4 space-y-3 max-h-[560px]">
+        <div className={expanded ? 'min-h-0 space-y-3 overflow-y-auto p-4' : 'max-h-[560px] space-y-3 overflow-y-auto p-4'}>
           {/* Confianza IA */}
           {doc.extracted?.confianza_pgc != null && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-1">
