@@ -17,6 +17,10 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
     if(!body.allFiltered&&(!ids.length||ids.length>20000)) fail('Selecciona entre 1 y 20.000 facturas.',422);
     const query=reviewFilter(companyId,body.filters);
     if(!body.allFiltered) query.id={$in:ids};
+    else if(Array.isArray(body.excludedIds)&&body.excludedIds.length) {
+      if(body.excludedIds.length>20000) fail('Demasiadas exclusiones. Divide por fechas o tipo.',422);
+      query.id={$nin:[...new Set(body.excludedIds.map(clean))]};
+    }
     const snapshot=[];
     for(let offset=0;offset<=20000;offset+=500) {
       const page=await svc.entities.Invoice.filter(query,'created_date',500,offset);
@@ -47,7 +51,7 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
   }
   if(body.action==='recover_review_batch') {
     if(!body.processStopped||!clean(body.reason)||body.expectedToken!==job.lock_token||!job.lock_token
-      ||Date.now()-Date.parse(job.lock_started_at)<600000) fail('Recuperación: espera 10 minutos, confirma proceso terminado e indica motivo.',422);
+      ||!Number.isFinite(Date.parse(job.lock_started_at))||Date.now()-Date.parse(job.lock_started_at)<600000) fail('Recuperación: espera 10 minutos, confirma proceso terminado e indica motivo.',422);
     const locked=await svc.entities.Invoice.filter({company_id:companyId,fiscal_review_lock_token:job.lock_token},'id',500);
     for(const row of locked) await svc.entities.Invoice.updateMany({id:row.id,company_id:companyId,fiscal_review_lock_token:job.lock_token},
       {$set:{fiscal_review_lock_token:'',fiscal_review_lock_started_at:''}});
