@@ -472,11 +472,11 @@ export default function LectorIngresos({ reviewPage = false }) {
   if (reviewPage) return (
     <OcrReviewWorkspace kind="emitidas" documents={documents} selectedId={selectedReviewId} loading={loading}
       busy={validating} message={reviewMessage} onNavigate={openReviewPage}
-      onExit={() => navigate('/tax-accounting/ocr-ingresos')}>
+      onExit={() => navigate('/tax-accounting/lector-ingresos')}>
       {reviewing && reviewing.id === selectedReviewId && <ReviewPanel key={reviewing.id} expanded
         doc={reviewing} fiscalContext={fiscalContext} error={reviewError} tipo="ingresos"
         onApprove={handleValidate} onReject={handleReject}
-        onCancel={() => navigate('/tax-accounting/ocr-ingresos')} loading={validating}
+        onCancel={() => navigate('/tax-accounting/lector-ingresos')} loading={validating}
         companyId={company?.id} fiscalActivities={fiscalContext.activities || []} />}
     </OcrReviewWorkspace>
   );
