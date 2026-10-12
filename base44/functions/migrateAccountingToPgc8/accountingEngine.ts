@@ -733,7 +733,10 @@ export async function createJournalEntry(svc, companyId, payload, userEmail) {
     }
     const candidates = linked ? [] : await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 100);
     const entryYear = Number(String(payload.date || '').slice(0, 4));
-    const dated = candidates.filter(account => Number(account.ejercicio) === entryYear && account.status !== 'inactiva');
+    const eligibleYears = candidates.filter(account => account.ejercicio != null
+      && Number(account.ejercicio) <= entryYear && account.status !== 'inactiva');
+    const latestYear = Math.max(0, ...eligibleYears.map(account => Number(account.ejercicio)));
+    const dated = eligibleYears.filter(account => Number(account.ejercicio) === latestYear);
     const timeless = candidates.filter(account => account.ejercicio == null && account.status !== 'inactiva');
     const eligible = dated.length ? dated : timeless;
     const identities = new Set(eligible.map(account => `${normalizeTaxId(account.nif)}:${clean(account.name).toUpperCase()}`));
