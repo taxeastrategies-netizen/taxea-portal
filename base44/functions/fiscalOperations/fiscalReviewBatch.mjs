@@ -63,15 +63,28 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
   if(Number(acquired?.updated||0)!==1) fail('El lote está ejecutándose en otra pestaña.');
   let heldInvoice='';
   try {
-    const part=(await chunks.filter({company_id:companyId,batch_id:job.id,chunk_index:job.chunk_index},'chunk_index',2))[0];
+    let part=(await chunks.filter({company_id:companyId,batch_id:job.id,chunk_index:job.chunk_index},'chunk_index',2))[0];
     if(!part) fail('Falta un bloque del manifiesto. No se modifica ninguna factura.',422);
+    if(Number(part.next_index)>=part.items.length) {
+      const nextPart=(await chunks.filter({company_id:companyId,batch_id:job.id,chunk_index:Number(part.chunk_index)+1},'chunk_index',2))[0];
+      if(!nextPart) {
+        const all=await chunks.filter({company_id:companyId,batch_id:job.id},'chunk_index',101);
+        const done=all.flatMap(row=>row.outcomes||[]);
+        const complete=await jobs.update(job.id,{status:'completed',processed:done.length,
+          succeeded:done.filter(row=>row.status==='succeeded').length,failed:done.filter(row=>row.status==='failed').length,
+          pending_accounting:done.filter(row=>row.status==='pending_accounting').length});
+        return {success:true,batch:{...complete,lock_token:'',lock_started_at:''}};
+      }
+      part=nextPart;
+    }
     const i=Number(part.next_index||0),item=part.items[i];
     if(!item) fail('Cursor de lote incoherente.',422);
     let outcome={invoice_id:item.id,number:item.number,status:'failed',message:''};
     try {
       const invoice=await svc.entities.Invoice.get(item.id);
       if(!invoice||invoice.company_id!==companyId||invoice.anulada) fail('Factura no accesible o anulada.');
-      const own=invoice.fiscal_review_batch_id===job.id&&invoice.fiscal_review_status==='validado';
+      const ownPending=invoice.fiscal_review_batch_id===job.id&&invoice.fiscal_advisor_decision?.status==='pending_accounting';
+      const own=invoice.fiscal_review_batch_id===job.id&&invoice.fiscal_review_status==='validado'||ownPending;
       if(!own&&(invoice.updated_date||invoice.created_date)!==item.version) fail('La factura cambió después de seleccionarla. Revísala de nuevo.');
       if(!own&&!REVIEW_REASONS.includes(invoice.accounting_migration_hold_reason)) fail('La factura ya no está pendiente. No se repite ni reclasifica.');
       const lock=await svc.entities.Invoice.updateMany({id:item.id,company_id:companyId,...free('fiscal_review_lock_token')},
@@ -84,7 +97,7 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
         saved=await response.json();
         if(!response.ok||saved.error) fail(saved.error||'No se guardó el criterio.',response.status);
       }
-      if(saved?.mode==='classified_pending') outcome={...outcome,status:'pending_accounting',message:saved.warning};
+      if(ownPending||saved?.mode==='classified_pending') outcome={...outcome,status:'pending_accounting',message:saved?.warning||'Criterio guardado; circuito contable pendiente.'};
       else {
         const response=await base44.functions.invoke('invoiceOperations',{action:'finalize_fiscal_review',company_id:companyId,invoice_id:item.id});
         const final=response?.data??response;
@@ -98,12 +111,20 @@ export async function fiscalReviewBatch({svc,base44,companyId,user,save},body) {
       heldInvoice='';
     }
     await chunks.update(part.id,{outcomes:[...(part.outcomes||[]),outcome],next_index:i+1});
-    const allParts=await chunks.filter({company_id:companyId,batch_id:job.id},'chunk_index',101);
-    const done=allParts.flatMap(row=>row.outcomes||[]);
-    const batch=await jobs.update(job.id,{processed:done.length,succeeded:done.filter(row=>row.status==='succeeded').length,
-      failed:done.filter(row=>row.status==='failed').length,pending_accounting:done.filter(row=>row.status==='pending_accounting').length,
-      chunk_index:i+1>=part.items.length?Number(job.chunk_index)+1:Number(job.chunk_index),status:done.length>=job.total?'completed':'paused'});
-    return {success:true,batch,lastResult:outcome};
+    const processed=Number(part.chunk_index)*200+i+1;
+    let succeeded=Number(job.succeeded||0)+(outcome.status==='succeeded'?1:0),
+      failed=Number(job.failed||0)+(outcome.status==='failed'?1:0),
+      pending=Number(job.pending_accounting||0)+(outcome.status==='pending_accounting'?1:0);
+    if(Number(job.processed||0)!==processed-1) {
+      // Solo recuperación de un acuse perdido: evita descargar todo el manifiesto por cada factura.
+      const parts=await chunks.filter({company_id:companyId,batch_id:job.id},'chunk_index',101);
+      const done=parts.flatMap(row=>row.outcomes||[]);
+      succeeded=done.filter(row=>row.status==='succeeded').length;failed=done.filter(row=>row.status==='failed').length;
+      pending=done.filter(row=>row.status==='pending_accounting').length;
+    }
+    const batch=await jobs.update(job.id,{processed,succeeded,failed,pending_accounting:pending,
+      chunk_index:i+1>=part.items.length?Number(part.chunk_index)+1:Number(part.chunk_index),status:processed>=job.total?'completed':'paused'});
+    return {success:true,batch:{...batch,lock_token:'',lock_started_at:''},lastResult:outcome};
   } finally {
     if(heldInvoice) await svc.entities.Invoice.updateMany({id:heldInvoice,company_id:companyId,fiscal_review_lock_token:token},
       {$set:{fiscal_review_lock_token:'',fiscal_review_lock_started_at:''}});
