@@ -79,6 +79,8 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
   const posting = await postInvoice(svc, doc.company_id, invoice, user.email, {
     ocrDocumentId: doc.id, source: 'OCR', status: 'confirmado',
   });
+  if(doc.status==='accounted' && doc.linkedJournalEntryId===posting.entry.id)
+    return {status:200,json:{success:true,alreadyProcessed:true,invoiceId:invoice.id,journalEntryId:posting.entry.id}};
   const now = new Date().toISOString();
   await svc.entities.OcrInvoiceDocument.update(doc.id, {
     status: 'accounted', linkedInvoiceId: invoice.id, linkedJournalEntryId: posting.entry.id,
