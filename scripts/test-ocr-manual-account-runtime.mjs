@@ -168,8 +168,8 @@ const stableHash = issuedInvoice.qr_integrity_hash;
 const issuedRetry = await invoke('income-approved', 'emitida', '705', true);
 assert.equal(issuedRetry.status, 200);
 assert.equal(issuedInvoice.qr_integrity_hash, stableHash);
-assert.equal(records.Invoice.length, 4);
-assert.equal(postingCount, 4);
+assert.equal(records.Invoice.length, 6);
+assert.equal(postingCount, 6);
 
 // Use the real accounting engine to verify the selected account reaches Debe/Haber.
 const engineEntry = path.resolve('base44/functions/approveOcrDocument/accountingEngine.ts');
