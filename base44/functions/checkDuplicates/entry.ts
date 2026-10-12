@@ -92,7 +92,7 @@ Deno.serve(async req => {
       const number = normalizedNumber(record.number);
       const date = normalizedDate(record.date);
       if (!number || !date) continue; // Never infer a duplicate from an amount alone.
-      const key = `${number}|︎${date}`;
+      const key = `${number}|${date}`;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(record);
     }
@@ -117,6 +117,8 @@ Deno.serve(async req => {
         }
       }
     }
+    if (body.action === 'check_one' && !body.docId)
+      return Response.json({ error: 'docId es obligatorio.' }, { status: 400 });
     const duplicateGroups = body.action === 'check_one' && body.docId
       ? pairs.filter(pair => pair.allItems.some(item => item.id === body.docId && item.entityType === 'OcrInvoiceDocument'))
       : pairs;
