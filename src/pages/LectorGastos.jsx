@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument } from '@/lib/ocrWorkspace.mjs';
+import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument, approveStoredOcrBatch } from '@/lib/ocrWorkspace.mjs';
 import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -376,6 +376,28 @@ export default function LectorGastos({ reviewPage = false }) {
 
   const [validating, setValidating] = useState(false);
 
+  const handleApproveSelected = async () => {
+    if(!company?.id || !bulkIds.length || validating) return;
+    cancelBulk.current=false;
+    setValidating(true);
+    setBulkProgress({done:0,failed:0,total:bulkIds.length,remaining:bulkIds.length});
+    try {
+      const result=await approveStoredOcrBatch(base44,company.id,documents,bulkIds,mapForm,INVOICE_TIPO,{
+        activities:fiscalContext.activities || [],
+        shouldStop:()=>cancelBulk.current,
+        onSuccess:doc=>setDocuments(rows=>rows.map(row=>row.id===doc.id?{...row,status:'accounted',safeErrorMessage:''}:row)),
+        onFailure:(doc,reason)=>{if(doc)setDocuments(rows=>rows.map(row=>row.id===doc.id?{...row,safeErrorMessage:reason}:row));},
+        onProgress:setBulkProgress,
+      });
+      setBulkProgress(result);
+      setToast({type:result.failed?'error':'success',message:`Lote: ${result.done} contabilizadas, ${result.failed} con incidencia, ${result.remaining} pendientes.`});
+      window.dispatchEvent(new Event('financials:refresh'));
+    } finally {
+      setBulkIds([]);setReviewing(null);setValidating(false);
+      loadDocs();
+    }
+  };
+
   const handleValidate = async (docId, form) => {
     if (!form.proveedor_cliente) {
       setReviewError('El nombre del proveedor es obligatorio.');
@@ -399,34 +421,6 @@ export default function LectorGastos({ reviewPage = false }) {
     }
     setValidating(true);
     try {
-      if(bulkIds.length){
-        cancelBulk.current=false;
-        let done=0,failed=0;
-        for(const id of bulkIds){
-          if(cancelBulk.current) break;
-          const doc=documents.find(row=>row.id===id);
-          if(!doc) {failed++;continue;}
-          const original=mapForm(doc.invoiceSource?invoiceSourceData(doc.invoiceSource):parseExtracted(doc.extractedData));
-          try{
-            await approveWorkspaceDocument(base44,company.id,doc,{...original,
-              fiscal_activity_id:form.fiscal_activity_id,fiscal_criteria:form.fiscal_criteria,
-              cuenta_contable_manual:form.cuenta_contable_manual},INVOICE_TIPO);
-            done++;
-            setDocuments(rows=>rows.map(row=>row.id===id?{...row,status:'accounted',safeErrorMessage:''}:row));
-          }catch(error){
-            failed++;
-            const message=error?.response?.data?.error || error.message;
-            if(Number(error?.response?.status)===409 && /otra aprobaci[oó]n|siendo confirmado/i.test(message)) cancelBulk.current=true;
-            setDocuments(rows=>rows.map(row=>row.id===id?{...row,safeErrorMessage:message}:row));
-          }
-          setBulkProgress({done,failed,total:bulkIds.length});
-        }
-        setBulkIds([]);setReviewing(null);
-        setToast({type:failed?'error':'success',message:`Lote: ${done} contabilizadas, ${failed} con incidencia.${cancelBulk.current?' Proceso detenido; el resto sigue pendiente.':''}`});
-        window.dispatchEvent(new Event('financials:refresh'));
-        await loadDocs();
-        return;
-      }
       const doc=documents.find(row=>row.id===docId) || reviewing;
       await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
       const followingId = reviewPage ? nextAfterConfirmation(documents, docId) : null;
@@ -564,7 +558,15 @@ export default function LectorGastos({ reviewPage = false }) {
         <BulkDropZone onFilesAdded={handleFilesAdded} />
       </div>
 
-      {reviewing && (
+      {bulkIds.length>0 && !reviewPage && <div className="mb-5 rounded-xl border border-teal/30 bg-teal/5 p-4 text-sm">
+        <p className="font-semibold">Procesar {bulkIds.length} OCR con sus propuestas individuales</p>
+        <p className="mt-1 text-muted-foreground">Cada factura conserva sus propios datos, cuenta sugerida y criterio fiscal guardado. Los casos con datos insuficientes quedarán pendientes para revisión individual.</p>
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" disabled={validating} onClick={handleApproveSelected}>{validating?'Procesando lote...':`Confirmar y procesar ${bulkIds.length}`}</Button>
+          <Button size="sm" variant="outline" disabled={validating} onClick={()=>setBulkIds([])}>Cancelar</Button>
+        </div>
+      </div>}
+      {reviewing && !bulkIds.length && (
         <div className="mb-5">
           <ReviewPanel
             key={`${reviewing.id}:${bulkIds.length}`}
@@ -594,7 +596,7 @@ export default function LectorGastos({ reviewPage = false }) {
         onRefresh={loadDocs}
         onProcessOcr={processOcr}
         onReview={doc=>{setBulkIds([]);openReviewPage(doc.id);}}
-        onBulkReview={ids=>{setBulkIds(ids);handleReview(documents.find(row=>row.id===ids[0]));}}
+        onBulkReview={ids=>{setBulkIds(ids);setBulkProgress(null);setReviewing(null);setReviewError('');}}
         busy={validating}
         onWithdraw={handleWithdraw}
         processingIds={processingIds}
