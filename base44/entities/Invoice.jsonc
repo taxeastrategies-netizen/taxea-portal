@@ -5,6 +5,9 @@
     "source_confirmation_lock_token": {
       "type": "string"
     },
+    "source_confirmation_lock_recovery": {
+      "type": "object"
+    },
     "source_confirmation_lock_started_at": {
       "type": "string"
     },
