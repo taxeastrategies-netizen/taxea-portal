@@ -53,7 +53,15 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
     if (['rejected', 'cancelled_by_client', 'replacement_requested'].includes(doc.status)) {
       return { status: 409, json: { error: 'Documento archivado o rechazado: no se creará otra factura.' } };
     }
-    const resumed = await resumeExistingOcr(svc, user, doc, invoiceType, confirmFiscalReview, postInvoice, SCHEMA_VERSION);
+    const resumed = await resumeExistingOcr(svc, user, doc, invoiceType, confirmFiscalReview, postInvoice, SCHEMA_VERSION,
+      !recoveryOnly ? async invoice => {
+        const response = await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
+          company_id:doc.company_id,invoice_id:invoice.id,criteria:{...(form.fiscal_criteria || {}),
+            activityId:form.fiscal_activity_id || undefined}});
+        const result=response?.data??response;
+        if(!result?.success) throw new Error(result?.error || 'No se pudo completar el documento.');
+        return result.invoice;
+      } : null);
     if (resumed) return resumed;
     if (recoveryOnly) return { status: 409, json: { error: 'No existe factura enlazada para recuperar. No se creó ninguna.' } };
     return await approveNew(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview);
@@ -89,7 +97,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
 
   const numeroFactura = invoiceType === 'emitida'
     ? (form.numero_factura || extractedData?.numero_factura || '')
-    : (extractedData?.numero_factura || form.numero_factura || '');
+    : (form.numero_factura || extractedData?.numero_factura || '');
 
   if (!numeroFactura) {
     return { status: 400, json: { error: 'El numero de factura es obligatorio' } };
@@ -115,44 +123,13 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     return { status: 400, json: { error: 'Base imponible negativa solo permitida en facturas rectificativas. Marca la opción es_rectificativa.' } };
   }
 
-  // La aprobación OCR utiliza la misma evaluación que la factura manual.
-  let fiscalAssessment;
-  try {
-    const fiscalResponse = await base44.functions.invoke('fiscalOperations', {
-      action: 'evaluate', companyId: doc.company_id,
-      requireValidatedProfile: true, requireExactActivity: true,
-      activityId: form.fiscal_activity_id || undefined,
-      direction: invoiceType === 'emitida' ? 'ingreso' : 'gasto',
-      operationDate: fechaEmision,
-      base: baseImponible,
-      taxRate: Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto),
-      taxAmount: Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto),
-      withholdingRate: Number(form.retencion_irpf || 0),
-      counterpartyIsWithholdingAgent: Number(form.retencion_irpf || 0) > 0,
-    });
-    fiscalAssessment = (fiscalResponse?.data || fiscalResponse)?.evaluation;
-  } catch (fiscalError) {
-    console.error('[approveOcrDocument] Fiscal check failed:', fiscalError.message);
-    return { status: 503, json: { error: 'No se pudo verificar el encuadramiento fiscal. El documento OCR sigue pendiente y no se ha creado una factura.' } };
-  }
-  const pendingReview = !fiscalAssessment
-    || !['ready', 'review_required'].includes(fiscalAssessment.status)
-    || confirmFiscalReview !== true
-    || !ADMIN_ROLES.includes(user.role);
-  if (!pendingReview && (!['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic', 'comerciante_minorista_igic'].includes(fiscalAssessment.regime)
-    || fiscalAssessment.accounting?.reverseCharge || !['iva', 'igic'].includes(fiscalAssessment.taxKind))) {
-    return { status: 422, json: { error: 'Régimen u operación especial pendiente de revisión del asesor; el documento OCR se conserva sin contabilizar.' } };
-  }
-  if (!pendingReview && fiscalAssessment.operationType === 'exempt_limited' && (!fiscalAssessment.exemptionKey || !fiscalAssessment.legalBasis)) {
-    return { status: 422, json: { error: 'Falta clave de exención o fundamento legal confirmado por el asesor.' } };
-  }
   const sourceTotal = Number(invoiceType === 'emitida' ? form.total_factura : form.total);
-  if (!Number.isFinite(sourceTotal)
-    || (!pendingReview && Math.abs(sourceTotal - fiscalAssessment.total) > 0.02)
-    || (!pendingReview && Math.abs(Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto) - fiscalAssessment.taxRate) > 0.0001)
-    || (!pendingReview && Math.abs(Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto) - fiscalAssessment.taxAmount) > 0.02)) {
-    return { status: 422, json: { error: 'Los importes OCR no coinciden con el perfil fiscal validado. Revisa base, tipo, cuota, retención y total antes de aprobar.' } };
-  }
+  const sourceQuota = Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto);
+  const rate = Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto);
+  const withholding = Number(form.importe_retencion ?? Math.round(baseImponible * Number(form.retencion_irpf || 0)) / 100);
+  if (![sourceTotal,sourceQuota,rate,withholding].every(Number.isFinite)
+    || Math.abs(sourceTotal - Math.round((baseImponible + sourceQuota - withholding)*100)/100) > 0.02)
+    return {status:422,json:{error:'Base, cuota, retención y total no cuadran. Corrige los importes en este mismo OCR.'}};
 
   // 4. Build invoice data
   const year = new Date(fechaEmision).getFullYear();
@@ -231,27 +208,18 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     };
   }
 
-  if (!pendingReview) Object.assign(invoiceData, {
-    indirect_tax_kind: fiscalAssessment.taxKind, fiscal_treatment: fiscalAssessment.operationType,
-    fiscal_regime: fiscalAssessment.regime, fiscal_activity_id: fiscalAssessment.activityId,
-    fiscal_rule_set_version: fiscalAssessment.ruleSetVersion, fiscal_review_status: 'validado',
-    fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email,
-    fiscal_exemption_key: fiscalAssessment.exemptionKey, fiscal_legal_basis: fiscalAssessment.legalBasis,
-    deductible_tax_amount: fiscalAssessment.deductibleTax,
-    non_deductible_tax_amount: fiscalAssessment.nonDeductibleTax,
-  });
   invoiceData.ocr_document_id = doc.id;
+  invoiceData.fiscal_activity_id = form.fiscal_activity_id || '';
+  invoiceData.indirect_tax_kind = form.fiscal_criteria?.taxKind || undefined;
   if (manualAccount) {
     invoiceData.revenue_expense_account_code = manualAccount.code;
     invoiceData.revenue_expense_account_id = manualAccount.id;
   }
   invoiceData.accounting_review_status = 'pendiente_revision';
   invoiceData.accounting_schema_version = SCHEMA_VERSION;
-  if (pendingReview) Object.assign(invoiceData, {
-    fiscal_review_status: 'pendiente_revision', estado_contable: 'en_revision',
-    fiscal_activity_id: form.fiscal_activity_id || fiscalAssessment?.activityId || '',
-    accounting_migration_hold: true, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1',
-  });
+  invoiceData.fiscal_review_status = 'pendiente_revision';
+  invoiceData.accounting_migration_hold = true;
+  invoiceData.accounting_migration_hold_reason = 'SOURCE_CHECK_PENDING';
 
   // Remove undefined keys
   Object.keys(invoiceData).forEach(k => {
@@ -259,25 +227,8 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   });
 
   // 5. Create the Invoice with service role (bypasses RLS)
-  console.log('[approveOcrDocument] Creating invoice for company:', doc.company_id, 'type:', invoiceType, 'fiscalStatus:', fiscalAssessment?.status);
-  invoiceData.fiscalAssessment = JSON.stringify({
-    status: fiscalAssessment?.status || 'blocked',
-    treatment: fiscalAssessment?.operationType || '',
-    confidence: fiscalAssessment?.confidence || 0,
-    alerts: fiscalAssessment?.alerts || [],
-    appliedRules: fiscalAssessment?.reasons || [],
-    explanation: 'Evaluación del motor fiscal unificado, revisada al aprobar el OCR.',
-  });
-  if (!pendingReview && invoiceType === 'emitida') {
-    try {
-      const issuer = await base44.asServiceRole.entities.Company.get(doc.company_id);
-      invoiceData.qr_url = buildAeatQrUrl(issuer, invoiceData);
-      invoiceData.qr_mode = 'no_verifactu';
-      invoiceData.qr_spec_version = 'AEAT-QR-0.5.0';
-    } catch (qrError) {
-      return { status: 422, json: { error: qrError.message || 'No se pudo preparar el QR tributario.' } };
-    }
-  }
+  console.log('[approveOcrDocument] Confirming source document:', doc.id);
+  invoiceData.fiscalAssessment = JSON.stringify({source:'single_ocr_check'});
   const duplicates = await findFinancialDuplicates(base44.asServiceRole, doc, invoiceData);
   if (duplicates.length) {
     await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
@@ -299,37 +250,18 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   });
   const inv = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, created);
   console.log('[approveOcrDocument] Invoice created:', inv.id);
-  if (pendingReview) {
-    await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
-      status: 'review_required', linkedInvoiceId: inv.id,
-      safeErrorMessage: 'Extracción OCR conservada; pendiente de validación fiscal del asesor. Sin QR ni asiento.',
-      lastStatusChangedAt: new Date().toISOString(),
-      auditTrail: [...(Array.isArray(doc.auditTrail) ? doc.auditTrail : []), JSON.stringify({
-        action: 'pendiente_revision_fiscal', invoiceId: inv.id, userEmail: user.email,
-        manualAccount: manualAccount?.code || 'none', timestamp: new Date().toISOString(),
-      })],
-    });
-    return { status: 200, json: { success: true, review_required: true, invoiceId: inv.id,
-      message: 'Factura guardada para revisión fiscal, sin emitir ni contabilizar.' } };
-  }
+  let completed;
   try {
-    await base44.asServiceRole.entities.InvoiceTaxLine.create({
-      companyId: doc.company_id, invoiceId: inv.id, lineNumber: 1,
-      operationDate: fechaEmision, receiptDate: invoiceType === 'recibida' ? fechaRecepcion : undefined,
-      taxKind: fiscalAssessment.taxKind, regime: fiscalAssessment.regime,
-      operationType: fiscalAssessment.operationType, activityId: fiscalAssessment.activityId,
-      exemptionKey: fiscalAssessment.exemptionKey, legalBasis: fiscalAssessment.legalBasis,
-      base: fiscalAssessment.base, rate: fiscalAssessment.taxRate, quota: fiscalAssessment.taxAmount,
-      deductibleQuota: fiscalAssessment.deductibleTax, nonDeductibleQuota: fiscalAssessment.nonDeductibleTax,
-      deductiblePercent: fiscalAssessment.deductiblePercent,
-      deductible: invoiceType === 'recibida' && fiscalAssessment.nonDeductibleTax === 0,
-      source: 'ocr', reviewStatus: 'validado', reviewedAt: new Date().toISOString(),
-      reviewedBy: user.email, ruleSetVersion: fiscalAssessment.ruleSetVersion, schemaVersion: SCHEMA_VERSION,
-    });
-  } catch (taxLineError) {
-    await base44.asServiceRole.entities.Invoice.update(inv.id, { estado_contable: 'requiere_correccion', accounting_review_status: 'requiere_correccion', accounting_migration_hold: true, accounting_migration_hold_reason: 'Falló el registro fiscal OCR.' });
-    await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, { status: 'review_required', linkedInvoiceId: inv.id, safeErrorMessage: 'Factura conservada sin contabilizar: falta su línea fiscal.' });
-    return { status: 503, json: { error: 'La factura se conservó sin contabilizar; falta su línea fiscal y requiere revisión.', invoiceId: inv.id } };
+    const response=await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
+      company_id:doc.company_id,invoice_id:inv.id,
+      criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined}});
+    completed=response?.data??response;
+    if(!completed?.success) throw new Error(completed?.error || 'No se pudo completar el asiento.');
+  } catch(error) {
+    const detail=error?.response?.data?.error || error.message || 'Error al confirmar el documento.';
+    await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id,{status:'review_required',
+      linkedInvoiceId:inv.id,safeErrorMessage:detail,lastStatusChangedAt:new Date().toISOString()});
+    return {status:Number(error?.response?.status || error.status)||422,json:{error:detail,invoiceId:inv.id}};
   }
 
   await base44.asServiceRole.functions.invoke('syncInvoiceContacts', {
@@ -337,64 +269,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     invoiceId: inv.id,
   }).catch((error) => console.warn('[approveOcrDocument] Contact sync failed:', error?.message || error));
 
-  let posting;
-  try {
-    posting = await postInvoice(base44.asServiceRole, doc.company_id, inv, user.email, {
-      ocrDocumentId: doc.id,
-      source: 'OCR',
-      status: 'confirmado',
-    });
-  } catch (postingError) {
-    await base44.asServiceRole.entities.Invoice.update(inv.id, {
-      estado_contable: 'requiere_correccion',
-      accounting_review_status: 'requiere_correccion',
-      comentarios: `Error al generar el asiento OCR: ${postingError.message}`,
-    });
-    await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
-      status: 'review_required',
-      linkedInvoiceId: inv.id,
-      safeErrorMessage: `La factura se guardó, pero el asiento no pudo generarse: ${postingError.message}`,
-      lastStatusChangedAt: new Date().toISOString(),
-    });
-    return {
-      status: 422,
-      json: {
-        error: 'La factura se ha conservado, pero el asiento contable necesita corrección manual.',
-        detail: postingError.message,
-        invoiceId: inv.id,
-      },
-    };
-  }
-
-  // 6. Build audit trail entry
-  const auditEntry = JSON.stringify({
-    action: 'contabilizado',
-    userId: user.id,
-    userEmail: user.email,
-    timestamp: new Date().toISOString(),
-    prevStatus: doc.status,
-    newStatus: 'accounted',
-    detail: `invoice=${inv.id} journalEntry=${posting.entry.id} type=${invoiceType} schema=${SCHEMA_VERSION} manualAccount=${manualAccount?.code || 'none'}`,
-    source: 'approveOcrDocument',
-  });
-
-  const existingTrail = Array.isArray(doc.auditTrail) ? doc.auditTrail : [];
-  const now = new Date().toISOString();
-
-  // 7. Update the OCR document with service role
-  await base44.asServiceRole.entities.OcrInvoiceDocument.update(doc.id, {
-    status: 'accounted',
-    accountedAt: now,
-    linkedInvoiceId: inv.id,
-    linkedJournalEntryId: posting.entry.id,
-    accountingSchemaVersion: SCHEMA_VERSION,
-    reviewedAt: now,
-    lastStatusChangedAt: now,
-    reviewedByAdminId: user.id,
-    auditTrail: [...existingTrail, auditEntry],
-  });
-
-  console.log('[approveOcrDocument] OCR document updated:', doc.id);
+  const posting = {entry:{id:completed.journalEntryId},proposal:null};
 
   // 8. Create timeline event
   try {
@@ -526,13 +401,9 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Documento OCR no encontrado' }, { status: 404 });
     }
 
-    // 1.5. Ownership check: non-admin users can only approve their own company's documents
-    const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-    if (!isAdmin && doc.company_id !== user.data?.company_id) {
-      return Response.json({ error: 'Forbidden: document does not belong to your company' }, { status: 403 });
-    }
+    // approveOne verifica acceso real a la empresa, también para usuarios autorizados.
 
-    const res = await approveOne(base44, user, doc, form, invoiceType, extractedData, body.confirm_fiscal_review === true);
+    const res = await approveOne(base44, user, doc, form, invoiceType, extractedData, true);
     return Response.json(res.json, { status: res.status });
   } catch (error) {
     console.error('[approveOcrDocument] Error:', error.message, error.stack);
