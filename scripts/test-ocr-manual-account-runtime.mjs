@@ -96,11 +96,12 @@ const preserved = context.__bulkForm({ base_imponible: 100, tipo_impuesto: 7, cu
 assert.equal(preserved.total, 89);
 assert.equal(preserved.cuota_impuesto, 7);
 assert.equal(preserved.importe_retencion, 18);
-async function invoke(docId, invoiceType, account, confirm = false) {
+async function invoke(docId, invoiceType, account, confirm = false, suggested = '', invoiceNumber = 'G-1') {
   const form = invoiceType === 'emitida'
-    ? { numero_factura: 'F-1', fecha_emision: '2026-10-02', base_imponible: 100, tipo_iva: 0, cuota_iva: 0, total_factura: 100 }
-    : { numero_factura: 'G-1', fecha: '2026-10-02', fecha_recepcion: '2026-10-03', base_imponible: 100, tipo_impuesto: 0, cuota_impuesto: 0, total: 100 };
+    ? { numero_factura: invoiceNumber === 'G-1' ? 'F-1' : invoiceNumber, fecha_emision: '2026-10-02', base_imponible: 100, tipo_iva: 0, cuota_iva: 0, total_factura: 100 }
+    : { numero_factura: invoiceNumber, fecha: '2026-10-02', fecha_recepcion: '2026-10-03', base_imponible: 100, tipo_impuesto: 0, cuota_impuesto: 0, total: 100 };
   if (account !== undefined) form.cuenta_contable_manual = account;
+  if (suggested) form.cuenta_pgc = suggested;
   const response = await handler(new Request('https://taxea.test/approveOcrDocument', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ docId, form, invoiceType, extractedData: {}, confirm_fiscal_review: confirm }),
@@ -138,6 +139,18 @@ const defaultExpense = await invoke('expense-default', 'recibida');
 assert.equal(defaultExpense.status, 200);
 assert.equal(records.Invoice[2].revenue_expense_account_code, undefined);
 assert.equal(postingCount, 3);
+records.OcrInvoiceDocument.push(
+  {id:'expense-ai-a',company_id:'company-a',documentType:'expense_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]},
+  {id:'expense-ai-b',company_id:'company-a',documentType:'expense_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]},
+  {id:'expense-ai-invalid',company_id:'company-a',documentType:'expense_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]},
+);
+records.AccountingAccount.push({id:'a-602',companyId:'company-a',code:'60200000',type:'gasto',status:'activa'});
+assert.equal((await invoke('expense-ai-a','recibida',undefined,false,'602','G-AI-1')).status,200);
+assert.equal((await invoke('expense-ai-b','recibida',undefined,false,'629','G-AI-2')).status,200);
+assert.equal(records.Invoice.find(row=>row.numero_factura==='G-AI-1').revenue_expense_account_code,'60200000');
+assert.equal(records.Invoice.find(row=>row.numero_factura==='G-AI-2').revenue_expense_account_code,'62900000');
+assert.equal((await invoke('expense-ai-invalid','recibida',undefined,false,'705','G-AI-3')).status,422);
+assert.equal(records.Invoice.some(row=>row.numero_factura==='G-AI-3'),false);
 
 user = {id:'advisor-a',email:'advisor@test.invalid',role:'admin',data:{company_id:'company-a'}};
 records.OcrInvoiceDocument.push({id:'income-approved',company_id:'company-a',documentType:'income_invoice',status:'review_required',uploadedAt:'2026-10-03',auditTrail:[]});
