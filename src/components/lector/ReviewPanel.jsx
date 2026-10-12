@@ -5,9 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import FiscalAssessmentPanel from './FiscalAssessmentPanel';
+import OcrFiscalFields from './OcrFiscalFields';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [] }) {
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '' }) {
   const [form, setForm] = useState(() => ({ ...doc.formData, fiscal_activity_id: doc.formData?.fiscal_activity_id || (fiscalActivities.length === 1 ? fiscalActivities[0].id : '') }));
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
@@ -23,16 +23,16 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-secondary/40">
         <div>
           <p className="font-jakarta font-semibold text-foreground text-sm">{doc.file?.name || 'Documento'}</p>
-          <p className="text-xs text-muted-foreground">Revisión humana obligatoria</p>
+          <p className="text-xs text-muted-foreground">{bulkCount ? `Criterio común para ${bulkCount} documentos · los importes individuales no se cambian` : 'Una aprobación: factura, libro y asiento contable'}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={loading} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
+          <Button size="sm" variant="outline" disabled={loading || doc.invoiceOnly || bulkCount > 0} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
             <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
           <Button size="sm" disabled={loading || !!invalidManualAccount || missingFiscalActivity} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
-            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : 'Aprobar y guardar'}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />} {loading ? 'Guardando...' : (bulkCount ? `Aprobar lote (${bulkCount})` : 'Aprobar y contabilizar')}
           </Button>
-          <button onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
+          <button disabled={loading} onClick={onCancel} className="ml-1 text-muted-foreground hover:text-foreground text-xs">✕</button>
         </div>
       </div>
 
@@ -150,22 +150,10 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
             </F>
           )}
 
-          {/* Panel de evaluación fiscal automática */}
-          <FiscalAssessmentPanel
-            ocrData={doc.extracted}
-            companyId={companyId}
-            direction={tipo === 'ingresos' ? 'ingreso' : 'gasto'}
-            activityId={form.fiscal_activity_id}
-            operationDate={tipo === 'ingresos' ? form.fecha_emision : form.fecha}
-            counterpartyName={tipo === 'ingresos' ? form.cliente_nombre : form.proveedor_cliente}
-            counterpartyTaxId={tipo === 'ingresos' ? form.cliente_nif : doc.extracted?.nif_proveedor}
-            invoiceBase={parseFloat(form.base_imponible) || 0}
-            invoiceTaxRate={parseFloat(tipo === 'ingresos' ? form.tipo_iva : form.tipo_impuesto) || 0}
-            invoiceTaxAmount={parseFloat(tipo === 'ingresos' ? form.cuota_iva : form.cuota_impuesto) || 0}
-            invoiceWithholdingRate={parseFloat(form.retencion_irpf) || 0}
-            invoiceWithholdingAmount={parseFloat(form.importe_retencion) || 0}
-            esProveedorExtranjero={doc.extracted?.es_proveedor_extranjero}
-          />
+          {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+          <OcrFiscalFields value={form.fiscal_criteria || {}} onChange={value=>set('fiscal_criteria',value)}
+            context={fiscalContext} direction={tipo==='ingresos'?'ingreso':'gasto'} activityId={form.fiscal_activity_id}
+            sourceTaxRate={tipo==='ingresos'?form.tipo_iva:form.tipo_impuesto} disabled={loading} />
 
           {/* Campos según tipo */}
           {tipo === 'ingresos' ? (
@@ -240,6 +228,7 @@ const CATEGORIAS = [
 function GastosFields({ form, set }) {
   return (
     <div className="grid grid-cols-2 gap-3">
+      <F label="Nº Factura"><Input value={form.numero_factura || ''} onChange={e=>set('numero_factura',e.target.value)} className="h-8 text-sm" /></F>
       <F label="Proveedor" col2><Input value={form.proveedor_cliente || ''} onChange={e => set('proveedor_cliente', e.target.value)} className="h-8 text-sm" /></F>
       <F label="NIF/CIF proveedor"><Input value={form.nif_proveedor || ''} onChange={e => set('nif_proveedor', e.target.value)} className="h-8 text-sm" /></F>
       <F label="Fecha"><Input type="date" value={form.fecha || ''} onChange={e => set('fecha', e.target.value)} className="h-8 text-sm" /></F>
