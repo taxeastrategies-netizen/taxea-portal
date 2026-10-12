@@ -409,7 +409,7 @@ Deno.serve(async (req) => {
     return Response.json(res.json, { status: res.status });
   } catch (error) {
     console.error('[approveOcrDocument] Error:', error.message, error.stack);
-    const status = Number(error?.status);
-    return Response.json({ error: error.message || 'Error interno del servidor' }, { status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500 });
+    const status = Number(error?.response?.status || error?.status);
+    return Response.json({ error: error?.response?.data?.error || error.message || 'Error interno del servidor' }, { status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500 });
   }
 });
