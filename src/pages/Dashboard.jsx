@@ -3,7 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   Activity, AlertTriangle, ArrowRight, BarChart3, Bell,
-  Calendar, Calculator, CheckCircle, ChevronRight, Clock, Database,
+  Calendar, Calculator, CheckCircle, ChevronRight, Database,
   Euro, FileText, Heart, Landmark, MapPinned, RefreshCw, TrendingDown, TrendingUp,
   Upload, Users, Wallet,
 } from 'lucide-react';
@@ -23,7 +23,7 @@ const LIVE_ENTITIES = [
   'BankAccount', 'BankTransaction', 'TaxModel', 'TaxObligation', 'TaxPeriod',
   'TaxFiling', 'Document', 'Employee', 'HRAbsence', 'HRDocument',
   'LaborOcrDocument', 'PayrollExtraction', 'SocialSecurityExtraction',
-  'Task', 'FiscalError', 'Notification',
+  'FiscalError', 'Notification',
 ];
 
 const TAX_TOOLS = [
@@ -223,10 +223,9 @@ export default function Dashboard() {
 
       {error && <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" /><div className="flex-1"><p className="font-semibold">Actualización incompleta</p><p className="text-xs mt-0.5">{error} Se mantiene la última información disponible.</p></div><Button variant="outline" size="sm" onClick={() => loadDashboard({ quiet: true })}>Reintentar</Button></div>}
 
-      {(operations.criticalErrors > 0 || operations.overdueTasks > 0 || derived.overdueObligations.length > 0 || derived.urgentObligations.length > 0) && (
+      {(operations.criticalErrors > 0 || derived.overdueObligations.length > 0 || derived.urgentObligations.length > 0) && (
         <div className="flex flex-wrap gap-2">
           {operations.criticalErrors > 0 && <Link to="/errores" className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-lg"><AlertTriangle className="w-3.5 h-3.5" />{operations.criticalErrors} incidencia(s) crítica(s)</Link>}
-          {operations.overdueTasks > 0 && <Link to="/tareas" className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-lg"><Clock className="w-3.5 h-3.5" />{operations.overdueTasks} tarea(s) vencida(s)</Link>}
           {derived.overdueObligations.length > 0 && <Link to="/tax-accounting/obligaciones" className="inline-flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-3 py-1.5 rounded-lg"><Calendar className="w-3.5 h-3.5" />{derived.overdueObligations.length} obligación(es) vencida(s)</Link>}
           {derived.urgentObligations.length > 0 && <Link to="/tax-accounting/obligaciones" className="inline-flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-semibold px-3 py-1.5 rounded-lg"><Calendar className="w-3.5 h-3.5" />{derived.urgentObligations.length} vencimiento(s) en 15 días</Link>}
         </div>
