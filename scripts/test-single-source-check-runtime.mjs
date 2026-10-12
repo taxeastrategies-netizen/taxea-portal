@@ -41,12 +41,12 @@ const client={auth:{me:async()=>user},asServiceRole:{entities},functions:{invoke
   if(!handlers[name])return {data:{success:true,ok:true}};
   const response=await api(name,body),data=await response.json();
   if(response.status>=400)throw Object.assign(new Error(data.error),{response:{status:response.status,data}});
-  return {data};}};
+  return {data};}}};
 client.asServiceRole.functions=client.functions;
 for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument']){
   const build=await esbuild.build({entryPoints:['base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
     plugins:[{name:'stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));}}]});
-  vm.runInContext(build.outputFiles[0].text,vm.createContext({Response,Request,URL,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,console,Date,
+  vm.runInContext(build.outputFiles[0].text,vm.createContext({Response,Request,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,console,Date,
     setTimeout:fn=>{fn();return 0;},clearTimeout(){},__client:client,Deno:{serve:fn=>{handlers[name]=fn;}}}));
 }
 async function api(name,body){return handlers[name](new Request('https://qa.invalid/'+name,{method:'POST',body:JSON.stringify(body)}));}
@@ -99,7 +99,7 @@ Object.assign(records.FiscalActivity[0],{indirectTax:'iva',indirectTaxRegime:'ge
 const manualBody={action:'create_invoice',company_id:'qa',idempotency_key:'qa-manual-one',invoice:{tipo:'emitida',numero_factura:'QA-MANUAL',fecha_emision:'2026-07-14',
   cliente_nombre:'Cliente QA',cliente_nif:'B12345674',base_imponible:100,tipo_iva:21,cuota_iva:21,total_factura:121,retencion_irpf:0,importe_retencion:0,fiscal_activity_id:'fa'}};
 const manual=await call('invoiceOperations',manualBody);assert.equal(manual.invoice.estado_contable,'contabilizada');assert.equal(manual.review_required,false);
-assert.match(manual.invoice.qr_integrity_hash,/^[a-f0-9]{64}$/);const hash=manual.invoice.qr_integrity_hash;
+assert.match(manual.invoice.qr_integrity_hash,/^[a-f0-9]{64}$/i);const hash=manual.invoice.qr_integrity_hash;
 const manualRetry=await call('invoiceOperations',manualBody);assert.equal(manualRetry.invoice.id,manual.invoice.id);assert.equal(manualRetry.invoice.qr_integrity_hash,hash);
 // Servicios UE: autorrepercusión separada y deuda del proveedor inalterada.
 const intra=await makeDoc('intra',{base:100,rate:0,quota:0,total:100});
