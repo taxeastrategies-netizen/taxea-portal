@@ -18,8 +18,8 @@ const STATUS_CONFIG = {
 const FILTERS = [
   { key: 'all',     label: 'Todos',        match: () => true },
   { key: 'pending', label: 'Pendientes',   match: (s) => s === 'pending' },
-  { key: 'active',  label: 'En revision',  match: (s) => ['queued_for_analysis','processing','review_required','analysis_failed'].includes(s) },
-  { key: 'done',    label: 'Procesados',   match: (s) => ['validated','accounted'].includes(s) },
+  { key: 'active',  label: 'En revision',  match: (s) => ['queued_for_analysis','processing','review_required','validated','analysis_failed'].includes(s) },
+  { key: 'done',    label: 'Procesados',   match: (s) => s==='accounted' },
   { key: 'closed',  label: 'Rechazados',   match: (s) => ['rejected','replacement_requested','cancelled_by_client'].includes(s) },
 ];
 
@@ -38,12 +38,21 @@ export default function OcrDocumentTable({
   onWithdraw,
   processingIds,
   emptyMessage,
+  onBulkReview,
+  busy=false,
 }) {
   const [filter, setFilter] = useState('all');
+  const [selected,setSelected]=useState(new Set());
+  const [page,setPage]=useState(0);
 
   const activeFilter = FILTERS.find(f => f.key === filter);
   const filtered = documents.filter(d => activeFilter.match(d.status));
 
+  const selectable=filtered.filter(doc=>doc.status==='review_required');
+  const selectedIds=selectable.filter(doc=>selected.has(doc.id)).map(doc=>doc.id);
+  const pageCount=Math.max(1,Math.ceil(filtered.length/50)),currentPage=Math.min(page,pageCount-1);
+  const visible=filtered.slice(currentPage*50,(currentPage+1)*50);
+  const toggle=id=>setSelected(previous=>{const next=new Set(previous);next.has(id)?next.delete(id):next.add(id);return next;});
   const counts = FILTERS.reduce((acc, f) => {
     acc[f.key] = documents.filter(d => f.match(d.status)).length;
     return acc;
@@ -67,7 +76,7 @@ export default function OcrDocumentTable({
         {FILTERS.map(f => (
           <button
             key={f.key}
-            onClick={() => setFilter(f.key)}
+            onClick={() => {setFilter(f.key);setPage(0);}}
             className={cn(
               'px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors',
               filter === f.key ? 'bg-teal text-white' : 'text-muted-foreground hover:bg-secondary'
@@ -78,6 +87,14 @@ export default function OcrDocumentTable({
         ))}
       </div>
 
+      {onBulkReview && selectable.length>0 && <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b text-xs">
+        <label className="flex items-center gap-2"><input type="checkbox" disabled={busy} checked={selectedIds.length===selectable.length}
+          onChange={event=>setSelected(event.target.checked?new Set(selectable.map(row=>row.id)):new Set())} />
+          Seleccionar todas las pendientes del filtro ({selectable.length})
+        </label>
+        <button disabled={busy || !selectedIds.length} className="rounded-md bg-teal px-3 py-2 text-white disabled:opacity-40"
+          onClick={()=>onBulkReview(selectedIds)}>Revisar y aprobar lote ({selectedIds.length})</button>
+      </div>}
       {/* List */}
       {loading ? (
         <div className="py-10 text-center">
@@ -90,13 +107,14 @@ export default function OcrDocumentTable({
         </div>
       ) : (
         <div className="divide-y divide-border max-h-[600px] overflow-y-auto">
-          {filtered.map(doc => {
+          {visible.map(doc => {
             const cfg = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
             const Icon = fileIcon(doc.originalFileName);
             const isProcessing = processingIds?.has(doc.id);
             return (
               <div key={doc.id} className="px-5 py-3 hover:bg-secondary/20 transition-colors">
                 <div className="flex items-center gap-3">
+                  {onBulkReview && doc.status==='review_required' && <input aria-label={`Seleccionar ${doc.originalFileName}`} type="checkbox" disabled={busy} checked={selected.has(doc.id)} onChange={()=>toggle(doc.id)} />}
                   <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -132,8 +150,8 @@ export default function OcrDocumentTable({
                         {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                       </button>
                     )}
-                    {doc.status === 'review_required' && (
-                      <button onClick={() => onReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisar y validar">
+                    {['review_required','validated'].includes(doc.status) && (
+                      <button disabled={busy} onClick={() => onReview(doc)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Revisar y validar">
                         <CheckCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -158,6 +176,11 @@ export default function OcrDocumentTable({
           })}
         </div>
       )}
+      {filtered.length>50 && <div className="flex items-center justify-between border-t px-5 py-3 text-xs">
+        <button disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>Anterior</button>
+        <span>Página {currentPage+1} de {pageCount} · {filtered.length} documentos</span>
+        <button disabled={currentPage+1>=pageCount} onClick={()=>setPage(currentPage+1)}>Siguiente</button>
+      </div>}
     </div>
   );
 }
