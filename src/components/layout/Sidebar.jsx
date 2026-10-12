@@ -4,7 +4,7 @@ import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
-  Shield, CheckSquare, Clock, AlertTriangle, BarChart2,
+  Shield, Clock, AlertTriangle, BarChart2,
   Sparkles, Brain, Lightbulb, CloudUpload, MessageCircle,
   ChevronDown, FileText, TrendingUp, TrendingDown, FileCheck, Receipt,
   BookOpen, ScanLine, ScanText, Calendar,
@@ -198,7 +198,6 @@ const DEPT_GROUPS = [
 const DEPARTMENTS = DEPT_GROUPS.flatMap(g => g.depts);
 
 const UTILS_ITEMS = [
-  { to: '/tareas', label: 'Tareas', icon: CheckSquare },
   { to: '/sugerencias', label: 'Mejoras', icon: Lightbulb },
   { to: '/suscripcion', label: 'Suscripción', icon: CreditCard },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
