@@ -115,7 +115,7 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
               placeholder={tipo === 'ingresos' ? 'Ej. 70500000' : 'Ej. 62900000'}
               aria-invalid={!!invalidManualAccount}
             />
-            <p className="text-xs text-muted-foreground">Si la indicas, sustituye la clasificación automática en la factura y su asiento. Usa una cuenta activa de tu plan contable (3 a 8 dígitos; se completa a 8 con ceros).</p>
+            <p className="text-xs text-muted-foreground">Si la indicas, prevalece sobre la cuenta propuesta por la IA. Si la dejas vacía, se usará la propuesta individual del OCR cuando sea válida. La cuenta manual debe estar activa en tu plan (3 a 8 dígitos).</p>
             {invalidManualAccount && <p className="text-xs text-red-600">Indica una cuenta PGC de {tipo === 'ingresos' ? 'ingresos (grupo 7)' : 'gastos (grupo 6)'} de 3 a 8 dígitos.</p>}
           </div>
 
