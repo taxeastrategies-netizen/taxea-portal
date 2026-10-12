@@ -472,11 +472,11 @@ export default function LectorGastos({ reviewPage = false }) {
   if (reviewPage) return (
     <OcrReviewWorkspace kind="recibidas" documents={documents} selectedId={selectedReviewId} loading={loading}
       busy={validating} message={reviewMessage} onNavigate={openReviewPage}
-      onExit={() => navigate('/tax-accounting/ocr-gastos')}>
+      onExit={() => navigate('/tax-accounting/lector-gastos')}>
       {reviewing && reviewing.id === selectedReviewId && <ReviewPanel key={reviewing.id} expanded
         doc={reviewing} fiscalContext={fiscalContext} error={reviewError} tipo="gastos"
         onApprove={handleValidate} onReject={handleReject}
-        onCancel={() => navigate('/tax-accounting/ocr-gastos')} loading={validating}
+        onCancel={() => navigate('/tax-accounting/lector-gastos')} loading={validating}
         companyId={company?.id} fiscalActivities={fiscalContext.activities || []} />}
     </OcrReviewWorkspace>
   );
