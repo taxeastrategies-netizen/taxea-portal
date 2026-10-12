@@ -33,7 +33,7 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   if (body.regime === 'comerciante_minorista_igic' && direction === 'ingreso' && !input.operationType) {
     body.operationType = 'exempt_limited';
     body.exemptionKey ||= 'IGIC_COMERCIANTE_MINORISTA';
-    body.legalBasis ||= 'Entregas comerciales del comerciante minorista: artículo 27 del texto refundido del IGIC (DLeg 1/2025); verificar vigencia y naturaleza de la operación.';
+    if(String(invoice.fecha_operacion || invoice.fecha_emision || '')>='2025-10-14') body.legalBasis ||= 'Entregas comerciales del comerciante minorista: artículo 27 del texto refundido del IGIC (DLeg 1/2025); verificar naturaleza de la operación.';
   }
   if (direction === 'gasto' && ['intra_services','intra_goods_current','intra_goods_investment'].includes(input.deductionCategory)) body.operationType = 'intra_eu_acquisition';
   if (direction === 'gasto' && ['reverse_charge','intra_eu_acquisition'].includes(body.operationType)) {
