@@ -1,263 +1,133 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { normalizedDate, normalizedNumber, sameInvoiceIdentity } from './duplicateIdentity.mjs';
 
-Deno.serve(async (req) => {
+const parseSource = raw => {
+  if (raw && typeof raw === 'object') return raw;
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+};
+const money = value => value == null || value === '' ? null : Number(value);
+const excludedOcr = new Set(['rejected', 'rechazada', 'cancelled_by_client', 'cancelled', 'eliminado']);
+const priority = record => record.entityType === 'Invoice' ? 0
+  : record.status === 'accounted' ? 1 : record.status === 'validated' ? 2 : 3;
+
+Deno.serve(async req => {
+  if (req.method !== 'POST') return Response.json({ error: 'Method not allowed' }, { status: 405 });
   try {
     const base44 = createClientFromRequest(req);
-    let user;
-    try { user = await base44.auth.me(); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await req.json();
-    const { company_id, scope, period_type, year, period_value } = body;
-
-    if (!company_id || !scope) {
-      return Response.json({ error: 'company_id and scope are required' }, { status: 400 });
-    }
-
-    const isAdmin = ['admin', 'super_admin'].includes(user.role);
-    const company = await base44.asServiceRole.entities.Company.get(company_id);
-    if (!company) return Response.json({ error: 'Empresa no encontrada' }, { status: 404 });
-    const email = String(user.email || '').trim().toLowerCase();
-    const authorized = (Array.isArray(company.usuarios_autorizados) ? company.usuarios_autorizados : []).map(value => String(value).trim().toLowerCase());
-    if (!isAdmin && (!email || (String(company.owner_email || '').trim().toLowerCase() !== email && !authorized.includes(email)))) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
+    const user = await base44.auth.me().catch(() => null);
+    if (!user || user.is_deleted === true || ['bloqueado', 'suspendido', 'eliminado'].includes(user.status))
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = await req.json().catch(() => ({}));
+    const companyId = body.company_id;
+    const scope = body.scope;
     const allowedScopes = new Set(['ocr_expense', 'ocr_income', 'invoices_emitida', 'invoices_recibida']);
-    if (!allowedScopes.has(scope)) {
-      return Response.json({ error: 'scope no válido' }, { status: 400 });
-    }
+    if (!companyId || !allowedScopes.has(scope))
+      return Response.json({ error: 'Empresa y alcance válidos son obligatorios.' }, { status: 400 });
+    const company = await base44.asServiceRole.entities.Company.get(companyId);
+    if (!company) return Response.json({ error: 'Empresa no encontrada' }, { status: 404 });
+    const admin = ['admin', 'super_admin'].includes(user.role);
+    const email = String(user.email || '').trim().toLowerCase();
+    const members = Array.isArray(company.usuarios_autorizados) ? company.usuarios_autorizados : [];
+    if (!admin && (!email || (String(company.owner_email || '').trim().toLowerCase() !== email
+      && !members.some(member => String(member).trim().toLowerCase() === email))))
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
 
-    // scope: 'ocr_expense' | 'ocr_income' | 'invoices_emitida' | 'invoices_recibida'
-    const periodType = period_type || 'all'; // 'month' | 'quarter' | 'all'
-    const filterYear = year ? parseInt(year) : null;
-    const periodValue = period_value || null; // '1'-'12' for month, 'T1'-'T4' for quarter
+    const direction = scope === 'ocr_income' || scope === 'invoices_emitida' ? 'emitida' : 'recibida';
+    const docType = direction === 'emitida' ? 'income_invoice' : 'expense_invoice';
+    const periodType = body.period_type || 'all';
+    const periodValue = body.period_value || null;
+    const filterYear = body.year ? Number(body.year) : null;
+    if (!['all', 'quarter', 'month'].includes(periodType)
+      || (periodType !== 'all' && (!Number.isInteger(filterYear) || !periodValue)))
+      return Response.json({ error: 'Periodo no válido.' }, { status: 400 });
 
-    // Helper: normalize strings for comparison
-    const normalize = (s) => (s || '').toString().trim().toUpperCase().replace(/[\s\-_./]/g, '').replace(/^0+/, '');
-    const parseAmount = (v) => {
-      if (v == null) return null;
-      const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
-      return isNaN(n) ? null : Math.round(n * 100) / 100;
+    const fetchAll = async (name, filter) => {
+      const result = [];
+      for (let skip = 0; ; skip += 200) {
+        const batch = await base44.asServiceRole.entities[name].filter(filter, '-created_date', 200, skip);
+        result.push(...batch);
+        if (batch.length < 200) return result;
+      }
     };
-
-    // Helper: get quarter from date
-    const getQuarter = (dateStr) => {
-      if (!dateStr) return null;
-      const m = new Date(dateStr).getMonth() + 1;
-      if (isNaN(m)) return null;
-      return m <= 3 ? 'T1' : m <= 6 ? 'T2' : m <= 9 ? 'T3' : 'T4';
-    };
-
-    const getMonth = (dateStr) => {
-      if (!dateStr) return null;
-      const m = new Date(dateStr).getMonth() + 1;
-      return isNaN(m) ? null : m;
-    };
-
-    const getYear = (dateStr) => {
-      if (!dateStr) return null;
-      const y = new Date(dateStr).getFullYear();
-      return isNaN(y) ? null : y;
-    };
-
-    // Helper: check if record matches period filter
-    const matchesPeriod = (dateStr) => {
+    const [invoices, docs] = await Promise.all([
+      fetchAll('Invoice', { company_id: companyId, tipo: direction }),
+      fetchAll('OcrInvoiceDocument', { company_id: companyId, documentType: docType }),
+    ]);
+    const activeInvoices = invoices.filter(invoice => !invoice.anulada);
+    const invoiceIds = new Set(activeInvoices.map(invoice => invoice.id));
+    const records = [
+      ...activeInvoices.map(invoice => ({
+        id: invoice.id, entityType: 'Invoice', source: 'invoice', companyId, direction,
+        number: invoice.numero_factura, date: invoice.fecha_emision,
+        taxId: direction === 'emitida' ? invoice.cliente_nif : invoice.proveedor_nif,
+        name: direction === 'emitida' ? invoice.cliente_nombre : invoice.proveedor_nombre,
+        total: money(invoice.total_factura), status: invoice.estado_contable || 'registrada',
+        originalFileName: null, linkedInvoiceId: null,
+      })),
+      ...docs.filter(doc => !excludedOcr.has(doc.status) && (!doc.linkedInvoiceId || !invoiceIds.has(doc.linkedInvoiceId)))
+        .map(doc => {
+          const source = parseSource(doc.extractedData);
+          return {
+            id: doc.id, entityType: 'OcrInvoiceDocument', source: 'ocr', companyId, direction,
+            number: source.numero_factura || source.numero,
+            date: direction === 'emitida' ? source.fecha_emision || source.fecha : source.fecha || source.fecha_emision,
+            taxId: direction === 'emitida' ? source.cliente_nif || source.nif_cliente : source.nif_proveedor,
+            name: direction === 'emitida' ? source.cliente_nombre || source.cliente : source.proveedor || source.proveedor_nombre,
+            total: money(source.total_factura ?? source.total),
+            status: doc.status, originalFileName: doc.originalFileName, linkedInvoiceId: doc.linkedInvoiceId || null,
+          };
+        }),
+    ];
+    const matchesPeriod = record => {
       if (periodType === 'all') return true;
-      const recYear = getYear(dateStr);
-      if (filterYear && recYear !== filterYear) return false;
-      if (periodType === 'month' && periodValue) {
-        return getMonth(dateStr) === parseInt(periodValue);
-      }
-      if (periodType === 'quarter' && periodValue) {
-        return getQuarter(dateStr) === periodValue;
-      }
-      return true;
+      const date = normalizedDate(record.date);
+      if (!date || Number(date.slice(0, 4)) !== filterYear) return false;
+      const month = Number(date.slice(5, 7));
+      return periodType === 'month' ? month === Number(periodValue)
+        : `T${Math.ceil(month / 3)}` === periodValue;
     };
-
-    // Helper: parse OCR extracted data
-    const parseExtracted = (raw) => {
-      if (!raw) return null;
-      if (typeof raw === 'object') return raw;
-      try { return JSON.parse(raw); } catch { return null; }
-    };
-
-    // Fetch all records with pagination
-    const fetchAll = async (entityName, filter) => {
-      let all = [];
-      let skip = 0;
-      while (true) {
-        const batch = await base44.asServiceRole.entities[entityName].filter(filter, '-created_date', 200, skip);
-        all = all.concat(batch);
-        if (batch.length < 200) break;
-        skip += 200;
-      }
-      return all;
-    };
-
-    let records = [];
-
-    if (scope === 'ocr_expense' || scope === 'ocr_income') {
-      const docType = scope === 'ocr_expense' ? 'expense_invoice' : 'income_invoice';
-      const docs = await fetchAll('OcrInvoiceDocument', { company_id, documentType: docType });
-
-      for (const doc of docs) {
-        const extracted = parseExtracted(doc.extractedData);
-        const dateStr = extracted?.fecha || extracted?.fecha_emision || '';
-        if (!matchesPeriod(dateStr)) continue;
-
-        const numero = extracted?.numero_factura || extracted?.numero || '';
-        const proveedor = extracted?.proveedor || extracted?.proveedor_nombre || '';
-        const cliente = extracted?.cliente_nombre || '';
-        const total = parseAmount(extracted?.total || extracted?.total_factura);
-        const base = parseAmount(extracted?.base_imponible);
-
-        records.push({
-          id: doc.id,
-          entityType: 'OcrInvoiceDocument',
-          numero: numero,
-          fecha: dateStr,
-          proveedor_cliente: proveedor || cliente,
-          total: total,
-          base: base,
-          status: doc.status,
-          linkedInvoiceId: doc.linkedInvoiceId,
-          originalFileName: doc.originalFileName,
-          source: 'ocr'
-        });
-      }
-    } else if (scope === 'invoices_emitida' || scope === 'invoices_recibida') {
-      const tipo = scope === 'invoices_emitida' ? 'emitida' : 'recibida';
-      const invoices = await fetchAll('Invoice', { company_id, tipo });
-
-      for (const inv of invoices) {
-        if (inv.anulada) continue; // skip annulled
-        if (!matchesPeriod(inv.fecha_emision)) continue;
-
-        const proveedor = inv.proveedor_nombre || '';
-        const cliente = inv.cliente_nombre || '';
-        const total = parseAmount(inv.total_factura);
-        const base = parseAmount(inv.base_imponible);
-
-        records.push({
-          id: inv.id,
-          entityType: 'Invoice',
-          numero: inv.numero_factura || '',
-          fecha: inv.fecha_emision || '',
-          proveedor_cliente: tipo === 'emitida' ? cliente : proveedor,
-          total: total,
-          base: base,
-          status: inv.estado_contable,
-          linkedInvoiceId: null,
-          originalFileName: null,
-          source: 'invoice'
-        });
+    const filtered = records.filter(matchesPeriod);
+    const buckets = new Map();
+    for (const record of filtered) {
+      const number = normalizedNumber(record.number);
+      const date = normalizedDate(record.date);
+      if (!number || !date) continue; // Never infer a duplicate from an amount alone.
+      const key = `${number}|︎${date}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(record);
+    }
+    const pairs = [];
+    for (const rows of buckets.values()) {
+      for (let i = 0; i < rows.length; i++) {
+        for (let j = i + 1; j < rows.length; j++) {
+          if (!sameInvoiceIdentity(rows[i], rows[j])) continue;
+          const [keep, candidate] = [rows[i], rows[j]].sort((left, right) => priority(left) - priority(right));
+          const view = record => ({
+            id: record.id, entityType: record.entityType, numero: record.number || '',
+            fecha: normalizedDate(record.date), proveedor_cliente: record.name || '',
+            nif_tercero: record.taxId || '', total: record.total, status: record.status,
+            originalFileName: record.originalFileName,
+          });
+          pairs.push({
+            groupKey: `${keep.id}:${candidate.id}`,
+            reason: 'Coinciden tercero, número y fecha de factura',
+            keep: view(keep), toDelete: [],
+            allItems: [{ ...view(keep), action: 'review' }, { ...view(candidate), action: 'review' }],
+          });
+        }
       }
     }
-
-    // Build fingerprint groups
-    // Group 1: by normalized invoice number + normalized provider/client
-    // Group 2: by date + total amount + provider/client (for records without invoice number)
-    const groupsByKey = {};
-
-    for (const rec of records) {
-      const numNorm = normalize(rec.numero);
-      const provNorm = normalize(rec.proveedor_cliente);
-
-      let groupKey = null;
-      let reason = '';
-
-      if (numNorm && provNorm) {
-        groupKey = `num:${numNorm}|prov:${provNorm}`;
-        reason = 'Mismo numero de factura y proveedor/cliente';
-      } else if (numNorm) {
-        groupKey = `num:${numNorm}`;
-        reason = 'Mismo numero de factura';
-      }
-
-      // If no invoice number, try date + amount + provider
-      if (!groupKey && rec.fecha && rec.total != null && provNorm) {
-        groupKey = `date:${rec.fecha}|amt:${rec.total}|prov:${provNorm}`;
-        reason = 'Misma fecha, importe y proveedor/cliente (sin numero de factura)';
-      }
-
-      if (!groupKey) continue;
-
-      if (!groupsByKey[groupKey]) groupsByKey[groupKey] = { key: groupKey, reason, items: [] };
-      groupsByKey[groupKey].items.push(rec);
-    }
-
-    // Filter to only groups with duplicates
-    const duplicateGroups = [];
-    for (const group of Object.values(groupsByKey)) {
-      if (group.items.length < 2) continue;
-
-      // Sort items: keep the one that is accounted/contabilizada or oldest, delete the rest
-      const sorted = [...group.items].sort((a, b) => {
-        // Prioritize keeping: accounted > validated > review_required > pending
-        const statusPriority = (s) => {
-          if (s === 'accounted' || s === 'contabilizada') return 0;
-          if (s === 'validated' || s === 'revisada') return 1;
-          if (s === 'review_required' || s === 'en_revision') return 2;
-          if (s === 'pending' || s === 'pendiente') return 3;
-          return 4;
-        };
-        return statusPriority(a.status) - statusPriority(b.status);
-      });
-
-      const keep = sorted[0];
-      const toDelete = sorted.slice(1);
-
-      duplicateGroups.push({
-        groupKey: group.key,
-        reason: group.reason,
-        keep: {
-          id: keep.id,
-          entityType: keep.entityType,
-          numero: keep.numero,
-          fecha: keep.fecha,
-          proveedor_cliente: keep.proveedor_cliente,
-          total: keep.total,
-          status: keep.status,
-          originalFileName: keep.originalFileName
-        },
-        toDelete: toDelete.map(r => ({
-          id: r.id,
-          entityType: r.entityType,
-          numero: r.numero,
-          fecha: r.fecha,
-          proveedor_cliente: r.proveedor_cliente,
-          total: r.total,
-          status: r.status,
-          originalFileName: r.originalFileName
-        })),
-        allItems: sorted.map(r => ({
-          id: r.id,
-          entityType: r.entityType,
-          numero: r.numero,
-          fecha: r.fecha,
-          proveedor_cliente: r.proveedor_cliente,
-          total: r.total,
-          status: r.status,
-          originalFileName: r.originalFileName,
-          action: r.id === keep.id ? 'keep' : 'delete'
-        }))
-      });
-    }
-
-    const totalToDelete = duplicateGroups.reduce((sum, g) => sum + g.toDelete.length, 0);
-
+    const duplicateGroups = body.action === 'check_one' && body.docId
+      ? pairs.filter(pair => pair.allItems.some(item => item.id === body.docId && item.entityType === 'OcrInvoiceDocument'))
+      : pairs;
     return Response.json({
-      success: true,
-      scope,
-      period: { type: periodType, year: filterYear, value: periodValue },
-      totalRecordsAnalyzed: records.length,
-      duplicateGroupsCount: duplicateGroups.length,
-      totalToDelete,
-      duplicateGroups
+      success: true, scope, period: { type: periodType, year: filterYear, value: periodValue },
+      totalRecordsAnalyzed: filtered.length, duplicateGroupsCount: duplicateGroups.length,
+      totalToDelete: 0, duplicateGroups,
+      message: 'Coincidencias para revisión individual; este chequeo no elimina ni anula asientos.',
     });
   } catch (error) {
     console.error('checkDuplicates error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'No se pudo completar el chequeo de duplicados.' }, { status: 500 });
   }
 });
