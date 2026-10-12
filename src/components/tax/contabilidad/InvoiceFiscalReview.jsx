@@ -19,7 +19,9 @@ async function invoke(payload) {
   return result;
 }
 
-export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false }) {
+export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess = false, bulkCount = 0, onBulkConfirm }) {
+  const [applyTaxRate, setApplyTaxRate] = useState(false);
+  const [applyWithholding, setApplyWithholding] = useState(false);
   const [open, setOpen] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -52,11 +54,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
     setLoading(true);
     setError('');
     Promise.all([
-      invoke({ action: 'bundle', companyId, invoiceId: invoice.id }),
-      invoke({ action: 'catalog', companyId }),
+      invoke({ action: 'review_context', companyId, invoiceId: bulkCount ? undefined : invoice.id, includePayments: !bulkCount && invoice.fiscal_regime === 'criterio_caja' }),
+      Promise.resolve(null),
     ]).then(([bundleData, catalogData]) => {
       setBundle(bundleData);
-      setCatalog(catalogData);
+      setCatalog(catalogData || bundleData);
       const activity = (bundleData.activities || []).find(item => item.id === invoice.fiscal_activity_id)
         || (bundleData.activities || []).find(item => item.active !== false);
       let metadata = {}, breakdown = [];
@@ -73,9 +75,9 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
         regime: existingTaxLine?.regime || invoice.fiscal_regime || activity?.indirectTaxRegime || 'general',
         operationType: invoice.fiscal_treatment || activity?.[invoice.tipo === 'recibida' ? 'expenseDefaultTreatment' : 'incomeDefaultTreatment'] || 'subject_taxed',
         base: Number(invoice.base_imponible || 0),
-        taxRate: Number(invoice.tipo_iva || 0),
+        taxRate: Number(invoice.self_assessed_tax_rate || invoice.tipo_iva || 0),
         taxAmount: Number(invoice.cuota_iva || 0),
-        deductiblePercent: invoice.cuota_iva ? Math.round(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) * 10000 / Number(invoice.cuota_iva)) / 100 : 0,
+        deductiblePercent: (invoice.self_assessed_tax_amount || invoice.cuota_iva) ? Math.round(Number(invoice.deductible_tax_amount ?? (invoice.tipo === 'recibida' ? invoice.cuota_iva : 0)) * 10000 / Number(invoice.self_assessed_tax_amount || invoice.cuota_iva)) / 100 : (activity?.deductionRight === 'sin_derecho' ? 0 : Number(activity?.proRataPercent ?? 100)),
         deductionCategory: existingTaxLine?.deductionCategory || '',
         deductionUse: existingTaxLine?.deductionUse || '',
         withholdingRate: Number(invoice.retencion_irpf || 0),
@@ -99,7 +101,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
 
   const update = (key, value) => {
     setClassificationSaved(false);
-    setForm(current => ({ ...current, [key]: value }));
+    setForm(current => ({ ...current, [key]: value,
+      ...(key === 'taxRate' ? {taxAmount: Math.round(Number(current.base || 0) * Number(value)) / 100} : {}),
+      ...(key === 'deductionCategory' && ['intra_services','intra_goods_current','intra_goods_investment'].includes(value)
+        ? {operationType:'intra_eu_acquisition'} : {}) }));
+    if (key === 'deductionCategory' && String(value).startsWith('intra_')) setApplyTaxRate(true);
     setEvaluation(null);
   };
 
@@ -126,16 +132,18 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
   };
 
   const confirm = async () => {
-    if (form.manualOverride && !String(form.manualOverrideReason || '').trim()) {
-      setError('La modificación manual requiere un motivo trazable.');
-      return;
-    }
     setSaving(true); setError('');
     try {
+      if (bulkCount) {
+        await onBulkConfirm({...form,taxKind,applyTaxRate,applyWithholding});
+        setOpen(false);
+        return;
+      }
       let confirmedEvaluation = evaluation;
       if (!classificationSaved) {
         const result = await invoke(payload(true));
         confirmedEvaluation = result.evaluation;
+        if (result.mode === 'classified_pending') {setEvaluation(result.evaluation);setError(result.warning);return;}
         if (result.mode !== 'saved') throw new Error('La clasificación fiscal no quedó confirmada.');
         setClassificationSaved(true);
       }
@@ -147,7 +155,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
       }
       setEvaluation(confirmedEvaluation);
       window.dispatchEvent(new Event('financials:refresh'));
-      setTimeout(() => setOpen(false), 650);
+      setOpen(false);
     } catch (err) { setError(reviewError(err)); } finally { setSaving(false); }
   };
 
@@ -155,14 +163,14 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
     <>
       <button type="button" onClick={() => setOpen(true)} title="Revisar tratamiento fiscal"
         className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 hover:border-cyan-300 hover:text-cyan-700">
-        <PencilLine className="h-3 w-3" /> Fiscal
+        <PencilLine className="h-3 w-3" /> {bulkCount ? `Aplicar criterio a ${bulkCount < 0 ? "todas las filtradas" : bulkCount}` : "Fiscal"}
       </button>
       {open && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true">
           <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-jakarta text-base font-bold text-slate-900">Tratamiento fiscal de la factura</h3>
+                <h3 className="font-jakarta text-base font-bold text-slate-900">{bulkCount ? 'Criterio fiscal común · revisión masiva' : 'Tratamiento fiscal de la factura'}</h3>
                 <p className="mt-1 text-xs text-slate-500">{invoice.numero_factura || invoice.id} · {invoice.tipo === 'recibida' ? 'recibida' : 'emitida'} · {money(invoice.total_factura)}</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
@@ -173,6 +181,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
             {!loading && !error && (!bundle?.profile || !activeActivities.length) && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Antes de automatizar esta factura, valida el perfil fiscal y al menos una actividad IAE en la pestaña Perfil fiscal.</div>}
             {!loading && bundle?.profile && activeActivities.length > 0 && (
               <div className="mt-5 space-y-4">
+                {bulkCount !== 0 && <div className="rounded-xl bg-cyan-50 p-3 text-xs text-cyan-900">
+                  Se conservarán la base, fecha, total, subcuentas y documentos de cada factura. No se copian pagos, anticipos ni datos particulares entre facturas.
+                  <label className="mt-2 flex gap-2"><input type="checkbox" checked={applyTaxRate} onChange={e=>setApplyTaxRate(e.target.checked)} />Aplicar también el tipo indicado (necesario para autorrepercusión; conserva el total del proveedor)</label>
+                  <label className="mt-2 flex gap-2"><input type="checkbox" checked={applyWithholding} onChange={e=>setApplyWithholding(e.target.checked)} />Aplicar también la retención indicada; si no, conservar la de cada documento</label>
+                </div>}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-medium text-slate-700">Actividad
                     <select value={form.activityId || ''} onChange={event => update('activityId', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
@@ -194,24 +207,24 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                       {(catalog?.operations || []).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </label>
-                  <label className="text-xs font-medium text-slate-700">Base imponible
+                  {!bulkCount && <label className="text-xs font-medium text-slate-700">Base imponible
                     <input type="number" step="0.01" value={form.base ?? 0} onChange={event => update('base', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
-                  </label>
+                  </label>}
                   <label className="text-xs font-medium text-slate-700">Tipo (%)
                     <input type="number" step="0.01" value={form.taxRate ?? 0} onChange={event => update('taxRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
-                  {['rebu', 'agencias_viajes'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-2">
+                  {!bulkCount && ['rebu', 'agencias_viajes'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3 space-y-2">
                     <p className="text-xs font-bold text-cyan-900">Cálculo interno del margen · propuesta para el asesor</p>
                     <p className="text-[11px] text-cyan-800">El precio total al cliente incluye el impuesto; la cuota calculada no se desglosa en la factura. Debe vincularse la compra o los servicios directos antes de contabilizar.</p>
                     <div className="grid gap-2 sm:grid-cols-2"><label className="text-xs">Precio total al cliente (€)<input type="number" step="0.01" value={specialInputs.saleGross ?? ''} onChange={event => updateSpecial('saleGross', event.target.value)} className="mt-1 w-full rounded-lg border border-cyan-200 px-3 py-2" /></label><label className="text-xs">{selectedRegime === 'rebu' ? 'Adquisición del bien' : 'Costes directos del viaje'} (€)<input type="number" step="0.01" value={specialInputs.directCostGross ?? ''} onChange={event => updateSpecial('directCostGross', event.target.value)} className="mt-1 w-full rounded-lg border border-cyan-200 px-3 py-2" /></label></div>
                   </div>}
-                  {Number(invoice.cuota_recargo || 0) !== 0 && <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">El documento incluye recargo de equivalencia {money(invoice.cuota_recargo)} ({invoice.tipo_recargo || 0} %). Su tratamiento depende del régimen confirmado: mayor coste para compras del minorista o IVA y recargo repercutidos para ventas a minoristas. El asesor debe revisar el desglose antes de contabilizar.</div>}
-                  {selectedRegime === 'recargo_equivalencia' && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">En una venta nacional ordinaria de actividad minorista confirmada, se repercute IVA sin recargo al cliente. Tras la revisión del asesor, el IVA forma parte del ingreso contable; no se contabiliza en 477 ni se liquida en el 303 ordinario. Ventas de inmuebles y otras excepciones siguen pendientes de circuito específico.</div>}
-                  {selectedRegime === 'recargo_equivalencia' && invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Recargo registrado en factura (%)<input type="number" readOnly value={invoice.tipo_recargo || 0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /><span className="mt-1 block font-normal text-slate-500">El IVA y el recargo de esta compra son mayor coste, no IVA deducible.</span></label>}
-                  {['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Estado miembro de consumo (ISO 2 letras)<input value={specialInputs.destinationCountry || ''} maxLength={2} onChange={event => updateSpecial('destinationCountry', event.target.value.toUpperCase())} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="text-xs">Tipo IVA de destino (%)<input type="number" min="0" max="100" step="0.01" value={specialInputs.destinationRate ?? ''} onChange={event => updateSpecial('destinationRate', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(specialInputs.destinationRateConfirmed)} onChange={event => updateSpecial('destinationRateConfirmed', event.target.checked)} />Tipo de IVA del país de destino confirmado por asesor</label></div>}
-                  {selectedRegime === 'ioss_importacion' && invoice.tipo === 'emitida' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Valor intrínseco del envío (€)<input type="number" min="0" step="0.01" value={specialInputs.consignmentIntrinsicValue ?? ''} onChange={event => updateSpecial('consignmentIntrinsicValue', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(specialInputs.isExcise)} onChange={event => updateSpecial('isExcise', event.target.checked)} />Mercancía sujeta a impuestos especiales</label></div>}
-                  {selectedRegime === 'grupo_entidades' && <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">Grupo validado en el perfil: {bundle?.profile?.taxGroupId || 'sin identificador'} · rol: {bundle?.profile?.taxGroupRole || 'sin confirmar'}. Solo puede cambiarse en Perfil fiscal y validarse por el asesor.</div>}
-                  {selectedRegime === 'criterio_caja' && <div className="sm:col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 space-y-2">
+                  {!bulkCount && Number(invoice.cuota_recargo || 0) !== 0 && <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">El documento incluye recargo de equivalencia {money(invoice.cuota_recargo)} ({invoice.tipo_recargo || 0} %). Su tratamiento depende del régimen confirmado: mayor coste para compras del minorista o IVA y recargo repercutidos para ventas a minoristas. El asesor debe revisar el desglose antes de contabilizar.</div>}
+                  {!bulkCount && selectedRegime === 'recargo_equivalencia' && invoice.tipo === 'emitida' && <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">En una venta nacional ordinaria de actividad minorista confirmada, se repercute IVA sin recargo al cliente. Tras la revisión del asesor, el IVA forma parte del ingreso contable; no se contabiliza en 477 ni se liquida en el 303 ordinario. Ventas de inmuebles y otras excepciones siguen pendientes de circuito específico.</div>}
+                  {!bulkCount && selectedRegime === 'recargo_equivalencia' && invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Recargo registrado en factura (%)<input type="number" readOnly value={invoice.tipo_recargo || 0} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /><span className="mt-1 block font-normal text-slate-500">El IVA y el recargo de esta compra son mayor coste, no IVA deducible.</span></label>}
+                  {!bulkCount && ['oss_union', 'oss_exterior_union', 'ioss_importacion'].includes(selectedRegime) && invoice.tipo === 'emitida' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Estado miembro de consumo (ISO 2 letras)<input value={specialInputs.destinationCountry || ''} maxLength={2} onChange={event => updateSpecial('destinationCountry', event.target.value.toUpperCase())} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="text-xs">Tipo IVA de destino (%)<input type="number" min="0" max="100" step="0.01" value={specialInputs.destinationRate ?? ''} onChange={event => updateSpecial('destinationRate', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(specialInputs.destinationRateConfirmed)} onChange={event => updateSpecial('destinationRateConfirmed', event.target.checked)} />Tipo de IVA del país de destino confirmado por asesor</label></div>}
+                  {!bulkCount && selectedRegime === 'ioss_importacion' && invoice.tipo === 'emitida' && <div className="sm:col-span-2 grid gap-2 sm:grid-cols-2"><label className="text-xs">Valor intrínseco del envío (€)<input type="number" min="0" step="0.01" value={specialInputs.consignmentIntrinsicValue ?? ''} onChange={event => updateSpecial('consignmentIntrinsicValue', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label><label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(specialInputs.isExcise)} onChange={event => updateSpecial('isExcise', event.target.checked)} />Mercancía sujeta a impuestos especiales</label></div>}
+                  {!bulkCount && selectedRegime === 'grupo_entidades' && <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">Grupo validado en el perfil: {bundle?.profile?.taxGroupId || 'sin identificador'} · rol: {bundle?.profile?.taxGroupRole || 'sin confirmar'}. Solo puede cambiarse en Perfil fiscal y validarse por el asesor.</div>}
+                  {!bulkCount && selectedRegime === 'criterio_caja' && <div className="sm:col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900 space-y-2">
                     {bundle?.invoicePaymentsTruncated && <p className="font-semibold text-red-700">El histórico de pagos supera el límite de esta vista. No se puede confirmar el cálculo hasta revisar todos los movimientos.</p>}
                     <p>Criterio de caja: {specialInputs.payments?.length || 0} cobro(s)/pago(s) confirmados. La factura se contabiliza al devengo; el IVA se liquida por cobros/pagos trazados y, como límite, el 31 de diciembre del año siguiente. No se crean cobros desde esta revisión.</p>
                     {(bundle?.invoicePayments || []).length > 0 && <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-indigo-200"><th className="pr-3 py-1">Fecha</th><th className="pr-3 py-1">Importe</th><th className="pr-3 py-1">Medio</th><th className="pr-3 py-1">Referencia</th><th className="py-1">Estado</th></tr></thead><tbody>{bundle.invoicePayments.map(payment => <tr key={payment.id} className="border-b border-indigo-100"><td className="pr-3 py-1">{payment.payment_date || '—'}</td><td className="pr-3 py-1">{money(payment.amount)}</td><td className="pr-3 py-1">{payment.method || '—'}</td><td className="pr-3 py-1">{payment.reference || '—'}</td><td className="py-1">{payment.operation_status || 'histórico sin estado'}</td></tr>)}</tbody></table></div>}
@@ -291,7 +304,7 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   {form.taxBreakdown?.length > 0 && <p>Desglose: {form.taxBreakdown.map(row => `${row.rate}%: base ${money(row.base)}, cuota ${money(row.quota)}`).join(' · ')}</p>}
                 </fieldset>}
                 <label className="flex items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={Boolean(form.manualOverride)} onChange={event => update('manualOverride', event.target.checked)} />Modificar manualmente la propuesta automática</label>
-                {form.manualOverride && <label className="block text-xs font-medium text-slate-700">Motivo obligatorio del cambio
+                {form.manualOverride && <label className="block text-xs font-medium text-slate-700">Observaciones del asesor (opcional; la confirmación se registra automáticamente)
                   <textarea value={form.manualOverrideReason || ''} onChange={event => update('manualOverrideReason', event.target.value)} className="mt-1 min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2" />
                 </label>}
 
@@ -302,11 +315,11 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   {evaluation.specialPreview && <div className="mt-2 rounded-lg border border-amber-300 bg-white/70 p-2"><p className="font-semibold">Desglose específico · {evaluation.postingBlocked ? 'solo simulación' : 'revisión del asesor'}</p><p className="mt-1">{evaluation.specialPreview.reason}</p>{evaluation.specialPreview.marginGross != null && <p className="mt-1">Margen bruto {money(evaluation.specialPreview.marginGross)} · base interna {money(evaluation.specialPreview.taxableBase)} · impuesto incluido en margen {money(evaluation.specialPreview.embeddedTax)}</p>}{evaluation.specialPreview.surcharge != null && <p className="mt-1">IVA compra {money(evaluation.specialPreview.vat)} · recargo {money(evaluation.specialPreview.surcharge)} · mayor coste {money(evaluation.specialPreview.purchaseCost)}</p>}{evaluation.specialPreview.events && <p className="mt-1">Reconocimientos propuestos: {evaluation.specialPreview.events.map(item => `${item.date}: base ${money(item.taxableBase)} · cuota ${money(item.taxQuota)}${item.kind === 'forced_deadline' ? ' (fecha límite)' : ''}`).join(' · ')}</p>}{evaluation.specialPreview.destinationTax != null && <p className="mt-1">{evaluation.specialPreview.destinationCountry} · impuesto destino {money(evaluation.specialPreview.destinationTax)}</p>}{evaluation.specialPreview.individualModel && <p className="mt-1">Modelo individual {evaluation.specialPreview.individualModel}{evaluation.specialPreview.aggregateModel ? ` · agregado ${evaluation.specialPreview.aggregateModel}` : ''}</p>}</div>}
                   {[...(evaluation.reasons || []), ...(evaluation.alerts || [])].map((item, index) => <p key={index} className="mt-1">· {item}</p>)}
                   <p className="mt-2 font-medium">Libros propuestos: {(evaluation.bookImpact || []).join(', ') || 'sin impacto'} · modelos orientativos: {(evaluation.modelImpact || []).join(', ') || 'revisar'}</p>
-                  {evaluation.postingBlocked && <p className="mt-2 font-semibold text-red-700">Confirmación bloqueada: falta el circuito específico de este régimen. La factura y el diario no se modificarán.</p>}
+                  {evaluation.postingBlocked && <p className="mt-2 font-semibold text-red-700">El criterio puede guardarse. El asiento permanecerá pendiente si todavía falta el circuito específico; no se aplicarán reglas ordinarias incorrectas.</p>}
                 </div>}
                 {canApprove ? <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={review} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Analizar propuesta</button>
-                  <button type="button" onClick={confirm} disabled={saving || evaluation?.postingBlocked} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{classificationSaved ? 'Reintentar contabilización' : 'Confirmar y guardar'}</button>
+                  {!bulkCount && <button type="button" onClick={review} disabled={saving} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Analizar propuesta</button>}
+                  <button type="button" onClick={confirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{bulkCount ? 'Confirmar criterio y preparar lote' : classificationSaved ? 'Reintentar contabilización' : 'Confirmar y guardar'}</button>
                 </div> : <p className="text-xs text-amber-800">Solo el asesor o administrador puede confirmar esta clasificación.</p>}
                 <p className="text-[11px] leading-relaxed text-slate-400">La confirmación guarda regla, actividad, fundamento legal, usuario y versión. No presenta ningún modelo tributario.</p>
               </div>
