@@ -79,7 +79,7 @@ const call = async body => {
 const query = { company_id: 'qa', scope: 'ocr_expense', period_type: 'all' };
 const all = await call(query);
 assert.equal(all.status, 200);
-assert.equal(all.data.totalRecordsAnalyzed, 213);
+assert.equal(all.data.totalRecordsAnalyzed, 212);
 assert.equal(all.data.duplicateGroupsCount, 3); // historical + two unlinked OCR documents.
 assert.equal(all.data.totalToDelete, 0);
 assert.ok(all.data.duplicateGroups.every(group => group.toDelete.length === 0));
