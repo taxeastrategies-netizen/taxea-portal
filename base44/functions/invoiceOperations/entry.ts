@@ -1,3 +1,4 @@
+import { reviewFilter } from './advisorReview.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
@@ -615,12 +616,10 @@ Deno.serve(async (req) => {
     if (action === 'list_fiscal_review') {
       const { companyId } = await authorizeCompany(base44, user, body.company_id);
       if (!['admin', 'super_admin', 'advisor', 'asesor'].includes(roleOf(user))) return Response.json({ error: 'Bandeja exclusiva del asesor o administrador.' }, { status: 403 });
-      const [pending, postingErrors] = await Promise.all([
-        base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, accounting_migration_hold_reason: 'FISCAL_ADVISOR_REVIEW_PHASE1' }, '-created_date', 500),
-        base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, accounting_migration_hold_reason: 'FISCAL_POSTING_ERROR' }, '-created_date', 500),
-      ]);
-      const invoices = [...(pending || []), ...(postingErrors || [])].filter(row => !row.anulada);
-      return Response.json({ ok: true, invoices, truncated: (pending || []).length >= 500 || (postingErrors || []).length >= 500 });
+      const page = Math.max(0,Number(body.page)||0),pageSize=50;
+      const rows = await base44.asServiceRole.entities.Invoice.filter(reviewFilter(companyId,body.filters),'-created_date',pageSize+1,page*pageSize);
+      return Response.json({ok:true,invoices:rows.slice(0,pageSize),hasMore:rows.length>pageSize,page,pageSize});
+
     }
 
     if (action === 'reconcile_multiple') {
