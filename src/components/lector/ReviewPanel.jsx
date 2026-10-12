@@ -249,7 +249,7 @@ function GastosFields({ form, set }) {
   );
 }
 
-function F({ label, children, col2 }) {
+function F({ label, children, col2 = false }) {
   return (
     <div className={`space-y-1 ${col2 ? 'col-span-2' : ''}`}>
       <Label className="text-xs">{label}</Label>
