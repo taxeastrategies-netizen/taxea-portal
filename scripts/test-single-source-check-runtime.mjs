@@ -74,6 +74,18 @@ const credit=await approve(await makeDoc('credit',{base:-45.28,rate:7,quota:-3.1
 assert.equal((await entity('Invoice').get(credit.invoiceId)).non_deductible_tax_amount,-3.17);
 const zero=await approve(await makeDoc('zero',{base:128.23,rate:0,quota:0,total:128.23}));
 assert.equal((await entity('Invoice').get(zero.invoiceId)).estado_contable,'contabilizada');
+// Venta minorista de prueba: exención propia y QR/hash al aprobar en OCR de emitidas.
+const issuedDoc=await makeDoc('minorista-sale',{base:200,rate:0,quota:0,total:200,type:'income_invoice'});
+const issuedForm={numero_factura:'minorista-sale',fecha_emision:'2026-07-12',cliente_nombre:'Cliente QA',
+  cliente_nif:'B12345674',base_imponible:200,tipo_iva:0,cuota_iva:0,total_factura:200,
+  retencion_irpf:0,importe_retencion:0,fiscal_activity_id:'fa'};
+const issued=await call('approveOcrDocument',{docId:issuedDoc.id,invoiceType:'emitida',form:issuedForm});
+const issuedInv=await entity('Invoice').get(issued.invoiceId);
+assert.equal(issuedInv.fiscal_treatment,'exempt_limited');assert.equal(issuedInv.fiscal_exemption_key,'IGIC_COMERCIANTE_MINORISTA');
+assert.equal(issuedInv.estado_contable,'contabilizada');assert.match(issuedInv.qr_integrity_hash,/^[a-f0-9]{64}$/i);
+const issuedHash=issuedInv.qr_integrity_hash;
+await call('approveOcrDocument',{docId:issuedDoc.id,invoiceType:'emitida',form:issuedForm});
+assert.equal((await entity('Invoice').get(issuedInv.id)).qr_integrity_hash,issuedHash);
 // Ya existe factura del doble check anterior: reutilizar exactamente ese ID.
 const legacy=await makeDoc('legacy');
 const saved=await entity('Invoice').create({company_id:'qa',tipo:'recibida',numero_factura:'legacy',fecha_emision:'2026-07-12',fecha_recepcion:'2026-07-13',
@@ -113,6 +125,23 @@ records.FiscalActivity[0].deductionRight='prorrata_especial';records.FiscalActiv
 const pro=await makeDoc('prorrata',{rate:21,quota:21,total:121});
 const proResult=await call('approveOcrDocument',{docId:pro.id,invoiceType:'recibida',form:{...form(pro),fiscal_criteria:{deductionUse:'shared'}}});
 assert.equal((await entity('Invoice').get(proResult.invoiceId)).deductible_tax_amount,8.4);
+// Borradores manuales heredados, sin OCR asociado, se completan en el mismo módulo OCR.
+const orphan=await entity('Invoice').create({company_id:'qa',tipo:'recibida',numero_factura:'orphan',
+  fecha_emision:'2026-07-15',fecha_recepcion:'2026-07-16',proveedor_nombre:'Proveedor QA',
+  proveedor_nif:'B98765432',base_imponible:100,tipo_iva:21,cuota_iva:21,total_factura:121,
+  retencion_irpf:0,importe_retencion:0,fiscal_review_status:'pendiente_revision',
+  fiscal_activity_id:'fa',accounting_migration_hold:true,accounting_migration_hold_reason:'FISCAL_ADVISOR_REVIEW_PHASE1'});
+const {loadOcrWorkspace,approveWorkspaceDocument,invoiceSourceData}=await import('../src/lib/ocrWorkspace.mjs');
+const workspace=await loadOcrWorkspace(client,'qa','expense_invoice');
+const virtual=workspace.find(row=>row.invoiceOnly && row.invoiceSource.id===orphan.id);
+assert.ok(virtual);assert.equal(virtual.status,'review_required');
+const original=invoiceSourceData(orphan),invoiceCountBefore=records.Invoice.length;
+const orphanResult=await approveWorkspaceDocument(client,'qa',virtual,{numero_factura:original.numero_factura,
+  fecha:original.fecha,fecha_recepcion:original.fecha_recepcion,base_imponible:original.base_imponible,
+  tipo_impuesto:original.tipo_impuesto,cuota_impuesto:original.cuota_impuesto,total:original.total,
+  fiscal_activity_id:'fa',fiscal_criteria:{taxKind:'iva',regime:'general',operationType:'subject_taxed'}},'recibida');
+assert.equal(orphanResult.invoiceId,orphan.id);assert.equal(records.Invoice.length,invoiceCountBefore);
+assert.equal((await entity('Invoice').get(orphan.id)).estado_contable,'contabilizada');
 for(const entry of records.JournalEntry.filter(row=>row.status==='confirmado')){
   const lines=records.JournalEntryLine.filter(row=>row.journalEntryId===entry.id);
   assert.ok(Math.abs(lines.reduce((sum,row)=>sum+Number(row.debit || 0)-Number(row.credit || 0),0))<0.011);
@@ -120,4 +149,4 @@ for(const entry of records.JournalEntry.filter(row=>row.status==='confirmado')){
 assert.equal(records.AccountingAccount.find(row=>row.id==='expense-history').code,'60000008');
 console.log(JSON.stringify({ok:true,workflow:'single-source-check',normalUser:true,invoiceCount:records.Invoice.length,confirmedEntries:records.JournalEntry.filter(row=>row.status==='confirmado').length,
   checks:['minorista taxed/zero/credit','source amounts preserved','existing subaccount preserved','idempotent retry','legacy same invoice recovered','tax-line failure recovered',
-  'tenant denied','manual direct with stable QR hash','intra services self-assessment','special prorrata','all journals balanced'],apiCalls:calls},null,2));
+  'tenant denied','manual direct with stable QR hash','minorista issued OCR QR/hash','orphan invoice appears in OCR and recovers','intra services self-assessment','special prorrata','all journals balanced'],apiCalls:calls},null,2));
