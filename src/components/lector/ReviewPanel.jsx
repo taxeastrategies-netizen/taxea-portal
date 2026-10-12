@@ -73,6 +73,10 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
 
         {/* Formulario */}
         <div className={expanded ? 'min-h-0 space-y-3 overflow-y-auto p-4' : 'max-h-[560px] space-y-3 overflow-y-auto p-4'}>
+          {doc.duplicateWarning && <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">Posible duplicado: revisa antes de confirmar</p>
+            <p>{doc.duplicateWarning}</p>
+          </div>}
           {/* Confianza IA */}
           {doc.extracted?.confianza_pgc != null && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-1">
