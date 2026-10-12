@@ -114,7 +114,7 @@ Deno.serve(async req => {
             groupKey: `${keep.id}:${candidate.id}`,
             reason: 'Coinciden tercero, número y fecha de factura',
             keep: view(keep), toDelete: [],
-            allItems: [{ ...view(keep), action: 'review' }, { ...view(candidate), action: 'review' }],
+            allItems: [{ ...view(keep), action: 'keep' }, { ...view(candidate), action: 'keep' }],
           });
         }
       }
