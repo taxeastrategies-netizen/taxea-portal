@@ -25,17 +25,17 @@ import { invoiceTaxBreakdown, invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakd
 
 // ── Estado visual de factura ───────────────────────────────────────────────────
 const STATUS_CFG = {
-  borrador:             { label: 'Borrador',              color: 'bg-slate-100 text-slate-600 border-slate-200' },
-  emitida:              { label: 'Emitida',               color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  enviada:              { label: 'Enviada',               color: 'bg-violet-100 text-violet-700 border-violet-200' },
-  pendiente:            { label: 'Pendiente de pago',     color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  parcial:              { label: 'Pago parcial',          color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  cobrada:              { label: 'Cobrada',               color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  vencida:              { label: 'Vencida',               color: 'bg-red-100 text-red-700 border-red-200' },
-  contabilizada:        { label: 'Contabilizada',         color: 'bg-teal-100 text-teal-700 border-teal-200' },
-  pendiente_pago:       { label: 'Pendiente de pago',     color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  parcialmente_pagada:  { label: 'Pago parcial',          color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  anulada:              { label: 'Anulada',               color: 'bg-slate-100 text-slate-500 border-slate-200 line-through' },
+  borrador:             { label: 'Borrador',              color: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800' },
+  emitida:              { label: 'Emitida',               color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800' },
+  enviada:              { label: 'Enviada',               color: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-800' },
+  pendiente:            { label: 'Pendiente de pago',     color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800' },
+  parcial:              { label: 'Pago parcial',          color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800' },
+  cobrada:              { label: 'Cobrada',               color: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800' },
+  vencida:              { label: 'Vencida',               color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800' },
+  contabilizada:        { label: 'Contabilizada',         color: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-300 dark:border-teal-800' },
+  pendiente_pago:       { label: 'Pendiente de pago',     color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800' },
+  parcialmente_pagada:  { label: 'Pago parcial',          color: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800' },
+  anulada:              { label: 'Anulada',               color: 'bg-slate-100 text-slate-500 border-slate-200 line-through dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800' },
 };
 
 function resolveStatus(invoice) {
@@ -63,9 +63,9 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-100">
+    <div className="flex flex-col h-full bg-secondary">
       {/* Toolbar del visor */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-border flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-card border-b border-border flex-shrink-0">
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground font-medium">
@@ -74,10 +74,10 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
           <span className={cn(
             "text-[10px] px-2 py-0.5 rounded-full border font-medium",
             isRecibida
-              ? 'bg-blue-50 text-blue-700 border-blue-200'
+              ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800'
               : hasPdf
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800'
           )}>
             {isRecibida ? 'Factura recibida' : hasPdf ? 'PDF generado' : 'Render de datos'}
           </span>
@@ -142,7 +142,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             </div>
           ) : (
             // Sin PDF: mostrar los datos guardados, independientemente de su origen
-            <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-lg">
+            <div className="bg-card rounded-lg shadow-lg p-8 w-full max-w-lg">
               <div className="flex items-center gap-2 mb-6">
                 <FileText className="w-5 h-5 text-muted-foreground" />
                 <h3 className="text-base font-semibold text-foreground">Datos de la factura recibida</h3>
@@ -159,14 +159,14 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
                   [invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
                   ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
                 ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={label} className="flex justify-between py-2.5 border-b border-slate-100 last:border-0 text-sm">
+                  <div key={label} className="flex justify-between py-2.5 border-b border-border last:border-0 text-sm">
                     <span className="text-muted-foreground">{label}</span>
                     <span className="font-medium text-foreground">{value}</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                <p className="text-xs text-amber-700">No hay PDF original adjunto. Se muestra la información registrada en Taxea, que no sustituye al documento original.</p>
+              <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 dark:bg-amber-950/40 dark:border-amber-800">
+                <p className="text-xs text-amber-700 dark:text-amber-200">No hay PDF original adjunto. Se muestra la información registrada en Taxea, que no sustituye al documento original.</p>
               </div>
             </div>
           )
@@ -544,3 +544,4 @@ export default function InvoiceDocumentWorkspace({
     </FullscreenWorkspace>
   );
 }
+
