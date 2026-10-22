@@ -140,7 +140,9 @@ Deno.serve(async (req) => {
       newMonthlyPrice: targetPlan.monthlyBasePrice,
     });
   } catch (error) {
-    console.error('Error en createPlanUpgradeCheckout:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[createPlanUpgradeCheckout]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo abrir el cambio de plan. No se ha confirmado ningún cobro. Comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
