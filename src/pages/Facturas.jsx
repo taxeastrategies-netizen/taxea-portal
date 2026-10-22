@@ -419,7 +419,7 @@ export default function Facturas() {
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
                     <th className="w-10 px-4 py-3">
-                      <input type="checkbox" className="rounded border-border" checked={filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id))} onChange={e => { if (e.target.checked) setSelectedIds(filtered.map(i => i.id)); else setSelectedIds([]); }} />
+                      <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar todas las facturas visibles</span><input type="checkbox" className="rounded border-border" checked={filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id))} onChange={e => { if (e.target.checked) setSelectedIds(filtered.map(i => i.id)); else setSelectedIds([]); }} /></label>
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nº Factura</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
@@ -438,7 +438,7 @@ export default function Facturas() {
                       onClick={() => handleOpenWorkspace(inv)}
                       className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-red-50/50' : ''}`}>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} />
+                        <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar factura {inv.numero_factura || inv.id}</span><input type="checkbox" className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} /></label>
                       </td>
                       <td className="px-4 py-3 font-medium text-foreground">
                          {inv.numero_factura}
@@ -467,7 +467,7 @@ export default function Facturas() {
                           </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
+                              <button type="button" aria-label={`Más opciones de la factura ${inv.numero_factura || inv.id}`} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
                                 <MoreVertical className="w-4 h-4" />
                               </button>
                             </DropdownMenuTrigger>
