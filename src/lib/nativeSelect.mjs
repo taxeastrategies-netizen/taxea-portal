@@ -26,3 +26,9 @@ export function nativeSelectModel(children,{itemType,groupType,labelType,valueTy
   walk(children);
   return {options,placeholder};
 }
+export function filterPickerOptions(options,query){
+  const normalize=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+  const search=normalize(query).trim();
+  return search?options.filter(option=>normalize(option.label+' '+option.group+' '+option.value).includes(search)):options;
+}
+
