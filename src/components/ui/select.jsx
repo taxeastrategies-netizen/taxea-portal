@@ -35,9 +35,9 @@ function Select({children,value,defaultValue,onValueChange,...props}){
     form?.addEventListener('reset',reset);return()=>form?.removeEventListener('reset',reset);
   },[uncontrolled,defaultValue,props.form]);
   const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
-  // Radix still owns the single native form control, option registration,
-  // required/name/form semantics and bubbling. Only the mobile presentation is
-  // replaced: its popup stays closed while the accessible drawer is visible.
+  // Named/required HTML forms use one OS control. Application drawers retain
+  // Radix option registration and trigger semantics; its desktop popup stays
+  // closed while the mobile drawer is visible. No form has duplicate names.
   return <SelectUiContext.Provider value={picker}>
     {nativeForm?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change} open={sheet?false:open} onOpenChange={next=>sheet?(next&&setOpen(true)):setOpen(next)}>
       {children}
