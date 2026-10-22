@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
+import AppearanceSettings from '@/components/layout/AppearanceSettings';
 import { Building2, Shield, Users, CheckSquare, Bell, User, Landmark } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
 import { cn } from '@/lib/utils';
@@ -21,11 +21,14 @@ const TABS = [
 
 export default function Ajustes() {
   const { company, user, isAdmin, refreshCompany } = useOutletContext() || {};
-  const [activeTab, setActiveTab] = useState('empresa');
+  const [searchParams,setSearchParams]=useSearchParams();
+  const activeTab=TABS.some(tab=>tab.id===searchParams.get('tab'))?searchParams.get('tab'):'empresa';
+  const setActiveTab=id=>setSearchParams(previous=>{const next=new URLSearchParams(previous);next.set('tab',id);return next;});
 
   return (
     <div>
       <PageHeader title="Ajustes" subtitle="Configuración de empresa, seguridad y preferencias" />
+      <AppearanceSettings/>
 
       {/* Tabs */}
       <div className="flex gap-1 flex-wrap mb-6 bg-secondary/40 border border-border rounded-xl p-1">
@@ -103,3 +106,4 @@ export default function Ajustes() {
     </div>
   );
 }
+
