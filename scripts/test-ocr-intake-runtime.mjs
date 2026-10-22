@@ -249,5 +249,3 @@ for(const component of ['src/components/lector/ReviewPanel.jsx','src/components/
   assert.deepEqual(events[0],['pending',doc.id]);
 }
 console.log('OCR intake: pending uploads, OCR to review, reject persistence, reset/reanalyse, idempotence, approval lease, canonical/linked invoice guards, stale response CAS, membership/auth, pagination and delivery methods pass. No external calls.');
-
-

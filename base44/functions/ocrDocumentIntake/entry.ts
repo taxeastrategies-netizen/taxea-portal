@@ -160,5 +160,3 @@ Deno.serve(async req => {
     return fail('No se pudo guardar el documento. Reintenta; no se ha aprobado ni contabilizado ninguna factura.', 502, 'INTAKE_UNAVAILABLE');
   }
 });
-
-

@@ -434,4 +434,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.response?.data?.error || error.message || 'Error interno del servidor' }, { status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500 });
   }
 });
-

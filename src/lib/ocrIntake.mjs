@@ -36,5 +36,3 @@ export async function loadIntakeDocuments(client, companyId, documentType) {
   }
   throw new Error('La cola supera el límite de lectura completo. Filtra por cliente.');
 }
-
-

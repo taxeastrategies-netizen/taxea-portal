@@ -553,5 +553,3 @@ export default function LectorIngresos({ reviewPage = false }) {
     </div>
   );
 }
-
-
