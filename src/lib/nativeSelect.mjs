@@ -32,3 +32,14 @@ export function filterPickerOptions(options,query){
   const search=normalize(query).trim();
   return search?options.filter(option=>normalize(option.label+' '+option.group+' '+option.value).includes(search)):options;
 }
+export function resetUncontrolledSelect(defaultValue,triggerRef,setValue){
+  // The browser's native reset runs after the reset event. Restore afterwards,
+  // including when React would otherwise bail out because its state is equal.
+  return Promise.resolve().then(()=>{
+    const trigger=triggerRef.current;if(!trigger)return;
+    const value=defaultValue??'';
+    if(trigger.tagName==='SELECT')trigger.value=String(value);
+    setValue(value);
+  });
+}
+
