@@ -15,7 +15,7 @@ function inside(x, y, corners) {
   for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) if (((corners[i].y > y) !== (corners[j].y > y)) && x < (corners[j].x - corners[i].x) * (y - corners[i].y) / (corners[j].y - corners[i].y) + corners[i].x) yes = !yes;
   return yes;
 }
-function fixture(corners, { width = 360, height = 480, paper = 232, background = 38, shadow = 0, noise = 0, texture = false, colour = false, sameLum = false, blur = 0, borderGap = false } = {}) {
+function fixture(corners, { width = 360, height = 480, paper = 232, background = 38, shadow = 0, noise = 0, texture = false, colour = false, sameLum = false, blur = 0, borderGap = false, internalRules = false } = {}) {
   const data = new Uint8ClampedArray(width * height * 4); let seed = 4271;
   const random = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -23,6 +23,7 @@ function fixture(corners, { width = 360, height = 480, paper = 232, background =
     let value = (on ? paper - shade : background + (texture ? 13 * Math.sin(y / 8) + 8 * Math.sin(x / 13) : 0)) + grain;
     const text = on && y / height > .25 && y / height < .76 && x / width > .36 && x / width < .62 && y % 22 < 2 && x % 33 < 25;
     if (text) value = paper * .15 - shade * .1 + grain;
+    if (internalRules && on && x / width > .12 && x / width < .92 && [.27, .5, .72].some(at => Math.abs(y - height * at) < 1)) value = 35;
     const p = (y * width + x) * 4;
     const rgb = !on && colour ? sameLum ? [value + 48, value - 29, value + 25] : [value * .6, value, value * 1.5] : [value, value, value];
     for (let c = 0; c < 3; c++) data[p + c] = clamp(rgb[c]); data[p + 3] = 255;
@@ -48,6 +49,11 @@ for (const [name, corners, options] of cases) {
 console.table(metrics);
 if (old) console.log(`Baseline correctly detected: ${baselinePass}/${cases.length}; v2: ${metrics.filter(p => p.cornerError < .065).length}/${cases.length}`);
 assert.ok(metrics.every(p => p.cornerError < .065), 'Every positive scenario detects the paper boundary within tolerance');
+for (const height of [320, 480, 640, 720, 800]) {
+  const found = detectDocument(fixture(perspective, { width: Math.round(height * .75), height, background: 95, texture: true, shadow: 95, internalRules: true }));
+  assert.ok(found && Math.max(...found.corners.map((p, i) => Math.hypot(p.x - perspective[i].x, p.y - perspective[i].y))) < .03, `At ${height}px the invoice rules must not turn into an outer page boundary`);
+}
+console.log('PASS: internal table rules under shadows at five analysis resolutions.');
 for (const background of [18, 130, 245]) assert.equal(detectDocument(fixture(null, { background, noise: 4 })), null, 'No blue detection on an empty surface');
 assert.equal(detectDocument(fixture(null, { background: 130, noise: 75 })), null, 'Texture/noise alone is not a document');
 assert.equal(detectDocument(fixture([{ x: -.1, y: .15 }, { x: .8, y: .15 }, { x: .8, y: .9 }, { x: -.1, y: .9 }])), null, 'A cut-off fourth edge is not invented');
