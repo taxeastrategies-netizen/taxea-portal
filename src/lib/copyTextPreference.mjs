@@ -12,4 +12,3 @@ export function setCopyTextMode(mode){
   emit();return saved;
 }
 export const allowsCopyText=(mode,mobile)=>mode==='allow'||(mode==='auto'&&!mobile);
-

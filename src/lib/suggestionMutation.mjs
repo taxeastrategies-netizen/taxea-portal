@@ -15,4 +15,3 @@ export function suggestionCreateOptions({queryClient,queryKey,persist}){
     onSettled:(_saved,error)=>queryClient.invalidateQueries({queryKey,refetchType:error?'active':'none'}),
   };
 }
-
