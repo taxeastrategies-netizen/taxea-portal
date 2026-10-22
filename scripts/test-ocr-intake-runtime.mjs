@@ -118,5 +118,31 @@ for(const file of process.env.OCR_INTAKE_ENTRY ? [] : ['src/pages/LectorGastos.j
   assert.match(source,/documents\.filter\(needsOcrAnalysis\)/);
   assert.match(source,/action: 'analysis_complete'/);
 }
+// Exercise the real drop-zone callbacks without browser injection or network.
+const zoneBundle=await esbuild.build({entryPoints:['src/components/lector/BulkDropZone.jsx'],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{
+  name:'ui-stubs',setup(build){
+    build.onResolve({filter:/^(react$|lucide-react$|@\/)/},args=>({path:args.path,namespace:'ui'}));
+    build.onLoad({filter:/.*/,namespace:'ui'},args=>({loader:'js',contents:args.path==='react'
+      ? 'export const useRef=()=>({current:{click(){}}});let count=0;export const useState=()=>[count++%2===1,()=>{}];'
+      : args.path==='lucide-react'?'export const Upload="Upload",FolderOpen="Folder",Camera="Camera";'
+      : args.path.includes('MobileScanner')?'export default "Scanner";'
+      : args.path.includes('button')?'export const Button="Button";':'export const cn=(...args)=>args.join(" ");'}));
+  },
+}]});
+const exports={};
+const uiContext=vm.createContext({module:{exports},exports,React:{createElement:(type,props,...children)=>({type,props:props || {},children})}});
+vm.runInContext(zoneBundle.outputFiles[0].text,uiContext);
+const zone=uiContext.module.exports.default,deliveries=[];
+const tree=zone({onFilesAdded:(files,method)=>deliveries.push({files,method})});
+const flatten=node=>node && typeof node==='object'?[node,...(node.children || []).flatMap(flatten)]:[];
+const nodes=flatten(tree), input=nodes.find(n=>n.type==='input'), scanner=nodes.find(n=>n.type==='Scanner');
+assert.ok(input);assert.ok(scanner);
+tree.props.onDrop({preventDefault(){},dataTransfer:{files:[image]}});
+input.props.onChange({target:{files:[image],value:'file'}});
+scanner.props.onCapture([image]);
+assert.deepEqual(deliveries.map(row=>row.method),['drag_drop','file_picker','camera']);
+assert.ok(deliveries.every(row=>row.files.length===1 && row.files[0]===image));
+const disabled=zone({onFilesAdded:()=>{throw new Error('Disabled intake must not submit twice');},disabled:true});
+disabled.props.onDrop({preventDefault(){},dataTransfer:{files:[image]}});
 console.log('OCR intake: own/membership/legacy profiles/admin pass; anonymous/foreign/unassigned advisor denied before upload or document reads; validation, review-only state, retry reuse, protected linked invoices, analysis lifecycle, 1203-row pagination and both OCR pages pass. No external calls.');
 
