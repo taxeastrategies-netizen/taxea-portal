@@ -39,7 +39,7 @@ const BREADCRUMBS = {
   '/': ['Dashboard'],
 };
 
-export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdmin, onRefresh, refreshing }) {
+export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdmin, onRefresh, refreshing, safeAreaTop = true }) {
   const location = useLocation();
   const navigation=useMobileNavigation();
   const crumbs = BREADCRUMBS[location.pathname] || null;
@@ -49,7 +49,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
   };
 
   return (
-    <header className="taxea-future-topbar h-14 shrink-0 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+    <header className={`taxea-future-topbar ${safeAreaTop?'taxea-top-inset':''} h-14 shrink-0 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30`}>
       <div className="flex items-center gap-1 sm:gap-3 min-w-0">
         <button
           type="button"
@@ -136,3 +136,4 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
     </header>
   );
 }
+
