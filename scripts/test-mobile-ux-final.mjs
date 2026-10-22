@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import * as esbuild from 'esbuild';
 import React from 'react';
 import {renderToString} from 'react-dom/server';
-import {nativeSelectModel,selectText,filterPickerOptions} from '../src/lib/nativeSelect.mjs';
+import {nativeSelectModel,selectText,filterPickerOptions,resetUncontrolledSelect} from '../src/lib/nativeSelect.mjs';
 import {suppressChromeGesture} from '../src/lib/appGestures.mjs';
 import {recordNavigation,safeBackTarget,referenceDestination} from '../src/lib/navigationStack.mjs';
 import {savePreference} from '../src/lib/optimisticPreference.mjs';
@@ -38,6 +38,13 @@ const longList=Array.from({length:1000},(_,i)=>({value:String(i),label:i===777?'
 check(filterPickerOptions(longList,'cafe agricola')[0].value==='777','Picker search is accent-insensitive');
 check(filterPickerOptions(longList,'Canarias').length===1000,'Every option stays searchable, including beyond a visible batch');
 check(filterPickerOptions(longList,'nothing-here').length===0,'Empty picker search has an honest empty state');
+const resetControl={tagName:'SELECT',value:'43000001'};let resetValue='';
+const resetOperation=resetUncontrolledSelect('',{current:resetControl},value=>{resetValue=value;});
+resetControl.value='43000002';await resetOperation;
+check(resetControl.value===''&&resetValue==='','A native reset cannot silently select the first account');
+await resetUncontrolledSelect('43000002',{current:resetControl},value=>{resetValue=value;});
+check(resetControl.value==='43000002'&&resetValue==='43000002','Nonempty defaults are preserved');
+await resetUncontrolledSelect('',{current:null},()=>{throw Error('Unmounted control must not update');});cases++;
 for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,true,false],[false,false,false]])check(suppressChromeGesture({closest:selector=>(selector.startsWith('input,')?protectedTarget:chromeTarget)?{}:null})===expected,'Chrome gesture suppression must preserve editable/copyable content');
 
 // Render actual shared Select with real React/server, not an invented DOM.
@@ -91,3 +98,4 @@ hookContext.module.exports.default(()=>{closes++;});const cleanups=lifecycle.map
 navigationListeners.get('taxea:navigation-committed')();check(closes===1,'Committed navigation closes an ephemeral portal');
 cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigation listener is removed on unmount');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
+
