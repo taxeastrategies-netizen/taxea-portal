@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
-export default async function handleCompanyContacts(req) {
+export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
@@ -35,5 +35,4 @@ export default async function handleCompanyContacts(req) {
   }
 }
 
-Deno.serve(handleCompanyContacts);
 
