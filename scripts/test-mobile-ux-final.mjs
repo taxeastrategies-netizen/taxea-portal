@@ -35,7 +35,7 @@ assert.deepEqual(model,{placeholder:'Cuenta',options:[{value:'43000012',label:'C
 check(selectText([0,null,false,' €'])==='0 €','Zero labels and fragments survive');
 
 // Render actual shared Select with real React/server, not an invented DOM.
-const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',packages:'external',jsx:'automatic',alias:{'@':process.cwd()+'/src'}});
+const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'}});
 const exported={},window={matchMedia:()=>({matches:true,addEventListener(){},removeEventListener(){}})};
 const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),window,document:{documentElement:{}},getComputedStyle:()=>({getPropertyValue:()=> '0px'}),console};
 vm.runInNewContext(built.outputFiles[0].text,sandbox);
