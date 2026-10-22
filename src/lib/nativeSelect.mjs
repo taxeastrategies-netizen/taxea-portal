@@ -31,4 +31,3 @@ export function filterPickerOptions(options,query){
   const search=normalize(query).trim();
   return search?options.filter(option=>normalize(option.label+' '+option.group+' '+option.value).includes(search)):options;
 }
-
