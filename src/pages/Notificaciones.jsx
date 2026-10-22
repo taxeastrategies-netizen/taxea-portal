@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import {markNotificationReads} from '@/lib/notificationRead.mjs';
+import {notificationReadOptions} from '@/lib/notificationMutation.mjs';
 import {referenceDestination} from '@/lib/navigationStack.mjs';
 
 const TIPO_CONFIG = {
@@ -31,18 +31,11 @@ export default function Notificaciones() {
   const flight=useRef(false);
 
   const load=()=>{setError('');return query.refetch();};
-  const readMutation=useMutation({mutationKey:['notification-read',user?.email],mutationFn:async ids=>{
-    await queryClient.cancelQueries({queryKey});
-    return markNotificationReads({rows:notifs,ids,
-      persist:id=>base44.entities.Notification.update(id,{leida:true}),
-      optimistic:changed=>setNotifs(prev=>prev.map(n=>changed.includes(n.id)?{...n,leida:true}:n)),
-      rollback:failed=>setNotifs(prev=>prev.map(n=>failed.includes(n.id)?{...n,leida:false}:n)),
-    });
-  },onSettled:()=>queryClient.invalidateQueries({queryKey})});
+  const readMutation=useMutation({mutationKey:['notification-read',user?.email],...notificationReadOptions({queryClient,queryKey,persist:id=>base44.entities.Notification.update(id,{leida:true})})});
 
   const markRead = async (ids) => {
     if(flight.current)return;flight.current=true;setBusy(true);setError('');
-    try{const result=await readMutation.mutateAsync(ids);if(result.failed.length)setError(`${result.failed.length} notificación(es) no se guardaron. Se ha restaurado su estado; puedes reintentar.`);
+    try{const result=await readMutation.mutateAsync({rows:notifs,ids});if(result.failed.length)setError(`${result.failed.length} notificación(es) no se guardaron. Se ha restaurado su estado; puedes reintentar.`);
     }catch{setError('No se pudo guardar el cambio. Actualiza y vuelve a intentarlo.');
     }finally{flight.current=false;setBusy(false);}
   };
@@ -177,3 +170,4 @@ export default function Notificaciones() {
     </div>
   );
 }
+
