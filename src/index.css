@@ -214,6 +214,10 @@
 .taxea-page-transition .taxea-mobile-screen:not([hidden]) { animation:none; }
 .taxea-native-select { min-height:44px; }
 .taxea-native-select select { -webkit-appearance:none; appearance:none; }
+.taxea-toast-viewport { top:calc(var(--taxea-safe-top) + 4rem); right:var(--taxea-safe-right); max-height:calc(100dvh - var(--taxea-safe-top) - var(--taxea-safe-bottom) - 9rem); pointer-events:none; }
+@media (min-width:768px) {
+  .taxea-toast-viewport { top:auto; bottom:calc(var(--taxea-safe-bottom) + 1rem); right:max(1rem,var(--taxea-safe-right)); }
+}
 /* Suppress accidental shell selection, image dragging and double-tap activation.
    Actual document text and inputs remain copyable; pinch zoom/edge back are not
    blocked by global preventDefault handlers. */
@@ -275,3 +279,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
