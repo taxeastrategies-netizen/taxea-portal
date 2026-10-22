@@ -69,6 +69,10 @@ export function classifyUploadError(err) {
   const rawMsg = err?.message || String(err || '');
   const msg = rawMsg.toLowerCase();
   const status = err?.status || err?.response?.status || err?.statusCode;
+  const code = err?.response?.data?.code;
+
+  if (code === 'COMPANY_FORBIDDEN') return { safeMessage: 'No tienes acceso a la empresa seleccionada. Cambia a tu perfil o pide a Taxea que revise tu vinculación.', retryable: false, errorCode: code };
+  if (code === 'ACCOUNT_DISABLED') return { safeMessage: 'Tu acceso al portal está suspendido. Contacta con Taxea.', retryable: false, errorCode: code };
 
   if (msg === 'timeout' || msg.includes('timeout')) {
     return { safeMessage: 'La subida tardó demasiado. Revisa tu conexión e inténtalo de nuevo.', retryable: true, errorCode: 'TIMEOUT' };
@@ -77,7 +81,7 @@ export function classifyUploadError(err) {
     return { safeMessage: 'Tu sesión ha caducado. Cierra sesión y vuelve a entrar.', retryable: true, errorCode: 'AUTH_EXPIRED' };
   }
   if (status === 403 || msg.includes('forbidden') || msg.includes('permission') || msg.includes('permiso')) {
-    return { safeMessage: 'No tienes permisos para subir documentos en este cliente. Contacta con Taxea.', retryable: false, errorCode: 'FORBIDDEN' };
+    return { safeMessage: 'El servidor ha rechazado la entrega. Actualiza la sesión; si persiste, Taxea revisará el acceso.', retryable: false, errorCode: 'FORBIDDEN' };
   }
   if (status === 413 || msg.includes('too large') || msg.includes('tamaño') || msg.includes('size limit')) {
     return { safeMessage: 'El archivo supera el límite permitido de 10 MB.', retryable: false, errorCode: 'FILE_TOO_LARGE' };
@@ -121,3 +125,4 @@ export function validateFile(file, maxMB = 10) {
   }
   return { valid: true };
 }
+
