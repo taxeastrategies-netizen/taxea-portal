@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import postcss from 'postcss';
 import {collisionInsets} from '../src/lib/safeArea.mjs';
 import {markNotificationReads} from '../src/lib/notificationRead.mjs';
+import {MOBILE_MEDIA} from '../src/lib/mobileNavigation.mjs';
 const html=fs.readFileSync('index.html','utf8'),css=fs.readFileSync('src/index.css','utf8');
 const viewports=[...html.matchAll(/<meta\s+name="viewport"\s+content="([^"]+)"/g)];
 assert.equal(viewports.length,1);assert.match(viewports[0][1],/viewport-fit=cover/);
@@ -20,6 +21,8 @@ assert.match(css,/\.taxea-dialog-content[^}]+max-height:calc\(100dvh/);
 assert.match(css,/prefers-reduced-motion/);
 assert.match(css,/\.taxea-future-bottomnav[^}]+--taxea-safe-bottom/);
 assert.match(css,/\.taxea-mobile-screen:not\(\[hidden\]\)/);
+assert.match(MOBILE_MEDIA,/hover: none/);assert.match(MOBILE_MEDIA,/pointer: coarse/);
+assert.match(css,/nav\.taxea-future-bottomnav[^}]+display:flex/);
 for(const file of ['select.jsx','dropdown-menu.jsx'])assert.match(fs.readFileSync('src/components/ui/'+file,'utf8'),/collisionPadding=\{safePadding\}/);
 let ui=[{id:'a',leida:false},{id:'b',leida:false},{id:'c',leida:true},{id:'untouched',leida:false}],resolveA,started=[],rolled=[];
 const gate=new Promise(resolve=>{resolveA=resolve;});
@@ -37,3 +40,4 @@ assert.equal(complete.updated.length,19);assert.equal(persisted,19);assert.ok(ma
 const empty=await markNotificationReads({rows:[],ids:['outside'],persist(){throw new Error('Foreign row cannot be persisted');},optimistic(){throw new Error('Empty operation');},rollback(){}});
 assert.deepEqual(empty,{updated:[],failed:[]});
 console.log('Viewport + CSS single-inset ownership + portrait/landscape collision arithmetic + safe menu contracts + immediate notification read/partial rollback/deduplication/bounded batches pass. No external calls; nonzero physical device insets still require iPhone QA.');
+
