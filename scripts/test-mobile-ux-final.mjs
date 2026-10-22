@@ -41,10 +41,17 @@ check(filterPickerOptions(longList,'nothing-here').length===0,'Empty picker sear
 for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,true,false],[false,false,false]])check(suppressChromeGesture({closest:selector=>(selector.startsWith('input,')?protectedTarget:chromeTarget)?{}:null})===expected,'Chrome gesture suppression must preserve editable/copyable content');
 
 // Render actual shared Select with real React/server, not an invented DOM.
-const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'},plugins:[{name:'viewport-adapter-only',setup(build){build.onResolve({filter:/useMobileViewport(?:\.js)?$/},()=>({path:'viewport',namespace:'qa-viewport'}));build.onLoad({filter:/.*/,namespace:'qa-viewport'},()=>({contents:'export default ()=>globalThis.__mobile;',loader:'js'}));}}]});
+const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'},plugins:[{name:'server-render-adapters',setup(build){
+  build.onResolve({filter:/useMobileViewport(?:\.js)?$/},()=>({path:'viewport',namespace:'qa-viewport'}));
+  build.onLoad({filter:/.*/,namespace:'qa-viewport'},()=>({contents:'export default ()=>globalThis.__mobile;',loader:'js'}));
+  // Vaul is browser-only (window.self at module scope). This test covers the
+  // real closed trigger, not drawer gestures/focus; those require browser QA.
+  build.onResolve({filter:/[\\/]drawer(?:\.jsx)?$/},()=>({path:'drawer',namespace:'qa-drawer'}));
+  build.onLoad({filter:/.*/,namespace:'qa-drawer'},()=>({contents:'export const Drawer=({children})=>children;export const DrawerTrigger=Drawer,DrawerContent=Drawer,DrawerTitle=Drawer,DrawerDescription=Drawer,DrawerClose=Drawer;',loader:'js'}));
+}}]});
 const exported={};
 // Keep the real server environment free of a fake DOM; only the media-query
-// hook is adapted. React, the Select and drawer primitives remain real.
+// hook and browser-only drawer shell are adapted. React and Select are real.
 const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),__mobile:true,console};
 vm.runInNewContext(built.outputFiles[0].text,sandbox);
 const ui=sandbox.module.exports,e=React.createElement;
@@ -80,4 +87,5 @@ const toastSource=fs.readFileSync('src/components/ui/toast.jsx','utf8');
 check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixed/.test(toastSource),'Provider cannot create a transparent fixed hit-test layer');
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
-console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,externalCalls:0,financialWrites:0},null,2));
+console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,drawerSsrAdapter:true,externalCalls:0,financialWrites:0},null,2));
+
