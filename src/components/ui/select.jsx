@@ -28,7 +28,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const sheet=native&&model.options.length>8&&!props.name&&!props.required;
   const picker=native?{...model,mode:sheet?'sheet':'native',value:current,change,open,setOpen,contentId,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null;
   return <NativeSelectContext.Provider value={picker}>
-    {sheet?<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs={false} handleOnly>{children}{open&&<MobileSelectPicker picker={picker}/>}</Drawer>:native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
+    {sheet?<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{children}{open&&<MobileSelectPicker picker={picker}/>}</Drawer>:native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
   </NativeSelectContext.Provider>;
 }
 
