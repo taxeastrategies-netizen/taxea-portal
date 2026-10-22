@@ -128,10 +128,10 @@ export default function Documentos() {
             </Select>
 
             <div className="flex border border-border rounded-lg overflow-hidden">
-              <button onClick={() => setView('grid')} className={cn('p-2 transition-colors', view === 'grid' ? 'bg-teal text-white' : 'hover:bg-secondary text-muted-foreground')}>
+              <button type="button" aria-label="Vista de cuadrícula" aria-pressed={view === 'grid'} onClick={() => setView('grid')} className={cn('p-2 transition-colors', view === 'grid' ? 'bg-teal text-white' : 'hover:bg-secondary text-muted-foreground')}>
                 <LayoutGrid className="w-4 h-4" />
               </button>
-              <button onClick={() => setView('list')} className={cn('p-2 transition-colors', view === 'list' ? 'bg-teal text-white' : 'hover:bg-secondary text-muted-foreground')}>
+              <button type="button" aria-label="Vista de lista" aria-pressed={view === 'list'} onClick={() => setView('list')} className={cn('p-2 transition-colors', view === 'list' ? 'bg-teal text-white' : 'hover:bg-secondary text-muted-foreground')}>
                 <LayoutList className="w-4 h-4" />
               </button>
             </div>
