@@ -71,6 +71,12 @@ check(native.includes('aria-label="Estado"')&&native.includes('id="qa-selector"'
 const largePicker=e(ui.Select,{value:'777',onValueChange(){}},e(ui.SelectTrigger,{'aria-label':'Proveedor'},e(ui.SelectValue,{placeholder:'Proveedor'})),e(ui.SelectContent,null,longList.map(option=>e(ui.SelectItem,{key:option.value,value:option.value},option.label))));
 const largeMarkup=renderToString(largePicker);
 check(largeMarkup.includes('aria-haspopup="dialog"')&&largeMarkup.includes('Café agrícola'),'Long mobile lists get a searchable drawer trigger without changing the value');
+const ordinaryMobile=renderToString(createSelect({name:undefined}));
+check(ordinaryMobile.includes('taxea-native-select')&&ordinaryMobile.includes('taxea-form-select-proxy'),'Standard mobile controls use NativeSelect, not a second desktop picker implementation');
+const emptyMobile=renderToString(e(ui.Select,{value:''},e(ui.SelectTrigger,{'aria-label':'Cargando cuentas'},e(ui.SelectValue,{placeholder:'Cargando cuentas'})),e(ui.SelectContent,null)));
+check(emptyMobile.includes('aria-haspopup="dialog"')&&emptyMobile.includes('taxea-form-select-proxy'),'Empty/loading options cannot fall back to a desktop popup');
+const controlledForm=renderToString(createSelect({name:'account',open:false,onOpenChange(){}}));
+check(controlledForm.includes('taxea-form-select-proxy')&&controlledForm.includes('aria-haspopup="dialog"'),'Controlled-open mobile forms retain one valid native field and the bottom picker');
 sandbox.__mobile=false;
 const desktop=renderToString(createSelect({name:undefined}));
 check(desktop.includes('role="combobox"')&&!desktop.includes('taxea-native-select'),'Desktop retains accessible Radix');
@@ -107,3 +113,4 @@ await import('./test-fullscreen-workspace.mjs');
 await import('./test-dual-store-polish.mjs');
 await import('./test-mobile-portal-boundaries.mjs');
 await import('./test-notification-preference-autosave.mjs');
+
