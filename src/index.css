@@ -213,6 +213,13 @@
 /* The stable motion wrapper handles PUSH/POP without remounting cached forms. */
 .taxea-page-transition .taxea-mobile-screen:not([hidden]) { animation:none; }
 .taxea-native-select { min-height:44px; }
+.taxea-drawer-content { max-height:calc(100dvh - var(--taxea-safe-top) - 1rem); padding-bottom:var(--taxea-safe-bottom); padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); }
+.taxea-mobile-picker { height:min(80dvh,40rem); margin-top:0; border-radius:1.5rem 1.5rem 0 0; }
+.taxea-future-shell { touch-action:manipulation; }
+@media (max-width:767px), (hover:none) and (pointer:coarse) {
+  .taxea-future-shell :is(button,[role="button"],[role="tab"],[role="switch"]) { min-width:44px; min-height:44px; }
+  .taxea-checkbox-target { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; cursor:pointer; }
+}
 .taxea-native-select select { -webkit-appearance:none; appearance:none; }
 .taxea-toast-viewport { top:calc(var(--taxea-safe-top) + 4rem); right:var(--taxea-safe-right); max-height:calc(100dvh - var(--taxea-safe-top) - var(--taxea-safe-bottom) - 9rem); pointer-events:none; }
 @media (min-width:768px) {
@@ -279,3 +286,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
