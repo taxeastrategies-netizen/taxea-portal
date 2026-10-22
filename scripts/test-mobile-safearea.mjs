@@ -11,12 +11,18 @@ assert.ok(!/user-scalable=no|maximum-scale\s*=\s*1/.test(viewports[0][1]),'Do no
 assert.deepEqual(collisionInsets(),{top:12,right:12,bottom:12,left:12});
 assert.deepEqual(collisionInsets({top:'59px',right:'0px',bottom:'34px',left:'47px'}),{top:59,right:12,bottom:34,left:47});
 assert.deepEqual(collisionInsets({top:'garbage',left:'-5px'}),{top:12,right:12,bottom:12,left:12});
-const parsed=postcss.parse(css);let shellTop=false;
-parsed.walkRules(rule=>{if(rule.selector==='.taxea-future-shell')rule.walkDecls('padding-top',decl=>{shellTop=decl.value==='var(--taxea-safe-top)';});});
-assert.ok(shellTop);
+const parsed=postcss.parse(css);let shellTop=false,headerTop=false,bannerTop=false;
+parsed.walkRules(rule=>{
+  if(rule.selector==='.taxea-future-shell')rule.walkDecls('padding-top',()=>{shellTop=true;});
+  if(rule.selector==='.taxea-future-topbar.taxea-top-inset')rule.walkDecls('padding-top',decl=>{headerTop=decl.value==='env(safe-area-inset-top,0px)';});
+  if(rule.selector==='.taxea-impersonation-safe-top')rule.walkDecls('padding-top',decl=>{bannerTop=decl.value==='env(safe-area-inset-top,0px)';});
+});
+assert.ok(!shellTop&&headerTop&&bannerTop,'Header or banner owns top inset exactly once');
 const layout=fs.readFileSync('src/components/layout/AppLayout.jsx','utf8'),topbar=fs.readFileSync('src/components/layout/TopBar.jsx','utf8');
 assert.ok(!/taxea-future-shell[^\n]+safe-area-padded/.test(layout));
 assert.ok(!/taxea-future-topbar[^\n]+safe-area-pt/.test(topbar));
+assert.match(layout,/safeAreaTop=\{!impersonation\}/);assert.match(layout,/min-h-0 overflow-y-auto overscroll-none/);
+assert.match(topbar,/safeAreaTop\?'taxea-top-inset'/);
 assert.match(css,/\.taxea-dialog-content[^}]+max-height:calc\(100dvh/);
 assert.match(css,/prefers-reduced-motion/);
 assert.match(css,/\.taxea-future-bottomnav[^}]+--taxea-safe-bottom/);
@@ -40,3 +46,4 @@ assert.equal(complete.updated.length,19);assert.equal(persisted,19);assert.ok(ma
 const empty=await markNotificationReads({rows:[],ids:['outside'],persist(){throw new Error('Foreign row cannot be persisted');},optimistic(){throw new Error('Empty operation');},rollback(){}});
 assert.deepEqual(empty,{updated:[],failed:[]});
 console.log('Viewport + CSS single-inset ownership + portrait/landscape collision arithmetic + safe menu contracts + immediate notification read/partial rollback/deduplication/bounded batches pass. No external calls; nonzero physical device insets still require iPhone QA.');
+
