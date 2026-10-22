@@ -9,4 +9,3 @@ export default function useAppGestures(ref,mobile){
     return()=>{for(const name of ['contextmenu','selectstart','dragstart'])shell.removeEventListener(name,handle);};
   },[ref,mobile]);
 }
-

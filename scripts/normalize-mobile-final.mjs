@@ -5,4 +5,3 @@ paths.push('src/components/ui/toast.jsx');
 paths.push('src/components/ui/MobileSelectPicker.jsx','src/components/ui/drawer.jsx','src/hooks/useAppGestures.js','src/lib/appGestures.mjs');
 for(const path of paths){const before=fs.readFileSync(path,'utf8'),after=before.trimEnd()+'\n';if(after!==before)fs.writeFileSync(path,after);}
 console.log('Task-only EOF normalisation complete.');
-
