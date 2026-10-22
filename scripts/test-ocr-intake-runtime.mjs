@@ -119,7 +119,7 @@ for(const file of process.env.OCR_INTAKE_ENTRY ? [] : ['src/pages/LectorGastos.j
   assert.match(source,/action: 'analysis_complete'/);
 }
 // Exercise the real drop-zone callbacks without browser injection or network.
-const zoneBundle=await esbuild.build({entryPoints:['src/components/lector/BulkDropZone.jsx'],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{
+const zoneBundle=await esbuild.build({entryPoints:['src/components/lector/BulkDropZone.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'transform',plugins:[{
   name:'ui-stubs',setup(build){
     build.onResolve({filter:/^(react$|lucide-react$|@\/)/},args=>({path:args.path,namespace:'ui'}));
     build.onLoad({filter:/.*/,namespace:'ui'},args=>({loader:'js',contents:args.path==='react'
