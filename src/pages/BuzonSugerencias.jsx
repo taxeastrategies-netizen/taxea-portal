@@ -49,7 +49,7 @@ export default function BuzonSugerencias() {
   const [form, setForm] = useState(BLANK);
   const [sent, setSent] = useState(false);
   const [sendError,setSendError]=useState(''),[notice,setNotice]=useState('');
-  const flight=useRef(false),scope=useRef(user?.email),queryClient=useQueryClient(),queryKey=['my-suggestions',user?.email||'anonymous'];
+  const flight=useRef(false),scope=useRef(user?.email),latestSubmission=useRef(null),queryClient=useQueryClient(),queryKey=['my-suggestions',user?.email||'anonymous'];
   useEffect(()=>{scope.current=user?.email;return()=>{scope.current=null;};},[user?.email]);
   const mine=useQuery({queryKey,enabled:!!company&&!!user?.email,queryFn:()=>base44.entities.Sugerencia.filter({usuario_email:user.email},'-created_date'),staleTime:30000,retry:1});
   const news=useQuery({queryKey:['public-implemented-suggestions'],enabled:!!company&&!!user?.email,queryFn:()=>base44.entities.Sugerencia.filter({estado:'implementada',publica:true},'-updated_date',6),staleTime:60000,retry:1});
@@ -73,10 +73,10 @@ export default function BuzonSugerencias() {
       estado: 'nueva',
     };
     const tempId='pending-'+(globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2));
+    latestSubmission.current=tempId;
     try{
       await createMutation.mutateAsync({payload,tempId,createdAt:new Date().toISOString()});
-      if(scope.current!==ownEmail)return;
-      setSent(true);setForm(BLANK);
+      if(scope.current===ownEmail){setSent(true);setForm(BLANK);}
       // The suggestion already has its real ID. Ancillary notices must never
       // leave the primary action spinning or invite a duplicate resubmission.
       void Promise.allSettled([Promise.resolve().then(()=>base44.entities.TimelineEvent.create({
@@ -94,7 +94,7 @@ export default function BuzonSugerencias() {
       titulo: `Nueva sugerencia: ${draft.titulo}`,
       mensaje: `${user.full_name || user.email} ha enviado una sugerencia de tipo "${TIPOS.find(t => t.value === draft.tipo)?.label}".`,
       tipo: 'aviso',
-    }))]).then(results=>{if(results.some(result=>result.status==='rejected')&&scope.current===ownEmail)setNotice('Tu sugerencia está registrada. No se pudo completar alguno de los avisos internos; no es necesario enviarla otra vez.');});
+    }))]).then(results=>{if(results.some(result=>result.status==='rejected')&&scope.current===ownEmail&&latestSubmission.current===tempId)setNotice('Tu sugerencia está registrada. No se pudo completar alguno de los avisos internos; no es necesario enviarla otra vez.');});
     }catch{if(scope.current===ownEmail)setSendError('No se confirmó el registro. Se conserva tu texto. Revisa «Mis sugerencias» antes de reintentar para evitar un duplicado.');}
     finally{flight.current=false;}
   };
