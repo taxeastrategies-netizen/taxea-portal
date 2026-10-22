@@ -24490,7 +24490,7 @@ var import_react14 = __toESM(require_react(), 1);
 var import_client = __toESM(require_client(), 1);
 
 // src/components/ui/select.jsx
-var React40 = __toESM(require_react(), 1);
+var React41 = __toESM(require_react(), 1);
 
 // node_modules/@radix-ui/react-select/dist/index.mjs
 var React33 = __toESM(require_react(), 1);
@@ -35537,14 +35537,143 @@ function useCloseOnNavigation(close) {
   }, []);
 }
 
-// src/components/ui/select.jsx
+// src/components/ui/NativeSelect.jsx
+var React40 = __toESM(require_react(), 1);
 var import_jsx_runtime21 = __toESM(require_jsx_runtime(), 1);
-var SelectUiContext = React40.createContext(null);
-var useControlLayoutEffect = typeof window === "undefined" ? React40.useEffect : React40.useLayoutEffect;
+var useClientLayoutEffect = typeof window === "undefined" ? React40.useEffect : React40.useLayoutEffect;
+function htmlSelectOptions(children) {
+  const options = [];
+  function walk(node, group = "", disabled = false) {
+    if (Array.isArray(node)) {
+      node.forEach((child) => walk(child, group, disabled));
+      return;
+    }
+    if (!node?.props) return;
+    if (node.type === "option") {
+      const label = String(node.props.label ?? selectText(node.props.children)).replace(/\s+/g, " ").trim();
+      options.push({ value: String(node.props.value ?? label), label, group, disabled: disabled || !!node.props.disabled });
+      return;
+    }
+    if (node.type === "optgroup") {
+      group = node.props.label || "";
+      disabled = disabled || !!node.props.disabled;
+    }
+    walk(node.props.children, group, disabled);
+  }
+  walk(children);
+  return options;
+}
+var NativeSelect = React40.forwardRef(function NativeSelect2({ children, value, defaultValue, className, style, onChange, onInvalid, onFocus, ...props }, ref) {
+  const mobile = useMobileViewport(), options = React40.useMemo(() => htmlSelectOptions(children), [children]);
+  const initial = defaultValue ?? options.find((option) => !option.disabled)?.value ?? "";
+  const [localValue, setLocalValue] = React40.useState(String(initial)), [open, setOpen] = React40.useState(false), [invalid, setInvalid] = React40.useState(false), [fieldLabel, setFieldLabel] = React40.useState("");
+  const nativeRef = React40.useRef(null), triggerRef = React40.useRef(null), generatedId = React40.useId(), contentId = React40.useId(), errorId = React40.useId();
+  const controlled = value !== void 0, current = String(controlled ? value ?? "" : localValue);
+  const adaptive = mobile && !props.multiple && !(Number(props.size) > 1);
+  const selected = options.find((option) => option.value === current);
+  const label = props["aria-label"] || fieldLabel || props.title || "Seleccionar opci\xF3n";
+  const assignedRef = React40.useCallback((node) => {
+    nativeRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) ref.current = node;
+  }, [ref]);
+  useCloseOnNavigation(() => setOpen(false));
+  React40.useEffect(() => {
+    if (!adaptive || props.disabled) setOpen(false);
+  }, [adaptive, props.disabled]);
+  useClientLayoutEffect(() => {
+    const native = nativeRef.current;
+    if (!native) return;
+    syncNativeSelectDefaults(native, controlled ? current : initial, current);
+    const associatedLabels = [...native.labels || []];
+    const previousLabel = (adaptive ? native.parentElement : native)?.previousElementSibling;
+    if (!associatedLabels.length && previousLabel?.tagName === "LABEL") associatedLabels.push(previousLabel);
+    const labels = associatedLabels.map((element) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, { acceptNode: (node) => node.parentElement?.closest("select,button") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const parts = [];
+      while (walker.nextNode()) parts.push(walker.currentNode.textContent);
+      return parts.join(" ");
+    }).join(" ").replace(/\s+/g, " ").trim();
+    setFieldLabel((previous) => previous === labels ? previous : labels);
+  }, [controlled, current, initial, options, adaptive]);
+  React40.useEffect(() => {
+    const native = nativeRef.current, form = native?.form;
+    if (!form) return;
+    const reset2 = () => {
+      void Promise.resolve().then(() => {
+        if (nativeRef.current !== native) return;
+        if (!controlled) {
+          native.value = String(initial);
+          setLocalValue(String(initial));
+        } else native.value = current;
+        setInvalid(false);
+        setOpen(false);
+      });
+    };
+    form.addEventListener("reset", reset2);
+    return () => form.removeEventListener("reset", reset2);
+  }, [controlled, initial, current]);
+  const handleChange = (event) => {
+    if (!controlled) setLocalValue(event.currentTarget.value);
+    setInvalid(false);
+    onChange?.(event);
+  };
+  const choose = (next) => {
+    const native = nativeRef.current;
+    if (!native || props.disabled) return;
+    native.value = next;
+    native.dispatchEvent(new Event("change", { bubbles: true }));
+    setOpen(false);
+  };
+  const nativeProps = { ...props, ref: assignedRef, value: current, onChange: handleChange, onInvalid: (event) => {
+    onInvalid?.(event);
+    if (adaptive) {
+      event.preventDefault();
+      setInvalid(true);
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+  }, onFocus: (event) => {
+    onFocus?.(event);
+    if (adaptive) triggerRef.current?.focus({ preventScroll: true });
+  } };
+  const nativeChildren = /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+    current && !selected && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("option", { value: current, disabled: true, children: [
+      current,
+      " \xB7 no disponible"
+    ] }),
+    children
+  ] });
+  if (!adaptive) return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("select", { ...nativeProps, className, style, children: nativeChildren });
+  const picker = { options, placeholder: label, value: current, change: choose, open, setOpen, contentId, triggerRef };
+  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: cn("taxea-legacy-select relative inline-flex max-w-full min-h-11", className), style, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("select", { ...nativeProps, className: "taxea-form-select-proxy", "aria-hidden": "true", tabIndex: -1, children: nativeChildren }),
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("button", { type: "button", id: props.id ? props.id + "-picker" : generatedId, ref: triggerRef, role: "combobox", "aria-label": label, "aria-labelledby": props["aria-labelledby"], "aria-describedby": [props["aria-describedby"], invalid ? errorId : ""].filter(Boolean).join(" ") || void 0, "aria-required": props.required || void 0, "aria-invalid": invalid || void 0, "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": contentId, disabled: props.disabled, className: "flex w-full min-h-11 min-w-0 items-center justify-between gap-2 rounded-[inherit] bg-transparent px-3 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", onClick: () => setOpen(true), onKeyDown: (event) => {
+      if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+        event.preventDefault();
+        setOpen(true);
+      }
+    }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "truncate", children: selected?.label || (current ? `${current} \xB7 no disponible` : "Seleccionar\u2026") }),
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronDown, { "aria-hidden": "true", className: "h-4 w-4 shrink-0 opacity-60" })
+    ] }),
+    invalid && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { id: errorId, role: "alert", className: "absolute left-0 top-full z-20 mt-1 max-w-full rounded-md border border-destructive bg-background px-2 py-1 text-xs text-destructive shadow-sm", children: [
+      "Selecciona una opci\xF3n v\xE1lida para ",
+      label,
+      "."
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Drawer2, { open, onOpenChange: setOpen, shouldScaleBackground: false, repositionInputs: true, handleOnly: true, children: open && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MobileSelectPicker, { picker }) })
+  ] });
+});
+var NativeSelect_default = NativeSelect;
+
+// src/components/ui/select.jsx
+var import_jsx_runtime22 = __toESM(require_jsx_runtime(), 1);
+var SelectUiContext = React41.createContext(null);
+var useControlLayoutEffect = typeof window === "undefined" ? React41.useEffect : React41.useLayoutEffect;
 function Select2({ children, value, defaultValue, onValueChange, ...props }) {
   const mobile = useMobileViewport();
-  const [localValue, setLocalValue] = React40.useState(defaultValue ?? "");
-  const [localOpen, setLocalOpen] = React40.useState(props.defaultOpen ?? false), contentId = React40.useId(), triggerRef = React40.useRef(null);
+  const [localValue, setLocalValue] = React41.useState(defaultValue ?? "");
+  const [localOpen, setLocalOpen] = React41.useState(props.defaultOpen ?? false), contentId = React41.useId(), triggerRef = React41.useRef(null);
   const open = props.open === void 0 ? localOpen : props.open;
   const setOpen = (next) => {
     if (props.open === void 0) setLocalOpen(next);
@@ -35559,10 +35688,10 @@ function Select2({ children, value, defaultValue, onValueChange, ...props }) {
     if (value === void 0) setLocalValue(next);
     onValueChange?.(next);
   };
-  const customTrigger = React40.Children.toArray(children).some((child) => child.type === SelectTrigger2 && child.props.asChild);
+  const customTrigger = React41.Children.toArray(children).some((child) => child.type === SelectTrigger2 && child.props.asChild);
   const nativeForm = !!(props.name || props.required) && !customTrigger && !props.defaultOpen && props.open === void 0 && props.onOpenChange === void 0;
   const sheet = mobile && model.options.length > 0 && !nativeForm && !(props.name || props.required), uncontrolled = value === void 0;
-  React40.useEffect(() => {
+  React41.useEffect(() => {
     if (!uncontrolled) return;
     const form = props.form ? document.getElementById(props.form) : triggerRef.current?.closest("form");
     const reset2 = () => {
@@ -35574,45 +35703,45 @@ function Select2({ children, value, defaultValue, onValueChange, ...props }) {
   useControlLayoutEffect(() => {
     if (nativeForm) syncNativeSelectDefaults(triggerRef.current, uncontrolled ? defaultValue : current, current);
   }, [nativeForm, uncontrolled, defaultValue, current, model.options]);
-  const picker = { ...model, mode: nativeForm ? "native" : sheet ? "sheet" : "desktop", value: current, change, open, setOpen, contentId, triggerRef, disabled: props.disabled, name: props.name, required: props.required, form: props.form, dir: props.dir };
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(SelectUiContext.Provider, { value: picker, children: nativeForm ? children : sheet ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+  const picker = { ...model, mobile, mode: nativeForm ? "native" : sheet ? "sheet" : "desktop", value: current, change, open, setOpen, contentId, triggerRef, disabled: props.disabled, name: props.name, required: props.required, form: props.form, dir: props.dir };
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(SelectUiContext.Provider, { value: picker, children: nativeForm ? children : sheet ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
     children,
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Drawer2, { open, onOpenChange: setOpen, shouldScaleBackground: false, repositionInputs: true, handleOnly: true, children: open && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MobileSelectPicker, { picker }) })
-  ] }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Root22, { ...props, value: current, onValueChange: change, open, onOpenChange: setOpen, children }) });
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Drawer2, { open, onOpenChange: setOpen, shouldScaleBackground: false, repositionInputs: true, handleOnly: true, children: open && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(MobileSelectPicker, { picker }) })
+  ] }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Root22, { ...props, value: current, onValueChange: change, open, onOpenChange: setOpen, children }) });
 }
 var SelectGroup2 = Group;
-var SelectValue2 = React40.forwardRef(({ children, placeholder, ...props }, ref) => {
-  const picker = React40.useContext(SelectUiContext);
-  if (picker?.mode !== "desktop" && picker) return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { ...props, ref, children: children ?? picker.options.find((option) => option.value === String(picker.value))?.label ?? placeholder ?? "" });
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Value, { ...props, placeholder, ref, children });
+var SelectValue2 = React41.forwardRef(({ children, placeholder, ...props }, ref) => {
+  const picker = React41.useContext(SelectUiContext);
+  if (picker?.mode !== "desktop" && picker) return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { ...props, ref, children: children ?? picker.options.find((option) => option.value === String(picker.value))?.label ?? placeholder ?? "" });
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Value, { ...props, placeholder, ref, children });
 });
 SelectValue2.displayName = "SelectValue";
-var SelectTrigger2 = React40.forwardRef(({ className, children, asChild, ...props }, ref) => {
-  const picker = React40.useContext(SelectUiContext);
+var SelectTrigger2 = React41.forwardRef(({ className, children, asChild, ...props }, ref) => {
+  const picker = React41.useContext(SelectUiContext);
   const registeredTrigger = picker?.triggerRef;
-  const assignedRef = React40.useCallback((node) => {
+  const assignedRef = React41.useCallback((node) => {
     if (registeredTrigger) registeredTrigger.current = node;
     if (typeof ref === "function") ref(node);
     else if (ref) ref.current = node;
   }, [registeredTrigger, ref]);
   if (picker?.mode === "native") {
     const groups = [...new Set(picker.options.map((option2) => option2.group))];
-    const option = (entry) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("option", { value: entry.value, disabled: entry.disabled, children: entry.label }, entry.value);
-    return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: cn("taxea-native-select relative inline-flex w-full", className), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("select", { ...props, ref: assignedRef, className: "w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", "aria-label": props["aria-label"] || (!props["aria-labelledby"] ? picker.placeholder || "Seleccionar opci\xF3n" : void 0), name: picker.name, required: picker.required, form: picker.form, disabled: picker.disabled || props.disabled, dir: picker.dir, value: picker.value ?? "", onChange: (event) => picker.change(event.target.value), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("option", { value: "", disabled: true, hidden: true, children: picker.placeholder || "Selecciona una opci\xF3n" }),
-        picker.value && !picker.options.some((entry) => entry.value === String(picker.value)) && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("option", { value: picker.value, disabled: true, children: [
+    const option = (entry) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("option", { value: entry.value, disabled: entry.disabled, children: entry.label }, entry.value);
+    return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { className: cn("taxea-native-select relative inline-flex w-full", className), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(NativeSelect_default, { ...props, ref: assignedRef, className: "w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", "aria-label": props["aria-label"] || (!props["aria-labelledby"] ? picker.placeholder || "Seleccionar opci\xF3n" : void 0), name: picker.name, required: picker.required, form: picker.form, disabled: picker.disabled || props.disabled, dir: picker.dir, value: picker.value ?? "", onChange: (event) => picker.change(event.target.value), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("option", { value: "", disabled: true, hidden: true, children: picker.placeholder || "Selecciona una opci\xF3n" }),
+        picker.value && !picker.options.some((entry) => entry.value === String(picker.value)) && /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("option", { value: picker.value, disabled: true, children: [
           picker.value,
           " \xB7 no disponible"
         ] }),
-        groups.map((group) => group ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("optgroup", { label: group, children: picker.options.filter((entry) => entry.group === group).map(option) }, group) : picker.options.filter((entry) => !entry.group).map(option))
+        groups.map((group) => group ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("optgroup", { label: group, children: picker.options.filter((entry) => entry.group === group).map(option) }, group) : picker.options.filter((entry) => !entry.group).map(option))
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronDown, { "aria-hidden": "true", className: "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50" })
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ChevronDown, { "aria-hidden": "true", className: picker.mobile ? "hidden" : "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50" })
     ] });
   }
   if (picker?.mode === "sheet") {
     const Trigger4 = asChild ? Slot2 : "button";
-    return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Trigger4, { ...props, ref: assignedRef, type: "button", role: "combobox", "aria-haspopup": "dialog", "aria-expanded": picker.open, "aria-controls": picker.contentId, "aria-label": props["aria-label"] || (!props["aria-labelledby"] ? picker.placeholder || "Seleccionar opci\xF3n" : void 0), disabled: picker.disabled || props.disabled, onClick: (event) => {
+    return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Trigger4, { ...props, ref: assignedRef, type: "button", role: "combobox", "aria-haspopup": "dialog", "aria-expanded": picker.open, "aria-controls": picker.contentId, "aria-label": props["aria-label"] || (!props["aria-labelledby"] ? picker.placeholder || "Seleccionar opci\xF3n" : void 0), disabled: picker.disabled || props.disabled, onClick: (event) => {
       props.onClick?.(event);
       if (!event.defaultPrevented) picker.setOpen(true);
     }, onKeyDown: (event) => {
@@ -35621,12 +35750,12 @@ var SelectTrigger2 = React40.forwardRef(({ className, children, asChild, ...prop
         event.preventDefault();
         picker.setOpen(true);
       }
-    }, className: cn("flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className), children: asChild ? children : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "truncate", children: picker.options.find((option) => option.value === String(picker.value))?.label || (picker.value ? `${picker.value} \xB7 no disponible` : picker.placeholder || "Seleccionar opci\xF3n") }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronDown, { "aria-hidden": "true", className: "h-4 w-4 shrink-0 opacity-50" })
+    }, className: cn("flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", className), children: asChild ? children : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "truncate", children: picker.options.find((option) => option.value === String(picker.value))?.label || (picker.value ? `${picker.value} \xB7 no disponible` : picker.placeholder || "Seleccionar opci\xF3n") }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ChevronDown, { "aria-hidden": "true", className: "h-4 w-4 shrink-0 opacity-50" })
     ] }) });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
     Trigger,
     {
       ref: assignedRef,
@@ -35636,39 +35765,39 @@ var SelectTrigger2 = React40.forwardRef(({ className, children, asChild, ...prop
         className
       ),
       ...props,
-      children: asChild ? children : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+      children: asChild ? children : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
         children,
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Icon, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronDown, { className: "h-4 w-4 opacity-50" }) })
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Icon, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ChevronDown, { className: "h-4 w-4 opacity-50" }) })
       ] })
     }
   );
 });
 SelectTrigger2.displayName = Trigger.displayName;
-var SelectScrollUpButton2 = React40.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+var SelectScrollUpButton2 = React41.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
   ScrollUpButton,
   {
     ref,
     className: cn("flex cursor-default items-center justify-center py-1", className),
     ...props,
-    children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronUp, { className: "h-4 w-4" })
+    children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ChevronUp, { className: "h-4 w-4" })
   }
 ));
 SelectScrollUpButton2.displayName = ScrollUpButton.displayName;
-var SelectScrollDownButton2 = React40.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+var SelectScrollDownButton2 = React41.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
   ScrollDownButton,
   {
     ref,
     className: cn("flex cursor-default items-center justify-center py-1", className),
     ...props,
-    children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ChevronDown, { className: "h-4 w-4" })
+    children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ChevronDown, { className: "h-4 w-4" })
   }
 ));
 SelectScrollDownButton2.displayName = ScrollDownButton.displayName;
-var SelectContent2 = React40.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
+var SelectContent2 = React41.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
   const safePadding = useSafeAreaCollision();
-  const picker = React40.useContext(SelectUiContext);
+  const picker = React41.useContext(SelectUiContext);
   if (picker?.mode === "native" || picker?.mode === "sheet") return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Portal2, { children: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Portal2, { children: /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
     Content2,
     {
       ref,
@@ -35681,21 +35810,21 @@ var SelectContent2 = React40.forwardRef(({ className, children, position = "popp
       position,
       ...props,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(SelectScrollUpButton2, {}),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(SelectScrollUpButton2, {}),
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
           Viewport,
           {
             className: cn("p-1", position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"),
             children
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(SelectScrollDownButton2, {})
+        /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(SelectScrollDownButton2, {})
       ]
     }
   ) });
 });
 SelectContent2.displayName = Content2.displayName;
-var SelectLabel2 = React40.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+var SelectLabel2 = React41.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
   Label,
   {
     ref,
@@ -35704,7 +35833,7 @@ var SelectLabel2 = React40.forwardRef(({ className, ...props }, ref) => /* @__PU
   }
 ));
 SelectLabel2.displayName = Label.displayName;
-var SelectItem2 = React40.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+var SelectItem2 = React41.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(
   Item,
   {
     ref,
@@ -35714,13 +35843,13 @@ var SelectItem2 = React40.forwardRef(({ className, children, ...props }, ref) =>
     ),
     ...props,
     children: [
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "absolute right-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ItemIndicator, { children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Check, { className: "h-4 w-4" }) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(ItemText, { children })
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: "absolute right-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ItemIndicator, { children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(Check, { className: "h-4 w-4" }) }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(ItemText, { children })
     ]
   }
 ));
 SelectItem2.displayName = Item.displayName;
-var SelectSeparator2 = React40.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+var SelectSeparator2 = React41.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
   Separator,
   {
     ref,
@@ -35741,10 +35870,10 @@ function useShellScrollLock() {
 }
 
 // node_modules/react-router/dist/development/chunk-OB3PAWPO.mjs
-var React41 = __toESM(require_react(), 1);
+var React42 = __toESM(require_react(), 1);
 var React211 = __toESM(require_react(), 1);
 var React310 = __toESM(require_react(), 1);
-var React42 = __toESM(require_react(), 1);
+var React43 = __toESM(require_react(), 1);
 var React92 = __toESM(require_react(), 1);
 var React82 = __toESM(require_react(), 1);
 var React72 = __toESM(require_react(), 1);
@@ -36543,39 +36672,39 @@ function hasInvalidProtocol(location) {
     return false;
   }
 }
-var DataRouterContext = React41.createContext(null);
+var DataRouterContext = React42.createContext(null);
 DataRouterContext.displayName = "DataRouter";
-var DataRouterStateContext = React41.createContext(null);
+var DataRouterStateContext = React42.createContext(null);
 DataRouterStateContext.displayName = "DataRouterState";
-var RSCRouterContext = React41.createContext(false);
+var RSCRouterContext = React42.createContext(false);
 function useIsRSCRouterContext() {
-  return React41.useContext(RSCRouterContext);
+  return React42.useContext(RSCRouterContext);
 }
-var ViewTransitionContext = React41.createContext({
+var ViewTransitionContext = React42.createContext({
   isTransitioning: false
 });
 ViewTransitionContext.displayName = "ViewTransition";
-var FetchersContext = React41.createContext(
+var FetchersContext = React42.createContext(
   /* @__PURE__ */ new Map()
 );
 FetchersContext.displayName = "Fetchers";
-var AwaitContext = React41.createContext(null);
+var AwaitContext = React42.createContext(null);
 AwaitContext.displayName = "Await";
-var NavigationContext = React41.createContext(
+var NavigationContext = React42.createContext(
   null
 );
 NavigationContext.displayName = "Navigation";
-var LocationContext = React41.createContext(
+var LocationContext = React42.createContext(
   null
 );
 LocationContext.displayName = "Location";
-var RouteContext = React41.createContext({
+var RouteContext = React42.createContext({
   outlet: null,
   matches: [],
   isDataRoute: false
 });
 RouteContext.displayName = "Route";
-var RouteErrorContext = React41.createContext(null);
+var RouteErrorContext = React42.createContext(null);
 RouteErrorContext.displayName = "RouteError";
 var ENABLE_DEV_WARNINGS = true;
 var ERROR_DIGEST_BASE = "REACT_ROUTER_ERROR";
@@ -38470,7 +38599,7 @@ function useViewTransitionState(to, { relative } = {}) {
 
 // src/components/layout/MobileNavigation.jsx
 var import_react13 = __toESM(require_react(), 1);
-var import_jsx_runtime22 = __toESM(require_jsx_runtime(), 1);
+var import_jsx_runtime23 = __toESM(require_jsx_runtime(), 1);
 var NavigationContext2 = (0, import_react13.createContext)(null);
 function useMobileNavigation() {
   return (0, import_react13.useContext)(NavigationContext2);
@@ -38487,17 +38616,17 @@ var base44 = { auth: { logout() {
 } } };
 
 // src/components/ui/dropdown-menu.jsx
-var React47 = __toESM(require_react(), 1);
+var React48 = __toESM(require_react(), 1);
 
 // node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
-var React46 = __toESM(require_react(), 1);
+var React47 = __toESM(require_react(), 1);
 
 // node_modules/@radix-ui/react-menu/dist/index.mjs
-var React45 = __toESM(require_react(), 1);
+var React46 = __toESM(require_react(), 1);
 
 // node_modules/@radix-ui/react-roving-focus/dist/index.mjs
-var React43 = __toESM(require_react(), 1);
-var import_jsx_runtime23 = __toESM(require_jsx_runtime(), 1);
+var React44 = __toESM(require_react(), 1);
+var import_jsx_runtime24 = __toESM(require_jsx_runtime(), 1);
 var ENTRY_FOCUS = "rovingFocusGroup.onEntryFocus";
 var EVENT_OPTIONS2 = { bubbles: false, cancelable: true };
 var GROUP_NAME2 = "RovingFocusGroup";
@@ -38507,13 +38636,13 @@ var [createRovingFocusGroupContext, createRovingFocusGroupScope] = createContext
   [createCollectionScope2]
 );
 var [RovingFocusProvider, useRovingFocusContext] = createRovingFocusGroupContext(GROUP_NAME2);
-var RovingFocusGroup = React43.forwardRef(
+var RovingFocusGroup = React44.forwardRef(
   (props, forwardedRef) => {
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Collection2.Provider, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(Collection2.Slot, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(RovingFocusGroupImpl, { ...props, ref: forwardedRef }) }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Collection2.Provider, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(Collection2.Slot, { scope: props.__scopeRovingFocusGroup, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(RovingFocusGroupImpl, { ...props, ref: forwardedRef }) }) });
   }
 );
 RovingFocusGroup.displayName = GROUP_NAME2;
-var RovingFocusGroupImpl = React43.forwardRef((props, forwardedRef) => {
+var RovingFocusGroupImpl = React44.forwardRef((props, forwardedRef) => {
   const {
     __scopeRovingFocusGroup,
     orientation,
@@ -38526,7 +38655,7 @@ var RovingFocusGroupImpl = React43.forwardRef((props, forwardedRef) => {
     preventScrollOnEntryFocus = false,
     ...groupProps
   } = props;
-  const ref = React43.useRef(null);
+  const ref = React44.useRef(null);
   const composedRefs = useComposedRefs(forwardedRef, ref);
   const direction = useDirection(dir);
   const [currentTabStopId, setCurrentTabStopId] = useControllableState({
@@ -38535,19 +38664,19 @@ var RovingFocusGroupImpl = React43.forwardRef((props, forwardedRef) => {
     onChange: onCurrentTabStopIdChange,
     caller: GROUP_NAME2
   });
-  const [isTabbingBackOut, setIsTabbingBackOut] = React43.useState(false);
+  const [isTabbingBackOut, setIsTabbingBackOut] = React44.useState(false);
   const handleEntryFocus = useCallbackRef(onEntryFocus);
   const getItems = useCollection2(__scopeRovingFocusGroup);
-  const isClickFocusRef = React43.useRef(false);
-  const [focusableItemsCount, setFocusableItemsCount] = React43.useState(0);
-  React43.useEffect(() => {
+  const isClickFocusRef = React44.useRef(false);
+  const [focusableItemsCount, setFocusableItemsCount] = React44.useState(0);
+  React44.useEffect(() => {
     const node = ref.current;
     if (node) {
       node.addEventListener(ENTRY_FOCUS, handleEntryFocus);
       return () => node.removeEventListener(ENTRY_FOCUS, handleEntryFocus);
     }
   }, [handleEntryFocus]);
-  return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
     RovingFocusProvider,
     {
       scope: __scopeRovingFocusGroup,
@@ -38555,20 +38684,20 @@ var RovingFocusGroupImpl = React43.forwardRef((props, forwardedRef) => {
       dir: direction,
       loop,
       currentTabStopId,
-      onItemFocus: React43.useCallback(
+      onItemFocus: React44.useCallback(
         (tabStopId) => setCurrentTabStopId(tabStopId),
         [setCurrentTabStopId]
       ),
-      onItemShiftTab: React43.useCallback(() => setIsTabbingBackOut(true), []),
-      onFocusableItemAdd: React43.useCallback(
+      onItemShiftTab: React44.useCallback(() => setIsTabbingBackOut(true), []),
+      onFocusableItemAdd: React44.useCallback(
         () => setFocusableItemsCount((prevCount) => prevCount + 1),
         []
       ),
-      onFocusableItemRemove: React43.useCallback(
+      onFocusableItemRemove: React44.useCallback(
         () => setFocusableItemsCount((prevCount) => prevCount - 1),
         []
       ),
-      children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
         Primitive.div,
         {
           tabIndex: isTabbingBackOut || focusableItemsCount === 0 ? -1 : 0,
@@ -38604,7 +38733,7 @@ var RovingFocusGroupImpl = React43.forwardRef((props, forwardedRef) => {
   );
 });
 var ITEM_NAME2 = "RovingFocusGroupItem";
-var RovingFocusGroupItem = React43.forwardRef(
+var RovingFocusGroupItem = React44.forwardRef(
   (props, forwardedRef) => {
     const {
       __scopeRovingFocusGroup,
@@ -38620,20 +38749,20 @@ var RovingFocusGroupItem = React43.forwardRef(
     const isCurrentTabStop = context.currentTabStopId === id;
     const getItems = useCollection2(__scopeRovingFocusGroup);
     const { onFocusableItemAdd, onFocusableItemRemove, currentTabStopId } = context;
-    React43.useEffect(() => {
+    React44.useEffect(() => {
       if (focusable) {
         onFocusableItemAdd();
         return () => onFocusableItemRemove();
       }
     }, [focusable, onFocusableItemAdd, onFocusableItemRemove]);
-    return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
       Collection2.ItemSlot,
       {
         scope: __scopeRovingFocusGroup,
         id,
         focusable,
         active,
-        children: /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
           Primitive.span,
           {
             tabIndex: isCurrentTabStop ? 0 : -1,
@@ -38709,52 +38838,52 @@ var Root5 = RovingFocusGroup;
 var Item2 = RovingFocusGroupItem;
 
 // node_modules/@radix-ui/react-menu/node_modules/@radix-ui/react-slot/dist/index.mjs
-var React44 = __toESM(require_react(), 1);
-var import_jsx_runtime24 = __toESM(require_jsx_runtime(), 1);
+var React45 = __toESM(require_react(), 1);
+var import_jsx_runtime25 = __toESM(require_jsx_runtime(), 1);
 // @__NO_SIDE_EFFECTS__
 function createSlot6(ownerName) {
   const SlotClone = /* @__PURE__ */ createSlotClone6(ownerName);
-  const Slot22 = React44.forwardRef((props, forwardedRef) => {
+  const Slot22 = React45.forwardRef((props, forwardedRef) => {
     const { children, ...slotProps } = props;
-    const childrenArray = React44.Children.toArray(children);
+    const childrenArray = React45.Children.toArray(children);
     const slottable = childrenArray.find(isSlottable6);
     if (slottable) {
       const newElement = slottable.props.children;
       const newChildren = childrenArray.map((child) => {
         if (child === slottable) {
-          if (React44.Children.count(newElement) > 1) return React44.Children.only(null);
-          return React44.isValidElement(newElement) ? newElement.props.children : null;
+          if (React45.Children.count(newElement) > 1) return React45.Children.only(null);
+          return React45.isValidElement(newElement) ? newElement.props.children : null;
         } else {
           return child;
         }
       });
-      return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children: React44.isValidElement(newElement) ? React44.cloneElement(newElement, void 0, newChildren) : null });
+      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children: React45.isValidElement(newElement) ? React45.cloneElement(newElement, void 0, newChildren) : null });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children });
+    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(SlotClone, { ...slotProps, ref: forwardedRef, children });
   });
   Slot22.displayName = `${ownerName}.Slot`;
   return Slot22;
 }
 // @__NO_SIDE_EFFECTS__
 function createSlotClone6(ownerName) {
-  const SlotClone = React44.forwardRef((props, forwardedRef) => {
+  const SlotClone = React45.forwardRef((props, forwardedRef) => {
     const { children, ...slotProps } = props;
-    if (React44.isValidElement(children)) {
+    if (React45.isValidElement(children)) {
       const childrenRef = getElementRef7(children);
       const props2 = mergeProps6(slotProps, children.props);
-      if (children.type !== React44.Fragment) {
+      if (children.type !== React45.Fragment) {
         props2.ref = forwardedRef ? composeRefs(forwardedRef, childrenRef) : childrenRef;
       }
-      return React44.cloneElement(children, props2);
+      return React45.cloneElement(children, props2);
     }
-    return React44.Children.count(children) > 1 ? React44.Children.only(null) : null;
+    return React45.Children.count(children) > 1 ? React45.Children.only(null) : null;
   });
   SlotClone.displayName = `${ownerName}.SlotClone`;
   return SlotClone;
 }
 var SLOTTABLE_IDENTIFIER6 = Symbol("radix.slottable");
 function isSlottable6(child) {
-  return React44.isValidElement(child) && typeof child.type === "function" && "__radixId" in child.type && child.type.__radixId === SLOTTABLE_IDENTIFIER6;
+  return React45.isValidElement(child) && typeof child.type === "function" && "__radixId" in child.type && child.type.__radixId === SLOTTABLE_IDENTIFIER6;
 }
 function mergeProps6(slotProps, childProps) {
   const overrideProps = { ...childProps };
@@ -38795,7 +38924,7 @@ function getElementRef7(element) {
 }
 
 // node_modules/@radix-ui/react-menu/dist/index.mjs
-var import_jsx_runtime25 = __toESM(require_jsx_runtime(), 1);
+var import_jsx_runtime26 = __toESM(require_jsx_runtime(), 1);
 var SELECTION_KEYS2 = ["Enter", " "];
 var FIRST_KEYS = ["ArrowDown", "PageUp", "Home"];
 var LAST_KEYS = ["ArrowUp", "PageDown", "End"];
@@ -38822,11 +38951,11 @@ var [MenuRootProvider, useMenuRootContext] = createMenuContext(MENU_NAME);
 var Menu2 = (props) => {
   const { __scopeMenu, open = false, children, dir, onOpenChange, modal = true } = props;
   const popperScope = usePopperScope2(__scopeMenu);
-  const [content, setContent] = React45.useState(null);
-  const isUsingKeyboardRef = React45.useRef(false);
+  const [content, setContent] = React46.useState(null);
+  const isUsingKeyboardRef = React46.useRef(false);
   const handleOpenChange = useCallbackRef(onOpenChange);
   const direction = useDirection(dir);
-  React45.useEffect(() => {
+  React46.useEffect(() => {
     const handleKeyDown = () => {
       isUsingKeyboardRef.current = true;
       document.addEventListener("pointerdown", handlePointer, { capture: true, once: true });
@@ -38840,7 +38969,7 @@ var Menu2 = (props) => {
       document.removeEventListener("pointermove", handlePointer, { capture: true });
     };
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Root2, { ...popperScope, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Root2, { ...popperScope, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
     MenuProvider,
     {
       scope: __scopeMenu,
@@ -38848,11 +38977,11 @@ var Menu2 = (props) => {
       onOpenChange: handleOpenChange,
       content,
       onContentChange: setContent,
-      children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
         MenuRootProvider,
         {
           scope: __scopeMenu,
-          onClose: React45.useCallback(() => handleOpenChange(false), [handleOpenChange]),
+          onClose: React46.useCallback(() => handleOpenChange(false), [handleOpenChange]),
           isUsingKeyboardRef,
           dir: direction,
           modal,
@@ -38864,11 +38993,11 @@ var Menu2 = (props) => {
 };
 Menu2.displayName = MENU_NAME;
 var ANCHOR_NAME2 = "MenuAnchor";
-var MenuAnchor = React45.forwardRef(
+var MenuAnchor = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, ...anchorProps } = props;
     const popperScope = usePopperScope2(__scopeMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Anchor, { ...popperScope, ...anchorProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Anchor, { ...popperScope, ...anchorProps, ref: forwardedRef });
   }
 );
 MenuAnchor.displayName = ANCHOR_NAME2;
@@ -38879,30 +39008,30 @@ var [PortalProvider2, usePortalContext2] = createMenuContext(PORTAL_NAME4, {
 var MenuPortal = (props) => {
   const { __scopeMenu, forceMount, children, container } = props;
   const context = useMenuContext(PORTAL_NAME4, __scopeMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(PortalProvider2, { scope: __scopeMenu, forceMount, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Portal, { asChild: true, container, children }) }) });
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(PortalProvider2, { scope: __scopeMenu, forceMount, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Portal, { asChild: true, container, children }) }) });
 };
 MenuPortal.displayName = PORTAL_NAME4;
 var CONTENT_NAME4 = "MenuContent";
 var [MenuContentProvider, useMenuContentContext] = createMenuContext(CONTENT_NAME4);
-var MenuContent = React45.forwardRef(
+var MenuContent = React46.forwardRef(
   (props, forwardedRef) => {
     const portalContext = usePortalContext2(CONTENT_NAME4, props.__scopeMenu);
     const { forceMount = portalContext.forceMount, ...contentProps } = props;
     const context = useMenuContext(CONTENT_NAME4, props.__scopeMenu);
     const rootContext = useMenuRootContext(CONTENT_NAME4, props.__scopeMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Collection3.Provider, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Collection3.Slot, { scope: props.__scopeMenu, children: rootContext.modal ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(MenuRootContentModal, { ...contentProps, ref: forwardedRef }) : /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(MenuRootContentNonModal, { ...contentProps, ref: forwardedRef }) }) }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Collection3.Provider, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Collection3.Slot, { scope: props.__scopeMenu, children: rootContext.modal ? /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(MenuRootContentModal, { ...contentProps, ref: forwardedRef }) : /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(MenuRootContentNonModal, { ...contentProps, ref: forwardedRef }) }) }) });
   }
 );
-var MenuRootContentModal = React45.forwardRef(
+var MenuRootContentModal = React46.forwardRef(
   (props, forwardedRef) => {
     const context = useMenuContext(CONTENT_NAME4, props.__scopeMenu);
-    const ref = React45.useRef(null);
+    const ref = React46.useRef(null);
     const composedRefs = useComposedRefs(forwardedRef, ref);
-    React45.useEffect(() => {
+    React46.useEffect(() => {
       const content = ref.current;
       if (content) return hideOthers(content);
     }, []);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuContentImpl,
       {
         ...props,
@@ -38920,9 +39049,9 @@ var MenuRootContentModal = React45.forwardRef(
     );
   }
 );
-var MenuRootContentNonModal = React45.forwardRef((props, forwardedRef) => {
+var MenuRootContentNonModal = React46.forwardRef((props, forwardedRef) => {
   const context = useMenuContext(CONTENT_NAME4, props.__scopeMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
     MenuContentImpl,
     {
       ...props,
@@ -38935,7 +39064,7 @@ var MenuRootContentNonModal = React45.forwardRef((props, forwardedRef) => {
   );
 });
 var Slot4 = createSlot6("MenuContent.ScrollLock");
-var MenuContentImpl = React45.forwardRef(
+var MenuContentImpl = React46.forwardRef(
   (props, forwardedRef) => {
     const {
       __scopeMenu,
@@ -38958,16 +39087,16 @@ var MenuContentImpl = React45.forwardRef(
     const popperScope = usePopperScope2(__scopeMenu);
     const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeMenu);
     const getItems = useCollection3(__scopeMenu);
-    const [currentItemId, setCurrentItemId] = React45.useState(null);
-    const contentRef = React45.useRef(null);
+    const [currentItemId, setCurrentItemId] = React46.useState(null);
+    const contentRef = React46.useRef(null);
     const composedRefs = useComposedRefs(forwardedRef, contentRef, context.onContentChange);
-    const timerRef = React45.useRef(0);
-    const searchRef = React45.useRef("");
-    const pointerGraceTimerRef = React45.useRef(0);
-    const pointerGraceIntentRef = React45.useRef(null);
-    const pointerDirRef = React45.useRef("right");
-    const lastPointerXRef = React45.useRef(0);
-    const ScrollLockWrapper = disableOutsideScroll ? Combination_default : React45.Fragment;
+    const timerRef = React46.useRef(0);
+    const searchRef = React46.useRef("");
+    const pointerGraceTimerRef = React46.useRef(0);
+    const pointerGraceIntentRef = React46.useRef(null);
+    const pointerDirRef = React46.useRef("right");
+    const lastPointerXRef = React46.useRef(0);
+    const ScrollLockWrapper = disableOutsideScroll ? Combination_default : React46.Fragment;
     const scrollLockWrapperProps = disableOutsideScroll ? { as: Slot4, allowPinchZoom: true } : void 0;
     const handleTypeaheadSearch = (key) => {
       const search = searchRef.current + key;
@@ -38986,26 +39115,26 @@ var MenuContentImpl = React45.forwardRef(
         setTimeout(() => newItem.focus());
       }
     };
-    React45.useEffect(() => {
+    React46.useEffect(() => {
       return () => window.clearTimeout(timerRef.current);
     }, []);
     useFocusGuards();
-    const isPointerMovingToSubmenu = React45.useCallback((event) => {
+    const isPointerMovingToSubmenu = React46.useCallback((event) => {
       const isMovingTowards = pointerDirRef.current === pointerGraceIntentRef.current?.side;
       return isMovingTowards && isPointerInGraceArea(event, pointerGraceIntentRef.current?.area);
     }, []);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuContentProvider,
       {
         scope: __scopeMenu,
         searchRef,
-        onItemEnter: React45.useCallback(
+        onItemEnter: React46.useCallback(
           (event) => {
             if (isPointerMovingToSubmenu(event)) event.preventDefault();
           },
           [isPointerMovingToSubmenu]
         ),
-        onItemLeave: React45.useCallback(
+        onItemLeave: React46.useCallback(
           (event) => {
             if (isPointerMovingToSubmenu(event)) return;
             contentRef.current?.focus();
@@ -39013,17 +39142,17 @@ var MenuContentImpl = React45.forwardRef(
           },
           [isPointerMovingToSubmenu]
         ),
-        onTriggerLeave: React45.useCallback(
+        onTriggerLeave: React46.useCallback(
           (event) => {
             if (isPointerMovingToSubmenu(event)) event.preventDefault();
           },
           [isPointerMovingToSubmenu]
         ),
         pointerGraceTimerRef,
-        onPointerGraceIntentChange: React45.useCallback((intent) => {
+        onPointerGraceIntentChange: React46.useCallback((intent) => {
           pointerGraceIntentRef.current = intent;
         }, []),
-        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ScrollLockWrapper, { ...scrollLockWrapperProps, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(ScrollLockWrapper, { ...scrollLockWrapperProps, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
           FocusScope,
           {
             asChild: true,
@@ -39033,7 +39162,7 @@ var MenuContentImpl = React45.forwardRef(
               contentRef.current?.focus({ preventScroll: true });
             }),
             onUnmountAutoFocus: onCloseAutoFocus,
-            children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
               DismissableLayer,
               {
                 asChild: true,
@@ -39043,7 +39172,7 @@ var MenuContentImpl = React45.forwardRef(
                 onFocusOutside,
                 onInteractOutside,
                 onDismiss,
-                children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+                children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
                   Root5,
                   {
                     asChild: true,
@@ -39057,7 +39186,7 @@ var MenuContentImpl = React45.forwardRef(
                       if (!rootContext.isUsingKeyboardRef.current) event.preventDefault();
                     }),
                     preventScrollOnEntryFocus: true,
-                    children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+                    children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
                       Content,
                       {
                         role: "menu",
@@ -39119,31 +39248,31 @@ var MenuContentImpl = React45.forwardRef(
 );
 MenuContent.displayName = CONTENT_NAME4;
 var GROUP_NAME3 = "MenuGroup";
-var MenuGroup = React45.forwardRef(
+var MenuGroup = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, ...groupProps } = props;
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Primitive.div, { role: "group", ...groupProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Primitive.div, { role: "group", ...groupProps, ref: forwardedRef });
   }
 );
 MenuGroup.displayName = GROUP_NAME3;
 var LABEL_NAME2 = "MenuLabel";
-var MenuLabel = React45.forwardRef(
+var MenuLabel = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, ...labelProps } = props;
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Primitive.div, { ...labelProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Primitive.div, { ...labelProps, ref: forwardedRef });
   }
 );
 MenuLabel.displayName = LABEL_NAME2;
 var ITEM_NAME3 = "MenuItem";
 var ITEM_SELECT = "menu.itemSelect";
-var MenuItem = React45.forwardRef(
+var MenuItem = React46.forwardRef(
   (props, forwardedRef) => {
     const { disabled = false, onSelect, ...itemProps } = props;
-    const ref = React45.useRef(null);
+    const ref = React46.useRef(null);
     const rootContext = useMenuRootContext(ITEM_NAME3, props.__scopeMenu);
     const contentContext = useMenuContentContext(ITEM_NAME3, props.__scopeMenu);
     const composedRefs = useComposedRefs(forwardedRef, ref);
-    const isPointerDownRef = React45.useRef(false);
+    const isPointerDownRef = React46.useRef(false);
     const handleSelect = () => {
       const menuItem = ref.current;
       if (!disabled && menuItem) {
@@ -39157,7 +39286,7 @@ var MenuItem = React45.forwardRef(
         }
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuItemImpl,
       {
         ...itemProps,
@@ -39184,28 +39313,28 @@ var MenuItem = React45.forwardRef(
   }
 );
 MenuItem.displayName = ITEM_NAME3;
-var MenuItemImpl = React45.forwardRef(
+var MenuItemImpl = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, disabled = false, textValue, ...itemProps } = props;
     const contentContext = useMenuContentContext(ITEM_NAME3, __scopeMenu);
     const rovingFocusGroupScope = useRovingFocusGroupScope(__scopeMenu);
-    const ref = React45.useRef(null);
+    const ref = React46.useRef(null);
     const composedRefs = useComposedRefs(forwardedRef, ref);
-    const [isFocused, setIsFocused] = React45.useState(false);
-    const [textContent, setTextContent] = React45.useState("");
-    React45.useEffect(() => {
+    const [isFocused, setIsFocused] = React46.useState(false);
+    const [textContent, setTextContent] = React46.useState("");
+    React46.useEffect(() => {
       const menuItem = ref.current;
       if (menuItem) {
         setTextContent((menuItem.textContent ?? "").trim());
       }
     }, [itemProps.children]);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       Collection3.ItemSlot,
       {
         scope: __scopeMenu,
         disabled,
         textValue: textValue ?? textContent,
-        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Item2, { asChild: true, ...rovingFocusGroupScope, focusable: !disabled, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Item2, { asChild: true, ...rovingFocusGroupScope, focusable: !disabled, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
           Primitive.div,
           {
             role: "menuitem",
@@ -39241,10 +39370,10 @@ var MenuItemImpl = React45.forwardRef(
   }
 );
 var CHECKBOX_ITEM_NAME = "MenuCheckboxItem";
-var MenuCheckboxItem = React45.forwardRef(
+var MenuCheckboxItem = React46.forwardRef(
   (props, forwardedRef) => {
     const { checked = false, onCheckedChange, ...checkboxItemProps } = props;
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ItemIndicatorProvider, { scope: props.__scopeMenu, checked, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(ItemIndicatorProvider, { scope: props.__scopeMenu, checked, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuItem,
       {
         role: "menuitemcheckbox",
@@ -39268,21 +39397,21 @@ var [RadioGroupProvider, useRadioGroupContext] = createMenuContext(
   { value: void 0, onValueChange: () => {
   } }
 );
-var MenuRadioGroup = React45.forwardRef(
+var MenuRadioGroup = React46.forwardRef(
   (props, forwardedRef) => {
     const { value, onValueChange, ...groupProps } = props;
     const handleValueChange = useCallbackRef(onValueChange);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(RadioGroupProvider, { scope: props.__scopeMenu, value, onValueChange: handleValueChange, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(MenuGroup, { ...groupProps, ref: forwardedRef }) });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(RadioGroupProvider, { scope: props.__scopeMenu, value, onValueChange: handleValueChange, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(MenuGroup, { ...groupProps, ref: forwardedRef }) });
   }
 );
 MenuRadioGroup.displayName = RADIO_GROUP_NAME;
 var RADIO_ITEM_NAME = "MenuRadioItem";
-var MenuRadioItem = React45.forwardRef(
+var MenuRadioItem = React46.forwardRef(
   (props, forwardedRef) => {
     const { value, ...radioItemProps } = props;
     const context = useRadioGroupContext(RADIO_ITEM_NAME, props.__scopeMenu);
     const checked = value === context.value;
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(ItemIndicatorProvider, { scope: props.__scopeMenu, checked, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(ItemIndicatorProvider, { scope: props.__scopeMenu, checked, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuItem,
       {
         role: "menuitemradio",
@@ -39305,15 +39434,15 @@ var [ItemIndicatorProvider, useItemIndicatorContext] = createMenuContext(
   ITEM_INDICATOR_NAME2,
   { checked: false }
 );
-var MenuItemIndicator = React45.forwardRef(
+var MenuItemIndicator = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, forceMount, ...itemIndicatorProps } = props;
     const indicatorContext = useItemIndicatorContext(ITEM_INDICATOR_NAME2, __scopeMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       Presence,
       {
         present: forceMount || isIndeterminate(indicatorContext.checked) || indicatorContext.checked === true,
-        children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
           Primitive.span,
           {
             ...itemIndicatorProps,
@@ -39327,10 +39456,10 @@ var MenuItemIndicator = React45.forwardRef(
 );
 MenuItemIndicator.displayName = ITEM_INDICATOR_NAME2;
 var SEPARATOR_NAME2 = "MenuSeparator";
-var MenuSeparator = React45.forwardRef(
+var MenuSeparator = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, ...separatorProps } = props;
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       Primitive.div,
       {
         role: "separator",
@@ -39343,11 +39472,11 @@ var MenuSeparator = React45.forwardRef(
 );
 MenuSeparator.displayName = SEPARATOR_NAME2;
 var ARROW_NAME3 = "MenuArrow";
-var MenuArrow = React45.forwardRef(
+var MenuArrow = React46.forwardRef(
   (props, forwardedRef) => {
     const { __scopeMenu, ...arrowProps } = props;
     const popperScope = usePopperScope2(__scopeMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Arrow2, { ...popperScope, ...arrowProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Arrow2, { ...popperScope, ...arrowProps, ref: forwardedRef });
   }
 );
 MenuArrow.displayName = ARROW_NAME3;
@@ -39357,14 +39486,14 @@ var MenuSub = (props) => {
   const { __scopeMenu, children, open = false, onOpenChange } = props;
   const parentMenuContext = useMenuContext(SUB_NAME, __scopeMenu);
   const popperScope = usePopperScope2(__scopeMenu);
-  const [trigger, setTrigger] = React45.useState(null);
-  const [content, setContent] = React45.useState(null);
+  const [trigger, setTrigger] = React46.useState(null);
+  const [content, setContent] = React46.useState(null);
   const handleOpenChange = useCallbackRef(onOpenChange);
-  React45.useEffect(() => {
+  React46.useEffect(() => {
     if (parentMenuContext.open === false) handleOpenChange(false);
     return () => handleOpenChange(false);
   }, [parentMenuContext.open, handleOpenChange]);
-  return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Root2, { ...popperScope, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Root2, { ...popperScope, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
     MenuProvider,
     {
       scope: __scopeMenu,
@@ -39372,7 +39501,7 @@ var MenuSub = (props) => {
       onOpenChange: handleOpenChange,
       content,
       onContentChange: setContent,
-      children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
         MenuSubProvider,
         {
           scope: __scopeMenu,
@@ -39388,28 +39517,28 @@ var MenuSub = (props) => {
 };
 MenuSub.displayName = SUB_NAME;
 var SUB_TRIGGER_NAME = "MenuSubTrigger";
-var MenuSubTrigger = React45.forwardRef(
+var MenuSubTrigger = React46.forwardRef(
   (props, forwardedRef) => {
     const context = useMenuContext(SUB_TRIGGER_NAME, props.__scopeMenu);
     const rootContext = useMenuRootContext(SUB_TRIGGER_NAME, props.__scopeMenu);
     const subContext = useMenuSubContext(SUB_TRIGGER_NAME, props.__scopeMenu);
     const contentContext = useMenuContentContext(SUB_TRIGGER_NAME, props.__scopeMenu);
-    const openTimerRef = React45.useRef(null);
+    const openTimerRef = React46.useRef(null);
     const { pointerGraceTimerRef, onPointerGraceIntentChange } = contentContext;
     const scope = { __scopeMenu: props.__scopeMenu };
-    const clearOpenTimer = React45.useCallback(() => {
+    const clearOpenTimer = React46.useCallback(() => {
       if (openTimerRef.current) window.clearTimeout(openTimerRef.current);
       openTimerRef.current = null;
     }, []);
-    React45.useEffect(() => clearOpenTimer, [clearOpenTimer]);
-    React45.useEffect(() => {
+    React46.useEffect(() => clearOpenTimer, [clearOpenTimer]);
+    React46.useEffect(() => {
       const pointerGraceTimer = pointerGraceTimerRef.current;
       return () => {
         window.clearTimeout(pointerGraceTimer);
         onPointerGraceIntentChange(null);
       };
     }, [pointerGraceTimerRef, onPointerGraceIntentChange]);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(MenuAnchor, { asChild: true, ...scope, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(MenuAnchor, { asChild: true, ...scope, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuItemImpl,
       {
         id: subContext.triggerId,
@@ -39489,16 +39618,16 @@ var MenuSubTrigger = React45.forwardRef(
 );
 MenuSubTrigger.displayName = SUB_TRIGGER_NAME;
 var SUB_CONTENT_NAME = "MenuSubContent";
-var MenuSubContent = React45.forwardRef(
+var MenuSubContent = React46.forwardRef(
   (props, forwardedRef) => {
     const portalContext = usePortalContext2(CONTENT_NAME4, props.__scopeMenu);
     const { forceMount = portalContext.forceMount, ...subContentProps } = props;
     const context = useMenuContext(CONTENT_NAME4, props.__scopeMenu);
     const rootContext = useMenuRootContext(CONTENT_NAME4, props.__scopeMenu);
     const subContext = useMenuSubContext(SUB_CONTENT_NAME, props.__scopeMenu);
-    const ref = React45.useRef(null);
+    const ref = React46.useRef(null);
     const composedRefs = useComposedRefs(forwardedRef, ref);
-    return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Collection3.Provider, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(Collection3.Slot, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Collection3.Provider, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Presence, { present: forceMount || context.open, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Collection3.Slot, { scope: props.__scopeMenu, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
       MenuContentImpl,
       {
         id: subContext.contentId,
@@ -39608,7 +39737,7 @@ var SubTrigger = MenuSubTrigger;
 var SubContent = MenuSubContent;
 
 // node_modules/@radix-ui/react-dropdown-menu/dist/index.mjs
-var import_jsx_runtime26 = __toESM(require_jsx_runtime(), 1);
+var import_jsx_runtime27 = __toESM(require_jsx_runtime(), 1);
 var DROPDOWN_MENU_NAME = "DropdownMenu";
 var [createDropdownMenuContext, createDropdownMenuScope] = createContextScope(
   DROPDOWN_MENU_NAME,
@@ -39627,14 +39756,14 @@ var DropdownMenu = (props) => {
     modal = true
   } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  const triggerRef = React46.useRef(null);
+  const triggerRef = React47.useRef(null);
   const [open, setOpen] = useControllableState({
     prop: openProp,
     defaultProp: defaultOpen ?? false,
     onChange: onOpenChange,
     caller: DROPDOWN_MENU_NAME
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
     DropdownMenuProvider,
     {
       scope: __scopeDropdownMenu,
@@ -39643,20 +39772,20 @@ var DropdownMenu = (props) => {
       contentId: useId(),
       open,
       onOpenChange: setOpen,
-      onOpenToggle: React46.useCallback(() => setOpen((prevOpen) => !prevOpen), [setOpen]),
+      onOpenToggle: React47.useCallback(() => setOpen((prevOpen) => !prevOpen), [setOpen]),
       modal,
-      children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Root32, { ...menuScope, open, onOpenChange: setOpen, dir, modal, children })
+      children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Root32, { ...menuScope, open, onOpenChange: setOpen, dir, modal, children })
     }
   );
 };
 DropdownMenu.displayName = DROPDOWN_MENU_NAME;
 var TRIGGER_NAME3 = "DropdownMenuTrigger";
-var DropdownMenuTrigger = React46.forwardRef(
+var DropdownMenuTrigger = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, disabled = false, ...triggerProps } = props;
     const context = useDropdownMenuContext(TRIGGER_NAME3, __scopeDropdownMenu);
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Anchor2, { asChild: true, ...menuScope, children: /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Anchor2, { asChild: true, ...menuScope, children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
       Primitive.button,
       {
         type: "button",
@@ -39690,17 +39819,17 @@ var PORTAL_NAME5 = "DropdownMenuPortal";
 var DropdownMenuPortal = (props) => {
   const { __scopeDropdownMenu, ...portalProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Portal5, { ...menuScope, ...portalProps });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Portal5, { ...menuScope, ...portalProps });
 };
 DropdownMenuPortal.displayName = PORTAL_NAME5;
 var CONTENT_NAME5 = "DropdownMenuContent";
-var DropdownMenuContent = React46.forwardRef(
+var DropdownMenuContent = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, ...contentProps } = props;
     const context = useDropdownMenuContext(CONTENT_NAME5, __scopeDropdownMenu);
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    const hasInteractedOutsideRef = React46.useRef(false);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+    const hasInteractedOutsideRef = React47.useRef(false);
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
       Content22,
       {
         id: context.contentId,
@@ -39736,88 +39865,88 @@ var DropdownMenuContent = React46.forwardRef(
 );
 DropdownMenuContent.displayName = CONTENT_NAME5;
 var GROUP_NAME4 = "DropdownMenuGroup";
-var DropdownMenuGroup = React46.forwardRef(
+var DropdownMenuGroup = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, ...groupProps } = props;
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Group2, { ...menuScope, ...groupProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Group2, { ...menuScope, ...groupProps, ref: forwardedRef });
   }
 );
 DropdownMenuGroup.displayName = GROUP_NAME4;
 var LABEL_NAME3 = "DropdownMenuLabel";
-var DropdownMenuLabel = React46.forwardRef(
+var DropdownMenuLabel = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, ...labelProps } = props;
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Label2, { ...menuScope, ...labelProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Label2, { ...menuScope, ...labelProps, ref: forwardedRef });
   }
 );
 DropdownMenuLabel.displayName = LABEL_NAME3;
 var ITEM_NAME4 = "DropdownMenuItem";
-var DropdownMenuItem = React46.forwardRef(
+var DropdownMenuItem = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, ...itemProps } = props;
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Item22, { ...menuScope, ...itemProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Item22, { ...menuScope, ...itemProps, ref: forwardedRef });
   }
 );
 DropdownMenuItem.displayName = ITEM_NAME4;
 var CHECKBOX_ITEM_NAME2 = "DropdownMenuCheckboxItem";
-var DropdownMenuCheckboxItem = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuCheckboxItem = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...checkboxItemProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(CheckboxItem, { ...menuScope, ...checkboxItemProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(CheckboxItem, { ...menuScope, ...checkboxItemProps, ref: forwardedRef });
 });
 DropdownMenuCheckboxItem.displayName = CHECKBOX_ITEM_NAME2;
 var RADIO_GROUP_NAME2 = "DropdownMenuRadioGroup";
-var DropdownMenuRadioGroup = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuRadioGroup = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...radioGroupProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(RadioGroup, { ...menuScope, ...radioGroupProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(RadioGroup, { ...menuScope, ...radioGroupProps, ref: forwardedRef });
 });
 DropdownMenuRadioGroup.displayName = RADIO_GROUP_NAME2;
 var RADIO_ITEM_NAME2 = "DropdownMenuRadioItem";
-var DropdownMenuRadioItem = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuRadioItem = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...radioItemProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(RadioItem, { ...menuScope, ...radioItemProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(RadioItem, { ...menuScope, ...radioItemProps, ref: forwardedRef });
 });
 DropdownMenuRadioItem.displayName = RADIO_ITEM_NAME2;
 var INDICATOR_NAME = "DropdownMenuItemIndicator";
-var DropdownMenuItemIndicator = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuItemIndicator = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...itemIndicatorProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(ItemIndicator2, { ...menuScope, ...itemIndicatorProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(ItemIndicator2, { ...menuScope, ...itemIndicatorProps, ref: forwardedRef });
 });
 DropdownMenuItemIndicator.displayName = INDICATOR_NAME;
 var SEPARATOR_NAME3 = "DropdownMenuSeparator";
-var DropdownMenuSeparator = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuSeparator = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...separatorProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Separator2, { ...menuScope, ...separatorProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Separator2, { ...menuScope, ...separatorProps, ref: forwardedRef });
 });
 DropdownMenuSeparator.displayName = SEPARATOR_NAME3;
 var ARROW_NAME4 = "DropdownMenuArrow";
-var DropdownMenuArrow = React46.forwardRef(
+var DropdownMenuArrow = React47.forwardRef(
   (props, forwardedRef) => {
     const { __scopeDropdownMenu, ...arrowProps } = props;
     const menuScope = useMenuScope(__scopeDropdownMenu);
-    return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(Arrow22, { ...menuScope, ...arrowProps, ref: forwardedRef });
+    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Arrow22, { ...menuScope, ...arrowProps, ref: forwardedRef });
   }
 );
 DropdownMenuArrow.displayName = ARROW_NAME4;
 var SUB_TRIGGER_NAME2 = "DropdownMenuSubTrigger";
-var DropdownMenuSubTrigger = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuSubTrigger = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...subTriggerProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(SubTrigger, { ...menuScope, ...subTriggerProps, ref: forwardedRef });
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(SubTrigger, { ...menuScope, ...subTriggerProps, ref: forwardedRef });
 });
 DropdownMenuSubTrigger.displayName = SUB_TRIGGER_NAME2;
 var SUB_CONTENT_NAME2 = "DropdownMenuSubContent";
-var DropdownMenuSubContent = React46.forwardRef((props, forwardedRef) => {
+var DropdownMenuSubContent = React47.forwardRef((props, forwardedRef) => {
   const { __scopeDropdownMenu, ...subContentProps } = props;
   const menuScope = useMenuScope(__scopeDropdownMenu);
-  return /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
     SubContent,
     {
       ...menuScope,
@@ -39852,9 +39981,9 @@ var SubTrigger2 = DropdownMenuSubTrigger;
 var SubContent2 = DropdownMenuSubContent;
 
 // src/components/ui/dropdown-menu.jsx
-var import_jsx_runtime27 = __toESM(require_jsx_runtime(), 1);
+var import_jsx_runtime28 = __toESM(require_jsx_runtime(), 1);
 function DropdownMenu2({ open, defaultOpen = false, onOpenChange, ...props }) {
-  const [localOpen, setLocalOpen] = React47.useState(defaultOpen);
+  const [localOpen, setLocalOpen] = React48.useState(defaultOpen);
   const change = (next) => {
     if (open === void 0) setLocalOpen(next);
     onOpenChange?.(next);
@@ -39862,10 +39991,10 @@ function DropdownMenu2({ open, defaultOpen = false, onOpenChange, ...props }) {
   useCloseOnNavigation(() => {
     if (open === void 0 ? localOpen : open) change(false);
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Root23, { ...props, open: open === void 0 ? localOpen : open, onOpenChange: change });
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Root23, { ...props, open: open === void 0 ? localOpen : open, onOpenChange: change });
 }
 var DropdownMenuTrigger2 = Trigger3;
-var DropdownMenuSubTrigger2 = React47.forwardRef(({ className, inset, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+var DropdownMenuSubTrigger2 = React48.forwardRef(({ className, inset, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
   SubTrigger2,
   {
     ref,
@@ -39877,14 +40006,14 @@ var DropdownMenuSubTrigger2 = React47.forwardRef(({ className, inset, children, 
     ...props,
     children: [
       children,
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(ChevronRight, { className: "ml-auto" })
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChevronRight, { className: "ml-auto" })
     ]
   }
 ));
 DropdownMenuSubTrigger2.displayName = SubTrigger2.displayName;
-var DropdownMenuSubContent2 = React47.forwardRef(({ className, ...props }, ref) => {
+var DropdownMenuSubContent2 = React48.forwardRef(({ className, ...props }, ref) => {
   const safePadding = useSafeAreaCollision();
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
     SubContent2,
     {
       ref,
@@ -39898,11 +40027,11 @@ var DropdownMenuSubContent2 = React47.forwardRef(({ className, ...props }, ref) 
   );
 });
 DropdownMenuSubContent2.displayName = SubContent2.displayName;
-var DropdownMenuContent2 = React47.forwardRef(({ className, sideOffset = 4, children, ...props }, ref) => {
+var DropdownMenuContent2 = React48.forwardRef(({ className, sideOffset = 4, children, ...props }, ref) => {
   const safePadding = useSafeAreaCollision(), mobile = useMobileViewport();
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(import_jsx_runtime27.Fragment, { children: [
-    mobile && /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Portal22, { children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { "aria-hidden": "true", className: "taxea-action-menu-backdrop fixed inset-0 z-50 bg-black/40", style: { pointerEvents: "auto" } }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Portal22, { children: /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
+    mobile && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Portal22, { children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { "aria-hidden": "true", className: "taxea-action-menu-backdrop fixed inset-0 z-50 bg-black/40", style: { pointerEvents: "auto" } }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Portal22, { children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
       Content23,
       {
         ref,
@@ -39916,9 +40045,9 @@ var DropdownMenuContent2 = React47.forwardRef(({ className, sideOffset = 4, chil
         ...props,
         children: [
           children,
-          mobile && /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(import_jsx_runtime27.Fragment, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Separator22, { className: "my-2 h-px bg-border" }),
-            /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Item23, { className: "flex min-h-11 cursor-default select-none items-center justify-center rounded-xl px-3 text-sm font-semibold outline-none focus:bg-accent", children: "Cancelar" })
+          mobile && /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(import_jsx_runtime28.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Separator22, { className: "my-2 h-px bg-border" }),
+            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Item23, { className: "flex min-h-11 cursor-default select-none items-center justify-center rounded-xl px-3 text-sm font-semibold outline-none focus:bg-accent", children: "Cancelar" })
           ] })
         ]
       }
@@ -39926,7 +40055,7 @@ var DropdownMenuContent2 = React47.forwardRef(({ className, sideOffset = 4, chil
   ] });
 });
 DropdownMenuContent2.displayName = Content23.displayName;
-var DropdownMenuItem2 = React47.forwardRef(({ className, inset, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+var DropdownMenuItem2 = React48.forwardRef(({ className, inset, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
   Item23,
   {
     ref,
@@ -39939,7 +40068,7 @@ var DropdownMenuItem2 = React47.forwardRef(({ className, inset, ...props }, ref)
   }
 ));
 DropdownMenuItem2.displayName = Item23.displayName;
-var DropdownMenuCheckboxItem2 = React47.forwardRef(({ className, children, checked, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+var DropdownMenuCheckboxItem2 = React48.forwardRef(({ className, children, checked, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
   CheckboxItem2,
   {
     ref,
@@ -39950,13 +40079,13 @@ var DropdownMenuCheckboxItem2 = React47.forwardRef(({ className, children, check
     checked,
     ...props,
     children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "absolute left-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(ItemIndicator22, { children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Check, { className: "h-4 w-4" }) }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "absolute left-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ItemIndicator22, { children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Check, { className: "h-4 w-4" }) }) }),
       children
     ]
   }
 ));
 DropdownMenuCheckboxItem2.displayName = CheckboxItem2.displayName;
-var DropdownMenuRadioItem2 = React47.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)(
+var DropdownMenuRadioItem2 = React48.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
   RadioItem2,
   {
     ref,
@@ -39966,13 +40095,13 @@ var DropdownMenuRadioItem2 = React47.forwardRef(({ className, children, ...props
     ),
     ...props,
     children: [
-      /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("span", { className: "absolute left-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(ItemIndicator22, { children: /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(Circle, { className: "h-2 w-2 fill-current" }) }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "absolute left-2 flex h-3.5 w-3.5 items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ItemIndicator22, { children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Circle, { className: "h-2 w-2 fill-current" }) }) }),
       children
     ]
   }
 ));
 DropdownMenuRadioItem2.displayName = RadioItem2.displayName;
-var DropdownMenuLabel2 = React47.forwardRef(({ className, inset, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+var DropdownMenuLabel2 = React48.forwardRef(({ className, inset, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
   Label22,
   {
     ref,
@@ -39981,7 +40110,7 @@ var DropdownMenuLabel2 = React47.forwardRef(({ className, inset, ...props }, ref
   }
 ));
 DropdownMenuLabel2.displayName = Label22.displayName;
-var DropdownMenuSeparator2 = React47.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+var DropdownMenuSeparator2 = React48.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
   Separator22,
   {
     ref,
@@ -39994,7 +40123,7 @@ var DropdownMenuShortcut = ({
   className,
   ...props
 }) => {
-  return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
     "span",
     {
       className: cn("ml-auto text-xs tracking-widest opacity-60", className),
@@ -40005,7 +40134,7 @@ var DropdownMenuShortcut = ({
 DropdownMenuShortcut.displayName = "DropdownMenuShortcut";
 
 // src/components/layout/TopBar.jsx
-var import_jsx_runtime28 = __toESM(require_jsx_runtime(), 1);
+var import_jsx_runtime29 = __toESM(require_jsx_runtime(), 1);
 var BREADCRUMBS = {
   "/tax-accounting/dashboard": ["Fiscalidad y Contabilidad", "Dashboard"],
   "/tax-accounting/asesoria": ["Fiscalidad y Contabilidad", "Bandeja del asesor"],
@@ -40043,68 +40172,68 @@ function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdm
   const handleLogout = () => {
     base44.auth.logout("/login");
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("header", { className: `taxea-future-topbar ${safeAreaTop ? "taxea-top-inset" : ""} h-14 shrink-0 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "flex items-center gap-1 sm:gap-3 min-w-0", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("header", { className: `taxea-future-topbar ${safeAreaTop ? "taxea-top-inset" : ""} h-14 shrink-0 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "flex items-center gap-1 sm:gap-3 min-w-0", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
         "button",
         {
           type: "button",
           onClick: onMenuToggle,
           "aria-label": "Abrir men\xFA principal",
           className: "lg:hidden min-w-11 min-h-11 p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors",
-          children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Menu, { className: "w-5 h-5" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Menu, { className: "w-5 h-5" })
         }
       ),
-      location.pathname !== "/" && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", "aria-label": "Volver a la pantalla anterior", onClick: () => navigation?.goBack(), className: "taxea-mobile-back md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChevronLeft, { className: "w-5 h-5" }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "taxea-mobile-title sm:hidden text-sm font-semibold truncate", children: crumbs?.at(-1) || { "/ajustes": "Ajustes", "/suscripcion": "Suscripci\xF3n", "/notificaciones": "Avisos" }[location.pathname] || "Taxea" }),
-      crumbs && crumbs.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("nav", { className: "hidden sm:flex items-center gap-1 text-sm", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "text-muted-foreground/60 font-medium", children: crumbs[0] }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChevronRight, { className: "w-3.5 h-3.5 text-muted-foreground/30" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "text-foreground font-semibold", children: crumbs[1] })
-      ] }) : companyName ? /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "taxea-topbar-company hidden sm:flex items-center gap-2", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "text-sm font-medium text-foreground truncate max-w-xs", children: companyName })
+      location.pathname !== "/" && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Volver a la pantalla anterior", onClick: () => navigation?.goBack(), className: "taxea-mobile-back md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ChevronLeft, { className: "w-5 h-5" }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "taxea-mobile-title sm:hidden text-sm font-semibold truncate", children: crumbs?.at(-1) || { "/ajustes": "Ajustes", "/suscripcion": "Suscripci\xF3n", "/notificaciones": "Avisos" }[location.pathname] || "Taxea" }),
+      crumbs && crumbs.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("nav", { className: "hidden sm:flex items-center gap-1 text-sm", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "text-muted-foreground/60 font-medium", children: crumbs[0] }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ChevronRight, { className: "w-3.5 h-3.5 text-muted-foreground/30" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "text-foreground font-semibold", children: crumbs[1] })
+      ] }) : companyName ? /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "taxea-topbar-company hidden sm:flex items-center gap-2", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" }),
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "text-sm font-medium text-foreground truncate max-w-xs", children: companyName })
       ] }) : null
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "flex items-center gap-0 sm:gap-2 shrink-0", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "taxea-topbar-ocr hidden sm:block", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Badge, { isAdmin }) }),
-      onRefresh && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("button", { type: "button", "aria-label": "Actualizar datos sin salir de la pantalla", disabled: refreshing, onClick: onRefresh, className: "taxea-mobile-refresh md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(RefreshCw, { className: `w-4 h-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}` }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "flex items-center gap-0 sm:gap-2 shrink-0", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "taxea-topbar-ocr hidden sm:block", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Badge, { isAdmin }) }),
+      onRefresh && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("button", { type: "button", "aria-label": "Actualizar datos sin salir de la pantalla", disabled: refreshing, onClick: onRefresh, className: "taxea-mobile-refresh md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(RefreshCw, { className: `w-4 h-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}` }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(
         Link,
         {
           to: "/notificaciones",
           "aria-label": notificationsCount > 0 ? `Notificaciones: ${notificationsCount} pendientes` : "Notificaciones",
           className: "relative min-w-11 min-h-11 p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-all duration-150 flex items-center justify-center",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Bell, { className: "w-4 h-4" }),
-            notificationsCount > 0 && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "absolute top-1 right-1 w-4 h-4 bg-taxea-red text-white text-[10px] rounded-full flex items-center justify-center font-bold leading-none shadow", children: notificationsCount > 9 ? "9+" : notificationsCount })
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Bell, { className: "w-4 h-4" }),
+            notificationsCount > 0 && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "absolute top-1 right-1 w-4 h-4 bg-taxea-red text-white text-[10px] rounded-full flex items-center justify-center font-bold leading-none shadow", children: notificationsCount > 9 ? "9+" : notificationsCount })
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(DropdownMenu2, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(DropdownMenuTrigger2, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("button", { "aria-label": "Men\xFA de tu cuenta", className: "min-w-11 min-h-11 flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl hover:bg-secondary transition-all duration-150 sm:ml-1", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { className: "w-7 h-7 rounded-lg bg-gradient-to-br from-taxea-red to-taxea-red-dark flex items-center justify-center shadow-sm", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "text-white text-xs font-bold", children: user?.full_name?.charAt(0)?.toUpperCase() || "U" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { className: "taxea-user-name hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate", children: user?.full_name?.split(" ")[0] || user?.email }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(ChevronDown, { className: "w-3 h-3 text-muted-foreground hidden sm:block" })
+      /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(DropdownMenu2, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(DropdownMenuTrigger2, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("button", { "aria-label": "Men\xFA de tu cuenta", className: "min-w-11 min-h-11 flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl hover:bg-secondary transition-all duration-150 sm:ml-1", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("div", { className: "w-7 h-7 rounded-lg bg-gradient-to-br from-taxea-red to-taxea-red-dark flex items-center justify-center shadow-sm", children: /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "text-white text-xs font-bold", children: user?.full_name?.charAt(0)?.toUpperCase() || "U" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "taxea-user-name hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate", children: user?.full_name?.split(" ")[0] || user?.email }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ChevronDown, { className: "w-3 h-3 text-muted-foreground hidden sm:block" })
         ] }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(DropdownMenuContent2, { align: "end", className: "w-52 rounded-xl shadow-xl border border-border", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "px-3 py-3 border-b border-border", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "text-sm font-semibold text-foreground truncate", children: user?.full_name }),
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { className: "text-xs text-muted-foreground truncate mt-0.5", children: user?.email })
+        /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(DropdownMenuContent2, { align: "end", className: "w-52 rounded-xl shadow-xl border border-border", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "px-3 py-3 border-b border-border", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "text-sm font-semibold text-foreground truncate", children: user?.full_name }),
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("p", { className: "text-xs text-muted-foreground truncate mt-0.5", children: user?.email })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "p-1", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(DropdownMenuItem2, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(Link, { to: "/ajustes", className: "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 text-sm", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(User, { className: "w-4 h-4 text-muted-foreground" }),
+          /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("div", { className: "p-1", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(DropdownMenuItem2, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(Link, { to: "/ajustes", className: "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 text-sm", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(User, { className: "w-4 h-4 text-muted-foreground" }),
               "Perfil y Ajustes"
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(DropdownMenuSeparator2, {}),
-            /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(DropdownMenuSeparator2, {}),
+            /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(
               DropdownMenuItem2,
               {
                 onClick: handleLogout,
                 className: "flex items-center gap-2 text-destructive focus:text-destructive cursor-pointer rounded-lg px-2 py-2 text-sm",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(LogOut, { className: "w-4 h-4" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(LogOut, { className: "w-4 h-4" }),
                   "Cerrar sesi\xF3n"
                 ]
               }
@@ -40115,132 +40244,6 @@ function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdm
     ] })
   ] });
 }
-
-// src/components/ui/NativeSelect.jsx
-var React48 = __toESM(require_react(), 1);
-var import_jsx_runtime29 = __toESM(require_jsx_runtime(), 1);
-var useClientLayoutEffect = typeof window === "undefined" ? React48.useEffect : React48.useLayoutEffect;
-function htmlSelectOptions(children) {
-  const options = [];
-  function walk(node, group = "", disabled = false) {
-    if (Array.isArray(node)) {
-      node.forEach((child) => walk(child, group, disabled));
-      return;
-    }
-    if (!node?.props) return;
-    if (node.type === "option") {
-      const label = String(node.props.label ?? selectText(node.props.children)).replace(/\s+/g, " ").trim();
-      options.push({ value: String(node.props.value ?? label), label, group, disabled: disabled || !!node.props.disabled });
-      return;
-    }
-    if (node.type === "optgroup") {
-      group = node.props.label || "";
-      disabled = disabled || !!node.props.disabled;
-    }
-    walk(node.props.children, group, disabled);
-  }
-  walk(children);
-  return options;
-}
-var NativeSelect = React48.forwardRef(function NativeSelect2({ children, value, defaultValue, className, style, onChange, onInvalid, onFocus, ...props }, ref) {
-  const mobile = useMobileViewport(), options = React48.useMemo(() => htmlSelectOptions(children), [children]);
-  const initial = defaultValue ?? options.find((option) => !option.disabled)?.value ?? "";
-  const [localValue, setLocalValue] = React48.useState(String(initial)), [open, setOpen] = React48.useState(false), [invalid, setInvalid] = React48.useState(false), [fieldLabel, setFieldLabel] = React48.useState("");
-  const nativeRef = React48.useRef(null), triggerRef = React48.useRef(null), generatedId = React48.useId(), contentId = React48.useId(), errorId = React48.useId();
-  const controlled = value !== void 0, current = String(controlled ? value ?? "" : localValue);
-  const adaptive = mobile && !props.multiple && !(Number(props.size) > 1);
-  const selected = options.find((option) => option.value === current);
-  const label = props["aria-label"] || fieldLabel || props.title || "Seleccionar opci\xF3n";
-  const assignedRef = React48.useCallback((node) => {
-    nativeRef.current = node;
-    if (typeof ref === "function") ref(node);
-    else if (ref) ref.current = node;
-  }, [ref]);
-  useCloseOnNavigation(() => setOpen(false));
-  React48.useEffect(() => {
-    if (!adaptive) setOpen(false);
-  }, [adaptive]);
-  useClientLayoutEffect(() => {
-    const native = nativeRef.current;
-    if (!native) return;
-    syncNativeSelectDefaults(native, controlled ? current : initial, current);
-    const labels = [...native.labels || []].map((element) => {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, { acceptNode: (node) => node.parentElement?.closest("select,button") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
-      const parts = [];
-      while (walker.nextNode()) parts.push(walker.currentNode.textContent);
-      return parts.join(" ");
-    }).join(" ").replace(/\s+/g, " ").trim();
-    setFieldLabel((previous) => previous === labels ? previous : labels);
-  }, [controlled, current, initial, options, adaptive]);
-  React48.useEffect(() => {
-    const native = nativeRef.current, form = native?.form;
-    if (!form) return;
-    const reset2 = () => {
-      void Promise.resolve().then(() => {
-        if (nativeRef.current !== native) return;
-        if (!controlled) {
-          native.value = String(initial);
-          setLocalValue(String(initial));
-        } else native.value = current;
-        setInvalid(false);
-        setOpen(false);
-      });
-    };
-    form.addEventListener("reset", reset2);
-    return () => form.removeEventListener("reset", reset2);
-  }, [controlled, initial, current]);
-  const handleChange = (event) => {
-    if (!controlled) setLocalValue(event.currentTarget.value);
-    setInvalid(false);
-    onChange?.(event);
-  };
-  const choose = (next) => {
-    const native = nativeRef.current;
-    if (!native || props.disabled) return;
-    native.value = next;
-    native.dispatchEvent(new Event("change", { bubbles: true }));
-    setOpen(false);
-  };
-  const nativeProps = { ...props, ref: assignedRef, value: current, onChange: handleChange, onInvalid: (event) => {
-    onInvalid?.(event);
-    if (adaptive) {
-      event.preventDefault();
-      setInvalid(true);
-      triggerRef.current?.focus({ preventScroll: true });
-    }
-  }, onFocus: (event) => {
-    onFocus?.(event);
-    if (adaptive) triggerRef.current?.focus({ preventScroll: true });
-  } };
-  const nativeChildren = /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)(import_jsx_runtime29.Fragment, { children: [
-    current && !selected && /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("option", { value: current, disabled: true, children: [
-      current,
-      " \xB7 no disponible"
-    ] }),
-    children
-  ] });
-  if (!adaptive) return /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("select", { ...nativeProps, className, style, children: nativeChildren });
-  const picker = { options, placeholder: label, value: current, change: choose, open, setOpen, contentId, triggerRef };
-  return /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("span", { className: cn("taxea-legacy-select relative inline-flex max-w-full min-h-11", className), style, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("select", { ...nativeProps, className: "taxea-form-select-proxy", "aria-hidden": "true", tabIndex: -1, children: nativeChildren }),
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("button", { type: "button", id: props.id ? props.id + "-picker" : generatedId, ref: triggerRef, role: "combobox", "aria-label": label, "aria-labelledby": props["aria-labelledby"], "aria-describedby": [props["aria-describedby"], invalid ? errorId : ""].filter(Boolean).join(" ") || void 0, "aria-required": props.required || void 0, "aria-invalid": invalid || void 0, "aria-haspopup": "dialog", "aria-expanded": open, "aria-controls": contentId, disabled: props.disabled, className: "flex w-full min-h-11 min-w-0 items-center justify-between gap-2 rounded-[inherit] bg-transparent px-3 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50", onClick: () => setOpen(true), onKeyDown: (event) => {
-      if (["ArrowDown", "ArrowUp"].includes(event.key)) {
-        event.preventDefault();
-        setOpen(true);
-      }
-    }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { className: "truncate", children: selected?.label || (current ? `${current} \xB7 no disponible` : "Seleccionar\u2026") }),
-      /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(ChevronDown, { "aria-hidden": "true", className: "h-4 w-4 shrink-0 opacity-60" })
-    ] }),
-    invalid && /* @__PURE__ */ (0, import_jsx_runtime29.jsxs)("span", { id: errorId, role: "alert", className: "sr-only", children: [
-      "Selecciona una opci\xF3n v\xE1lida para ",
-      label,
-      "."
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(Drawer2, { open, onOpenChange: setOpen, shouldScaleBackground: false, repositionInputs: true, handleOnly: true, children: open && /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(MobileSelectPicker, { picker }) })
-  ] });
-});
-var NativeSelect_default = NativeSelect;
 
 // scripts/mobile-controls-fixture.jsx
 var import_jsx_runtime30 = __toESM(require_jsx_runtime(), 1);
@@ -40268,6 +40271,15 @@ function Fixture() {
     /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("main", { className: "taxea-future-main flex-1 min-h-0 overflow-y-auto overscroll-none p-4 space-y-5", children: [
       /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("h1", { children: "Taxea QA \u2014 controles ficticios sin backend" }),
       /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("p", { children: "Esta p\xE1gina no accede a perfiles ni guarda documentos." }),
+      /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("form", { onSubmit: (event) => event.preventDefault(), className: "space-y-3 rounded-xl border p-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("label", { htmlFor: "qa-uncontrolled-legacy", children: "Proveedor sin control ficticio" }),
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(NativeSelect_default, { className: "w-full border rounded-lg", id: "qa-uncontrolled-legacy", name: "uncontrolledLegacy", required: true, defaultValue: "", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("option", { value: "", children: "Elegir proveedor" }),
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("option", { value: "40000001", children: "Proveedor libre Alpha" }),
+          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("option", { value: "40000002", children: "Proveedor libre Beta" })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("button", { className: "rounded-lg border p-3", type: "reset", children: "Restablecer proveedor sin control" })
+      ] }),
       /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("form", { className: "space-y-3 rounded-xl border p-4", onSubmit: (event) => {
         event.preventDefault();
         setLegacyResult(JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))));
