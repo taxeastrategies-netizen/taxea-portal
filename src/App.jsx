@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
+import { ThemeProvider } from 'next-themes';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -55,6 +56,8 @@ const AdminOcrCredits = lazy(() => import('./pages/AdminOcrCredits'));
 const ImportacionContable = lazy(() => import('./pages/ImportacionContable'));
 const AdminOcrBandeja = lazy(() => import('./pages/AdminOcrBandeja'));
 const AdminBackupDrive = lazy(() => import('./pages/AdminBackupDrive'));
+const AdminPrivacyRequests = lazy(() => import('./pages/AdminPrivacyRequests'));
+const AccountDeletionInfo = lazy(() => import('./pages/AccountDeletionInfo'));
 const SetupPassword = lazy(() => import('./pages/SetupPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Register = lazy(() => import('./pages/Register'));
@@ -135,6 +138,7 @@ function AppWithContext({ user }) {
           <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
           <Route path="/importacion-contable" element={<ImportacionContable />} />
           <Route path="/admin/backup-drive" element={<AdminOnlyRoute isAdmin={isPlatformAdmin}><AdminBackupDrive /></AdminOnlyRoute>} />
+          <Route path="/admin/privacy-requests" element={<AdminOnlyRoute isAdmin={isPlatformAdmin}><AdminPrivacyRequests /></AdminOnlyRoute>} />
           <Route path="/signup" element={<Navigate to="/login" replace />} />
         </Route>
         <Route path="*" element={<PageNotFound />} />
@@ -191,15 +195,21 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem enableColorScheme storageKey="taxea-appearance" disableTransitionOnChange>
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <AuthenticatedApp />
+          <Suspense fallback={<PageLoader/>}><Routes>
+            <Route path="/eliminar-cuenta" element={<AccountDeletionInfo/>}/>
+            <Route path="*" element={<AuthenticatedApp/>}/>
+          </Routes></Suspense>
         </Router>
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 
 export default App;
+
