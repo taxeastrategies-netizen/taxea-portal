@@ -4,6 +4,8 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Isolate rebuilt dependency metadata from the cache predating security fixes.
+  cacheDir: 'node_modules/.vite-taxea',
   logLevel: 'error', // Suppress warnings, only show errors
   plugins: [
     base44({
