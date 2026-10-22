@@ -12,6 +12,7 @@ import {nativeSelectModel,resetUncontrolledSelect,syncNativeSelectDefaults} from
 import {Drawer} from './drawer';
 import MobileSelectPicker from './MobileSelectPicker';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
+import NativeSelect from './NativeSelect';
 
 const SelectUiContext=React.createContext(null);
 const useControlLayoutEffect=typeof window==='undefined'?React.useEffect:React.useLayoutEffect;
@@ -26,8 +27,8 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const current=value===undefined?localValue:value;
   const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
   const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
-  // Real HTML form controls retain the OS picker and native validation. All
-  // ordinary application choices, including controlled popups, use the drawer.
+  // Form controls retain native validation/FormData. Their visual picker is
+  // adaptive too; ordinary application choices use the direct drawer path.
   const nativeForm=!!(props.name||props.required)&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
   const sheet=mobile&&model.options.length>0&&!nativeForm&&!(props.name||props.required),uncontrolled=value===undefined;
   React.useEffect(()=>{
@@ -37,7 +38,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
     form?.addEventListener('reset',reset);return()=>form?.removeEventListener('reset',reset);
   },[uncontrolled,defaultValue,props.form]);
   useControlLayoutEffect(()=>{if(nativeForm)syncNativeSelectDefaults(triggerRef.current,uncontrolled?defaultValue:current,current);},[nativeForm,uncontrolled,defaultValue,current,model.options]);
-  const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
+  const picker={...model,mobile,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
   // The mobile path mounts only its picker, not a hidden desktop popup or its
   // form listeners. Desktop and real native HTML forms retain their own paths.
   return <SelectUiContext.Provider value={picker}>
@@ -63,11 +64,11 @@ const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }
   if(picker?.mode==='native'){
     const groups=[...new Set(picker.options.map(option=>option.group))];
     const option=entry=><option key={entry.value} value={entry.value} disabled={entry.disabled}>{entry.label}</option>;
-    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}><select {...props} ref={assignedRef} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} name={picker.name} required={picker.required} form={picker.form} disabled={picker.disabled||props.disabled} dir={picker.dir} value={picker.value??''} onChange={event=>picker.change(event.target.value)}>
+    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}><NativeSelect {...props} ref={assignedRef} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} name={picker.name} required={picker.required} form={picker.form} disabled={picker.disabled||props.disabled} dir={picker.dir} value={picker.value??''} onChange={event=>picker.change(event.target.value)}>
       <option value="" disabled hidden>{picker.placeholder||'Selecciona una opción'}</option>
       {picker.value&&!picker.options.some(entry=>entry.value===String(picker.value))&&<option value={picker.value} disabled>{picker.value} · no disponible</option>}
       {groups.map(group=>group?<optgroup key={group} label={group}>{picker.options.filter(entry=>entry.group===group).map(option)}</optgroup>:picker.options.filter(entry=>!entry.group).map(option))}
-    </select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/></span>;
+    </NativeSelect><ChevronDown aria-hidden="true" className={picker.mobile?'hidden':'pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50'}/></span>;
   }
   if(picker?.mode==='sheet'){
     const Trigger=asChild?Slot:'button';
@@ -187,3 +188,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
