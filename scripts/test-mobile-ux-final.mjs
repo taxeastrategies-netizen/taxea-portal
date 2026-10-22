@@ -72,6 +72,8 @@ check(largeMarkup.includes('aria-haspopup="dialog"')&&largeMarkup.includes('CafÃ
 sandbox.__mobile=false;
 const desktop=renderToString(createSelect());
 check(desktop.includes('role="combobox"')&&!desktop.includes('taxea-native-select'),'Desktop retains accessible Radix');
+const customDesktop=renderToString(e(ui.Select,{value:'a'},e(ui.SelectTrigger,{asChild:true,'aria-label':'Custom QA'},e('button',null,'Single custom child')),e(ui.SelectContent,null,e(ui.SelectItem,{value:'a'},'Alpha'))));
+check(customDesktop.includes('Single custom child'),'asChild cannot receive an extra icon sibling and crash desktop');
 
 let visible={summary:false},release,events=[];
 const previous=visible,next={summary:true},gate=new Promise(resolve=>{release=resolve;});
