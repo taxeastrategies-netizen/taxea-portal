@@ -1,6 +1,6 @@
 import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition} from 'react';
 import {useLocation,useNavigate,useNavigationType,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
-import {MOBILE_TABS,MOBILE_MEDIA,mobileTabId,internalHref} from '@/lib/mobileNavigation.mjs';
+import {MOBILE_TABS,MOBILE_MEDIA,NAVIGATION_COMMITTED_EVENT,mobileTabId,internalHref} from '@/lib/mobileNavigation.mjs';
 import {recordNavigation,safeBackTarget} from '@/lib/navigationStack.mjs';
 
 const NavigationContext=createContext(null);
@@ -19,7 +19,7 @@ export function MobileNavigationProvider({children}) {
     return ()=>media.removeEventListener?.('change',changed);
   },[]);
   useLayoutEffect(()=>{const id=mobileTabId(location.pathname);if(id)lastRoutes.current[id]=internalHref(location);},[location]);
-  useLayoutEffect(()=>{entries.current=recordNavigation(entries.current,location,window.history.state?.idx,navigationType);},[location,navigationType]);
+  useLayoutEffect(()=>{entries.current=recordNavigation(entries.current,location,window.history.state?.idx,navigationType);window.dispatchEvent(new CustomEvent(NAVIGATION_COMMITTED_EVENT));},[location,navigationType]);
   const currentTab=mobileTabId(location.pathname);
   const selectTab=id=>{
     if(id===currentTab){window.dispatchEvent(new CustomEvent('taxea:tab-reselect',{detail:{id}}));return;}
@@ -68,3 +68,4 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     {!id&&<section className="taxea-mobile-screen" key={href}>{outlet}</section>}
   </>;
 }
+
