@@ -105,8 +105,9 @@ Deno.serve(async (req) => {
           })),
         };
       } catch (stripeErr) {
-        console.error('[getBillingOverview] Stripe error:', stripeErr.message);
-        stripeSummary = { configured: true, isTestMode, error: stripeErr.message };
+        const requestId = crypto.randomUUID();
+        console.error('[getBillingOverview] Stripe', { requestId, name: String(stripeErr?.name || 'Error') });
+        stripeSummary = { configured: true, isTestMode, error: 'No se pudo consultar Stripe. Reintenta o comunica la referencia al administrador.', requestId };
       }
     }
 
@@ -239,7 +240,9 @@ Deno.serve(async (req) => {
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[getBillingOverview]', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[getBillingOverview]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo cargar el resumen de facturación. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
