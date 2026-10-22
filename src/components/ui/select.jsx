@@ -6,14 +6,44 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
+import useMobileViewport from '@/hooks/useMobileViewport';
+import {nativeSelectModel} from '@/lib/nativeSelect.mjs';
 
-const Select = SelectPrimitive.Root
+const NativeSelectContext=React.createContext(null);
+function Select({children,value,defaultValue,onValueChange,...props}){
+  const mobile=useMobileViewport();
+  const [localValue,setLocalValue]=React.useState(defaultValue??'');
+  const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue});
+  // Explicitly controlled popup APIs keep Radix; ordinary choices use the OS
+  // picker on phones. No duplicated hidden inputs or parallel form submission.
+  const native=mobile&&model.options.length>0&&props.open===undefined&&props.onOpenChange===undefined;
+  const current=value===undefined?localValue:value;
+  const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
+  return <NativeSelectContext.Provider value={native?{...model,value:current,change,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null}>
+    {native?children:<SelectPrimitive.Root {...props} value={value} defaultValue={defaultValue} onValueChange={onValueChange}>{children}</SelectPrimitive.Root>}
+  </NativeSelectContext.Provider>;
+}
 
 const SelectGroup = SelectPrimitive.Group
 
 const SelectValue = SelectPrimitive.Value
 
-const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) => (
+const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) => {
+  const native=React.useContext(NativeSelectContext);
+  if(native){
+    const groups=[...new Set(native.options.map(option=>option.group))];
+    const option=entry=><option key={entry.value} value={entry.value} disabled={entry.disabled}>{entry.label}</option>;
+    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}>
+      <select {...props} ref={ref} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        aria-label={props['aria-label']||(!props['aria-labelledby']?native.placeholder||'Seleccionar opción':undefined)}
+        name={native.name} required={native.required} disabled={native.disabled||props.disabled} dir={native.dir} value={native.value??''} onChange={event=>native.change(event.target.value)}>
+        <option value="" disabled hidden>{native.placeholder||'Selecciona una opción'}</option>
+        {groups.map(group=>group?<optgroup key={group} label={group}>{native.options.filter(entry=>entry.group===group).map(option)}</optgroup>:native.options.filter(entry=>!entry.group).map(option))}
+      </select>
+      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/>
+    </span>;
+  }
+  return (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
@@ -26,7 +56,8 @@ const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) 
       <ChevronDown className="h-4 w-4 opacity-50" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
-))
+  );
+})
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
 
 const SelectScrollUpButton = React.forwardRef(({ className, ...props }, ref) => (
@@ -52,6 +83,8 @@ SelectScrollDownButton.displayName =
 
 const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
   const safePadding=useSafeAreaCollision();
+  const native=React.useContext(NativeSelectContext);
+  if(native)return null;
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
@@ -124,3 +157,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
