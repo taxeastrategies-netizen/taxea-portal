@@ -44,7 +44,7 @@ const client={auth:{me:async()=>user},asServiceRole:{entities},functions:{invoke
   return {data};}}};
 client.asServiceRole.functions=client.functions;
 client.entities=entities;
-for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument']){
+for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument','ocrDocumentIntake']){
   const build=await esbuild.build({entryPoints:['base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
     plugins:[{name:'stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));}}]});
   vm.runInContext(build.outputFiles[0].text,vm.createContext({Response,Request,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,console,Date,
@@ -155,3 +155,4 @@ assert.equal(records.AccountingAccount.find(row=>row.id==='expense-history').cod
 console.log(JSON.stringify({ok:true,workflow:'single-source-check',normalUser:true,invoiceCount:records.Invoice.length,confirmedEntries:records.JournalEntry.filter(row=>row.status==='confirmado').length,
   checks:['minorista taxed/zero/credit','source amounts preserved','existing subaccount preserved','idempotent retry','legacy same invoice recovered','tax-line failure recovered',
   'tenant denied','manual direct with stable QR hash','minorista issued OCR QR/hash','orphan invoice appears in OCR and recovers','intra services self-assessment','special prorrata','all journals balanced'],apiCalls:calls},null,2));
+
