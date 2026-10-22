@@ -20,7 +20,7 @@ for(const name of targets){
     console:{log(){},warn(){},error:(...args)=>logs.push(JSON.stringify(args))}});
   vm.runInContext(built.outputFiles[0].text,context);handler ||= context.module.exports.default;
   const response=await handler(new Request('https://qa.invalid/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
-    companyId:'qa',companyData:{nombre:'QA ficticia'},clientEmail:'qa@invalid.test',subscriptionId:'qa-subscription',planCode:'qa-plan',toPlanCode:'qa-plan',
+    companyId:'qa',companyData:{nombre:'QA ficticia'},clientEmail:'qa@invalid.test',subscriptionId:'qa-subscription',planCode:'platform_basic',toPlanCode:'platform_basic',
     file_url:'https://media.base44.com/files/public/6a00fec50cc522a74ddde4b2/qa.xlsx'})}));
   assert.equal(response.status,500,name+' controlled provider failure must be a generic server error');
   const body=await response.json();assert.equal(body.code,'INTERNAL_ERROR');assert.match(body.requestId,/^[a-f0-9-]{36}$/);
