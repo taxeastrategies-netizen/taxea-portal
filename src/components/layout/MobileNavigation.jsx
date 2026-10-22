@@ -1,13 +1,16 @@
 import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition} from 'react';
-import {useLocation,useNavigate,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
-import {MOBILE_TABS,MOBILE_MEDIA,mobileTabId,internalHref,parentRoute} from '@/lib/mobileNavigation.mjs';
+import {useLocation,useNavigate,useNavigationType,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
+import {MOBILE_TABS,MOBILE_MEDIA,mobileTabId,internalHref} from '@/lib/mobileNavigation.mjs';
+import {recordNavigation,safeBackTarget} from '@/lib/navigationStack.mjs';
 
 const NavigationContext=createContext(null);
 export function useMobileNavigation(){return useContext(NavigationContext);}
 export function MobileNavigationProvider({children}) {
   const location=useLocation(),navigate=useNavigate();
+  const navigationType=useNavigationType();
   const [mobile,setMobile]=useState(()=>typeof window!=='undefined'&&window.matchMedia(MOBILE_MEDIA).matches);
   const lastRoutes=useRef({});
+  const entries=useRef([]);
   const [pending,startTransition]=useTransition();
   useEffect(()=>{
     const media=window.matchMedia(MOBILE_MEDIA);
@@ -16,6 +19,7 @@ export function MobileNavigationProvider({children}) {
     return ()=>media.removeEventListener?.('change',changed);
   },[]);
   useLayoutEffect(()=>{const id=mobileTabId(location.pathname);if(id)lastRoutes.current[id]=internalHref(location);},[location]);
+  useLayoutEffect(()=>{entries.current=recordNavigation(entries.current,location,window.history.state?.idx,navigationType);},[location,navigationType]);
   const currentTab=mobileTabId(location.pathname);
   const selectTab=id=>{
     if(id===currentTab){window.dispatchEvent(new CustomEvent('taxea:tab-reselect',{detail:{id}}));return;}
@@ -23,11 +27,14 @@ export function MobileNavigationProvider({children}) {
     if(tab)startTransition(()=>navigate(lastRoutes.current[id]||tab.to));
   };
   const goBack=()=>{
-    // React Router's index counts same-document entries, not external history.
-    startTransition(()=>{if(Number(window.history.state?.idx)>0)navigate(-1);
-    else navigate(parentRoute(location.pathname),{replace:true});});
+    // Dismiss a modal before leaving its underlying form. Radix owns Escape and
+    // focus restoration; never intercept the native iOS edge-back gesture.
+    const modal=document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="listbox"][data-state="open"], [role="menu"][data-state="open"]');
+    if(modal){modal.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));return;}
+    const target=safeBackTarget(entries.current,location,window.history.state?.idx);
+    startTransition(()=>target.delta?navigate(target.delta):navigate(target.to,{replace:true}));
   };
-  return <NavigationContext.Provider value={{mobile,currentTab,selectTab,goBack,pending}}>{children}</NavigationContext.Provider>;
+  return <NavigationContext.Provider value={{mobile,currentTab,selectTab,goBack,pending,direction:navigationType==='POP'?'back':'forward'}}>{children}</NavigationContext.Provider>;
 }
 
 // Keep only the five explicitly visited quick-access screens in memory. No
@@ -61,3 +68,4 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     {!id&&<section className="taxea-mobile-screen" key={href}>{outlet}</section>}
   </>;
 }
+
