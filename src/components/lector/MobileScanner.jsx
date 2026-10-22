@@ -67,15 +67,16 @@ export default function MobileScanner({ onCapture, onClose }) {
   useEffect(() => {
     if (cameraState !== 'ready' || mode !== 'camera') return;
     let cancelled = false, timer, last = null, dimension = 480;
-    const tracker = createDocumentTracker();
+    const tracker = createDocumentTracker(), canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
     const inspect = async () => {
       const video = videoRef.current;
       if (cancelled || document.hidden || !video?.videoWidth || !streamRef.current) return;
       if (video.readyState < 2) { timer = window.setTimeout(inspect, 120); return; }
       const started = performance.now();
       try {
-        const scale = dimension / Math.max(video.videoWidth, video.videoHeight), canvas = document.createElement('canvas'); canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
-        const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const scale = dimension / Math.max(video.videoWidth, video.videoHeight), width = Math.round(video.videoWidth * scale), height = Math.round(video.videoHeight * scale);
+        if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const found = await processorRef.current.detect(ctx.getImageData(0, 0, canvas.width, canvas.height), { previous: last?.corners });
         if (cancelled || !alive.current) return;
         const result = tracker.update(found); last = result.detection; setTracking(result);
@@ -209,13 +210,13 @@ export default function MobileScanner({ onCapture, onClose }) {
       <div className="flex flex-wrap items-center justify-center gap-1">{FILTERS.map(filter => <button key={filter.id} type="button" disabled={acquiring || sending} aria-pressed={selected.filter === filter.id} onClick={() => { changeSelected({ filter: filter.id }); setShowOriginal(false); }} className={`min-h-11 rounded-xl px-3 text-xs ${selected.filter === filter.id ? 'bg-blue-600 text-white' : 'bg-white/10 text-slate-200'}`}>{filter.label}</button>)}</div>
       {!cropMode && selected.filter !== 'color' && <label className="mx-auto flex max-w-md items-center gap-3 px-2 text-[11px] text-slate-300">Intensidad<input aria-label="Intensidad de mejora" type="range" min="0" max="100" step="5" value={selected.strength} disabled={acquiring || sending} onChange={event => changeSelected({ strength: Number(event.target.value) })} className="h-7 min-w-0 flex-1 accent-blue-500" /><span className="w-8 text-right">{selected.strength}%</span></label>}
       {cropMode ? <div className="flex items-center justify-center gap-2"><button type="button" disabled={acquiring || sending} onClick={redetect} className="flex min-h-10 items-center gap-1 rounded-xl bg-white/10 px-3 text-xs"><ScanLine className="h-4 w-4" />Detectar bordes</button><button type="button" disabled={acquiring || sending} onClick={() => changeSelected({ corners: defaultDocumentCorners(), detected: false })} className="flex min-h-10 items-center gap-1 rounded-xl bg-white/10 px-3 text-xs"><Maximize className="h-4 w-4" />Foto completa</button></div> : <p className="text-center text-[11px] text-slate-300">{selected.quality?.dark ? 'La foto está oscura: revisa que se lean todos los importes.' : 'Revisa texto pequeño, importes y bordes antes de usar el escaneo.'}</p>}
-      <div className="flex items-center justify-between gap-1">
-        <button type="button" aria-label="Foto anterior" disabled={current === 0 || rendering || acquiring || sending} onClick={() => { setCurrent(n => n - 1); setShowOriginal(false); setDragCorner(null); }} className="h-11 w-11 shrink-0 rounded-xl disabled:opacity-25"><ChevronLeft className="mx-auto h-5 w-5" /></button>
-        <button type="button" disabled={acquiring || sending} onClick={() => { setCropMode(v => !v); setShowOriginal(false); setDragCorner(null); }} className="flex min-h-11 items-center gap-1 rounded-xl px-2 text-xs"><Crop className="h-4 w-4" />{cropMode ? 'Ver resultado' : 'Recortar'}</button>
-        <button type="button" disabled={cropMode || acquiring || sending} aria-pressed={showOriginal} onClick={() => setShowOriginal(v => !v)} className="min-h-11 rounded-xl px-2 text-xs disabled:opacity-30">{showOriginal ? 'Resultado' : 'Ver original'}</button>
-        <button type="button" aria-label="Rotar foto" disabled={rendering || cropMode || acquiring || sending} onClick={() => changeSelected({ rotation: (selected.rotation + 90) % 360 })} className="h-11 w-11 shrink-0 rounded-xl disabled:opacity-30"><RotateCw className="mx-auto h-5 w-5" /></button>
-        <button type="button" aria-label="Eliminar esta foto" disabled={sending || acquiring} onClick={removeCurrent} className="h-11 w-11 shrink-0 rounded-xl text-red-300"><Trash2 className="mx-auto h-5 w-5" /></button>
-        <button type="button" aria-label="Foto siguiente" disabled={current >= pages.length - 1 || rendering || acquiring || sending} onClick={() => { setCurrent(n => n + 1); setShowOriginal(false); setDragCorner(null); }} className="h-11 w-11 shrink-0 rounded-xl disabled:opacity-25"><ChevronRight className="mx-auto h-5 w-5" /></button>
+      <div className="mx-auto grid w-full max-w-xl grid-cols-6 items-center gap-1">
+        <button type="button" aria-label="Foto anterior" disabled={current === 0 || rendering || acquiring || sending} onClick={() => { setCurrent(n => n - 1); setShowOriginal(false); setDragCorner(null); }} className="h-11 w-full rounded-xl disabled:opacity-25"><ChevronLeft className="mx-auto h-5 w-5" /></button>
+        <button type="button" disabled={acquiring || sending} onClick={() => { setCropMode(v => !v); setShowOriginal(false); setDragCorner(null); }} className="flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px]"><Crop className="h-4 w-4" />{cropMode ? 'Ver resultado' : 'Recortar'}</button>
+        <button type="button" disabled={cropMode || acquiring || sending} aria-pressed={showOriginal} onClick={() => setShowOriginal(v => !v)} className="min-h-11 min-w-0 rounded-xl text-[10px] disabled:opacity-30">{showOriginal ? 'Resultado' : 'Ver original'}</button>
+        <button type="button" aria-label="Rotar foto" disabled={rendering || cropMode || acquiring || sending} onClick={() => changeSelected({ rotation: (selected.rotation + 90) % 360 })} className="h-11 w-full rounded-xl disabled:opacity-30"><RotateCw className="mx-auto h-5 w-5" /></button>
+        <button type="button" aria-label="Eliminar esta foto" disabled={sending || acquiring} onClick={removeCurrent} className="h-11 w-full rounded-xl text-red-300"><Trash2 className="mx-auto h-5 w-5" /></button>
+        <button type="button" aria-label="Foto siguiente" disabled={current >= pages.length - 1 || rendering || acquiring || sending} onClick={() => { setCurrent(n => n + 1); setShowOriginal(false); setDragCorner(null); }} className="h-11 w-full rounded-xl disabled:opacity-25"><ChevronRight className="mx-auto h-5 w-5" /></button>
       </div>
     </div>}
     <footer className="shrink-0 border-t border-white/10 px-4 py-2">
