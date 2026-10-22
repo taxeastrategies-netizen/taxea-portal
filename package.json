@@ -22,7 +22,8 @@
     "test:tax-accounting-phase2": "npm run test:tax-accounting-phase1 && npm run test:fiscal-review && node scripts/test-recc-extended-runtime.mjs && node scripts/test-recc-advances-runtime.mjs && node scripts/test-recc-lock-runtime.mjs && node scripts/test-accounting-request-queue.mjs && node scripts/test-invoice-tax-breakdown.mjs && node scripts/test-invoice-annul-recovery.mjs && node scripts/test-recc-book-runtime.mjs && node scripts/test-special-regime-preview.mjs && npm run test:document-backup && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-scanner-auth-gates.mjs && npm run test:ocr-intake",
     "test:ocr-intake": "node scripts/test-ocr-intake-runtime.mjs",
     "test:utility-tools": "node scripts/test-utility-tools.mjs",
-    "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-financial-report-truth.mjs && node scripts/test-tax-artifact-integrity.mjs && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs"
+    "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-financial-report-truth.mjs && node scripts/test-tax-artifact-integrity.mjs && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs",
+    "test:security": "node scripts/test-security-function-boundaries.mjs && node scripts/test-security-redaction.mjs && node scripts/test-security-spreadsheet.mjs && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-client-setup-runtime.mjs && node scripts/test-import-client-accounting-security.mjs && node scripts/test-scanner-auth-gates.mjs"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.57",
@@ -94,6 +95,9 @@
     "vaul": "^1.1.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.24.2"
+  },
+  "overrides": {
+    "postcss-selector-parser": "6.1.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
