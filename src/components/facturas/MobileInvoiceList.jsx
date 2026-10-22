@@ -40,4 +40,3 @@ export default function MobileInvoiceList({ invoices, selectedIds, allSelected, 
     </div>
   );
 }
-

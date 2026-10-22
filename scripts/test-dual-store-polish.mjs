@@ -61,4 +61,3 @@ const settings = fs.readFileSync('src/components/ajustes/TabNotificaciones.jsx',
 assert.ok(settings.includes('Guardar preferencias') && settings.includes('mutation.mutateAsync(variables)'));
 assert.ok(settings.includes('flight.current!==token') && settings.includes('identity.current!==ownId'));
 console.log(JSON.stringify({ ok: true, actualTanstack: true, optimisticBeforeNetwork: true, errorRollback: true, scopeIsolation: true, mobileCardsRealRender: true, operationalHandlersUnchanged: true, floatingButtonReserve: true, externalCalls: 0, financialWrites: 0 }));
-

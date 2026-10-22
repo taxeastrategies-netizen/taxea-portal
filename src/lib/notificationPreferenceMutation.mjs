@@ -28,4 +28,3 @@ export function notificationPreferenceOptions({ queryClient, persist, isCurrent,
     },
   };
 }
-
