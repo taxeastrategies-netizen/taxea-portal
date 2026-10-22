@@ -57,8 +57,9 @@ DropdownMenuSubContent.displayName =
 
 const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, children,...props }, ref) => {
   const safePadding=useSafeAreaCollision(),mobile=useMobileViewport();return (
+  <>
+    {mobile&&<DropdownMenuPrimitive.Portal><div aria-hidden="true" className="taxea-action-menu-backdrop fixed inset-0 z-50 bg-black/40" style={{pointerEvents:'auto'}}/></DropdownMenuPrimitive.Portal>}
   <DropdownMenuPrimitive.Portal>
-    {mobile&&<div aria-hidden="true" className="taxea-action-menu-backdrop fixed inset-0 z-50 bg-black/40" style={{pointerEvents:'auto'}}/>}
     <DropdownMenuPrimitive.Content
       ref={ref}
       collisionPadding={safePadding}
@@ -73,6 +74,7 @@ const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, child
       {mobile&&<><DropdownMenuPrimitive.Separator className="my-2 h-px bg-border"/><DropdownMenuPrimitive.Item className="flex min-h-11 cursor-default select-none items-center justify-center rounded-xl px-3 text-sm font-semibold outline-none focus:bg-accent">Cancelar</DropdownMenuPrimitive.Item></>}
     </DropdownMenuPrimitive.Content>
   </DropdownMenuPrimitive.Portal>
+  </>
   );
 })
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName
