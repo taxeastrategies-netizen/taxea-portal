@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext,Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { cn } from '@/lib/utils';
 import {
@@ -205,12 +205,12 @@ export default function TaxDashboard({ onNavigate }) {
             <p className="text-xs text-amber-800 mt-0.5">Actividad, régimen, IVA/IGIC e IRPF determinan cómo se proponen impuestos, retenciones y asientos. Las facturas permanecerán pendientes hasta disponer de una configuración revisada.</p>
           </div>
           <Button asChild size="sm" variant="outline" className="border-amber-300 bg-white">
-            <a href="/ajustes">Abrir ajustes fiscales</a>
+            <Link to="/ajustes">Abrir ajustes fiscales</Link>
           </Button>
         </div>
       )}
 
-      <a href="/finance/treasury" className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 hover:border-blue-300 transition-colors">
+      <Link to="/finance/treasury" className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 hover:border-blue-300 transition-colors">
         <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
           <Wallet className="w-4 h-4 text-blue-700" />
         </div>
@@ -223,7 +223,7 @@ export default function TaxDashboard({ onNavigate }) {
           </p>
         </div>
         <span className="text-xs font-semibold text-blue-700">Abrir Tesorería</span>
-      </a>
+      </Link>
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -330,9 +330,9 @@ export default function TaxDashboard({ onNavigate }) {
               <h3 className="font-jakarta font-semibold text-foreground">Cashflow — Últimos 6 meses</h3>
               <p className="text-xs text-muted-foreground mt-0.5">{treasury.connectedAccounts > 0 ? 'Entradas y salidas bancarias reales en EUR' : 'Estimación por facturas y gastos'}</p>
             </div>
-            <a href={treasury.connectedAccounts > 0 ? '/finance/treasury' : '/tax-accounting/libros'} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
+            <Link to={treasury.connectedAccounts > 0 ? '/finance/treasury' : '/tax-accounting/libros'} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
               {treasury.connectedAccounts > 0 ? 'Tesorería' : 'Libros'} <ChevronRight className="w-3 h-3" />
-            </a>
+            </Link>
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={cashflowData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
