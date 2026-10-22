@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell, CheckCheck, Trash2, AlertTriangle, CheckSquare, FileText, Calendar, Info } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {markNotificationReads} from '@/lib/notificationRead.mjs';
 
 const TIPO_CONFIG = {
   aviso: { icon: Info, color: 'bg-blue-50 text-blue-600' },
@@ -21,30 +22,38 @@ export default function Notificaciones() {
   const [notifs, setNotifs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all | unread | read
+  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  const flight=useRef(false);
 
   useEffect(() => { if (user?.email) load(); }, [user?.email]);
 
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.Notification.filter({ destinatario_email: user.email }, '-created_date', 100);
-    setNotifs(data || []);
-    setLoading(false);
+    try{const data = await base44.entities.Notification.filter({ destinatario_email: user.email }, '-created_date', 100);
+      setNotifs(data || []);setError('');
+    }catch{setError('No se pudieron cargar las notificaciones. Inténtalo de nuevo.');}
+    finally{setLoading(false);}
   };
 
-  const markRead = async (id) => {
-    await base44.entities.Notification.update(id, { leida: true });
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n));
+  const markRead = async (ids) => {
+    if(flight.current)return;flight.current=true;setBusy(true);setError('');
+    try{const result=await markNotificationReads({rows:notifs,ids,
+      persist:id=>base44.entities.Notification.update(id,{leida:true}),
+      optimistic:changed=>setNotifs(prev=>prev.map(n=>changed.includes(n.id)?{...n,leida:true}:n)),
+      rollback:failed=>setNotifs(prev=>prev.map(n=>failed.includes(n.id)?{...n,leida:false}:n)),
+    });if(result.failed.length)setError(`${result.failed.length} notificación(es) no se guardaron. Se ha restaurado su estado; puedes reintentar.`);
+    }finally{flight.current=false;setBusy(false);}
   };
 
   const markAllRead = async () => {
-    const unread = notifs.filter(n => !n.leida);
-    await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { leida: true })));
-    setNotifs(prev => prev.map(n => ({ ...n, leida: true })));
+    await markRead(notifs.filter(n=>!n.leida).map(n=>n.id));
   };
 
   const deleteNotif = async (id) => {
-    await base44.entities.Notification.delete(id);
-    setNotifs(prev => prev.filter(n => n.id !== id));
+    if(flight.current)return;flight.current=true;setBusy(true);setError('');
+    try{await base44.entities.Notification.delete(id);setNotifs(prev=>prev.filter(n=>n.id!==id));}
+    catch{setError('No se pudo eliminar la notificación. Sigue disponible para reintentar.');}
+    finally{flight.current=false;setBusy(false);}
   };
 
   const filtered = notifs.filter(n => {
@@ -62,11 +71,13 @@ export default function Notificaciones() {
         subtitle={unreadCount > 0 ? `${unreadCount} sin leer` : 'Todas leídas'}
       >
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllRead} className="gap-2">
+          <Button variant="outline" size="sm" onClick={markAllRead} disabled={busy} className="gap-2">
             <CheckCheck className="w-4 h-4" /> Marcar todas leídas
           </Button>
         )}
       </PageHeader>
+      {busy&&<p role="status" className="text-sm text-muted-foreground mb-3">Guardando cambios…</p>}
+      {error&&<div role="alert" className="text-sm text-destructive mb-3">{error}{!notifs.length&&<Button variant="outline" onClick={load} disabled={loading}>Reintentar</Button>}</div>}
 
       {/* Filtros */}
       <div className="flex gap-2 mb-5">
@@ -125,7 +136,9 @@ export default function Notificaciones() {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {!n.leida && (
                         <button
-                          onClick={() => markRead(n.id)}
+                          onClick={() => markRead([n.id])}
+                          disabled={busy}
+                          aria-label="Marcar notificación como leída"
                           className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground"
                           title="Marcar como leída"
                         >
@@ -133,6 +146,8 @@ export default function Notificaciones() {
                         </button>
                       )}
                       <button
+                        disabled={busy}
+                        aria-label="Eliminar notificación"
                         onClick={() => deleteNotif(n.id)}
                         className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
                         title="Eliminar"
@@ -161,3 +176,4 @@ export default function Notificaciones() {
     </div>
   );
 }
+
