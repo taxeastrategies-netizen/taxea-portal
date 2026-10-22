@@ -39,4 +39,3 @@ for(const {file} of manifest.files){
   assert.deepEqual(ast(current),ast(previous),'Only JSX names/import may change: '+file);
 }
 console.log(JSON.stringify({ok:true,legacyFiles:manifest.files.length,businessAstUnchanged:true,nativeFormDataControlSingle:true,realReact:true,externalCalls:0},null,2));
-

@@ -18,4 +18,3 @@ for(const file of files){
   walk(ast);
 }
 console.log(JSON.stringify({count:matches.length,files:new Set(matches.map(m=>m.file)).size,special:matches.filter(m=>m.attributes.some(a=>!['value','defaultValue','onChange','disabled','className','id','aria-label','required','name','title'].includes(a))),all:matches},null,2));
-
