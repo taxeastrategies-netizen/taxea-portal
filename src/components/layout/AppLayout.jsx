@@ -15,8 +15,10 @@ import SubscriptionGate from './SubscriptionGate';
 import FutureBackdrop from './FutureBackdrop';
 import PageTransition from './PageTransition';
 import useAppGestures from '@/hooks/useAppGestures';
+import useShellScrollLock from '@/hooks/useShellScrollLock';
 
 function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
+  useShellScrollLock();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const location = useLocation();
@@ -149,3 +151,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
