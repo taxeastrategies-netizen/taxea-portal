@@ -5,6 +5,8 @@ export const MOBILE_TABS = [
   {id:'documents',to:'/documentos',label:'Docs'},
   {id:'settings',to:'/ajustes',label:'Ajustes'},
 ];
+// Coarse, hoverless pointers remain touch devices when rotated past 767px.
+export const MOBILE_MEDIA='(max-width: 767px), (hover: none) and (pointer: coarse)';
 export function mobileTabId(pathname='') {
   if(pathname==='/')return 'home';
   if(['/facturas','/tax-accounting/facturas'].includes(pathname))return 'invoices';
@@ -33,3 +35,4 @@ export function pullGesture(start,x,y,{nestedScroll=false,touches=1}={}) {
   const distance=Math.min(88,Math.max(0,dy)*0.48);
   return {cancelled:false,distance,armed:distance>=58};
 }
+
