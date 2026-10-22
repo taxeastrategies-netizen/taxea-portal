@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
-import {savePreference} from '@/lib/optimisticPreference.mjs';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { notificationPreferenceOptions } from '@/lib/notificationPreferenceMutation.mjs';
 
 const PREFS_DEFAULT = {
   email_resumen: true,
@@ -40,24 +41,31 @@ export default function TabNotificaciones({ user }) {
   const [saved, setSaved] = useState(false);
   const [saving,setSaving]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(null);
   const confirmed=useRef(initial()),flight=useRef(false),identity=useRef(user?.id);
-  useEffect(()=>{identity.current=user?.id;const value={...PREFS_DEFAULT,...user?.notification_prefs};confirmed.current=value;setPrefs(value);setRetry(null);setError('');setSaved(false);return()=>{identity.current=null;};},[user?.id]);
+  const queryClient = useQueryClient();
+  const mutation = useMutation(notificationPreferenceOptions({queryClient,
+    persist: value => base44.auth.updateMe({notification_prefs:value}),
+    isCurrent: variables => identity.current === variables.userId && flight.current === variables.token,
+    onVisible: setPrefs,
+  }));
+  useEffect(()=>{identity.current=user?.id;const value={...PREFS_DEFAULT,...user?.notification_prefs};confirmed.current=value;setPrefs(value);setRetry(null);setError('');setSaved(false);setSaving(false);flight.current=false;return()=>{identity.current=null;};},[user?.id]);
 
   const set = (k, v) => {if(flight.current)return;setSaved(false);setError('');setRetry(null);setPrefs(p => ({ ...p, [k]: v }));};
 
   const handleSave = async (next=prefs) => {
     if(flight.current||!user?.id)return;
-    flight.current=true;setSaving(true);setError('');setSaved(false);
+    const token={};flight.current=token;setSaving(true);setError('');setSaved(false);
     const ownId=user.id;
-    const result=await savePreference({previous:confirmed.current,next,
-      optimistic:value=>setPrefs(value),
-      persist:value=>base44.auth.updateMe({notification_prefs:value}),
-      rollback:value=>{if(identity.current===ownId)setPrefs(value);},
-    });
-    flight.current=false;
-    if(identity.current!==ownId)return;
-    setSaving(false);
-    if(result.ok){confirmed.current=result.value;setSaved(true);setRetry(null);}
-    else{setRetry(next);setError('No se pudieron guardar las preferencias. Se ha restaurado la última configuración confirmada. Puedes reintentar el cambio.');}
+    const variables={userId:ownId,next,previous:confirmed.current,token};
+    try {
+      const value=await mutation.mutateAsync(variables);
+      if(identity.current!==ownId||flight.current!==token)return;
+      confirmed.current=value;setSaved(true);setRetry(null);
+    } catch {
+      if(identity.current!==ownId||flight.current!==token)return;
+      setRetry(next);setError('No se pudieron guardar las preferencias. Se ha restaurado la última configuración confirmada. Puedes reintentar el cambio.');
+    } finally {
+      if(identity.current===ownId&&flight.current===token){flight.current=false;setSaving(false);}
+    }
   };
 
   return (
@@ -65,10 +73,10 @@ export default function TabNotificaciones({ user }) {
       <div className="bg-card border border-border rounded-xl shadow-card p-6" aria-busy={saving}>
         <fieldset disabled={saving} className="min-w-0">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-9 h-9 bg-teal-light rounded-lg flex items-center justify-center"><Bell className="w-4 h-4 text-teal" /></div>
+          <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center"><Bell className="w-4 h-4 text-primary" /></div>
           <div>
             <h2 className="font-jakarta font-semibold text-foreground">Preferencias de notificaciones</h2>
-            <p className="text-xs text-muted-foreground">Controla qué avisos recibes y con qué frecuencia</p>
+            <p className="text-xs text-muted-foreground">Controla qué avisos recibes y con qué frecuencia. Los cambios se aplican al guardar.</p>
           </div>
         </div>
 
@@ -104,7 +112,7 @@ export default function TabNotificaciones({ user }) {
         </div>
 
         </fieldset>
-        <div role="status" aria-live="polite">{saving&&<p className="mb-3 text-sm text-muted-foreground">Guardando preferencias…</p>}{saved&&<p className="mb-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5"><CheckCircle2 className="w-4 h-4" />Preferencias guardadas.</p>}</div>
+        <div role="status" aria-live="polite">{saving&&<p className="mb-3 text-sm text-muted-foreground">Guardando preferencias…</p>}{saved&&<p className="mb-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800 rounded-lg px-4 py-2.5"><CheckCircle2 className="w-4 h-4" />Preferencias guardadas.</p>}</div>
         {error&&<div role="alert" className="mb-3 text-sm text-destructive">{error}<Button variant="outline" disabled={saving} onClick={()=>handleSave(retry)}>Reintentar el cambio</Button></div>}
 
         <Button disabled={saving} onClick={()=>handleSave()} className="bg-teal hover:bg-teal-dark">{saving?'Guardando…':'Guardar preferencias'}</Button>
@@ -121,3 +129,4 @@ export default function TabNotificaciones({ user }) {
     </div>
   );
 }
+
