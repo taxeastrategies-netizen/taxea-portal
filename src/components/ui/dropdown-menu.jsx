@@ -9,7 +9,7 @@ import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 function DropdownMenu({open,defaultOpen=false,onOpenChange,...props}){
   const [localOpen,setLocalOpen]=React.useState(defaultOpen);
   const change=next=>{if(open===undefined)setLocalOpen(next);onOpenChange?.(next);};
-  useCloseOnNavigation(()=>change(false));
+  useCloseOnNavigation(()=>{if(open===undefined?localOpen:open)change(false);});
   return <DropdownMenuPrimitive.Root {...props} open={open===undefined?localOpen:open} onOpenChange={change}/>;
 }
 
