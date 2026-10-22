@@ -9,4 +9,3 @@ export default function useShellScrollLock(){
     return()=>nodes.forEach(node=>node.classList.remove('taxea-shell-document'));
   },[]);
 }
-

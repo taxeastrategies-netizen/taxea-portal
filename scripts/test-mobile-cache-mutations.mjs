@@ -41,4 +41,3 @@ vm.runInNewContext(built.outputFiles[0].text,context);context.module.exports.def
 const cleanup=effects[0]();assert.ok(classes.every(set=>set.has('taxea-shell-document')));
 cleanup();assert.ok(classes.every(set=>!set.has('taxea-shell-document')),'Public pages regain document scrolling on shell unmount');
 console.log(JSON.stringify({ok:true,actualTanstackMutationObserver:true,optimisticBeforeNetwork:true,partialRollback:true,errorRollback:true,deduplicated:true,scopeIsolation:true,shellScrollCleanup:true,externalCalls:0,financialWrites:0},null,2));
-

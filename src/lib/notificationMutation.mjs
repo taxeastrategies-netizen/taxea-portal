@@ -18,4 +18,3 @@ export function notificationReadOptions({queryClient,queryKey,persist}){
     onSettled:()=>queryClient.invalidateQueries({queryKey}),
   };
 }
-
