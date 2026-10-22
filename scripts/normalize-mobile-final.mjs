@@ -10,4 +10,3 @@ paths.push('src/lib/copyTextPreference.mjs','src/hooks/useCopyTextPreference.js'
 paths.push('src/components/layout/TopBar.jsx','scripts/test-mobile-safearea.mjs');
 for(const path of paths){const before=fs.readFileSync(path,'utf8'),after=before.trimEnd()+'\n';if(after!==before)fs.writeFileSync(path,after);}
 console.log('Task-only EOF normalisation complete.');
-
