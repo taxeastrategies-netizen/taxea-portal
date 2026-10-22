@@ -45,8 +45,7 @@ const client={auth:{me:async()=>user},asServiceRole:{entities},functions:{invoke
 client.asServiceRole.functions=client.functions;
 client.entities=entities;
 for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument','ocrDocumentIntake']){
-  const entry=name==='ocrDocumentIntake' ? process.env.OCR_INTAKE_ENTRY : name==='approveOcrDocument' ? process.env.OCR_APPROVE_ENTRY : '';
-  const build=await esbuild.build({entryPoints:[entry || 'base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
+  const build=await esbuild.build({entryPoints:['base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
     plugins:[{name:'stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));}}]});
   vm.runInContext(build.outputFiles[0].text,vm.createContext({Response,Request,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,console,Date,
     setTimeout:fn=>{fn();return 0;},clearTimeout(){},__client:client,Deno:{serve:fn=>{handlers[name]=fn;}}}));
