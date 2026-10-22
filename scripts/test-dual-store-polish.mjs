@@ -62,4 +62,3 @@ assert.ok(settings.includes('Los cambios se guardan automáticamente') && settin
 assert.ok(settings.includes('void handleSave({ ...prefs, [k]: v })'), 'Every preference switch commits through the reversible mutation');
 assert.ok(settings.includes('flight.current!==token') && settings.includes('identity.current!==ownId'));
 console.log(JSON.stringify({ ok: true, actualTanstack: true, optimisticBeforeNetwork: true, errorRollback: true, scopeIsolation: true, mobileCardsRealRender: true, operationalHandlersUnchanged: true, floatingButtonReserve: true, externalCalls: 0, financialWrites: 0 }));
-

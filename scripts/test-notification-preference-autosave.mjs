@@ -35,4 +35,3 @@ tree=render();assert.equal(find(tree,element=>element.props?.label==='Resumen pe
 release();await pending;await Promise.resolve();tree=render();assert.equal(find(tree,element=>element.props?.label==='Resumen periódico por email').props.checked,false);
 assert.equal(find(tree,element=>element.type==='fieldset').props.disabled,false);assert.equal(writes,2);
 client.clear();console.log(JSON.stringify({ok:true,actualComponentCallbacks:true,hookStorageAdapter:true,actualMutationObserver:true,automaticSave:true,errorRollback:true,explicitRetry:true,externalCalls:0,financialWrites:0}));
-
