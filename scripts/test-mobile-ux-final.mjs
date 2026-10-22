@@ -41,9 +41,11 @@ check(filterPickerOptions(longList,'nothing-here').length===0,'Empty picker sear
 for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,true,false],[false,false,false]])check(suppressChromeGesture({closest:selector=>(selector.startsWith('input,')?protectedTarget:chromeTarget)?{}:null})===expected,'Chrome gesture suppression must preserve editable/copyable content');
 
 // Render actual shared Select with real React/server, not an invented DOM.
-const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'}});
-const exported={},window={matchMedia:()=>({matches:true,addEventListener(){},removeEventListener(){}})};
-const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),window,document:{documentElement:{}},getComputedStyle:()=>({getPropertyValue:()=> '0px'}),console};
+const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'},plugins:[{name:'viewport-adapter-only',setup(build){build.onResolve({filter:/useMobileViewport(?:\.js)?$/},()=>({path:'viewport',namespace:'qa-viewport'}));build.onLoad({filter:/.*/,namespace:'qa-viewport'},()=>({contents:'export default ()=>globalThis.__mobile;',loader:'js'}));}}]});
+const exported={};
+// Keep the real server environment free of a fake DOM; only the media-query
+// hook is adapted. React, the Select and drawer primitives remain real.
+const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),__mobile:true,console};
 vm.runInNewContext(built.outputFiles[0].text,sandbox);
 const ui=sandbox.module.exports,e=React.createElement;
 const createSelect=extra=>e(ui.Select,{value:'b',name:'account',onValueChange(){},...extra},e(ui.SelectTrigger,{'aria-label':'Estado',id:'qa-selector'},e(ui.SelectValue,{placeholder:'Selecciona'})),e(ui.SelectContent,null,e(ui.SelectGroup,null,e(ui.SelectLabel,null,'Grupo'),e(ui.SelectItem,{value:'a'},'Primera'),e(ui.SelectItem,{value:'b'},'Segunda'),e(ui.SelectItem,{value:'c',disabled:true},'Inactiva'))));
@@ -57,7 +59,7 @@ check(native.includes('aria-label="Estado"')&&native.includes('id="qa-selector"'
 const largePicker=e(ui.Select,{value:'777',onValueChange(){}},e(ui.SelectTrigger,{'aria-label':'Proveedor'},e(ui.SelectValue,{placeholder:'Proveedor'})),e(ui.SelectContent,null,longList.map(option=>e(ui.SelectItem,{key:option.value,value:option.value},option.label))));
 const largeMarkup=renderToString(largePicker);
 check(largeMarkup.includes('aria-haspopup="dialog"')&&largeMarkup.includes('Café agrícola'),'Long mobile lists get a searchable drawer trigger without changing the value');
-window.matchMedia=()=>({matches:false});
+sandbox.__mobile=false;
 const desktop=renderToString(createSelect());
 check(desktop.includes('role="combobox"')&&!desktop.includes('taxea-native-select'),'Desktop retains accessible Radix');
 
