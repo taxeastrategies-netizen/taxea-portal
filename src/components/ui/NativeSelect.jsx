@@ -41,7 +41,10 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
   useClientLayoutEffect(()=>{
     const native=nativeRef.current;if(!native)return;
     syncNativeSelectDefaults(native,controlled?current:initial,current);
-    const labels=[...(native.labels||[])].map(element=>{
+    const associatedLabels=[...(native.labels||[])];
+    const previousLabel=(adaptive?native.parentElement:native)?.previousElementSibling;
+    if(!associatedLabels.length&&previousLabel?.tagName==='LABEL')associatedLabels.push(previousLabel);
+    const labels=associatedLabels.map(element=>{
       const walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('select,button')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
       const parts=[];while(walker.nextNode())parts.push(walker.currentNode.textContent);return parts.join(' ');
     }).join(' ').replace(/\s+/g,' ').trim();
@@ -83,3 +86,4 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
   </span>;
 });
 export default NativeSelect;
+
