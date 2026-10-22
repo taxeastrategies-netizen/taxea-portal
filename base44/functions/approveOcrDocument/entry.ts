@@ -71,6 +71,9 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
     }
     if (resumed) return resumed;
     if (recoveryOnly) return { status: 409, json: { error: 'No existe factura enlazada para recuperar. No se creó ninguna.' } };
+    if (!['review_required', 'validated'].includes(doc.status)) {
+      return { status: 409, json: { error: 'El documento todavía está pendiente de análisis OCR o se está analizando. Actualiza la lista y revísalo cuando termine.' } };
+    }
     return await approveNew(base44, user, doc, form, invoiceType, extractedData, confirmFiscalReview);
   } finally {
     await release().catch(error => console.warn('[approveOcrDocument] approval lease release failed:', error?.message));
@@ -431,3 +434,4 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.response?.data?.error || error.message || 'Error interno del servidor' }, { status: Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500 });
   }
 });
+
