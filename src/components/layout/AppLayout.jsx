@@ -94,7 +94,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   return (
     <div ref={shellRef} data-copy-text={allowsCopyText(copyTextMode,navigation?.mobile)?'true':'false'} className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
       <FutureBackdrop />
-      {impersonation && <ImpersonationBanner impersonation={impersonation} />}
+      {impersonation && <div className="taxea-impersonation-safe-top"><ImpersonationBanner impersonation={impersonation} /></div>}
       <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
         <Sidebar
           isOpen={sidebarOpen}
@@ -106,6 +106,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
         />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <TopBar
+            safeAreaTop={!impersonation}
             onMenuToggle={() => setSidebarOpen(true)}
             user={user}
             companyName={company?.nombre_comercial || company?.razon_social}
@@ -113,7 +114,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
             onRefresh={refresh.refresh}
             refreshing={refresh.busy}
           />
-          <main ref={mainRef} tabIndex={-1} className="taxea-future-main flex-1 overflow-y-auto overscroll-y-contain focus:outline-none" aria-busy={refresh.busy||navigation?.pending}>
+          <main ref={mainRef} tabIndex={-1} className="taxea-future-main flex-1 min-h-0 overflow-y-auto overscroll-none focus:outline-none" aria-busy={refresh.busy||navigation?.pending}>
             {navigation?.pending&&<p role="status" className="sticky top-0 z-20 bg-card/95 border-b border-border px-4 py-2 text-xs text-muted-foreground">Abriendo sección…</p>}
             <div className="sticky top-0 z-20 h-0 pointer-events-none flex justify-center" aria-hidden={refresh.distance===0&&!refresh.busy}>
               {(refresh.distance>0||refresh.busy)&&<div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-2 text-xs" style={{transform:`translateY(${refresh.busy?12:Math.max(0,refresh.distance-20)}px)`}}><RefreshCw className={`w-4 h-4 ${refresh.busy?'animate-spin motion-reduce:animate-none':''}`}/>{refresh.busy?'Actualizando…':refresh.distance>=58?'Suelta para actualizar':'Desliza para actualizar'}</div>}
@@ -154,3 +155,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
