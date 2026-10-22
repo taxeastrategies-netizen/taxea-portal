@@ -100,4 +100,3 @@ hookContext.module.exports.default(()=>{closes++;});const cleanups=lifecycle.map
 navigationListeners.get('taxea:navigation-committed')();check(closes===1,'Committed navigation closes an ephemeral portal');
 cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigation listener is removed on unmount');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
-

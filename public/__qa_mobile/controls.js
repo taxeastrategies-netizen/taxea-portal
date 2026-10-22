@@ -33205,6 +33205,15 @@ function filterPickerOptions(options, query) {
   const search = normalize(query).trim();
   return search ? options.filter((option) => normalize(option.label + " " + option.group + " " + option.value).includes(search)) : options;
 }
+function resetUncontrolledSelect(defaultValue, triggerRef, setValue) {
+  return Promise.resolve().then(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const value = defaultValue ?? "";
+    if (trigger.tagName === "SELECT") trigger.value = String(value);
+    setValue(value);
+  });
+}
 
 // src/components/ui/drawer.jsx
 var React38 = __toESM(require_react(), 1);
@@ -35386,12 +35395,14 @@ function Select2({ children, value, defaultValue, onValueChange, ...props }) {
     onValueChange?.(next);
   };
   const customTrigger = React39.Children.toArray(children).some((child) => child.type === SelectTrigger2 && child.props.asChild);
-  const nativeForm = mobile && !!(props.name || props.required) && !customTrigger && !props.defaultOpen && props.open === void 0 && props.onOpenChange === void 0;
+  const nativeForm = !!(props.name || props.required) && !customTrigger && !props.defaultOpen && props.open === void 0 && props.onOpenChange === void 0;
   const sheet = mobile && model.options.length > 0 && !nativeForm && !(props.name || props.required), uncontrolled = value === void 0;
   React39.useEffect(() => {
     if (!uncontrolled) return;
     const form = props.form ? document.getElementById(props.form) : triggerRef.current?.closest("form");
-    const reset2 = () => setLocalValue(defaultValue ?? "");
+    const reset2 = () => {
+      void resetUncontrolledSelect(defaultValue, triggerRef, setLocalValue);
+    };
     form?.addEventListener("reset", reset2);
     return () => form?.removeEventListener("reset", reset2);
   }, [uncontrolled, defaultValue, props.form]);
@@ -35432,7 +35443,7 @@ var SelectTrigger2 = React39.forwardRef(({ className, children, asChild, ...prop
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(ChevronDown, { "aria-hidden": "true", className: "h-4 w-4 shrink-0 opacity-50" })
     ] }) });
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
     Trigger,
     {
       ref: assignedRef,
@@ -35442,10 +35453,10 @@ var SelectTrigger2 = React39.forwardRef(({ className, children, asChild, ...prop
         className
       ),
       ...props,
-      children: [
+      children: asChild ? children : /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(import_jsx_runtime20.Fragment, { children: [
         children,
         /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(Icon, { asChild: true, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(ChevronDown, { className: "h-4 w-4 opacity-50" }) })
-      ]
+      ] })
     }
   );
 });

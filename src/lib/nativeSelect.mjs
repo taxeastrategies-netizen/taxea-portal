@@ -42,4 +42,3 @@ export function resetUncontrolledSelect(defaultValue,triggerRef,setValue){
     setValue(value);
   });
 }
-
