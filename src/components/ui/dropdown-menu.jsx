@@ -5,6 +5,7 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
+import useMobileViewport from '@/hooks/useMobileViewport';
 
 function DropdownMenu({open,defaultOpen=false,onOpenChange,...props}){
   const [localOpen,setLocalOpen]=React.useState(defaultOpen);
@@ -54,19 +55,23 @@ const DropdownMenuSubContent = React.forwardRef(({ className, ...props }, ref) =
 DropdownMenuSubContent.displayName =
   DropdownMenuPrimitive.SubContent.displayName
 
-const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
-  const safePadding=useSafeAreaCollision();return (
+const DropdownMenuContent = React.forwardRef(({ className, sideOffset = 4, children,...props }, ref) => {
+  const safePadding=useSafeAreaCollision(),mobile=useMobileViewport();return (
   <DropdownMenuPrimitive.Portal>
+    {mobile&&<div aria-hidden="true" className="taxea-action-menu-backdrop fixed inset-0 z-50 bg-black/40" style={{pointerEvents:'auto'}}/>}
     <DropdownMenuPrimitive.Content
       ref={ref}
       collisionPadding={safePadding}
       sideOffset={sideOffset}
       className={cn(
-        "taxea-dropdown-content z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
+        "taxea-dropdown-content taxea-action-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         className
       )}
-      {...props} />
+      {...props}>
+      {children}
+      {mobile&&<><DropdownMenuPrimitive.Separator className="my-2 h-px bg-border"/><DropdownMenuPrimitive.Item className="flex min-h-11 cursor-default select-none items-center justify-center rounded-xl px-3 text-sm font-semibold outline-none focus:bg-accent">Cancelar</DropdownMenuPrimitive.Item></>}
+    </DropdownMenuPrimitive.Content>
   </DropdownMenuPrimitive.Portal>
   );
 })
@@ -167,3 +172,4 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 }
+
