@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import usePageRefresh from '@/hooks/usePageRefresh';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -68,13 +69,17 @@ export default function Facturas() {
     setLoadError('');
     try {
       setInvoices(await fetchInvoices());
+      return true;
     } catch (error) {
       console.error('[Facturas] Error cargando facturas:', error);
       setLoadError(error?.response?.data?.error || error?.message || 'No se pudieron cargar las facturas.');
+      return false;
     } finally {
       setLoading(false);
     }
   };
+
+  usePageRefresh(loadInvoices,['/facturas','/tax-accounting/facturas']);
 
   const handleAnular = async (inv) => {
     setAnulando(true);
@@ -567,3 +572,4 @@ export default function Facturas() {
     </>
   );
 }
+
