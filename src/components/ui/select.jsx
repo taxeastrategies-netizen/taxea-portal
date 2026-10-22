@@ -7,12 +7,13 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useMobileViewport from '@/hooks/useMobileViewport';
-import {nativeSelectModel,resetUncontrolledSelect} from '@/lib/nativeSelect.mjs';
+import {nativeSelectModel,resetUncontrolledSelect,syncNativeSelectDefaults} from '@/lib/nativeSelect.mjs';
 import {Drawer} from './drawer';
 import MobileSelectPicker from './MobileSelectPicker';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 
 const SelectUiContext=React.createContext(null);
+const useControlLayoutEffect=typeof window==='undefined'?React.useEffect:React.useLayoutEffect;
 function Select({children,value,defaultValue,onValueChange,...props}){
   const mobile=useMobileViewport();
   const [localValue,setLocalValue]=React.useState(defaultValue??'');
@@ -34,6 +35,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
     const reset=()=>{void resetUncontrolledSelect(defaultValue,triggerRef,setLocalValue);};
     form?.addEventListener('reset',reset);return()=>form?.removeEventListener('reset',reset);
   },[uncontrolled,defaultValue,props.form]);
+  useControlLayoutEffect(()=>{if(nativeForm)syncNativeSelectDefaults(triggerRef.current,uncontrolled?defaultValue:current,current);},[nativeForm,uncontrolled,defaultValue,current,model.options]);
   const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
   // Named/required HTML forms use one OS control. Application drawers retain
   // Radix option registration and trigger semantics; its desktop popup stays
@@ -180,3 +182,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
