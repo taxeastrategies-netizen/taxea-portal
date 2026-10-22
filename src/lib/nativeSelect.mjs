@@ -13,7 +13,7 @@ export function nativeSelectModel(children,{itemType,groupType,labelType,valueTy
     if(!node?.props)return;
     if(node.type===valueType)placeholder=node.props.placeholder||placeholder;
     if(node.type===itemType){
-      const label=selectText(node.props.children).replace(/\s+/g,' ').trim();
+      const label=String(node.props.textValue??selectText(node.props.children)).replace(/\s+/g,' ').trim();
       options.push({value:String(node.props.value),label,group,disabled:disabled||!!node.props.disabled});return;
     }
     if(node.type===groupType){
