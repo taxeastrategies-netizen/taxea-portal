@@ -1,4 +1,5 @@
-import { Menu, Bell, ChevronDown, LogOut, User, ChevronRight } from 'lucide-react';
+import { Menu, Bell, ChevronDown, LogOut, User, ChevronRight, ChevronLeft, RefreshCw } from 'lucide-react';
+import {useMobileNavigation} from './MobileNavigation';
 import OcrTopBarBadge from '@/components/ocr/OcrTopBarBadge';
 import { Link, useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -38,8 +39,9 @@ const BREADCRUMBS = {
   '/': ['Dashboard'],
 };
 
-export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdmin }) {
+export default function TopBar({ onMenuToggle, user, companyName, notificationsCount = 0, isAdmin, onRefresh, refreshing }) {
   const location = useLocation();
+  const navigation=useMobileNavigation();
   const crumbs = BREADCRUMBS[location.pathname] || null;
 
   const handleLogout = () => {
@@ -48,7 +50,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
 
   return (
     <header className="taxea-future-topbar h-14 bg-card/95 backdrop-blur-md border-b border-border flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30 safe-area-pt">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3 min-w-0">
         <button
           type="button"
           onClick={onMenuToggle}
@@ -57,6 +59,8 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         >
           <Menu className="w-5 h-5" />
         </button>
+        {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
+        <span className="sm:hidden text-sm font-semibold truncate">{crumbs?.at(-1)||({'/ajustes':'Ajustes','/suscripcion':'Suscripción','/notificaciones':'Avisos'}[location.pathname])||'Taxea'}</span>
 
         {/* Breadcrumb o empresa */}
         {crumbs && crumbs.length > 1 ? (
@@ -73,16 +77,9 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         ) : null}
       </div>
 
-      <div className="flex items-center gap-2">
-        <OcrTopBarBadge isAdmin={isAdmin} />
-        {/* Company badge — mobile */}
-        {companyName && (
-          <div className="sm:hidden flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5 mr-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="text-xs font-medium text-foreground truncate max-w-[80px]">{companyName}</span>
-          </div>
-        )}
-
+      <div className="flex items-center gap-0 sm:gap-2 shrink-0">
+        <div className="hidden sm:block"><OcrTopBarBadge isAdmin={isAdmin} /></div>
+        {onRefresh&&<button type="button" aria-label="Actualizar datos sin salir de la pantalla" disabled={refreshing} onClick={onRefresh} className="md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin motion-reduce:animate-none':''}`}/></button>}
         {/* Notificaciones */}
         <Link
           to="/notificaciones"
@@ -100,7 +97,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-secondary transition-all duration-150 ml-1">
+            <button aria-label="Menú de tu cuenta" className="min-w-11 min-h-11 flex items-center justify-center gap-2 px-2 py-1.5 rounded-xl hover:bg-secondary transition-all duration-150 sm:ml-1">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-taxea-red to-taxea-red-dark flex items-center justify-center shadow-sm">
                 <span className="text-white text-xs font-bold">
                   {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
@@ -119,10 +116,10 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
             </div>
             <div className="p-1">
               <DropdownMenuItem asChild>
-                <a href="/ajustes" className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 text-sm">
+                <Link to="/ajustes" className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-2 text-sm">
                   <User className="w-4 h-4 text-muted-foreground" />
                   Perfil y Ajustes
-                </a>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -139,3 +136,4 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
     </header>
   );
 }
+
