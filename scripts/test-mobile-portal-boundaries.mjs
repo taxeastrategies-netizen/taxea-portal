@@ -39,4 +39,3 @@ assert.ok(!styles.includes('touch-action:none'), 'Never block pinch zoom or OS g
 const invoice = fs.readFileSync('src/components/facturas/InvoiceDocumentWorkspace.jsx', 'utf8');
 assert.equal((invoice.match(/data-selectable="true"/g) || []).length, 2, 'Actual invoice content remains copyable, including received metadata');
 console.log(JSON.stringify({ ok: true, actualTanstackDeletion: true, provisionalRemoval: true, targetedRollback: true, noAutoRetry: true, scopeIsolation: true, portalScrollBoundary: true, portalGestureBoundary: true, documentCopyPreserved: true, externalCalls: 0, financialWrites: 0 }));
-
