@@ -1,6 +1,7 @@
 import { FileText, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import {Link} from 'react-router-dom';
 
 function SummaryCard({ icon: Icon, label, value, sub, colorClass, bgClass, href, accentColor, index }) {
   const content = (
@@ -36,7 +37,7 @@ function SummaryCard({ icon: Icon, label, value, sub, colorClass, bgClass, href,
     </motion.div>
   );
 
-  if (href) return <a href={href}>{content}</a>;
+  if (href) return <Link to={href}>{content}</Link>;
   return content;
 }
 
@@ -114,3 +115,4 @@ export default function SummaryCards({ invoices, expenses, obligations, currentM
     </div>
   );
 }
+
