@@ -136,7 +136,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
                 </div>
               </div>
             ) : (
-              <div className={`taxea-mobile-content p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 lg:p-6 ${isDeptPage?'':'max-w-[1400px] mx-auto'}`}>
+              <div className={`taxea-mobile-content p-4 pb-[calc(10.5rem+env(safe-area-inset-bottom))] md:pb-6 lg:p-6 ${isDeptPage?'':'max-w-[1400px] mx-auto'}`}>
                 <SubscriptionGate required={needsGate} subscription={subscription} isAdmin={isAdmin}>
                   <PageTransition mainRef={mainRef}><MobileScreenCache context={outletContext} enabled={navigation?.mobile&&!impersonation&&!isAdmin} mainRef={mainRef}/></PageTransition>
                 </SubscriptionGate>
@@ -155,3 +155,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
