@@ -1,4 +1,4 @@
-import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition} from 'react';
 import {useLocation,useNavigate,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
 import {MOBILE_TABS,mobileTabId,internalHref,parentRoute} from '@/lib/mobileNavigation.mjs';
 
@@ -8,6 +8,7 @@ export function MobileNavigationProvider({children}) {
   const location=useLocation(),navigate=useNavigate();
   const [mobile,setMobile]=useState(()=>typeof window!=='undefined'&&window.matchMedia('(max-width: 767px)').matches);
   const lastRoutes=useRef({});
+  const [pending,startTransition]=useTransition();
   useEffect(()=>{
     const media=window.matchMedia('(max-width: 767px)');
     const changed=()=>setMobile(media.matches);changed();
@@ -17,16 +18,16 @@ export function MobileNavigationProvider({children}) {
   useLayoutEffect(()=>{const id=mobileTabId(location.pathname);if(id)lastRoutes.current[id]=internalHref(location);},[location]);
   const currentTab=mobileTabId(location.pathname);
   const selectTab=id=>{
-    if(id===currentTab)return;
+    if(id===currentTab){window.dispatchEvent(new CustomEvent('taxea:tab-reselect',{detail:{id}}));return;}
     const tab=MOBILE_TABS.find(item=>item.id===id);
-    if(tab)navigate(lastRoutes.current[id]||tab.to);
+    if(tab)startTransition(()=>navigate(lastRoutes.current[id]||tab.to));
   };
   const goBack=()=>{
     // React Router's index counts same-document entries, not external history.
-    if(Number(window.history.state?.idx)>0)navigate(-1);
-    else navigate(parentRoute(location.pathname),{replace:true});
+    startTransition(()=>{if(Number(window.history.state?.idx)>0)navigate(-1);
+    else navigate(parentRoute(location.pathname),{replace:true});});
   };
-  return <NavigationContext.Provider value={{mobile,currentTab,selectTab,goBack}}>{children}</NavigationContext.Provider>;
+  return <NavigationContext.Provider value={{mobile,currentTab,selectTab,goBack,pending}}>{children}</NavigationContext.Provider>;
 }
 
 // Keep only the five explicitly visited quick-access screens in memory. No
@@ -46,11 +47,18 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     return ()=>main.removeEventListener('scroll',save);
   },[href,mainRef]);
   useEffect(()=>{if(!enabled)cache.current.clear();},[enabled]);
+  useEffect(()=>{
+    const reselect=event=>{if(event.detail?.id!==id)return;const main=mainRef.current;if(!main)return;
+      positions.current.set(href,0);main.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    };
+    window.addEventListener('taxea:tab-reselect',reselect);return()=>window.removeEventListener('taxea:tab-reselect',reselect);
+  },[id,href,mainRef]);
   if(!enabled)return outlet;
   return <>
-    {[...cache.current].map(([key,entry])=><section key={key} hidden={key!==id} inert={key!==id?'':undefined} aria-hidden={key!==id?true:undefined} data-mobile-screen={key}>
+    {[...cache.current].map(([key,entry])=><section className="taxea-mobile-screen" key={key} hidden={key!==id} inert={key!==id?'':undefined} aria-hidden={key!==id?true:undefined} data-mobile-screen={key}>
       <UNSAFE_LocationContext.Provider value={{...entry.routerLocation,location:entry.location}}>{key===id?outlet:entry.outlet}</UNSAFE_LocationContext.Provider>
     </section>)}
-    {!id&&<section key={href}>{outlet}</section>}
+    {!id&&<section className="taxea-mobile-screen" key={href}>{outlet}</section>}
   </>;
 }
+
