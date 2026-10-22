@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { buildCashForecast } from '@/lib/cashForecast';
+import {Link} from 'react-router-dom';
 
 const fmt = value => value == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
 const VIEWS = [{ id: '7d', label: '7 días', days: 7 }, { id: '30d', label: '30 días', days: 30 }, { id: '13w', label: '13 semanas', days: 91 }];
@@ -23,7 +24,7 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
       </div>
       {supportError && <p role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Previsión parcial: no se pudieron leer {supportError}. El saldo proyectado puede omitir pagos o cobros.</p>}
       {!forecast.hasBankBalance ? (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sin saldo bancario conectado y verificable. Se muestran los vencimientos registrados, pero no un saldo futuro inventado. <a href="/finance/treasury" className="font-semibold underline">Revisar bancos</a></div>
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sin saldo bancario conectado y verificable. Se muestran los vencimientos registrados, pero no un saldo futuro inventado. <Link to="/finance/treasury" className="font-semibold underline">Revisar bancos</Link></div>
       ) : (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -47,7 +48,7 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
       )}
       <details className="mt-4 rounded-lg border border-border bg-background"><summary className="cursor-pointer px-3 py-2 text-xs font-semibold">Ver origen de la proyección ({forecast.movements.filter(row => row.date <= data.at(-1)?.date).length} apuntes)</summary>
         <div className="max-h-60 overflow-auto border-t border-border px-3 py-2 text-xs">
-          {forecast.movements.filter(row => row.date <= data.at(-1)?.date).slice(0, 80).map(row => <a key={row.key} href={row.route} className="flex justify-between gap-3 border-b border-border py-1.5 hover:text-taxea-red"><span>{row.originalDate} · {row.label}{row.originalDate < row.date ? ' · vencido' : ''}</span><span className="shrink-0 font-semibold">{fmt(row.amount)}</span></a>)}
+          {forecast.movements.filter(row => row.date <= data.at(-1)?.date).slice(0, 80).map(row => <Link key={row.key} to={row.route} className="flex justify-between gap-3 border-b border-border py-1.5 hover:text-taxea-red"><span>{row.originalDate} · {row.label}{row.originalDate < row.date ? ' · vencido' : ''}</span><span className="shrink-0 font-semibold">{fmt(row.amount)}</span></Link>)}
           {forecast.undated > 0 && <p className="py-2 text-amber-700">{forecast.undated} partidas sin fecha fiable o cobros vencidos no se incluyen en la curva; revísalas en su módulo de origen.</p>}
           {!forecast.movements.length && <p className="py-2 text-muted-foreground">No hay vencimientos cuantificados dentro del horizonte.</p>}
         </div>
@@ -55,3 +56,4 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
     </section>
   );
 }
+
