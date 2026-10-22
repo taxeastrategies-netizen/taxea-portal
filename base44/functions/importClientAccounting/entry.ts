@@ -1,5 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import * as XLSX from 'npm:xlsx@0.18.5';
+// Official SheetJS CE 0.20.3, vendored with license and checksum for reproducible
+// backend imports. Do not fall back to the outdated npm xlsx@0.18.5 package.
+import * as XLSX from './xlsx.mjs';
 
 const IMPORT_APP_ID = '6a00fec50cc522a74ddde4b2';
 const IMPORT_MEDIA_HOST = 'media.base44.com';
@@ -257,7 +259,9 @@ Deno.serve(async (req) => {
 
     return Response.json({ status: 'ok', batch, results });
   } catch (error) {
-    console.error('importClientAccounting:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[importClientAccounting]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo completar la importación. Revisa el resultado antes de reintentar para no duplicar datos. Comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
