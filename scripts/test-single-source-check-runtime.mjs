@@ -45,7 +45,8 @@ const client={auth:{me:async()=>user},asServiceRole:{entities},functions:{invoke
 client.asServiceRole.functions=client.functions;
 client.entities=entities;
 for(const name of ['fiscalOperations','invoiceOperations','approveOcrDocument','ocrDocumentIntake']){
-  const build=await esbuild.build({entryPoints:['base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
+  const entry=name==='ocrDocumentIntake' ? process.env.OCR_INTAKE_ENTRY : name==='approveOcrDocument' ? process.env.OCR_APPROVE_ENTRY : '';
+  const build=await esbuild.build({entryPoints:[entry || 'base44/functions/'+name+'/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',
     plugins:[{name:'stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));}}]});
   vm.runInContext(build.outputFiles[0].text,vm.createContext({Response,Request,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,crypto:webcrypto,console,Date,
     setTimeout:fn=>{fn();return 0;},clearTimeout(){},__client:client,Deno:{serve:fn=>{handlers[name]=fn;}}}));
@@ -65,6 +66,20 @@ const form=doc=>{const ex=JSON.parse(doc.extractedData);return {numero_factura:e
   cuota_impuesto:ex.cuota_impuesto,total:ex.total,retencion_irpf:0,importe_retencion:0,es_rectificativa:ex.es_rectificativa,
   fiscal_activity_id:'fa',cuenta_contable_manual:'60000008'};};
 const approve=doc=>call('approveOcrDocument',{docId:doc.id,invoiceType:'recibida',form:form(doc),extractedData:JSON.parse(doc.extractedData)});
+// Reset/reject and approval share the real company lease. A stale review form
+// must not create an invoice after its document returned to pending/rejected.
+const lifecycle=await makeDoc('lifecycle-qa'), savedForm=form(lifecycle), savedData=JSON.parse(lifecycle.extractedData);
+const stateAction=action=>call('ocrDocumentIntake',{action,companyId:'qa',docId:lifecycle.id});
+const staleApproval=()=>call('approveOcrDocument',{docId:lifecycle.id,invoiceType:'recibida',form:savedForm,extractedData:savedData},409);
+const beforeLifecycle={invoices:records.Invoice.length,journals:records.JournalEntry.length};
+await stateAction('return_to_pending');assert.equal((await entity('OcrInvoiceDocument').get(lifecycle.id)).status,'pending');
+await staleApproval();
+const retry=await stateAction('analysis_start');
+await staleApproval();
+await call('ocrDocumentIntake',{action:'analysis_complete',companyId:'qa',docId:lifecycle.id,
+  analysisStartedAt:retry.document.analysisStartedAt,extractedData:savedData});
+await stateAction('reject');await staleApproval();
+assert.equal(records.Invoice.length,beforeLifecycle.invoices);assert.equal(records.JournalEntry.length,beforeLifecycle.journals);
 const positive=await approve(await makeDoc('positive'));
 assert.equal(positive.success,true);let invoice=await entity('Invoice').get(positive.invoiceId);
 assert.equal(invoice.estado_contable,'contabilizada');assert.equal(invoice.deductible_tax_amount,0);
@@ -155,4 +170,5 @@ assert.equal(records.AccountingAccount.find(row=>row.id==='expense-history').cod
 console.log(JSON.stringify({ok:true,workflow:'single-source-check',normalUser:true,invoiceCount:records.Invoice.length,confirmedEntries:records.JournalEntry.filter(row=>row.status==='confirmado').length,
   checks:['minorista taxed/zero/credit','source amounts preserved','existing subaccount preserved','idempotent retry','legacy same invoice recovered','tax-line failure recovered',
   'tenant denied','manual direct with stable QR hash','minorista issued OCR QR/hash','orphan invoice appears in OCR and recovers','intra services self-assessment','special prorrata','all journals balanced'],apiCalls:calls},null,2));
+
 
