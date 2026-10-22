@@ -42,3 +42,12 @@ export function resetUncontrolledSelect(defaultValue,triggerRef,setValue){
     setValue(value);
   });
 }
+export function syncNativeSelectDefaults(control,defaultValue,currentValue){
+  if(control?.tagName!=='SELECT')return;
+  const resetValue=String(defaultValue??'');
+  for(const option of control.options)option.defaultSelected=option.value===resetValue;
+  // Setting defaultSelected can affect a pristine select. Keep the displayed
+  // value controlled, while native form.reset() has the correct default.
+  control.value=String(currentValue??'');
+}
+
