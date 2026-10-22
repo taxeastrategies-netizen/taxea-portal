@@ -5,7 +5,8 @@ import {createRequire} from 'node:module';
 import * as esbuild from 'esbuild';
 import React from 'react';
 import {renderToString} from 'react-dom/server';
-import {nativeSelectModel,selectText} from '../src/lib/nativeSelect.mjs';
+import {nativeSelectModel,selectText,filterPickerOptions} from '../src/lib/nativeSelect.mjs';
+import {suppressChromeGesture} from '../src/lib/appGestures.mjs';
 import {recordNavigation,safeBackTarget,referenceDestination} from '../src/lib/navigationStack.mjs';
 import {savePreference} from '../src/lib/optimisticPreference.mjs';
 
@@ -33,6 +34,11 @@ const element=(type,props)=>({type,props});
 const model=nativeSelectModel([element(valueType,{placeholder:'Cuenta'}),element(groupType,{children:[element(labelType,{children:'Clientes'}),element(itemType,{value:'43000012',children:[element('svg',{}),' Cliente ',element('span',{children:'nuevo'})]}),element(itemType,{value:'43000018',disabled:true,children:'Archivado'})]}),element(itemType,{value:'all',children:'Todos'})],{itemType,groupType,labelType,valueType});
 assert.deepEqual(model,{placeholder:'Cuenta',options:[{value:'43000012',label:'Cliente nuevo',group:'Clientes',disabled:false},{value:'43000018',label:'Archivado',group:'Clientes',disabled:true},{value:'all',label:'Todos',group:'',disabled:false}]});cases++;
 check(selectText([0,null,false,' €'])==='0 €','Zero labels and fragments survive');
+const longList=Array.from({length:1000},(_,i)=>({value:String(i),label:i===777?'Café agrícola':'Proveedor '+i,group:'Canarias'}));
+check(filterPickerOptions(longList,'cafe agricola')[0].value==='777','Picker search is accent-insensitive');
+check(filterPickerOptions(longList,'Canarias').length===1000,'Every option stays searchable, including beyond a visible batch');
+check(filterPickerOptions(longList,'nothing-here').length===0,'Empty picker search has an honest empty state');
+for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,true,false],[false,false,false]])check(suppressChromeGesture({closest:selector=>(selector.startsWith('input,')?protectedTarget:chromeTarget)?{}:null})===expected,'Chrome gesture suppression must preserve editable/copyable content');
 
 // Render actual shared Select with real React/server, not an invented DOM.
 const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'}});
@@ -48,6 +54,9 @@ check(native.includes('<optgroup label="Grupo"'),'Native groups survive');
 check(/value="b" selected=""/.test(native),'Controlled selection survives');
 check(/value="c" disabled=""/.test(native),'Disabled choices survive');
 check(native.includes('aria-label="Estado"')&&native.includes('id="qa-selector"'),'Accessible label/id survive');
+const largePicker=e(ui.Select,{value:'777',onValueChange(){}},e(ui.SelectTrigger,{'aria-label':'Proveedor'},e(ui.SelectValue,{placeholder:'Proveedor'})),e(ui.SelectContent,null,longList.map(option=>e(ui.SelectItem,{key:option.value,value:option.value},option.label))));
+const largeMarkup=renderToString(largePicker);
+check(largeMarkup.includes('aria-haspopup="dialog"')&&largeMarkup.includes('Café agrícola'),'Long mobile lists get a searchable drawer trigger without changing the value');
 window.matchMedia=()=>({matches:false});
 const desktop=renderToString(createSelect());
 check(desktop.includes('role="combobox"')&&!desktop.includes('taxea-native-select'),'Desktop retains accessible Radix');
@@ -70,3 +79,4 @@ check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixe
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,externalCalls:0,financialWrites:0},null,2));
+
