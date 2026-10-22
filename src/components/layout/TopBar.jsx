@@ -60,7 +60,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
           <Menu className="w-5 h-5" />
         </button>
         {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="taxea-mobile-back md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
-        <span className="sm:hidden text-sm font-semibold truncate">{crumbs?.at(-1)||({'/ajustes':'Ajustes','/suscripcion':'Suscripción','/notificaciones':'Avisos'}[location.pathname])||'Taxea'}</span>
+        <span className="taxea-mobile-title sm:hidden text-sm font-semibold truncate">{crumbs?.at(-1)||({'/ajustes':'Ajustes','/suscripcion':'Suscripción','/notificaciones':'Avisos'}[location.pathname])||'Taxea'}</span>
 
         {/* Breadcrumb o empresa */}
         {crumbs && crumbs.length > 1 ? (
@@ -70,7 +70,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
             <span className="text-foreground font-semibold">{crumbs[1]}</span>
           </nav>
         ) : companyName ? (
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="taxea-topbar-company hidden sm:flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
             <span className="text-sm font-medium text-foreground truncate max-w-xs">{companyName}</span>
           </div>
@@ -78,7 +78,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
       </div>
 
       <div className="flex items-center gap-0 sm:gap-2 shrink-0">
-        <div className="hidden sm:block"><OcrTopBarBadge isAdmin={isAdmin} /></div>
+        <div className="taxea-topbar-ocr hidden sm:block"><OcrTopBarBadge isAdmin={isAdmin} /></div>
         {onRefresh&&<button type="button" aria-label="Actualizar datos sin salir de la pantalla" disabled={refreshing} onClick={onRefresh} className="taxea-mobile-refresh md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin motion-reduce:animate-none':''}`}/></button>}
         {/* Notificaciones */}
         <Link
@@ -103,7 +103,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
                   {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
               </div>
-              <span className="hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
+              <span className="taxea-user-name hidden sm:block text-sm font-medium text-foreground max-w-[120px] truncate">
                 {user?.full_name?.split(' ')[0] || user?.email}
               </span>
               <ChevronDown className="w-3 h-3 text-muted-foreground hidden sm:block" />
