@@ -1,4 +1,4 @@
-import { loadOcrDocuments } from './loadOcrDocuments.mjs';
+import { loadIntakeDocuments } from './ocrIntake.mjs';
 const parsed=(raw,fallback)=>{try{return JSON.parse(raw || JSON.stringify(fallback));}catch{return fallback;}};
 export function invoiceSourceData(invoice) {
   return {numero_factura:invoice.numero_factura,fecha:invoice.fecha_emision,fecha_emision:invoice.fecha_emision,
@@ -22,7 +22,7 @@ export function invoiceSourceData(invoice) {
     }};
 }
 export async function loadOcrWorkspace(client, companyId, documentType) {
-  const docs=await loadOcrDocuments(client.entities.OcrInvoiceDocument,{company_id:companyId,documentType});
+  const docs=await loadIntakeDocuments(client,companyId,documentType);
   const pending=[];
   for(let page=0;page<200;page++){
     const response=await client.functions.invoke('invoiceOperations',{action:'list_source_pending',company_id:companyId,
@@ -104,3 +104,4 @@ export async function approveStoredOcrBatch(client,companyId,documents,ids,mapFo
   }
   return {done,failed,total:selected.length,remaining:selected.length-done-failed,stopped,issues};
 }
+
