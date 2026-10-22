@@ -4,8 +4,14 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
+import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+function DropdownMenu({open,defaultOpen=false,onOpenChange,...props}){
+  const [localOpen,setLocalOpen]=React.useState(defaultOpen);
+  const change=next=>{if(open===undefined)setLocalOpen(next);onOpenChange?.(next);};
+  useCloseOnNavigation(()=>change(false));
+  return <DropdownMenuPrimitive.Root {...props} open={open===undefined?localOpen:open} onOpenChange={change}/>;
+}
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 
@@ -161,3 +167,4 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 }
+
