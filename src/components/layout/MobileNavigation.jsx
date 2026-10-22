@@ -68,4 +68,3 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     {!id&&<section className="taxea-mobile-screen" key={href}>{outlet}</section>}
   </>;
 }
-

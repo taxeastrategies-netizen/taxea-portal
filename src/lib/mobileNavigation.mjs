@@ -38,4 +38,3 @@ export function pullGesture(start,x,y,{nestedScroll=false,touches=1}={}) {
   const distance=Math.min(88,Math.max(0,dy)*0.48);
   return {cancelled:false,distance,armed:distance>=58};
 }
-

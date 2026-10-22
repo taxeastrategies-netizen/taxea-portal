@@ -6,4 +6,3 @@ paths.push('src/components/ui/MobileSelectPicker.jsx','src/components/ui/drawer.
 paths.push('src/hooks/useCloseOnNavigation.js','src/components/ui/dropdown-menu.jsx');
 for(const path of paths){const before=fs.readFileSync(path,'utf8'),after=before.trimEnd()+'\n';if(after!==before)fs.writeFileSync(path,after);}
 console.log('Task-only EOF normalisation complete.');
-

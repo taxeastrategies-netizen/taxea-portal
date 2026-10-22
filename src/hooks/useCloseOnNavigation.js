@@ -13,4 +13,3 @@ export default function useCloseOnNavigation(close){
     return()=>window.removeEventListener(NAVIGATION_COMMITTED_EVENT,listener);
   },[]);
 }
-
