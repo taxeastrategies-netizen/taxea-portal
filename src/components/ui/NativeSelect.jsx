@@ -26,10 +26,12 @@ export function htmlSelectOptions(children){
 // A normal HTML select on desktop; a searchable picker on mobile. The single
 // native form control remains responsible for FormData and constraint validity.
 // Selection dispatches its real change event, preserving existing event handlers.
-const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaultValue,className,style,onChange,onInvalid,onFocus,...props},ref){
+const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaultValue,className,style,onChange,onInvalid,onFocus,open:controlledOpen,defaultOpen=false,onOpenChange,...props},ref){
   const mobile=useMobileViewport(),options=React.useMemo(()=>htmlSelectOptions(children),[children]);
   const initial=defaultValue??options.find(option=>!option.disabled)?.value??'';
-  const [localValue,setLocalValue]=React.useState(String(initial)),[open,setOpen]=React.useState(false),[invalid,setInvalid]=React.useState(false),[fieldLabel,setFieldLabel]=React.useState('');
+  const [localValue,setLocalValue]=React.useState(String(initial)),[localOpen,setLocalOpen]=React.useState(defaultOpen),[invalid,setInvalid]=React.useState(false),[fieldLabel,setFieldLabel]=React.useState('');
+  const open=controlledOpen===undefined?localOpen:controlledOpen;
+  const setOpen=React.useCallback(next=>{if(controlledOpen===undefined)setLocalOpen(next);onOpenChange?.(next);},[controlledOpen,onOpenChange]);
   const nativeRef=React.useRef(null),triggerRef=React.useRef(null),generatedId=React.useId(),contentId=React.useId(),errorId=React.useId();
   const controlled=value!==undefined,current=String(controlled?(value??''):localValue);
   const adaptive=mobile&&!props.multiple&&!(Number(props.size)>1);
@@ -37,7 +39,7 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
   const label=props['aria-label']||fieldLabel||props.title||'Seleccionar opción';
   const assignedRef=React.useCallback(node=>{nativeRef.current=node;if(typeof ref==='function')ref(node);else if(ref)ref.current=node;},[ref]);
   useCloseOnNavigation(()=>setOpen(false));
-  React.useEffect(()=>{if(!adaptive||props.disabled)setOpen(false);},[adaptive,props.disabled]);
+  React.useEffect(()=>{if(open&&(!adaptive||props.disabled))setOpen(false);},[adaptive,props.disabled,open,setOpen]);
   useClientLayoutEffect(()=>{
     const native=nativeRef.current;if(!native)return;
     syncNativeSelectDefaults(native,controlled?current:initial,current);
@@ -68,7 +70,6 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
     const native=nativeRef.current;if(!native||props.disabled)return;
     native.value=next;
     native.dispatchEvent(new Event('change',{bubbles:true}));
-    setOpen(false);
   };
   const nativeProps={...props,ref:assignedRef,value:current,onChange:handleChange,onInvalid:event=>{
     onInvalid?.(event);if(adaptive){event.preventDefault();setInvalid(true);triggerRef.current?.focus({preventScroll:true});}
@@ -86,3 +87,4 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
   </span>;
 });
 export default NativeSelect;
+
