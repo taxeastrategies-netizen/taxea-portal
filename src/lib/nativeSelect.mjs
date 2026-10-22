@@ -6,12 +6,13 @@ export function selectText(node){
   if(Array.isArray(node))return node.map(selectText).join('');
   return selectText(node.props?.children);
 }
-export function nativeSelectModel(children,{itemType,groupType,labelType,valueType}){
-  const options=[];let placeholder='';
+export function nativeSelectModel(children,{itemType,groupType,labelType,valueType,triggerType}){
+  const options=[];let placeholder='',triggerLabel='';
   function walk(node,group='',disabled=false){
     if(Array.isArray(node)){node.forEach(child=>walk(child,group,disabled));return;}
     if(!node?.props)return;
     if(node.type===valueType)placeholder=node.props.placeholder||placeholder;
+    if(triggerType&&node.type===triggerType)triggerLabel=node.props['aria-label']||triggerLabel;
     if(node.type===itemType){
       const label=String(node.props.textValue??selectText(node.props.children)).replace(/\s+/g,' ').trim();
       options.push({value:String(node.props.value),label,group,disabled:disabled||!!node.props.disabled});return;
@@ -24,10 +25,11 @@ export function nativeSelectModel(children,{itemType,groupType,labelType,valueTy
     walk(node.props.children,group,disabled);
   }
   walk(children);
-  return {options,placeholder};
+  return {options,placeholder:placeholder||triggerLabel};
 }
 export function filterPickerOptions(options,query){
   const normalize=value=>String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
   const search=normalize(query).trim();
   return search?options.filter(option=>normalize(option.label+' '+option.group+' '+option.value).includes(search)):options;
 }
+
