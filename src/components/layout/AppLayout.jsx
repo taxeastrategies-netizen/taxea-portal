@@ -83,7 +83,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col safe-area-padded">
+    <div className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
       <FutureBackdrop />
       {impersonation && <ImpersonationBanner impersonation={impersonation} />}
       <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
@@ -104,7 +104,8 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
             onRefresh={refresh.refresh}
             refreshing={refresh.busy}
           />
-          <main ref={mainRef} className="taxea-future-main flex-1 overflow-y-auto overscroll-y-contain" aria-busy={refresh.busy}>
+          <main ref={mainRef} className="taxea-future-main flex-1 overflow-y-auto overscroll-y-contain" aria-busy={refresh.busy||navigation?.pending}>
+            {navigation?.pending&&<p role="status" className="sticky top-0 z-20 bg-card/95 border-b border-border px-4 py-2 text-xs text-muted-foreground">Abriendo sección…</p>}
             <div className="sticky top-0 z-20 h-0 pointer-events-none flex justify-center" aria-hidden={refresh.distance===0&&!refresh.busy}>
               {(refresh.distance>0||refresh.busy)&&<div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-2 text-xs" style={{transform:`translateY(${refresh.busy?12:Math.max(0,refresh.distance-20)}px)`}}><RefreshCw className={`w-4 h-4 ${refresh.busy?'animate-spin motion-reduce:animate-none':''}`}/>{refresh.busy?'Actualizando…':refresh.distance>=58?'Suelta para actualizar':'Desliza para actualizar'}</div>}
             </div>
@@ -144,3 +145,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
