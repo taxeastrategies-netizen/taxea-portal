@@ -185,6 +185,35 @@
 }
 
 .taxea-future-shell { height: 100vh; height: 100dvh; }
+/* The decorative glass layer predates system themes. Override its fixed light
+   surfaces as well as the semantic tokens, otherwise dark text loses contrast. */
+@layer components {
+  .dark .taxea-future-shell { background: radial-gradient(circle at 76% -8%,rgba(155,28,28,.16),transparent 28rem),linear-gradient(135deg,#171418,#101014); }
+  .dark .taxea-future-main { background: linear-gradient(135deg,rgba(23,20,24,.94),rgba(16,16,20,.96)); }
+  .dark .taxea-future-main::before { opacity:.08; }
+  .dark .taxea-future-topbar { background:rgba(22,20,25,.94)!important; border-bottom-color:rgba(255,255,255,.12)!important; }
+  .dark .taxea-future-main .bg-card.rounded-xl,
+  .dark .taxea-future-main .bg-card.rounded-2xl,
+  .dark .taxea-future-main .card-premium { background:linear-gradient(145deg,#242128,#1b191f)!important; border-color:rgba(255,255,255,.13)!important; box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 12px 32px rgba(0,0,0,.24)!important; }
+  .dark .taxea-future-main .bg-card.border::after { opacity:.04; }
+  .dark .taxea-future-shell input,
+  .dark .taxea-future-shell textarea,
+  .dark .taxea-future-shell select,
+  .dark .taxea-future-shell [role="combobox"] { background-color:hsl(var(--background)); color:hsl(var(--foreground)); border-color:hsl(var(--border)); }
+  .dark .taxea-data-table-frame { background:#1b191f; border-color:rgba(255,255,255,.13); }
+  .dark .taxea-data-table tbody tr { background:rgba(30,27,34,.95); }
+  .dark .taxea-data-table tbody tr:nth-child(even) { background:rgba(38,33,41,.95); }
+  .dark .taxea-data-table tbody tr:hover { background:rgba(155,28,28,.2); }
+  .dark .taxea-data-table td { border-color:rgba(255,255,255,.1); }
+  .dark .taxea-future-main .bg-white { background-color:hsl(var(--card)); }
+  .dark .taxea-future-main .bg-slate-50,
+  .dark .taxea-future-main .bg-gray-50 { background-color:hsl(var(--secondary)); }
+  .dark .taxea-future-main .text-slate-900,
+  .dark .taxea-future-main .text-slate-800,
+  .dark .taxea-future-main .text-gray-900,
+  .dark .taxea-future-main .text-gray-800 { color:hsl(var(--foreground)); }
+  .dark .taxea-future-main .recharts-cartesian-grid line { stroke:rgba(255,255,255,.12); }
+}
 [data-mobile-screen][hidden] { display: none !important; }
 @media (max-width: 767px) {
   input, textarea, select { font-size: 16px; }
@@ -195,3 +224,4 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
