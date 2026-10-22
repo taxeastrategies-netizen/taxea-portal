@@ -32,7 +32,9 @@ Deno.serve(async (req) => {
     console.log(`Customer portal session creada para usuario ${user.id}`);
     return Response.json({ url: session.url });
   } catch (error) {
-    console.error('Error en stripeCustomerPortal:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[stripeCustomerPortal]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo abrir la gestión de suscripción. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
