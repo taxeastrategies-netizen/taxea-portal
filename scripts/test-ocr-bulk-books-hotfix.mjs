@@ -45,6 +45,8 @@ const document={
   body:{appendChild(){},removeChild(){}},
 };
 const source=readFileSync('src/components/libros/ExportExcel.jsx','utf8')
+  .replace("import { base44 } from '@/api/base44Client';",'')
+  .replaceAll('base44.functions','globalThis.__fakeBase44.functions')
   .replace('export async function exportarLibros','async function exportarLibros')
   .replaceAll("const { base44 } = await import('@/api/base44Client');",'const base44 = globalThis.__fakeBase44;');
 const context=vm.createContext({Blob:TestBlob,URL:{createObjectURL(value){blob=value;return 'blob:test';},revokeObjectURL(){}},document,Date,console});
@@ -80,3 +82,4 @@ assert.match(partialXml,/Facturas Emitidas|Facturas Recibidas/);
 assert.match(partialXml,/Incidencias contables/);
 assert.doesNotMatch(partialXml,/ss:Name="7\\. Libro Diario"|ss:Name="8\\. Libro Mayor"|ss:Name="11\\. Caja y Bancos"/);
 console.log(JSON.stringify({ok:true,bulkConfirmed:result.done,bulkFailures:result.failed,bookSheets:4,partialAccountingWarning:true}));
+
