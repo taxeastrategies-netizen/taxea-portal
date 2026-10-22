@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
+import {Slot} from '@radix-ui/react-slot';
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -37,20 +38,23 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   },[uncontrolled,defaultValue,props.form]);
   useControlLayoutEffect(()=>{if(nativeForm)syncNativeSelectDefaults(triggerRef.current,uncontrolled?defaultValue:current,current);},[nativeForm,uncontrolled,defaultValue,current,model.options]);
   const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
-  // Named/required HTML forms use one OS control. Application drawers retain
-  // Radix option registration and trigger semantics; its desktop popup stays
-  // closed while the mobile drawer is visible. No form has duplicate names.
+  // The mobile path mounts only its picker, not a hidden desktop popup or its
+  // form listeners. Desktop and real native HTML forms retain their own paths.
   return <SelectUiContext.Provider value={picker}>
-    {nativeForm?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change} open={sheet?false:open} onOpenChange={next=>sheet?(next&&setOpen(true)):setOpen(next)}>
+    {nativeForm?children:sheet?<>{children}<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{open&&<MobileSelectPicker picker={picker}/>}</Drawer></>:<SelectPrimitive.Root {...props} value={current} onValueChange={change} open={open} onOpenChange={setOpen}>
       {children}
-      {sheet&&<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{open&&<MobileSelectPicker picker={picker}/>}</Drawer>}
     </SelectPrimitive.Root>}
   </SelectUiContext.Provider>;
 }
 
 const SelectGroup = SelectPrimitive.Group
 
-const SelectValue = SelectPrimitive.Value
+const SelectValue = React.forwardRef(({children,placeholder,...props},ref)=>{
+  const picker=React.useContext(SelectUiContext);
+  if(picker?.mode!=='desktop'&&picker)return <span {...props} ref={ref}>{children??picker.options.find(option=>option.value===String(picker.value))?.label??placeholder??''}</span>;
+  return <SelectPrimitive.Value {...props} placeholder={placeholder} ref={ref}>{children}</SelectPrimitive.Value>;
+});
+SelectValue.displayName='SelectValue';
 
 const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }, ref) => {
   const picker=React.useContext(SelectUiContext);
@@ -66,9 +70,10 @@ const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }
     </select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/></span>;
   }
   if(picker?.mode==='sheet'){
-    return <SelectPrimitive.Trigger {...props} ref={assignedRef} asChild={asChild} aria-haspopup="dialog" aria-expanded={picker.open} aria-controls={picker.contentId} aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} disabled={picker.disabled||props.disabled} className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',className)}>
+    const Trigger=asChild?Slot:'button';
+    return <Trigger {...props} ref={assignedRef} type="button" role="combobox" aria-haspopup="dialog" aria-expanded={picker.open} aria-controls={picker.contentId} aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} disabled={picker.disabled||props.disabled} onClick={event=>{props.onClick?.(event);if(!event.defaultPrevented)picker.setOpen(true);}} onKeyDown={event=>{props.onKeyDown?.(event);if(!event.defaultPrevented&&['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();picker.setOpen(true);}}} className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',className)}>
       {asChild?children:<><span className="truncate">{picker.options.find(option=>option.value===String(picker.value))?.label||(picker.value?`${picker.value} · no disponible`:picker.placeholder||'Seleccionar opción')}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50"/></>}
-    </SelectPrimitive.Trigger>;
+    </Trigger>;
   }
   return (
   <SelectPrimitive.Trigger
@@ -109,7 +114,7 @@ SelectScrollDownButton.displayName =
 const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
   const safePadding=useSafeAreaCollision();
   const picker=React.useContext(SelectUiContext);
-  if(picker?.mode==='native')return null;
+  if(picker?.mode==='native'||picker?.mode==='sheet')return null;
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
@@ -182,3 +187,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
