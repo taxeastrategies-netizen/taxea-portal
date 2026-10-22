@@ -1,0 +1,11 @@
+{
+  "product": "SheetJS Community Edition",
+  "version": "0.20.3",
+  "source": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+  "documentation": "https://docs.sheetjs.com/docs/getting-started/installation/nodejs/",
+  "file": "xlsx.mjs",
+  "sha256": "1a0fb062ee9781b13f6687371b202aaefc53b6ce55b530c027e01f9c087b77db",
+  "license": "LICENSE.sheetjs",
+  "reason": "Replace unmaintained npm xlsx 0.18.5, preserving the same parser in frontend exports and the backend accounting importer."
+}
+
