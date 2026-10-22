@@ -9,12 +9,13 @@ const MAX_FILE_MB = 10;
 const MAX_TOTAL_MB = 500;
 const ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp';
 
-export default function BulkDropZone({ onFilesAdded }) {
+export default function BulkDropZone({ onFilesAdded, disabled = false }) {
   const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [dragging, setDragging] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
   const processFiles = (fileList, captureMethod = 'file_picker') => {
+    if (disabled || !fileList) return;
     const files = Array.from(fileList).filter(f => {
       const ext = f.name.split('.').pop().toLowerCase();
       return ['pdf','jpg','jpeg','png','webp'].includes(ext);
@@ -48,7 +49,7 @@ export default function BulkDropZone({ onFilesAdded }) {
       onDragOver={e => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      onClick={() => inputRef.current?.click()}
+      onClick={() => { if (!disabled) inputRef.current?.click(); }}
     >
       <div className="w-16 h-16 bg-teal-light rounded-2xl flex items-center justify-center mx-auto mb-4">
         <Upload className="w-8 h-8 text-teal" />
@@ -60,12 +61,13 @@ export default function BulkDropZone({ onFilesAdded }) {
         PDF, JPG, JPEG, PNG, WEBP · Hasta 200 archivos · Máx 10 MB por archivo
       </p>
       <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-        <Button variant="outline" size="sm" className="gap-2" onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}>
+        <Button disabled={disabled} variant="outline" size="sm" className="gap-2" onClick={e => { e.stopPropagation(); inputRef.current?.click(); }}>
           <FolderOpen className="w-4 h-4" /> Seleccionar archivos
         </Button>
         {/* Botón cámara — visible siempre, prominente en móvil */}
         <Button
           size="sm"
+          disabled={disabled}
           className="gap-2 bg-teal hover:bg-teal-dark"
           onClick={e => { e.stopPropagation(); setShowScanner(true); }}
         >
@@ -75,6 +77,7 @@ export default function BulkDropZone({ onFilesAdded }) {
       <input
         ref={inputRef}
         type="file"
+        disabled={disabled}
         className="hidden"
         accept={ACCEPT}
         multiple
@@ -89,3 +92,4 @@ export default function BulkDropZone({ onFilesAdded }) {
     </div>
   );
 }
+
