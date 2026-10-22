@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, ArrowUpRight, ArrowDownRight, Clock, X, Calendar } from 'lucide-react';
@@ -66,10 +68,10 @@ function AddEventForm({ companyId, accounts, onSaved, onClose }) {
           <div key={f.key}>
             <label className="text-xs font-medium text-slate-600 mb-1 block">{f.label}</label>
             {f.type === 'select' ? (
-              <select value={form[f.key]} onChange={e => set(f.key, e.target.value)}
+              <NativeSelect value={form[f.key]} onChange={e => set(f.key, e.target.value)}
                 className="w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none bg-white">
                 {f.opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              </NativeSelect>
             ) : (
               <input type={f.type} value={form[f.key]} onChange={e => set(f.key, e.target.value)} placeholder={f.placeholder}
                 className="w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-taxea-red/30 bg-white" />

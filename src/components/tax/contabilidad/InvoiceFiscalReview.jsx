@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, PencilLine, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -196,24 +198,24 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                 </div>}
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-medium text-slate-700">Actividad
-                    <select value={form.activityId || ''} onChange={event => update('activityId', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.activityId || ''} onChange={event => update('activityId', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       {activeActivities.map(item => <option key={item.id} value={item.id}>{item.iaeCode ? `${item.iaeCode} · ` : ''}{item.name}</option>)}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="text-xs font-medium text-slate-700">Impuesto
-                    <select value={taxKind} onChange={event => update('taxKind', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={taxKind} onChange={event => update('taxKind', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       <option value="iva">IVA</option><option value="igic">IGIC</option><option value="no_aplica">No aplica</option>
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="text-xs font-medium text-slate-700">Régimen
-                    <select value={form.regime || 'general'} onChange={event => update('regime', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.regime || 'general'} onChange={event => update('regime', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       {(catalog?.regimes?.[taxKind] || []).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="text-xs font-medium text-slate-700">Tipo de operación
-                    <select value={form.operationType || 'subject_taxed'} onChange={event => update('operationType', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.operationType || 'subject_taxed'} onChange={event => update('operationType', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       {(catalog?.operations || []).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    </NativeSelect>
                   </label>
                   {!bulkCount && <label className="text-xs font-medium text-slate-700">Base imponible
                     <input type="number" step="0.01" value={form.base ?? 0} onChange={event => update('base', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
@@ -238,32 +240,32 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                     {(bundle?.invoicePayments || []).length > 0 && <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead><tr className="border-b border-indigo-200"><th className="pr-3 py-1">Fecha</th><th className="pr-3 py-1">Importe</th><th className="pr-3 py-1">Medio</th><th className="pr-3 py-1">Referencia</th><th className="py-1">Estado</th></tr></thead><tbody>{bundle.invoicePayments.map(payment => <tr key={payment.id} className="border-b border-indigo-100"><td className="pr-3 py-1">{payment.payment_date || '—'}</td><td className="pr-3 py-1">{money(payment.amount)}</td><td className="pr-3 py-1">{payment.method || '—'}</td><td className="pr-3 py-1">{payment.reference || '—'}</td><td className="py-1">{payment.operation_status || 'histórico sin estado'}</td></tr>)}</tbody></table></div>}
                   </div>}
                   {invoice.tipo === 'recibida' && selectedActivity?.deductionRight === 'prorrata_especial' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Destino del gasto · prorrata especial
-                    <select value={form.deductionUse || ''} onChange={event => update('deductionUse', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.deductionUse || ''} onChange={event => update('deductionUse', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       <option value="">Seleccionar destino antes de confirmar</option>
                       <option value="exclusive_right">Exclusivo de operaciones con derecho a deducción · 100 %</option>
                       <option value="exclusive_no_right">Exclusivo de operaciones sin derecho a deducción · 0 %</option>
                       <option value="shared">Uso común · porcentaje de prorrata confirmado en la actividad</option>
-                    </select>
+                    </NativeSelect>
                     <span className="mt-1 block font-normal text-slate-500">La elección queda en la línea fiscal y debe revisarla el asesor; el porcentaje general no se aplica a los gastos exclusivos.</span>
                   </label>}
                   {invoice.tipo === 'recibida' && <label className="text-xs font-medium text-slate-700">Cuota deducible (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.deductiblePercent ?? 0} onChange={event => update('deductiblePercent', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>}
                   {invoice.tipo === 'recibida' && taxKind === 'iva' && <label className="text-xs font-medium text-slate-700 sm:col-span-2">Clasificación anual para el modelo 390
-                    <select value={form.deductionCategory || ''} onChange={event => update('deductionCategory', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.deductionCategory || ''} onChange={event => update('deductionCategory', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       <option value="">Propuesta automática pendiente de revisar</option>
                       {DEDUCTION_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    </NativeSelect>
                     <span className="mt-1 block font-normal text-slate-500">Permite separar correctamente operaciones corrientes, inversiones, importaciones e intracomunitarias en el resumen anual.</span>
                   </label>}
                   <label className="text-xs font-medium text-slate-700">Retención IRPF (%)
                     <input type="number" min="0" max="100" step="0.01" value={form.withholdingRate ?? 0} onChange={event => update('withholdingRate', Number(event.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
                   </label>
                   <label className="text-xs font-medium text-slate-700">Clave de exención/no sujeción
-                    <select value={form.exemptionKey || ''} onChange={event => update('exemptionKey', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
+                    <NativeSelect value={form.exemptionKey || ''} onChange={event => update('exemptionKey', event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2">
                       <option value="">No aplica / seleccionar…</option>
                       {(catalog?.exemptionKeys?.[taxKind] || []).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="text-xs font-medium text-slate-700 sm:col-span-2">Fundamento legal
                     <input value={form.legalBasis || ''} onChange={event => update('legalBasis', event.target.value)} placeholder="Artículo y motivo concreto revisado" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" />
@@ -273,15 +275,15 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <legend className="px-1 font-semibold">Control RECC del asesor</legend>
                   <label className="block">Fecha de realización de la operación<input type="date" className="mt-1 block rounded border p-2" value={form.operationDate || ''} onChange={event => update('operationDate', event.target.value)} /></label>
                   <p>La fecha determina el límite legal, no la fecha del cobro. La factura de anticipo usa 438/407, no ingresos/gastos. La factura final debe contener solo la base y cuota nuevas, ya descontado lo facturado por anticipos.</p>
-                  <label className="block">Tipo de documento RECC<select className="mt-1 w-full rounded border p-2" value={form.recc?.documentKind || 'ordinary'} onChange={event => update('recc', { ...form.recc, documentKind: event.target.value, advanceAllocations: [] })}>
+                  <label className="block">Tipo de documento RECC<NativeSelect className="mt-1 w-full rounded border p-2" value={form.recc?.documentKind || 'ordinary'} onChange={event => update('recc', { ...form.recc, documentKind: event.target.value, advanceAllocations: [] })}>
                     <option value="ordinary">Factura ordinaria</option><option value="advance">Factura de anticipo · 438/407</option><option value="final">Factura final por saldo · aplicar anticipos</option>
-                  </select></label>
+                  </NativeSelect></label>
                   {form.recc?.documentKind === 'advance' && <p>Indica como fecha de operación la del anticipo, no la entrega futura. El cobro/pago se registra por separado y solo se puede aplicar cuando tenga asiento confirmado.</p>}
                   {form.recc?.documentKind === 'final' && <div className="space-y-2">
                     <p>La factura contiene el saldo después de anticipos. Si está anticipada al 100%, registra base y cuota pendientes cero: se aplica 438/407 sin nuevo IVA ni pago ficticio.</p>
                     <label className="block">Base total de la operación, antes de los anticipos (€)<input type="number" min="0.01" step="0.01" className="mt-1 w-full rounded border p-2" value={form.recc?.finalOperationBase ?? ''} onChange={event => update('recc', { ...form.recc, finalOperationBase: event.target.value })} /></label>
                     <button type="button" disabled={saving} className="rounded border bg-white px-3 py-2" onClick={async () => { setSaving(true); setError(''); try { const result = await invoke({ action: 'recc_advance_candidates', companyId, invoiceId: invoice.id }); setAdvanceCandidates(result.candidates || []); } catch (err) { setError(reviewError(err)); } finally { setSaving(false); } }}>Buscar anticipos de esta contraparte</button>
-                    <label className="block">Añadir anticipo validado<select className="mt-1 w-full rounded border p-2" value="" onChange={event => { const candidate = advanceCandidates.find(row => row.id === event.target.value); if (candidate) update('recc', { ...form.recc, advanceAllocations: [...(form.recc?.advanceAllocations || []), { invoiceId: candidate.id, base: candidate.base }] }); }}><option value="">Seleccionar factura de anticipo</option>{advanceCandidates.filter(row => !(form.recc?.advanceAllocations || []).some(item => item.invoiceId === row.id)).map(row => <option key={row.id} value={row.id} disabled={row.locked}>{row.locked ? 'Bloqueado · ' : ''}{row.number} · {row.date} · base {money(row.base)}</option>)}</select></label>
+                    <label className="block">Añadir anticipo validado<NativeSelect className="mt-1 w-full rounded border p-2" value="" onChange={event => { const candidate = advanceCandidates.find(row => row.id === event.target.value); if (candidate) update('recc', { ...form.recc, advanceAllocations: [...(form.recc?.advanceAllocations || []), { invoiceId: candidate.id, base: candidate.base }] }); }}><option value="">Seleccionar factura de anticipo</option>{advanceCandidates.filter(row => !(form.recc?.advanceAllocations || []).some(item => item.invoiceId === row.id)).map(row => <option key={row.id} value={row.id} disabled={row.locked}>{row.locked ? 'Bloqueado · ' : ''}{row.number} · {row.date} · base {money(row.base)}</option>)}</NativeSelect></label>
                     {advanceCandidates.some(row => row.locked) && <div className="rounded border border-amber-300 bg-amber-50 p-2">
                       <p>Hay anticipos en confirmación. No se reutilizan mientras el proceso siga activo. Un bloqueo de más de una hora puede revisarlo el asesor, dejando motivo y auditoría.</p>
                       {canApprove && <><label className="block">Motivo de recuperación<input className="w-full rounded border p-1" value={lockRecoveryReason} onChange={event=>setLockRecoveryReason(event.target.value)} /></label>
@@ -295,9 +297,9 @@ export default function InvoiceFiscalReview({ companyId, invoice, advisorAccess 
                   <label className="block">Fecha del auto de concurso (solo hechos anteriores)<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.insolvencyDate || ''} onChange={event => update('recc', { ...form.recc, insolvencyDate: event.target.value })} /></label>
                   {invoice.es_rectificativa && <>
                     <p>Si el original es un anticipo íntegramente cobrado/pagado, el abono hereda 438/407 y su subcuenta histórica. No puede estar aplicado a una factura final. Su devolución debe quedar confirmada antes de reutilizar el saldo restante; un anticipo parcial requiere revisión específica.</p>
-                    <label className="block">Tratamiento de la rectificación<select className="mt-1 w-full rounded border p-2" value={form.recc?.adjustmentMode || ''} onChange={event => update('recc', { ...form.recc, adjustmentMode: event.target.value })}>
-                      <option value="">Seleccionar tras revisión del asesor</option><option value="price_change">Variación del precio · caja y saldo pendiente</option><option value="tax_adjustment">Ajuste de cuotas · período fiscal confirmado (arts. 89 y 114)</option></select></label>
-                    <label className="block">Causa legal para el resumen anual<select className="mt-1 w-full rounded border p-2" value={form.recc?.adjustmentCause || 'other'} onChange={event => update('recc', { ...form.recc, adjustmentCause: event.target.value })}><option value="other">Descuento, devolución, impago u otra causa revisada</option><option value="insolvency">Modificación por concurso de acreedores (art. 80.3)</option></select></label>
+                    <label className="block">Tratamiento de la rectificación<NativeSelect className="mt-1 w-full rounded border p-2" value={form.recc?.adjustmentMode || ''} onChange={event => update('recc', { ...form.recc, adjustmentMode: event.target.value })}>
+                      <option value="">Seleccionar tras revisión del asesor</option><option value="price_change">Variación del precio · caja y saldo pendiente</option><option value="tax_adjustment">Ajuste de cuotas · período fiscal confirmado (arts. 89 y 114)</option></NativeSelect></label>
+                    <label className="block">Causa legal para el resumen anual<NativeSelect className="mt-1 w-full rounded border p-2" value={form.recc?.adjustmentCause || 'other'} onChange={event => update('recc', { ...form.recc, adjustmentCause: event.target.value })}><option value="other">Descuento, devolución, impago u otra causa revisada</option><option value="insolvency">Modificación por concurso de acreedores (art. 80.3)</option></NativeSelect></label>
                     <label className="block">ID de factura original RECC<input className="mt-1 w-full rounded border p-2" value={form.recc?.originalInvoiceId || ''} onChange={event => update('recc', { ...form.recc, originalInvoiceId: event.target.value })} placeholder="Identificador del documento original de esta empresa" /></label>
                     <label className="block">Fecha fiscal de la rectificación<input type="date" className="mt-1 block rounded border p-2" value={form.recc?.adjustmentDate || ''} onChange={event => update('recc', { ...form.recc, adjustmentDate: event.target.value })} /></label>
                   </>}

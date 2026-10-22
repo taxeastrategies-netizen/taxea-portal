@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState } from 'react';
 import { Zap, Plus, Clock, Mail, CheckCircle2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -78,17 +80,17 @@ export default function AutoReports({ company }) {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Tipo de informe</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
+              <NativeSelect value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300">
                 {REPORT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Frecuencia</label>
-              <select value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
+              <NativeSelect value={form.frequency} onChange={e => setForm(p => ({ ...p, frequency: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300">
                 {FREQUENCIES.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
-              </select>
+              </NativeSelect>
             </div>
           </div>
           <div className="flex gap-2">

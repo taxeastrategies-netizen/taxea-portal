@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -438,7 +440,7 @@ export default function AdminClients() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-semibold text-muted-foreground">Motivo del acceso (opcional)</Label>
-                <select
+                <NativeSelect
                   value={impersonateReason}
                   onChange={e => setImpersonateReason(e.target.value)}
                   className="w-full h-9 px-3 text-sm border border-input rounded-md bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
@@ -450,7 +452,7 @@ export default function AdminClients() {
                   <option>Prueba de acceso</option>
                   <option>Incidencia técnica</option>
                   <option>Otro</option>
-                </select>
+                </NativeSelect>
               </div>
               <div className="flex gap-3 justify-end">
                 <Button variant="outline" size="sm" onClick={() => setImpersonateModal(null)}>Cancelar</Button>

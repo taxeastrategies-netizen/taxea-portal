@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -95,10 +97,10 @@ export default function Recruiting() {
                     {c.score_ia > 0 && <span className="text-xs text-amber-500 flex items-center gap-0.5"><Star className="w-3 h-3" />{c.score_ia}</span>}
                   </div>
                 </div>
-                <select value={c.etapa} onChange={e => moveStage(c.id, e.target.value)}
+                <NativeSelect value={c.etapa} onChange={e => moveStage(c.id, e.target.value)}
                   className={cn("text-[11px] font-semibold px-2 py-1 rounded-full border cursor-pointer", STAGE_COLORS[c.etapa])}>
                   {STAGES.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-                </select>
+                </NativeSelect>
               </div>
             ))}
           </div>

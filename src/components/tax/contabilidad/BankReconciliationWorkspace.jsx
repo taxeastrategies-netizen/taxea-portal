@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
@@ -277,12 +279,12 @@ export default function BankReconciliationWorkspace({ companyId, refreshToken })
                     {transaction.isPending ? (
                       <>
                         <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto]">
-                          <select value={selectedAccounts[transaction.id] || ''}
+                          <NativeSelect value={selectedAccounts[transaction.id] || ''}
                             onChange={(event) => setSelectedAccounts(current => ({ ...current, [transaction.id]: event.target.value }))}
                             className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
                             <option value="">Seleccionar cuenta contable definitiva…</option>
                             {(overview.selectableAccounts || []).map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-                          </select>
+                          </NativeSelect>
                           <button type="button" onClick={() => reclassify(transaction)} disabled={Boolean(workingId) || !selectedAccounts[transaction.id]}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-40">
                             {workingId === transaction.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}Reclasificar 555

@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 /**
  * PDFAnalysisEngine — Motor de análisis PDF cuenta a cuenta V5
  * Soporta múltiples PDFs de distintos tipos en el mismo análisis
@@ -761,10 +763,10 @@ Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
                         <span className="text-lg flex-shrink-0">{tipoInfo?.emoji || '📄'}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-slate-800 truncate">{pf.file.name}</p>
-                          <select value={pf.type} onChange={e => updateFileType(pf.id, e.target.value)}
+                          <NativeSelect value={pf.type} onChange={e => updateFileType(pf.id, e.target.value)}
                             className="text-[10px] text-slate-500 bg-transparent border-none focus:outline-none cursor-pointer mt-0.5">
                             {PDF_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                          </select>
+                          </NativeSelect>
                         </div>
                         <p className="text-[10px] text-slate-400 flex-shrink-0">{(pf.file.size / 1024).toFixed(0)} KB</p>
                         <button onClick={() => removeFile(pf.id)}><Trash2 className="w-3.5 h-3.5 text-red-400 hover:text-red-600" /></button>
@@ -777,10 +779,10 @@ Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
               {/* Add PDF area */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <select value={pendingFileType} onChange={e => setPendingFileType(e.target.value)}
+                  <NativeSelect value={pendingFileType} onChange={e => setPendingFileType(e.target.value)}
                     className="text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 flex-1 min-w-0">
                     {PDF_TYPES.map(t => <option key={t.value} value={t.value}>{t.emoji} {t.label}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div onClick={() => fileRef.current?.click()}
                   className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/20 transition-all">
@@ -876,16 +878,16 @@ Empresa: "${empresa}", Ejercicio: ${ejercicio}`,
                 <h3 className="text-base font-bold">Tabla de cuentas extraídas</h3>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Filter className="w-3.5 h-3.5 text-slate-400" />
-                  <select value={filterMasa} onChange={e => setFilterMasa(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                  <NativeSelect value={filterMasa} onChange={e => setFilterMasa(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
                     <option value="all">Todas</option>
                     {Object.entries(MASA_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                  <select value={filterConf} onChange={e => setFilterConf(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                  </NativeSelect>
+                  <NativeSelect value={filterConf} onChange={e => setFilterConf(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
                     <option value="all">Toda confianza</option>
                     <option value="alta">Alta (≥85%)</option>
                     <option value="media">Media (70-84%)</option>
                     <option value="baja">Baja (&lt;70%)</option>
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
               <p className="text-xs text-slate-400">{filteredAccounts.length} de {accounts.length} · Clic en celda para editar</p>

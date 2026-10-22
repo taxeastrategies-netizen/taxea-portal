@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -101,16 +103,16 @@ function EditUserModal({ targetUser, onClose, onSaved }) {
         <div><Label className="text-sm font-medium mb-1.5 block">Nombre de usuario</Label>
           <Input value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className="h-10" /></div>
         <div><Label className="text-sm font-medium mb-1.5 block">Tipo de negocio</Label>
-          <select value={form.business_type} onChange={e => setForm(p => ({ ...p, business_type: e.target.value }))}
+          <NativeSelect value={form.business_type} onChange={e => setForm(p => ({ ...p, business_type: e.target.value }))}
             className="w-full h-10 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
             <option value="">— Seleccionar —</option>
             {BIZ_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select></div>
+          </NativeSelect></div>
         <div><Label className="text-sm font-medium mb-1.5 block">Estado</Label>
-          <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
+          <NativeSelect value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
             className="w-full h-10 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
             {STATUS_OPTS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-          </select></div>
+          </NativeSelect></div>
         <div><Label className="text-sm font-medium mb-1.5 block">Notas internas</Label>
           <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
             rows={3} className="w-full px-3 py-2 rounded-md border border-input bg-transparent text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring" /></div>

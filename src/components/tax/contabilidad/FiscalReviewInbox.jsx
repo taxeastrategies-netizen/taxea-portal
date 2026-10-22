@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -68,8 +70,8 @@ export default function FiscalReviewInbox({companyId}) {
     <h2 className="font-semibold text-slate-900">Revisión fiscal del asesor</h2>
     <p className="mt-1 text-xs text-slate-600">El criterio del asesor prevalece sobre las propuestas del perfil. Revisión individual o por lotes, con trazabilidad y sin duplicar asientos.</p>
     <div className="my-4 flex flex-wrap items-end gap-3">
-      <label className="text-xs">Tipo<select aria-label="Tipo de factura" className="mt-1 block rounded border p-2" value={filters.type} onChange={e=>changeFilter('type',e.target.value)}>
-        <option value="">Emitidas y recibidas</option><option value="emitida">Emitidas</option><option value="recibida">Recibidas</option></select></label>
+      <label className="text-xs">Tipo<NativeSelect aria-label="Tipo de factura" className="mt-1 block rounded border p-2" value={filters.type} onChange={e=>changeFilter('type',e.target.value)}>
+        <option value="">Emitidas y recibidas</option><option value="emitida">Emitidas</option><option value="recibida">Recibidas</option></NativeSelect></label>
       <label className="text-xs">Desde<input aria-label="Desde" type="date" className="mt-1 block rounded border p-2" value={filters.from} onChange={e=>changeFilter('from',e.target.value)} /></label>
       <label className="text-xs">Hasta<input aria-label="Hasta" type="date" className="mt-1 block rounded border p-2" value={filters.to} onChange={e=>changeFilter('to',e.target.value)} /></label>
       <button type="button" className="rounded border px-3 py-2 text-xs" onClick={()=>query.refetch()}>Actualizar pendientes</button>
@@ -97,10 +99,10 @@ export default function FiscalReviewInbox({companyId}) {
     </div>
     <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50/40 p-4">
       <h3 className="text-sm font-semibold">Lotes guardados · reanudar y revisar incidencias</h3>
-      <select aria-label="Lote guardado" className="my-2 max-w-full rounded border p-2 text-xs" value={batch?.id||''} disabled={running||processing}
+      <NativeSelect aria-label="Lote guardado" className="my-2 max-w-full rounded border p-2 text-xs" value={batch?.id||''} disabled={running||processing}
         onChange={e=>{const job=jobs.data?.batches?.find(row=>row.id===e.target.value);if(job) loadResults(job).catch(e=>setError(err(e)));}}>
         <option value="">Seleccionar lote</option>{(jobs.data?.batches||[]).map(job=><option key={job.id} value={job.id}>{job.created_date?.slice(0,16)} · {job.processed}/{job.total} · {job.status}</option>)}
-      </select>
+      </NativeSelect>
       {batch&&<><p className="text-xs">{batch.processed}/{batch.total} procesadas · {batch.succeeded} confirmadas y contabilizadas · {batch.failed} incidencias · {batch.pending_accounting} pendientes de circuito contable.</p>
         <progress aria-label="Progreso del lote" className="my-2 w-full" max={batch.total||1} value={batch.processed||0} />
         <p className="text-xs text-slate-500">La pestaña procesa de forma acotada. Al pausarla o cerrarla termina la factura en curso; puedes reanudar sin repetir las completadas.</p>

@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Plus, Copy, ExternalLink, Loader2, Pencil, CheckCircle, X } from 'lucide-react';
@@ -154,15 +156,15 @@ export default function ReferralEngine({ partners, onRefresh }) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Categoría</label>
-                  <select className={inputCls} value={form.categoria} onChange={e => set('categoria', e.target.value)}>
+                  <NativeSelect className={inputCls} value={form.categoria} onChange={e => set('categoria', e.target.value)}>
                     {['neobank','broker','crypto','fondos','depositos','treasury','otro'].map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Estado</label>
-                  <select className={inputCls} value={form.estado || 'activo'} onChange={e => set('estado', e.target.value)}>
+                  <NativeSelect className={inputCls} value={form.estado || 'activo'} onChange={e => set('estado', e.target.value)}>
                     {['activo','pausado','negociacion','inactivo'].map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
               </div>
               <div>
@@ -172,9 +174,9 @@ export default function ReferralEngine({ partners, onRefresh }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Tipo comisión</label>
-                  <select className={inputCls} value={form.tipo_comision} onChange={e => set('tipo_comision', e.target.value)}>
+                  <NativeSelect className={inputCls} value={form.tipo_comision} onChange={e => set('tipo_comision', e.target.value)}>
                     {Object.entries(TIPO_COM_LABELS).map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Valor comisión</label>
@@ -192,15 +194,15 @@ export default function ReferralEngine({ partners, onRefresh }) {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Riesgo</label>
-                  <select className={inputCls} value={form.riesgo} onChange={e => set('riesgo', e.target.value)}>
+                  <NativeSelect className={inputCls} value={form.riesgo} onChange={e => set('riesgo', e.target.value)}>
                     {['muy_bajo','bajo','moderado','alto','muy_alto'].map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Liquidez</label>
-                  <select className={inputCls} value={form.liquidez} onChange={e => set('liquidez', e.target.value)}>
+                  <NativeSelect className={inputCls} value={form.liquidez} onChange={e => set('liquidez', e.target.value)}>
                     {['inmediata','1_7_dias','1_mes','3_meses','limitada'].map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">Orden</label>

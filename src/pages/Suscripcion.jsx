@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -61,7 +63,7 @@ function QuoteRequestForm({ user, onClose, onSent }) {
         <div className="p-6 space-y-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Tipo de expediente *</label>
-            <select value={form.caseType} onChange={e => setForm(p => ({ ...p, caseType: e.target.value }))}
+            <NativeSelect value={form.caseType} onChange={e => setForm(p => ({ ...p, caseType: e.target.value }))}
               className="w-full h-10 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               <option value="">— Seleccionar —</option>
               <option value="fiscal">Fiscal</option>
@@ -70,7 +72,7 @@ function QuoteRequestForm({ user, onClose, onSent }) {
               <option value="mercantil">Mercantil</option>
               <option value="legal">Legal</option>
               <option value="otro">Otro</option>
-            </select>
+            </NativeSelect>
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Descripción *</label>
@@ -80,12 +82,12 @@ function QuoteRequestForm({ user, onClose, onSent }) {
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Urgencia</label>
-            <select value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value }))}
+            <NativeSelect value={form.urgency} onChange={e => setForm(p => ({ ...p, urgency: e.target.value }))}
               className="w-full h-10 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               <option value="baja">Baja</option>
               <option value="media">Media</option>
               <option value="alta">Alta</option>
-            </select>
+            </NativeSelect>
           </div>
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">Teléfono</label>

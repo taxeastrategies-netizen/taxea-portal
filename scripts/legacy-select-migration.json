@@ -1,0 +1,157 @@
+{
+  "baseline": "68400513af7101ac96c9bfbdcf34b5b40fe5db0a",
+  "files": [
+    {
+      "file": "src/components/dashboard/DeptsDashboard.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/debt/DebtFormModal.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/facturas/InvoiceForm.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/facturas/InvoicePaymentReconciliationModal.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/facturas/SendInvoiceDocumentModal.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/finance/analysis/A3ImportWizard.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/finance/analysis/PDFAnalysisEngine.jsx",
+      "tags": 4
+    },
+    {
+      "file": "src/components/hr/EmployeeCenter.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/hr/HRAbsences.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/hr/HRDocuments.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/hr/Recruiting.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/investments/ReferralEngine.jsx",
+      "tags": 5
+    },
+    {
+      "file": "src/components/lector/OcrFiscalFields.jsx",
+      "tags": 3
+    },
+    {
+      "file": "src/components/reporting/AutoReports.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/tax/contabilidad/BankReconciliationWorkspace.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/tax/contabilidad/FiscalReviewInbox.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/tax/contabilidad/InvoiceFiscalReview.jsx",
+      "tags": 11
+    },
+    {
+      "file": "src/components/tax/impuestos/BorradoresTab.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/tax/impuestos/ConfiguracionFiscal.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/tax/impuestos/ErroresValidacionesTab.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/tax/impuestos/HistorialFiscalTab.jsx",
+      "tags": 3
+    },
+    {
+      "file": "src/components/tax/impuestos/ImporterCertificationPanel.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/tax/impuestos/PresentacionesTab.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/tax/impuestos/TaxModelWorkbench.jsx",
+      "tags": 29
+    },
+    {
+      "file": "src/components/tools/PdfImageKit.jsx",
+      "tags": 4
+    },
+    {
+      "file": "src/components/tools/UtilityDeadlines.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/treasury/BankTransactionsTable.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/components/treasury/ReconciliationPanel.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/components/treasury/TreasuryEventsPanel.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/pages/AdminClients.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/pages/AdminOcrBandeja.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/pages/AdminOcrCredits.jsx",
+      "tags": 5
+    },
+    {
+      "file": "src/pages/GestionUsuarios.jsx",
+      "tags": 2
+    },
+    {
+      "file": "src/pages/Grants.jsx",
+      "tags": 6
+    },
+    {
+      "file": "src/pages/Presupuestos.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/pages/Proformas.jsx",
+      "tags": 1
+    },
+    {
+      "file": "src/pages/PublicTenders.jsx",
+      "tags": 3
+    },
+    {
+      "file": "src/pages/Suscripcion.jsx",
+      "tags": 2
+    }
+  ]
+}

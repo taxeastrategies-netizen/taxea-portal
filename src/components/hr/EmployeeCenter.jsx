@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -205,22 +207,22 @@ export default function EmployeeCenter() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Modalidad</label>
-                <select value={form.modalidad} onChange={e => setForm(p => ({ ...p, modalidad: e.target.value }))}
+                <NativeSelect value={form.modalidad} onChange={e => setForm(p => ({ ...p, modalidad: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-200">
                   <option value="presencial">Presencial</option>
                   <option value="remoto">Remoto</option>
                   <option value="hibrido">Híbrido</option>
-                </select>
+                </NativeSelect>
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">Contrato</label>
-                <select value={form.tipo_contrato} onChange={e => setForm(p => ({ ...p, tipo_contrato: e.target.value }))}
+                <NativeSelect value={form.tipo_contrato} onChange={e => setForm(p => ({ ...p, tipo_contrato: e.target.value }))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-200">
                   <option value="indefinido">Indefinido</option>
                   <option value="temporal">Temporal</option>
                   <option value="practicas">Prácticas</option>
                   <option value="freelance">Freelance</option>
-                </select>
+                </NativeSelect>
               </div>
             </div>
             <button onClick={save} disabled={saving || !form.nombre || !form.email}

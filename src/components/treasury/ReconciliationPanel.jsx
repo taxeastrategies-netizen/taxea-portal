@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -259,7 +261,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Cuenta contable del banco</label>
-            <select value={selectedBankLedgerId} onChange={event => {
+            <NativeSelect value={selectedBankLedgerId} onChange={event => {
               setError('');
               setSelectedBankLedgerId(event.target.value);
             }}
@@ -267,7 +269,7 @@ export default function ReconciliationPanel({ transaction, invoices, onClose, on
               className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-sm">
               <option value="">Seleccionar subcuenta bancaria…</option>
               {bankLedgerAccounts.map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
-            </select>
+            </NativeSelect>
             {currency !== 'EUR' && <p className="text-[11px] text-amber-700 mt-1">La divisa es {currency}; utiliza una subcuenta bancaria específica para esa divisa.</p>}
           </div>
 

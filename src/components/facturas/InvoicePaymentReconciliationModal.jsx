@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { AlertTriangle, Building2, CalendarDays, CheckCircle2, Loader2, Landmark } from 'lucide-react';
@@ -212,7 +214,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Cuenta contable del banco *</label>
-                <select
+                <NativeSelect
                   value={selectedBankLedgerId}
                   onChange={e => {
                     setError('');
@@ -224,7 +226,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                   {bankAccountingAccounts.map(account => (
                     <option key={account.id} value={account.id}>{account.code} · {account.name}</option>
                   ))}
-                </select>
+                </NativeSelect>
                 {bankAccountingAccounts.length === 0 && (
                   <p className="text-[11px] text-amber-700 mt-1">No existe una cuenta bancaria activa 572/573 en el plan contable de la empresa.</p>
                 )}
@@ -290,13 +292,13 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Método</label>
-                <select value={method} onChange={e => setMethod(e.target.value)} className="w-full h-10 px-3 border border-input rounded-md bg-background text-sm">
+                <NativeSelect value={method} onChange={e => setMethod(e.target.value)} className="w-full h-10 px-3 border border-input rounded-md bg-background text-sm">
                   <option value="transferencia">Transferencia</option>
                   <option value="tarjeta">Tarjeta</option>
                   <option value="efectivo">Efectivo</option>
                   <option value="domiciliacion">Domiciliación</option>
                   <option value="otro">Otro</option>
-                </select>
+                </NativeSelect>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Referencia</label>

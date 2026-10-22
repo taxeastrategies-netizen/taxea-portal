@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -144,10 +146,10 @@ export default function HRDocuments() {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Tipo</label>
-              <select value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}
+              <NativeSelect value={form.tipo} onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-200">
                 {Object.entries(TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Archivo</label>

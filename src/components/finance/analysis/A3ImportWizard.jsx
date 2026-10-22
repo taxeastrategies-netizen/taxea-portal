@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -171,9 +173,9 @@ export default function A3ImportWizard({ companyId, company, onComplete, onCance
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">Tipo de exportación</label>
-                  <select value={tipoExp} onChange={e => setTipoExp(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none bg-white">
+                  <NativeSelect value={tipoExp} onChange={e => setTipoExp(e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none bg-white">
                     {TIPO_EXP.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                  </select>
+                  </NativeSelect>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">Período inicio</label>
@@ -248,10 +250,10 @@ export default function A3ImportWizard({ companyId, company, onComplete, onCance
                     ].map(f => (
                       <div key={f.key}>
                         <label className="text-[10px] font-semibold text-slate-500 block mb-1">{f.label}</label>
-                        <select value={templateConfig[f.key]} onChange={e => setTemplateConfig(c => ({ ...c, [f.key]: e.target.value }))}
+                        <NativeSelect value={templateConfig[f.key]} onChange={e => setTemplateConfig(c => ({ ...c, [f.key]: e.target.value }))}
                           className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none">
                           {f.opts.map(o => <option key={o} value={o}>{o || '(Tab)'}</option>)}
-                        </select>
+                        </NativeSelect>
                       </div>
                     ))}
                   </div>

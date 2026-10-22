@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Loader2 } from 'lucide-react';
@@ -152,12 +154,12 @@ export default function DebtFormModal({ debt, companyId, onClose, onSaved }) {
               <input type="number" className={inputCls} value={form.plazo_meses} onChange={e => set('plazo_meses', e.target.value)} placeholder="60" />
             </Field>
             <Field label="Periodicidad">
-              <select className={inputCls} value={form.periodicidad} onChange={e => set('periodicidad', e.target.value)}>
+              <NativeSelect className={inputCls} value={form.periodicidad} onChange={e => set('periodicidad', e.target.value)}>
                 <option value="mensual">Mensual</option>
                 <option value="trimestral">Trimestral</option>
                 <option value="semestral">Semestral</option>
                 <option value="anual">Anual</option>
-              </select>
+              </NativeSelect>
             </Field>
           </div>
 
@@ -206,13 +208,13 @@ export default function DebtFormModal({ debt, companyId, onClose, onSaved }) {
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Estado">
-              <select className={inputCls} value={form.estado} onChange={e => set('estado', e.target.value)}>
+              <NativeSelect className={inputCls} value={form.estado} onChange={e => set('estado', e.target.value)}>
                 <option value="activo">Activo</option>
                 <option value="carencia">En carencia</option>
                 <option value="cancelado">Cancelado</option>
                 <option value="vencido">Vencido</option>
                 <option value="refinanciado">Refinanciado</option>
-              </select>
+              </NativeSelect>
             </Field>
             <Field label="Avales / Garantías">
               <input className={inputCls} value={form.avales} onChange={e => set('avales', e.target.value)} placeholder="SGR, inmueble, personal..." />

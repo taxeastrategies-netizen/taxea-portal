@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -460,7 +462,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva) || 21 }])}>{quotaRows.length ? 'Volver a un tipo único' : 'Desglosar varios tipos de IVA'}</button>
               {quotaRows.map((row, index) => <div key={index} className="flex items-center gap-2">
                 <Input aria-label={`Base IVA línea ${index + 1}`} type="number" step="0.01" value={row.base} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, base: event.target.value } : item))} />
-                <select aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{[4,10,21].map(rate => <option key={rate} value={rate}>{rate}%</option>)}</select>
+                <NativeSelect aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{[4,10,21].map(rate => <option key={rate} value={rate}>{rate}%</option>)}</NativeSelect>
                 <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
               </div>)}
               {quotaRows.length > 0 && quotaRows.length < 3 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: [21,10,4].find(rate => !quotaRows.some(row => Number(row.rate) === rate)) }])}>Añadir tipo de IVA</button>}

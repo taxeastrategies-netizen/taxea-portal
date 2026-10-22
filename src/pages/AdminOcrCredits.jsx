@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -185,38 +187,38 @@ export default function AdminOcrCredits() {
 
         {periodType === 'month' && (
           <>
-            <select value={month} onChange={e => setMonth(e.target.value)}
+            <NativeSelect value={month} onChange={e => setMonth(e.target.value)}
               className="h-9 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               {MONTHS.map((m, i) => <option key={i} value={String(i + 1)}>{m}</option>)}
-            </select>
-            <select value={year} onChange={e => setYear(e.target.value)}
+            </NativeSelect>
+            <NativeSelect value={year} onChange={e => setYear(e.target.value)}
               className="h-9 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            </NativeSelect>
           </>
         )}
 
         {periodType === 'quarter' && (
           <>
-            <select value={quarter} onChange={e => setQuarter(e.target.value)}
+            <NativeSelect value={quarter} onChange={e => setQuarter(e.target.value)}
               className="h-9 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               <option value="1">T1 (Ene-Mar)</option>
               <option value="2">T2 (Abr-Jun)</option>
               <option value="3">T3 (Jul-Sep)</option>
               <option value="4">T4 (Oct-Dic)</option>
-            </select>
-            <select value={year} onChange={e => setYear(e.target.value)}
+            </NativeSelect>
+            <NativeSelect value={year} onChange={e => setYear(e.target.value)}
               className="h-9 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
               {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
+            </NativeSelect>
           </>
         )}
 
         {periodType === 'year' && (
-          <select value={year} onChange={e => setYear(e.target.value)}
+          <NativeSelect value={year} onChange={e => setYear(e.target.value)}
             className="h-9 px-3 rounded-md border border-input bg-transparent text-sm focus:outline-none focus:ring-1 focus:ring-ring">
             {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          </NativeSelect>
         )}
       </div>
 

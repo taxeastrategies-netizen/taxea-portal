@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { loadOcrDocuments } from '@/lib/loadOcrDocuments.mjs';
 import { useOutletContext } from 'react-router-dom';
@@ -620,7 +622,7 @@ export default function AdminOcrBandeja() {
                 onChange={e => setSearch(e.target.value)}
                 className="h-8 max-w-xs text-sm"
               />
-              <select
+              <NativeSelect
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
                 className="h-8 text-sm border border-input rounded-md px-2 bg-transparent"
@@ -628,8 +630,8 @@ export default function AdminOcrBandeja() {
                 <option value="all">Todos los tipos</option>
                 <option value="income_invoice">Ingresos</option>
                 <option value="expense_invoice">Gastos</option>
-              </select>
-              <select
+              </NativeSelect>
+              <NativeSelect
                 value={filterClient}
                 onChange={e => setFilterClient(e.target.value)}
                 className="h-8 text-sm border border-input rounded-md px-2 bg-transparent max-w-[200px]"
@@ -638,7 +640,7 @@ export default function AdminOcrBandeja() {
                 {companies.map(c => (
                   <option key={c.id} value={c.id}>{c.razon_social || c.nombre_comercial || c.id}</option>
                 ))}
-              </select>
+              </NativeSelect>
               {(search || filterType !== 'all' || filterClient !== 'all') && (
                 <Button variant="ghost" size="sm" className="h-8 gap-1" onClick={() => { setSearch(''); setFilterType('all'); setFilterClient('all'); }}>
                   <X className="w-3 h-3" /> Limpiar

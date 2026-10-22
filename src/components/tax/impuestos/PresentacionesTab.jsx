@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowRight, ExternalLink, FileCheck2, FileDown, FileText, Loader2, RefreshCw, Upload } from 'lucide-react';
@@ -79,7 +81,7 @@ export default function PresentacionesTab({ onOpenModel }) {
   const refresh = async () => { setEvidenceId(null); await queryClient.invalidateQueries({ queryKey: taxWorkspaceKey(companyId, year) }); };
 
   return <div className="mx-auto max-w-6xl space-y-5">
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-semibold text-slate-900">Presentaciones acreditadas</h2><p className="mt-1 text-sm text-slate-500">Fuente única: snapshots de modelos realmente presentados e importados. Generar o descargar un fichero no equivale a presentarlo.</p></div><div className="flex flex-wrap gap-2"><select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</select><Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Actualizar</Button></div></div>
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="text-base font-semibold text-slate-900">Presentaciones acreditadas</h2><p className="mt-1 text-sm text-slate-500">Fuente única: snapshots de modelos realmente presentados e importados. Generar o descargar un fichero no equivale a presentarlo.</p></div><div className="flex flex-wrap gap-2"><NativeSelect value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</NativeSelect><Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Actualizar</Button></div></div>
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Periodos presentados" value={(workspace.data?.latestFilings || []).length} tone="emerald" /><Metric label="Con evidencia" value={evidenceComplete} tone={evidenceComplete === (workspace.data?.latestFilings || []).length ? 'emerald' : 'amber'} /><Metric label="Correcciones versionadas" value={corrections} /><Metric label="Resultado positivo acumulado" value={formatMoney(paid)} tone="red" /></div>
 

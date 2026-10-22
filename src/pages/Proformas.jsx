@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -192,11 +194,11 @@ export default function Proformas() {
           </button>
         ))}
         {years.length > 0 && (
-          <select value={filterYear} onChange={e => setFilterYear(e.target.value)}
+          <NativeSelect value={filterYear} onChange={e => setFilterYear(e.target.value)}
             className="text-xs border border-border rounded-lg px-2 py-1.5 bg-card text-foreground">
             <option value="todos">Todos los a&#241;os</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          </NativeSelect>
         )}
         <div className="relative ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ArrowUpRight, ArrowDownRight, Sparkles, X } from 'lucide-react';
@@ -62,17 +64,17 @@ export default function BankTransactionsTable({ transactions, accounts, onConcil
             className="w-full pl-8 pr-8 h-9 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-taxea-red/30 bg-white" />
           {search && <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500" /></button>}
         </div>
-        <select value={filterConciliacion} onChange={e => setFilterConciliacion(e.target.value)}
+        <NativeSelect value={filterConciliacion} onChange={e => setFilterConciliacion(e.target.value)}
           className="h-9 px-3 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white text-slate-600">
           <option value="all">Todas</option>
           {Object.entries(CONCILIACION_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
+        </NativeSelect>
         {accounts.length > 1 && (
-          <select value={filterBanco} onChange={e => setFilterBanco(e.target.value)}
+          <NativeSelect value={filterBanco} onChange={e => setFilterBanco(e.target.value)}
             className="h-9 px-3 text-xs border border-slate-200 rounded-lg focus:outline-none bg-white text-slate-600">
             <option value="all">Todos los bancos</option>
             {accounts.map(a => <option key={a.id} value={a.id}>{a.nombre_banco}</option>)}
-          </select>
+          </NativeSelect>
         )}
       </div>
 

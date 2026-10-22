@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 /**
  * SendInvoiceDocumentModal V2 — Email premium HTML, adjunto PDF obligatorio, enlace público
  */
@@ -487,10 +489,10 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
               {/* Plantilla */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Plantilla</label>
-                <select value={templateId} onChange={e => setTemplateId(e.target.value)}
+                <NativeSelect value={templateId} onChange={e => setTemplateId(e.target.value)}
                   className="w-full text-sm border border-input rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-ring/30">
                   {(isReceived ? TEMPLATES.filter(t => t.id === 'envio_factura') : TEMPLATES).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
+                </NativeSelect>
               </div>
 
               {/* Asunto */}

@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useMemo, useState } from 'react';
 import { GeoJSON, MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -181,34 +183,34 @@ export default function Grants() {
         <h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><SlidersHorizontal className="h-4 w-4 text-taxea-red" />Ajusta la búsqueda</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="space-y-1.5 text-xs font-semibold">Comunidad autónoma
-            <select value={community?.ine || ''} onChange={e => changeGeography(COMMUNITIES.find(row => row.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={community?.ine || ''} onChange={e => changeGeography(COMMUNITIES.find(row => row.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="">Toda España</option>{COMMUNITIES.map(row => <option key={row.ine} value={row.ine}>{row.name}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Provincia
-            <select value={province} onChange={e => { setProvince(e.target.value); setPage(0); setPages([]); }} disabled={!community} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50">
+            <NativeSelect value={province} onChange={e => { setProvince(e.target.value); setPage(0); setPages([]); }} disabled={!community} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50">
               <option value="">Todas las provincias</option>{options.map(row => <option key={row.code} value={row.name}>{row.name}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Quién busca la ayuda
-            <select value={applicant} onChange={e => { setApplicant(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={applicant} onChange={e => { setApplicant(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="all">Todos los beneficiarios</option><option value="autonomos">Autónomos</option><option value="pymes">Pymes</option><option value="grandes_empresas">Grandes empresas</option><option value="particulares">Particulares</option><option value="entidades">Entidades y asociaciones</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Qué quieres impulsar
-            <select value={topic} onChange={e => { setTopic(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={topic} onChange={e => { setTopic(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="all">Cualquier finalidad</option><option value="inicio">Emprendimiento e inicio</option><option value="digitalizacion">Digitalización</option><option value="empleo">Empleo y contratación</option><option value="energia">Energía y sostenibilidad</option><option value="rural">Campo y medio rural</option><option value="innovacion">Innovación e I+D</option><option value="cultura">Cultura, deporte y educación</option><option value="vivienda">Vivienda y rehabilitación</option><option value="social">Acción social y cuidados</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Finalidad oficial BDNS
-            <select value={finality} onChange={e => { setFinality(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={finality} onChange={e => { setFinality(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="">Todas las finalidades</option>{OFFICIAL_FINALITIES.map(([id, label]) => <option key={id} value={String(id)}>{label}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="space-y-1.5 text-xs font-semibold">Administración convocante
-            <select value={administration} onChange={e => { setAdministration(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={administration} onChange={e => { setAdministration(e.target.value); setPage(0); setPages([]); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="">Todas las administraciones</option><option value="C">Estado</option><option value="A">Comunidad autónoma</option><option value="L">Entidad local</option><option value="O">Otros organismos</option>
-            </select>
+            </NativeSelect>
           </label>
           <form onSubmit={e => { e.preventDefault(); setQuery(draft.trim()); setPage(0); setPages([]); }} className="space-y-1.5">
             <label htmlFor="grant-keyword" className="block text-xs font-semibold">Actividad o palabra clave</label>

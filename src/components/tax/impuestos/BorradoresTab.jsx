@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, FileClock, FilePen, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
@@ -46,7 +48,7 @@ export default function BorradoresTab({ onOpenModel }) {
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div><h2 className="text-base font-semibold text-slate-900">Borradores versionados</h2><p className="mt-1 text-sm text-slate-500">Cada versión procede del motor tributario, conserva su huella de datos y nunca recalcula importes en esta pestaña.</p></div>
       <div className="flex flex-wrap items-center gap-2">
-        <select value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</select>
+        <NativeSelect value={year} onChange={event => setYear(Number(event.target.value))} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm">{[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(value => <option key={value}>{value}</option>)}</NativeSelect>
         <Button variant="outline" className="gap-2" onClick={() => workspace.refetch()} disabled={workspace.isFetching}><RefreshCw className={`h-4 w-4 ${workspace.isFetching ? 'animate-spin' : ''}`} />Actualizar</Button>
       </div>
     </div>

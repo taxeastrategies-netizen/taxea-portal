@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { Input } from '@/components/ui/input';
 const DEDUCTIONS=[['interior_current','Interior corriente'],['interior_investment','Interior · inversión'],
   ['intra_services','Adquisición intracomunitaria de servicios'],['intra_goods_current','Adquisición intracomunitaria de bienes'],
@@ -18,10 +20,10 @@ export default function OcrFiscalFields({value={},onChange,context={},direction,
     ...(key==='deductionUse'?{deductiblePercent:val==='exclusive_right'?100:val==='exclusive_no_right'?0:Number(activity?.proRataPercent || 0)}:{}),
     ...(key==='deductionCategory' && String(val).startsWith('intra_')?{operationType:'intra_eu_acquisition'}:{})});
   const select=(label,key,options,current)=>(
-    <label className="space-y-1 text-xs"><span>{label}</span><select disabled={disabled} value={current ?? value[key] ?? ''}
+    <label className="space-y-1 text-xs"><span>{label}</span><NativeSelect disabled={disabled} value={current ?? value[key] ?? ''}
       onChange={event=>update(key,event.target.value)} className="w-full min-h-9 rounded-md border border-input bg-background px-2 text-xs">
       <option value="">Según actividad / seleccionar</option>{options.map(([code,title])=><option key={code} value={code}>{title}</option>)}
-    </select></label>);
+    </NativeSelect></label>);
   return <fieldset disabled={disabled} className="rounded-xl border border-teal/25 bg-teal/5 p-3 space-y-3">
     <legend className="px-1 text-sm font-semibold">Criterio fiscal · único check</legend>
     <p className="text-xs text-muted-foreground">Revisa aquí el impuesto, la deducción y la cuenta contable. Aprobar registra la factura, el libro y su asiento; no hay otra revisión posterior.</p>
@@ -42,9 +44,9 @@ export default function OcrFiscalFields({value={},onChange,context={},direction,
       <summary className="cursor-pointer font-medium">Datos RECC · anticipos, rectificativas y requisitos</summary>
       <div className="mt-3 space-y-3">
         <label className="block">Fecha de realización de la operación<Input type="date" value={value.operationDate || ''} onChange={e=>update('operationDate',e.target.value)} /></label>
-        <label className="block">Tipo de documento<select className="w-full rounded border p-2" value={value.recc?.documentKind || 'ordinary'}
+        <label className="block">Tipo de documento<NativeSelect className="w-full rounded border p-2" value={value.recc?.documentKind || 'ordinary'}
           onChange={e=>update('recc',{...value.recc,documentKind:e.target.value})}>
-          <option value="ordinary">Factura ordinaria</option><option value="advance">Anticipo · 438/407</option><option value="final">Factura final · saldo después de anticipos</option></select></label>
+          <option value="ordinary">Factura ordinaria</option><option value="advance">Anticipo · 438/407</option><option value="final">Factura final · saldo después de anticipos</option></NativeSelect></label>
         {value.recc?.documentKind==='final' && <>
           <label className="block">Base total antes de los anticipos<Input type="number" step="0.01" value={value.recc?.finalOperationBase || ''} onChange={e=>update('recc',{...value.recc,finalOperationBase:e.target.value})}/></label>
           <p>Vincula los anticipos por ID de factura y base aplicada. El servidor verifica titular, tercero, saldo y contabilización: no se duplica el IVA.</p>
@@ -56,7 +58,7 @@ export default function OcrFiscalFields({value={},onChange,context={},direction,
         </>}
         <label className="flex gap-2"><input type="checkbox" checked={Boolean(value.recc?.advanceConfirmed)} onChange={e=>update('recc',{...value.recc,advanceConfirmed:e.target.checked})}/>Anticipos trazados, sin duplicar importes ya facturados</label>
         <label className="block">ID de factura original (solo rectificativas)<Input value={value.recc?.originalInvoiceId || ''} onChange={e=>update('recc',{...value.recc,originalInvoiceId:e.target.value})}/></label>
-        <label className="block">Tratamiento de rectificación<select className="w-full rounded border p-2" value={value.recc?.adjustmentMode || ''} onChange={e=>update('recc',{...value.recc,adjustmentMode:e.target.value})}><option value="">No aplica / elegir</option><option value="price_change">Variación de precio</option><option value="tax_adjustment">Ajuste de cuotas (arts. 89 y 114)</option></select></label>
+        <label className="block">Tratamiento de rectificación<NativeSelect className="w-full rounded border p-2" value={value.recc?.adjustmentMode || ''} onChange={e=>update('recc',{...value.recc,adjustmentMode:e.target.value})}><option value="">No aplica / elegir</option><option value="price_change">Variación de precio</option><option value="tax_adjustment">Ajuste de cuotas (arts. 89 y 114)</option></NativeSelect></label>
         <label className="block">Fecha fiscal de la rectificación<Input type="date" value={value.recc?.adjustmentDate || ''} onChange={e=>update('recc',{...value.recc,adjustmentDate:e.target.value})}/></label>
         <label className="block">Fecha de auto de concurso<Input type="date" value={value.recc?.insolvencyDate || ''} onChange={e=>update('recc',{...value.recc,insolvencyDate:e.target.value})}/></label>
         <label className="block">Motivo de la rectificación<Input value={value.recc?.reason || ''} onChange={e=>update('recc',{...value.recc,reason:e.target.value})}/></label>

@@ -1,3 +1,5 @@
+
+import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -228,9 +230,9 @@ export default function DeptsDashboard({ invoices = [], expenses = [], obligatio
               <button key={k} onClick={() => setPeriod(k)} className={cn('px-3 py-1.5 text-xs font-medium transition-colors', period === k ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-secondary/60')}>{l}</button>
             ))}
           </div>
-          <select className="h-8 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground focus:outline-none" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <NativeSelect className="h-8 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground focus:outline-none" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             {STATUS_FILTERS.map(s => <option key={s} value={s} className="capitalize">{s === 'todo' ? 'Todos los estados' : s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-          </select>
+          </NativeSelect>
           <Link to="/tax-accounting/dashboard">
             <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs">Ver departamentos <ArrowRight className="w-3 h-3" /></Button>
           </Link>
