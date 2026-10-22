@@ -104,3 +104,5 @@ cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigat
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
 await import('./test-native-select.mjs');
 await import('./test-fullscreen-workspace.mjs');
+await import('./test-dual-store-polish.mjs');
+
