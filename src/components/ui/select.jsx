@@ -10,12 +10,14 @@ import useMobileViewport from '@/hooks/useMobileViewport';
 import {nativeSelectModel} from '@/lib/nativeSelect.mjs';
 import {Drawer,DrawerTrigger} from './drawer';
 import MobileSelectPicker from './MobileSelectPicker';
+import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 
 const NativeSelectContext=React.createContext(null);
 function Select({children,value,defaultValue,onValueChange,...props}){
   const mobile=useMobileViewport();
   const [localValue,setLocalValue]=React.useState(defaultValue??'');
   const [open,setOpen]=React.useState(false),contentId=React.useId();
+  useCloseOnNavigation(()=>setOpen(false));
   const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue});
   // Explicitly controlled popup APIs keep Radix; ordinary choices use the OS
   // picker on phones. No duplicated hidden inputs or parallel form submission.
@@ -165,3 +167,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
