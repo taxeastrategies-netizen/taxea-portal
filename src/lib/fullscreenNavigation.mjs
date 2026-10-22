@@ -7,4 +7,3 @@ export function topmostDismissibleLayer(doc){
     .filter(node=>node.getClientRects().length&&!node.closest('[hidden],[inert]'));
   return [...layers].reverse().find(node=>node.contains(doc.activeElement))||layers.at(-1)||null;
 }
-

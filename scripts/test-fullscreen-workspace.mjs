@@ -43,4 +43,3 @@ const baseline=execFileSync('git',['show','742fd5762bf5bc9f40582005b76096b7b8c22
 const ast=text=>canonical(parse(text,{sourceType:'module',plugins:['jsx']}).program);
 assert.deepEqual(ast(fs.readFileSync(sendFile,'utf8')),ast(baseline),'Preview style/a11y changes must not alter any sending code or handler');
 console.log('Fullscreen focus/layer priority and four-inset/layout contracts pass. Browser QA covers focus, Escape, nested picker and cached ownership separately. No external calls.');
-

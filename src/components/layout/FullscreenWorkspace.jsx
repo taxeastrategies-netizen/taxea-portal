@@ -40,4 +40,3 @@ export default function FullscreenWorkspace({children,onBack,busy=false,classNam
   // retaining its form state rather than leaking it over another tab.
   return <><span ref={anchorRef} aria-hidden="true" style={{display:'none'}}/>{createPortal(<div {...props} ref={rootRef} role="dialog" aria-modal="true" data-state={inactive?'closed':'open'} hidden={inactive} inert={inactive?'':undefined} aria-hidden={inactive?true:undefined} tabIndex={-1} onKeyDown={onKeyDown} className={cn('taxea-fullscreen-surface fixed inset-0 z-[45] flex flex-col bg-background text-foreground outline-none',className)}>{children}</div>,document.body)}</>;
 }
-
