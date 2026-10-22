@@ -121,8 +121,10 @@ for(const file of process.env.OCR_INTAKE_ENTRY ? [] : ['src/pages/LectorGastos.j
 // Exercise the real drop-zone callbacks without browser injection or network.
 const zoneBundle=await esbuild.build({entryPoints:['src/components/lector/BulkDropZone.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'transform',plugins:[{
   name:'ui-stubs',setup(build){
-    build.onResolve({filter:/^(react$|lucide-react$|@\/)/},args=>({path:args.path,namespace:'ui'}));
-    build.onLoad({filter:/.*/,namespace:'ui'},args=>({loader:'js',contents:args.path==='react'
+    build.onResolve({filter:/^(react($|\/jsx-runtime$)|lucide-react$|@\/)/},args=>({path:args.path,namespace:'ui'}));
+    build.onLoad({filter:/.*/,namespace:'ui'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'
+      ? 'export const jsx=(type,props)=>({type,props:props || {},children:[].concat(props?.children || [])});export const jsxs=jsx;export const Fragment="Fragment";'
+      : args.path==='react'
       ? 'export const useRef=()=>({current:{click(){}}});let count=0;export const useState=()=>[count++%2===1,()=>{}];'
       : args.path==='lucide-react'?'export const Upload="Upload",FolderOpen="Folder",Camera="Camera";'
       : args.path.includes('MobileScanner')?'export default "Scanner";'
