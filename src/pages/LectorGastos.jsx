@@ -12,7 +12,8 @@ import OcrReviewWorkspace from '@/components/lector/OcrReviewWorkspace';
 import { reviewableDocuments, nextAfterConfirmation } from '@/lib/ocrReviewQueue.mjs';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
-import { detectDeviceType, detectUploadSource, buildAuditEntry, appendAuditTrail, classifyUploadError, generateTraceId, generateIdempotencyKey, validateFile } from '@/lib/ocrUploadUtils';
+import { detectDeviceType, buildAuditEntry, appendAuditTrail, classifyUploadError, validateFile } from '@/lib/ocrUploadUtils';
+import { ocrIntake, needsOcrAnalysis } from '@/lib/ocrIntake.mjs';
 import { runBatch, debounce } from '@/lib/batchProcessor';
 
 const DOC_TYPE = 'expense_invoice';
@@ -149,6 +150,7 @@ export default function LectorGastos({ reviewPage = false }) {
   }, [company?.id]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const uploadLock = useRef(false);
   const [uploadProgress, setUploadProgress] = useState([]);
   const [reviewing, setReviewing] = useState(null);
   const [processingIds, setProcessingIds] = useState(new Set());
@@ -206,147 +208,86 @@ export default function LectorGastos({ reviewPage = false }) {
   }, [company?.id, loadDocs]);
 
   const handleFilesAdded = async (files, captureMethod = 'file_picker') => {
-    if (!company?.id) return;
+    if (!company?.id || uploadLock.current || !files.length) return;
+    const companyId = company.id;
+    uploadLock.current = true;
     setUploading(true);
     const progress = files.map(f => ({ name: f.name, size: f.size, status: 'uploading' }));
     setUploadProgress(progress);
-
     const deviceType = detectDeviceType();
-    const uploadSource = detectUploadSource(captureMethod, isAdmin, deviceType);
-
-    const { succeeded: successCount, failed: errorCount } = await runBatch(files, async (file, i) => {
-      const validation = validateFile(file);
-      if (!validation.valid) throw new Error(validation.message);
-
-      const traceId = generateTraceId();
-      const idempotencyKey = generateIdempotencyKey(file, company.id, user?.id);
-
-      const uploadResult = await Promise.race([
-        base44.integrations.Core.UploadFile({ file }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 120000)),
-      ]);
-      const file_url = uploadResult?.file_url;
-      if (!file_url) throw new Error('NO_URL_RETURNED');
-
-      await base44.entities.OcrInvoiceDocument.create({
-        company_id: company.id,
-        uploadedByUserId: user?.id,
-        uploadedByEmail: user?.email,
-        documentType: DOC_TYPE,
-        sourceModule: SOURCE_MODULE,
-        status: 'pending',
-        originalFileName: file.name,
-        fileName: file.name,
-        fileMimeType: file.type,
-        fileSize: file.size,
-        fileStorageUrl: file_url,
-        uploadSource,
-        captureMethod,
-        uploadedFromDeviceType: deviceType,
-        uploadedAt: new Date().toISOString(),
-        lastStatusChangedAt: new Date().toISOString(),
-        auditTrail: [buildAuditEntry({
-          user, action: 'documento_subido', newStatus: 'pending',
-          detail: `${captureMethod} from ${deviceType} | trace=${traceId} | idempotency=${idempotencyKey}`,
-        })],
-      });
-
-      // Fire-and-forget timeline event — no await to keep upload fast
-      base44.entities.TimelineEvent.create({
-        company_id: company.id,
-        tipo: 'documento_subido',
-        titulo: `Factura de gasto entregada: ${file.name}`,
-        descripcion: 'Documento pendiente de revision por Taxea',
-        color: 'azul',
-        usuario_email: user?.email,
-        automatico: true,
-        visibilidad: 'ambos',
-      }).catch(() => {});
-
-      progress[i].status = 'done';
-      setUploadProgress([...progress]);
-    }, {
-      concurrency: 5,
-      onItemComplete: (i, { ok, error }) => {
-        if (!ok) {
+    try {
+      const { succeeded, failed } = await runBatch(files, async (file, i) => {
+        const validation = validateFile(file);
+        if (!validation.valid) throw new Error(validation.message);
+        await ocrIntake(base44, { action: 'upload', companyId, documentType: DOC_TYPE,
+          file, captureMethod, deviceType });
+        progress[i].status = 'done';
+        if (activeCompanyId.current === companyId) setUploadProgress([...progress]);
+      }, {
+        concurrency: 3,
+        onItemComplete: (i, { ok, error }) => {
+          if (ok) return;
           const classified = classifyUploadError(error);
-          console.error(`[OCR Upload] file="${files[i].name}" code=${classified.errorCode} raw=${classified.rawError || error?.message || error}`);
+          console.error('[OCR Upload]', classified.errorCode);
           progress[i].status = 'error';
           progress[i].error = classified.safeMessage;
-          setUploadProgress([...progress]);
-        }
-      },
-    });
-
-    setUploading(false);
-    if (successCount > 0 && errorCount === 0) {
-      setToast({ type: 'success', message: `${successCount} factura(s) recibida(s). Quedan pendientes de revision por Taxea.` });
-      setTimeout(() => setToast(null), 6000);
-    } else if (successCount > 0 && errorCount > 0) {
-      setToast({ type: 'error', message: `Se han subido ${successCount} archivo(s) y ${errorCount} han fallado. Reintenta solo los fallidos.` });
-      setTimeout(() => setToast(null), 8000);
-    } else if (errorCount > 0) {
-      setToast({ type: 'error', message: progress[0]?.error || 'No se pudo subir el archivo. Inténtalo de nuevo.' });
-      setTimeout(() => setToast(null), 8000);
+          if (activeCompanyId.current === companyId) setUploadProgress([...progress]);
+        },
+      });
+      if (activeCompanyId.current !== companyId) return;
+      setToast({ type: failed ? 'error' : 'success', message: failed
+        ? (succeeded ? `Se han entregado ${succeeded} archivo(s) y ${failed} han fallado. Reintenta solo los fallidos.` : progress.find(item => item.error)?.error || 'No se pudo completar la entrega. Reintenta solo los fallidos.')
+        : `${succeeded} documento(s) en revisión. Los ya entregados no se vuelven a crear. No se han aprobado ni contabilizado.` });
+      loadDocs();
+    } finally {
+      uploadLock.current = false;
+      setUploading(false);
     }
-    const hadErrors = errorCount > 0;
-    setTimeout(() => setUploadProgress([]), hadErrors ? 8000 : 5000);
-    loadDocs();
   };
 
   const processOcr = async (doc) => {
+    const companyId = company.id;
     setProcessingIds(prev => new Set([...prev, doc.id]));
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(doc.id, {
-      status: 'processing',
-      analysisStartedAt: now,
-      lastStatusChangedAt: now,
-      safeErrorMessage: '',
-      auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_iniciado', prevStatus: doc.status, newStatus: 'processing' })),
-    });
-    debouncedLoadDocs();
-
+    let started;
     try {
-      const result = await (/** @type {any} */ (base44)).controlledCore.InvokeLLM({
+      const result = await ocrIntake(base44, { action: 'analysis_start', companyId, docId: doc.id });
+      started = result.document.analysisStartedAt;
+      debouncedLoadDocs();
+      const extracted = await (/** @type {any} */ (base44)).controlledCore.InvokeLLM({
         prompt: buildOcrPrompt(company, fiscalContext.profile, fiscalContext.activity),
         file_urls: [doc.fileStorageUrl],
         response_json_schema: OCR_SCHEMA,
       });
-      const doneNow = new Date().toISOString();
-      await base44.entities.OcrInvoiceDocument.update(doc.id, {
-        status: 'review_required',
-        extractedData: JSON.stringify(result),
-        analysisCompletedAt: doneNow,
-        lastStatusChangedAt: doneNow,
-        auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_completado', prevStatus: 'processing', newStatus: 'review_required' })),
-      });
+      await ocrIntake(base44, { action: 'analysis_complete', companyId, docId: doc.id,
+        analysisStartedAt: started, extractedData: extracted });
       const [contactSync, duplicateScan] = await Promise.allSettled([
-        base44.functions.invoke('syncInvoiceContacts', { action: 'sync_ocr', docId: doc.id, extractedData: result }),
-        base44.functions.invoke('checkDuplicates', { action: 'check_one', company_id: company.id, scope: SOURCE_MODULE, docId: doc.id, period_type: 'all' }),
+        base44.functions.invoke('syncInvoiceContacts', { action: 'sync_ocr', docId: doc.id, extractedData: extracted }),
+        base44.functions.invoke('checkDuplicates', { action: 'check_one', company_id: companyId, scope: SOURCE_MODULE, docId: doc.id, period_type: 'all' }),
       ]);
-      if (contactSync.status === 'rejected') console.warn('[OCR] Contact sync failed:', contactSync.reason);
+      if (contactSync.status === 'rejected') console.warn('[OCR] No se pudo sincronizar el contacto.');
       if (duplicateScan.status === 'fulfilled') {
         const scan = duplicateScan.value?.data ?? duplicateScan.value;
         const warning = scan?.duplicateGroupsCount > 0
           ? 'Posible duplicado: coinciden tercero, número y fecha con otra factura o documento OCR. Revísalo antes de confirmar.' : '';
-        await base44.entities.OcrInvoiceDocument.update(doc.id, { duplicateWarning: warning }).catch(error => console.warn('[OCR] Duplicate warning could not be saved:', error));
-      } else console.warn('[OCR] Duplicate scan unavailable:', duplicateScan.reason);
-    } catch {
-      const failNow = new Date().toISOString();
-      await base44.entities.OcrInvoiceDocument.update(doc.id, {
-        status: 'analysis_failed',
-        safeErrorMessage: 'No se ha podido analizar automaticamente. El documento sigue guardado para revision manual.',
-        lastStatusChangedAt: failNow,
-        auditTrail: appendAuditTrail(doc.auditTrail, buildAuditEntry({ user, action: 'ocr_fallido', prevStatus: 'processing', newStatus: 'analysis_failed' })),
-      });
+        await ocrIntake(base44, { action: 'duplicate_warning', companyId, docId: doc.id, warning })
+          .catch(() => console.warn('[OCR] No se pudo guardar el aviso de duplicado.'));
+      }
+    } catch (error) {
+      if (started) await ocrIntake(base44, { action: 'analysis_fail', companyId, docId: doc.id,
+        analysisStartedAt: started }).catch(() => {});
+      if (activeCompanyId.current === companyId) setToast({ type: 'error',
+        message: error?.response?.data?.error || 'El documento sigue guardado en revisión. No se pudo completar el análisis.' });
+    } finally {
+      setProcessingIds(prev => { const next = new Set(prev); next.delete(doc.id); return next; });
+      if (activeCompanyId.current === companyId) debouncedLoadDocs();
     }
-    setProcessingIds(prev => { const n = new Set(prev); n.delete(doc.id); return n; });
-    debouncedLoadDocs();
   };
 
   const processAllPending = async () => {
-    const pending = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed');
-    await runBatch(pending, (doc) => processOcr(doc), { concurrency: 3 });
+    if (validatingAll) return;
+    setValidatingAll(true);
+    try { await runBatch(documents.filter(needsOcrAnalysis), doc => processOcr(doc), { concurrency: 3 }); }
+    finally { setValidatingAll(false); }
   };
 
   const handleReview = (doc) => {
@@ -483,7 +424,7 @@ export default function LectorGastos({ reviewPage = false }) {
   if (loadingCompany) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
   if (!company) return <NoCompanyState pageName="el Lector de Gastos" />;
 
-  const pendingCount = documents.filter(d => d.status === 'pending' || d.status === 'analysis_failed').length;
+  const pendingCount = documents.filter(needsOcrAnalysis).length;
 
   if (reviewPage) return (
     <OcrReviewWorkspace kind="recibidas" documents={documents} selectedId={selectedReviewId} loading={loading}
@@ -498,7 +439,7 @@ export default function LectorGastos({ reviewPage = false }) {
   );
 
   return (
-    <div>
+    <div data-ocr-intake-version="1">
       <PageHeader title="Lector de Gastos" subtitle="Entrega de facturas recibidas y tickets · Taxea revisa y contabiliza">
         <Button variant="outline" onClick={() => setShowDuplicateCheck(true)} className="h-9 gap-2">
           <CopyCheck className="w-4 h-4" /> Chequeo duplicado
@@ -515,7 +456,7 @@ export default function LectorGastos({ reviewPage = false }) {
           <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-blue-900">Entrega tus facturas de gasto aqui</p>
-            <p className="text-xs text-blue-700 mt-0.5">Arrastra los archivos y quedan registradas como pendientes. Taxea las revisara antes de validarlas o contabilizarlas.</p>
+            <p className="text-xs text-blue-700 mt-0.5">Escanea, arrastra o selecciona archivos: quedan en revisión. El análisis OCR y la aprobación contable se realizan después.</p>
           </div>
         </div>
       )}
@@ -523,7 +464,7 @@ export default function LectorGastos({ reviewPage = false }) {
       {uploadProgress.length > 0 && (
         <div className="bg-card border border-border rounded-xl shadow-card mb-5 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-border bg-secondary/40">
-            <p className="text-sm font-semibold">Subiendo {uploadProgress.length} archivo(s)...</p>
+            <p className="text-sm font-semibold">{uploading ? 'Subiendo' : 'Resultado de la entrega'}: {uploadProgress.length} archivo(s)</p>
           </div>
           <div className="divide-y divide-border">
             {uploadProgress.map((p, i) => (
@@ -557,7 +498,7 @@ export default function LectorGastos({ reviewPage = false }) {
       )}
 
       <div className="mb-5">
-        <BulkDropZone onFilesAdded={handleFilesAdded} />
+        <BulkDropZone onFilesAdded={handleFilesAdded} disabled={uploading} />
       </div>
 
       {bulkIds.length>0 && !reviewPage && <div className="mb-5 rounded-xl border border-teal/30 bg-teal/5 p-4 text-sm">
@@ -616,3 +557,4 @@ export default function LectorGastos({ reviewPage = false }) {
     </div>
   );
 }
+
