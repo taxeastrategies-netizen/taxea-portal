@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import { useOutletContext,Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {notificationReadOptions} from '@/lib/notificationMutation.mjs';
 import {referenceDestination} from '@/lib/navigationStack.mjs';
+import {notificationDeleteOptions} from '@/lib/notificationDeleteMutation.mjs';
 
 const TIPO_CONFIG = {
   aviso: { icon: Info, color: 'bg-blue-50 text-blue-600' },
@@ -24,11 +25,13 @@ export default function Notificaciones() {
   const queryClient=useQueryClient(),queryKey=['notifications',user?.email||'anonymous'];
   const query=useQuery({queryKey,enabled:!!user?.email,queryFn:()=>base44.entities.Notification.filter({destinatario_email:user.email},'-created_date',100),staleTime:30000,retry:1});
   const notifs=query.data||[],loading=query.isPending&&query.fetchStatus==='fetching';
-  const setNotifs=update=>queryClient.setQueryData(queryKey,previous=>typeof update==='function'?update(previous||[]):update);
   const [filter, setFilter] = useState('all'); // all | unread | read
   const [busy,setBusy]=useState(false),[actionError,setError]=useState('');
   const error=actionError||(query.isError?'No se pudieron actualizar las notificaciones. Se conserva la última información disponible.':'');
-  const flight=useRef(false);
+  const flight=useRef(false),identity=useRef(user?.email);
+  useEffect(()=>{identity.current=user?.email;return()=>{identity.current=null;};},[user?.email]);
+  const scope=user?.email;
+  const deleteMutation=useMutation({mutationKey:['notification-delete',scope],...notificationDeleteOptions({queryClient,queryKey,persist:id=>base44.entities.Notification.delete(id),isCurrent:()=>identity.current===scope})});
 
   const load=()=>{setError('');return query.refetch();};
   const readMutation=useMutation({mutationKey:['notification-read',user?.email],...notificationReadOptions({queryClient,queryKey,persist:id=>base44.entities.Notification.update(id,{leida:true})})});
@@ -46,9 +49,9 @@ export default function Notificaciones() {
 
   const deleteNotif = async (id) => {
     if(flight.current)return;flight.current=true;setBusy(true);setError('');
-    try{await base44.entities.Notification.delete(id);setNotifs(prev=>prev.filter(n=>n.id!==id));}
-    catch{setError('No se pudo eliminar la notificación. Sigue disponible para reintentar.');}
-    finally{flight.current=false;setBusy(false);}
+    try{await deleteMutation.mutateAsync({rows:notifs,id});}
+    catch{if(identity.current===scope)setError('No se pudo eliminar la notificación. Se ha restaurado en la lista para reintentar.');}
+    finally{flight.current=false;if(identity.current===scope)setBusy(false);}
   };
 
   const filtered = notifs.filter(n => {
@@ -170,3 +173,4 @@ export default function Notificaciones() {
     </div>
   );
 }
+
