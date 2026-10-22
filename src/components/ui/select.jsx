@@ -8,11 +8,14 @@ import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useMobileViewport from '@/hooks/useMobileViewport';
 import {nativeSelectModel} from '@/lib/nativeSelect.mjs';
+import {Drawer,DrawerTrigger} from './drawer';
+import MobileSelectPicker from './MobileSelectPicker';
 
 const NativeSelectContext=React.createContext(null);
 function Select({children,value,defaultValue,onValueChange,...props}){
   const mobile=useMobileViewport();
   const [localValue,setLocalValue]=React.useState(defaultValue??'');
+  const [open,setOpen]=React.useState(false),contentId=React.useId();
   const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue});
   // Explicitly controlled popup APIs keep Radix; ordinary choices use the OS
   // picker on phones. No duplicated hidden inputs or parallel form submission.
@@ -20,8 +23,10 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const native=mobile&&model.options.length>0&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
   const current=value===undefined?localValue:value;
   const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
-  return <NativeSelectContext.Provider value={native?{...model,value:current,change,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null}>
-    {native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
+  const sheet=native&&model.options.length>8&&!props.name&&!props.required;
+  const picker=native?{...model,mode:sheet?'sheet':'native',value:current,change,open,setOpen,contentId,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null;
+  return <NativeSelectContext.Provider value={picker}>
+    {sheet?<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs={false} handleOnly>{children}{open&&<MobileSelectPicker picker={picker}/>}</Drawer>:native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
   </NativeSelectContext.Provider>;
 }
 
@@ -32,6 +37,7 @@ const SelectValue = SelectPrimitive.Value
 const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) => {
   const native=React.useContext(NativeSelectContext);
   if(native){
+    if(native.mode==='sheet')return <DrawerTrigger asChild><button {...props} type="button" role="combobox" aria-haspopup="dialog" aria-expanded={native.open} aria-controls={native.contentId} aria-label={props['aria-label']||native.placeholder||'Seleccionar opción'} ref={ref} disabled={native.disabled||props.disabled} className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',className)}><span className="truncate">{native.options.find(option=>option.value===String(native.value))?.label||native.placeholder||'Seleccionar opción'}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50"/></button></DrawerTrigger>;
     const groups=[...new Set(native.options.map(option=>option.group))];
     const option=entry=><option key={entry.value} value={entry.value} disabled={entry.disabled}>{entry.label}</option>;
     return <span className={cn('taxea-native-select relative inline-flex w-full',className)}>
@@ -159,3 +165,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
