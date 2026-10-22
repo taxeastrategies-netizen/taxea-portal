@@ -5,7 +5,8 @@ export async function ocrIntake(client, params) {
   return result;
 }
 
-// Review is the delivery state, not proof that OCR has already extracted data.
+// New deliveries are pending. Older review rows without extraction can still
+// be analysed, without migrating or approving historical documents.
 export function needsOcrAnalysis(doc) {
   if (['pending', 'analysis_failed', 'queued_for_analysis'].includes(doc.status)) return true;
   if (doc.status !== 'review_required' || doc.invoiceSource || doc.invoiceOnly) return false;
@@ -14,6 +15,13 @@ export function needsOcrAnalysis(doc) {
     return !data || typeof data !== 'object' || Array.isArray(data) || !Object.keys(data).length;
   } catch { return true; }
 }
+
+const unlinkedDocument = doc => !!doc && !doc.invoiceOnly && !doc.invoiceSource
+  && !doc.linkedInvoiceId && !doc.linkedJournalEntryId && !doc.accountedAt;
+export const canReturnOcrToPending = doc => unlinkedDocument(doc)
+  && ['review_required','analysis_failed'].includes(doc.status);
+export const canRejectOcrDocument = doc => unlinkedDocument(doc)
+  && ['pending','review_required','analysis_failed'].includes(doc.status);
 
 export async function loadIntakeDocuments(client, companyId, documentType) {
   const rows = new Map();
@@ -28,4 +36,5 @@ export async function loadIntakeDocuments(client, companyId, documentType) {
   }
   throw new Error('La cola supera el límite de lectura completo. Filtra por cliente.');
 }
+
 
