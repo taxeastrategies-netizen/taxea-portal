@@ -13,7 +13,7 @@ const mocked={
   useState:value=>[typeof value==='function'?value():value,()=>{}],
   useLocation:()=>location,useOutlet:()=>outlet,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'location-provider'},
 };
-const result=await esbuild.build({entryPoints:['src/components/layout/MobileNavigation.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsxFactory:'React.createElement',jsxFragment:'React.Fragment',inject:[],plugins:[{name:'hooks',setup(b){
+const result=await esbuild.build({entryPoints:['src/components/layout/MobileNavigation.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'transform',jsxFactory:'React.createElement',jsxFragment:'React.Fragment',inject:[],plugins:[{name:'hooks',setup(b){
   b.onResolve({filter:/^(react|react-router-dom)$/},args=>({path:args.path,namespace:'mock'}));
   b.onLoad({filter:/.*/,namespace:'mock'},()=>({loader:'js',contents:'const r=globalThis.__mock;export const {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useLocation,useNavigate,useOutlet,UNSAFE_LocationContext}=r;'}));
   b.onResolve({filter:/^@\/lib\/mobileNavigation.mjs$/},()=>({path:process.cwd()+'/src/lib/mobileNavigation.mjs'}));
