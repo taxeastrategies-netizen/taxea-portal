@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect,useRef } from 'react';
+import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
+import {suggestionCreateOptions} from '@/lib/suggestionMutation.mjs';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Lightbulb, Send, CheckCircle, Clock, Rocket, ThumbsUp, AlertCircle, Loader2 } from 'lucide-react';
@@ -30,6 +32,7 @@ const PRIORIDADES = [
 ];
 
 const ESTADO_CONFIG = {
+  enviando:          { label: 'Enviando · sin confirmar', color: 'bg-secondary text-muted-foreground border-border', icon: Clock },
   nueva:             { label: 'Nueva', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Lightbulb },
   pendiente_revision:{ label: 'Pendiente revisión', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: Clock },
   en_estudio:        { label: 'En estudio', color: 'bg-purple-50 text-purple-700 border-purple-200', icon: Loader2 },
@@ -44,59 +47,56 @@ const BLANK = { titulo: '', descripcion: '', tipo: 'nueva_funcionalidad', priori
 export default function BuzonSugerencias() {
   const { company, user, loadingCompany } = useOutletContext() || {};
   const [form, setForm] = useState(BLANK);
-  const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
-  const [misSugerencias, setMisSugerencias] = useState([]);
-  const [novEdades, setNovEdades] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [sendError,setSendError]=useState(''),[notice,setNotice]=useState('');
+  const flight=useRef(false),scope=useRef(user?.email),queryClient=useQueryClient(),queryKey=['my-suggestions',user?.email||'anonymous'];
+  useEffect(()=>{scope.current=user?.email;return()=>{scope.current=null;};},[user?.email]);
+  const mine=useQuery({queryKey,enabled:!!company&&!!user?.email,queryFn:()=>base44.entities.Sugerencia.filter({usuario_email:user.email},'-created_date'),staleTime:30000,retry:1});
+  const news=useQuery({queryKey:['public-implemented-suggestions'],enabled:!!company&&!!user?.email,queryFn:()=>base44.entities.Sugerencia.filter({estado:'implementada',publica:true},'-updated_date',6),staleTime:60000,retry:1});
+  const misSugerencias=mine.data||[],novEdades=news.data||[];
+  const createMutation=useMutation({mutationKey:['create-suggestion',user?.email],...suggestionCreateOptions({queryClient,queryKey,persist:payload=>base44.entities.Sugerencia.create(payload)})});
+  const sending=createMutation.isPending;
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const set = (k, v) => {if(!flight.current)setForm(f => ({ ...f, [k]: v }));};
 
-  useEffect(() => {
-    if (!company || !user) return;
-    Promise.all([
-      base44.entities.Sugerencia.filter({ usuario_email: user.email }),
-      base44.entities.Sugerencia.filter({ estado: 'implementada', publica: true }),
-    ]).then(([mis, pub]) => {
-      setMisSugerencias(mis.sort((a, b) => new Date(b.created_date) - new Date(a.created_date)));
-      setNovEdades(pub.sort((a, b) => new Date(b.updated_date) - new Date(a.updated_date)).slice(0, 6));
-      setLoading(false);
-    });
-  }, [company, user, sent]);
+  useEffect(()=>{if(!sent)return;const timer=setTimeout(()=>setSent(false),3000);return()=>clearTimeout(timer);},[sent]);
 
   const handleSend = async () => {
-    if (!form.titulo.trim() || !form.descripcion.trim()) return;
-    setSending(true);
-    const sug = await base44.entities.Sugerencia.create({
-      ...form,
+    if (flight.current||!company?.id||!user?.email||!form.titulo.trim()||!form.descripcion.trim()) return;
+    flight.current=true;setSendError('');setNotice('');setSent(false);
+    const draft={...form},ownEmail=user.email;
+    const payload={
+      ...draft,
       company_id: company.id,
       usuario_email: user.email,
       usuario_nombre: user.full_name || user.email,
       estado: 'nueva',
-    });
-    // Timeline
-    await base44.entities.TimelineEvent.create({
+    };
+    const tempId='pending-'+(globalThis.crypto?.randomUUID?.()||Date.now()+'-'+Math.random().toString(36).slice(2));
+    try{
+      await createMutation.mutateAsync({payload,tempId,createdAt:new Date().toISOString()});
+      if(scope.current!==ownEmail)return;
+      setSent(true);setForm(BLANK);
+      // The suggestion already has its real ID. Ancillary notices must never
+      // leave the primary action spinning or invite a duplicate resubmission.
+      void Promise.allSettled([Promise.resolve().then(()=>base44.entities.TimelineEvent.create({
       company_id: company.id,
       tipo: 'nota_interna',
-      titulo: `💡 Sugerencia enviada: ${form.titulo}`,
-      descripcion: `Tipo: ${TIPOS.find(t => t.value === form.tipo)?.label}`,
+      titulo: `Sugerencia enviada: ${draft.titulo}`,
+      descripcion: `Tipo: ${TIPOS.find(t => t.value === draft.tipo)?.label}`,
       color: 'azul',
       usuario_email: user.email,
       automatico: true,
       visibilidad: 'ambos',
-    });
-    // Notificación admin
-    await base44.entities.Notification.create({
+    })),Promise.resolve().then(()=>base44.entities.Notification.create({
       company_id: company.id,
       destinatario_email: 'admin',
-      titulo: `💡 Nueva sugerencia: ${form.titulo}`,
-      mensaje: `${user.full_name || user.email} ha enviado una sugerencia de tipo "${TIPOS.find(t => t.value === form.tipo)?.label}".`,
+      titulo: `Nueva sugerencia: ${draft.titulo}`,
+      mensaje: `${user.full_name || user.email} ha enviado una sugerencia de tipo "${TIPOS.find(t => t.value === draft.tipo)?.label}".`,
       tipo: 'aviso',
-    });
-    setSending(false);
-    setSent(true);
-    setForm(BLANK);
-    setTimeout(() => setSent(false), 3000);
+    }))]).then(results=>{if(results.some(result=>result.status==='rejected')&&scope.current===ownEmail)setNotice('Tu sugerencia está registrada. No se pudo completar alguno de los avisos internos; no es necesario enviarla otra vez.');});
+    }catch{if(scope.current===ownEmail)setSendError('No se confirmó el registro. Se conserva tu texto. Revisa «Mis sugerencias» antes de reintentar para evitar un duplicado.');}
+    finally{flight.current=false;}
   };
 
   if (loadingCompany) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
@@ -108,6 +108,9 @@ export default function BuzonSugerencias() {
         title="Buzón de Sugerencias"
         subtitle="Ayúdanos a mejorar Taxea Portal · Tu opinión vale"
       />
+      {sendError&&<p role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{sendError}</p>}
+      {notice&&<p role="status" className="mb-4 rounded-lg border border-border bg-secondary p-3 text-sm">{notice}</p>}
+      {mine.isError&&<p role="alert" className="mb-4 text-sm text-destructive">No se pudo actualizar tu lista. Se conserva la última información. <button type="button" onClick={()=>mine.refetch()} className="min-h-11 underline">Reintentar lectura</button></p>}
 
       {/* Formulario */}
       <div className="bg-card border border-border rounded-xl shadow-card p-6 mb-6">
@@ -121,14 +124,15 @@ export default function BuzonSugerencias() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <fieldset disabled={sending} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Título *</Label>
-            <Input placeholder="Ej: Poder exportar facturas en ZIP" value={form.titulo} onChange={e => set('titulo', e.target.value)} />
+            <Label htmlFor="suggestion-title">Título *</Label>
+            <Input id="suggestion-title" placeholder="Ej: Poder exportar facturas en ZIP" value={form.titulo} onChange={e => set('titulo', e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Descripción *</Label>
+            <Label htmlFor="suggestion-description">Descripción *</Label>
             <textarea
+              id="suggestion-description"
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[100px] resize-none"
               placeholder="Describe con detalle tu sugerencia, el problema que resuelve o el comportamiento esperado..."
               value={form.descripcion}
@@ -139,14 +143,14 @@ export default function BuzonSugerencias() {
             <div className="space-y-1.5">
               <Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => set('tipo', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Tipo de sugerencia"><SelectValue /></SelectTrigger>
                 <SelectContent>{TIPOS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Prioridad</Label>
               <Select value={form.prioridad} onValueChange={v => set('prioridad', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Prioridad de sugerencia"><SelectValue /></SelectTrigger>
                 <SelectContent>{PRIORIDADES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
@@ -160,7 +164,7 @@ export default function BuzonSugerencias() {
               : sending ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enviando...</>
               : <><Send className="w-4 h-4" /> Enviar sugerencia</>}
           </Button>
-        </div>
+        </fieldset>
       </div>
 
       {/* Novedades implementadas */}
@@ -186,7 +190,7 @@ export default function BuzonSugerencias() {
       )}
 
       {/* Mis sugerencias */}
-      {!loading && misSugerencias.length > 0 && (
+      {misSugerencias.length > 0 && (
         <div className="bg-card border border-border rounded-xl shadow-card p-6">
           <p className="font-jakarta font-semibold text-foreground mb-4">Mis sugerencias</p>
           <div className="space-y-2">
@@ -213,3 +217,4 @@ export default function BuzonSugerencias() {
     </div>
   );
 }
+
