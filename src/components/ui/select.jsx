@@ -26,7 +26,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
   // Real HTML form controls retain the OS picker and native validation. All
   // ordinary application choices, including controlled popups, use the drawer.
-  const nativeForm=mobile&&!!(props.name||props.required)&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
+  const nativeForm=!!(props.name||props.required)&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
   const sheet=mobile&&model.options.length>0&&!nativeForm&&!(props.name||props.required),uncontrolled=value===undefined;
   React.useEffect(()=>{
     if(!uncontrolled)return;
