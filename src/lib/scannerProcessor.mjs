@@ -43,6 +43,7 @@ export function createScannerProcessor(workerFactory = () => new Worker(new URL(
     });
   }
   return {
+    get mode() { return worker ? 'worker' : 'compatibility'; },
     detect(image, options = {}) { return request('detect', { image: { data: image.data, width: image.width, height: image.height }, options }); },
     process(payload) { return request('process', payload); },
     dispose() {
