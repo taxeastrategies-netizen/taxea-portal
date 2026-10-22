@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext,Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell, CheckCheck, Trash2, AlertTriangle, CheckSquare, FileText, Calendar, Info } from 'lucide-react';
 import PageHeader from '@/components/ui/PageHeader';
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {markNotificationReads} from '@/lib/notificationRead.mjs';
+import {referenceDestination} from '@/lib/navigationStack.mjs';
 
 const TIPO_CONFIG = {
   aviso: { icon: Info, color: 'bg-blue-50 text-blue-600' },
@@ -114,6 +115,7 @@ export default function Notificaciones() {
       ) : (
         <div className="space-y-2">
           {filtered.map(n => {
+            const reference=referenceDestination(n.url_referencia,window.location.origin);
             const cfg = TIPO_CONFIG[n.tipo] || TIPO_CONFIG.aviso;
             const Icon = cfg.icon;
             return (
@@ -163,9 +165,7 @@ export default function Notificaciones() {
                     {!n.leida && (
                       <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                     )}
-                    {n.url_referencia && (
-                      <a href={n.url_referencia} className="text-xs text-primary hover:underline">Ver detalle →</a>
-                    )}
+                    {reference&&(reference.internal?<Link to={reference.to} className="text-xs text-primary hover:underline">Ver detalle →</Link>:<a href={reference.to} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Ver detalle ↗</a>)}
                   </div>
                 </div>
               </div>
@@ -176,3 +176,4 @@ export default function Notificaciones() {
     </div>
   );
 }
+
