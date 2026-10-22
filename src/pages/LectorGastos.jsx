@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import usePageRefresh from '@/hooks/usePageRefresh';
 import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument, approveStoredOcrBatch } from '@/lib/ocrWorkspace.mjs';
 import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -183,14 +184,17 @@ export default function LectorGastos({ reviewPage = false }) {
     try {
       const data = await loadOcrWorkspace(base44,company.id,DOC_TYPE);
       if (version === loadVersion.current) setDocuments(data);
+      return true;
     } catch {
       if (version === loadVersion.current) setToast({ type: 'error', message: 'No se pudo actualizar el OCR. Se conserva la última lista; pulsa Actualizar antes de volver a aprobar.' });
+      return false;
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
   }, [company?.id]);
 
   useEffect(() => { if (company?.id) loadDocs(); }, [company?.id, loadDocs]);
+  usePageRefresh(loadDocs,['/lector-gastos','/tax-accounting/lector-gastos']);
 
   const debouncedLoadDocs = useMemo(() => debounce(loadDocs, 1200), [loadDocs]);
 
@@ -553,3 +557,4 @@ export default function LectorGastos({ reviewPage = false }) {
     </div>
   );
 }
+
