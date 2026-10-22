@@ -53,7 +53,7 @@ const exported={};
 // Keep the real server environment free of a fake DOM; only the media-query
 // hook and browser-only drawer shell are adapted. React and Select are real.
 const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),__mobile:true,console};
-vm.runInNewContext(built.outputFiles[0].text,sandbox);
+try{vm.runInNewContext(built.outputFiles[0].text,sandbox);}catch(error){const code=built.outputFiles[0].text,at=code.indexOf('window.self');console.error(code.slice(code.lastIndexOf('\n// ',at),at+80));throw error;}
 const ui=sandbox.module.exports,e=React.createElement;
 const createSelect=extra=>e(ui.Select,{value:'b',name:'account',onValueChange(){},...extra},e(ui.SelectTrigger,{'aria-label':'Estado',id:'qa-selector'},e(ui.SelectValue,{placeholder:'Selecciona'})),e(ui.SelectContent,null,e(ui.SelectGroup,null,e(ui.SelectLabel,null,'Grupo'),e(ui.SelectItem,{value:'a'},'Primera'),e(ui.SelectItem,{value:'b'},'Segunda'),e(ui.SelectItem,{value:'c',disabled:true},'Inactiva'))));
 const native=renderToString(createSelect());
@@ -88,3 +88,4 @@ check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixe
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,drawerSsrAdapter:true,externalCalls:0,financialWrites:0},null,2));
+
