@@ -19,9 +19,12 @@ import RecurringSection from '@/components/facturas/RecurringSection';
 import GenerateRecurringModal from '@/components/facturas/GenerateRecurringModal';
 import { exportInvoiceToPdf } from '@/components/facturas/invoicePdfExport';
 import { triggerFinancialRefresh } from '@/hooks/useFinancialData';
+import useMobileViewport from '@/hooks/useMobileViewport';
+import MobileInvoiceList from '@/components/facturas/MobileInvoiceList';
 import DataPagination from '@/components/ui/DataPagination';
 
 export default function Facturas() {
+  const mobile = useMobileViewport();
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [invoices, setInvoices] = useState([]);
   const [fiscalPendingInvoices, setFiscalPendingInvoices] = useState([]);
@@ -211,6 +214,58 @@ export default function Facturas() {
   const safePage = Math.min(page, totalPages);
   const visibleInvoices = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  const renderInvoiceActions = inv => (
+    <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleSend(inv)}
+                            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
+                            type="button" aria-label={`Enviar factura ${inv.numero_factura || inv.id}`} title="Enviar factura">
+                            <Send className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenWorkspace(inv)}
+                            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-teal transition-colors"
+                            type="button" aria-label={`Ver factura ${inv.numero_factura || inv.id}`} title="Ver factura">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" aria-label={`Más opciones de la factura ${inv.numero_factura || inv.id}`} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento definitivo</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
+                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>{inv.tipo === 'recibida' ? 'Registrar pago' : 'Registrar cobro'}</DropdownMenuItem>
+                               {isAdmin && (
+                                 <>
+                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
+                                 </>
+                               )}
+                               {inv.archivo_url && (
+                                 <DropdownMenuItem asChild>
+                                   <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                                     <Download className="w-3.5 h-3.5" /> Descargar archivo
+                                   </a>
+                                 </DropdownMenuItem>
+                               )}
+                               {!inv.archivo_url && inv.tipo === 'emitida' && (
+                                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(inv, company)}>
+                                   <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
+                                 </DropdownMenuItem>
+                               )}
+                               {!inv.anulada && (
+                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleAnular(inv)}>
+                                   <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
+                                 </DropdownMenuItem>
+                               )}
+
+                             </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+  );
+
   if (loadingCompany && loading) return (
     <div className="p-12 text-center">
       <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
@@ -296,7 +351,7 @@ export default function Facturas() {
         </div>
         )}
 
-        {fiscalPendingInvoices.length > 0 && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        {fiscalPendingInvoices.length > 0 && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
           <strong>{fiscalPendingInvoices.length} documento(s) incompletos del flujo anterior.</strong> Se completan desde el check del OCR de facturas emitidas o recibidas, reutilizando la factura existente. No se crean copias.
           <div className="mt-2 text-xs">{fiscalPendingInvoices.slice(0, 8).map(inv => inv.numero_factura || inv.id).join(' · ')}{fiscalPendingInvoices.length > 8 ? ' · …' : ''}</div>
         </div>}
@@ -370,17 +425,17 @@ export default function Facturas() {
         )}
 
         {anularError && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/40 dark:border-red-800">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span className="text-sm text-red-700">{anularError}</span>
+            <span className="text-sm text-red-700 dark:text-red-300">{anularError}</span>
             <button className="ml-auto text-xs text-red-600 hover:underline" onClick={() => setAnularError('')}>Cerrar</button>
           </div>
         )}
 
         {/* Bulk action bar */}
         {selectedIds.length > 0 && !showRecurringView && (
-          <div className="flex items-center gap-3 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg">
-            <span className="text-sm font-medium text-red-700">{selectedIds.length} factura(s) seleccionada(s)</span>
+          <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/40 dark:border-red-800">
+            <span className="text-sm font-medium text-red-700 dark:text-red-300">{selectedIds.length} factura(s) seleccionada(s)</span>
             <div className="flex-1" />
             <Button variant="destructive" size="sm" disabled={anulando} onClick={handleAnularBulk} className="gap-1.5">
               {anulando ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Anulando...</> : <><Ban className="w-3.5 h-3.5" /> Anular seleccionadas</>}
@@ -414,7 +469,11 @@ export default function Facturas() {
             </div>
           ) : (
             <>
-            <div className="overflow-x-auto">
+            {mobile ? <MobileInvoiceList invoices={visibleInvoices} selectedIds={selectedIds}
+              allSelected={filtered.length > 0 && filtered.every(invoice => selectedIds.includes(invoice.id))}
+              onSelectAll={checked => setSelectedIds(checked ? filtered.map(invoice => invoice.id) : [])}
+              onSelect={(id, checked) => setSelectedIds(previous => checked ? [...new Set([...previous, id])] : previous.filter(selected => selected !== id))}
+              onOpen={handleOpenWorkspace} renderActions={renderInvoiceActions} /> : <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
@@ -436,7 +495,7 @@ export default function Facturas() {
                   {visibleInvoices.map(inv => (
                     <tr key={inv.id}
                       onClick={() => handleOpenWorkspace(inv)}
-                      className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-red-50/50' : ''}`}>
+                      className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-accent/50' : ''}`}>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar factura {inv.numero_factura || inv.id}</span><input type="checkbox" className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} /></label>
                       </td>
@@ -452,61 +511,13 @@ export default function Facturas() {
                       <td className="px-4 py-3 hidden lg:table-cell"><StatusBadge status={inv.estado_cobro} /></td>
                       <td className="px-4 py-3"><StatusBadge status={inv.estado_contable} /></td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleSend(inv)}
-                            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-primary transition-colors"
-                            title="Enviar factura">
-                            <Send className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenWorkspace(inv)}
-                            className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-teal transition-colors"
-                            title="Ver factura">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button type="button" aria-label={`Más opciones de la factura ${inv.numero_factura || inv.id}`} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground">
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento definitivo</DropdownMenuItem>
-                               <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
-                               <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>{inv.tipo === 'recibida' ? 'Registrar pago' : 'Registrar cobro'}</DropdownMenuItem>
-                               {isAdmin && (
-                                 <>
-                                   <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
-                                 </>
-                               )}
-                               {inv.archivo_url && (
-                                 <DropdownMenuItem asChild>
-                                   <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
-                                     <Download className="w-3.5 h-3.5" /> Descargar archivo
-                                   </a>
-                                 </DropdownMenuItem>
-                               )}
-                               {!inv.archivo_url && inv.tipo === 'emitida' && (
-                                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(inv, company)}>
-                                   <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
-                                 </DropdownMenuItem>
-                               )}
-                               {!inv.anulada && (
-                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleAnular(inv)}>
-                                   <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
-                                 </DropdownMenuItem>
-                               )}
-
-                             </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
+                        {renderInvoiceActions(inv)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
             <DataPagination page={safePage} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
           </>
           )}
@@ -572,3 +583,4 @@ export default function Facturas() {
     </>
   );
 }
+
