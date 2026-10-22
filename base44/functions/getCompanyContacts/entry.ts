@@ -29,7 +29,9 @@ export default async function(req) {
       contacts: (contacts || []).filter((contact) => contact.activo !== false && !contact.merged_into_contact_id),
     });
   } catch (error) {
-    console.error('[getCompanyContacts]', error);
-    return Response.json({ error: 'No se pudieron cargar los contactos', detail: error?.message || String(error) }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[getCompanyContacts]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudieron cargar los contactos. Reintenta; si continúa, comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 }
+
