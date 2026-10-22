@@ -83,4 +83,12 @@ const toastSource=fs.readFileSync('src/components/ui/toast.jsx','utf8');
 check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixed/.test(toastSource),'Provider cannot create a transparent fixed hit-test layer');
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
+const lifecycle=[],navigationListeners=new Map();let closes=0;
+const hookBuild=await esbuild.build({entryPoints:['src/hooks/useCloseOnNavigation.js'],bundle:true,write:false,platform:'node',format:'cjs',alias:{'@':process.cwd()+'/src'},plugins:[{name:'hook-lifecycle-adapter',setup(build){build.onResolve({filter:/^react$/},()=>({path:'react',namespace:'qa-hooks'}));build.onLoad({filter:/.*/,namespace:'qa-hooks'},()=>({contents:'const r=globalThis.__hooks;export const {useEffect,useLayoutEffect,useRef}=r;',loader:'js'}));}}]});
+const hookExports={},hookContext={exports:hookExports,module:{exports:hookExports},__hooks:{useRef:value=>({current:value}),useEffect:effect=>lifecycle.push(effect),useLayoutEffect:effect=>lifecycle.push(effect)},window:{addEventListener:(name,fn)=>navigationListeners.set(name,fn),removeEventListener:name=>navigationListeners.delete(name)}};
+vm.runInNewContext(hookBuild.outputFiles[0].text,hookContext);
+hookContext.module.exports.default(()=>{closes++;});const cleanups=lifecycle.map(effect=>effect()).filter(Boolean);
+navigationListeners.get('taxea:navigation-committed')();check(closes===1,'Committed navigation closes an ephemeral portal');
+cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigation listener is removed on unmount');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
+
