@@ -27,11 +27,12 @@ async function load(name){
       b.onLoad({filter:/.*/,namespace:'safe-stub'},args=>{
         if(args.path.includes('@base44/sdk')) return {loader:'js',contents:'export const createClientFromRequest=()=>globalThis.__client;export const createClient=()=>globalThis.__client;'};
         if(args.path.startsWith('npm:stripe')) return {loader:'js',contents:'export default class Stripe{webhooks={constructEventAsync:async()=>{throw new Error("Invalid QA signature");}}}'};
+        if(args.path.startsWith('npm:xlsx')) return {loader:'js',contents:'export const read=()=>{throw new Error("No parsing before authentication");};export const utils={};'};
         const source=fs.readFileSync(args.pluginData.importer,'utf8');
         const escaped=args.path.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
         const expression=new RegExp('import\\s+\\{([^}]+)\\}\\s+from\\s+[\'\"]'+escaped+'[\'\"]','g');
         const names=[...source.matchAll(expression)].flatMap(m=>m[1].split(',').map(s=>s.trim().split(/\s+as\s+/)[0]).filter(Boolean));
-        return {loader:'js',contents:'export default function stub(){return {};};'+[...new Set(names)].map(key=>`export const ${key}=()=>{throw new Error("External stub must not run");};`).join('\n')};
+        return {loader:'js',contents:'export default function stub(){return {};};'+[...new Set(names)].map(key=>`export function ${key}(){return new Proxy({}, {get:()=>()=>{throw new Error("External stub must not run");}});}`).join('\n')};
       });
     },
   }]});
@@ -59,7 +60,7 @@ for(const name of guarded){
       assert.ok([401,403].includes(r.status),`${name}/${action}: expected auth rejection, got ${JSON.stringify(r)}`);
       assert.equal(r.effects.length,0,`${name}/${action}: no data/network/privileged side effects for anonymous caller`);cases++;
     }
-    const invalidToken=await runner.invoke({action:'security_probe'},{authThrows:true});
+    const invalidToken=await runner.invoke({action:'security_probe',companyId:'foreign',company_id:'foreign',email:'qa@invalid.test'},{authThrows:true});
     assert.ok([401,403].includes(invalidToken.status),`${name}: expired/invalid sessions must be denied, not become 500`);
     assert.equal(invalidToken.effects.length,0);assert.ok(!invalidToken.body.includes(marker));
     results.push({name,anonymousActions:cases,invalidSession:true});
@@ -84,6 +85,7 @@ for(const name of publicFunctions){
     results.push({name,publicCredentialBoundary:true});
   }catch(error){failures.push({name,error:error.message.slice(0,1400)});}
 }
-console.log(JSON.stringify({ok:failures.length===0,functions:roots.length,protected:guarded.length,publicCapabilities:publicFunctions.size,results,failures},null,2));
-assert.deepEqual(failures,[],'All backend entry points must enforce the intended security boundary');
+console.log(JSON.stringify({ok:failures.length===0,functions:roots.length,protected:guarded.length,publicCapabilities:publicFunctions.size,
+  passed:results.length,anonymousActions:results.reduce((sum,row)=>sum+(row.anonymousActions || 0),0),failures},null,2));
+assert.equal(failures.length,0,'All backend entry points must enforce the intended security boundary');
 
