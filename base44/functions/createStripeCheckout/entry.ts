@@ -159,7 +159,9 @@ Deno.serve(async (req) => {
 
     return Response.json({ url: session.url });
   } catch (error) {
-    console.error('Error en createStripeCheckout:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[createStripeCheckout]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo abrir el pago. No se ha confirmado ningún cobro. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
