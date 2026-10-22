@@ -50,4 +50,3 @@ export function syncNativeSelectDefaults(control,defaultValue,currentValue){
   // value controlled, while native form.reset() has the correct default.
   control.value=String(currentValue??'');
 }
-

@@ -1103,7 +1103,7 @@ var require_react_development = __commonJS({
           var dispatcher = resolveDispatcher();
           return dispatcher.useInsertionEffect(create, deps);
         }
-        function useLayoutEffect7(create, deps) {
+        function useLayoutEffect8(create, deps) {
           var dispatcher = resolveDispatcher();
           return dispatcher.useLayoutEffect(create, deps);
         }
@@ -1882,7 +1882,7 @@ var require_react_development = __commonJS({
         exports.useId = useId3;
         exports.useImperativeHandle = useImperativeHandle;
         exports.useInsertionEffect = useInsertionEffect2;
-        exports.useLayoutEffect = useLayoutEffect7;
+        exports.useLayoutEffect = useLayoutEffect8;
         exports.useMemo = useMemo10;
         exports.useReducer = useReducer3;
         exports.useRef = useRef17;
@@ -33214,6 +33214,12 @@ function resetUncontrolledSelect(defaultValue, triggerRef, setValue) {
     setValue(value);
   });
 }
+function syncNativeSelectDefaults(control, defaultValue, currentValue) {
+  if (control?.tagName !== "SELECT") return;
+  const resetValue = String(defaultValue ?? "");
+  for (const option of control.options) option.defaultSelected = option.value === resetValue;
+  control.value = String(currentValue ?? "");
+}
 
 // src/components/ui/drawer.jsx
 var React38 = __toESM(require_react(), 1);
@@ -35376,6 +35382,7 @@ function useCloseOnNavigation(close) {
 // src/components/ui/select.jsx
 var import_jsx_runtime20 = __toESM(require_jsx_runtime(), 1);
 var SelectUiContext = React39.createContext(null);
+var useControlLayoutEffect = typeof window === "undefined" ? React39.useEffect : React39.useLayoutEffect;
 function Select2({ children, value, defaultValue, onValueChange, ...props }) {
   const mobile = useMobileViewport();
   const [localValue, setLocalValue] = React39.useState(defaultValue ?? "");
@@ -35406,6 +35413,9 @@ function Select2({ children, value, defaultValue, onValueChange, ...props }) {
     form?.addEventListener("reset", reset2);
     return () => form?.removeEventListener("reset", reset2);
   }, [uncontrolled, defaultValue, props.form]);
+  useControlLayoutEffect(() => {
+    if (nativeForm) syncNativeSelectDefaults(triggerRef.current, uncontrolled ? defaultValue : current, current);
+  }, [nativeForm, uncontrolled, defaultValue, current, model.options]);
   const picker = { ...model, mode: nativeForm ? "native" : sheet ? "sheet" : "desktop", value: current, change, open, setOpen, contentId, triggerRef, disabled: props.disabled, name: props.name, required: props.required, form: props.form, dir: props.dir };
   return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(SelectUiContext.Provider, { value: picker, children: nativeForm ? children : /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(Root22, { ...props, value: current, onValueChange: change, open: sheet ? false : open, onOpenChange: (next) => sheet ? next && setOpen(true) : setOpen(next), children: [
     children,
