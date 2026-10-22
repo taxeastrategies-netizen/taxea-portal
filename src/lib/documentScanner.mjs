@@ -1,7 +1,7 @@
 // Document detection and image processing run entirely on the user's device.
 const clamp = (n, lo = 0, hi = 255) => Math.max(lo, Math.min(hi, n));
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-export const defaultDocumentCorners = () => [{ x: .03, y: .03 }, { x: .97, y: .03 }, { x: .97, y: .97 }, { x: .03, y: .97 }];
+export const defaultDocumentCorners = () => [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }];
 export function polygonArea(points) {
   return Math.abs(points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p.x * q.y - q.x * p.y; }, 0)) / 2;
 }
