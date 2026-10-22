@@ -24,6 +24,7 @@ function Fixture(){
     <main className="taxea-future-main flex-1 min-h-0 overflow-y-auto overscroll-none p-4 space-y-5">
     <h1>Taxea QA — controles ficticios sin backend</h1>
     <p>Esta página no accede a perfiles ni guarda documentos.</p>
+    <form onSubmit={event=>event.preventDefault()} className="space-y-3 rounded-xl border p-4"><label htmlFor="qa-uncontrolled-legacy">Proveedor sin control ficticio</label><NativeSelect className="w-full border rounded-lg" id="qa-uncontrolled-legacy" name="uncontrolledLegacy" required defaultValue=""><option value="">Elegir proveedor</option><option value="40000001">Proveedor libre Alpha</option><option value="40000002">Proveedor libre Beta</option></NativeSelect><button className="rounded-lg border p-3" type="reset">Restablecer proveedor sin control</button></form>
     <form className="space-y-3 rounded-xl border p-4" onSubmit={event=>{event.preventDefault();setLegacyResult(JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))));}}>
       <label htmlFor="qa-legacy-account">Proveedor obligatorio ficticio</label>
       <NativeSelect className="w-full border rounded-lg" id="qa-legacy-account" name="legacyAccount" required value={legacy} onChange={event=>{setLegacy(event.target.value);setLegacyChanges(count=>count+1);}}><option value="">Elige proveedor</option><optgroup label="Proveedores ficticios"><option value="40000001">Proveedor Alpha</option><option value="40000002">Proveedor Beta</option><option value="40000003" disabled>Proveedor archivado</option></optgroup></NativeSelect>
