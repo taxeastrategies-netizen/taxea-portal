@@ -74,10 +74,10 @@ const staleApproval=()=>call('approveOcrDocument',{docId:lifecycle.id,invoiceTyp
 const beforeLifecycle={invoices:records.Invoice.length,journals:records.JournalEntry.length};
 await stateAction('return_to_pending');assert.equal((await entity('OcrInvoiceDocument').get(lifecycle.id)).status,'pending');
 await staleApproval();
-const retry=await stateAction('analysis_start');
+const lifecycleRetry=await stateAction('analysis_start');
 await staleApproval();
 await call('ocrDocumentIntake',{action:'analysis_complete',companyId:'qa',docId:lifecycle.id,
-  analysisStartedAt:retry.document.analysisStartedAt,extractedData:savedData});
+  analysisStartedAt:lifecycleRetry.document.analysisStartedAt,extractedData:savedData});
 await stateAction('reject');await staleApproval();
 assert.equal(records.Invoice.length,beforeLifecycle.invoices);assert.equal(records.JournalEntry.length,beforeLifecycle.journals);
 const positive=await approve(await makeDoc('positive'));
