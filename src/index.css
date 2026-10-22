@@ -240,8 +240,10 @@ body.taxea-shell-document .taxea-future-main { overscroll-behavior-y:none; }
 .taxea-future-shell { -webkit-user-select:none; user-select:none; }
 .taxea-future-shell :is(button,a,[role="button"],[role="tab"],[role="switch"],[role="combobox"],select,summary) { touch-action:manipulation; -webkit-touch-callout:none; }
 .taxea-future-shell :is(img,svg) { -webkit-user-drag:none; }
-.taxea-future-main :is(p,td,dd,pre,code),
+.taxea-future-shell[data-copy-text="true"] .taxea-future-main :is(p,td,dd,pre,code),
 input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectable { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+.taxea-future-shell[data-copy-text="false"] .taxea-future-main :is(p,td,dd,pre,code) { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+.taxea-future-shell [data-selectable="true"] :is(p,td,dd,pre,code), .taxea-future-shell .taxea-selectable :is(p,td,dd,pre,code) { -webkit-user-select:text!important; user-select:text!important; -webkit-touch-callout:default; }
 .taxea-future-shell :is(button,a,[role="button"],[role="tab"],[role="switch"],[role="option"],[role="menuitem"]) :is(p,span) { -webkit-user-select:none; user-select:none; }
 @media (hover:none) and (pointer:coarse) {
   .taxea-future-shell :is(button,a,[role="button"],[role="switch"]):active { opacity:.78; }
@@ -295,3 +297,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
