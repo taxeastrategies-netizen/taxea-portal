@@ -59,7 +59,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         >
           <Menu className="w-5 h-5" />
         </button>
-        {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
+        {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="taxea-mobile-back md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
         <span className="sm:hidden text-sm font-semibold truncate">{crumbs?.at(-1)||({'/ajustes':'Ajustes','/suscripcion':'Suscripción','/notificaciones':'Avisos'}[location.pathname])||'Taxea'}</span>
 
         {/* Breadcrumb o empresa */}
@@ -79,7 +79,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
 
       <div className="flex items-center gap-0 sm:gap-2 shrink-0">
         <div className="hidden sm:block"><OcrTopBarBadge isAdmin={isAdmin} /></div>
-        {onRefresh&&<button type="button" aria-label="Actualizar datos sin salir de la pantalla" disabled={refreshing} onClick={onRefresh} className="md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin motion-reduce:animate-none':''}`}/></button>}
+        {onRefresh&&<button type="button" aria-label="Actualizar datos sin salir de la pantalla" disabled={refreshing} onClick={onRefresh} className="taxea-mobile-refresh md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${refreshing?'animate-spin motion-reduce:animate-none':''}`}/></button>}
         {/* Notificaciones */}
         <Link
           to="/notificaciones"
@@ -136,3 +136,4 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
     </header>
   );
 }
+
