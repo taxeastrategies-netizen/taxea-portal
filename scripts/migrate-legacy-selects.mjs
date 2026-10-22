@@ -24,4 +24,5 @@ for(const file of files){
   fs.writeFileSync(file,next);results.push({file,tags:edits.length/2});
 }
 console.log(JSON.stringify({files:results.length,results},null,2));
-fs.writeFileSync('scripts/legacy-select-migration.json',JSON.stringify({baseline:'68400513af7101ac96c9bfbdcf34b5b40fe5db0a',files:results},null,2)+'\n');
+if(results.length)fs.writeFileSync('scripts/legacy-select-migration.json',JSON.stringify({baseline:'68400513af7101ac96c9bfbdcf34b5b40fe5db0a',files:results},null,2)+'\n');
+
