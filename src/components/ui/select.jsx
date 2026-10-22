@@ -16,11 +16,12 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue});
   // Explicitly controlled popup APIs keep Radix; ordinary choices use the OS
   // picker on phones. No duplicated hidden inputs or parallel form submission.
-  const native=mobile&&model.options.length>0&&props.open===undefined&&props.onOpenChange===undefined;
+  const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
+  const native=mobile&&model.options.length>0&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
   const current=value===undefined?localValue:value;
   const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
   return <NativeSelectContext.Provider value={native?{...model,value:current,change,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null}>
-    {native?children:<SelectPrimitive.Root {...props} value={value} defaultValue={defaultValue} onValueChange={onValueChange}>{children}</SelectPrimitive.Root>}
+    {native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
   </NativeSelectContext.Provider>;
 }
 
@@ -158,3 +159,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
