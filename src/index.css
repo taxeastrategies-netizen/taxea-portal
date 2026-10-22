@@ -188,9 +188,12 @@
   }
 }
 
-.taxea-future-shell { height: 100vh; height: 100dvh; padding-top:var(--taxea-safe-top); }
-/* One owner per inset: shell owns the status area; fixed navigation owns the
-   home indicator. Header remains 56px instead of paying the top inset twice. */
+.taxea-future-shell { height: 100vh; height: 100dvh; }
+/* One owner per inset: the header paints the status area and keeps 56px for
+   controls. An impersonation banner owns that area instead when present.
+   The fixed bottom navigation independently owns the home indicator. */
+.taxea-future-topbar.taxea-top-inset { height:calc(3.5rem + env(safe-area-inset-top,0px)); padding-top:env(safe-area-inset-top,0px); }
+.taxea-impersonation-safe-top { padding-top:env(safe-area-inset-top,0px); flex-shrink:0; }
 .taxea-future-topbar { padding-left:max(1rem,var(--taxea-safe-left)); padding-right:max(1rem,var(--taxea-safe-right)); }
 .taxea-future-main { padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); }
 .taxea-future-bottomnav { padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); padding-bottom:calc(.5rem + var(--taxea-safe-bottom)); }
@@ -213,13 +216,14 @@
 /* The stable motion wrapper handles PUSH/POP without remounting cached forms. */
 .taxea-page-transition .taxea-mobile-screen:not([hidden]) { animation:none; }
 .taxea-native-select { min-height:44px; }
-.taxea-drawer-content { max-height:calc(100dvh - var(--taxea-safe-top) - 1rem); padding-bottom:var(--taxea-safe-bottom); padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); }
+.taxea-drawer-content { max-height:calc(100dvh - var(--taxea-safe-top) - 1rem); padding-bottom:var(--taxea-safe-bottom); padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); overscroll-behavior:none; }
 .taxea-mobile-picker { height:min(80dvh,40rem); margin-top:0; border-radius:1.5rem 1.5rem 0 0; }
 .taxea-future-shell { touch-action:manipulation; }
 html.taxea-shell-document { height:100%; overflow:hidden; overscroll-behavior:none; }
 body.taxea-shell-document { position:fixed; inset:0; width:100%; height:100%; overflow:hidden; overscroll-behavior:none; }
 body.taxea-shell-document #root { height:100%; overflow:hidden; }
 body.taxea-shell-document .taxea-future-main { overscroll-behavior-y:none; }
+.taxea-future-sidebar, .taxea-future-sidebar nav { overscroll-behavior:none; }
 .taxea-mobile-picker, .taxea-action-menu { touch-action:manipulation; -webkit-touch-callout:none; }
 .taxea-mobile-picker { -webkit-user-select:none; user-select:none; }
 @media (max-width:767px), (hover:none) and (pointer:coarse) {
@@ -297,3 +301,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
