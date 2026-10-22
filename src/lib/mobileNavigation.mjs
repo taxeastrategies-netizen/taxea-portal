@@ -21,11 +21,13 @@ export function internalHref(location) {
   return pathname+String(location?.search||'')+String(location?.hash||'');
 }
 export function parentRoute(pathname) {
+  if(pathname.startsWith('/documentos/'))return '/documentos';
+  if(pathname.startsWith('/ajustes/'))return '/ajustes';
   if(pathname.startsWith('/herramientas/'))return '/herramientas';
   for(const root of ['/tax-accounting','/finance','/people']) {
     if(pathname.startsWith(root+'/')&&!pathname.endsWith('/dashboard'))return root+'/dashboard';
   }
-  if(pathname.startsWith('/admin/'))return '/admin/users';
+  if(pathname.startsWith('/admin/'))return pathname==='/admin/users'?'/':'/admin/users';
   return '/';
 }
 export function pullGesture(start,x,y,{nestedScroll=false,touches=1}={}) {
@@ -35,3 +37,4 @@ export function pullGesture(start,x,y,{nestedScroll=false,touches=1}={}) {
   const distance=Math.min(88,Math.max(0,dy)*0.48);
   return {cancelled:false,distance,armed:distance>=58};
 }
+
