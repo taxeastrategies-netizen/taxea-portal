@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
+import {useQuery,useMutation,useQueryClient} from '@tanstack/react-query';
 import { useOutletContext,Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { Bell, CheckCheck, Trash2, AlertTriangle, CheckSquare, FileText, Calendar, Info } from 'lucide-react';
@@ -20,29 +21,29 @@ const TIPO_CONFIG = {
 
 export default function Notificaciones() {
   const { user } = useOutletContext() || {};
-  const [notifs, setNotifs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient=useQueryClient(),queryKey=['notifications',user?.email||'anonymous'];
+  const query=useQuery({queryKey,enabled:!!user?.email,queryFn:()=>base44.entities.Notification.filter({destinatario_email:user.email},'-created_date',100),staleTime:30000,retry:1});
+  const notifs=query.data||[],loading=query.isPending&&query.fetchStatus==='fetching';
+  const setNotifs=update=>queryClient.setQueryData(queryKey,previous=>typeof update==='function'?update(previous||[]):update);
   const [filter, setFilter] = useState('all'); // all | unread | read
-  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [busy,setBusy]=useState(false),[actionError,setError]=useState('');
+  const error=actionError||(query.isError?'No se pudieron actualizar las notificaciones. Se conserva la última información disponible.':'');
   const flight=useRef(false);
 
-  useEffect(() => { if (user?.email) load(); }, [user?.email]);
-
-  const load = async () => {
-    setLoading(true);
-    try{const data = await base44.entities.Notification.filter({ destinatario_email: user.email }, '-created_date', 100);
-      setNotifs(data || []);setError('');
-    }catch{setError('No se pudieron cargar las notificaciones. Inténtalo de nuevo.');}
-    finally{setLoading(false);}
-  };
-
-  const markRead = async (ids) => {
-    if(flight.current)return;flight.current=true;setBusy(true);setError('');
-    try{const result=await markNotificationReads({rows:notifs,ids,
+  const load=()=>{setError('');return query.refetch();};
+  const readMutation=useMutation({mutationKey:['notification-read',user?.email],mutationFn:async ids=>{
+    await queryClient.cancelQueries({queryKey});
+    return markNotificationReads({rows:notifs,ids,
       persist:id=>base44.entities.Notification.update(id,{leida:true}),
       optimistic:changed=>setNotifs(prev=>prev.map(n=>changed.includes(n.id)?{...n,leida:true}:n)),
       rollback:failed=>setNotifs(prev=>prev.map(n=>failed.includes(n.id)?{...n,leida:false}:n)),
-    });if(result.failed.length)setError(`${result.failed.length} notificación(es) no se guardaron. Se ha restaurado su estado; puedes reintentar.`);
+    });
+  },onSettled:()=>queryClient.invalidateQueries({queryKey})});
+
+  const markRead = async (ids) => {
+    if(flight.current)return;flight.current=true;setBusy(true);setError('');
+    try{const result=await readMutation.mutateAsync(ids);if(result.failed.length)setError(`${result.failed.length} notificación(es) no se guardaron. Se ha restaurado su estado; puedes reintentar.`);
+    }catch{setError('No se pudo guardar el cambio. Actualiza y vuelve a intentarlo.');
     }finally{flight.current=false;setBusy(false);}
   };
 
@@ -176,3 +177,4 @@ export default function Notificaciones() {
     </div>
   );
 }
+
