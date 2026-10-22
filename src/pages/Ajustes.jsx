@@ -37,6 +37,7 @@ export default function Ajustes() {
           return (
             <button
               key={t.id}
+              type="button" aria-pressed={activeTab === t.id}
               onClick={() => setActiveTab(t.id)}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
