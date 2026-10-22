@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import usePageRefresh from '@/hooks/usePageRefresh';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -16,6 +17,7 @@ export default function Documentos() {
   const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError,setLoadError]=useState('');
   const [showUpload, setShowUpload] = useState(false);
   const [selectedCarpeta, setSelectedCarpeta] = useState(null);
   const [search, setSearch] = useState('');
@@ -28,11 +30,16 @@ export default function Documentos() {
   }, [company?.id, loadingCompany]);
 
   const load = async () => {
+    if(!company?.id)return;
     setLoading(true);
-    const data = await base44.entities.Document.filter({ company_id: company.id });
-    setDocs(data || []);
-    setLoading(false);
+    setLoadError('');
+    try{
+      const data = await base44.entities.Document.filter({ company_id: company.id });
+      setDocs(data || []);return true;
+    }catch{setLoadError('No se pudieron actualizar los documentos. Se conserva la última lista.');return false;}
+    finally{setLoading(false);}
   };
+  usePageRefresh(load,['/documentos']);
 
   const handleUpdate = async (id, updates) => {
     await base44.entities.Document.update(id, updates);
@@ -73,6 +80,7 @@ export default function Documentos() {
         </Button>
       </PageHeader>
 
+      {loadError&&<p role="alert" className="text-sm text-destructive mb-4">{loadError}</p>}
       <div className="flex gap-5">
         {/* Árbol de carpetas — sidebar */}
         <div className="hidden lg:block w-56 flex-shrink-0">
@@ -195,3 +203,4 @@ export default function Documentos() {
     </div>
   );
 }
+
