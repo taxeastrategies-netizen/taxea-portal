@@ -1,0 +1,25 @@
+/* Fullscreen overlays don't inherit the AppLayout header's insets. Insets are
+   applied once on the viewport surface, including landscape display cutouts. */
+.taxea-fullscreen-surface {
+  box-sizing:border-box;
+  height:100vh;
+  height:100dvh;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-right:env(safe-area-inset-right,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:env(safe-area-inset-left,0px);
+  overflow:hidden;
+  overscroll-behavior-y:none;
+}
+.taxea-fullscreen-surface[hidden] { display:none!important; }
+.taxea-safe-overlay {
+  padding-top:max(1rem,env(safe-area-inset-top,0px));
+  padding-right:max(1rem,env(safe-area-inset-right,0px));
+  padding-bottom:max(1rem,env(safe-area-inset-bottom,0px));
+  padding-left:max(1rem,env(safe-area-inset-left,0px));
+}
+.taxea-safe-preview {
+  max-height:calc(100vh - 2rem - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+  max-height:min(85dvh,calc(100dvh - 2rem - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)));
+}
+
