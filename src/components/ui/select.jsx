@@ -29,8 +29,10 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
   // Form controls retain native validation/FormData. Their visual picker is
   // adaptive too; ordinary application choices use the direct drawer path.
-  const nativeForm=!!(props.name||props.required)&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
-  const sheet=mobile&&model.options.length>0&&!nativeForm&&!(props.name||props.required),uncontrolled=value===undefined;
+  // Standard mobile controls all use NativeSelect, including empty/loading
+  // lists and controlled-open forms. Only custom asChild triggers need a Slot.
+  const nativeForm=!customTrigger&&(mobile||(!!(props.name||props.required)&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined));
+  const sheet=mobile&&!nativeForm&&!(props.name||props.required),uncontrolled=value===undefined;
   React.useEffect(()=>{
     if(!uncontrolled)return;
     const form=props.form?document.getElementById(props.form):triggerRef.current?.closest('form');
@@ -64,7 +66,7 @@ const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }
   if(picker?.mode==='native'){
     const groups=[...new Set(picker.options.map(option=>option.group))];
     const option=entry=><option key={entry.value} value={entry.value} disabled={entry.disabled}>{entry.label}</option>;
-    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}><NativeSelect {...props} ref={assignedRef} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} name={picker.name} required={picker.required} form={picker.form} disabled={picker.disabled||props.disabled} dir={picker.dir} value={picker.value??''} onChange={event=>picker.change(event.target.value)}>
+    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}><NativeSelect {...props} ref={assignedRef} open={picker.open} onOpenChange={picker.setOpen} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} name={picker.name} required={picker.required} form={picker.form} disabled={picker.disabled||props.disabled} dir={picker.dir} value={picker.value??''} onChange={event=>picker.change(event.target.value)}>
       <option value="" disabled hidden>{picker.placeholder||'Selecciona una opción'}</option>
       {picker.value&&!picker.options.some(entry=>entry.value===String(picker.value))&&<option value={picker.value} disabled>{picker.value} · no disponible</option>}
       {groups.map(group=>group?<optgroup key={group} label={group}>{picker.options.filter(entry=>entry.group===group).map(option)}</optgroup>:picker.options.filter(entry=>!entry.group).map(option))}
@@ -188,3 +190,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
