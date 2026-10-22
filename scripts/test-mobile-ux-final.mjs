@@ -16,6 +16,8 @@ ledger=recordNavigation(ledger,loc('b'),1,'PUSH');
 assert.deepEqual(safeBackTarget(ledger,loc('b'),1),{delta:-1});cases++;
 assert.deepEqual(safeBackTarget([],loc('reload','/herramientas/renombrador'),9),{to:'/herramientas',replace:true});cases++;
 assert.deepEqual(safeBackTarget(ledger,loc('foreign'),8),{to:'/',replace:true});cases++;
+assert.deepEqual(safeBackTarget([],loc('admin','/admin/users'),22),{to:'/',replace:true});cases++;
+assert.deepEqual(safeBackTarget([],loc('doc','/documentos/qa'),7),{to:'/documentos',replace:true});cases++;
 ledger=recordNavigation(ledger,loc('c','/ajustes','?tab=seguridad'),1,'REPLACE');
 check(ledger.length===2&&ledger.at(-1).href==='/ajustes?tab=seguridad','REPLACE must not grow the stack');
 ledger=recordNavigation(ledger,loc('a','/'),0,'POP');check(ledger.length===1,'POP truncates known entries');
