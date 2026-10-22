@@ -3,6 +3,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 const lower = (value: unknown) => String(value || '').trim().toLowerCase();
 const types = { expense_invoice: 'ocr_expense', income_invoice: 'ocr_income' };
 const mutable = new Set(['pending', 'review_required', 'analysis_failed', 'queued_for_analysis', 'processing']);
+const reviewActions = new Set(['reject', 'return_to_pending', 'withdraw']);
 const fail = (error: string, status: number, code: string) => Response.json({ error, code }, { status });
 function canAccess(user: any, company: any) {
   if (!company || company.activa === false) return false;
@@ -73,22 +74,57 @@ Deno.serve(async req => {
       const name = file.name.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 240);
       const doc = await documents.create({
         company_id: companyId, uploadedByUserId: user.id, uploadedByEmail: user.email,
-        documentType, sourceModule: types[documentType], status: 'review_required',
+        documentType, sourceModule: types[documentType], status: 'pending',
         originalFileName: name, fileName: name, fileMimeType: file.type, fileSize: file.size,
         fileStorageUrl: uploaded.file_url, fileHash: digest, captureMethod, uploadSource: source,
         uploadedFromDeviceType: device, uploadedAt: now, lastStatusChangedAt: now,
-        auditTrail: [audit(user, 'documento_subido', '', 'review_required')],
+        auditTrail: [audit(user, 'documento_subido', '', 'pending')],
       });
       // Non-critical timeline failure cannot turn a saved delivery into a retry.
       await svc.entities.TimelineEvent.create({ company_id: companyId, tipo: 'documento_subido',
-        titulo: `Documento entregado: ${name}`, descripcion: 'En revisión. Análisis OCR y aprobación contable pendientes.',
+        titulo: `Documento entregado: ${name}`, descripcion: 'Pendiente de análisis OCR. Después pasará a revisión; todavía no está aprobado ni contabilizado.',
         color: 'azul', usuario_email: user.email, automatico: true, visibilidad: 'ambos' }).catch(() => {});
       return Response.json({ ok: true, document: doc, reused: false });
     }
 
-    if (!['analysis_start','analysis_complete','analysis_fail','duplicate_warning'].includes(body.action)) return fail('Operación no válida', 400, 'INVALID_ACTION');
-    const doc = await documents.get(String(body.docId || '')).catch(() => null);
+    if (!reviewActions.has(body.action) && !['analysis_start','analysis_complete','analysis_fail','duplicate_warning'].includes(body.action)) return fail('Operación no válida', 400, 'INVALID_ACTION');
+    let doc = await documents.get(String(body.docId || '')).catch(() => null);
     if (!doc || doc.company_id !== companyId) return fail('Documento no disponible', 404, 'DOCUMENT_NOT_FOUND');
+    if (reviewActions.has(body.action)) {
+      // Same company lease as approveOcrDocument: never reset/reject while an
+      // approval is creating the canonical invoice but has not linked it yet.
+      const token = crypto.randomUUID();
+      const claim = await svc.entities.Company.updateMany({ id: companyId, ocr_approval_lock_token: { $in: [null, ''] } },
+        { $set: { ocr_approval_lock_token: token, ocr_approval_lock_started_at: new Date().toISOString() } });
+      if (Number(claim?.updated) !== 1) return fail('Hay otra operación OCR en curso. Espera a que termine y reintenta.', 409, 'OCR_BUSY');
+      try {
+        doc = await documents.get(doc.id);
+        if (!doc || doc.company_id !== companyId) return fail('Documento no disponible', 404, 'DOCUMENT_NOT_FOUND');
+        if (doc.linkedInvoiceId || doc.linkedJournalEntryId || doc.accountedAt || doc.status === 'accounted')
+          return fail('Este documento ya tiene una factura o asiento asociado. No se puede rechazar ni volver a pendientes desde el OCR.', 409, 'DOCUMENT_LINKED');
+        const expected = body.action === 'return_to_pending' ? ['review_required','analysis_failed']
+          : body.action === 'withdraw' ? ['pending'] : ['pending','review_required','analysis_failed'];
+        // Repeating a successful click is harmless; do not append another audit.
+        const target = body.action === 'return_to_pending' ? 'pending' : body.action === 'withdraw' ? 'cancelled_by_client' : 'rejected';
+        if (doc.status === target) return Response.json({ ok: true, document: doc, reused: true });
+        if (!expected.includes(doc.status)) return fail('El estado del documento ha cambiado. Actualiza la lista antes de continuar.', 409, 'DOCUMENT_CHANGED');
+        const existing = await svc.entities.Invoice.filter({ company_id: companyId, ocr_document_id: doc.id }, 'id', 1);
+        if (existing.length) return fail('Ya existe una factura creada desde este documento. Completa su revisión sin volver a importarla.', 409, 'DOCUMENT_LINKED');
+        const now = new Date().toISOString();
+        const patch: any = { status: target, lastStatusChangedAt: now, safeErrorMessage: '',
+          auditTrail: [...(Array.isArray(doc.auditTrail) ? doc.auditTrail : []), audit(user, body.action, doc.status, target)] };
+        if (body.action === 'return_to_pending') Object.assign(patch, { extractedData: '', duplicateWarning: '', validationWarnings: [],
+          analysisStartedAt: null, analysisCompletedAt: null, reviewedAt: null, reviewedByAdminId: '', rejectionReason: '', rejectedAt: null });
+        if (body.action === 'reject') Object.assign(patch, { rejectedAt: now, reviewedAt: now,
+          reviewedByAdminId: user.id, rejectionReason: String(body.reason || '').trim().slice(0,1000) });
+        const changed = await documents.updateMany({ id: doc.id, company_id: companyId, status: doc.status }, { $set: patch });
+        if (Number(changed?.updated) !== 1) return fail('El documento ha cambiado. Actualiza la lista; no se ha aplicado esta acción.', 409, 'DOCUMENT_CHANGED');
+        return Response.json({ ok: true, document: await documents.get(doc.id) });
+      } finally {
+        await svc.entities.Company.updateMany({ id: companyId, ocr_approval_lock_token: token },
+          { $set: { ocr_approval_lock_token: '', ocr_approval_lock_started_at: '' } });
+      }
+    }
     if (!mutable.has(doc.status) || doc.linkedInvoiceId || doc.linkedJournalEntryId) return fail('El documento ya no admite cambios de análisis. Actualiza la lista.', 409, 'DOCUMENT_CHANGED');
     const now = new Date().toISOString();
     let patch: any;
@@ -112,11 +148,17 @@ Deno.serve(async req => {
     }
     patch.lastStatusChangedAt = now;
     patch.auditTrail = [...(Array.isArray(doc.auditTrail) ? doc.auditTrail : []), audit(user, body.action, doc.status, patch.status || doc.status)];
-    return Response.json({ ok: true, document: await documents.update(doc.id, patch) });
+    // A delayed extraction must not overwrite a later rejection/reset.
+    const condition: any = { id: doc.id, company_id: companyId, status: doc.status };
+    if (['analysis_complete','analysis_fail'].includes(body.action)) condition.analysisStartedAt = body.analysisStartedAt;
+    const changed = await documents.updateMany(condition, { $set: patch });
+    if (Number(changed?.updated) !== 1) return fail('El análisis ha cambiado. Actualiza antes de reintentar.', 409, 'STALE_ANALYSIS');
+    return Response.json({ ok: true, document: await documents.get(doc.id) });
   } catch (error) {
     // Do not expose provider payloads or document contents in logs/responses.
     console.error('[ocrDocumentIntake]', String(error?.name || 'Error'));
     return fail('No se pudo guardar el documento. Reintenta; no se ha aprobado ni contabilizado ninguna factura.', 502, 'INTAKE_UNAVAILABLE');
   }
 });
+
 
