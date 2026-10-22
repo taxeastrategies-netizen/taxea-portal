@@ -70,4 +70,3 @@ check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixe
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,externalCalls:0,financialWrites:0},null,2));
-

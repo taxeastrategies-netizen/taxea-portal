@@ -4,4 +4,3 @@ paths.push('src/lib/mobileNavigation.mjs');
 paths.push('src/components/ui/toast.jsx');
 for(const path of paths){const before=fs.readFileSync(path,'utf8'),after=before.trimEnd()+'\n';if(after!==before)fs.writeFileSync(path,after);}
 console.log('Task-only EOF normalisation complete.');
-
