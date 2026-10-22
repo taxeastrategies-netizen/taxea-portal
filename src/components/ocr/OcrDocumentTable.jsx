@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileText, Image, Eye, RefreshCw, Play, CheckCircle, Loader2, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { needsOcrAnalysis } from '@/lib/ocrIntake.mjs';
 
 const STATUS_CONFIG = {
   pending:               { label: 'Pendiente',                  color: 'text-amber-600',  bg: 'bg-amber-50' },
@@ -48,7 +49,7 @@ export default function OcrDocumentTable({
   const activeFilter = FILTERS.find(f => f.key === filter);
   const filtered = documents.filter(d => activeFilter.match(d.status));
 
-  const selectable=filtered.filter(doc=>['review_required','validated'].includes(doc.status));
+  const selectable=filtered.filter(doc=>['review_required','validated'].includes(doc.status) && !needsOcrAnalysis(doc));
   const selectedIds=selectable.filter(doc=>selected.has(doc.id)).map(doc=>doc.id);
   const pageCount=Math.max(1,Math.ceil(filtered.length/50)),currentPage=Math.min(page,pageCount-1);
   const visible=filtered.slice(currentPage*50,(currentPage+1)*50);
@@ -112,9 +113,9 @@ export default function OcrDocumentTable({
             const Icon = fileIcon(doc.originalFileName);
             const isProcessing = processingIds?.has(doc.id);
             return (
-              <div key={doc.id} className="px-5 py-3 hover:bg-secondary/20 transition-colors">
+              <div key={doc.id} data-ocr-id={doc.id} data-ocr-status={doc.status} className="px-5 py-3 hover:bg-secondary/20 transition-colors">
                 <div className="flex items-center gap-3">
-                  {onBulkReview && ['review_required','validated'].includes(doc.status) && <input aria-label={`Seleccionar ${doc.originalFileName}`} type="checkbox" disabled={busy} checked={selected.has(doc.id)} onChange={()=>toggle(doc.id)} />}
+                  {onBulkReview && ['review_required','validated'].includes(doc.status) && !needsOcrAnalysis(doc) && <input aria-label={`Seleccionar ${doc.originalFileName}`} type="checkbox" disabled={busy} checked={selected.has(doc.id)} onChange={()=>toggle(doc.id)} />}
                   <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -140,10 +141,10 @@ export default function OcrDocumentTable({
                         <Eye className="w-3.5 h-3.5" />
                       </a>
                     )}
-                    {(doc.status === 'pending' || doc.status === 'analysis_failed') && (
+                    {needsOcrAnalysis(doc) && (
                       <button
                         onClick={() => onProcessOcr(doc)}
-                        disabled={isProcessing}
+                        disabled={isProcessing || busy}
                         className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal disabled:opacity-50"
                         title="Procesar OCR"
                       >
@@ -162,6 +163,7 @@ export default function OcrDocumentTable({
                     )}
                   </div>
                 </div>
+                {doc.status === 'review_required' && needsOcrAnalysis(doc) && <p className="text-xs text-muted-foreground mt-1.5 pl-7">En revisión · Análisis OCR pendiente. Puedes analizarlo o revisarlo manualmente; todavía no es una factura contabilizada.</p>}
                 {doc.safeErrorMessage && (
                   <p className="text-xs text-red-500 mt-1.5 pl-7">{doc.safeErrorMessage}</p>
                 )}
@@ -184,3 +186,4 @@ export default function OcrDocumentTable({
     </div>
   );
 }
+
