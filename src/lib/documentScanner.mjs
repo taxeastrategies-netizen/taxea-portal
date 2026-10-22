@@ -156,10 +156,12 @@ function edgeEvidence(raw, f) {
         const xx = Math.round(x + nx * offset), yy = Math.round(y + ny * offset); if (xx < 1 || yy < 1 || xx >= w - 1 || yy >= h - 1) continue;
         const p = yy * w + xx, aligned = Math.abs(gx[p] * nx + gy[p] * ny); if (aligned / Math.max(1, mag[p]) > .72) best = Math.max(best, aligned);
       }
-      const ix = Math.round(x + nx * 4), iy = Math.round(y + ny * 4), ox = Math.round(x - nx * 4), oy = Math.round(y - ny * 4);
-      if (Math.min(ix, ox) < 0 || Math.max(ix, ox) >= w || Math.min(iy, oy) < 0 || Math.max(iy, oy) >= h) continue;
-      visible++; const lightDelta = gray[iy * w + ix] - gray[oy * w + ox], colourDelta = (f.chroma[iy * w + ix] - f.chroma[oy * w + ox]) * .7;
-      const delta = Math.abs(lightDelta) > Math.abs(colourDelta) ? lightDelta : colourDelta;
+      const ix = Math.round(x + nx * 7), iy = Math.round(y + ny * 7), ox = Math.round(x - nx * 7), oy = Math.round(y - ny * 7), ix2 = Math.round(x + nx * 11), iy2 = Math.round(y + ny * 11), ox2 = Math.round(x - nx * 11), oy2 = Math.round(y - ny * 11);
+      if (Math.min(ix2, ox2) < 0 || Math.max(ix2, ox2) >= w || Math.min(iy2, oy2) < 0 || Math.max(iy2, oy2) >= h) continue;
+      const step = (a, b) => { const light = gray[a] - gray[b], colour = (f.chroma[a] - f.chroma[b]) * .7; return Math.abs(light) > Math.abs(colour) ? light : colour; };
+      const d1 = step(iy * w + ix, oy * w + ox), d2 = step(iy2 * w + ix2, oy2 * w + ox2);
+      // A border is a sustained transition between surfaces, not a thin table rule.
+      visible++; const delta = d1 * d2 > 0 ? Math.sign(d1) * Math.min(Math.abs(d1), Math.abs(d2)) : 0;
       contrast += Math.abs(delta); polarity += delta > 3 ? 1 : delta < -3 ? -1 : 0;
       if (best > Math.max(10, f.high * .22)) covered++;
       strength += Math.min(1, best / 85);
@@ -338,7 +340,7 @@ export function enhancePixels(image, mode = 'enhance', strength = 70) {
     if (mode === 'bw') {
       const { mean, std } = stats(x, y), sauvola = mean * (1 + .18 * (std / 128 - 1));
       const threshold = Math.max(sauvola, mean - 13 - (1 - amount) * 12);
-      target = clamp((value - threshold) * (1.2 + amount * 2) + 180);
+      target = clamp((value - threshold) * (1.2 + amount * 2) + 210);
     } else {
       const near = (normalized[y * width + Math.max(0, x - 1)] + normalized[y * width + Math.min(width - 1, x + 1)] + normalized[Math.max(0, y - 1) * width + x] + normalized[Math.min(height - 1, y + 1) * width + x]) / 4;
       const detail = value - near;
