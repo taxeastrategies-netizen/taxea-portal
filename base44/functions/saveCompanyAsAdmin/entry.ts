@@ -55,7 +55,9 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true, company: saved, linkedUsers: matchingUsers.length });
   } catch (error) {
-    console.error('Error en saveCompanyAsAdmin:', error);
-    return Response.json({ error: error.message || 'Error interno' }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[saveCompanyAsAdmin]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo guardar la empresa. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
