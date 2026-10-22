@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import * as esbuild from 'esbuild';
 import React from 'react';
 import {renderToString} from 'react-dom/server';
-import {nativeSelectModel,selectText,filterPickerOptions,resetUncontrolledSelect} from '../src/lib/nativeSelect.mjs';
+import {nativeSelectModel,selectText,filterPickerOptions,resetUncontrolledSelect,syncNativeSelectDefaults} from '../src/lib/nativeSelect.mjs';
 import {suppressChromeGesture} from '../src/lib/appGestures.mjs';
 import {recordNavigation,safeBackTarget,referenceDestination} from '../src/lib/navigationStack.mjs';
 import {savePreference} from '../src/lib/optimisticPreference.mjs';
@@ -45,6 +45,8 @@ check(resetControl.value===''&&resetValue==='','A native reset cannot silently s
 await resetUncontrolledSelect('43000002',{current:resetControl},value=>{resetValue=value;});
 check(resetControl.value==='43000002'&&resetValue==='43000002','Nonempty defaults are preserved');
 await resetUncontrolledSelect('',{current:null},()=>{throw Error('Unmounted control must not update');});cases++;
+const nativeDefaults={tagName:'SELECT',value:'b',options:[{value:''},{value:'a'},{value:'b'}]};
+syncNativeSelectDefaults(nativeDefaults,'','b');check(nativeDefaults.options[0].defaultSelected&&!nativeDefaults.options[1].defaultSelected&&nativeDefaults.value==='b','Native reset defaults cannot fall back to the first customer');
 for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,true,false],[false,false,false]])check(suppressChromeGesture({closest:selector=>(selector.startsWith('input,')?protectedTarget:chromeTarget)?{}:null})===expected,'Chrome gesture suppression must preserve editable/copyable content');
 
 // Render actual shared Select with real React/server, not an invented DOM.
@@ -100,3 +102,4 @@ hookContext.module.exports.default(()=>{closes++;});const cleanups=lifecycle.map
 navigationListeners.get('taxea:navigation-committed')();check(closes===1,'Committed navigation closes an ephemeral portal');
 cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigation listener is removed on unmount');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
+
