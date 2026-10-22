@@ -66,4 +66,3 @@ Deno.serve(async(req)=>{
     return Response.json({error:'No se pudo completar la operación. Reintenta o facilita esta referencia a Taxea.',requestId},{status:Number(error?.status)===413?413:500});
   }
 });
-

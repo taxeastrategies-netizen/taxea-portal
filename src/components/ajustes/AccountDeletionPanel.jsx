@@ -30,4 +30,3 @@ export default function AccountDeletionPanel({user}){
     </DialogContent></Dialog>
   </section>;
 }
-

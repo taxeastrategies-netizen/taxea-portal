@@ -38,4 +38,3 @@ const desktop=render('/facturas',invoice,false);assert.equal(desktop,invoice);
 view=render('/ajustes',settings);assert.equal(sections(view).length,1,'Desktop transition clears the mobile cache');
 refs=[];view=render('/',{id:'other-scope'});assert.equal(sections(view).length,1,'New keyed scope has no previous screens');
 console.log('Mobile cache render contract: hidden mounted screens, frozen route locations, bounded cache, scroll restore, desktop and identity remount pass (hook doubles; browser QA separate).');
-

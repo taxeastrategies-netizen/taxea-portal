@@ -54,4 +54,3 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     {!id&&<section key={href}>{outlet}</section>}
   </>;
 }
-

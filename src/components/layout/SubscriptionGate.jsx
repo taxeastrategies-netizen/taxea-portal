@@ -14,4 +14,3 @@ export default function SubscriptionGate({subscription,isAdmin,required=true,chi
     </div>
   </div>;
 }
-

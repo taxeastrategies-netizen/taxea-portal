@@ -14,4 +14,3 @@ export default function usePageRefresh(refresh,paths){
     return ()=>window.removeEventListener('taxea:refresh',listener);
   },[key]);
 }
-

@@ -15,4 +15,3 @@ export default function AccountDeletionInfo(){return <main className="min-h-[100
   <p className="text-sm text-muted-foreground">No publiques documentos fiscales ni credenciales en formularios abiertos. Si no puedes acceder, el contacto de privacidad puede ayudarte a verificar tu identidad.</p>
   <Link to="/login" className="underline">Volver al acceso</Link>
 </article></main>;}
-

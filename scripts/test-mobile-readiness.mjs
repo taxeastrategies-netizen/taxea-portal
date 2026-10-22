@@ -79,4 +79,3 @@ check('refresh does not reload or mutate',()=>assert.ok(!/location\.reload|\.mut
 check('cache scope',()=>assert.match(layout,/props\.user\?\.id[\s\S]*props\.company\?\.id[\s\S]*MobileNavigationProvider key=\{scope\}/));
 check('password current required',()=>assert.match(security,/auth.changePassword\(\{userId:user.id,currentPassword:pwForm.current,newPassword:pwForm.nueva\}\)/));
 console.log(JSON.stringify({ok:true,cases,backendCallsAreMocked:true,realAccountsDeleted:0,externalCalls:0},null,2));
-

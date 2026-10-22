@@ -49,4 +49,3 @@ export default function usePullToRefresh(mainRef,pathname,enabled){
   },[enabled,mainRef,refresh]);
   return {refresh,busy,distance,message};
 }
-

@@ -8,4 +8,3 @@ for(const file of paths){
   if(before!==after)fs.writeFileSync(file,after);
 }
 console.log('Normalised EOF whitespace in task files only.');
-
