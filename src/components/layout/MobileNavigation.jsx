@@ -1,16 +1,16 @@
 import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition} from 'react';
 import {useLocation,useNavigate,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
-import {MOBILE_TABS,mobileTabId,internalHref,parentRoute} from '@/lib/mobileNavigation.mjs';
+import {MOBILE_TABS,MOBILE_MEDIA,mobileTabId,internalHref,parentRoute} from '@/lib/mobileNavigation.mjs';
 
 const NavigationContext=createContext(null);
 export function useMobileNavigation(){return useContext(NavigationContext);}
 export function MobileNavigationProvider({children}) {
   const location=useLocation(),navigate=useNavigate();
-  const [mobile,setMobile]=useState(()=>typeof window!=='undefined'&&window.matchMedia('(max-width: 767px)').matches);
+  const [mobile,setMobile]=useState(()=>typeof window!=='undefined'&&window.matchMedia(MOBILE_MEDIA).matches);
   const lastRoutes=useRef({});
   const [pending,startTransition]=useTransition();
   useEffect(()=>{
-    const media=window.matchMedia('(max-width: 767px)');
+    const media=window.matchMedia(MOBILE_MEDIA);
     const changed=()=>setMobile(media.matches);changed();
     media.addEventListener?.('change',changed);
     return ()=>media.removeEventListener?.('change',changed);
@@ -61,3 +61,4 @@ export function MobileScreenCache({context,enabled,mainRef}) {
     {!id&&<section className="taxea-mobile-screen" key={href}>{outlet}</section>}
   </>;
 }
+
