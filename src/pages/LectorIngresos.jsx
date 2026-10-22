@@ -12,7 +12,7 @@ import OcrReviewWorkspace from '@/components/lector/OcrReviewWorkspace';
 import { reviewableDocuments, nextAfterConfirmation } from '@/lib/ocrReviewQueue.mjs';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
-import { detectDeviceType, buildAuditEntry, appendAuditTrail, classifyUploadError, validateFile } from '@/lib/ocrUploadUtils';
+import { detectDeviceType, classifyUploadError, validateFile } from '@/lib/ocrUploadUtils';
 import { ocrIntake, needsOcrAnalysis } from '@/lib/ocrIntake.mjs';
 import { runBatch, debounce } from '@/lib/batchProcessor';
 
@@ -132,7 +132,7 @@ const OCR_SCHEMA = {
 };
 
 export default function LectorIngresos({ reviewPage = false }) {
-  const { company, user, isAdmin, loadingCompany } = useOutletContext() || {};
+  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
   const navigate = useNavigate();
   const location = useLocation();
   const selectedReviewId = new URLSearchParams(location.search).get('doc');
@@ -237,7 +237,7 @@ export default function LectorIngresos({ reviewPage = false }) {
       if (activeCompanyId.current !== companyId) return;
       setToast({ type: failed ? 'error' : 'success', message: failed
         ? (succeeded ? `Se han entregado ${succeeded} archivo(s) y ${failed} han fallado. Reintenta solo los fallidos.` : progress.find(item => item.error)?.error || 'No se pudo completar la entrega. Reintenta solo los fallidos.')
-        : `${succeeded} documento(s) en revisión. Los ya entregados no se vuelven a crear. No se han aprobado ni contabilizado.` });
+        : `${succeeded} archivo(s) entregados. Los nuevos están en Pendientes para analizar; los ya entregados conservan su estado. No se han aprobado ni contabilizado.` });
       loadDocs();
     } finally {
       uploadLock.current = false;
@@ -384,42 +384,36 @@ export default function LectorIngresos({ reviewPage = false }) {
     } finally {setValidating(false);}
   };
 
-  const handleReject = async (docId) => {
+  const handleDocumentAction = async (docId, action) => {
+    if (!company?.id || validating) return;
+    if (action === 'return_to_pending' && !window.confirm('¿Volver a pendientes y repetir el análisis OCR? Se reemplazarán los datos extraídos al analizar de nuevo. Se conserva el archivo original; no se crea ni elimina ninguna factura o asiento.')) return;
+    const companyId = company.id;
     setValidating(true);
+    setReviewError('');
     try {
-      const doc = documents.find(d => d.id === docId);
-      const now = new Date().toISOString();
-      await base44.entities.OcrInvoiceDocument.update(docId, {
-        status: 'rejected',
-        rejectedAt: now,
-        lastStatusChangedAt: now,
-        reviewedByAdminId: user?.id,
-        auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'rechazado', prevStatus: doc?.status, newStatus: 'rejected' })),
-      });
+      const result = await ocrIntake(base44, { action, companyId, docId });
+      if (activeCompanyId.current !== companyId) return;
       const followingId = reviewPage ? nextAfterConfirmation(documents, docId) : null;
-      setDocuments(rows => rows.map(row => row.id === docId ? { ...row, status: 'rejected' } : row));
+      setDocuments(rows => rows.map(row => row.id === docId ? { ...row, ...result.document } : row));
       setReviewing(null);
-      setReviewMessage('Documento rechazado. Puedes continuar con el siguiente.');
+      setBulkIds([]);
+      const message = action === 'reject' ? 'Documento movido a Rechazados. No se ha borrado el archivo.'
+        : action === 'return_to_pending' ? 'Documento devuelto a Pendientes. Pulsa Procesar OCR para repetir la extracción.'
+        : 'Documento retirado. Lo encontrarás en Rechazados.';
+      setReviewMessage(message);
+      setToast({ type: 'success', message });
       if (reviewPage) navigate(followingId ? `${reviewPath}?doc=${encodeURIComponent(followingId)}` : `${reviewPath}?done=1`, { replace: true });
       loadDocs();
     } catch (err) {
-      console.error('[LectorIngresos] Error al rechazar:', err);
-      setToast({ type: 'error', message: `Error al rechazar: ${err?.message || 'inténtalo de nuevo'}` });
-      setTimeout(() => setToast(null), 8000);
-    }
-    setValidating(false);
+      if (activeCompanyId.current !== companyId) return;
+      const message = err?.response?.data?.error || err?.message || 'No se pudo guardar el cambio. El documento conserva su estado anterior.';
+      setReviewError(message);
+      setToast({ type: 'error', message });
+    } finally { setValidating(false); }
   };
-
-  const handleWithdraw = async (docId) => {
-    const doc = documents.find(d => d.id === docId);
-    const now = new Date().toISOString();
-    await base44.entities.OcrInvoiceDocument.update(docId, {
-      status: 'cancelled_by_client',
-      lastStatusChangedAt: now,
-      auditTrail: appendAuditTrail(doc?.auditTrail, buildAuditEntry({ user, action: 'retirado_por_cliente', prevStatus: doc?.status, newStatus: 'cancelled_by_client' })),
-    });
-    loadDocs();
-  };
+  const handleReject = docId => handleDocumentAction(docId, 'reject');
+  const handleReturnToPending = docId => handleDocumentAction(docId, 'return_to_pending');
+  const handleWithdraw = docId => handleDocumentAction(docId, 'withdraw');
 
   if (loadingCompany) return <div className="p-12 text-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" /></div>;
   if (!company) return <NoCompanyState pageName="el Lector de Ingresos" />;
@@ -429,17 +423,17 @@ export default function LectorIngresos({ reviewPage = false }) {
   if (reviewPage) return (
     <OcrReviewWorkspace kind="emitidas" documents={documents} selectedId={selectedReviewId} loading={loading}
       busy={validating} message={reviewMessage} onNavigate={openReviewPage}
-      onExit={() => navigate('/tax-accounting/lector-ingresos')}>
+      onExit={() => { setReviewing(null); navigate('/tax-accounting/lector-ingresos'); }}>
       {reviewing && reviewing.id === selectedReviewId && <ReviewPanel key={reviewing.id} expanded
         doc={reviewing} fiscalContext={fiscalContext} error={reviewError} tipo="ingresos"
-        onApprove={handleValidate} onReject={handleReject}
+        onApprove={handleValidate} onReject={handleReject} onReturnToPending={handleReturnToPending}
         onCancel={() => navigate('/tax-accounting/lector-ingresos')} loading={validating}
         companyId={company?.id} fiscalActivities={fiscalContext.activities || []} />}
     </OcrReviewWorkspace>
   );
 
   return (
-    <div data-ocr-intake-version="1">
+    <div data-ocr-intake-version="2">
       <PageHeader title="Lector de Ingresos" subtitle="Entrega de facturas emitidas · Taxea revisa y contabiliza">
         <Button variant="outline" onClick={() => setShowDuplicateCheck(true)} className="h-9 gap-2">
           <CopyCheck className="w-4 h-4" /> Chequeo duplicado
@@ -456,7 +450,7 @@ export default function LectorIngresos({ reviewPage = false }) {
           <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-blue-900">Entrega tus facturas de ingreso aqui</p>
-            <p className="text-xs text-blue-700 mt-0.5">Escanea, arrastra o selecciona archivos: quedan en revisión. El análisis OCR y la aprobación contable se realizan después.</p>
+            <p className="text-xs text-blue-700 mt-0.5">Escanea, arrastra o selecciona archivos: quedan en Pendientes. Al procesar el OCR se extraen los datos y pasan a En revisión. Solo al confirmar se contabilizan.</p>
           </div>
         </div>
       )}
@@ -520,6 +514,7 @@ export default function LectorIngresos({ reviewPage = false }) {
             tipo="ingresos"
             onApprove={handleValidate}
             onReject={handleReject}
+            onReturnToPending={handleReturnToPending}
             onCancel={() => {setReviewing(null);setBulkIds([]);}}
             loading={validating}
             companyId={company?.id}
@@ -543,6 +538,7 @@ export default function LectorIngresos({ reviewPage = false }) {
         onBulkReview={ids=>{setBulkIds(ids);setBulkProgress(null);setReviewing(null);setReviewError('');}}
         busy={validating}
         onWithdraw={handleWithdraw}
+        onReturnToPending={handleReturnToPending}
         processingIds={processingIds}
         emptyMessage="Todavia no hay facturas de ingreso entregadas en este apartado."
       />
@@ -557,4 +553,5 @@ export default function LectorIngresos({ reviewPage = false }) {
     </div>
   );
 }
+
 
