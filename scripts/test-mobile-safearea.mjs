@@ -40,4 +40,3 @@ assert.equal(complete.updated.length,19);assert.equal(persisted,19);assert.ok(ma
 const empty=await markNotificationReads({rows:[],ids:['outside'],persist(){throw new Error('Foreign row cannot be persisted');},optimistic(){throw new Error('Empty operation');},rollback(){}});
 assert.deepEqual(empty,{updated:[],failed:[]});
 console.log('Viewport + CSS single-inset ownership + portrait/landscape collision arithmetic + safe menu contracts + immediate notification read/partial rollback/deduplication/bounded batches pass. No external calls; nonzero physical device insets still require iPhone QA.');
-
