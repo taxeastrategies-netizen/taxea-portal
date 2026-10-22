@@ -44,16 +44,12 @@ for(const [protectedTarget,chromeTarget,expected] of [[false,true,true],[true,tr
 const built=await esbuild.build({entryPoints:['src/components/ui/select.jsx'],bundle:true,write:false,format:'cjs',platform:'node',mainFields:['module','main'],external:['react','react-dom','react/jsx-runtime'],jsx:'automatic',alias:{'@':process.cwd()+'/src'},plugins:[{name:'server-render-adapters',setup(build){
   build.onResolve({filter:/useMobileViewport(?:\.js)?$/},()=>({path:'viewport',namespace:'qa-viewport'}));
   build.onLoad({filter:/.*/,namespace:'qa-viewport'},()=>({contents:'export default ()=>globalThis.__mobile;',loader:'js'}));
-  // Vaul is browser-only (window.self at module scope). This test covers the
-  // real closed trigger, not drawer gestures/focus; those require browser QA.
-  build.onResolve({filter:/[\\/]drawer(?:\.jsx)?$/},()=>({path:'drawer',namespace:'qa-drawer'}));
-  build.onLoad({filter:/.*/,namespace:'qa-drawer'},()=>({contents:'export const Drawer=({children})=>children;export const DrawerTrigger=Drawer,DrawerContent=Drawer,DrawerTitle=Drawer,DrawerDescription=Drawer,DrawerClose=Drawer;',loader:'js'}));
 }}]});
 const exported={};
 // Keep the real server environment free of a fake DOM; only the media-query
-// hook and browser-only drawer shell are adapted. React and Select are real.
+// hook is adapted. React, Select and the closed drawer shell remain real.
 const sandbox={exports:exported,module:{exports:exported},require:createRequire(import.meta.url),__mobile:true,console};
-try{vm.runInNewContext(built.outputFiles[0].text,sandbox);}catch(error){const code=built.outputFiles[0].text,at=code.indexOf('window.self');console.error(code.slice(code.lastIndexOf('\n// ',at),at+80));throw error;}
+vm.runInNewContext(built.outputFiles[0].text,sandbox);
 const ui=sandbox.module.exports,e=React.createElement;
 const createSelect=extra=>e(ui.Select,{value:'b',name:'account',onValueChange(){},...extra},e(ui.SelectTrigger,{'aria-label':'Estado',id:'qa-selector'},e(ui.SelectValue,{placeholder:'Selecciona'})),e(ui.SelectContent,null,e(ui.SelectGroup,null,e(ui.SelectLabel,null,'Grupo'),e(ui.SelectItem,{value:'a'},'Primera'),e(ui.SelectItem,{value:'b'},'Segunda'),e(ui.SelectItem,{value:'c',disabled:true},'Inactiva'))));
 const native=renderToString(createSelect());
@@ -87,5 +83,5 @@ const toastSource=fs.readFileSync('src/components/ui/toast.jsx','utf8');
 check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixed/.test(toastSource),'Provider cannot create a transparent fixed hit-test layer');
 check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
 check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
-console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,drawerSsrAdapter:true,externalCalls:0,financialWrites:0},null,2));
+console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
 
