@@ -142,7 +142,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             </div>
           ) : (
             // Sin PDF: mostrar los datos guardados, independientemente de su origen
-            <div className="bg-card rounded-lg shadow-lg p-8 w-full max-w-lg">
+            <div data-selectable="true" className="bg-card rounded-lg shadow-lg p-8 w-full max-w-lg">
               <div className="flex items-center gap-2 mb-6">
                 <FileText className="w-5 h-5 text-muted-foreground" />
                 <h3 className="text-base font-semibold text-foreground">Datos de la factura recibida</h3>
@@ -175,7 +175,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
           <div
             style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', width: '100%', maxWidth: '680px' }}
             className="transition-transform duration-150">
-            <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div data-selectable="true" className="bg-white rounded-lg shadow-lg overflow-hidden">
               <InvoiceVisualRender invoice={invoice} company={company} fmt={fmt} fmtDate={fmtDate} />
             </div>
           </div>
@@ -544,3 +544,4 @@ export default function InvoiceDocumentWorkspace({
     </FullscreenWorkspace>
   );
 }
+
