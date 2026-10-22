@@ -216,9 +216,18 @@
 .taxea-drawer-content { max-height:calc(100dvh - var(--taxea-safe-top) - 1rem); padding-bottom:var(--taxea-safe-bottom); padding-left:var(--taxea-safe-left); padding-right:var(--taxea-safe-right); }
 .taxea-mobile-picker { height:min(80dvh,40rem); margin-top:0; border-radius:1.5rem 1.5rem 0 0; }
 .taxea-future-shell { touch-action:manipulation; }
+html.taxea-shell-document { height:100%; overflow:hidden; overscroll-behavior:none; }
+body.taxea-shell-document { position:fixed; inset:0; width:100%; height:100%; overflow:hidden; overscroll-behavior:none; }
+body.taxea-shell-document #root { height:100%; overflow:hidden; }
+body.taxea-shell-document .taxea-future-main { overscroll-behavior-y:none; }
+.taxea-mobile-picker, .taxea-action-menu { touch-action:manipulation; -webkit-touch-callout:none; }
+.taxea-mobile-picker { -webkit-user-select:none; user-select:none; }
 @media (max-width:767px), (hover:none) and (pointer:coarse) {
   .taxea-future-shell :is(button,[role="button"],[role="tab"],[role="switch"]) { min-width:44px; min-height:44px; }
   .taxea-checkbox-target { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; cursor:pointer; }
+  [data-radix-popper-content-wrapper]:has(>.taxea-action-menu) { position:fixed!important; transform:none!important; top:auto!important; left:max(.75rem,var(--taxea-safe-left))!important; right:max(.75rem,var(--taxea-safe-right))!important; bottom:calc(.75rem + var(--taxea-safe-bottom))!important; width:auto!important; min-width:0!important; max-width:calc(100vw - 1.5rem - var(--taxea-safe-left) - var(--taxea-safe-right))!important; z-index:60!important; }
+  .taxea-action-menu { width:100%!important; max-width:100%!important; max-height:calc(85dvh - var(--taxea-safe-top) - var(--taxea-safe-bottom)); border-radius:1.25rem; padding:.5rem; overflow-y:auto; overscroll-behavior:none; }
+  .taxea-action-menu [role="menuitem"], .taxea-action-menu [role="menuitemcheckbox"], .taxea-action-menu [role="menuitemradio"] { min-height:44px; border-radius:.75rem; }
 }
 .taxea-native-select select { -webkit-appearance:none; appearance:none; }
 .taxea-toast-viewport { top:calc(var(--taxea-safe-top) + 4rem); right:var(--taxea-safe-right); max-height:calc(100dvh - var(--taxea-safe-top) - var(--taxea-safe-bottom) - 9rem); pointer-events:none; }
@@ -286,3 +295,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
