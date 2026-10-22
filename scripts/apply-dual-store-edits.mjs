@@ -1,5 +1,11 @@
 import fs from 'node:fs';
 const changes={
+  'src/index.css':[
+    ['@tailwind base;',"@import './styles/fullscreen-workspace.css';\n\n@tailwind base;"],
+  ],
+  'scripts/test-mobile-ux-final.mjs':[
+    ["await import('./test-native-select.mjs');","await import('./test-native-select.mjs');\nawait import('./test-fullscreen-workspace.mjs');"],
+  ],
   'src/components/layout/TopBar.jsx':[
     ['taxea-mobile-back md:hidden min-w-11','taxea-mobile-back min-w-11'],
   ],
