@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Lock } from 'lucide-react';
+import { Lock, RefreshCw } from 'lucide-react';
+import {MobileNavigationProvider,MobileScreenCache,useMobileNavigation} from './MobileNavigation';
+import usePullToRefresh from './usePullToRefresh';
 import { Button } from '@/components/ui/button';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
@@ -12,13 +14,17 @@ import { getImpersonation } from '@/lib/impersonation';
 import SubscriptionGate from './SubscriptionGate';
 import FutureBackdrop from './FutureBackdrop';
 
-export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
+function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const trackedRef = useRef(false);
   const impersonation = getImpersonation();
+  const mainRef=useRef(null);
+  const navigation=useMobileNavigation();
+  const refresh=usePullToRefresh(mainRef,location.pathname,navigation?.mobile);
+  const outletContext={user,company,isAdmin,isSuperAdmin,userRole,loadingCompany,refreshCompany,subscription};
 
   useEffect(() => {
     if (!user?.id || isAdmin) return;
@@ -95,8 +101,14 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
             user={user}
             companyName={company?.nombre_comercial || company?.razon_social}
             isAdmin={isAdmin}
+            onRefresh={refresh.refresh}
+            refreshing={refresh.busy}
           />
-          <main className="taxea-future-main flex-1 overflow-y-auto">
+          <main ref={mainRef} className="taxea-future-main flex-1 overflow-y-auto overscroll-y-contain" aria-busy={refresh.busy}>
+            <div className="sticky top-0 z-20 h-0 pointer-events-none flex justify-center" aria-hidden={refresh.distance===0&&!refresh.busy}>
+              {(refresh.distance>0||refresh.busy)&&<div className="bg-card border border-border rounded-full shadow-lg px-4 py-2 flex items-center gap-2 text-xs" style={{transform:`translateY(${refresh.busy?12:Math.max(0,refresh.distance-20)}px)`}}><RefreshCw className={`w-4 h-4 ${refresh.busy?'animate-spin motion-reduce:animate-none':''}`}/>{refresh.busy?'Actualizando…':refresh.distance>=58?'Suelta para actualizar':'Desliza para actualizar'}</div>}
+            </div>
+            <p role="status" aria-live="polite" className={refresh.message&&!refresh.busy?'text-center text-xs text-muted-foreground px-4 py-2 bg-card/90':'sr-only'}>{refresh.message}</p>
             {isPortalLocked && !isOnLockedPath ? (
               <div className="flex items-center justify-center min-h-[60vh] p-6">
                 <div className="text-center max-w-md">
@@ -112,25 +124,11 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
                   </Button>
                 </div>
               </div>
-            ) : isDeptPage ? (
-              <div className="p-4 pb-20 lg:p-6 lg:pb-6">
-                {needsGate ? (
-                  <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
-                    <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
-                  </SubscriptionGate>
-                ) : (
-                  <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
-                )}
-              </div>
             ) : (
-              <div className="p-4 pb-20 lg:p-6 lg:pb-6 max-w-[1400px] mx-auto">
-                {needsGate ? (
-                  <SubscriptionGate subscription={subscription} isAdmin={isAdmin}>
-                    <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
-                  </SubscriptionGate>
-                ) : (
-                  <Outlet context={{ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany, subscription }} />
-                )}
+              <div className={`p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 lg:p-6 ${isDeptPage?'':'max-w-[1400px] mx-auto'}`}>
+                <SubscriptionGate required={needsGate} subscription={subscription} isAdmin={isAdmin}>
+                  <MobileScreenCache context={outletContext} enabled={navigation?.mobile&&!impersonation&&!isAdmin} mainRef={mainRef}/>
+                </SubscriptionGate>
               </div>
             )}
           </main>
@@ -141,3 +139,9 @@ export default function AppLayout({ user, company, isAdmin, isSuperAdmin, userRo
     </div>
   );
 }
+
+export default function AppLayout(props){
+  const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
+  return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
+}
+
