@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2, MinusCircle } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2, MinusCircle, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import OcrFiscalFields from './OcrFiscalFields';
+import { canReturnOcrToPending, canRejectOcrDocument } from '@/lib/ocrIntake.mjs';
 
-export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '', expanded = false }) {
+export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnToPending, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '', expanded = false }) {
   const [form, setForm] = useState(() => ({ ...doc.formData, fiscal_activity_id: doc.formData?.fiscal_activity_id || (fiscalActivities.length === 1 ? fiscalActivities[0].id : '') }));
   const [zoom, setZoom] = useState(1);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
@@ -25,8 +26,12 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onCancel, 
           <p className="font-jakarta font-semibold text-foreground text-sm">{doc.file?.name || 'Documento'}</p>
           <p className="text-xs text-muted-foreground">{bulkCount ? `Criterio común para ${bulkCount} documentos · los importes individuales no se cambian` : 'Una aprobación: factura, libro y asiento contable'}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={loading || doc.invoiceOnly || bulkCount > 0} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
+        <div className="flex flex-wrap items-center gap-2">
+          {onReturnToPending && canReturnOcrToPending(doc) && !bulkCount && <Button size="sm" variant="outline" disabled={loading}
+            className="h-8 gap-1 text-xs" onClick={() => onReturnToPending(doc.id)}>
+            <Undo2 className="w-3.5 h-3.5" /> Volver a pendientes
+          </Button>}
+          <Button size="sm" variant="outline" disabled={loading || !canRejectOcrDocument(doc) || bulkCount > 0} title={canRejectOcrDocument(doc) ? 'Mover a Rechazados sin borrar el archivo' : 'La factura ya creada debe corregirse desde su libro, no rechazarse desde el OCR'} className="h-8 gap-1 text-xs border-red-200 text-red-600 hover:bg-red-50" onClick={() => onReject(doc.id)}>
             <XCircle className="w-3.5 h-3.5" /> {loading ? 'Procesando...' : 'Rechazar'}
           </Button>
           <Button size="sm" disabled={loading || !!invalidManualAccount || missingFiscalActivity} className="h-8 gap-1 text-xs bg-green-600 hover:bg-green-700" onClick={() => onApprove(doc.id, form)}>
@@ -264,3 +269,4 @@ function F({ label, children, col2 = false }) {
     </div>
   );
 }
+
