@@ -6,7 +6,7 @@ import {filterPickerOptions} from '@/lib/nativeSelect.mjs';
 export default function MobileSelectPicker({picker}){
   const [query,setQuery]=useState(''),[limit,setLimit]=useState(150),title=useRef(null);
   const options=useMemo(()=>filterPickerOptions(picker.options,query),[picker.options,query]);
-  return <DrawerContent id={picker.contentId} className="taxea-mobile-picker" onOpenAutoFocus={event=>{event.preventDefault();title.current?.focus({preventScroll:true});}}>
+  return <DrawerContent id={picker.contentId} className="taxea-mobile-picker" onOpenAutoFocus={event=>{event.preventDefault();title.current?.focus({preventScroll:true});}} onCloseAutoFocus={event=>{event.preventDefault();const trigger=picker.triggerRef?.current;if(trigger&&!trigger.closest('[hidden]'))trigger.focus({preventScroll:true});}}>
     <div className="flex items-start justify-between gap-3 px-4 py-3">
       <div><DrawerTitle ref={title} tabIndex={-1} className="outline-none">{picker.placeholder||'Seleccionar opción'}</DrawerTitle><DrawerDescription>Busca y selecciona una opción. Se conserva el valor si cierras sin elegir.</DrawerDescription></div>
       <DrawerClose aria-label="Cerrar selector" className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-border"><X aria-hidden="true" className="h-5 w-5"/></DrawerClose>
@@ -22,3 +22,4 @@ export default function MobileSelectPicker({picker}){
     </div>
   </DrawerContent>;
 }
+
