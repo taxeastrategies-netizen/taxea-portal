@@ -1,0 +1,74 @@
+{
+  "name": "AccountDeletionRequest",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "requested",
+        "reviewing",
+        "completed"
+      ],
+      "default": "requested"
+    },
+    "reference": {
+      "type": "string"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "due_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_by": {
+      "type": "string"
+    },
+    "retention_notes": {
+      "type": "string"
+    },
+    "completion_evidence": {
+      "type": "string"
+    },
+    "data_cleanup_confirmed": {
+      "type": "boolean"
+    },
+    "oauth_cleanup_confirmed": {
+      "type": "boolean"
+    },
+    "billing_review_confirmed": {
+      "type": "boolean"
+    },
+    "confirmation_sent": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "user_id",
+    "email",
+    "status",
+    "reference",
+    "requested_at",
+    "due_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
