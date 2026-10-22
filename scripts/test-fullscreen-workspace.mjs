@@ -35,7 +35,7 @@ assert.match(fs.readFileSync('src/components/facturas/InvoiceDocumentWorkspace.j
 function canonical(node){
   if(Array.isArray(node))return node.map(canonical).filter(Boolean);
   if(!node||typeof node!=='object')return node;
-  if(node.type==='JSXAttribute'&&['className','type','aria-label'].includes(node.name.name))return null;
+  if(node.type==='JSXAttribute'&&(['className','aria-label'].includes(node.name.name)||(node.name.name==='type'&&node.value?.value==='button')))return null;
   const result={};for(const [key,value] of Object.entries(node)){if(['start','end','loc','extra','leadingComments','trailingComments','innerComments','comments','tokens'].includes(key))continue;result[key]=canonical(value);}return result;
 }
 const sendFile='src/components/facturas/SendInvoiceDocumentModal.jsx';
