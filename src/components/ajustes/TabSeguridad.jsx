@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Shield, Lock, Monitor, LogOut, CheckCircle, AlertCircle, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Shield, Lock, Monitor, LogOut, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import {Link} from 'react-router-dom';
+import AccountDeletionPanel from './AccountDeletionPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
 
 export default function TabSeguridad({ user }) {
@@ -11,10 +12,6 @@ export default function TabSeguridad({ user }) {
   const [showPw, setShowPw] = useState({ current: false, nueva: false });
   const [pwStatus, setPwStatus] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState(null);
 
   const handleChangePassword = async () => {
     if (pwForm.nueva !== pwForm.confirm) { setPwStatus('mismatch'); return; }
@@ -22,7 +19,7 @@ export default function TabSeguridad({ user }) {
     setSaving(true);
     setPwStatus(null);
     try {
-      await base44.auth.updateMe({ password: pwForm.nueva });
+      await base44.auth.changePassword({userId:user.id,currentPassword:pwForm.current,newPassword:pwForm.nueva});
       setPwStatus('success');
       setPwForm({ current: '', nueva: '', confirm: '' });
     } catch { setPwStatus('error'); }
@@ -31,23 +28,6 @@ export default function TabSeguridad({ user }) {
 
   const handleLogout = () => base44.auth.logout('/login');
 
-  const handleDeleteAccount = async () => {
-    if (deleteConfirm !== 'ELIMINAR') {
-      setDeleteError('Debes escribir ELIMINAR para confirmar');
-      return;
-    }
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await base44.auth.updateMe({ is_deleted: true, status: 'eliminado' });
-      setDeleteOpen(false);
-      base44.auth.logout('/login');
-    } catch (err) {
-      setDeleteError(err.message || 'Error al eliminar la cuenta');
-    } finally {
-      setDeleting(false);
-    }
-  };
 
   return (
     <div className="space-y-5">
@@ -61,6 +41,7 @@ export default function TabSeguridad({ user }) {
           </div>
         </div>
         <div className="space-y-3 max-w-sm">
+          <div className="space-y-1.5"><Label htmlFor="current-password">Contraseña actual</Label><Input id="current-password" type="password" autoComplete="current-password" value={pwForm.current} onChange={e=>setPwForm(p=>({...p,current:e.target.value}))}/></div>
           <div className="space-y-1.5">
             <Label>Nueva contraseña</Label>
             <div className="relative">
@@ -78,7 +59,7 @@ export default function TabSeguridad({ user }) {
           {pwStatus === 'short' && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />Mínimo 8 caracteres</p>}
           {pwStatus === 'success' && <p className="text-xs text-green-600 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Contraseña actualizada</p>}
           {pwStatus === 'error' && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="w-3 h-3" />Error al cambiar la contraseña</p>}
-          <Button onClick={handleChangePassword} disabled={saving || !pwForm.nueva || !pwForm.confirm} size="sm" className="bg-teal hover:bg-teal-dark">
+          <Button onClick={handleChangePassword} disabled={saving || !pwForm.current || !pwForm.nueva || !pwForm.confirm} size="sm" className="bg-teal hover:bg-teal-dark">
             {saving ? 'Guardando...' : 'Actualizar contraseña'}
           </Button>
         </div>
@@ -123,50 +104,12 @@ export default function TabSeguridad({ user }) {
       {/* Privacidad */}
       <div className="bg-secondary/30 border border-border rounded-xl p-5">
         <p className="text-sm font-medium text-foreground mb-1">🔒 Privacidad y RGPD</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">Todos tus datos son privados y confidenciales. Solo tú y tu asesor de Taxea Strategies tienen acceso. Portal en cumplimiento con el RGPD y la LOPDGDD.</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">Puedes gestionar aquí el acceso a tu cuenta e iniciar su eliminación. La documentación fiscal sujeta a conservación se trata por separado. Para consultas de privacidad: taxeastrategies@gmail.com.</p>
       </div>
 
-      {/* Zona de peligro — Eliminar cuenta */}
-      <div className="bg-card border border-destructive/30 rounded-xl shadow-card p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 bg-destructive/10 rounded-lg flex items-center justify-center"><Trash2 className="w-4 h-4 text-destructive" /></div>
-          <div>
-            <h2 className="font-jakarta font-semibold text-foreground">Eliminar cuenta</h2>
-            <p className="text-xs text-muted-foreground">Esta acción es irreversible</p>
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          Al eliminar tu cuenta, se marcará como eliminada y perderás acceso al portal. Tus datos fiscales y contables serán conservados según las obligaciones legales. Esta acción no se puede deshacer.
-        </p>
-        <Button variant="outline" size="sm" className="gap-2 text-destructive border-destructive/40 hover:bg-destructive/5" onClick={() => { setDeleteOpen(true); setDeleteConfirm(''); setDeleteError(null); }}>
-          <Trash2 className="w-3.5 h-3.5" /> Eliminar mi cuenta
-        </Button>
-      </div>
-
-      {/* Modal de confirmación */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-destructive">Eliminar cuenta</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Estás a punto de eliminar tu cuenta de Taxea Strategies. Esta acción es <strong className="text-foreground">irreversible</strong>.
-            </p>
-            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3">
-              <p className="text-xs text-muted-foreground mb-2">Para confirmar, escribe <strong className="text-destructive">ELIMINAR</strong> en el campo:</p>
-              <Input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="ELIMINAR" />
-            </div>
-            {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleting || deleteConfirm !== 'ELIMINAR'}>
-              {deleting ? 'Eliminando...' : 'Eliminar cuenta'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AccountDeletionPanel user={user}/>
+      {['admin','super_admin'].includes(user?.role)&&<Link to="/admin/privacy-requests" className="inline-flex min-h-11 items-center text-sm underline">Administrar solicitudes de eliminación</Link>}
     </div>
   );
 }
+
