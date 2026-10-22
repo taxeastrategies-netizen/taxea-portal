@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {QueryClient,MutationObserver} from '@tanstack/react-query';
 import {notificationReadOptions} from '../src/lib/notificationMutation.mjs';
+import {suggestionCreateOptions} from '../src/lib/suggestionMutation.mjs';
+import {allowsCopyText,getCopyTextMode,setCopyTextMode} from '../src/lib/copyTextPreference.mjs';
 import * as esbuild from 'esbuild';
 import vm from 'node:vm';
 
@@ -32,6 +34,32 @@ const none=await duplicateObserver.mutate({rows:[],ids:['not-owned']});
 assert.deepEqual(none,{updated:[],failed:[]});assert.equal(duplicates,1);
 observer.reset();fatal.reset();duplicateObserver.reset();client.clear();
 
+const feedbackClient=new QueryClient(),feedbackKey=['my-suggestions','qa-only'];
+feedbackClient.setQueryData(feedbackKey,[{id:'older-fictitious',titulo:'Anterior'}]);
+let releaseFeedback,feedbackStarted,primaryCalls=0;
+const feedbackGate=new Promise(resolve=>{releaseFeedback=resolve;}),feedbackBegan=new Promise(resolve=>{feedbackStarted=resolve;});
+const feedbackOptions=suggestionCreateOptions({queryClient:feedbackClient,queryKey:feedbackKey,persist:async payload=>{primaryCalls++;feedbackStarted();await feedbackGate;return {...payload,id:'confirmed-fictitious'};}});
+const feedbackObserver=new MutationObserver(feedbackClient,feedbackOptions),variables={payload:{titulo:'QA ficticia',descripcion:'Sin destinatarios reales'},tempId:'pending-qa',createdAt:'2026-10-22T00:00:00Z'};
+const feedbackPending=feedbackObserver.mutate(variables);await feedbackBegan;
+assert.equal(feedbackClient.getQueryData(feedbackKey)[0].id,'pending-qa');
+assert.equal(feedbackClient.getQueryData(feedbackKey)[0].estado,'enviando');
+assert.equal(feedbackClient.getQueryData(feedbackKey)[0]._optimistic,true,'An optimistic addition is visibly provisional');
+releaseFeedback();await feedbackPending;
+assert.equal(primaryCalls,1);assert.equal(feedbackClient.getQueryData(feedbackKey)[0].id,'confirmed-fictitious');
+assert.ok(!feedbackClient.getQueryData(feedbackKey).some(row=>row._optimistic));
+const confirmedFeedback=feedbackClient.getQueryData(feedbackKey);
+let failedCreates=0;
+const rejectedFeedback=new MutationObserver(feedbackClient,suggestionCreateOptions({queryClient:feedbackClient,queryKey:feedbackKey,persist:async()=>{failedCreates++;throw Error('Synthetic rejected create');}}));
+await assert.rejects(rejectedFeedback.mutate({...variables,tempId:'pending-rejected'}));
+assert.equal(failedCreates,1,'No automatic retries can duplicate a submitted suggestion');
+assert.deepEqual(feedbackClient.getQueryData(feedbackKey),confirmedFeedback,'Only the provisional card is removed on failure');
+const noConfirmation=new MutationObserver(feedbackClient,suggestionCreateOptions({queryClient:feedbackClient,queryKey:feedbackKey,persist:async()=>({})}));
+await assert.rejects(noConfirmation.mutate({...variables,tempId:'pending-no-id'}));
+assert.deepEqual(feedbackClient.getQueryData(feedbackKey),confirmedFeedback,'A response without an ID cannot be shown as registered');
+feedbackObserver.reset();rejectedFeedback.reset();noConfirmation.reset();feedbackClient.clear();
+assert.equal(allowsCopyText('auto',true),false);assert.equal(allowsCopyText('auto',false),true);assert.equal(allowsCopyText('allow',true),true);assert.equal(allowsCopyText('deny',false),false);
+assert.equal(setCopyTextMode('allow'),false,'Unavailable storage retains an honest session-only preference');assert.equal(getCopyTextMode(),'allow');setCopyTextMode('auto');
+
 // Execute the shell-only scroll-lock effect with DOM class-list adapters.
 const effects=[],classes=[new Set(),new Set()];
 const node=index=>({classList:{add:value=>classes[index].add(value),remove:value=>classes[index].delete(value)}});
@@ -40,4 +68,5 @@ const exported={},context={exports:exported,module:{exports:exported},__effect:e
 vm.runInNewContext(built.outputFiles[0].text,context);context.module.exports.default();
 const cleanup=effects[0]();assert.ok(classes.every(set=>set.has('taxea-shell-document')));
 cleanup();assert.ok(classes.every(set=>!set.has('taxea-shell-document')),'Public pages regain document scrolling on shell unmount');
-console.log(JSON.stringify({ok:true,actualTanstackMutationObserver:true,optimisticBeforeNetwork:true,partialRollback:true,errorRollback:true,deduplicated:true,scopeIsolation:true,shellScrollCleanup:true,externalCalls:0,financialWrites:0},null,2));
+console.log(JSON.stringify({ok:true,actualTanstackMutationObserver:true,optimisticBeforeNetwork:true,partialRollback:true,errorRollback:true,deduplicated:true,scopeIsolation:true,shellScrollCleanup:true,provisionalSuggestionAdded:true,suggestionRollback:true,noAutoCreateRetry:true,noConfirmationNoSuccess:true,copyPreference:true,externalCalls:0,financialWrites:0},null,2));
+
