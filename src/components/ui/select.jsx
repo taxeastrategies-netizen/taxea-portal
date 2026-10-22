@@ -7,7 +7,7 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useMobileViewport from '@/hooks/useMobileViewport';
-import {nativeSelectModel} from '@/lib/nativeSelect.mjs';
+import {nativeSelectModel,resetUncontrolledSelect} from '@/lib/nativeSelect.mjs';
 import {Drawer} from './drawer';
 import MobileSelectPicker from './MobileSelectPicker';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
@@ -31,7 +31,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   React.useEffect(()=>{
     if(!uncontrolled)return;
     const form=props.form?document.getElementById(props.form):triggerRef.current?.closest('form');
-    const reset=()=>setLocalValue(defaultValue??'');
+    const reset=()=>{void resetUncontrolledSelect(defaultValue,triggerRef,setLocalValue);};
     form?.addEventListener('reset',reset);return()=>form?.removeEventListener('reset',reset);
   },[uncontrolled,defaultValue,props.form]);
   const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
@@ -183,3 +183,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
