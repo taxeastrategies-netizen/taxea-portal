@@ -38,6 +38,7 @@ const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) 
         aria-label={props['aria-label']||(!props['aria-labelledby']?native.placeholder||'Seleccionar opción':undefined)}
         name={native.name} required={native.required} disabled={native.disabled||props.disabled} dir={native.dir} value={native.value??''} onChange={event=>native.change(event.target.value)}>
         <option value="" disabled hidden>{native.placeholder||'Selecciona una opción'}</option>
+        {native.value&&!native.options.some(entry=>entry.value===String(native.value))&&<option value={native.value} disabled>{native.value} · no disponible</option>}
         {groups.map(group=>group?<optgroup key={group} label={group}>{native.options.filter(entry=>entry.group===group).map(option)}</optgroup>:native.options.filter(entry=>!entry.group).map(option))}
       </select>
       <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/>
