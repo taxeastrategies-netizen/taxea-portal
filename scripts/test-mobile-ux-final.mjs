@@ -65,4 +65,9 @@ const css=fs.readFileSync('src/index.css','utf8'),page=fs.readFileSync('src/comp
 check(css.includes('touch-action:manipulation')&&css.includes('user-select:text'),'Controls suppress accidental gestures without blocking copy/zoom');
 check(!/preventDefault/.test(page)&&!/<motion.div[^>]+key=/.test(page),'Transition cannot remount forms or suppress gestures');
 check(page.includes('useReducedMotion')&&page.includes("navigation.direction==='back'"),'Transitions respect motion preference and POP direction');
+const toastSource=fs.readFileSync('src/components/ui/toast.jsx','utf8');
+check(toastSource.includes('ToastPrimitive.Provider')&&!/ToastProvider[^\n]+fixed/.test(toastSource),'Provider cannot create a transparent fixed hit-test layer');
+check(toastSource.includes('pointer-events-none')&&toastSource.includes('pointer-events-auto'),'Empty toast viewport passes taps while actual messages remain interactive');
+check(toastSource.includes('ToastPrimitive.Close')&&toastSource.includes('ToastPrimitive.Root'),'Toast lifecycle, swipe and dismiss use the accessible primitive');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,externalCalls:0,financialWrites:0},null,2));
+
