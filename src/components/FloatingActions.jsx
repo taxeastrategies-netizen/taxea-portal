@@ -15,16 +15,17 @@ export default function FloatingActions() {
   const navigate = useNavigate();
 
   return (
-    <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 flex flex-col items-end gap-3 safe-area-pb">
+    <div className="taxea-floating-actions fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 flex flex-col items-end gap-3">
       {open && (
         <div className="flex flex-col items-end gap-2 animate-fade-in">
           {actions.map((action) => (
             <button
               key={action.path}
+              aria-label={action.label}
               onClick={() => { navigate(action.path); setOpen(false); }}
               className="flex items-center gap-3 group"
             >
-              <span className="bg-card shadow-card text-sm font-medium text-foreground px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+              <span className="bg-card shadow-card text-sm font-medium text-foreground px-3 py-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 md:group-focus-visible:opacity-100 transition-opacity whitespace-nowrap">
                 {action.label}
               </span>
               <div className={cn(
@@ -38,6 +39,8 @@ export default function FloatingActions() {
         </div>
       )}
       <button
+        aria-label={open?'Cerrar acciones rápidas':'Abrir acciones rápidas'}
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         className={cn(
           "w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300",
@@ -50,3 +53,4 @@ export default function FloatingActions() {
     </div>
   );
 }
+
