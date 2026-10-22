@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import postcss from 'postcss';
+import {execFileSync} from 'node:child_process';
+import {parse} from '@babel/parser';
 import {focusableWorkspaceControls,topmostDismissibleLayer} from '../src/lib/fullscreenNavigation.mjs';
 
 const controls=[
@@ -28,5 +30,17 @@ assert.match(fullscreen,/!root.contains\(event.target\)/);assert.match(fullscree
 for(const file of ['src/components/lector/OcrReviewWorkspace.jsx','src/components/facturas/InvoiceDocumentWorkspace.jsx'])assert.match(fs.readFileSync(file,'utf8'),/<FullscreenWorkspace/);
 assert.match(fs.readFileSync('src/components/lector/MobileScanner.jsx','utf8'),/taxea-fullscreen-surface/);
 assert.match(fs.readFileSync('src/components/facturas/InvoiceDocumentWorkspace.jsx','utf8'),/w-full shrink-0 border-t/);
+// Send preview can change presentation only. Compare the complete current AST
+// against the last released version, ignoring only the approved UI attributes.
+function canonical(node){
+  if(Array.isArray(node))return node.map(canonical).filter(Boolean);
+  if(!node||typeof node!=='object')return node;
+  if(node.type==='JSXAttribute'&&['className','type','aria-label'].includes(node.name.name))return null;
+  const result={};for(const [key,value] of Object.entries(node)){if(['start','end','loc','extra','leadingComments','trailingComments','innerComments','comments','tokens'].includes(key))continue;result[key]=canonical(value);}return result;
+}
+const sendFile='src/components/facturas/SendInvoiceDocumentModal.jsx';
+const baseline=execFileSync('git',['show','742fd5762bf5bc9f40582005b76096b7b8c2250c:'+sendFile],{encoding:'utf8'});
+const ast=text=>canonical(parse(text,{sourceType:'module',plugins:['jsx']}).program);
+assert.deepEqual(ast(fs.readFileSync(sendFile,'utf8')),ast(baseline),'Preview style/a11y changes must not alter any sending code or handler');
 console.log('Fullscreen focus/layer priority and four-inset/layout contracts pass. Browser QA covers focus, Escape, nested picker and cached ownership separately. No external calls.');
 
