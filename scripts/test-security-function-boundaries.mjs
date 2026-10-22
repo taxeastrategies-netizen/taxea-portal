@@ -88,4 +88,3 @@ for(const name of publicFunctions){
 console.log(JSON.stringify({ok:failures.length===0,functions:roots.length,protected:guarded.length,publicCapabilities:publicFunctions.size,
   passed:results.length,anonymousActions:results.reduce((sum,row)=>sum+(row.anonymousActions || 0),0),failures},null,2));
 assert.equal(failures.length,0,'All backend entry points must enforce the intended security boundary');
-

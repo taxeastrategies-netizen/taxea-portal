@@ -38,4 +38,3 @@ const checkout=fs.readFileSync('base44/functions/createStripeCheckout/entry.ts',
 assert.match(checkout,/asServiceRole\.entities\.PlanCatalog/,'Resolve private Stripe prices on backend only');
 assert.match(checkout,/safePortalUrl\(successUrl/);assert.match(checkout,/safePortalUrl\(cancelUrl/);
 console.log(JSON.stringify({ok:true,genericProviderErrors:targets.length,privateStripeFields:2,publicPricingPreserved:true,noExternalCalls:true}));
-

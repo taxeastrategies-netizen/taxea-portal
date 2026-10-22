@@ -25,4 +25,3 @@ for(const writer of [XLSX,backend])for(const bookType of ['xlsx','xls']){
 }
 assert.throws(()=>backend.read(new Uint8Array([0x50,0x4b,0x03,0x04]),{type:'array'}),'Malformed archive must fail safely');
 console.log(JSON.stringify({ok:true,version:XLSX.version,parserHashVerified:true,spreadsheetRoundtrips:8,preservesSubaccounts:true,realAccountingModified:false}));
-

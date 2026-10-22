@@ -21,4 +21,3 @@ if(process.argv.includes('--format-touched')){
   }
   console.log(JSON.stringify({formattedEndOfFile:formatted,vendorUnchanged:true}));
 }
-

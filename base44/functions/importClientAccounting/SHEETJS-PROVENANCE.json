@@ -8,4 +8,3 @@
   "license": "LICENSE.sheetjs",
   "reason": "Replace unmaintained npm xlsx 0.18.5, preserving the same parser in frontend exports and the backend accounting importer."
 }
-

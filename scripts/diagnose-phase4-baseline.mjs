@@ -11,4 +11,3 @@ let source=fs.readFileSync('scripts/test-tax-accounting-phase4.mjs','utf8').repl
 source=source.replace("entryPoints: [path.resolve(entry)],", "stdin: {contents: execFileSync('git',['show',ref+':'+entry],{encoding:'utf8'}),loader:'ts',resolveDir:path.dirname(path.resolve(entry))},");
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 await new AsyncFunction('fs','path','vm','webcrypto','esbuild','execFileSync','ref',source)(fs,path,vm,webcrypto,esbuild,execFileSync,ref);
-

@@ -34,5 +34,3 @@ export default async function(req) {
     return Response.json({ error: 'No se pudieron cargar los contactos. Reintenta; si continúa, comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 }
-
-
