@@ -54,7 +54,9 @@ Deno.serve(async (req) => {
       stripe: stripeSub ? { status: stripeSub.status, currentPeriodEnd: stripeSub.current_period_end } : null,
     });
   } catch (error) {
-    console.error('Error en syncStripe:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const requestId = crypto.randomUUID();
+    console.error('[syncStripe]', { requestId, name: String(error?.name || 'Error') });
+    return Response.json({ error: 'No se pudo sincronizar la suscripción. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
+
