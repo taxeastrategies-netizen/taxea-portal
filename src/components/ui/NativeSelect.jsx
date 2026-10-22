@@ -37,7 +37,7 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
   const label=props['aria-label']||fieldLabel||props.title||'Seleccionar opción';
   const assignedRef=React.useCallback(node=>{nativeRef.current=node;if(typeof ref==='function')ref(node);else if(ref)ref.current=node;},[ref]);
   useCloseOnNavigation(()=>setOpen(false));
-  React.useEffect(()=>{if(!adaptive)setOpen(false);},[adaptive]);
+  React.useEffect(()=>{if(!adaptive||props.disabled)setOpen(false);},[adaptive,props.disabled]);
   useClientLayoutEffect(()=>{
     const native=nativeRef.current;if(!native)return;
     syncNativeSelectDefaults(native,controlled?current:initial,current);
@@ -81,7 +81,7 @@ const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaul
     <button type="button" id={props.id?props.id+'-picker':generatedId} ref={triggerRef} role="combobox" aria-label={label} aria-labelledby={props['aria-labelledby']} aria-describedby={[props['aria-describedby'],invalid?errorId:''].filter(Boolean).join(' ')||undefined} aria-required={props.required||undefined} aria-invalid={invalid||undefined} aria-haspopup="dialog" aria-expanded={open} aria-controls={contentId} disabled={props.disabled} className="flex w-full min-h-11 min-w-0 items-center justify-between gap-2 rounded-[inherit] bg-transparent px-3 text-left text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" onClick={()=>setOpen(true)} onKeyDown={event=>{if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();setOpen(true);}}}>
       <span className="truncate">{selected?.label||(current?`${current} · no disponible`:'Seleccionar…')}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-60"/>
     </button>
-    {invalid&&<span id={errorId} role="alert" className="sr-only">Selecciona una opción válida para {label}.</span>}
+    {invalid&&<span id={errorId} role="alert" className="absolute left-0 top-full z-20 mt-1 max-w-full rounded-md border border-destructive bg-background px-2 py-1 text-xs text-destructive shadow-sm">Selecciona una opción válida para {label}.</span>}
     <Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{open&&<MobileSelectPicker picker={picker}/>}</Drawer>
   </span>;
 });
