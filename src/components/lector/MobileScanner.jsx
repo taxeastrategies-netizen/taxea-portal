@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, RotateCw, Check, Plus, X, ChevronLeft, ChevronRight, Trash2, Crop, Loader2, ImagePlus, ScanLine, Flashlight, Sparkles, Maximize } from 'lucide-react';
-import { canvasBlob, createDocumentTracker, defaultDocumentCorners, detectFromCanvas, imageCanvas, renderDocument, validDocumentCorners } from '@/lib/documentScanner.mjs';
+import { canvasBlob, createDocumentTracker, defaultDocumentCorners, detectFromCanvas, imageCanvas, polygonArea, renderDocument, validDocumentCorners } from '@/lib/documentScanner.mjs';
 import { createScannerProcessor } from '@/lib/scannerProcessor.mjs';
 
 const MAX_PHOTOS = 20;
@@ -91,10 +91,11 @@ export default function MobileScanner({ onCapture, onClose }) {
     if (!blob || pagesRef.current.length >= MAX_PHOTOS) return;
     captureLock.current = true; setAcquiring(true); setError(''); autoSince.current = 0;
     try {
-      const canvas = await imageCanvas(blob), found = await detectFromCanvas(canvas, processorRef.current, 720);
+      const canvas = await imageCanvas(blob); if (!alive.current) return;
+      const found = await detectFromCanvas(canvas, processorRef.current, 720);
       if (!alive.current) return;
       const id = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-      const item = { id, source: blob, sourceUrl: registerUrl(blob), dimensions: { width: canvas.width, height: canvas.height }, corners: found?.corners || defaultDocumentCorners(), detected: !!found, quality: found?.quality, filter: 'enhance', strength: 70, rotation: 0, resultUrl: '', file: null };
+      const item = { id, source: blob, sourceUrl: registerUrl(blob), dimensions: { width: canvas.width, height: canvas.height }, corners: found?.corners || defaultDocumentCorners(), referenceArea: found ? polygonArea(found.corners) : null, detected: !!found, quality: found?.quality, filter: 'enhance', strength: 70, rotation: 0, resultUrl: '', file: null };
       const nextIndex = pagesRef.current.length; updatePages(prev => [...prev, item]); setCurrent(nextIndex); setCropMode(!found); setShowOriginal(false); setDragCorner(null); setMode('preview');
     } catch (problem) { if (alive.current) setError(problem.message || 'No se pudo leer la foto.'); }
     finally { captureLock.current = false; if (alive.current) setAcquiring(false); }
@@ -146,7 +147,15 @@ export default function MobileScanner({ onCapture, onClose }) {
   };
   const redetect = async () => {
     if (acquiring) return; setAcquiring(true); setError('');
-    try { const source = await imageCanvas(selected.source), found = await detectFromCanvas(source, processorRef.current, 800); if (alive.current) { if (found) changeSelected({ corners: found.corners, detected: true, quality: found.quality }); else setError('No se distinguen los cuatro bordes con suficiente seguridad. Ajusta las esquinas o usa la foto completa.'); } }
+    try {
+      const source = await imageCanvas(selected.source); if (!alive.current) return;
+      const found = await detectFromCanvas(source, processorRef.current, 800);
+      if (alive.current) {
+        if (found && selected.referenceArea && polygonArea(found.corners) < selected.referenceArea * .68) setError('La nueva detección recortaría demasiado el documento. Se conserva el encuadre anterior; puedes ajustar las esquinas a mano.');
+        else if (found) changeSelected({ corners: found.corners, detected: true, quality: found.quality });
+        else setError('No se distinguen los cuatro bordes con suficiente seguridad. Ajusta las esquinas o usa la foto completa.');
+      }
+    }
     catch (problem) { if (alive.current) setError(problem.message); } finally { if (alive.current) setAcquiring(false); }
   };
   const toggleTorch = async () => {
