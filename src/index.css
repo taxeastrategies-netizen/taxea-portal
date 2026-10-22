@@ -266,7 +266,7 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 }
 @media (hover:none) and (pointer:coarse) {
   nav.taxea-future-bottomnav, .taxea-mobile-back, .taxea-mobile-refresh { display:flex; }
-  .taxea-mobile-content { padding-bottom:calc(5rem + var(--taxea-safe-bottom)); }
+  .taxea-mobile-content { padding-bottom:calc(10.5rem + var(--taxea-safe-bottom)); }
   .taxea-floating-actions { bottom:calc(6rem + var(--taxea-safe-bottom)); }
   button, [role="button"], [role="combobox"], [role="option"], [role="menuitem"], select { min-height:44px; }
 }
@@ -309,3 +309,4 @@ input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectab
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
