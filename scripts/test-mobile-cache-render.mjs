@@ -11,12 +11,12 @@ const mocked={
   useRef:value=>{const index=cursor++;return refs[index]||= {current:value};},
   useEffect:fn=>effects.push(fn),useLayoutEffect:fn=>effects.push(fn),
   useState:value=>[typeof value==='function'?value():value,()=>{}],useTransition:()=>[false,fn=>fn()],
-  useLocation:()=>location,useOutlet:()=>outlet,useNavigate:()=>()=>{},UNSAFE_LocationContext:{Provider:'location-provider'},
+  useLocation:()=>location,useOutlet:()=>outlet,useNavigate:()=>()=>{},useNavigationType:()=> 'PUSH',UNSAFE_LocationContext:{Provider:'location-provider'},
 };
 const result=await esbuild.build({entryPoints:['src/components/layout/MobileNavigation.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'transform',jsxFactory:'React.createElement',jsxFragment:'React.Fragment',inject:[],plugins:[{name:'hooks',setup(b){
   b.onResolve({filter:/^(react|react\/jsx-runtime|react-router-dom)$/},args=>({path:args.path,namespace:'mock'}));
-  b.onLoad({filter:/.*/,namespace:'mock'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'?'export const Fragment="fragment";export const jsx=(type,props,key)=>({type,key,props});export const jsxs=jsx;':'const r=globalThis.__mock;export const {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition,useLocation,useNavigate,useOutlet,UNSAFE_LocationContext}=r;'}));
-  b.onResolve({filter:/^@\/lib\/mobileNavigation.mjs$/},()=>({path:process.cwd()+'/src/lib/mobileNavigation.mjs'}));
+  b.onLoad({filter:/.*/,namespace:'mock'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'?'export const Fragment="fragment";export const jsx=(type,props,key)=>({type,key,props});export const jsxs=jsx;':'const r=globalThis.__mock;export const {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTransition,useLocation,useNavigate,useNavigationType,useOutlet,UNSAFE_LocationContext}=r;'}));
+  b.onResolve({filter:/^@\/lib\//},args=>({path:process.cwd()+'/src/lib/'+args.path.slice('@/lib/'.length)}));
 }}]});
 const listeners=new Map();
 const window={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name),matchMedia:()=>({matches:false})};
@@ -42,3 +42,4 @@ const desktop=render('/facturas',invoice,false);assert.equal(desktop,invoice);
 view=render('/ajustes',settings);assert.equal(sections(view).length,1,'Desktop transition clears the mobile cache');
 refs=[];view=render('/',{id:'other-scope'});assert.equal(sections(view).length,1,'New keyed scope has no previous screens');
 console.log('Mobile cache render contract: hidden mounted screens, frozen route locations, bounded cache, scroll restore, desktop and identity remount pass (hook doubles; browser QA separate).');
+
