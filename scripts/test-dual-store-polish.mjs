@@ -58,6 +58,8 @@ const css = fs.readFileSync('src/index.css', 'utf8'), layout = fs.readFileSync('
 assert.ok(css.includes('calc(10.5rem + var(--taxea-safe-bottom))') && layout.includes('10.5rem+env(safe-area-inset-bottom)'));
 assert.ok(currentSource.includes('{mobile ? <MobileInvoiceList') && currentSource.includes('{renderInvoiceActions(inv)}'));
 const settings = fs.readFileSync('src/components/ajustes/TabNotificaciones.jsx', 'utf8');
-assert.ok(settings.includes('Guardar preferencias') && settings.includes('mutation.mutateAsync(variables)'));
+assert.ok(settings.includes('Los cambios se guardan automáticamente') && settings.includes('mutation.mutateAsync(variables)'));
+assert.ok(settings.includes('void handleSave({ ...prefs, [k]: v })'), 'Every preference switch commits through the reversible mutation');
 assert.ok(settings.includes('flight.current!==token') && settings.includes('identity.current!==ownId'));
 console.log(JSON.stringify({ ok: true, actualTanstack: true, optimisticBeforeNetwork: true, errorRollback: true, scopeIsolation: true, mobileCardsRealRender: true, operationalHandlersUnchanged: true, floatingButtonReserve: true, externalCalls: 0, financialWrites: 0 }));
+
