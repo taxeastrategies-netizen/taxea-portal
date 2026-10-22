@@ -14,6 +14,7 @@ import { getImpersonation } from '@/lib/impersonation';
 import SubscriptionGate from './SubscriptionGate';
 import FutureBackdrop from './FutureBackdrop';
 import PageTransition from './PageTransition';
+import useAppGestures from '@/hooks/useAppGestures';
 
 function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -23,7 +24,9 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   const trackedRef = useRef(false);
   const impersonation = getImpersonation();
   const mainRef=useRef(null);
+  const shellRef=useRef(null);
   const navigation=useMobileNavigation();
+  useAppGestures(shellRef,navigation?.mobile);
   const refresh=usePullToRefresh(mainRef,location.pathname,navigation?.mobile);
   const outletContext={user,company,isAdmin,isSuperAdmin,userRole,loadingCompany,refreshCompany,subscription};
 
@@ -84,7 +87,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
+    <div ref={shellRef} className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
       <FutureBackdrop />
       {impersonation && <ImpersonationBanner impersonation={impersonation} />}
       <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
@@ -146,3 +149,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
