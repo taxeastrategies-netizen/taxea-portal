@@ -3,11 +3,17 @@ import {createPortal} from 'react-dom';
 import {cn} from '@/lib/utils';
 import {focusableWorkspaceControls} from '@/lib/fullscreenNavigation.mjs';
 import {NAVIGATION_COMMITTED_EVENT} from '@/lib/mobileNavigation.mjs';
+import useMobileViewport from '@/hooks/useMobileViewport';
+import useCopyTextPreference from '@/hooks/useCopyTextPreference';
+import useAppGestures from '@/hooks/useAppGestures';
+import {allowsCopyText} from '@/lib/copyTextPreference.mjs';
 
 // A full-screen workspace must escape the animated page's containing/stacking
 // context. Its four safe insets are owned once, independently from AppLayout.
 export default function FullscreenWorkspace({children,onBack,busy=false,className,...props}){
   const rootRef=useRef(null),anchorRef=useRef(null);
+  const mobile=useMobileViewport(),copyMode=useCopyTextPreference();
+  useAppGestures(rootRef,mobile);
   const [inactive,setInactive]=useState(false);
   useLayoutEffect(()=>{
     const previous=document.activeElement;
@@ -38,5 +44,6 @@ export default function FullscreenWorkspace({children,onBack,busy=false,classNam
   // Above the isolated app shell, below its normal z-50 Radix/Vaul portals.
   // A cached screen can become hidden without unmounting: hide this portal too,
   // retaining its form state rather than leaking it over another tab.
-  return <><span ref={anchorRef} aria-hidden="true" style={{display:'none'}}/>{createPortal(<div {...props} ref={rootRef} role="dialog" aria-modal="true" data-state={inactive?'closed':'open'} hidden={inactive} inert={inactive?'':undefined} aria-hidden={inactive?true:undefined} tabIndex={-1} onKeyDown={onKeyDown} className={cn('taxea-fullscreen-surface fixed inset-0 z-[45] flex flex-col bg-background text-foreground outline-none',className)}>{children}</div>,document.body)}</>;
+  return <><span ref={anchorRef} aria-hidden="true" style={{display:'none'}}/>{createPortal(<div {...props} ref={rootRef} role="dialog" aria-modal="true" data-copy-text={allowsCopyText(copyMode,mobile)?'true':'false'} data-state={inactive?'closed':'open'} hidden={inactive} inert={inactive?'':undefined} aria-hidden={inactive?true:undefined} tabIndex={-1} onKeyDown={onKeyDown} className={cn('taxea-fullscreen-surface fixed inset-0 z-[45] flex flex-col bg-background text-foreground outline-none select-none',className)}>{children}</div>,document.body)}</>;
 }
+
