@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import usePageRefresh from '@/hooks/usePageRefresh';
 import { loadOcrWorkspace, invoiceSourceData, approveWorkspaceDocument, approveStoredOcrBatch } from '@/lib/ocrWorkspace.mjs';
 import { useOutletContext, useLocation, useNavigate } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -186,11 +187,13 @@ export default function LectorIngresos({ reviewPage = false }) {
     const version=++loadVersion.current;setLoading(true);
     try{const data=await loadOcrWorkspace(base44,company.id,DOC_TYPE);
       if(version===loadVersion.current)setDocuments(data);
-    }catch{if(version===loadVersion.current)setToast({type:'error',message:'No se pudo actualizar el OCR. Se conserva la última lista.'});}
+      return true;
+    }catch{if(version===loadVersion.current)setToast({type:'error',message:'No se pudo actualizar el OCR. Se conserva la última lista.'});return false;}
     finally{if(version===loadVersion.current)setLoading(false);}
   },[company?.id]);
 
   useEffect(() => { if (company?.id) loadDocs(); }, [company?.id, loadDocs]);
+  usePageRefresh(loadDocs,['/lector-ingresos','/tax-accounting/lector-ingresos']);
 
   const debouncedLoadDocs = useMemo(() => debounce(loadDocs, 1200), [loadDocs]);
 
@@ -553,3 +556,4 @@ export default function LectorIngresos({ reviewPage = false }) {
     </div>
   );
 }
+
