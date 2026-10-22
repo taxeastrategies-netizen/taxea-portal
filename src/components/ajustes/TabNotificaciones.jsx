@@ -49,7 +49,9 @@ export default function TabNotificaciones({ user }) {
   }));
   useEffect(()=>{identity.current=user?.id;const value={...PREFS_DEFAULT,...user?.notification_prefs};confirmed.current=value;setPrefs(value);setRetry(null);setError('');setSaved(false);setSaving(false);flight.current=false;return()=>{identity.current=null;};},[user?.id]);
 
-  const set = (k, v) => {if(flight.current)return;setSaved(false);setError('');setRetry(null);setPrefs(p => ({ ...p, [k]: v }));};
+  // Notification choices are reversible preferences, not financial operations.
+  // Each switch commits directly through onMutate; failed saves visibly roll back.
+  const set = (k, v) => {if(flight.current)return;setRetry(null);void handleSave({ ...prefs, [k]: v });};
 
   const handleSave = async (next=prefs) => {
     if(flight.current||!user?.id)return;
@@ -76,7 +78,7 @@ export default function TabNotificaciones({ user }) {
           <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center"><Bell className="w-4 h-4 text-primary" /></div>
           <div>
             <h2 className="font-jakarta font-semibold text-foreground">Preferencias de notificaciones</h2>
-            <p className="text-xs text-muted-foreground">Controla qué avisos recibes y con qué frecuencia. Los cambios se aplican al guardar.</p>
+            <p className="text-xs text-muted-foreground">Los cambios se guardan automáticamente. Si falla la conexión, se restaura el último valor confirmado.</p>
           </div>
         </div>
 
@@ -115,7 +117,6 @@ export default function TabNotificaciones({ user }) {
         <div role="status" aria-live="polite">{saving&&<p className="mb-3 text-sm text-muted-foreground">Guardando preferencias…</p>}{saved&&<p className="mb-4 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800 rounded-lg px-4 py-2.5"><CheckCircle2 className="w-4 h-4" />Preferencias guardadas.</p>}</div>
         {error&&<div role="alert" className="mb-3 text-sm text-destructive">{error}<Button variant="outline" disabled={saving} onClick={()=>handleSave(retry)}>Reintentar el cambio</Button></div>}
 
-        <Button disabled={saving} onClick={()=>handleSave()} className="bg-teal hover:bg-teal-dark">{saving?'Guardando…':'Guardar preferencias'}</Button>
       </div>
 
       <div className="bg-secondary/30 border border-border rounded-xl p-4">
@@ -129,3 +130,4 @@ export default function TabNotificaciones({ user }) {
     </div>
   );
 }
+
