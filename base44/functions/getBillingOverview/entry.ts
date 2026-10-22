@@ -20,7 +20,7 @@ function getCanaryMonthBounds() {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
       return Response.json({ error: 'No autorizado' }, { status: 403 });
     }
@@ -245,4 +245,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'No se pudo cargar el resumen de facturación. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
-

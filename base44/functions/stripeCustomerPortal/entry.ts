@@ -7,7 +7,7 @@ const PUBLISHED_URL = "https://taxeaportal.com";
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
     // Solo la suscripción protegida del usuario autenticado es fuente de verdad.
@@ -37,4 +37,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'No se pudo abrir la gestión de suscripción. Reintenta o comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
-

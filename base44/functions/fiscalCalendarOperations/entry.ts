@@ -228,7 +228,7 @@ function buildCalendar(data: any, fiscalYear: number) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
@@ -374,4 +374,3 @@ Deno.serve(async (req) => {
 });
 
 export { generateSchedule, normalizeCode, normalizePeriod };
-

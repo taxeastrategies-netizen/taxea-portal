@@ -12,10 +12,10 @@ Deno.serve(async req => {
   try {
     if (req.method !== 'POST') return response({ error: 'Método no permitido.' }, 405);
     const sdk = createClientFromRequest(req);
-    if (!await sdk.auth.me()) return response({ error: 'Inicia sesión para consultar licitaciones.' }, 401);
+    if (!await sdk.auth.me().catch(() => null)) return response({ error: 'Inicia sesión para consultar licitaciones.' }, 401);
     const body = await req.json().catch(() => ({}));
     if (body.action === 'refresh_source') {
-      const user = await sdk.auth.me();
+      const user = await sdk.auth.me().catch(() => null);
       if (!['admin', 'super_admin'].includes(user?.role)) return response({ error: 'Acceso reservado al administrador.' }, 403);
       if (!isSource(body.source)) return response({ error: 'Fuente no válida.' }, 400);
       try {

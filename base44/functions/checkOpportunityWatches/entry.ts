@@ -35,7 +35,7 @@ Deno.serve(async req => {
   try {
     if (req.method !== 'POST') return reply({ error: 'Método no permitido.' }, 405);
     const sdk = createClientFromRequest(req);
-    const user = await sdk.auth.me();
+    const user = await sdk.auth.me().catch(() => null);
     if (!['admin', 'super_admin'].includes(user?.role)) return reply({ error: 'Acceso reservado al administrador.' }, user ? 403 : 401);
     const now = Date.now();
     const watches = await sdk.asServiceRole.entities.OpportunityWatch.filter({ enabled: true }, '-created_date', 500);

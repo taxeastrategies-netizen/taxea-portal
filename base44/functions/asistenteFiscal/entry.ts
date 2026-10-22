@@ -155,7 +155,7 @@ Responde ÚNICAMENTE con este JSON sin texto adicional:
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { pregunta, company_id, historial = [], sesion_id } = await req.json().catch(() => ({}));

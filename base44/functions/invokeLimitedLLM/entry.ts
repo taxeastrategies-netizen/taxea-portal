@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
   let eventId: string | undefined;
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));

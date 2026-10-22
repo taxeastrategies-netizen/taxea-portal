@@ -31,7 +31,7 @@ function validateImportFileUrl(value) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Admin only' }, { status: 403 });
@@ -264,4 +264,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'No se pudo completar la importación. Revisa el resultado antes de reintentar para no duplicar datos. Comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
-

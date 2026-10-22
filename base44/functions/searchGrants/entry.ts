@@ -169,7 +169,7 @@ function response(value: unknown, status = 200) {
 Deno.serve(async req => {
   try {
     const sdk = createClientFromRequest(req);
-    const user = await sdk.auth.me();
+    const user = await sdk.auth.me().catch(() => null);
     if (!user) return response({ error: 'Inicia sesión para consultar las ayudas.' }, 401);
     const body = await req.json().catch(() => ({}));
     const communityCode = normalizeCode(body?.communityCode);

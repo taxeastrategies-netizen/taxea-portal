@@ -6,7 +6,7 @@ const roleOf = user => clean(user?.role || user?.data?.role).toLowerCase();
 Deno.serve(async req => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const { company_id } = await req.json().catch(() => ({}));
     if (!company_id) return Response.json({ error: 'company_id es obligatorio.' }, { status: 400 });

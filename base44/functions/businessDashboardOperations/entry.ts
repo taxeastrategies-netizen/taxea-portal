@@ -236,7 +236,7 @@ export function buildBusinessSummary(data: any, year: number, user: any = {}) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
@@ -283,4 +283,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: error?.message || 'No se pudo construir el dashboard.' }, { status: error?.status || 500 });
   }
 });
-

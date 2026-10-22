@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     let user;
-    try { user = await base44.auth.me(); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
+    try { user = await base44.auth.me().catch(() => null); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();

@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const { action = 'validate', token, clientAccountId } = await req.json().catch(() => ({}));
     if (action === 'issue') {
-      const user = await base44.auth.me();
+      const user = await base44.auth.me().catch(() => null);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return Response.json({ error: 'No autorizado' }, { status: 403 });
       }

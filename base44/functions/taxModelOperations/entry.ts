@@ -3699,7 +3699,7 @@ function taxPeriodOutcome(model: string, value: number) {
 
 Deno.serve(async (req) => {
   try {
-    const base44=createClientFromRequest(req); const user=await base44.auth.me();
+    const base44=createClientFromRequest(req); const user=await base44.auth.me().catch(() => null);
     if(!user) return Response.json({error:'Unauthorized'},{status:401});
     const body=await req.json().catch(()=>({})); const action=clean(body.action||'catalog');
     if(action==='catalog') { const developer=developerTaxIdStatus(); return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),readiness:{developerTaxIdConfigured:developer.configured,developerTaxIdValid:developer.valid},recommendedExtensions:[],sources:SOURCES}); }
@@ -4482,5 +4482,3 @@ Deno.serve(async (req) => {
     return Response.json({error:'Acción no soportada.'},{status:400});
   } catch(error){const status=Number((error as any)?.status)||500; return Response.json({error:(error as Error).message||'Error interno'},{status});}
 });
-
-

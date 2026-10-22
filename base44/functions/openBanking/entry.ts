@@ -780,7 +780,7 @@ async function startAuthorization(base44: any, token: string, user: any, company
 Deno.serve(async (request) => {
   try {
     const base44 = createClientFromRequest(request);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json().catch(() => ({}));
     const action = clean(body.action, 80) || 'scheduled_sync_all';
@@ -1302,4 +1302,3 @@ Deno.serve(async (request) => {
     return Response.json({ error: publicError(error), code: error?.code || null }, { status: Number(error?.status) || 500 });
   }
 });
-

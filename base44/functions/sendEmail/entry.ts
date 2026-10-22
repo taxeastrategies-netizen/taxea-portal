@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
   let body = {};
   try {
     base44 = createClientFromRequest(req);
-    user = await base44.auth.me();
+    user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     body = await req.json().catch(() => ({}));
     const connection = await getGmailConnection(base44);

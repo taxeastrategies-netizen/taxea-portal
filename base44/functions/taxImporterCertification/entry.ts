@@ -59,7 +59,7 @@ async function allRows(entity: any, filter: any) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Sesión no válida.' }, { status: 401 });
     const body = await req.json().catch(() => ({}));
     const action = clean(body.action || 'list');

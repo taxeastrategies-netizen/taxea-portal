@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   let log = null;
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     const isAdmin = user && (user.role === 'admin' || user.role === 'super_admin');
     if (!isAdmin) return Response.json({ error: 'Esta migración requiere permisos de administrador.' }, { status: 403 });
 

@@ -16,7 +16,7 @@ function getCurrentQuarterKey() {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
@@ -145,4 +145,3 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'No se pudo abrir el cambio de plan. No se ha confirmado ningún cobro. Comunica la referencia al administrador.', code: 'INTERNAL_ERROR', requestId }, { status: 500 });
   }
 });
-
