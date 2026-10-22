@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { FileText, Image, Eye, RefreshCw, Play, CheckCircle, Loader2, Ban } from 'lucide-react';
+import { FileText, Image, Eye, RefreshCw, Play, CheckCircle, Loader2, Ban, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { needsOcrAnalysis } from '@/lib/ocrIntake.mjs';
+import { needsOcrAnalysis, canReturnOcrToPending } from '@/lib/ocrIntake.mjs';
 
 const STATUS_CONFIG = {
   pending:               { label: 'Pendiente',                  color: 'text-amber-600',  bg: 'bg-amber-50' },
@@ -37,6 +37,7 @@ export default function OcrDocumentTable({
   onProcessOcr,
   onReview,
   onWithdraw,
+  onReturnToPending,
   processingIds,
   emptyMessage,
   onBulkReview,
@@ -156,8 +157,15 @@ export default function OcrDocumentTable({
                         <CheckCircle className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    {onReturnToPending && canReturnOcrToPending(doc) && (
+                      <button disabled={busy || isProcessing} onClick={() => onReturnToPending(doc.id)}
+                        className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal disabled:opacity-50"
+                        title="Volver a pendientes" aria-label="Volver a pendientes">
+                        <Undo2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {!isAdmin && doc.status === 'pending' && (
-                      <button onClick={() => onWithdraw(doc.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Retirar documento">
+                      <button disabled={busy || isProcessing} onClick={() => onWithdraw(doc.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive disabled:opacity-50" title="Retirar documento">
                         <Ban className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -186,4 +194,5 @@ export default function OcrDocumentTable({
     </div>
   );
 }
+
 
