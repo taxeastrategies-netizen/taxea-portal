@@ -8,54 +8,70 @@ import { cn } from "@/lib/utils"
 import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useMobileViewport from '@/hooks/useMobileViewport';
 import {nativeSelectModel} from '@/lib/nativeSelect.mjs';
-import {Drawer,DrawerTrigger} from './drawer';
+import {Drawer} from './drawer';
 import MobileSelectPicker from './MobileSelectPicker';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 
-const NativeSelectContext=React.createContext(null);
+const SelectUiContext=React.createContext(null);
 function Select({children,value,defaultValue,onValueChange,...props}){
   const mobile=useMobileViewport();
   const [localValue,setLocalValue]=React.useState(defaultValue??'');
-  const [open,setOpen]=React.useState(false),contentId=React.useId();
-  useCloseOnNavigation(()=>setOpen(false));
-  const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue});
-  // Explicitly controlled popup APIs keep Radix; ordinary choices use the OS
-  // picker on phones. No duplicated hidden inputs or parallel form submission.
-  const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
-  const native=mobile&&model.options.length>0&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
+  const [localOpen,setLocalOpen]=React.useState(props.defaultOpen??false),contentId=React.useId(),triggerRef=React.useRef(null);
+  const open=props.open===undefined?localOpen:props.open;
+  const setOpen=next=>{if(props.open===undefined)setLocalOpen(next);props.onOpenChange?.(next);};
+  useCloseOnNavigation(()=>{if(open)setOpen(false);});
+  const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue,triggerType:SelectTrigger});
   const current=value===undefined?localValue:value;
   const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
-  const sheet=native&&model.options.length>8&&!props.name&&!props.required;
-  const picker=native?{...model,mode:sheet?'sheet':'native',value:current,change,open,setOpen,contentId,disabled:props.disabled,name:props.name,required:props.required,dir:props.dir}:null;
-  return <NativeSelectContext.Provider value={picker}>
-    {sheet?<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{children}{open&&<MobileSelectPicker picker={picker}/>}</Drawer>:native?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change}>{children}</SelectPrimitive.Root>}
-  </NativeSelectContext.Provider>;
+  const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
+  // Real HTML form controls retain the OS picker and native validation. All
+  // ordinary application choices, including controlled popups, use the drawer.
+  const nativeForm=mobile&&!!(props.name||props.required)&&!customTrigger&&!props.defaultOpen&&props.open===undefined&&props.onOpenChange===undefined;
+  const sheet=mobile&&model.options.length>0&&!nativeForm&&!(props.name||props.required),uncontrolled=value===undefined;
+  React.useEffect(()=>{
+    if(!uncontrolled)return;
+    const form=props.form?document.getElementById(props.form):triggerRef.current?.closest('form');
+    const reset=()=>setLocalValue(defaultValue??'');
+    form?.addEventListener('reset',reset);return()=>form?.removeEventListener('reset',reset);
+  },[uncontrolled,defaultValue,props.form]);
+  const picker={...model,mode:nativeForm?'native':sheet?'sheet':'desktop',value:current,change,open,setOpen,contentId,triggerRef,disabled:props.disabled,name:props.name,required:props.required,form:props.form,dir:props.dir};
+  // Radix still owns the single native form control, option registration,
+  // required/name/form semantics and bubbling. Only the mobile presentation is
+  // replaced: its popup stays closed while the accessible drawer is visible.
+  return <SelectUiContext.Provider value={picker}>
+    {nativeForm?children:<SelectPrimitive.Root {...props} value={current} onValueChange={change} open={sheet?false:open} onOpenChange={next=>sheet?(next&&setOpen(true)):setOpen(next)}>
+      {children}
+      {sheet&&<Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false} repositionInputs handleOnly>{open&&<MobileSelectPicker picker={picker}/>}</Drawer>}
+    </SelectPrimitive.Root>}
+  </SelectUiContext.Provider>;
 }
 
 const SelectGroup = SelectPrimitive.Group
 
 const SelectValue = SelectPrimitive.Value
 
-const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) => {
-  const native=React.useContext(NativeSelectContext);
-  if(native){
-    if(native.mode==='sheet')return <DrawerTrigger asChild><button {...props} type="button" role="combobox" aria-haspopup="dialog" aria-expanded={native.open} aria-controls={native.contentId} aria-label={props['aria-label']||native.placeholder||'Seleccionar opción'} ref={ref} disabled={native.disabled||props.disabled} className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',className)}><span className="truncate">{native.options.find(option=>option.value===String(native.value))?.label||native.placeholder||'Seleccionar opción'}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50"/></button></DrawerTrigger>;
-    const groups=[...new Set(native.options.map(option=>option.group))];
+const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }, ref) => {
+  const picker=React.useContext(SelectUiContext);
+  const registeredTrigger=picker?.triggerRef;
+  const assignedRef=React.useCallback(node=>{if(registeredTrigger)registeredTrigger.current=node;if(typeof ref==='function')ref(node);else if(ref)ref.current=node;},[registeredTrigger,ref]);
+  if(picker?.mode==='native'){
+    const groups=[...new Set(picker.options.map(option=>option.group))];
     const option=entry=><option key={entry.value} value={entry.value} disabled={entry.disabled}>{entry.label}</option>;
-    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}>
-      <select {...props} ref={ref} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        aria-label={props['aria-label']||(!props['aria-labelledby']?native.placeholder||'Seleccionar opción':undefined)}
-        name={native.name} required={native.required} disabled={native.disabled||props.disabled} dir={native.dir} value={native.value??''} onChange={event=>native.change(event.target.value)}>
-        <option value="" disabled hidden>{native.placeholder||'Selecciona una opción'}</option>
-        {native.value&&!native.options.some(entry=>entry.value===String(native.value))&&<option value={native.value} disabled>{native.value} · no disponible</option>}
-        {groups.map(group=>group?<optgroup key={group} label={group}>{native.options.filter(entry=>entry.group===group).map(option)}</optgroup>:native.options.filter(entry=>!entry.group).map(option))}
-      </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/>
-    </span>;
+    return <span className={cn('taxea-native-select relative inline-flex w-full',className)}><select {...props} ref={assignedRef} className="w-full min-w-0 min-h-11 appearance-none rounded-md border border-input bg-background px-3 pr-9 text-base text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} name={picker.name} required={picker.required} form={picker.form} disabled={picker.disabled||props.disabled} dir={picker.dir} value={picker.value??''} onChange={event=>picker.change(event.target.value)}>
+      <option value="" disabled hidden>{picker.placeholder||'Selecciona una opción'}</option>
+      {picker.value&&!picker.options.some(entry=>entry.value===String(picker.value))&&<option value={picker.value} disabled>{picker.value} · no disponible</option>}
+      {groups.map(group=>group?<optgroup key={group} label={group}>{picker.options.filter(entry=>entry.group===group).map(option)}</optgroup>:picker.options.filter(entry=>!entry.group).map(option))}
+    </select><ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50"/></span>;
+  }
+  if(picker?.mode==='sheet'){
+    return <SelectPrimitive.Trigger {...props} ref={assignedRef} asChild={asChild} aria-haspopup="dialog" aria-expanded={picker.open} aria-controls={picker.contentId} aria-label={props['aria-label']||(!props['aria-labelledby']?picker.placeholder||'Seleccionar opción':undefined)} disabled={picker.disabled||props.disabled} className={cn('flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',className)}>
+      {asChild?children:<><span className="truncate">{picker.options.find(option=>option.value===String(picker.value))?.label||(picker.value?`${picker.value} · no disponible`:picker.placeholder||'Seleccionar opción')}</span><ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 opacity-50"/></>}
+    </SelectPrimitive.Trigger>;
   }
   return (
   <SelectPrimitive.Trigger
-    ref={ref}
+    ref={assignedRef}
+    asChild={asChild}
     className={cn(
       "flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background data-[placeholder]:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className
@@ -93,8 +109,8 @@ SelectScrollDownButton.displayName =
 
 const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
   const safePadding=useSafeAreaCollision();
-  const native=React.useContext(NativeSelectContext);
-  if(native)return null;
+  const picker=React.useContext(SelectUiContext);
+  if(picker?.mode==='native')return null;
   return (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
@@ -167,3 +183,4 @@ export {
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
+
