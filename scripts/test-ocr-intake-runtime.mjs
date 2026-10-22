@@ -210,6 +210,44 @@ assert.deepEqual(deliveries.map(row=>row.method),['drag_drop','file_picker','cam
 assert.ok(deliveries.every(row=>row.files.length===1 && row.files[0]===image));
 const disabled=zone({onFilesAdded:()=>{throw new Error('Disabled intake must not submit twice');},disabled:true});
 disabled.props.onDrop({preventDefault(){},dataTransfer:{files:[image]}});
+// Compile and exercise the real review/table action props with UI-only stubs.
+const walk=node=>Array.isArray(node)?node.flatMap(walk):node && typeof node==='object'?[node,...walk(node.children || [])]:[];
+const textOf=node=>Array.isArray(node)?node.map(textOf).join(''):node && typeof node==='object'?textOf(node.children || []):String(node ?? '');
+for(const component of ['src/components/lector/ReviewPanel.jsx','src/components/ocr/OcrDocumentTable.jsx']) {
+  const build=await esbuild.build({entryPoints:[component],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{
+    name:'review-ui',setup(b){
+      b.onResolve({filter:/ocrIntake\.mjs$/},()=>({path:process.cwd()+'/src/lib/ocrIntake.mjs'}));
+      b.onResolve({filter:/^(react($|\/jsx-runtime$)|lucide-react$|@\/)|OcrFiscalFields$/},args=>({path:args.path,namespace:'review-ui'}));
+      b.onLoad({filter:/.*/,namespace:'review-ui'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'
+        ? 'export const jsx=(type,props)=>({type,props:props || {},children:[].concat(props?.children || [])});export const jsxs=jsx;export const Fragment="Fragment";'
+        : args.path==='react' ? 'export const useState=initial=>[typeof initial==="function"?initial():initial,()=>{}];'
+        : args.path==='lucide-react' ? 'export const FileText="FileText",Image="Image",Eye="Eye",RefreshCw="RefreshCw",Play="Play",CheckCircle="CheckCircle",Loader2="Loader2",Ban="Ban",Undo2="Undo2",XCircle="XCircle",AlertCircle="AlertCircle",ZoomIn="ZoomIn",ZoomOut="ZoomOut",MinusCircle="MinusCircle";'
+        : args.path.includes('utils') ? 'export const cn=(...args)=>args.join(" ");'
+        : 'export const Button="Button",Input="Input",Label="Label",Checkbox="Checkbox",Select="Select",SelectContent="SelectContent",SelectItem="SelectItem",SelectTrigger="SelectTrigger",SelectValue="SelectValue";export default "FiscalFields";'}));
+    },
+  }]});
+  const exported={},context=vm.createContext({module:{exports:exported},exports:exported});
+  vm.runInContext(build.outputFiles[0].text,context);
+  const render=context.module.exports.default,events=[];
+  const doc={id:'review-qa',status:'review_required',originalFileName:'QA.jpg',extractedData:'{"total":121}',formData:{},file:{name:'QA.jpg'}};
+  const props=component.includes('ReviewPanel') ? {doc,tipo:'gastos',onReturnToPending:id=>events.push(['pending',id]),onReject:id=>events.push(['reject',id])}
+    : {documents:[doc],onReturnToPending:id=>events.push(['pending',id]),onReview(){}};
+  let nodes=walk(render(props));
+  const pending=nodes.find(n=>n.props?.title==='Volver a pendientes' || n.type==='Button' && textOf(n)===' Volver a pendientes');
+  assert.ok(pending,'Return to pending must be reachable from review and table');assert.ok(!pending.props.disabled);pending.props.onClick();
+  if(component.includes('ReviewPanel')) {
+    const reject=nodes.find(n=>n.type==='Button' && textOf(n).trim()==='Rechazar');assert.ok(reject);assert.ok(!reject.props.disabled);reject.props.onClick();
+    nodes=walk(render({...props,loading:true}));assert.ok(nodes.filter(n=>n.type==='Button').every(n=>n.props.disabled));
+    nodes=walk(render({...props,doc:{...doc,linkedInvoiceId:'canonical'}}));
+    assert.ok(!nodes.some(n=>n.type==='Button' && textOf(n).includes('Volver a pendientes')));
+    assert.ok(nodes.find(n=>n.type==='Button' && textOf(n).trim()==='Rechazar').props.disabled);
+  } else {
+    nodes=walk(render({...props,busy:true}));assert.ok(nodes.find(n=>n.props?.title==='Volver a pendientes').props.disabled);
+    nodes=walk(render({...props,documents:[{...doc,status:'accounted',linkedInvoiceId:'canonical'}]}));
+    assert.ok(!nodes.some(n=>n.props?.title==='Volver a pendientes'));
+  }
+  assert.deepEqual(events[0],['pending',doc.id]);
+}
 console.log('OCR intake: pending uploads, OCR to review, reject persistence, reset/reanalyse, idempotence, approval lease, canonical/linked invoice guards, stale response CAS, membership/auth, pagination and delivery methods pass. No external calls.');
 
 
