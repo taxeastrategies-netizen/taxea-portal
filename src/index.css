@@ -210,6 +210,22 @@
   .taxea-future-bottomnav a:active { background-color:rgba(255,255,255,.08); }
 }
 @keyframes taxea-screen-enter { from { opacity:.65; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
+/* The stable motion wrapper handles PUSH/POP without remounting cached forms. */
+.taxea-page-transition .taxea-mobile-screen:not([hidden]) { animation:none; }
+.taxea-native-select { min-height:44px; }
+.taxea-native-select select { -webkit-appearance:none; appearance:none; }
+/* Suppress accidental shell selection, image dragging and double-tap activation.
+   Actual document text and inputs remain copyable; pinch zoom/edge back are not
+   blocked by global preventDefault handlers. */
+.taxea-future-shell { -webkit-user-select:none; user-select:none; }
+.taxea-future-shell :is(button,a,[role="button"],[role="tab"],[role="switch"],[role="combobox"],select,summary) { touch-action:manipulation; -webkit-touch-callout:none; }
+.taxea-future-shell :is(img,svg) { -webkit-user-drag:none; }
+.taxea-future-main :is(p,td,dd,pre,code),
+input,textarea,[contenteditable="true"],[data-selectable="true"],.taxea-selectable { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+.taxea-future-shell :is(button,a,[role="button"],[role="tab"],[role="switch"],[role="option"],[role="menuitem"]) :is(p,span) { -webkit-user-select:none; user-select:none; }
+@media (hover:none) and (pointer:coarse) {
+  .taxea-future-shell :is(button,a,[role="button"],[role="switch"]):active { opacity:.78; }
+}
 @media (max-width:767px), (hover:none) and (pointer:coarse) {
   .taxea-future-topbar nav, .taxea-topbar-company, .taxea-topbar-ocr, .taxea-user-name { display:none; }
   .taxea-mobile-title { display:block; }
@@ -259,3 +275,4 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
