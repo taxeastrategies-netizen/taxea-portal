@@ -8,5 +8,7 @@ paths.push('src/hooks/useShellScrollLock.js','src/lib/notificationMutation.mjs',
 paths.push('scripts/test-mobile-cache-mutations.mjs');
 paths.push('src/lib/copyTextPreference.mjs','src/hooks/useCopyTextPreference.js','src/components/layout/AppearanceSettings.jsx','src/lib/suggestionMutation.mjs','src/pages/BuzonSugerencias.jsx');
 paths.push('src/components/layout/TopBar.jsx','scripts/test-mobile-safearea.mjs');
+paths.push('src/components/ui/NativeSelect.jsx','scripts/audit-legacy-selects.mjs','scripts/migrate-legacy-selects.mjs','scripts/test-native-select.mjs');
 for(const path of paths){const before=fs.readFileSync(path,'utf8'),after=before.trimEnd()+'\n';if(after!==before)fs.writeFileSync(path,after);}
 console.log('Task-only EOF normalisation complete.');
+
