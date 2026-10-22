@@ -16,6 +16,8 @@ import FutureBackdrop from './FutureBackdrop';
 import PageTransition from './PageTransition';
 import useAppGestures from '@/hooks/useAppGestures';
 import useShellScrollLock from '@/hooks/useShellScrollLock';
+import useCopyTextPreference from '@/hooks/useCopyTextPreference';
+import {allowsCopyText} from '@/lib/copyTextPreference.mjs';
 
 function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadingCompany, refreshCompany }) {
   useShellScrollLock();
@@ -28,6 +30,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   const mainRef=useRef(null);
   const shellRef=useRef(null);
   const navigation=useMobileNavigation();
+  const copyTextMode=useCopyTextPreference();
   useAppGestures(shellRef,navigation?.mobile);
   const refresh=usePullToRefresh(mainRef,location.pathname,navigation?.mobile);
   const outletContext={user,company,isAdmin,isSuperAdmin,userRole,loadingCompany,refreshCompany,subscription};
@@ -89,7 +92,7 @@ function AppLayoutInner({ user, company, isAdmin, isSuperAdmin, userRole, loadin
   const isDeptPage = location.pathname.startsWith('/tax-accounting') || location.pathname.startsWith('/finance');
 
   return (
-    <div ref={shellRef} className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
+    <div ref={shellRef} data-copy-text={allowsCopyText(copyTextMode,navigation?.mobile)?'true':'false'} className="taxea-future-shell relative isolate flex h-screen overflow-hidden bg-background flex-col">
       <FutureBackdrop />
       {impersonation && <ImpersonationBanner impersonation={impersonation} />}
       <div className="relative z-10 flex flex-1 min-h-0 overflow-hidden">
@@ -151,3 +154,4 @@ export default function AppLayout(props){
   const scope=`${props.user?.id||'anonymous'}:${props.company?.id||'no-company'}:${props.user?.role||'user'}`;
   return <MobileNavigationProvider key={scope}><AppLayoutInner {...props}/></MobileNavigationProvider>;
 }
+
