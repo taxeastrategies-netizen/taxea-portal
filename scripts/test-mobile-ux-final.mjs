@@ -70,7 +70,7 @@ const largePicker=e(ui.Select,{value:'777',onValueChange(){}},e(ui.SelectTrigger
 const largeMarkup=renderToString(largePicker);
 check(largeMarkup.includes('aria-haspopup="dialog"')&&largeMarkup.includes('Café agrícola'),'Long mobile lists get a searchable drawer trigger without changing the value');
 sandbox.__mobile=false;
-const desktop=renderToString(createSelect());
+const desktop=renderToString(createSelect({name:undefined}));
 check(desktop.includes('role="combobox"')&&!desktop.includes('taxea-native-select'),'Desktop retains accessible Radix');
 const customDesktop=renderToString(e(ui.Select,{value:'a'},e(ui.SelectTrigger,{asChild:true,'aria-label':'Custom QA'},e('button',null,'Single custom child')),e(ui.SelectContent,null,e(ui.SelectItem,{value:'a'},'Alpha'))));
 check(customDesktop.includes('Single custom child'),'asChild cannot receive an extra icon sibling and crash desktop');
