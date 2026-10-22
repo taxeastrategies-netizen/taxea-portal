@@ -115,4 +115,3 @@ export default function SummaryCards({ invoices, expenses, obligations, currentM
     </div>
   );
 }
-

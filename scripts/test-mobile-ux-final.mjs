@@ -66,4 +66,3 @@ check(css.includes('touch-action:manipulation')&&css.includes('user-select:text'
 check(!/preventDefault/.test(page)&&!/<motion.div[^>]+key=/.test(page),'Transition cannot remount forms or suppress gestures');
 check(page.includes('useReducedMotion')&&page.includes("navigation.direction==='back'"),'Transitions respect motion preference and POP direction');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,externalCalls:0,financialWrites:0},null,2));
-

@@ -23,4 +23,3 @@ export function referenceDestination(value,origin){
   try{const url=new URL(path);if(url.protocol==='https:')return url.origin===origin?{internal:true,to:url.pathname+url.search+url.hash}:{internal:false,to:url.href};}catch{/* Unsupported reference stays plain text. */}
   return null;
 }
-

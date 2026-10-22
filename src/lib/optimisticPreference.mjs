@@ -4,4 +4,3 @@ export async function savePreference({previous,next,optimistic,persist,rollback}
   try{await persist(next);return {ok:true,value:next};}
   catch{rollback(previous);return {ok:false,value:previous};}
 }
-

@@ -26,4 +26,3 @@ export function nativeSelectModel(children,{itemType,groupType,labelType,valueTy
   walk(children);
   return {options,placeholder};
 }
-

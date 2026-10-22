@@ -20,4 +20,3 @@ export default function PageTransition({children,mainRef}){
   },[location.pathname,navigation?.direction,navigation?.mobile,reduced,controls,mainRef]);
   return <motion.div initial={false} animate={controls} className="taxea-page-transition min-w-0">{children}</motion.div>;
 }
-

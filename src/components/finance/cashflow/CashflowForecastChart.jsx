@@ -56,4 +56,3 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
     </section>
   );
 }
-
