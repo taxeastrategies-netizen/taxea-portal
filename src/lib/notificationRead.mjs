@@ -12,4 +12,3 @@ export async function markNotificationReads({rows,ids,persist,optimistic,rollbac
   if(failed.length)rollback(failed);
   return {updated,failed};
 }
-
