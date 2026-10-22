@@ -103,3 +103,4 @@ navigationListeners.get('taxea:navigation-committed')();check(closes===1,'Commit
 cleanups.forEach(cleanup=>cleanup());check(navigationListeners.size===0,'Navigation listener is removed on unmount');
 console.log(JSON.stringify({ok:true,cases,realReactSelectRender:true,viewportAdapter:true,externalCalls:0,financialWrites:0},null,2));
 await import('./test-native-select.mjs');
+await import('./test-fullscreen-workspace.mjs');

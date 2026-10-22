@@ -599,11 +599,11 @@ export default function SendInvoiceDocumentModal({ open, onOpenChange, invoice, 
 
       {/* Modal de previsualización del email premium */}
       {showPreview && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowPreview(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="taxea-safe-overlay fixed inset-0 z-[110] bg-black/60 flex items-center justify-center p-4" onClick={() => setShowPreview(false)}>
+          <div className="taxea-safe-preview bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
               <p className="text-sm font-semibold text-slate-800">Previsualización del email</p>
-              <button onClick={() => setShowPreview(false)} className="p-1 rounded hover:bg-slate-100">
+              <button type="button" aria-label="Cerrar previsualización del email" onClick={() => setShowPreview(false)} className="p-1 rounded hover:bg-slate-100">
                 <X className="w-4 h-4 text-slate-500" />
               </button>
             </div>

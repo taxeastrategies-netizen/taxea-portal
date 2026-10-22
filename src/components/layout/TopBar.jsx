@@ -59,7 +59,7 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
         >
           <Menu className="w-5 h-5" />
         </button>
-        {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="taxea-mobile-back md:hidden min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
+        {location.pathname!=='/'&&<button type="button" aria-label="Volver a la pantalla anterior" onClick={()=>navigation?.goBack()} className="taxea-mobile-back min-w-11 min-h-11 flex items-center justify-center rounded-lg hover:bg-secondary"><ChevronLeft className="w-5 h-5"/></button>}
         <span className="taxea-mobile-title sm:hidden text-sm font-semibold truncate">{crumbs?.at(-1)||({'/ajustes':'Ajustes','/suscripcion':'Suscripción','/notificaciones':'Avisos'}[location.pathname])||'Taxea'}</span>
 
         {/* Breadcrumb o empresa */}

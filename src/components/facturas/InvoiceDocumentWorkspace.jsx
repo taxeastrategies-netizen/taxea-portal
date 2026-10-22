@@ -3,6 +3,7 @@
  * Layout: Cabecera superior · Visor PDF/factura izquierda · Panel operativo derecha
  */
 import { useState } from 'react';
+import FullscreenWorkspace from '@/components/layout/FullscreenWorkspace';
 import { cn } from '@/lib/utils';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
 import {
@@ -378,7 +379,7 @@ export default function InvoiceDocumentWorkspace({
   useEffect(() => {
     if (!invoicesList || !onNavigate) return;
     const handler = (e) => {
-      if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA' || e.target?.isContentEditable) return;
+      if (e.defaultPrevented || e.target?.closest('[data-vaul-drawer],[role="listbox"],[role="menu"]') || ['INPUT','TEXTAREA','SELECT'].includes(e.target?.tagName) || e.target?.isContentEditable) return;
       if (e.key === 'ArrowLeft' && hasPrev) { e.preventDefault(); goPrev(); }
       if (e.key === 'ArrowRight' && hasNext) { e.preventDefault(); goNext(); }
     };
@@ -402,14 +403,16 @@ export default function InvoiceDocumentWorkspace({
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-background flex flex-col">
+    <FullscreenWorkspace aria-label="Vista de factura" onBack={onClose}>
 
       {/* ── Cabecera superior ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card flex-shrink-0 shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-card flex-shrink-0 shadow-sm">
 
         {/* Izquierda: volver + título */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex flex-1 items-center gap-3 min-w-0">
           <button
+            type="button"
+            aria-label="Volver al listado de facturas"
             onClick={onClose}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
             <ArrowLeft className="w-4 h-4" />
@@ -435,7 +438,7 @@ export default function InvoiceDocumentWorkspace({
         </div>
 
         {/* Derecha: acciones */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex w-full flex-wrap justify-end items-center gap-1.5 flex-shrink-0 sm:w-auto">
           {/* Compartir enlace — solo para facturas emitidas */}
           {publicUrl && !isRecibida && (
             <button
@@ -455,7 +458,7 @@ export default function InvoiceDocumentWorkspace({
           {/* Más acciones */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-1.5 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+              <button type="button" aria-label="Más opciones de la factura" className="p-1.5 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                 <MoreVertical className="w-4 h-4" />
               </button>
             </DropdownMenuTrigger>
@@ -517,18 +520,18 @@ export default function InvoiceDocumentWorkspace({
             <span>Enviar</span>
           </Button>
         </div>
-      </div>
+      </header>
 
       {/* ── Layout principal: visor + panel ───────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 flex-col overflow-y-auto overscroll-none lg:flex-row lg:overflow-hidden">
 
         {/* Zona visor (izquierda/centro) */}
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="h-[45dvh] min-h-[15rem] shrink-0 min-w-0 overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink">
           <InvoiceDocumentPreviewPane invoice={invoice} company={company} />
         </div>
 
         {/* Panel operativo (derecha) */}
-        <div className="w-[440px] flex-shrink-0 border-l border-border overflow-hidden flex flex-col bg-card">
+        <div className="w-full shrink-0 border-t border-border flex flex-col bg-card lg:w-[440px] lg:border-t-0 lg:border-l lg:overflow-hidden">
           <InvoiceOperationalSidePanel
             invoice={invoice}
             company={company}
@@ -538,6 +541,6 @@ export default function InvoiceDocumentWorkspace({
           />
         </div>
       </div>
-    </div>
+    </FullscreenWorkspace>
   );
 }

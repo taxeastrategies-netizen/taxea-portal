@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import FullscreenWorkspace from '@/components/layout/FullscreenWorkspace';
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { reviewableDocuments, nextReviewId, previousReviewId } from '@/lib/ocrReviewQueue.mjs';
@@ -12,7 +13,7 @@ export default function OcrReviewWorkspace({ kind, documents, selectedId, loadin
   useEffect(() => {
     const onKeyDown = event => {
       const tag = event.target?.tagName?.toLowerCase();
-      if (busy || event.altKey || event.ctrlKey || event.metaKey || ['input', 'textarea', 'select'].includes(tag)
+      if (busy || event.defaultPrevented || event.target?.closest('[data-vaul-drawer],[role="listbox"],[role="menu"]') || event.altKey || event.ctrlKey || event.metaKey || ['input', 'textarea', 'select'].includes(tag)
         || event.target?.isContentEditable) return;
       if (event.key === 'ArrowLeft' && previousId) { event.preventDefault(); onNavigate(previousId); }
       if (event.key === 'ArrowRight' && nextId) { event.preventDefault(); onNavigate(nextId); }
@@ -22,7 +23,7 @@ export default function OcrReviewWorkspace({ kind, documents, selectedId, loadin
   }, [busy, previousId, nextId, onNavigate]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-background text-foreground" role="region" aria-label={`Revisión de facturas ${kind}`}>
+    <FullscreenWorkspace aria-label={`Revisión de facturas ${kind}`} onBack={onExit} busy={busy}>
       <header className="shrink-0 border-b border-border bg-card px-4 py-3 md:px-6">
         <div className="mx-auto flex max-w-[1800px] flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" disabled={busy} onClick={onExit} className="gap-2"><ArrowLeft className="h-4 w-4" /> Volver al OCR</Button>
@@ -59,6 +60,6 @@ export default function OcrReviewWorkspace({ kind, documents, selectedId, loadin
           )}
         </div>
       </main>
-    </div>
+    </FullscreenWorkspace>
   );
 }

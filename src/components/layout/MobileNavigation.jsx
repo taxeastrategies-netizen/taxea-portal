@@ -2,6 +2,7 @@ import {createContext,useContext,useEffect,useLayoutEffect,useRef,useState,useTr
 import {useLocation,useNavigate,useNavigationType,useOutlet,UNSAFE_LocationContext} from 'react-router-dom';
 import {MOBILE_TABS,MOBILE_MEDIA,NAVIGATION_COMMITTED_EVENT,mobileTabId,internalHref} from '@/lib/mobileNavigation.mjs';
 import {recordNavigation,safeBackTarget} from '@/lib/navigationStack.mjs';
+import {topmostDismissibleLayer} from '@/lib/fullscreenNavigation.mjs';
 
 const NavigationContext=createContext(null);
 export function useMobileNavigation(){return useContext(NavigationContext);}
@@ -29,7 +30,7 @@ export function MobileNavigationProvider({children}) {
   const goBack=()=>{
     // Dismiss a modal before leaving its underlying form. Radix owns Escape and
     // focus restoration; never intercept the native iOS edge-back gesture.
-    const modal=document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="listbox"][data-state="open"], [role="menu"][data-state="open"]');
+    const modal=topmostDismissibleLayer(document);
     if(modal){modal.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));return;}
     const target=safeBackTarget(entries.current,location,window.history.state?.idx);
     startTransition(()=>target.delta?navigate(target.delta):navigate(target.to,{replace:true}));
