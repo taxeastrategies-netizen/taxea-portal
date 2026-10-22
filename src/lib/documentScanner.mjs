@@ -58,11 +58,12 @@ function prepareEdges(image) {
   const { data, width: w, height: h } = image, n = w * h, hist = new Uint32Array(256), lum = new Float32Array(n), chroma = new Float32Array(n);
   for (let p = 0; p < n; p++) { const r = data[p * 4], g = data[p * 4 + 1], b = data[p * 4 + 2]; lum[p] = .299 * r + .587 * g + .114 * b; chroma[p] = Math.max(r, g, b) - Math.min(r, g, b); hist[Math.round(lum[p])]++; }
   const gray = blur3(lum, w, h), color = blur3(chroma, w, h), mag = new Float32Array(n), gx = new Float32Array(n), gy = new Float32Array(n), gh = new Uint32Array(1024);
-  const sobel = (a, p) => [-a[p - w - 1] + a[p - w + 1] - 2 * a[p - 1] + 2 * a[p + 1] - a[p + w - 1] + a[p + w + 1], -a[p - w - 1] - 2 * a[p - w] - a[p - w + 1] + a[p + w - 1] + 2 * a[p + w] + a[p + w + 1]];
+  const a = [0, 0], b = [0, 0];
+  const sobel = (source, p, out) => { out[0] = -source[p - w - 1] + source[p - w + 1] - 2 * source[p - 1] + 2 * source[p + 1] - source[p + w - 1] + source[p + w + 1]; out[1] = -source[p - w - 1] - 2 * source[p - w] - source[p - w + 1] + source[p + w - 1] + 2 * source[p + w] + source[p + w + 1]; };
   for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
-    const p = y * w + x, a = sobel(gray, p), b = sobel(color, p);
-    const use = Math.hypot(...b) * .8 > Math.hypot(...a) ? b : a;
-    gx[p] = use[0]; gy[p] = use[1]; mag[p] = Math.hypot(...use); if (mag[p] > 4) gh[Math.min(1023, Math.round(mag[p]))]++;
+    const p = y * w + x; sobel(gray, p, a); sobel(color, p, b);
+    const a2 = a[0] * a[0] + a[1] * a[1], b2 = b[0] * b[0] + b[1] * b[1], use = b2 * .64 > a2 ? b : a;
+    gx[p] = use[0]; gy[p] = use[1]; mag[p] = Math.sqrt(use === b ? b2 : a2); if (mag[p] > 4) gh[Math.min(1023, Math.round(mag[p]))]++;
   }
   // Adaptive Canny: suppress grain and text noise without requiring a white sheet.
   const high = clamp(quantile(gh, .76), 18, 180), low = high * .38, weak = new Uint8Array(n), edge = new Uint8Array(n), queue = new Int32Array(n);
