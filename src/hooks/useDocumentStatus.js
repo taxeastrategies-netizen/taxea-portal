@@ -25,6 +25,9 @@ export default function useDocumentStatus({docs, setDocs, companyId, userId, isA
         Object.keys(updates).some(key => key !== 'estado') || !DOCUMENT_REVIEW_STATUSES.has(updates.estado)) {
       setError('No se puede cambiar el estado de este documento desde esta sesión.'); return;
     }
+    if (previous.estado === updates.estado) {
+      setError(''); setMessage('El documento ya tiene ese estado.'); return;
+    }
     const variables = {documentId: id, companyId, userId, previous, nextStatus: updates.estado};
     const token = {}; flight.current = token;
     setError(''); setMessage('Guardando cambio documental…');
