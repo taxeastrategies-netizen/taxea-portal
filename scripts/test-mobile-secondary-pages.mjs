@@ -81,4 +81,25 @@ check(!analysisMarkup.includes('bg-white') && analysisMarkup.includes('bg-card')
 check(analysisMarkup.includes('dark:text-amber-200') && analysisMarkup.includes('dark:text-emerald-300'), 'Status and quality text have explicit dark contrast');
 check(analysisMarkup.includes('Abrir PDF Balance / PyG') && analysisMarkup.includes('Abrir Excel o A3 .dat'), 'Feature navigation uses actual buttons');
 check(!/<div[^>]*cursor-pointer/.test(analysisMarkup), 'No mouse-only clickable div remains in analysis home');
+
+// Real TopBar markup, inert account/API and router adapters. The navigation
+// algorithm itself remains covered by the existing mobile-stack tests.
+const navigationEvents = [], route = { pathname: '/finance/treasury' };
+const Header = await load('src/components/layout/TopBar.jsx', { plugins: [{ name: 'header-read-only-adapters', setup(build) {
+  build.onResolve({ filter: /base44Client$/ }, () => ({ path: 'api', namespace: 'qa-header' }));
+  build.onResolve({ filter: /^react-router-dom$/ }, () => ({ path: 'router', namespace: 'qa-header' }));
+  build.onResolve({ filter: /MobileNavigation$/ }, () => ({ path: 'navigation', namespace: 'qa-header' }));
+  build.onResolve({ filter: /OcrTopBarBadge$/ }, () => ({ path: 'badge', namespace: 'qa-header' }));
+  build.onLoad({ filter: /.*/, namespace: 'qa-header' }, args => ({ contents: args.path === 'api' ? 'export const base44=new Proxy({}, {get(){throw Error("Unexpected external API call");}});' : args.path === 'router' ? 'import React from "react";export const useLocation=()=>globalThis.__qaRoute;export const Link=({to,children,...props})=>React.createElement("a",{...props,href:to},children);' : args.path === 'navigation' ? 'export const useMobileNavigation=()=>({goBack:()=>globalThis.__qaBack()});' : 'export default function Badge(){return null;}', loader: 'js' }));
+} }] }, { __qaRoute: route, __qaBack: () => navigationEvents.push('back') });
+for (const [path, label] of Object.entries({ '/finance/treasury': 'Tesorería', '/finance/ar': 'Cuentas a cobrar', '/finance/ap': 'Cuentas a pagar', '/finance/cashflow': 'Centro de Tesorería', '/finance/debt': 'Deuda y Financiación', '/finance/investments': 'Inversiones', '/finance/reporting': 'Centro de Informes', '/finance/analysis': 'Análisis Financiero', '/lector-gastos': 'OCR facturas recibidas', '/lector-ingresos': 'OCR facturas emitidas' })) {
+  route.pathname = path;
+  const header = renderToStaticMarkup(e(Header, { user: { full_name: 'Usuario ficticio' } }));
+  check(header.includes('Volver a la pantalla anterior') && header.includes(label), path + ' has a meaningful title and back control');
+}
+walk(Header({ user: { full_name: 'Usuario ficticio' } })).find(node => node.props['aria-label'] === 'Volver a la pantalla anterior').props.onClick();
+assert.deepEqual(navigationEvents, ['back']); cases++;
+const beforeHeader = execFileSync('git', ['show', `${baseline}:src/components/layout/TopBar.jsx`], { encoding: 'utf8' }), afterHeader = fs.readFileSync('src/components/layout/TopBar.jsx', 'utf8');
+assert.equal(afterHeader.slice(afterHeader.indexOf('export default function TopBar')), beforeHeader.slice(beforeHeader.indexOf('export default function TopBar')).trimEnd() + '\n', 'Only the route labels change, not header handlers or navigation'); cases++;
 console.log(JSON.stringify({ ok: true, cases, realReactRender: true, callbackDispatch: true, allNamedOperationalFunctionsUnchanged: true, externalCalls: 0, financialWrites: 0 }));
+
