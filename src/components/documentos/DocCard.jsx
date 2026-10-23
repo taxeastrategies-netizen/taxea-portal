@@ -22,11 +22,11 @@ async function downloadFile(url, filename) {
 }
 
 const ESTADO_COLORS = {
-  pendiente: 'bg-amber-50 text-amber-700 border-amber-200',
-  en_revision: 'bg-blue-50 text-blue-700 border-blue-200',
-  revisado: 'bg-teal-light text-teal border-teal/20',
-  aprobado: 'bg-green-50 text-green-700 border-green-200',
-  rechazado: 'bg-red-50 text-red-700 border-red-200',
+  pendiente: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800',
+  en_revision: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800',
+  revisado: 'bg-teal-light text-teal border-teal/20 dark:bg-teal-950 dark:text-teal-200 dark:border-teal-800',
+  aprobado: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-800',
+  rechazado: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-800',
 };
 const ESTADO_LABELS = {
   pendiente: 'Pendiente', en_revision: 'En revisión', revisado: 'Revisado',
@@ -43,19 +43,19 @@ function getFileIcon(tipo, nombre) {
 
 function getExtBadge(nombre) {
   const ext = (nombre || '').split('.').pop()?.toLowerCase();
-  const colors = { pdf: 'bg-red-50 text-red-600', xlsx: 'bg-green-50 text-green-600', xls: 'bg-green-50 text-green-600',
-    jpg: 'bg-blue-50 text-blue-600', jpeg: 'bg-blue-50 text-blue-600', png: 'bg-blue-50 text-blue-600',
-    docx: 'bg-indigo-50 text-indigo-600', doc: 'bg-indigo-50 text-indigo-600',
+  const colors = { pdf: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-200', xlsx: 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-200', xls: 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-200',
+    jpg: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-200', jpeg: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-200', png: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-200',
+    docx: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-200', doc: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-200',
   };
   return { ext: ext?.toUpperCase() || 'DOC', color: colors[ext] || 'bg-secondary text-muted-foreground' };
 }
 
-export default function DocCard({ doc, isAdmin, onUpdate, view = 'grid' }) {
+export default function DocCard({ doc, isAdmin, onUpdate, busy = false, view = 'grid' }) {
   const { ext, color } = getExtBadge(doc.nombre);
 
   if (view === 'list') {
     return (
-      <tr className="hover:bg-secondary/20 transition-colors">
+      <tr aria-busy={doc._taxeaStatusPending || undefined} className="hover:bg-secondary/20 transition-colors">
         <td className="px-4 py-3">
           <div className="flex items-center gap-2.5">
             {getFileIcon(doc.tipo_archivo, doc.nombre)}
@@ -79,26 +79,24 @@ export default function DocCard({ doc, isAdmin, onUpdate, view = 'grid' }) {
           {doc.created_date ? new Date(doc.created_date).toLocaleDateString('es-ES') : '—'}
         </td>
         <td className="px-4 py-3">
-          <span className={cn('text-xs px-2 py-0.5 rounded border font-medium', ESTADO_COLORS[doc.estado] || 'bg-secondary text-muted-foreground border-border')}>
-            {ESTADO_LABELS[doc.estado] || doc.estado}
-          </span>
+          <DocumentStatusBadge doc={doc} />
         </td>
         <td className="px-4 py-3 text-right">
-          <DocActions doc={doc} isAdmin={isAdmin} onUpdate={onUpdate} />
+          <DocActions doc={doc} isAdmin={isAdmin} onUpdate={onUpdate} busy={busy} />
         </td>
       </tr>
     );
   }
 
   return (
-    <div className="bg-card border border-border rounded-xl shadow-card p-4 hover:shadow-card-hover transition-all group">
+    <div aria-busy={doc._taxeaStatusPending || undefined} className="bg-card border border-border rounded-xl shadow-card p-4 hover:shadow-card-hover transition-all group">
       <div className="flex items-start justify-between mb-3">
         <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', 'bg-secondary/50')}>
           {getFileIcon(doc.tipo_archivo, doc.nombre)}
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn('text-xs px-1.5 py-0.5 rounded font-bold', color)}>{ext}</span>
-          <DocActions doc={doc} isAdmin={isAdmin} onUpdate={onUpdate} />
+          <DocActions doc={doc} isAdmin={isAdmin} onUpdate={onUpdate} busy={busy} />
         </div>
       </div>
       <p className="text-sm font-medium text-foreground line-clamp-2 mb-1">{doc.nombre}</p>
@@ -106,21 +104,26 @@ export default function DocCard({ doc, isAdmin, onUpdate, view = 'grid' }) {
       {doc.etiquetas?.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
           {doc.etiquetas.slice(0, 3).map(e => (
-            <span key={e} className="text-xs bg-teal-light text-teal px-1.5 py-0.5 rounded">{e}</span>
+            <span key={e} className="text-xs bg-teal-light text-teal dark:bg-teal-950 dark:text-teal-200 px-1.5 py-0.5 rounded">{e}</span>
           ))}
         </div>
       )}
       <div className="flex items-center justify-between mt-2">
-        <span className={cn('text-xs px-2 py-0.5 rounded border font-medium', ESTADO_COLORS[doc.estado] || 'bg-secondary text-muted-foreground border-border')}>
-          {ESTADO_LABELS[doc.estado] || doc.estado}
-        </span>
+        <DocumentStatusBadge doc={doc} />
         <span className="text-xs text-muted-foreground">{doc.created_date ? new Date(doc.created_date).toLocaleDateString('es-ES') : '—'}</span>
       </div>
     </div>
   );
 }
 
-function DocActions({ doc, isAdmin, onUpdate }) {
+export function DocumentStatusBadge({doc}) {
+  return <span role={doc._taxeaStatusPending ? 'status' : undefined} className={cn('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border font-medium', doc._taxeaStatusPending ? ESTADO_COLORS.pendiente : (ESTADO_COLORS[doc.estado] || 'bg-secondary text-muted-foreground border-border'))}>
+    {doc._taxeaStatusPending && <Loader2 aria-hidden="true" className="w-3 h-3 animate-spin motion-reduce:animate-none" />}
+    {doc._taxeaStatusPending ? 'Guardando: ' : ''}{ESTADO_LABELS[doc.estado] || doc.estado}
+  </span>;
+}
+
+function DocActions({ doc, isAdmin, onUpdate, busy }) {
   const [downloading, setDownloading] = useState(false);
   const documentUrl = safeDocumentUrl(doc.archivo_url);
 
@@ -140,7 +143,7 @@ function DocActions({ doc, isAdmin, onUpdate }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="p-1.5 rounded hover:bg-secondary text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+        <button type="button" aria-label={`Acciones del documento ${doc.nombre || doc.id}`} className="min-w-11 min-h-11 p-1.5 rounded hover:bg-secondary text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <MoreVertical className="w-4 h-4" />
         </button>
       </DropdownMenuTrigger>
@@ -161,12 +164,13 @@ function DocActions({ doc, isAdmin, onUpdate }) {
         )}
         {isAdmin && (
           <>
-            <DropdownMenuItem onClick={() => onUpdate(doc.id, { estado: 'revisado' })}>Marcar revisado</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onUpdate(doc.id, { estado: 'aprobado' })}>Aprobar</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onUpdate(doc.id, { estado: 'rechazado' })}>Rechazar</DropdownMenuItem>
+            <DropdownMenuItem disabled={busy} onClick={() => onUpdate(doc.id, { estado: 'revisado' })}>Marcar revisado</DropdownMenuItem>
+            <DropdownMenuItem disabled={busy} onClick={() => onUpdate(doc.id, { estado: 'aprobado' })}>Aprobar</DropdownMenuItem>
+            <DropdownMenuItem disabled={busy} onClick={() => onUpdate(doc.id, { estado: 'rechazado' })}>Rechazar</DropdownMenuItem>
           </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
+
