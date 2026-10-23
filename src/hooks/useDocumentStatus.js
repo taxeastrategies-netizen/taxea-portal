@@ -35,7 +35,17 @@ export default function useDocumentStatus({docs, setDocs, companyId, userId, isA
         setMessage('');
         setError('No se ha podido confirmar el cambio. Se muestra el estado anterior; actualiza para comprobarlo o vuelve a intentarlo.');
       }
-    }).finally(() => {if (flight.current === token) flight.current = null;});
+    }).finally(() => {
+      if (flight.current === token) flight.current = null;
+      // A role may be revoked while the request is running. Never leave a
+      // provisional approval visible, or carry it into another identity.
+      if (mounted.current && scope.current.companyId === variables.companyId &&
+          scope.current.userId === variables.userId && !scope.current.isAdmin) {
+        setDocs(current => current.map(doc => doc.id === id && doc.company_id === variables.companyId ?
+          {...doc, estado: previous.estado, _taxeaStatusPending: false} : doc));
+      }
+    });
   };
   return {changeStatus, pending: mutation.isPending, error, message};
 }
+
