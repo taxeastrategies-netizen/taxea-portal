@@ -1,4 +1,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
 // Official SheetJS CE 0.20.3, vendored with license and checksum for reproducible
 // backend imports. Do not fall back to the outdated npm xlsx@0.18.5 package.
 import * as XLSX from './xlsx.mjs';
@@ -30,9 +39,11 @@ function validateImportFileUrl(value) {
 
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Admin only' }, { status: 403 });
     }

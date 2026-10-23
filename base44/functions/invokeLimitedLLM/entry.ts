@@ -1,5 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
+
 const DEFAULTS = {
   userMinute: 4,
   userDay: 40,
@@ -70,8 +79,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
-    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
-      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const isAdmin = ['admin', 'super_admin'].includes(user.role);

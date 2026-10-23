@@ -1,5 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
+
 const APP_ID = '6a00fec50cc522a74ddde4b2';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const limits = {
@@ -38,8 +47,7 @@ Deno.serve(async (req) => {
     client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
-    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
-      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const operation = String(body.operation || '');
     if (!Object.hasOwn(limits, operation)) return Response.json({ error: 'Operación no admitida' }, { status: 400 });

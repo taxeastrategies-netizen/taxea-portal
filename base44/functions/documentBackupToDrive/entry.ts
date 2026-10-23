@@ -1,5 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
+
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const REQUIRED_EMAIL = 'taxeastrategies@gmail.com';
@@ -364,6 +373,7 @@ function clientFolderName(companyId, companyName, mode) {
 
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'status';
@@ -371,6 +381,7 @@ Deno.serve(async (req) => {
     // El respaldo contiene documentación sensible: toda ejecución requiere una sesión administradora.
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }

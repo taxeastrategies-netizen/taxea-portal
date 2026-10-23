@@ -1,5 +1,14 @@
 import { reviewFilter } from './advisorReview.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
 import { commitJournalEntry, createJournalEntry, ensureAccount, postBankReconciliation, postInvoice, seedOperationalPgc, SCHEMA_VERSION, updatePostingOperation } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
@@ -446,9 +455,11 @@ async function commitPaymentPostingUnit(base44, companyId, payment, paymentPosti
 Deno.serve(async (req) => {
   let currentAction = '';
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const action = cleanText(body.action, 80);

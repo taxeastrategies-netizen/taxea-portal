@@ -5,6 +5,15 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
+// Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
+function isTaxeaAccountDisabled(account: any) {
+  return [account, account?.data].filter(Boolean).some(state =>
+    state.is_deleted === true
+    || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
+    || ['suspended', 'blocked', 'disabled', 'deleted'].includes(String(state.accountAccessStatus || '').trim().toLowerCase()));
+}
+
+
 const GMAIL_CONNECTOR_ID = '6a1b49be4d83894815de65a2';
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -226,8 +235,7 @@ Deno.serve(async (req) => {
     base44 = createClientFromRequest(req);
     user = await base44.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
-      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
+    if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     body = await req.json().catch(() => ({}));
     const connection = await getGmailConnection(base44);
 
