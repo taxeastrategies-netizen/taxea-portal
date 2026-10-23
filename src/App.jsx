@@ -108,16 +108,16 @@ function AppWithContext({ user }) {
           <Route path="/obligaciones" element={<ObligacionesFiscales />} />
           <Route path="/documentos" element={<Documentos />} />
           <Route path="/ajustes" element={<Ajustes />} />
-          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminPanel /></AdminOnlyRoute>} />
           <Route path="/errores" element={<DetectorErrores />} />
           <Route path="/notificaciones" element={<Notificaciones />} />
           <Route path="/asistente" element={<AsistenteFiscal />} />
-          <Route path="/admin-asistente" element={<AdminAsistente />} />
+          <Route path="/admin-asistente" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminAsistente /></AdminOnlyRoute>} />
           <Route path="/sugerencias" element={<BuzonSugerencias />} />
-          <Route path="/admin-sugerencias" element={<AdminSugerencias />} />
-          <Route path="/admin-afiliados" element={<AdminAfiliados />} />
-          <Route path="/subida-modelos" element={<SubidaMasivaModelos />} />
-          <Route path="/admin-whatsapp" element={<AdminWhatsApp />} />
+          <Route path="/admin-sugerencias" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminSugerencias /></AdminOnlyRoute>} />
+          <Route path="/admin-afiliados" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminAfiliados /></AdminOnlyRoute>} />
+          <Route path="/subida-modelos" element={<AdminOnlyRoute isAdmin={isAdmin}><SubidaMasivaModelos /></AdminOnlyRoute>} />
+          <Route path="/admin-whatsapp" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminWhatsApp /></AdminOnlyRoute>} />
           <Route path="/tax-accounting" element={<TaxAccounting />} />
           <Route path="/tax-accounting/:module" element={<TaxAccounting />} />
           <Route path="/finance" element={<Finance />} />
@@ -130,13 +130,13 @@ function AppWithContext({ user }) {
           <Route path="/law/:subdept" element={<Law />} />
           <Route path="/law/:subdept/:module" element={<Law />} />
           <Route path="/coming-soon" element={<ComingSoon />} />
-          <Route path="/admin/clients" element={<AdminClients />} />
+          <Route path="/admin/clients" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminClients /></AdminOnlyRoute>} />
           <Route path="/admin/estado-contable" element={<Navigate to="/admin/ocr-bandeja" replace />} />
           <Route path="/suscripcion" element={<Suscripcion />} />
-          <Route path="/admin/users" element={<GestionUsuarios />} />
-          <Route path="/admin/audit" element={<AdminAudit />} />
-          <Route path="/admin/ocr-credits" element={<AdminOcrCredits />} />
-          <Route path="/admin/ocr-bandeja" element={<AdminOcrBandeja />} />
+          <Route path="/admin/users" element={<AdminOnlyRoute isAdmin={isAdmin}><GestionUsuarios /></AdminOnlyRoute>} />
+          <Route path="/admin/audit" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminAudit /></AdminOnlyRoute>} />
+          <Route path="/admin/ocr-credits" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminOcrCredits /></AdminOnlyRoute>} />
+          <Route path="/admin/ocr-bandeja" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminOcrBandeja /></AdminOnlyRoute>} />
           <Route path="/importacion-contable" element={<ImportacionContable />} />
           <Route path="/admin/backup-drive" element={<AdminOnlyRoute isAdmin={isPlatformAdmin}><AdminBackupDrive /></AdminOnlyRoute>} />
           <Route path="/admin/privacy-requests" element={<AdminOnlyRoute isAdmin={isPlatformAdmin}><AdminPrivacyRequests /></AdminOnlyRoute>} />
@@ -186,7 +186,7 @@ const AuthenticatedApp = () => {
         <Route path="/setup-password" element={<SetupPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-          <Route path="/*" element={<AppWithContext user={user} />} />
+          <Route path="/*" element={<AppWithContext key={String(user?.id || '') + '::' + String(user?.role || '')} user={user} />} />
         </Route>
         <Route path="*" element={<PageNotFound />} />
       </Routes>
