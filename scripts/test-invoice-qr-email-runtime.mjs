@@ -63,7 +63,7 @@ const fakeFetch = async url => {
 };
 let handler;
 const ctx = vm.createContext({
-  console, Request, Response, URL, TextEncoder, Uint8Array, btoa, crypto: webcrypto, fetch: fakeFetch,
+  console, Request, Response, URL, TextEncoder, Uint8Array, AbortController, setTimeout, clearTimeout, btoa, crypto: webcrypto, fetch: fakeFetch,
   __client: client, Deno: { serve(fn) { handler = fn; } },
 });
 vm.runInContext(bundle.outputFiles[0].text, ctx, { filename: 'sendEmail.bundle.cjs' });
