@@ -789,7 +789,7 @@ var require_react_development = __commonJS({
           }
           return children;
         }
-        function createContext18(defaultValue) {
+        function createContext19(defaultValue) {
           var context = {
             $$typeof: REACT_CONTEXT_TYPE,
             // As a workaround to support multiple concurrent renderers, we categorize
@@ -1075,7 +1075,7 @@ var require_react_development = __commonJS({
           }
           return dispatcher;
         }
-        function useContext19(Context) {
+        function useContext20(Context) {
           var dispatcher = resolveDispatcher();
           {
             if (Context._context !== void 0) {
@@ -1097,7 +1097,7 @@ var require_react_development = __commonJS({
           var dispatcher = resolveDispatcher();
           return dispatcher.useReducer(reducer, initialArg, init);
         }
-        function useRef32(initialValue) {
+        function useRef33(initialValue) {
           var dispatcher = resolveDispatcher();
           return dispatcher.useRef(initialValue);
         }
@@ -1870,7 +1870,7 @@ var require_react_development = __commonJS({
         exports.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = ReactSharedInternals;
         exports.act = act;
         exports.cloneElement = cloneElement$1;
-        exports.createContext = createContext18;
+        exports.createContext = createContext19;
         exports.createElement = createElement$1;
         exports.createFactory = createFactory;
         exports.createRef = createRef;
@@ -1881,7 +1881,7 @@ var require_react_development = __commonJS({
         exports.startTransition = startTransition3;
         exports.unstable_act = act;
         exports.useCallback = useCallback22;
-        exports.useContext = useContext19;
+        exports.useContext = useContext20;
         exports.useDebugValue = useDebugValue;
         exports.useDeferredValue = useDeferredValue;
         exports.useEffect = useEffect43;
@@ -1891,7 +1891,7 @@ var require_react_development = __commonJS({
         exports.useLayoutEffect = useLayoutEffect13;
         exports.useMemo = useMemo22;
         exports.useReducer = useReducer3;
-        exports.useRef = useRef32;
+        exports.useRef = useRef33;
         exports.useState = useState38;
         exports.useSyncExternalStore = useSyncExternalStore2;
         exports.useTransition = useTransition2;
@@ -40808,7 +40808,9 @@ var SubContent2 = DropdownMenuSubContent;
 
 // src/components/ui/dropdown-menu.jsx
 var import_jsx_runtime36 = __toESM(require_jsx_runtime(), 1);
+var ActionMenuContext = React62.createContext(null);
 function DropdownMenu2({ open, defaultOpen = false, onOpenChange, ...props }) {
+  const mobile = useMobileViewport();
   const [localOpen, setLocalOpen] = React62.useState(defaultOpen);
   const change = (next) => {
     if (open === void 0) setLocalOpen(next);
@@ -40817,9 +40819,35 @@ function DropdownMenu2({ open, defaultOpen = false, onOpenChange, ...props }) {
   useCloseOnNavigation(() => {
     if (open === void 0 ? localOpen : open) change(false);
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Root24, { ...props, open: open === void 0 ? localOpen : open, onOpenChange: change });
+  const effectiveOpen = open === void 0 ? localOpen : open;
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ActionMenuContext.Provider, { value: { mobile, open: effectiveOpen, change }, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(Root24, { ...props, open: effectiveOpen, onOpenChange: change }) });
 }
-var DropdownMenuTrigger2 = Trigger3;
+var DropdownMenuTrigger2 = React62.forwardRef(({ onPointerDown, onClick, onKeyDown, ...props }, ref) => {
+  const menu = React62.useContext(ActionMenuContext), blockedClick = React62.useRef(false);
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+    Trigger3,
+    {
+      ...props,
+      ref,
+      onPointerDown: (event) => {
+        onPointerDown?.(event);
+        blockedClick.current = event.defaultPrevented;
+        if (menu?.mobile && !event.defaultPrevented && event.button === 0 && !event.ctrlKey) event.preventDefault();
+      },
+      onClick: (event) => {
+        onClick?.(event);
+        const blocked = blockedClick.current;
+        blockedClick.current = false;
+        if (menu?.mobile && !blocked && !props.disabled && !event.defaultPrevented && event.button === 0 && !event.ctrlKey) menu.change(!menu.open);
+      },
+      onKeyDown: (event) => {
+        blockedClick.current = false;
+        onKeyDown?.(event);
+      }
+    }
+  );
+});
+DropdownMenuTrigger2.displayName = Trigger3.displayName;
 var DropdownMenuSubTrigger2 = React62.forwardRef(({ className, inset, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(
   SubTrigger2,
   {
@@ -51975,6 +52003,11 @@ function useDocumentStatus({ docs, setDocs, companyId, userId, isAdmin }) {
     const previous = latest.current.find((doc) => doc.id === id3 && doc.company_id === companyId);
     if (!isAdmin || !userId || !companyId || !previous || !updates || Object.keys(updates).some((key) => key !== "estado") || !DOCUMENT_REVIEW_STATUSES.has(updates.estado)) {
       setError("No se puede cambiar el estado de este documento desde esta sesi\xF3n.");
+      return;
+    }
+    if (previous.estado === updates.estado) {
+      setError("");
+      setMessage("El documento ya tiene ese estado.");
       return;
     }
     const variables = { documentId: id3, companyId, userId, previous, nextStatus: updates.estado };
