@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
+import { registerSessionCleanup } from '@/lib/sessionSecurity.mjs';
 
 
 export const queryClientInstance = new QueryClient({
@@ -8,4 +9,8 @@ export const queryClientInstance = new QueryClient({
 			retry: 1,
 		},
 	},
+});
+registerSessionCleanup(() => {
+  void queryClientInstance.cancelQueries();
+  queryClientInstance.clear();
 });
