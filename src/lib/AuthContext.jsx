@@ -3,6 +3,9 @@ import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 
+import { acceptSessionIdentity, forgetSessionIdentity } from '@/lib/sessionSecurity.mjs';
+import '@/lib/query-client';
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -42,13 +45,19 @@ export const AuthProvider = ({ children }) => {
         if (appParams.token) {
           await checkUserAuth();
         } else {
+          forgetSessionIdentity();
+          setUser(null);
           setIsLoadingAuth(false);
           setIsAuthenticated(false);
           setAuthChecked(true);
         }
         setIsLoadingPublicSettings(false);
       } catch (appError) {
-        console.error('App state check failed:', appError);
+        forgetSessionIdentity();
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        console.warn('App state check failed:', appError?.status || 'unavailable');
         
         // Handle app-level errors
         if (appError.status === 403 && appError.data?.extra_data?.reason) {
@@ -79,7 +88,11 @@ export const AuthProvider = ({ children }) => {
         setIsLoadingAuth(false);
       }
     } catch (error) {
-      console.error('Unexpected error:', error);
+      forgetSessionIdentity();
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      console.warn('App state unavailable');
       setAuthError({
         type: 'unknown',
         message: error.message || 'An unexpected error occurred'
@@ -94,12 +107,16 @@ export const AuthProvider = ({ children }) => {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
       const currentUser = await base44.auth.me();
+      acceptSessionIdentity(currentUser);
+      setAuthError(null);
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       setAuthChecked(true);
     } catch (error) {
-      console.error('User auth check failed:', error);
+      forgetSessionIdentity();
+      setUser(null);
+      console.warn('User auth check failed:', error?.status || 'unavailable');
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
       setAuthChecked(true);
@@ -115,6 +132,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = (shouldRedirect = true) => {
+    forgetSessionIdentity();
     setUser(null);
     setIsAuthenticated(false);
     
