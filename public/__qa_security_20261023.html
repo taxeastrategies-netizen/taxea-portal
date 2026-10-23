@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Taxea QA seguridad aislada</title></head>
+<body><h1>Taxea: pruebas controladas de seguridad</h1><p>Solo diagnóstico. No se muestran tokens ni se consultan clientes reales.</p><button id="identity">Comprobar identidad de prueba</button><pre id="result" role="status">Sin ejecutar</pre>
+<script type="module">
+import {base44} from '/src/api/base44Client.js';
+const output=document.getElementById('result');
+document.getElementById('identity').addEventListener('click',async()=>{
+  try {const user=await base44.auth.me();output.textContent=JSON.stringify({authenticated:!!user?.id,role:user?.role,isFictitiousUser:/\+qa[-+]/i.test(user?.email||''),id:user?.id,companyId:user?.data?.company_id||user?.company_id||null},null,2);}
+  catch(error){output.textContent=JSON.stringify({authenticated:false,status:error?.status||error?.response?.status||null});}
+});
+</script></body></html>
+
