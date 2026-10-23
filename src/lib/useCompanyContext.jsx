@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { getImpersonation } from '@/lib/impersonation';
+import { registerSessionCleanup } from '@/lib/sessionSecurity.mjs';
 
 // Roles con acceso administrativo completo
 export const ADMIN_ROLES = ['admin', 'super_admin', 'advisor', 'asesor'];
@@ -8,6 +9,7 @@ export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
 // Cache simple en memoria para evitar re-fetches innecesarios
 const companyCache = new Map();
+registerSessionCleanup(() => companyCache.clear());
 
 async function syncCompanyId(companyId) {
   const response = await base44.functions.invoke('companyContextOperations', {
@@ -22,14 +24,14 @@ export function useCompanyContext(user) {
   const [loading, setLoading] = useState(true);
 
   const loadCompany = useCallback(async () => {
-    if (!user) { setLoading(false); return; }
+    if (!user) { setCompany(null); setLoading(false); return; }
 
     const imp = isAdminRole(user.role) ? getImpersonation() : null;
     // Cache key incluye el estado de impersonación para evitar devolver caché sin impersonar
     const assignedCompanyId = user.data?.company_id || '';
     const cacheKey = imp?.companyId || imp?.clientEmail
-      ? `${user.email}::imp:${imp.companyId || imp.clientEmail}`
-      : `${user.email}::company:${assignedCompanyId || 'unassigned'}`;
+      ? `${user.email}::${user.role}::imp:${imp.companyId || imp.clientEmail}`
+      : `${user.email}::${user.role}::company:${assignedCompanyId || 'unassigned'}`;
     if (companyCache.has(cacheKey)) {
       setCompany(companyCache.get(cacheKey));
       setLoading(false);
@@ -111,7 +113,7 @@ export function useCompanyContext(user) {
       for (const key of companyCache.keys()) {
         if (key === user.email || key.startsWith(`${user.email}::`)) companyCache.delete(key);
       }
-      if (imp?.companyId || imp?.clientEmail) companyCache.delete(`${user.email}::imp:${imp.companyId || imp.clientEmail}`);
+      if (imp?.companyId || imp?.clientEmail) companyCache.delete(`${user.email}::${user.role}::imp:${imp.companyId || imp.clientEmail}`);
     }
     // Small delay to allow the DB write to propagate
     setTimeout(() => loadCompany(), 300);
