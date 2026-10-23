@@ -51,7 +51,14 @@ function validateFileUrls(value: unknown, maxFiles: number) {
   return value.map((raw) => {
     if (typeof raw !== 'string' || raw.length > 2048) throw new Error('URL de archivo no válida');
     const url = new URL(raw);
-    if (url.protocol !== 'https:') throw new Error('Los archivos deben usar HTTPS');
+    const appId = '6a00fec50cc522a74ddde4b2';
+    const appFile = url.hostname === 'base44.app'
+      && url.pathname.startsWith('/api/apps/' + appId + '/files/mp/');
+    const mediaFile = url.hostname === 'media.base44.com'
+      && ['public', 'private'].some(kind => url.pathname.startsWith('/files/' + kind + '/' + appId + '/'));
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.hash || (!appFile && !mediaFile)) {
+      throw new Error('URL de archivo no válido: utiliza documentos de Taxea en HTTPS');
+    }
     return url.toString();
   });
 }
@@ -59,9 +66,12 @@ function validateFileUrls(value: unknown, maxFiles: number) {
 Deno.serve(async (req) => {
   let eventId: string | undefined;
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
+      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const isAdmin = ['admin', 'super_admin'].includes(user.role);
