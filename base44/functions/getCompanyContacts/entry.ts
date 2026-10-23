@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
-function isTaxeaAccountDisabled(account: any) {
+function isTaxeaAccountDisabled(account) {
   return [account, account?.data].filter(Boolean).some(state =>
     state.is_deleted === true
     || ['eliminado', 'bloqueado', 'suspendido'].includes(String(state.status || '').trim().toLowerCase())
