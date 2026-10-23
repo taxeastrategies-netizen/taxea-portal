@@ -181,9 +181,10 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
   vm.runInNewContext(functionSource, context, { filename: 'documentBackupToDrive/entry.ts' });
   assert.equal(typeof handler, 'function');
 
-  const response = await handler({
-    json: async () => ({ action: 'backup', jobType: 'manual' }),
-  });
+  const response = await handler(new Request('https://qa.invalid.test/documentBackupToDrive', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'backup', jobType: 'manual' }),
+  }));
   const payload = await response.json();
   return { payload, job, recordCreates, itemCreates, mediaDownloads, uploadAttempts };
 }
