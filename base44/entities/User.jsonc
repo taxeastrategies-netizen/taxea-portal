@@ -11,7 +11,24 @@
         "admin",
         "super_admin"
       ],
-      "default": "user"
+      "default": "user",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "company_id": {
       "type": "string",
@@ -19,9 +36,18 @@
       "rls": {
         "read": true,
         "write": {
-          "user_condition": {
-            "role": "admin"
-          }
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
         }
       }
     },
@@ -45,7 +71,24 @@
       "type": "string"
     },
     "stripeCustomerId": {
-      "type": "string"
+      "type": "string",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "billing_address": {
       "type": "string"
@@ -72,11 +115,45 @@
         "bloqueado",
         "eliminado"
       ],
-      "default": "activo"
+      "default": "activo",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "is_deleted": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "accountAccessStatus": {
       "type": "string",
@@ -85,7 +162,24 @@
         "active",
         "suspended"
       ],
-      "default": "locked"
+      "default": "locked",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "adminActivationStatus": {
       "type": "string",
@@ -94,18 +188,86 @@
         "approved",
         "rejected"
       ],
-      "default": "pending"
+      "default": "pending",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "isPortalActive": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "activatedAt": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "activatedBy": {
-      "type": "string"
+      "type": "string",
+      "rls": {
+        "read": true,
+        "write": {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
+        }
+      }
     },
     "notes": {
       "type": "string"
