@@ -68,6 +68,15 @@ hookDocs[0].notas='Latest local note';hookRelease();await assert.rejects(hookPen
 assert.equal(hookDocs[0].estado,'revisado');assert.equal(hookDocs[0].notas,'Latest local note');assert.ok(hook.error.includes('estado anterior'));
 hook.changeStatus(previous.id,{estado:'aprobado',company_id:'attacker'});await new Promise(setImmediate);assert.equal(hookWrites,2,'Caller cannot change ownership or sneak another field');
 identity={...identity,isAdmin:false};hook=render();hook.changeStatus(previous.id,{estado:'aprobado'});await new Promise(setImmediate);assert.equal(hookWrites,2,'Normal clients cannot approve document review metadata');
+fail=false;identity={...identity,isAdmin:true};hook=render();hookBegan=new Promise(resolve=>{hookStarted=resolve;});
+hook.changeStatus(previous.id,{estado:'aprobado'});await hookBegan;
+identity={...identity,isAdmin:false};hook=render();hookRelease();await hookPending;await new Promise(setImmediate);hook=render();
+assert.equal(hookDocs[0]._taxeaStatusPending,false,'Revoking the role mid-request cannot leave an eternal provisional badge');
+assert.equal(hookDocs[0].estado,'revisado','Role revocation does not show a provisional approval as confirmed');
+identity={...identity,isAdmin:true};hook=render();hookBegan=new Promise(resolve=>{hookStarted=resolve;});
+hook.changeStatus(previous.id,{estado:'aprobado'});await hookBegan;
+identity={companyId:'new-company',userId:'new-user',isAdmin:true};hookDocs=[{...previous,company_id:'new-company',estado:'pendiente'}];hook=render();
+hookRelease();await hookPending;await new Promise(setImmediate);hook=render();assert.equal(hookDocs[0].estado,'pendiente');assert.equal(hookDocs[0]._taxeaStatusPending,undefined,'A response cannot insert pending/confirmed metadata into a different company');
 hookClient.clear();
 
 // Render actual cards. Only presentation, no download, external API or approval.
@@ -83,3 +92,4 @@ const page=fs.readFileSync('src/pages/Documentos.jsx','utf8');
 assert.ok(page.includes('d.estado === filterEstado || d._taxeaStatusPending'),'Pending row remains visible until confirmation or rollback');
 assert.equal((page.match(/busy=\{updatingStatus\}/g)||[]).length,2,'Both views block repeated status changes');
 console.log(JSON.stringify({ok:true,actualMutationObserver:true,actualHookCallbacks:true,realReactCardRender:true,optimisticPendingBeforeNetwork:true,serverConfirmationRequired:true,targetedRollback:true,noAutoRetry:true,scopeIsolation:true,doubleTapGuard:true,explicitFieldAllowlist:true,externalCalls:0,financialWrites:0}));
+
