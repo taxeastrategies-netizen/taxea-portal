@@ -47,6 +47,7 @@ export default function PremiumReportViewerV5({ imp, onBack }) {
   const [aiContent, setAiContent] = useState(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [showSupuestos, setShowSupuestos] = useState(false);
   const [showIndex, setShowIndex] = useState(true);
   const [activeSection, setActiveSection] = useState('page-portada');
@@ -155,15 +156,30 @@ Genera JSON con: diagnostico_ejecutivo (4-6 frases, diagnóstico general prudent
   };
 
   // PDF Export
-  const exportPDF = async () => {
+  const exportPDF = () => {
     setExportingPDF(true);
-    await new Promise(r => setTimeout(r, 100));
-    const html = buildPDFHTML(calc, alertas, recs, aiContent, imp);
-    const w = window.open('', '_blank');
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); setExportingPDF(false); }, 800);
+    setExportError('');
+    let preview;
+    try {
+      // buildPDFHTML escapes the complete report DTO and adds script-src 'none'.
+      const html = buildPDFHTML(calc, alertas, recs, aiContent, imp);
+      preview = window.open('', '_blank');
+      if (!preview) {
+        setExportError('Permite las ventanas emergentes para abrir el PDF del informe.');
+        return;
+      }
+      // The print document must never retain a handle to the authenticated app.
+      preview.opener = null;
+      preview.document.write(html);
+      preview.document.close();
+      preview.focus();
+      setTimeout(() => { if (!preview.closed) preview.print(); }, 800);
+    } catch {
+      preview?.close();
+      setExportError('No se pudo abrir el PDF. Reintenta la exportación.');
+    } finally {
+      setExportingPDF(false);
+    }
   };
 
   return (
@@ -207,6 +223,8 @@ Genera JSON con: diagnostico_ejecutivo (4-6 frases, diagnóstico general prudent
           </button>
         </div>
       </div>
+
+      {exportError && <p role="alert" className="px-4 py-2 text-sm text-red-700 bg-red-50">{exportError}</p>}
 
       {/* ─── AI banner ─────────────────────────────────────────────────────────── */}
       {loadingAI && (
