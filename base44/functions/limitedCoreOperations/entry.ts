@@ -34,12 +34,15 @@ Deno.serve(async (req) => {
   let client: any;
   let event: any;
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
+      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const operation = String(body.operation || '');
-    if (!(operation in limits)) return Response.json({ error: 'Operación no admitida' }, { status: 400 });
+    if (!Object.hasOwn(limits, operation)) return Response.json({ error: 'Operación no admitida' }, { status: 400 });
     const companyId = String(body.companyId || '').trim();
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(companyId)) return Response.json({ error: 'Empresa no válida' }, { status: 400 });
     const svc = client.asServiceRole;
