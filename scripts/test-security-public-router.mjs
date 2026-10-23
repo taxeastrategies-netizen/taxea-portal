@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { StaticRouter, Route, Routes } from 'react-router-dom';
 import { transform } from 'esbuild';
 
 let source = fs.readFileSync('src/App.jsx', 'utf8');
@@ -36,7 +36,7 @@ for (const authState of ['no-session', 'auth-required', 'expired', 'loading', 'r
     const context = vm.createContext({
       React, Suspense: React.Suspense, ThemeProvider: passThrough, MotionConfig: passThrough,
       AuthProvider: passThrough, QueryClientProvider: passThrough, queryClientInstance: {},
-      Router: ({ children }) => React.createElement(MemoryRouter, { initialEntries: [pathname] }, children),
+      Router: ({ children }) => React.createElement(StaticRouter, { location: pathname }, children),
       Route, Routes, PageLoader: () => null, Toaster: () => null,
       PublicInvoiceViewer: () => React.createElement('span', null, 'public-invoice'),
       SetupPassword: () => React.createElement('span', null, 'public-setup'),
