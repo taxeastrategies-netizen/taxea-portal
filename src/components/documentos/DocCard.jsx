@@ -173,4 +173,3 @@ function DocActions({ doc, isAdmin, onUpdate, busy }) {
     </DropdownMenu>
   );
 }
-

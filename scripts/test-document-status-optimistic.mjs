@@ -83,4 +83,3 @@ const page=fs.readFileSync('src/pages/Documentos.jsx','utf8');
 assert.ok(page.includes('d.estado === filterEstado || d._taxeaStatusPending'),'Pending row remains visible until confirmation or rollback');
 assert.equal((page.match(/busy=\{updatingStatus\}/g)||[]).length,2,'Both views block repeated status changes');
 console.log(JSON.stringify({ok:true,actualMutationObserver:true,actualHookCallbacks:true,realReactCardRender:true,optimisticPendingBeforeNetwork:true,serverConfirmationRequired:true,targetedRollback:true,noAutoRetry:true,scopeIsolation:true,doubleTapGuard:true,explicitFieldAllowlist:true,externalCalls:0,financialWrites:0}));
-

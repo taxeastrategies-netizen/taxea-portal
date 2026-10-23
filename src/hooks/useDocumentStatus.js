@@ -39,4 +39,3 @@ export default function useDocumentStatus({docs, setDocs, companyId, userId, isA
   };
   return {changeStatus, pending: mutation.isPending, error, message};
 }
-

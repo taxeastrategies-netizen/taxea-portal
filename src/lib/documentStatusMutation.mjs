@@ -42,4 +42,3 @@ export function documentStatusOptions({queryClient, persist, isCurrent, onVisibl
     },
   };
 }
-
