@@ -32,4 +32,3 @@ handler=render();handler.onClick(event());assert.deepEqual(changes,[true],'Acces
 mobile=false;changes=[];handler=render();down=event();handler.onPointerDown(down);handler.onClick(event());assert.equal(down.defaultPrevented,false);assert.deepEqual(changes,[],'Desktop opening stays owned by the actual Radix primitive');
 let keys=0;handler=render({onKeyDown:()=>{keys++;}});const key=event({key:'Enter'});handler.onKeyDown(key);assert.equal(keys,1);assert.equal(key.defaultPrevented,false,'Radix keeps keyboard event ownership');
 console.log(JSON.stringify({ok:true,realReactContext:true,mobileOpensOnRelease:true,noPointerdownActivation:true,accessibleClick:true,callerCancellation:true,desktopAndKeyboardPreserved:true,externalCalls:0}));
-
