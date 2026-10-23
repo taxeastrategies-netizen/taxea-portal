@@ -10,6 +10,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 let captured,changes=[],mobile=true;
 const nativeRequire=createRequire(import.meta.url);
 const primitive={Root:({children})=>children,Trigger:React.forwardRef((props,ref)=>{captured=props;return React.createElement('button',{ref,type:'button'},props.children);})};
+for(const name of ['Group','Portal','Sub','RadioGroup','SubTrigger','SubContent','Content','Item','CheckboxItem','RadioItem','Label','Separator']) primitive[name]=React.forwardRef(({children},ref)=>React.createElement('div',{ref},children));
 const built=await esbuild.build({entryPoints:['src/components/ui/dropdown-menu.jsx'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',alias:{'@':process.cwd()+'/src'},external:['react','react-dom','react/jsx-runtime'],plugins:[{name:'event-contract',setup(build){
   build.onResolve({filter:/^@radix-ui\/react-dropdown-menu$/},()=>({path:'radix',namespace:'qa'}));
   build.onResolve({filter:/useMobileViewport$/},()=>({path:'mobile',namespace:'qa'}));
