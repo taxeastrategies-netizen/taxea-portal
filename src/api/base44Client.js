@@ -1,5 +1,6 @@
 import { createClient } from '@base44/sdk';
 import { appParams } from '@/lib/app-params';
+import { forgetSessionIdentity } from '@/lib/sessionSecurity.mjs';
 
 const { appId, token, functionsVersion, appBaseUrl } = appParams;
 
@@ -45,9 +46,21 @@ const limitedIntegrations = new Proxy(sdkBase44.integrations, {
   }
 });
 
+// Every logout entry point (TopBar, account settings, suspension) clears memory.
+const sessionAuth = new Proxy(sdkBase44.auth, {
+  get(target, property, receiver) {
+    if (property === 'logout') return (...args) => {
+      forgetSessionIdentity();
+      return target.logout(...args);
+    };
+    return Reflect.get(target, property, receiver);
+  }
+});
+
 // Los servicios que consumen créditos se invocan explícitamente en el backend.
 export const base44 = new Proxy(sdkBase44, {
   get(target, property, receiver) {
+    if (property === 'auth') return sessionAuth;
     if (property === 'integrations') return limitedIntegrations;
     if (property === 'controlledCore') return limitedCore;
     return Reflect.get(target, property, receiver);
