@@ -63,6 +63,7 @@ let hook=render(),hookBegan=new Promise(resolve=>{hookStarted=resolve;});
 hook.changeStatus(previous.id,{estado:'revisado'});hook.changeStatus(previous.id,{estado:'rechazado'});await hookBegan;
 hook=render();assert.equal(hookDocs[0].estado,'revisado');assert.equal(hookDocs[0]._taxeaStatusPending,true);assert.equal(hook.pending,true);assert.equal(hookWrites,1,'Fast double taps only persist once');
 hookRelease();await hookPending;await new Promise(setImmediate);hook=render();assert.equal(hookDocs[0]._taxeaStatusPending,false);assert.ok(hook.message.includes('actualizado'));
+hook.changeStatus(previous.id,{estado:'revisado'});await new Promise(setImmediate);assert.equal(hookWrites,1,'Repeated submission of the already-confirmed state is a local no-op');
 fail=true;hookBegan=new Promise(resolve=>{hookStarted=resolve;});hook.changeStatus(previous.id,{estado:'rechazado'});await hookBegan;
 hookDocs[0].notas='Latest local note';hookRelease();await assert.rejects(hookPending);await new Promise(setImmediate);hook=render();
 assert.equal(hookDocs[0].estado,'revisado');assert.equal(hookDocs[0].notas,'Latest local note');assert.ok(hook.error.includes('estado anterior'));
