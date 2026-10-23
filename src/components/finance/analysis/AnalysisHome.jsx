@@ -212,4 +212,3 @@ function EmptyState({ onImport }) {
     </div>
   );
 }
-

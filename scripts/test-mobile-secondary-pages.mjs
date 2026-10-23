@@ -82,4 +82,3 @@ check(analysisMarkup.includes('dark:text-amber-200') && analysisMarkup.includes(
 check(analysisMarkup.includes('Abrir PDF Balance / PyG') && analysisMarkup.includes('Abrir Excel o A3 .dat'), 'Feature navigation uses actual buttons');
 check(!/<div[^>]*cursor-pointer/.test(analysisMarkup), 'No mouse-only clickable div remains in analysis home');
 console.log(JSON.stringify({ ok: true, cases, realReactRender: true, callbackDispatch: true, allNamedOperationalFunctionsUnchanged: true, externalCalls: 0, financialWrites: 0 }));
-

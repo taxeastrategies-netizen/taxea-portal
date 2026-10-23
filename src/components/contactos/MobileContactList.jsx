@@ -33,4 +33,3 @@ export default function MobileContactList({ contacts, selected, allSelected, onS
     </ul>
   </div>;
 }
-
