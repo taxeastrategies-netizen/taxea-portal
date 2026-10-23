@@ -1,12 +1,27 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Taxea QA seguridad aislada</title></head>
-<body><h1>Taxea: pruebas controladas de seguridad</h1><p>Solo diagnóstico. No se muestran tokens ni se consultan clientes reales.</p><button id="identity">Comprobar identidad de prueba</button><pre id="result" role="status">Sin ejecutar</pre>
+<body><h1>Taxea: pruebas controladas de seguridad</h1><p>Solo diagnóstico. No se muestran tokens ni se consultan clientes reales. Las cargas contienen únicamente texto ficticio de QA.</p><button id="identity">Comprobar identidad de prueba</button><button id="files">Probar archivo ficticio público y privado</button><pre id="result" role="status">Sin ejecutar</pre><div id="files-result"></div>
 <script type="module">
 import {base44} from '/src/api/base44Client.js';
 const output=document.getElementById('result');
 document.getElementById('identity').addEventListener('click',async()=>{
   try {const user=await base44.auth.me();output.textContent=JSON.stringify({authenticated:!!user?.id,role:user?.role,isFictitiousUser:/\+qa[-+]/i.test(user?.email||''),id:user?.id,companyId:user?.data?.company_id||user?.company_id||null},null,2);}
   catch(error){output.textContent=JSON.stringify({authenticated:false,status:error?.status||error?.response?.status||null});}
+});
+document.getElementById('files').addEventListener('click',async()=>{
+  const button=document.getElementById('files');button.disabled=true;
+  try {
+    const user=await base44.auth.me();
+    if(!['admin','super_admin'].includes(user?.role)&&!/\+qa[-+]/i.test(user?.email||''))throw new Error('Solo identidad de QA o administrador');
+    const marker='TAXEA_QA_SECURITY_20261023_SYNTHETIC_NOT_CUSTOMER_DATA';
+    const file=new File([marker],'taxea-qa-security-20261023.txt',{type:'text/plain'});
+    const publicResult=await base44.integrations.Core.UploadFile({file});
+    const privateResult=await base44.integrations.Core.UploadPrivateFile({file});
+    const access=await base44.integrations.Core.CreateFileSignedUrl({file_uri:privateResult.file_uri,expires_in:300});
+    const box=document.getElementById('files-result');box.replaceChildren();
+    const result=document.createElement('pre');result.textContent=JSON.stringify({publicUploadConfirmed:!!publicResult.file_url,privateUploadConfirmed:!!privateResult.file_uri,privateUri:privateResult.file_uri,temporaryAccessConfirmed:!!access.signed_url},null,2);box.append(result);
+    for(const [id,label,url] of [['public-file','Archivo ficticio público',publicResult.file_url],['private-file','Acceso temporal al archivo ficticio privado',access.signed_url]]){const a=document.createElement('a');a.id=id;a.textContent=label;a.href=url;a.target='_blank';a.rel='noreferrer';box.append(a,document.createElement('br'));}
+  } catch(error){output.textContent=JSON.stringify({error:'Prueba de archivo no completada',status:error?.status||error?.response?.status||null,name:error?.name});}
 });
 </script></body></html>
 
