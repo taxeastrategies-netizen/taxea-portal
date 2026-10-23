@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import useMobileViewport from '@/hooks/useMobileViewport';
+import MobileContactList from '@/components/contactos/MobileContactList';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
 import {
@@ -35,12 +37,12 @@ import { Switch } from '@/components/ui/switch';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const AVATAR_COLORS = [
-  'bg-teal-100 text-teal-800',
-  'bg-blue-100 text-blue-800',
-  'bg-violet-100 text-violet-800',
-  'bg-amber-100 text-amber-800',
-  'bg-rose-100 text-rose-800',
-  'bg-emerald-100 text-emerald-800',
+  'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200',
+  'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
+  'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200',
+  'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200',
+  'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
 ];
 
 const EMPTY = {
@@ -126,6 +128,7 @@ function sourceLabel(contact) {
 }
 
 export default function Contactos() {
+  const mobile = useMobileViewport();
   const { company, loadingCompany } = useOutletContext() || {};
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -365,6 +368,48 @@ export default function Contactos() {
     URL.revokeObjectURL(url);
   };
 
+  // One set of actions for both layouts; keep all operational callbacks intact.
+  const renderContactActions = contact => {
+    const email = firstEmail(contact), phone = firstPhone(contact);
+    return (<DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Acciones para ${contact.nombre}`}>
+          <MoreHorizontal className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => openEdit(contact)}>
+          <Pencil className="w-4 h-4 mr-2" /> Editar contacto
+        </DropdownMenuItem>
+        {contact.nif_cif && (
+          <DropdownMenuItem onClick={() => navigator.clipboard.writeText(contact.nif_cif)}>
+            <Copy className="w-4 h-4 mr-2" /> Copiar NIF/CIF
+          </DropdownMenuItem>
+        )}
+        {email && (
+          <DropdownMenuItem asChild>
+            <a href={`mailto:${email}`}><Mail className="w-4 h-4 mr-2" /> Enviar email</a>
+          </DropdownMenuItem>
+        )}
+        {phone && (
+          <DropdownMenuItem asChild>
+            <a href={`tel:${phone}`}><Phone className="w-4 h-4 mr-2" /> Llamar</a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(contact)}>
+          <Trash2 className="w-4 h-4 mr-2" /> Retirar contacto
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>);
+  };
+
+  const describeContact = contact => ({
+    email: firstEmail(contact), phone: firstPhone(contact), address: fullAddress(contact),
+    klass: contactClass(contact) === 'empresa' ? 'Empresa' : 'Persona',
+    type: typeLabel(contact.tipo), source: sourceLabel(contact), activity: formatDate(lastActivity(contact)),
+  });
+
   const selectedRows = contacts.filter((contact) => selected.has(contact.id));
 
   if (loadingCompany && loading) {
@@ -403,14 +448,14 @@ export default function Contactos() {
       </PageHeader>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 px-4 py-3 text-sm text-amber-900">
           {error}
         </div>
       )}
 
       <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
         <div className="p-3 border-b border-border flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="inline-flex self-start rounded-lg border border-border bg-secondary/30 p-0.5">
+          <div className="inline-flex flex-wrap max-w-full self-start rounded-lg border border-border bg-secondary/30 p-0.5">
             {[
               { value: 'all', label: 'Todos', count: counts.total, icon: Users },
               { value: 'empresa', label: 'Empresas', count: counts.empresa, icon: Building2 },
@@ -434,7 +479,7 @@ export default function Contactos() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[170px] h-9">
+              <SelectTrigger aria-label="Ordenar contactos" className="w-[170px] h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -465,7 +510,7 @@ export default function Contactos() {
               className="pl-9 h-9"
             />
           </div>
-          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => exportCsv(filtered)} disabled={!filtered.length} title="Exportar contactos">
+          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => exportCsv(filtered)} disabled={!filtered.length} title="Exportar contactos" aria-label="Exportar contactos">
             <Download className="w-4 h-4" />
           </Button>
         </div>
@@ -475,7 +520,7 @@ export default function Contactos() {
             <div className="space-y-1.5">
               <Label className="text-xs">Relación</Label>
               <Select value={filterTipo} onValueChange={setFilterTipo}>
-                <SelectTrigger className="w-48 h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Relación del contacto" className="w-48 h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los tipos</SelectItem>
                   <SelectItem value="cliente">Clientes</SelectItem>
@@ -491,7 +536,7 @@ export default function Contactos() {
         )}
 
         {selected.size > 0 && (
-          <div className="px-4 py-2.5 border-b border-border bg-teal-light/50 flex items-center gap-3 text-sm">
+          <div className="px-4 py-2.5 border-b border-border bg-teal-light/50 dark:bg-teal-950/40 flex flex-wrap items-center gap-3 text-sm">
             <span className="font-medium text-foreground">{selected.size} seleccionados</span>
             <button className="text-teal hover:underline" onClick={() => exportCsv(selectedRows)}>Exportar selección</button>
             <button className="text-muted-foreground hover:text-foreground ml-auto" onClick={() => setSelected(new Set())}>Quitar selección</button>
@@ -515,7 +560,7 @@ export default function Contactos() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {mobile ? <MobileContactList contacts={visible} selected={selected} allSelected={allVisibleSelected} onSelectAll={toggleVisible} onSelect={toggleOne} onEdit={openEdit} describeContact={describeContact} renderActions={renderContactActions} /> : <div className="overflow-x-auto">
               <table className="w-full min-w-[1380px] text-sm">
                 <thead>
                   <tr className="border-b border-border bg-secondary/40">
@@ -586,72 +631,41 @@ export default function Contactos() {
                         <td className="px-3 py-2.5 text-muted-foreground"><span className="block max-w-[250px] truncate" title={address}>{address || '—'}</span></td>
                         <td className="px-3 py-2.5 text-muted-foreground">{contact.pais || '—'}</td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex rounded-md px-2 py-1 text-[11px] font-semibold ${contact.tipo === 'cliente' ? 'bg-teal-50 text-teal-700' : contact.tipo === 'proveedor' ? 'bg-orange-50 text-orange-700' : 'bg-blue-50 text-blue-700'}`}>
+                          <span className={`inline-flex rounded-md px-2 py-1 text-[11px] font-semibold ${contact.tipo === 'cliente' ? 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-200' : contact.tipo === 'proveedor' ? 'bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-200' : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200'}`}>
                             {typeLabel(contact.tipo)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${contact.origen_automatico ? 'bg-violet-50 text-violet-700' : 'bg-secondary text-muted-foreground'}`}>
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${contact.origen_automatico ? 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-200' : 'bg-secondary text-muted-foreground'}`}>
                             {sourceLabel(contact)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(lastActivity(contact))}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Acciones para ${contact.nombre}`}>
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              <DropdownMenuItem onClick={() => openEdit(contact)}>
-                                <Pencil className="w-4 h-4 mr-2" /> Editar contacto
-                              </DropdownMenuItem>
-                              {contact.nif_cif && (
-                                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(contact.nif_cif)}>
-                                  <Copy className="w-4 h-4 mr-2" /> Copiar NIF/CIF
-                                </DropdownMenuItem>
-                              )}
-                              {email && (
-                                <DropdownMenuItem asChild>
-                                  <a href={`mailto:${email}`}><Mail className="w-4 h-4 mr-2" /> Enviar email</a>
-                                </DropdownMenuItem>
-                              )}
-                              {phone && (
-                                <DropdownMenuItem asChild>
-                                  <a href={`tel:${phone}`}><Phone className="w-4 h-4 mr-2" /> Llamar</a>
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(contact)}>
-                                <Trash2 className="w-4 h-4 mr-2" /> Retirar contacto
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        <td className="px-3 py-2.5 text-right">{renderContactActions(contact)}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
+            </div>}
 
             <div className="px-4 py-3 border-t border-border flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
               <p className="text-muted-foreground">
                 Mostrando <span className="font-medium text-foreground">{(currentPage - 1) * pageSize + 1}</span>–<span className="font-medium text-foreground">{Math.min(currentPage * pageSize, filtered.length)}</span> de <span className="font-medium text-foreground">{filtered.length}</span>
               </p>
-              <div className="sm:ml-auto flex items-center gap-2">
+              <div className="sm:ml-auto flex flex-wrap items-center gap-2">
                 <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
-                  <SelectTrigger className="w-[105px] h-8"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Contactos por página" className="w-[105px] h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PAGE_SIZE_OPTIONS.map((size) => <SelectItem key={size} value={String(size)}>{size} / pág.</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Página anterior de contactos" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="min-w-20 text-center text-xs text-muted-foreground">Pág. {currentPage} de {pageCount}</span>
-                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
+                <Button variant="outline" size="icon" className="h-8 w-8" aria-label="Página siguiente de contactos" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -751,3 +765,4 @@ export default function Contactos() {
     </div>
   );
 }
+
