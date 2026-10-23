@@ -20,10 +20,9 @@ try{
   if (result?.signed_url) {
     const download = await fetch(result.signed_url, {signal: AbortSignal.timeout(10000)});
     downloadStatus = download.status;
-    markerReadable = (await download.text()) === 'TAXEA_QA_SECURITY_20261023_SYNTHETIC_NOT_CUSTOMER_DATA\n';
+    markerReadable = (await download.text()).trim() === 'TAXEA_QA_SECURITY_20261023_SYNTHETIC_NOT_CUSTOMER_DATA';
   }
   privateFileSigning={anonymousDenied:false,signedUrlReturned:!!result?.signed_url,downloadStatus,markerReadable};
 }catch(e){privateFileSigning={anonymousDenied:[401,403].includes(e?.status||e?.response?.status),status:e?.status||e?.response?.status||null};}
 console.log(JSON.stringify({readOnly:true,customerContentsPrinted:false,records:rows,privateFileSigning},null,2));
 client.cleanup();
-
