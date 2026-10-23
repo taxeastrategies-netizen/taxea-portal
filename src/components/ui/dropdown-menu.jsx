@@ -7,14 +7,35 @@ import useSafeAreaCollision from '@/hooks/useSafeAreaCollision';
 import useCloseOnNavigation from '@/hooks/useCloseOnNavigation';
 import useMobileViewport from '@/hooks/useMobileViewport';
 
+const ActionMenuContext = React.createContext(null);
+
 function DropdownMenu({open,defaultOpen=false,onOpenChange,...props}){
+  const mobile=useMobileViewport();
   const [localOpen,setLocalOpen]=React.useState(defaultOpen);
   const change=next=>{if(open===undefined)setLocalOpen(next);onOpenChange?.(next);};
   useCloseOnNavigation(()=>{if(open===undefined?localOpen:open)change(false);});
-  return <DropdownMenuPrimitive.Root {...props} open={open===undefined?localOpen:open} onOpenChange={change}/>;
+  const effectiveOpen=open===undefined?localOpen:open;
+  return <ActionMenuContext.Provider value={{mobile,open:effectiveOpen,change}}><DropdownMenuPrimitive.Root {...props} open={effectiveOpen} onOpenChange={change}/></ActionMenuContext.Provider>;
 }
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
+// The mobile menu is repositioned as a bottom action sheet. Opening on
+// pointerdown can put an item under the still-pressed pointer and select it on
+// release. Wait for click/release; keyboard handling stays with Radix.
+const DropdownMenuTrigger = React.forwardRef(({onPointerDown,onClick,onKeyDown,...props},ref)=>{
+  const menu=React.useContext(ActionMenuContext),blockedClick=React.useRef(false);
+  return <DropdownMenuPrimitive.Trigger {...props} ref={ref}
+    onPointerDown={event=>{
+      onPointerDown?.(event);blockedClick.current=event.defaultPrevented;
+      if(menu?.mobile&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey)event.preventDefault();
+    }}
+    onClick={event=>{
+      onClick?.(event);const blocked=blockedClick.current;blockedClick.current=false;
+      if(menu?.mobile&&!blocked&&!props.disabled&&!event.defaultPrevented&&event.button===0&&!event.ctrlKey)menu.change(!menu.open);
+    }}
+    onKeyDown={event=>{blockedClick.current=false;onKeyDown?.(event);}}
+  />;
+});
+DropdownMenuTrigger.displayName=DropdownMenuPrimitive.Trigger.displayName;
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 
@@ -174,3 +195,4 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 }
+
