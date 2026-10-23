@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import useDocumentStatus from '@/hooks/useDocumentStatus';
 import usePageRefresh from '@/hooks/usePageRefresh';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -41,10 +42,9 @@ export default function Documentos() {
   };
   usePageRefresh(load,['/documentos']);
 
-  const handleUpdate = async (id, updates) => {
-    await base44.entities.Document.update(id, updates);
-    load();
-  };
+  const {changeStatus: handleUpdate, pending: updatingStatus, error: updateError, message: updateMessage} = useDocumentStatus({
+    docs, setDocs, companyId: company?.id, userId: user?.id || user?.email, isAdmin,
+  });
 
   // Contar docs por carpeta para el árbol
   const docCounts = useMemo(() => {
@@ -56,7 +56,7 @@ export default function Documentos() {
   const filtered = useMemo(() => {
     return docs.filter(d => {
       const matchCarpeta = !selectedCarpeta || d.carpeta === selectedCarpeta;
-      const matchEstado = filterEstado === 'all' || d.estado === filterEstado;
+      const matchEstado = filterEstado === 'all' || d.estado === filterEstado || d._taxeaStatusPending;
       const matchSearch = !search || d.nombre?.toLowerCase().includes(search.toLowerCase()) ||
         d.etiquetas?.some(e => e.toLowerCase().includes(search.toLowerCase()));
       return matchCarpeta && matchEstado && matchSearch;
@@ -81,6 +81,8 @@ export default function Documentos() {
       </PageHeader>
 
       {loadError&&<p role="alert" className="text-sm text-destructive mb-4">{loadError}</p>}
+      {updateError&&<p role="alert" className="text-sm text-destructive mb-4">{updateError}</p>}
+      {updateMessage&&<p role="status" aria-live="polite" className="text-sm text-muted-foreground mb-4">{updateMessage}</p>}
       <div className="flex gap-5">
         {/* Árbol de carpetas — sidebar */}
         <div className="hidden lg:block w-56 flex-shrink-0">
@@ -97,7 +99,7 @@ export default function Documentos() {
             {/* Selector carpeta mobile */}
             <div className="lg:hidden w-full">
               <Select value={selectedCarpeta || 'all'} onValueChange={v => setSelectedCarpeta(v === 'all' ? null : v)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Carpeta..." /></SelectTrigger>
+                <SelectTrigger aria-label="Carpeta de documentos" className="h-9"><SelectValue placeholder="Carpeta..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las carpetas</SelectItem>
                   {DMS_STRUCTURE.map(root => (
@@ -112,11 +114,11 @@ export default function Documentos() {
 
             <div className="relative flex-1 min-w-40">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Buscar por nombre o etiqueta..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+              <Input aria-label="Buscar documentos" placeholder="Buscar por nombre o etiqueta..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
             </div>
 
             <Select value={filterEstado} onValueChange={setFilterEstado}>
-              <SelectTrigger className="w-40 h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Estado de documentos" className="w-40 h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="pendiente">Pendiente</SelectItem>
@@ -164,7 +166,7 @@ export default function Documentos() {
           ) : view === 'grid' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {filtered.map(doc => (
-                <DocCard key={doc.id} doc={doc} isAdmin={isAdmin} onUpdate={handleUpdate} view="grid" />
+                <DocCard key={doc.id} doc={doc} isAdmin={isAdmin} onUpdate={handleUpdate} busy={updatingStatus} view="grid" />
               ))}
             </div>
           ) : (
@@ -183,7 +185,7 @@ export default function Documentos() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {filtered.map(doc => (
-                      <DocCard key={doc.id} doc={doc} isAdmin={isAdmin} onUpdate={handleUpdate} view="list" />
+                      <DocCard key={doc.id} doc={doc} isAdmin={isAdmin} onUpdate={handleUpdate} busy={updatingStatus} view="list" />
                     ))}
                   </tbody>
                 </table>
@@ -203,3 +205,4 @@ export default function Documentos() {
     </div>
   );
 }
+
