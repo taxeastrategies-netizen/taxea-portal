@@ -113,3 +113,6 @@ await import('./test-fullscreen-workspace.mjs');
 await import('./test-dual-store-polish.mjs');
 await import('./test-mobile-portal-boundaries.mjs');
 await import('./test-notification-preference-autosave.mjs');
+await import('./test-mobile-secondary-pages.mjs');
+
+
