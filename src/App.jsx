@@ -24,7 +24,6 @@ const Contactos = lazy(() => import('./pages/Contactos'));
 const Herramientas = lazy(() => import('./pages/Herramientas'));
 const Productos = lazy(() => import('./pages/Productos'));
 const NotasPredefinidas = lazy(() => import('./pages/NotasPredefinidas'));
-const SecurityCompanyBoundaryQA = lazy(() => import('./pages/SecurityCompanyBoundaryQA'));
 const LibroRegistros = lazy(() => import('./pages/LibroRegistros'));
 const LectorGastos = lazy(() => import('./pages/LectorGastos'));
 const LectorIngresos = lazy(() => import('./pages/LectorIngresos'));
@@ -103,7 +102,6 @@ function AppWithContext({ user }) {
           <Route path="/contactos" element={<Contactos />} />
           <Route path="/productos" element={<Productos />} />
           <Route path="/notas" element={<NotasPredefinidas />} />
-          <Route path="/__security_company_qa_20261023" element={<SecurityCompanyBoundaryQA />} />
           <Route path="/libro-registros" element={<LibroRegistros />} />
           <Route path="/lector-gastos" element={<LectorGastos />} />
           <Route path="/lector-ingresos" element={<LectorIngresos />} />
