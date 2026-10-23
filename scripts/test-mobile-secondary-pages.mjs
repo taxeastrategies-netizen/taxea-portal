@@ -102,4 +102,3 @@ assert.deepEqual(navigationEvents, ['back']); cases++;
 const beforeHeader = execFileSync('git', ['show', `${baseline}:src/components/layout/TopBar.jsx`], { encoding: 'utf8' }), afterHeader = fs.readFileSync('src/components/layout/TopBar.jsx', 'utf8');
 assert.equal(afterHeader.slice(afterHeader.indexOf('export default function TopBar')), beforeHeader.slice(beforeHeader.indexOf('export default function TopBar')).trimEnd() + '\n', 'Only the route labels change, not header handlers or navigation'); cases++;
 console.log(JSON.stringify({ ok: true, cases, realReactRender: true, callbackDispatch: true, allNamedOperationalFunctionsUnchanged: true, externalCalls: 0, financialWrites: 0 }));
-

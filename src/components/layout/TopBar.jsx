@@ -151,4 +151,3 @@ export default function TopBar({ onMenuToggle, user, companyName, notificationsC
     </header>
   );
 }
-
