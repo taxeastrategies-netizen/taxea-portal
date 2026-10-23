@@ -12,20 +12,20 @@ import AnalysisDashboard from './AnalysisDashboard';
 import PremiumReportViewerV5 from './v5/PremiumReportViewerV5';
 
 const ESTADO_CONFIG = {
-  importado:          { label: 'Importado',            color: 'bg-slate-100 text-slate-600',    icon: Clock },
-  pdf_subido:         { label: 'PDF subido',           color: 'bg-blue-50 text-blue-600',       icon: FileText },
-  ocr_proceso:        { label: 'OCR en curso',         color: 'bg-amber-50 text-amber-600',     icon: Clock },
-  pendiente_revision: { label: 'Pendiente revisión',   color: 'bg-amber-50 text-amber-700',     icon: AlertTriangle },
-  analizado:          { label: 'Analizado',             color: 'bg-blue-50 text-blue-700',       icon: BarChart2 },
-  informe_generado:   { label: 'Informe generado',     color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle2 },
-  error:              { label: 'Error',                 color: 'bg-red-50 text-red-600',         icon: AlertTriangle },
+  importado:          { label: 'Importado',            color: 'bg-secondary text-muted-foreground',    icon: Clock },
+  pdf_subido:         { label: 'PDF subido',           color: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-200',       icon: FileText },
+  ocr_proceso:        { label: 'OCR en curso',         color: 'bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-200',     icon: Clock },
+  pendiente_revision: { label: 'Pendiente revisión',   color: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200',     icon: AlertTriangle },
+  analizado:          { label: 'Analizado',             color: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200',       icon: BarChart2 },
+  informe_generado:   { label: 'Informe generado',     color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200', icon: CheckCircle2 },
+  error:              { label: 'Error',                 color: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-200',         icon: AlertTriangle },
 };
 
 const CALIDAD = {
-  alta:       { label: 'Alta',   color: 'text-emerald-600' },
-  media:      { label: 'Media',  color: 'text-amber-600'   },
-  baja:       { label: 'Baja',   color: 'text-red-600'     },
-  sin_evaluar:{ label: '—',      color: 'text-slate-400'   },
+  alta:       { label: 'Alta',   color: 'text-emerald-600 dark:text-emerald-300' },
+  media:      { label: 'Media',  color: 'text-amber-600 dark:text-amber-300'   },
+  baja:       { label: 'Baja',   color: 'text-red-600 dark:text-red-300'     },
+  sin_evaluar:{ label: '—',      color: 'text-muted-foreground'   },
 };
 
 const ORIGEN_LABEL = {
@@ -92,40 +92,40 @@ export default function AnalysisHome() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-10">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 min-w-0">
             <BarChart2 className="w-5 h-5 text-emerald-600" />
             <h1 className="text-2xl font-jakarta font-bold text-foreground">Análisis Financiero</h1>
           </div>
-          <p className="text-sm text-slate-500 max-w-xl">Importa PDFs de Balance o PyG, Excel o archivos .dat de A3. La IA extrae, estructura y analiza los datos.</p>
+          <p className="text-sm text-muted-foreground max-w-xl">Importa PDFs de Balance o PyG, Excel o archivos .dat de A3. La IA extrae, estructura y analiza los datos.</p>
         </div>
-        <button onClick={() => setView('selector')}
+        <button type="button" onClick={() => setView('selector')}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-all shadow-sm flex-shrink-0">
           <Plus className="w-4 h-4" /> Nuevo análisis
         </button>
       </div>
 
       {/* Disclaimer */}
-      <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4">
+      <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl px-5 py-4">
         <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-blue-700 leading-relaxed">
+        <p className="text-xs text-blue-700 dark:text-blue-200 leading-relaxed">
           <strong>Análisis preliminar basado en los datos importados.</strong> La extracción mediante IA/OCR puede requerir revisión. No constituye auditoría ni validación fiscal definitiva. Toda clasificación es estimada. Las cifras deben ser verificadas por un profesional.
         </p>
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Importaciones',       value: imports.length,                                                          icon: Upload,         color: 'text-slate-600'   },
+          { label: 'Importaciones',       value: imports.length,                                                          icon: Upload,         color: 'text-muted-foreground'   },
           { label: 'PDFs analizados',     value: imports.filter(i => i.origen?.startsWith('pdf')).length,                 icon: FileText,       color: 'text-blue-600'    },
-          { label: 'Informes generados',  value: imports.filter(i => i.estado === 'informe_generado').length,             icon: CheckCircle2,   color: 'text-emerald-600' },
-          { label: 'Pendientes revisión', value: imports.filter(i => i.estado === 'pendiente_revision').length,           icon: AlertTriangle,  color: 'text-amber-600'   },
+          { label: 'Informes generados',  value: imports.filter(i => i.estado === 'informe_generado').length,             icon: CheckCircle2,   color: 'text-emerald-600 dark:text-emerald-300' },
+          { label: 'Pendientes revisión', value: imports.filter(i => i.estado === 'pendiente_revision').length,           icon: AlertTriangle,  color: 'text-amber-600 dark:text-amber-300'   },
         ].map((k, i) => { const Icon = k.icon; return (
-          <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <div key={i} className="bg-card border border-border rounded-2xl p-4 shadow-sm">
             <Icon className={cn("w-5 h-5 mb-2", k.color)} />
             <p className="text-2xl font-jakarta font-bold text-foreground">{k.value}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{k.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{k.label}</p>
           </div>
         ); })}
       </div>
@@ -138,37 +138,37 @@ export default function AnalysisHome() {
       ) : imports.length === 0 ? (
         <EmptyState onImport={() => setView('selector')} />
       ) : (
-        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <p className="text-sm font-semibold text-foreground">Análisis recientes</p>
             <button onClick={() => setView('selector')} className="text-xs font-semibold text-emerald-600 hover:underline">+ Nuevo</button>
           </div>
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-border">
             {imports.map((imp, i) => {
               const ec = ESTADO_CONFIG[imp.estado] || ESTADO_CONFIG.importado;
               const StatusIcon = ec.icon;
               const cal = CALIDAD[imp.calidad_dato] || CALIDAD.sin_evaluar;
               const origenLabel = ORIGEN_LABEL[imp.origen] || imp.origen;
               return (
-                <div key={imp.id || i}
-                  className="px-5 py-4 flex items-center gap-4 hover:bg-slate-50/50 cursor-pointer transition-colors"
+                <button type="button" key={imp.id || i}
+                  className="w-full min-w-0 px-4 py-4 flex flex-wrap items-center gap-3 text-left hover:bg-secondary/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                   onClick={() => { setSelectedImport(imp); setView('dashboard'); }}>
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <span className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center flex-shrink-0">
                     <FileText className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{imp.nombre_archivo}</p>
-                    <p className="text-xs text-slate-400">{origenLabel} · {imp.empresa_nombre || 'Sin empresa'} · {imp.total_lineas || 0} líneas</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    {imp.periodo_inicio && <span className="text-xs text-slate-400">{imp.periodo_inicio?.substring(0,7)}</span>}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold text-foreground break-words [overflow-wrap:anywhere]">{imp.nombre_archivo}</span>
+                    <span className="block text-xs text-muted-foreground break-words">{origenLabel} · {imp.empresa_nombre || 'Sin empresa'} · {imp.total_lineas || 0} líneas</span>
+                  </span>
+                  <span className="basis-full sm:basis-auto flex min-w-0 items-center gap-2 flex-wrap sm:justify-end">
+                    {imp.periodo_inicio && <span className="text-xs text-muted-foreground">{imp.periodo_inicio?.substring(0,7)}</span>}
                     <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1", ec.color)}>
                       <StatusIcon className="w-3 h-3" />{ec.label}
                     </span>
                     <span className={cn("text-[10px] font-semibold", cal.color)}>Cal. {cal.label}</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
-                </div>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </button>
               );
             })}
           </div>
@@ -183,13 +183,13 @@ export default function AnalysisHome() {
           { emoji: '📋', title: 'Informe con trazabilidad', desc: 'Cada cifra del informe indica su origen: página, tabla, confianza de extracción y si fue revisada o corregida manualmente.', action: null, color: 'bg-violet-50', iconColor: 'text-violet-600' },
         ].map((f, i) => (
           <div key={i}
-            className={cn("bg-white border border-slate-100 rounded-2xl p-5 shadow-sm", f.action && "cursor-pointer hover:shadow-md transition-all")}
-            onClick={() => f.action && handleSelectType(f.action)}>
+            className="min-w-0 bg-card border border-border rounded-2xl p-5 shadow-sm">
             <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center mb-3 text-xl", f.color)}>
               {f.emoji}
             </div>
             <p className="text-sm font-bold text-foreground mb-1">{f.title}</p>
-            <p className="text-xs text-slate-500 leading-relaxed">{f.desc}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+            {f.action && <button type="button" onClick={() => handleSelectType(f.action)} className="mt-3 min-h-11 rounded-lg border border-border px-3 text-sm font-semibold text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Abrir {f.title}</button>}
           </div>
         ))}
       </div>
@@ -199,10 +199,10 @@ export default function AnalysisHome() {
 
 function EmptyState({ onImport }) {
   return (
-    <div className="bg-white border border-slate-100 rounded-3xl p-12 text-center shadow-sm">
+    <div className="bg-card border border-border rounded-3xl p-6 sm:p-12 text-center shadow-sm">
       <div className="text-5xl mb-4">📄</div>
       <h3 className="text-lg font-jakarta font-bold text-foreground mb-2">Sin análisis todavía</h3>
-      <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+      <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
         Sube un PDF de Balance o PyG, un Excel contable o un archivo .dat de A3. La IA detecta, extrae y analiza los datos.
       </p>
       <button onClick={onImport}
@@ -212,3 +212,4 @@ function EmptyState({ onImport }) {
     </div>
   );
 }
+
