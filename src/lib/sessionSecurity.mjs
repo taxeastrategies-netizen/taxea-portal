@@ -23,4 +23,3 @@ export function forgetSessionIdentity() {
   principal = null;
   clearPrivateSessionState();
 }
-
