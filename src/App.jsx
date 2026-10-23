@@ -182,9 +182,6 @@ const AuthenticatedApp = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
-        <Route path="/setup-password" element={<SetupPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route path="/*" element={<AppWithContext key={String(user?.id || '') + '::' + String(user?.role || '')} user={user} />} />
         </Route>
@@ -202,6 +199,11 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <Suspense fallback={<PageLoader/>}><Routes>
+            {/* Public capabilities remain usable when app metadata requires login.
+                Data access still requires the opaque token validated by each backend. */}
+            <Route path="/public/invoice/:token" element={<PublicInvoiceViewer />} />
+            <Route path="/setup-password" element={<SetupPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/eliminar-cuenta" element={<AccountDeletionInfo/>}/>
             <Route path="*" element={<AuthenticatedApp/>}/>
           </Routes></Suspense>
