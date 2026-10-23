@@ -1,3 +1,4 @@
+import { registerSessionCleanup } from '@/lib/sessionSecurity.mjs';
 const KEY = 'taxea_impersonation';
 
 export function getImpersonation() {
@@ -22,3 +23,4 @@ export function startImpersonation({ clientAccountId, clientName, clientEmail, c
 export function endImpersonation() {
   sessionStorage.removeItem(KEY);
 }
+registerSessionCleanup(endImpersonation);
