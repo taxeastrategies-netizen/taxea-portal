@@ -43,6 +43,76 @@ function isSafeRemoteUrl(value) {
   }
 }
 
+
+// Downloads never follow an arbitrary redirect or buffer an unbounded body.
+function isSafeDownloadUrl(value) {
+  if (isSafeRemoteUrl(value)) return true;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && url.hostname === 'media.base44.com'
+      && !url.username && !url.password && !url.port && !url.hash
+      && ['public', 'private'].some(kind =>
+        url.pathname.startsWith('/files/' + kind + '/6a00fec50cc522a74ddde4b2/'));
+  } catch { return false; }
+}
+
+async function downloadInvoicePdf(initialUrl) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  let reader;
+  try {
+    let url = initialUrl;
+    for (let hop = 0; hop <= 3; hop++) {
+      if (!isSafeDownloadUrl(url)) throw Object.assign(new Error('Destino del adjunto no autorizado.'), { status: 400 });
+      const response = await fetch(url, { redirect: 'manual', signal: controller.signal });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        await response.body?.cancel();
+        const location = response.headers.get('location');
+        if (!location || hop === 3) throw Object.assign(new Error('Redirección de adjunto no válida.'), { status: 502 });
+        url = new URL(location, url).toString();
+        continue;
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw Object.assign(new Error('No se pudo descargar el PDF adjunto.'), { status: 502 });
+      }
+      const declaredLength = response.headers.get('content-length');
+      if (declaredLength !== null && (!/^\d+$/.test(declaredLength) || Number(declaredLength) > MAX_ATTACHMENT_BYTES)) {
+        await response.body?.cancel();
+        throw Object.assign(new Error('El PDF supera el límite de 10 MB.'), { status: 413 });
+      }
+      reader = response.body?.getReader();
+      if (!reader) throw Object.assign(new Error('El PDF adjunto está vacío.'), { status: 400 });
+      const chunks = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_ATTACHMENT_BYTES) throw Object.assign(new Error('El PDF supera el límite de 10 MB.'), { status: 413 });
+        chunks.push(value);
+      }
+      if (!size) throw Object.assign(new Error('El PDF adjunto está vacío.'), { status: 400 });
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      if (String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') {
+        throw Object.assign(new Error('El adjunto no es un PDF válido.'), { status: 415 });
+      }
+      return bytes;
+    }
+    throw Object.assign(new Error('Redirección de adjunto no válida.'), { status: 502 });
+  } catch (error) {
+    if (controller.signal.aborted) throw Object.assign(new Error('La descarga del PDF ha tardado demasiado. No se ha enviado el correo.'), { status: 504 });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    await reader?.cancel().catch(() => {});
+    reader?.releaseLock();
+    controller.abort();
+  }
+}
+
 function normalizeEmails(input, label, required = false) {
   const values = (Array.isArray(input) ? input : input ? [input] : [])
     .map(value => String(value || '').trim().toLowerCase())
@@ -96,10 +166,7 @@ async function loadAttachments(input, allowedUrl, requireInvoicePdf) {
     if (!url || url !== allowedUrl || !isSafeRemoteUrl(url)) {
       throw Object.assign(new Error('El adjunto no coincide con el PDF de la factura.'), { status: 400 });
     }
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`No se pudo descargar el PDF adjunto (${response.status}).`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new Error('El PDF supera el límite de 10 MB.');
+    const bytes = await downloadInvoicePdf(url);
     totalSize += bytes.byteLength;
     if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('Los adjuntos superan el límite total de 20 MB.');
     loaded.push({
@@ -155,9 +222,12 @@ Deno.serve(async (req) => {
   let companyId;
   let body = {};
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido.' }, { status: 405 });
     base44 = createClientFromRequest(req);
     user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user.is_deleted || ['eliminado', 'bloqueado', 'suspendido'].includes(user.status)
+      || user.accountAccessStatus === 'suspended') return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     body = await req.json().catch(() => ({}));
     const connection = await getGmailConnection(base44);
 
@@ -182,7 +252,7 @@ Deno.serve(async (req) => {
       String(company.owner_email || '').trim().toLowerCase() === email
       || (company.usuarios_autorizados || []).some(value => String(value || '').trim().toLowerCase() === email)
     );
-    if (!company || (!isAdmin && !isMember)) {
+    if (!company || company.activa === false || (!isAdmin && !isMember)) {
       return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
     }
     if (body.invoice_id) {
@@ -221,7 +291,14 @@ Deno.serve(async (req) => {
       ? invoice?.qr_pdf_url
       : invoice?.archivo_url;
     if (invoice && !allowedInvoicePdfUrl) return Response.json({ error: 'La factura no tiene un PDF válido preparado para este envío.' }, { status: 409 });
-    if (invoice && (!invoice.public_token || !String(body.public_invoice_url || '').endsWith(`/public/invoice/${invoice.public_token}`))) {
+    let validPublicLink = false;
+    try {
+      const publicLink = new URL(String(body.public_invoice_url || ''));
+      validPublicLink = publicLink.origin === 'https://taxeaportal.com'
+        && !publicLink.username && !publicLink.password && !publicLink.search && !publicLink.hash
+        && publicLink.pathname === `/public/invoice/${invoice?.public_token}`;
+    } catch { /* No outbound message with an untrusted invoice link. */ }
+    if (invoice && (!invoice.public_token || !validPublicLink)) {
       return Response.json({ error: 'El enlace público de la factura no está validado.' }, { status: 409 });
     }
 
