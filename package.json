@@ -24,7 +24,7 @@
     "test:utility-tools": "node scripts/test-utility-tools.mjs",
     "test:tax-accounting-phase4": "npm run test:tax-accounting-phase2 && node scripts/test-financial-report-truth.mjs && node scripts/test-tax-artifact-integrity.mjs && node scripts/test-tax-importer-certification.mjs && node scripts/test-tax-accounting-phase4.mjs",
     "test:mobile": "node scripts/test-mobile-readiness.mjs && node scripts/test-mobile-cache-render.mjs && node scripts/test-mobile-safearea.mjs && node scripts/test-mobile-ux-final.mjs && node scripts/test-mobile-cache-mutations.mjs",
-    "test:security": "node scripts/test-security-print-v5.mjs && node scripts/test-security-hardening.mjs && node scripts/test-security-function-boundaries.mjs && node scripts/test-security-redaction.mjs && node scripts/test-security-spreadsheet.mjs && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-client-setup-runtime.mjs && node scripts/test-import-client-accounting-security.mjs && node scripts/test-scanner-auth-gates.mjs"
+    "test:security": "node scripts/test-security-server-downloads.mjs && node scripts/test-security-print-v5.mjs && node scripts/test-security-hardening.mjs && node scripts/test-security-function-boundaries.mjs && node scripts/test-security-redaction.mjs && node scripts/test-security-spreadsheet.mjs && node scripts/test-public-functions-security.mjs && node scripts/test-disabled-backfill-auth.mjs && node scripts/test-client-setup-runtime.mjs && node scripts/test-import-client-accounting-security.mjs && node scripts/test-scanner-auth-gates.mjs"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.57",
