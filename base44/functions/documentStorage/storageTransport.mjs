@@ -46,9 +46,9 @@ export async function storageTransport(env,fetcher=(...args)=>globalThis.fetch(.
    if(meta.name!==name||meta.bucket!==STORAGE_BUCKET||Number(meta.size)!==bytes.length||!/^\d+$/.test(meta.generation))throw new Error('STORAGE_UPLOAD_UNVERIFIED');
    const disposition=/^(application\/pdf|image\/(jpeg|png|webp))$/.test(mime)?'inline':'attachment';
    const policy=await boundedFetch(objectUrl(name)+'?ifGenerationMatch='+meta.generation,{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({cacheControl:'private, no-store',contentDisposition:disposition})},32768,fetcher);
-   if(policy.status!==200)throw new Error('STORAGE_METADATA_UNVERIFIED');
+   if(policy.status!==200)throw new Error('STORAGE_METADATA_HTTP_'+policy.status);
    const stored=JSON.parse(new TextDecoder().decode(policy.bytes));
-   if(stored.name!==name||stored.generation!==meta.generation||stored.cacheControl!=='private, no-store'||stored.contentDisposition!==disposition)throw new Error('STORAGE_METADATA_UNVERIFIED');
+   if(stored.name!==name||stored.generation!==meta.generation||stored.cacheControl!=='private, no-store'||stored.contentDisposition!==disposition){const error=new Error('STORAGE_METADATA_UNVERIFIED');error.storageHints=[...(stored.name!==name?['name']:[]),...(stored.generation!==meta.generation?['generation']:[]),...(stored.cacheControl!=='private, no-store'?['cache_policy']:[]),...(stored.contentDisposition!==disposition?['disposition']:[])];throw error;}
    return {name,generation:meta.generation,size:Number(meta.size),contentType:meta.contentType};
   },
   async get(name,generation){
