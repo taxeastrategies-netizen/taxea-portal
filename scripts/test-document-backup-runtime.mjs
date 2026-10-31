@@ -17,12 +17,16 @@ function responseJson(data, status = 200, headers = {}) {
 }
 
 function paged(rows) {
+  const select=(query,sort,limit=50,skip=0)=>rows.filter(row=>Object.entries(query).every(([key,value])=>value&&typeof value==='object'?(value.$lte?row[key]<=value.$lte:value.$gt?row[key]>value.$gt:value.$in?value.$in.includes(row[key]):false):row[key]===value)).sort((a,b)=>sort==='id'?a.id.localeCompare(b.id):0).slice(skip,skip+limit);
+  return {list:async(_sort,limit=50,skip=0)=>rows.slice(skip,skip+limit),filter:async(...args)=>select(...args)};
+}
+function oldPaged(rows) {
   return {
     list: async (_sort, limit = 50, skip = 0) => rows.slice(skip, skip + limit),
   };
 }
 
-async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false, redirectFirstDownload = false,interruptAndInsert=false,lostMetadataOnce=false }) {
+async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false, redirectFirstDownload = false,interruptAndInsert=false,lostMetadataOnce=false,corruptExisting=false,sharedDestination=false }) {
   const fileUrl = id => `https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
   const documents = Array.from({ length: documentCount }, (_, index) => ({
     id: `doc-${index}`,
@@ -33,13 +37,15 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     fileMimeType: 'application/pdf',
     created_date: new Date(2026, 0, 1, 0, 0, index % 60).toISOString(),
   }));
+  const validChecksum=Array.from(new Uint8Array(await webcrypto.subtle.digest('SHA-256',new Uint8Array([1,2,3]))),n=>n.toString(16).padStart(2,'0')).join('');
   const records = Array.from({ length: existingCount }, (_, index) => ({
     id: `record-${index}`,
     documentId: `doc-${index}`,
     documentEntity: 'OcrInvoiceDocument',
+    clientAccountId:'company-1',
     fileStorageUrl: fileUrl(index),
     backupStatus: 'backed_up',
-    checksum: `checksum-${index}`,
+    checksum: validChecksum,
     driveFileId: `drive-${index}`,
     drivePath: `path-${index}`,
     lastBackedUpAt: new Date(2026, 7, 9, 0, 0, index % 60).toISOString(),
@@ -50,6 +56,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
       id: `pending-record-${index}`,
       documentId: `doc-${index}`,
       documentEntity: 'OcrInvoiceDocument',
+      clientAccountId:'company-1',
       fileStorageUrl: fileUrl(index),
       backupStatus: 'pending',
       updated_date: new Date(2026, 8, 24, 0, 0, index % 60).toISOString(),
@@ -67,7 +74,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     portalFolderName: 'Taxea Portal',
     folderNamingMode: 'both',
   };
-  let job = null;const driveFiles=new Map();let sourceScans=0,lost=false,forcePartialExpired=false;class ScenarioDate extends Date{static now(){return Date.now()+(forcePartialExpired?45000:0);}}
+  let job = null;const driveFiles=new Map();for(const record of records)if(record.driveFileId)driveFiles.set(record.driveFileId,{id:record.driveFileId,name:'existing-'+record.id,size:3,bytes:new Uint8Array([1,2,3])});if(corruptExisting&&driveFiles.has('drive-0'))driveFiles.get('drive-0').bytes=new Uint8Array([9,9,9]);let sourceScans=0,lost=false,forcePartialExpired=false;class ScenarioDate extends Date{static now(){return Date.now()+(forcePartialExpired?45000:0);}}
   let recordCreates = 0;
   let itemCreates = 0;
   let mediaDownloads = 0;
@@ -106,7 +113,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
         return current;
       },
     },
-    OcrInvoiceDocument:{list:async(...args)=>{sourceScans++;return paged(documents).list(...args);}},
+    OcrInvoiceDocument:{list:async(...args)=>{sourceScans++;return paged(documents).list(...args);},filter:async(...args)=>{sourceScans++;return paged(documents).filter(...args);}},
     Invoice: paged([]),
     Document: paged([]),
     HRDocument: paged([]),
@@ -117,13 +124,14 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     auth: { me: async () => ({ id: 'admin-1', email: 'admin@example.com', role: 'admin' }) },
     asServiceRole: {
       connectors: { getConnection: async () => ({ accessToken: 'test-token' }) },
-      entities: entityMap,
+      entities: new Proxy(entityMap,{get:(target,key)=>target[key]||paged([])}),
       integrations: { Core: { SendEmail: async () => ({}) } },
     },
   };
 
   const fetchMock = async (url, options = {}) => {
     const target = String(url);
+    if(target.includes('/permissions?'))return responseJson({permissions:[{type:'user',emailAddress:'taxeastrategies@gmail.com',role:'owner'},...(sharedDestination?[{type:'anyone',role:'reader'}]:[])]});
     if (target.includes('/drive/v3/about')) return responseJson({ user: { emailAddress: 'taxeastrategies@gmail.com' } });
     if(target.includes('/drive/v3/files?')&&options.method!=='POST'){
       const query=new URL(target).searchParams.get('q')||'';
@@ -178,7 +186,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     Request,
     Headers,
     URL,
-    TextEncoder,TextDecoder,atob,btoa,URLSearchParams,
+    TextEncoder,TextDecoder,atob,btoa,URLSearchParams,structuredClone,
     Uint8Array,
     AbortController,
     crypto: webcrypto,
@@ -211,7 +219,7 @@ assert.equal(paginated.payload.documentsCopied, 0);
 assert.equal(paginated.payload.documentsSkipped, 600);
 assert.equal(paginated.mediaDownloads, 0, 'existing records beyond page 500 must not be downloaded again');
 assert.equal(paginated.recordCreates, 0, 'existing records beyond page 500 must not create duplicate metadata');
-assert.equal(paginated.uploadAttempts,4,'Source index and three final manifests must be uploaded');
+assert.equal(paginated.uploadAttempts,206,'Two inventory pages, source index, 200 copy-manifest parts and three final manifests; no duplicate document upload');
 
 const augustBaseline = await executeScenario({
   documentCount: 600,
@@ -229,7 +237,7 @@ assert.equal(throttled.payload.documentsCopied, 1);
 assert.equal(throttled.recordCreates, 1);
 assert.equal(throttled.itemCreates, 1);
 assert.equal(throttled.mediaDownloads, 1);
-assert.equal(throttled.uploadAttempts,6,'One rate-limited upload, source index, one document, three final manifests');
+assert.equal(throttled.uploadAttempts,8,'Inventory, source index, copy manifest, one document, three final manifests and one recovered 429');
 
 const redirected = await executeScenario({
   documentCount: 1,
@@ -288,3 +296,6 @@ console.log(JSON.stringify({
 
 const resumed=await executeScenario({documentCount:6,existingCount:0,interruptAndInsert:true});assert.equal(resumed.payload.status,'completed');assert.equal(resumed.payload.documentsScanned,6);assert.equal(resumed.sourceScans,1,'Resume must use the frozen Drive index, not rescan shifting sources');
 const recovered=await executeScenario({documentCount:1,existingCount:0,lostMetadataOnce:true});assert.equal(recovered.payload.status,'completed');assert.equal(recovered.documentCopies,1,'Lost tracking response must not create a second Drive copy');console.log(JSON.stringify({frozenIndexResumeVerified:true,newRowsDeferredToNextJob:true,lostMetadataCopyRecoveredWithoutDuplicate:true}));
+
+const corruptedCopy=await executeScenario({documentCount:1,existingCount:1,corruptExisting:true});assert.equal(corruptedCopy.payload.status,'completed');assert.equal(corruptedCopy.payload.documentsCopied,1);assert.equal(corruptedCopy.payload.documentsSkipped,0);assert.equal(corruptedCopy.recordCreates,0);assert.equal(corruptedCopy.mediaDownloads,1,'corrupted cached copy must be replaced from the original, not reused');
+const publicDestination=await executeScenario({documentCount:1,existingCount:0,sharedDestination:true});assert.match(publicDestination.payload.error,/BACKUP_DRIVE_SHARED_DESTINATION/);assert.equal(publicDestination.mediaDownloads,0);assert.equal(publicDestination.uploadAttempts,0,'no source bytes or filenames uploaded to a shared destination');console.log(JSON.stringify({corruptedCachedCopyRebuilt:true,sharedDestinationDeniedBeforeSourceRead:true}));

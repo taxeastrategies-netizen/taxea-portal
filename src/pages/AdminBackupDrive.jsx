@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShieldCheck, HardDrive, Play, CheckCircle, AlertTriangle, XCircle, Clock, FolderOpen, Loader2, History, Cloud } from 'lucide-react';
 import BackupModal from '@/components/backup/BackupModal';
+import InventoryProtectionPreview from '@/components/backup/InventoryProtectionPreview';
 
 const STATUS_STYLES = {
   queued: { label: 'En cola', color: 'bg-gray-100 text-gray-700' },
@@ -135,7 +136,7 @@ export default function AdminBackupDrive() {
   if (loadError && !status) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Seguridad y Copias" subtitle="Copias documentales en Google Drive · manuales y programadas" />
+        <PageHeader title="Seguridad y Copias" subtitle="Copias documentales en Google Drive · inventario y verificación" />
         <Card className="border-red-200 bg-red-50/50">
           <CardContent className="pt-5 flex items-start gap-3">
             <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
@@ -243,15 +244,17 @@ export default function AdminBackupDrive() {
             <div className="text-xs text-blue-700 space-y-1">
               <p>Activa verificación en dos pasos en la cuenta de Google Drive usada para copias.</p>
               <p>
-                Seguimiento: <strong>{status?.trackedDocuments || 0}</strong> documentos únicos.
+                {status?.metadataLimited?'Muestra reciente:':'Seguimiento:'} <strong>{status?.trackedDocuments || 0}</strong> documentos únicos.{status?.metadataLimited&&' Conteo limitado a los últimos 500 registros; el manifiesto contiene el inventario completo.'}{status?.lastManifestDocumentCount!=null&&<> Último manifiesto: <strong>{status.lastManifestDocumentCount}</strong> referencias.</>}
                 {status?.metadataDuplicateCount > 0 && (
-                  <> Se han consolidado lógicamente <strong>{status.metadataDuplicateCount}</strong> registros históricos repetidos para impedir nuevas copias duplicadas.</>
+                  <> En los registros consultados se han consolidado lógicamente <strong>{status.metadataDuplicateCount}</strong> registros históricos repetidos para impedir nuevas copias duplicadas.</>
                 )}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <InventoryProtectionPreview disabled={running||verifying}/>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -269,21 +272,21 @@ export default function AdminBackupDrive() {
           <CardContent className="pt-5">
             <HardDrive className="w-5 h-5 text-blue-500 mb-1" />
             <p className="text-2xl font-bold">{status?.pendingCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Documentos pendientes</p>
+            <p className="text-xs text-muted-foreground">Documentos pendientes{status?.metadataLimited?' (muestra)':''}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <XCircle className="w-5 h-5 text-red-500 mb-1" />
             <p className="text-2xl font-bold">{status?.failedCount || 0}</p>
-            <p className="text-xs text-muted-foreground">Incidencias abiertas</p>
+            <p className="text-xs text-muted-foreground">Incidencias abiertas{status?.metadataLimited?' (muestra)':''}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
             <Clock className="w-5 h-5 text-purple-500 mb-1" />
             <p className="text-sm font-bold">{config?.scheduleEnabled ? config.scheduleTime : 'Desactivada'}</p>
-            <p className="text-xs text-muted-foreground">Próxima copia programada</p>
+            <p className="text-xs text-muted-foreground">Hora configurada · ejecución automática pendiente de validar</p>
           </CardContent>
         </Card>
       </div>

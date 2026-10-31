@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
 import {assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
+import {inventoryPreview} from './inventoryPreview.mjs';
+import {BACKUP_DOCUMENT_SOURCES,createBackupContextResolver,freshInventory,advanceDocumentInventory,loadInventoryDocuments,isBackupReference} from './backupCatalog.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -17,6 +19,8 @@ const REQUIRED_EMAIL = 'taxeastrategies@gmail.com';
 const BACKUP_APP_ID = '6a00fec50cc522a74ddde4b2';
 const AUTHORIZED_BACKUP_LOCATIONS = [
   { hostname: 'media.base44.com', pathPrefix: `/files/public/${BACKUP_APP_ID}/` },
+  { hostname: 'media.base44.com', pathPrefix: `/files/private/${BACKUP_APP_ID}/` },
+  { hostname: 'base44.app', pathPrefix: `/api/apps/${BACKUP_APP_ID}/files/mp/private/${BACKUP_APP_ID}/` },
   { hostname: 'media.base44.com', pathPrefix: `/images/public/${BACKUP_APP_ID}/` },
   { hostname: 'base44.app', pathPrefix: `/api/apps/${BACKUP_APP_ID}/files/mp/public/${BACKUP_APP_ID}/` },
 ];
@@ -69,7 +73,13 @@ function validateBackupFileUrl(value) {
 
 async function downloadBackupFile(value,base44,user,companyId,deadline) {
   if(assetIdFromReference(value))return (await readPrivateAssetBytes(base44.asServiceRole,user,value,Deno.env,companyId)).bytes;
-  return boundedBackupDownload(value,validateBackupFileUrl,{max:MAX_BACKUP_FILE_BYTES,timeoutMs:Math.max(1,Math.min(BACKUP_DOWNLOAD_TIMEOUT_MS,deadline-Date.now()))});
+  if(!isBackupReference(value))throw new Error('BACKUP_FILE_ORIGIN_DENIED');
+  let reference=value;
+  if(String(value).startsWith('mp/private/')||String(value).includes('/private/')){
+   let uri=String(value);if(uri.startsWith('https://')){const path=new URL(uri).pathname,offset=path.indexOf('/mp/private/');if(offset<0)throw new Error('BACKUP_PRIVATE_REFERENCE_INVALID');uri=path.slice(offset+1);}
+   const signed=await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:uri,expires_in:120});reference=signed?.signed_url;if(!reference)throw new Error('BACKUP_PRIVATE_REFERENCE_UNAVAILABLE');
+  }else if(String(value).startsWith('mp/public/'))reference='https://base44.app/api/apps/'+BACKUP_APP_ID+'/files/'+value;
+  return boundedBackupDownload(reference,validateBackupFileUrl,{max:MAX_BACKUP_FILE_BYTES,timeoutMs:Math.max(1,Math.min(BACKUP_DOWNLOAD_TIMEOUT_MS,deadline-Date.now()))});
 }
 
 function getCanaryDate() {
@@ -111,7 +121,9 @@ function getSubfolder(entityName, record) {
   return 'otros';
 }
 
-function getDisplayName(entityName, record) {
+function getDisplayName(entityName, record,source=null) {
+  if(source?.nameField&&record[source.nameField])return sanitizeName(record[source.nameField]);
+  if(record.__backupField==='qr_pdf_url')return 'factura_qr_'+(record.numero_factura||record.__backupRecordId||record.id)+'.pdf';
   if (entityName === 'OcrInvoiceDocument') return record.originalFileName || record.fileName || 'documento';
   if (entityName === 'Invoice') return `factura_${record.numero_factura || record.id}`.substring(0, 80);
   if (entityName === 'Document') return record.nombre || 'documento';
@@ -171,6 +183,7 @@ async function getDriveUserEmail(token) {
 }
 
 async function findOrCreateFolder(name, parentId, token) {
+  if(parentId)await assertPrivateDriveDestination(parentId,token);
   const escaped = name.replace(/'/g, "\\'");
   let query = `name='${escaped}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   if (parentId) query += ` and '${parentId}' in parents`;
@@ -204,7 +217,19 @@ async function findOrCreateFolderCached(name, parentId, token) {
   }
 }
 
+const privateDestinations=new Set();
+async function assertPrivateDriveDestination(id,token){
+ if(!id||privateDestinations.has(id))return;
+ let pageToken='',ownerVerified=false;do{
+  const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'/permissions?fields=permissions(type,emailAddress,role,deleted),nextPageToken&pageSize=100'+(pageToken?'&pageToken='+encodeURIComponent(pageToken):''),token);
+  if(!response.ok)throw new Error('BACKUP_DRIVE_PRIVACY_UNVERIFIED');const data=await response.json();
+  if(!Array.isArray(data.permissions)||!data.permissions.length||data.permissions.some(p=>!p.deleted&&(p.type!=='user'||String(p.emailAddress||'').toLowerCase()!==REQUIRED_EMAIL)))throw new Error('BACKUP_DRIVE_SHARED_DESTINATION');
+  if(data.permissions.some(p=>!p.deleted&&p.role==='owner'&&String(p.emailAddress||'').toLowerCase()===REQUIRED_EMAIL))ownerVerified=true;
+  pageToken=data.nextPageToken||'';
+ }while(pageToken);if(!ownerVerified)throw new Error('BACKUP_DRIVE_OWNER_UNVERIFIED');privateDestinations.add(id);
+}
 async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) {
+  await assertPrivateDriveDestination(parentId,token);
   const boundary = 'taxea_backup_' + Math.random().toString(36).slice(2);
   const checksum=await computeChecksum(contentBytes);
   const backupKey=await computeChecksum(new TextEncoder().encode((parentId||'')+'|'+name+'|'+checksum));
@@ -212,7 +237,7 @@ async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) 
   const existing=await driveGet(DRIVE_API+'/files?q='+encodeURIComponent(query)+'&fields=files(id,size,name,appProperties)&orderBy=createdTime&pageSize=2',token);
   if(!existing.ok)throw new Error('BACKUP_DRIVE_LOOKUP_HTTP_'+existing.status);
   const previous=(await existing.json()).files?.find(file=>file.appProperties?.taxeaSha256===checksum&&Number(file.size)===contentBytes.length);
-  if(previous){const restored=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(previous.id)+'?alt=media',token);if(!restored.ok||await computeChecksum(new Uint8Array(await restored.arrayBuffer()))!==checksum)throw new Error('BACKUP_EXISTING_COPY_HASH_MISMATCH');return previous;}
+  if(previous){await assertPrivateDriveDestination(previous.id,token);const restored=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(previous.id)+'?alt=media',token);if(!restored.ok||await computeChecksum(new Uint8Array(await restored.arrayBuffer()))!==checksum)throw new Error('BACKUP_EXISTING_COPY_HASH_MISMATCH');return previous;}
   const metadata = JSON.stringify({ name, parents: parentId ? [parentId] : [],appProperties:{taxeaBackupKey:backupKey,taxeaSha256:checksum} });
   const encoder = new TextEncoder();
   const header = encoder.encode(
@@ -295,16 +320,18 @@ async function trashExactFailedBackupFolders(token) {
 // ── Document sources ──
 
 
-return {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders};
+return {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders,assertPrivateDriveDestination};
 }
 
-const DOC_SOURCES = [
+const LEGACY_DOC_SOURCES = [
   { entity: 'OcrInvoiceDocument', urlField: 'fileStorageUrl', companyField: 'company_id', mimeField: 'fileMimeType', sizeField: 'fileSize' },
   { entity: 'Invoice', urlField: 'archivo_url', companyField: 'company_id', mimeField: null, sizeField: null },
   { entity: 'Document', urlField: 'archivo_url', companyField: 'company_id', mimeField: null, sizeField: null },
   { entity: 'HRDocument', urlField: 'archivo_url', companyField: 'company_id', mimeField: null, sizeField: null },
   { entity: 'MercantilDocumento', urlField: 'fileUrl', companyField: 'sociedadId', mimeField: null, sizeField: null },
 ];
+
+const DOC_SOURCES=[...LEGACY_DOC_SOURCES,...BACKUP_DOCUMENT_SOURCES];
 
 async function listAllEntity(entity, sort = '-created_date', maximum = 10000) {
   const rows = [];
@@ -314,7 +341,8 @@ async function listAllEntity(entity, sort = '-created_date', maximum = 10000) {
     rows.push(...(page || []));
     if (!page || page.length < pageSize) break;
   }
-  return rows.slice(0, maximum);
+  if(rows.length>=maximum)throw new Error('BACKUP_METADATA_LIMIT_REACHED');
+  return rows;
 }
 
 function latestBackupRecordMap(records) {
@@ -333,33 +361,10 @@ function latestBackupRecordMap(records) {
   return map;
 }
 
-async function scanDocumentSource(base44, src,scopeCompanyId='') {
-  if(scopeCompanyId&&src.entity==='MercantilDocumento')return [];
-  const all = [];
-  for (let skip = 0; skip < 10000; skip += 500) {
-    // Oldest-first keeps cursor pagination stable when new documents arrive during a resumed run.
-    const batch = scopeCompanyId
-      ? await base44.asServiceRole.entities[src.entity].filter({[src.companyField]:scopeCompanyId},'created_date',500,skip)
-      : await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip);
-    if (!batch?.length) break;
-    for (const rec of batch) {
-      const url = rec[src.urlField];
-      if (!url || typeof url !== 'string' || url.trim() === '') continue;
-      all.push({ record: rec, source: src });
-    }
-    if (batch.length < 500) break;
-    if(skip+500>=10000)throw new Error('BACKUP_SOURCE_LIMIT_REACHED');
-  }
-  return all;
-}
-
-async function scanAllDocuments(base44,scopeCompanyId='') {
-  const groups=[];for(const src of DOC_SOURCES)groups.push(await scanDocumentSource(base44,src,scopeCompanyId));
-  return groups.flat();
-}
-
 async function getCompanyName(companyId, base44, cache) {
   if (!companyId) return 'SinEmpresa';
+  if(companyId==='__admin_staging__')return 'Administracion - pendientes de asignar';
+  if(companyId==='__admin_unassigned__')return 'Administracion - vinculacion por revisar';
   if (cache[companyId]) return cache[companyId];
   try {
     const c = await base44.asServiceRole.entities.Company.get(companyId);
@@ -400,11 +405,11 @@ Deno.serve(async (req) => {
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
     const invocationStartedAt=Date.now(),timeBudgetMs=isManual?MANUAL_TIME_BUDGET_MS:SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
-    const {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders}=createDriveHelpers(deadline);
+    const {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders,assertPrivateDriveDestination}=createDriveHelpers(deadline);
     const scopeCompanyId=typeof body.qaCompanyId==='string'?body.qaCompanyId.trim():'';
     if(scopeCompanyId){
       const qa=await base44.asServiceRole.entities.Company.get(scopeCompanyId).catch(()=>null);
-      if(!qa?.private_document_storage_enabled||!['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com'].includes(String(qa.owner_email||'').toLowerCase())||!/DATOS FICTICIOS/.test(qa.razon_social||''))return Response.json({error:'Solo empresas ficticias verificadas para la prueba aislada.'},{status:403});
+      if(!qa?.private_document_storage_enabled||!['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com','taxeastrategies+qa-c1-recovery-20261031@gmail.com'].includes(String(qa.owner_email||'').toLowerCase())||!/DATOS FICTICIOS/.test(qa.razon_social||''))return Response.json({error:'Solo empresas ficticias verificadas para la prueba aislada.'},{status:403});
     }
 
     // Get Drive connection
@@ -462,13 +467,18 @@ Deno.serve(async (req) => {
       lease=await acquireBackupLease(leaseEntity,config.id);
       if(!lease)return Response.json({error:'Ya hay una copia o verificación en curso. Espera y reintenta.',code:'BACKUP_BUSY'},{status:409});
     }
+    if(action==='inventory_preview'){
+      const result=await inventoryPreview({service:base44.asServiceRole,user,body,scopeCompanyId,deadline,hash:computeChecksum,snapshot:backupSnapshot});
+      return Response.json(result,{status:result.continueRequired?202:result.ok?200:409,headers:{'Cache-Control':'no-store'}});
+    }
     // ── STATUS action ──
     if (action === 'status') {
       const [recentJobs, allRecords] = await Promise.all([
         base44.asServiceRole.entities.BackupJob.list('-startedAt', 20),
-        listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000),
+        base44.asServiceRole.entities.DocumentBackupRecord.list('-updated_date',501),
       ]);
-      const canonicalRecords = Object.values(latestBackupRecordMap(allRecords));
+      const metadataLimited=allRecords.length>500;
+      const canonicalRecords = Object.values(latestBackupRecordMap(allRecords.slice(0,500)));
       return Response.json({
         connected: !!driveEmail,
         connectedEmail: driveEmail,
@@ -479,7 +489,9 @@ Deno.serve(async (req) => {
         pendingCount: canonicalRecords.filter(record => record.backupStatus === 'pending').length,
         failedCount: canonicalRecords.filter(record => record.backupStatus === 'failed').length,
         trackedDocuments: canonicalRecords.length,
-        metadataDuplicateCount: Math.max(0, allRecords.length - canonicalRecords.length),
+        metadataLimited,
+        lastManifestDocumentCount:recentJobs.find(item=>String(item.scopeCompanyId||'')===scopeCompanyId&&['completed','completed_with_errors'].includes(item.status)&&item.manifestDriveFileId)?.documentsScanned??null,
+        metadataDuplicateCount: Math.max(0, Math.min(allRecords.length,500) - canonicalRecords.length),
       });
     }
 
@@ -531,6 +543,7 @@ Deno.serve(async (req) => {
       const batch = entries.slice(cursor, cursor + 25);
       const results = [];
       for (let offset = 0; offset < batch.length; offset += 5) {
+        if(results.length&&Date.now()>deadline-10000)break;
         const group = batch.slice(offset, offset + 5);
         const groupResults = await Promise.all(group.map(async (entry, localIndex) => {
           const index = cursor + offset + localIndex;
@@ -541,7 +554,7 @@ Deno.serve(async (req) => {
           const metadata = await metaRes.json();
           if (metadata.trashed || metadata.id !== entry.driveFileId) return { ok: false, code: 'DRIVE_FILE_UNAVAILABLE', index };
           if (Number(metadata.size) !== Number(entry.size)) return { ok: false, code: 'SIZE_MISMATCH', index };
-          if (!sampleIndices.has(index) || Number(entry.size) > 25 * 1024 * 1024) return { ok: true, checksumChecked: false, index };
+          if(Number(entry.size)>MAX_BACKUP_FILE_BYTES)return {ok:false,code:'COPY_TOO_LARGE_TO_VERIFY',index};
           const contentRes = await driveGet(`${DRIVE_API}/files/${encodeURIComponent(entry.driveFileId)}?alt=media`, accessToken);
           if (contentRes.status === 404) return { ok: false, code: 'DRIVE_FILE_MISSING', index };
           if (!contentRes.ok) throw new Error(`Drive content verification failed (${contentRes.status})`);
@@ -613,7 +626,7 @@ Deno.serve(async (req) => {
         driveAccountEmail: driveEmail,
         backupMode: config.backupMode,
         nextCursor: 0,
-        runVersion: 'snapshot-v3',
+        runVersion: 'snapshot-v4',
         scopeCompanyId,
         documentsScanned: 0, documentsCopied: 0, documentsSkipped: 0, documentsFailed: 0, bytesCopied: 0,
       });
@@ -646,7 +659,8 @@ Deno.serve(async (req) => {
       if(!scopeCompanyId)await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'running' });
 
       // Load the complete history and keep one canonical record per source document.
-      const existingRecords = await listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000);
+      const resumableManifest=job.runVersion==='snapshot-v4';
+      const existingRecords = resumableManifest?[]:await listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000);
       const recordMap = latestBackupRecordMap(existingRecords);
 
       const companyCache = {};
@@ -668,10 +682,19 @@ Deno.serve(async (req) => {
         if(index.jobId!==job.id||index.scopeCompanyId!==scopeCompanyId||!Array.isArray(index.documents)||index.documents.length!==job.sourceIndexCount)throw new Error('BACKUP_INDEX_INVALID');
         documents=backupSnapshot(index.documents,DOC_SOURCES);
       }else{
-        documents=backupSnapshot(await scanAllDocuments(base44,scopeCompanyId),DOC_SOURCES);
-        const sourceIndex=JSON.stringify({version:3,jobId:job.id,scopeCompanyId,documents});
+        let state;
+        try{state=job.inventoryState?JSON.parse(job.inventoryState):freshInventory(job.id,job.startedAt,scopeCompanyId);}catch{throw new Error('BACKUP_INVENTORY_INVALID');}
+        if(state.jobId!==job.id||state.scopeCompanyId!==scopeCompanyId)throw new Error('BACKUP_INVENTORY_SCOPE_MISMATCH');
+        const resolveCompany=createBackupContextResolver(base44.asServiceRole);
+        state=await advanceDocumentInventory({service:base44.asServiceRole,state,resolveCompany,deadline,
+         uploadPage:async page=>{const content=JSON.stringify({...page,documents:backupSnapshot(page.documents,DOC_SOURCES)}),bytes=new TextEncoder().encode(content);const saved=await uploadTextFile('inventory_'+job.id+'_'+page.index+'.json',dayFolder.id,content,accessToken);return{id:saved.id,sha256:await computeChecksum(bytes)};},
+         persist:async current=>{const patch={inventoryState:JSON.stringify(current),documentsScanned:current.count,lastHeartbeatAt:new Date().toISOString()};await base44.asServiceRole.entities.BackupJob.update(job.id,patch);job={...job,...patch};}
+        });
+        if(!state.done)return Response.json({status:'copying',phase:'inventory',jobId:job.id,continueRequired:true,documentsScanned:state.count,documentsProcessed:0,inventorySourcesCompleted:state.source,inventorySourcesTotal:BACKUP_DOCUMENT_SOURCES.length,retryAfterSeconds:1},{status:202});
+        documents=backupSnapshot(await loadInventoryDocuments(state,async id=>{const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!response.ok)throw new Error('BACKUP_INVENTORY_PART_UNAVAILABLE');return new Uint8Array(await response.arrayBuffer());},computeChecksum),DOC_SOURCES);
+        const sourceIndex=JSON.stringify({version:4,jobId:job.id,scopeCompanyId,cutoff:state.cutoff,unassigned:state.unassigned,excludedExternal:state.excludedExternal,documents});
         const uploadedIndex=await uploadTextFile('source_index_'+job.id+'.json',dayFolder.id,sourceIndex,accessToken);
-        const patch={sourceIndexDriveFileId:uploadedIndex.id,sourceIndexChecksum:await computeChecksum(new TextEncoder().encode(sourceIndex)),sourceIndexCount:documents.length,...(job.runVersion!=='snapshot-v3'?{nextCursor:0,documentsCopied:0,documentsSkipped:0,documentsFailed:0,bytesCopied:0,runVersion:'snapshot-v3'}:{})};
+        const patch={sourceIndexDriveFileId:uploadedIndex.id,sourceIndexChecksum:await computeChecksum(new TextEncoder().encode(sourceIndex)),sourceIndexCount:documents.length,...(!['snapshot-v3','snapshot-v4'].includes(job.runVersion)?{nextCursor:0,documentsCopied:0,documentsSkipped:0,documentsFailed:0,bytesCopied:0,runVersion:'snapshot-v3'}:{})};
         await base44.asServiceRole.entities.BackupJob.update(job.id,patch);job={...job,...patch};
       }
       const startCursor = Math.min(Math.max(0, Number(job.nextCursor || 0)), documents.length);
@@ -686,22 +709,35 @@ Deno.serve(async (req) => {
         const fileUrl = record[source.urlField];
         const docId = record.id;
         const key = `${source.entity}:${docId}`;
+        if(resumableManifest&&!recordMap[key]){
+          const query={documentEntity:source.entity,documentId:docId,clientAccountId:record[source.companyField]};
+          const usable=await base44.asServiceRole.entities.DocumentBackupRecord.filter({...query,backupStatus:{$in:['backed_up','verified']}},'-lastBackedUpAt',1);
+          const matches=usable.length?usable:await base44.asServiceRole.entities.DocumentBackupRecord.filter(query,'-updated_date',1);
+          recordMap[key]=latestBackupRecordMap(matches)[key]||null;
+        }
         const existing = recordMap[key];
         const sourceUnchanged = !existing?.fileStorageUrl || existing.fileStorageUrl === fileUrl;
-        const skipExisting = !isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && !!existing.driveFileId && !!existing.checksum && sourceUnchanged;
+        let skipExisting = !isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && !!existing.driveFileId && !!existing.checksum && sourceUnchanged;
 
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
         const subfolder = getSubfolder(source.entity, record);
-        const displayName = getDisplayName(source.entity, record);
+        const displayName = getDisplayName(source.entity, record,source);
         const safeFileName = sanitizeName(displayName) || sanitizeName(fileUrl.split('/').pop() || 'documento');
         const mimeType = guessMimeType(displayName, source.mimeField ? record[source.mimeField] : null);
 
+        let existingCopyVerified=null;
+        const verifyExistingCopy=async()=>{
+          if(existingCopyVerified!==null)return existingCopyVerified;
+          try{await assertPrivateDriveDestination(existing.driveFileId,accessToken);const copy=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(existing.driveFileId)+'?alt=media',accessToken);existingCopyVerified=copy.ok&&await computeChecksum(new Uint8Array(await copy.arrayBuffer()))===existing.checksum;}catch{existingCopyVerified=false;}
+          return existingCopyVerified;
+        };
+        if(skipExisting)skipExisting=await verifyExistingCopy();
         if (skipExisting) {
           return { type: 'skipped', manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName,
-            size: source.sizeField ? record[source.sizeField] : 0,
+            size: existing.fileSize || (source.sizeField ? record[source.sizeField] : 0),
             mimeType, checksum: existing?.checksum || '',
             driveFileId: existing?.driveFileId || '', drivePath: existing?.drivePath || '',
             status: 'skipped_existing', lastVerifiedAt: existing?.lastVerifiedAt || '',
@@ -729,7 +765,7 @@ Deno.serve(async (req) => {
         const fileSize = contentBytes.length;
 
         // If the URL changed but the bytes did not, refresh metadata without creating another Drive copy.
-        if (!isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && existing.driveFileId && existing.checksum === checksum) {
+        if (!isFullCopy && existing && ['backed_up', 'verified'].includes(existing.backupStatus) && existing.driveFileId && existing.checksum === checksum && await verifyExistingCopy()) {
           const nowIso = new Date().toISOString();
           const refreshed = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
             backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
@@ -806,6 +842,8 @@ Deno.serve(async (req) => {
       // instead of keeping one request open for four minutes.
 
       let nextCursor = startCursor;
+      let copyManifestParts=job.copyManifestParts?JSON.parse(job.copyManifestParts):[];
+      if(!Array.isArray(copyManifestParts))throw new Error('BACKUP_MANIFEST_PARTS_INVALID');
 
       for (let i = startCursor; i < documents.length; i += BACKUP_BATCH_SIZE) {
         if (Date.now() - invocationStartedAt >= timeBudgetMs) break;
@@ -826,6 +864,34 @@ Deno.serve(async (req) => {
             failedItems.push({ documentId: 'unknown', error: result.reason?.message || 'Error no identificado' });
           }
         }
+        if(resumableManifest){
+         const partEntries=[];
+      for (const { record, source } of batch) {
+        const backupRecord = recordMap[`${source.entity}:${record.id}`];
+        const displayName = getDisplayName(source.entity, record,source);
+        const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
+        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus) && !!backupRecord?.driveFileId && !!backupRecord?.checksum && (!backupRecord.fileStorageUrl||backupRecord.fileStorageUrl===record[source.urlField]);
+        partEntries.push({
+          documentId: record.id,
+          documentEntity: source.entity,
+          clientAccountId: record[source.companyField],
+          clientName: companyName,
+          type: source.entity,
+          originalFileName: displayName,
+          size: backupRecord?.fileSize || (source.sizeField ? record[source.sizeField] : 0) || 0,
+          mimeType: backupRecord?.mimeType || guessMimeType(displayName, source.mimeField ? record[source.mimeField] : null),
+          checksum: backupRecord?.checksum || '',
+          driveFileId: backupRecord?.driveFileId || '',
+          drivePath: backupRecord?.drivePath || '',
+          status: isBackedUp ? 'backed_up' : 'missing_or_stale',
+          lastVerifiedAt: backupRecord?.backupStatus === 'verified' ? (backupRecord.lastVerifiedAt || '') : '',
+        });
+      }
+
+         const content=JSON.stringify({version:1,jobId:job.id,start:i,entries:partEntries}),bytes=new TextEncoder().encode(content);
+         const saved=await uploadTextFile('copy_manifest_'+job.id+'_'+i+'.json',dayFolder.id,content,accessToken);
+         copyManifestParts=[...copyManifestParts.filter(p=>p.start!==i),{start:i,id:saved.id,sha256:await computeChecksum(bytes),count:batch.length}].sort((a,b)=>a.start-b.start);
+        }
         nextCursor = i + batch.length;
         await base44.asServiceRole.entities.BackupJob.update(job.id, {
           status: 'copying',
@@ -835,6 +901,7 @@ Deno.serve(async (req) => {
           documentsFailed: failed,
           bytesCopied,
           nextCursor,
+          ...(resumableManifest?{copyManifestParts:JSON.stringify(copyManifestParts)}:{}),
           lastHeartbeatAt: new Date().toISOString(),
         });
       }
@@ -856,11 +923,21 @@ Deno.serve(async (req) => {
         }, { status: 202 });
       }
 
-      // Build the final manifest from the canonical records, not only from this invocation.
-      const manifestEntries = [];
+      const manifestEntries=[];
+      if(resumableManifest){
+       let cursor=0;
+       for(const part of copyManifestParts){
+        if(part.start!==cursor)throw new Error('BACKUP_MANIFEST_PART_GAP');
+        const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(part.id)+'?alt=media',accessToken);if(!response.ok)throw new Error('BACKUP_MANIFEST_PART_UNAVAILABLE');
+        const bytes=new Uint8Array(await response.arrayBuffer());if(await computeChecksum(bytes)!==part.sha256)throw new Error('BACKUP_MANIFEST_PART_HASH_MISMATCH');
+        const page=JSON.parse(new TextDecoder().decode(bytes));if(page.version!==1||page.jobId!==job.id||page.start!==cursor||page.entries?.length!==part.count)throw new Error('BACKUP_MANIFEST_PART_INVALID');
+        for(const item of page.entries){const expected=documents[cursor++];if(item.documentEntity!==expected?.source.entity||item.documentId!==expected?.record.id)throw new Error('BACKUP_MANIFEST_SOURCE_MISMATCH');manifestEntries.push(item);}
+       }
+       if(cursor!==documents.length)throw new Error('BACKUP_MANIFEST_COUNT_MISMATCH');
+      }else{
       for (const { record, source } of documents) {
         const backupRecord = recordMap[`${source.entity}:${record.id}`];
-        const displayName = getDisplayName(source.entity, record);
+        const displayName = getDisplayName(source.entity, record,source);
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
         const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus) && !!backupRecord?.driveFileId && !!backupRecord?.checksum && (!backupRecord.fileStorageUrl||backupRecord.fileStorageUrl===record[source.urlField]);
         manifestEntries.push({
@@ -878,6 +955,8 @@ Deno.serve(async (req) => {
           status: isBackedUp ? 'backed_up' : 'missing_or_stale',
           lastVerifiedAt: backupRecord?.backupStatus === 'verified' ? (backupRecord.lastVerifiedAt || '') : '',
         });
+      }
+
       }
 
       // ── Verification phase ──

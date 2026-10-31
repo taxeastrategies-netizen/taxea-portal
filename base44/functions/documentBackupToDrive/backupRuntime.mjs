@@ -33,9 +33,9 @@ export async function boundedBackupDownload(value,validate,{fetcher=globalThis.f
  }finally{clearTimeout(timer);}
 }
 export function backupSnapshot(items,sources){
- const keys=new Set(),allowed=new Map(sources.map(s=>[s.entity,s]));
- return items.map(item=>{const source=allowed.get(item.source?.entity),r=item.record;if(!source||!r?.id)throw new Error('BACKUP_INDEX_INVALID');const key=source.entity+':'+r.id;if(keys.has(key))throw new Error('BACKUP_INDEX_DUPLICATE');keys.add(key);
-  const record={};for(const field of new Set(['id',source.urlField,source.companyField,source.mimeField,source.sizeField,'numero_factura','tipo','nombre','documentType','originalFileName','fileName','__backupCompanyId'].filter(Boolean)))if(r[field]!==undefined)record[field]=r[field];
+ const keys=new Set(),allowed=new Map(sources.map(s=>[s.entity+':'+s.urlField+':'+s.companyField,s]));
+ return items.map(item=>{const source=allowed.get(item.source?.entity+':'+item.source?.urlField+':'+item.source?.companyField),r=item.record;if(!source||!r?.id)throw new Error('BACKUP_INDEX_INVALID');const key=source.entity+':'+r.id;if(keys.has(key))throw new Error('BACKUP_INDEX_DUPLICATE');keys.add(key);
+  const record={};for(const field of new Set(['id',source.urlField,source.companyField,source.mimeField,source.sizeField,'numero_factura','tipo','nombre','documentType','originalFileName','fileName','__backupCompanyId','__backupRecordId','__backupField','sociedadId','expedienteId','auditCaseId',source.nameField].filter(Boolean)))if(r[field]!==undefined)record[field]=r[field];
   if(typeof record[source.urlField]!=='string'||record[source.urlField].length>4096)throw new Error('BACKUP_INDEX_INVALID');return {source,record};
  });
 }

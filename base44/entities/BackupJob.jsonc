@@ -157,6 +157,15 @@
     "sourceIndexCount": {
       "type": "number",
       "default": 0
+    },
+    "inventoryState": {
+      "type": "string"
+    },
+    "copyManifestParts": {
+      "type": "string"
+    },
+    "inventoryPreviewResult": {
+      "type": "string"
     }
   },
   "required": [

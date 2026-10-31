@@ -58,6 +58,15 @@
     "attempts": {
       "type": "number",
       "default": 1
+    },
+    "inventoryPage": {
+      "type": "string"
+    },
+    "inventoryPageSha256": {
+      "type": "string"
+    },
+    "inventoryIndex": {
+      "type": "number"
     }
   },
   "required": [

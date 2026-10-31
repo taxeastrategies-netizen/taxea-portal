@@ -45,7 +45,7 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
   };
   const context = { action: 'verify', body: {}, scopeCompanyId:'', base44, accessToken: 'synthetic',
     driveGet, computeChecksum: hash, DRIVE_API: 'https://drive.example/files',
-    Response, TextDecoder, Uint8Array, encodeURIComponent, Date, Number, Set, JSON };
+    Response, TextDecoder, Uint8Array, encodeURIComponent, Date, Number, Set, JSON,deadline:Date.now()+60000,MAX_BACKUP_FILE_BYTES:50*1024*1024 };
   const execute = vm.runInNewContext('(async () => {' + branch + '})', context);
   const first = await execute();
   const firstData = await first.json();
@@ -63,7 +63,7 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
   assert.equal(secondData.remaining, 0);
   assert.equal(secondData.status, missingIndex >= 0 || corruptIndex >= 0 ? 'incidents' : 'ok');
   assert.equal(secondData.missing, missingIndex >= 0 || corruptIndex >= 0 ? 1 : 0);
-  if (missingIndex < 0 && corruptIndex < 0) assert.equal(secondData.checksumChecked, 3);
+  if (missingIndex < 0 && corruptIndex < 0) assert.equal(secondData.checksumChecked, 27);
   const beforeRepeat = calls;
   const cached = await execute();
   assert.equal((await cached.json()).status, secondData.status);
@@ -73,5 +73,6 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
 await scenario();
 await scenario({ missingIndex: 26 });
 await scenario({ corruptIndex: 0 });
+await scenario({corruptIndex:13});
 await scenario({ manifestCorrupt: true });
 console.log(JSON.stringify({ ok: true, checks: ['resumable_full_manifest', 'missing_file', 'content_hash_mismatch', 'manifest_hash_mismatch', 'idempotent_result'] }));
