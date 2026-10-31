@@ -2,6 +2,8 @@ import {BACKUP_DOCUMENT_SOURCES,advanceDocumentInventory,createBackupContextReso
 const allowedId=value=>/^[A-Za-z0-9_-]{1,128}$/.test(value||'');
 export async function inventoryPreview({service,user,body,scopeCompanyId,deadline,hash,snapshot}){
  if(!['admin','super_admin'].includes(user?.role))throw Error('INVENTORY_ADMIN_ONLY');
+ let stage='job_lookup';
+ service=new Proxy(service,{get(target,key){if(key!=='entities')return Reflect.get(target,key);return new Proxy(target.entities,{get(entities,name){stage=String(name);const model=Reflect.get(entities,name);if(!model)return model;return new Proxy(model,{get(object,method){const value=Reflect.get(object,method);return typeof value==='function'?(...args)=>{stage=String(name)+'.'+String(method);return value.apply(object,args);}:value;}});}});}});
  let job;
  if(body.inventoryJobId){
   if(!allowedId(body.inventoryJobId))throw Error('INVENTORY_JOB_INVALID');
@@ -41,8 +43,10 @@ export async function inventoryPreview({service,user,body,scopeCompanyId,deadlin
   await service.entities.BackupJob.update(job.id,{status:'completed',completedAt:new Date().toISOString(),inventoryPreviewResult:JSON.stringify(result),documentsScanned:documents.length});
   return result;
  }catch(error){
+  const failedStage=stage;
   const code=/^(INVENTORY|BACKUP_INVENTORY|BACKUP_INDEX)_[A-Z_]+$/.test(error?.message||'')?error.message:'INVENTORY_UNAVAILABLE';
   await service.entities.BackupJob.update(job.id,{safeErrorMessage:code,lastHeartbeatAt:new Date().toISOString()}).catch(()=>{});
-  return{ok:false,status:'needs_attention',inventoryJobId:job.id,continueRequired:false,canResume:true,code,sourceBytesCopied:0,financialWrites:0};
+  const providerStatus=Number(error?.status||error?.response?.status||0),errorName=['Error','TypeError','ReferenceError','RangeError'].includes(error?.name)?error.name:'ProviderError';
+  return{ok:false,status:'needs_attention',inventoryJobId:job.id,continueRequired:false,canResume:true,code,diagnostic:{stage:failedStage,providerStatus,errorName},sourceBytesCopied:0,financialWrites:0};
  }
 }
