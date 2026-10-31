@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { base44, nativeEntitiesForC1Qa } from '@/api/base44Client';
+import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -54,15 +54,6 @@ export default function MercantilDashboard({ onOpenExpediente, onCreateSociedad,
   const [sociedades, setSociedades] = useState([]);
   const [expedientes, setExpedientes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [qaProbe,setQaProbe]=useState('');
-  const qaUser=user?.role==='user'&&['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com'].includes(user.email);
-  const probeNative=async()=>{
-    setQaProbe('Comprobando con sesión normal...');
-    const identity=await base44.auth.me();
-    if(identity.role!=='user'||identity.email!==user.email){setQaProbe('NO VÁLIDO: la sesión no es un usuario normal de QA.');return;}
-    try{await nativeEntitiesForC1Qa.MercantilExpediente.get('6ae61b4751ee633a646ecb64');setQaProbe('FAIL: el acceso nativo a la fila ficticia sigue permitido.');}
-    catch(error){const status=Number(error?.response?.status||error?.status||0);setQaProbe(([403,404].includes(status)?'PASS':'NO CONCLUYENTE')+' · sesión normal verificada · API nativa HTTP '+status);}
-  };
   const [search, setSearch] = useState('');
   const [filterEstado, setFilterEstado] = useState('all');
   const [filterEjercicio, setFilterEjercicio] = useState(String(CURRENT_YEAR));
@@ -101,7 +92,6 @@ export default function MercantilDashboard({ onOpenExpediente, onCreateSociedad,
 
   return (
     <div className="space-y-5">
-      {qaUser&&<section className="rounded-xl border p-3"><Button onClick={probeNative}>QA: comprobar bloqueo nativo de Mercantil</Button><p role="status">{qaProbe}</p></section>}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-jakarta font-bold text-foreground">Registro Mercantil y Cuentas Anuales</h1>
