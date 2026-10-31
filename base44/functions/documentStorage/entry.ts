@@ -59,10 +59,11 @@ Deno.serve(async req=>{
   }
   const company=await storageCompany(svc,user,body.companyId);
   if(!company)return response({error:'Empresa no disponible.'},403);
-  if(action==='capabilities')return response({ok:true,privateStorageEnabled:storageEnabled(company,Deno.env),maxFileBytes:25*1024*1024});
+  const dmsEnabled=storageEnabled(company,Deno.env)||Deno.env.get('TAXEA_PRIVATE_DMS_ENFORCED')==='true';
+  if(action==='capabilities')return response({ok:true,privateStorageEnabled:dmsEnabled,maxFileBytes:25*1024*1024});
   if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
-  if(!storageEnabled(company,Deno.env))return response({error:'El almacenamiento privado aún no está activado para esta empresa.'},409);
-  const saved=await savePrivateAsset(svc,user,company,body.file,Deno.env);
+  if(!dmsEnabled)return response({error:'El almacenamiento privado aún no está activado para esta empresa.'},409);
+  const saved=await savePrivateAsset(svc,user,{...company,private_document_storage_enabled:true},body.file,Deno.env);
   return response({ok:true,file_url:saved.file_url,assetId:saved.asset.id,reused:saved.reused,sha256:saved.asset.sha256,size:saved.asset.size});
  }catch(error){
   const detail=String(error?.message||'');
