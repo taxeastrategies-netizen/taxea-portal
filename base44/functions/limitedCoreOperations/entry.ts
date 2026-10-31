@@ -41,6 +41,7 @@ async function allowedCompany(svc: any, user: any, companyId: string) {
 }
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   let client: any;
   let event: any;
   try {
@@ -54,6 +55,7 @@ Deno.serve(async (req) => {
     client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    userAuthenticated=true;
     if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const operation = String(body.operation || '');
@@ -131,7 +133,7 @@ Deno.serve(async (req) => {
     await svc.entities.CoreIntegrationUsage.update(event.id, { status: 'success', completedAt: new Date().toISOString() });
     return Response.json({ ok: true, result });
   } catch (error) {
-    if (/^Invalid (?:service role )?authorization header format/.test(String(error?.message||''))) return Response.json({error:'No autenticado'},{status:401});
+    if (!userAuthenticated) return Response.json({error:'No autenticado'},{status:401});
     console.error('[limitedCoreOperations] provider_or_internal_error');
     if (event?.id && client?.asServiceRole?.entities?.CoreIntegrationUsage) {
       await client.asServiceRole.entities.CoreIntegrationUsage.update(event.id, {

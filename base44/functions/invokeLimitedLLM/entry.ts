@@ -80,6 +80,7 @@ async function validateFileUrls(value: unknown, maxFiles: number, svc: any, user
 }
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   let eventId: string | undefined;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
@@ -92,6 +93,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    userAuthenticated=true;
     if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
@@ -218,7 +220,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ result });
   } catch (error) {
-    if (/^Invalid (?:service role )?authorization header format/.test(String(error?.message||''))) return Response.json({error:'No autenticado'},{status:401});
+    if (!userAuthenticated) return Response.json({error:'No autenticado'},{status:401});
     console.error('[invokeLimitedLLM] provider_or_internal_error');
     if (eventId) {
       try {

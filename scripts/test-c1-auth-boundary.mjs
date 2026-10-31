@@ -12,7 +12,7 @@ for(const name of ['invokeLimitedLLM','limitedCoreOperations']){
   AIUsageEvent:{async filter(){reads++;return[];}}
  },integrations:{Core:{async InvokeLLM(){providerCalls++;throw Error('Forbidden in auth test');}}}}};
  const built=await esbuild.build({stdin:{contents:fs.readFileSync(entry,'utf8'),loader:'ts',resolveDir:path.dirname(entry),sourcefile:entry},bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(b){b.onResolve({filter:/^npm:@base44\/sdk/},()=>({path:'sdk',namespace:'test'}));b.onLoad({filter:/^sdk$/,namespace:'test'},()=>({loader:'js',contents:'export function createClientFromRequest(){return globalThis.__sdk();}'}));}}]});
- vm.runInContext(built.outputFiles[0].text,vm.createContext({TextEncoder,TextDecoder,Uint8Array,console,Request,Response,URL,crypto:globalThis.crypto,__sdk(){sdkCalls++;if(sdkThrows)throw Error('Invalid authorization header format. Expected Bearer token');return client;},Deno:{env:{get(){return undefined;}},serve(fn){handler=fn;}}}));
+ vm.runInContext(built.outputFiles[0].text,vm.createContext({TextEncoder,TextDecoder,Uint8Array,console,Request,Response,URL,crypto:globalThis.crypto,__sdk(){sdkCalls++;if(sdkThrows)throw Error('Synthetic SDK construction failure');return client;},Deno:{env:{get(){return undefined;}},serve(fn){handler=fn;}}}));
  async function invoke(authorization,body={},method='POST'){
   const headers={'content-type':'application/json','Base44-Service-Authorization':'Bearer SYNTHETIC-NOT-USER'};
   if(authorization!==undefined)headers.Authorization=authorization;
