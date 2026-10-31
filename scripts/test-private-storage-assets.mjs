@@ -11,6 +11,11 @@ asset.object_name='companies/A/0a000000-0000-0000-0000-000000000001.pdf';assert.
 assert.equal(assetIdFromReference(assetReference('asset-b')),'asset-b');for(const bad of ['https://evil.test/private-document/asset-b','http://taxeaportal.com/private-document/asset-b','https://taxeaportal.com@evil.test/private-document/asset-b','https://taxeaportal.com/private-document/../asset-b','https://taxeaportal.com/private-document/asset-b?company=B'])assert.equal(assetIdFromReference(bad),'');
 const bytes=new TextEncoder().encode('%PDF-1.4\nSYNTHETIC ONLY\n'),file=new File([bytes],'synthetic.pdf',{type:'application/pdf'});
 assert.throws(()=>privateFileFormat({name:'evil.pdf'},new TextEncoder().encode('<html>bad</html>')));assert.throws(()=>privateFileFormat({name:'test.svg'},bytes));
+assert.equal(privateFileFormat({name:'archivos.zip'},Uint8Array.from([80,75,5,6,...Array(18).fill(0)])).mime,'application/zip');
+assert.equal(privateFileFormat({name:'declaracion.xml'},new TextEncoder().encode('<?xml version="1.0"?><qa/>')).mime,'application/octet-stream');
+assert.equal(privateFileFormat({name:'imagen.gif'},new TextEncoder().encode('GIF89a')).mime,'image/gif');
+assert.equal(privateFileFormat({name:'imagen.bmp'},Uint8Array.from([66,77,0,0])).mime,'image/bmp');
+await assert.rejects(()=>savePrivateAsset(svc,user,a,{size:25*1024*1024+1,arrayBuffer(){throw new Error('Must reject before buffering');}},{}),/STORAGE_INVALID_SIZE/);assert.equal(writes,0);
 await assert.rejects(()=>savePrivateAsset(svc,user,b,file,{},()=>{throw Error('must not reach network');}),/STORAGE_COMPANY_NOT_ENABLED/);assert.equal(writes,0);
 await assert.rejects(()=>savePrivateAsset(svc,user,{...a,private_document_storage_enabled:false},file,{},()=>{throw Error('must not reach network');}),/STORAGE_COMPANY_NOT_ENABLED/);
 const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});const config={type:'service_account',project_id:STORAGE_PROJECT,client_email:STORAGE_ACCOUNT,token_uri:'https://oauth2.googleapis.com/token',private_key:privateKey.export({format:'pem',type:'pkcs8'})};const env={get:name=>({TAXEA_GCS_CREDENTIALS_JSON:JSON.stringify(config),TAXEA_GCS_BUCKET:STORAGE_BUCKET,TAXEA_GCS_PROJECT_ID:STORAGE_PROJECT})[name]};
