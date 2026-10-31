@@ -167,7 +167,7 @@ async function getDriveUserEmail(token) {
     if (!res.ok) return null;
     const data = await res.json();
     return data.user?.emailAddress || null;
-  } catch { return null; }
+  } catch(error) { if(error?.message==='BACKUP_CHUNK_DEADLINE')throw error;return null; }
 }
 
 async function findOrCreateFolder(name, parentId, token) {
@@ -417,6 +417,7 @@ Deno.serve(async (req) => {
     }
 
     const driveEmail = await getDriveUserEmail(accessToken);
+    if(action!=='status'&&!driveEmail)return Response.json({error:'No se pudo verificar la conexión con Google Drive. Reintenta.',code:'DRIVE_CONNECTION_UNVERIFIED'},{status:503});
     if (action !== 'status' && driveEmail !== REQUIRED_EMAIL) {
       return Response.json({
         error: `La copia requiere Google Drive conectado como ${REQUIRED_EMAIL}.`,
@@ -1010,8 +1011,8 @@ Deno.serve(async (req) => {
 
     } catch (error) {
       if(error?.message==='BACKUP_CHUNK_DEADLINE'||Number(error?.status||error?.response?.status)===429||/HTTP_429/.test(String(error?.message||''))){
-        await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',lastHeartbeatAt:new Date().toISOString(),safeErrorMessage:'Limitación temporal. La copia se puede reanudar.'}).catch(()=>{});
-        return Response.json({status:'copying',jobId:job.id,continueRequired:true,retryAfterSeconds:5,rateLimited:true},{status:202,headers:{'Retry-After':'5'}});
+        await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',lastHeartbeatAt:new Date().toISOString(),safeErrorMessage:error?.message==='BACKUP_CHUNK_DEADLINE'?'La copia continuará en el siguiente bloque.':'Limitación temporal. La copia se puede reanudar.'}).catch(()=>{});
+        return Response.json({status:'copying',jobId:job.id,continueRequired:true,retryAfterSeconds:error?.message==='BACKUP_CHUNK_DEADLINE'?1:5,rateLimited:error?.message!=='BACKUP_CHUNK_DEADLINE'},{status:202,headers:{'Retry-After':'5'}});
       }
       const failAt = new Date().toISOString();
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
