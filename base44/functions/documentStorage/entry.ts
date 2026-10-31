@@ -3,7 +3,7 @@ import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE
 import { verifyStorageConnection, boundedBytes } from './storageTransport.mjs';
 import { storageCompany, isStorageAdmin, savePrivateAsset, resolvePrivateAsset } from './storageAssets.mjs';
 import { verifySignedStorageConnection } from './storageSigning.mjs';
-import { prepareStorageQa } from './storageQaFixtures.mjs';
+import { prepareStorageQa, inspectStorageQa } from './storageQaFixtures.mjs';
 
 const disabled=(user:any)=>[user,user?.data].filter(Boolean).some(state=>state.is_deleted===true
  ||['eliminado','bloqueado','suspendido'].includes(String(state.status||'').trim().toLowerCase())
@@ -26,8 +26,9 @@ Deno.serve(async req=>{
    body=multipart?Object.fromEntries((await new Response(bytes,{headers:{'content-type':req.headers.get('content-type')}}).formData()).entries()):JSON.parse(new TextDecoder().decode(bytes));
   }catch{return response({error:'Solicitud no válida o demasiado grande.'},400);}
   const action=body?.action;
-  if(action==='prepare_storage_qa'){
+  if(['prepare_storage_qa','inspect_storage_qa'].includes(action)){
    if(!admin)return response({error:'Acceso reservado a administración.'},403);
+   if(action==='inspect_storage_qa')return response({ok:true,...await inspectStorageQa(client.asServiceRole,user)});
    return response({ok:true,...await prepareStorageQa(client.asServiceRole,user,Deno.env)});
   }
   if(['public_certificate','verify_connection','verify_signed_connection'].includes(action)){
@@ -53,7 +54,8 @@ Deno.serve(async req=>{
  }catch(error){
   const detail=String(error?.message||'');
   const safeCode=/^(STORAGE_AUTH_(NETWORK_(BINDING|TLS|DNS|TIMEOUT|BODY|CONNECT|TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|NOT_JSON_\d{3}|FAILED_\d{3}_(INVALID_GRANT|INVALID_CLIENT|INVALID_REQUEST|INVALID_SCOPE|UNAUTHORIZED_CLIENT|ACCESS_DENIED|UNEXPECTED))|STORAGE_STEP_AUTH_(TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|STORAGE_STEP_(AUTH|UPLOAD|READ|UNSIGNED|CLEANUP)|STORAGE_(AUTH|UPLOAD|DOWNLOAD)_FAILED_\d{3}|STORAGE_(PROBE|CLEANUP)_FAILED|PRIVATE_STORAGE_(NOT_CONFIGURED|INVALID_CONFIG)|STORAGE_(UNSUPPORTED_FILE|INVALID_SIZE|HASH_MISMATCH))$/.test(detail)?detail:'PRIVATE_STORAGE_UNAVAILABLE';
-  const status=safeCode==='STORAGE_UNSUPPORTED_FILE'?415:safeCode==='STORAGE_INVALID_SIZE'?413:503;
-  return response({error:'No se ha podido completar la operación de almacenamiento privado.',code:safeCode,...(admin&&Array.isArray(error?.storageHints)?{diagnosticHints:error.storageHints}:{})},status);
+  const code=admin&&/^(QA_(ADMIN_ONLY|EXISTING_COMPANY_NOT_VERIFIED|AMBIGUOUS_COMPANY|COMPANY_NOT_VERIFIED)|STORAGE_(SIGNED_READ_FAILED_\d{3}|UPLOAD_UNVERIFIED|METADATA_UNVERIFIED|COMPANY_NOT_ENABLED))$/.test(detail)?detail:safeCode;
+  const status=code==='STORAGE_UNSUPPORTED_FILE'?415:code==='STORAGE_INVALID_SIZE'?413:503;
+  return response({error:'No se ha podido completar la operación de almacenamiento privado.',code,...(admin&&Array.isArray(error?.storageHints)?{diagnosticHints:error.storageHints}:{})},status);
  }
 });
