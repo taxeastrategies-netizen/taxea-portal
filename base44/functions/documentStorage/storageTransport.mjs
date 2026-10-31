@@ -19,8 +19,11 @@ export async function storageTransport(env,fetcher=fetch){
  const segment=value=>base64url(encoder.encode(JSON.stringify(value)));
  const payload=segment({alg:'RS256',typ:'JWT'})+'.'+segment({iss:STORAGE_ACCOUNT,scope:'https://www.googleapis.com/auth/devstorage.read_write',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600});
  const signature=base64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(payload))));
- const tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature})},16384,fetcher);
- let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_FAILED');}
+ let tokenResponse;try{tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature})},16384,fetcher);}catch(error){
+  const kind=['TypeError','AbortError','OperationError','InvalidAccessError','ReferenceError'].includes(error?.name)?error.name:'Error';
+  throw new Error('STORAGE_AUTH_NETWORK_'+kind);
+ }
+ let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_NOT_JSON_'+tokenResponse.status);}
  if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer'){
   const reason=['invalid_grant','invalid_client','invalid_request','invalid_scope','unauthorized_client','access_denied'].includes(token.error)?token.error.toUpperCase():'UNEXPECTED';
   throw new Error('STORAGE_AUTH_FAILED_'+tokenResponse.status+'_'+reason);
@@ -52,7 +55,7 @@ export async function storageTransport(env,fetcher=fetch){
  };
 }
 export async function verifyStorageConnection(env,fetcher=fetch){
- let storage;try{storage=await storageTransport(env,fetcher);}catch(error){if(/^STORAGE_AUTH_FAILED_\d{3}_[A-Z_]+$/.test(error?.message||''))throw error;throw new Error('STORAGE_STEP_AUTH');}
+ let storage;try{storage=await storageTransport(env,fetcher);}catch(error){if(/^STORAGE_AUTH_(FAILED_\d{3}_[A-Z_]+|NETWORK_[A-Za-z]+|NOT_JSON_\d{3})$/.test(error?.message||''))throw error;const kind=['TypeError','AbortError','OperationError','InvalidAccessError','ReferenceError'].includes(error?.name)?error.name:'Error';throw new Error('STORAGE_STEP_AUTH_'+kind);}
  const name='__taxea_security_probe__/'+crypto.randomUUID()+'.txt';
  const expected=encoder.encode('TAXEA SYNTHETIC STORAGE PROBE - NO CUSTOMER DATA\n');
  let uploaded;try{uploaded=await storage.put(name,expected,'text/plain');}catch{throw new Error('STORAGE_STEP_UPLOAD');}let report;
