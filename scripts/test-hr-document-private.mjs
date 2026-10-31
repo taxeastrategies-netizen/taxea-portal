@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {saveHrDocumentUpload} from '../src/lib/hrDocumentUpload.mjs';
+const file={name:'qa-contract.pdf'},url='https://taxeaportal.com/private-document/qa-asset';
+let uploads=0,writes=0;
+const form={nombre:'Documento ficticio',tipo:'contrato',employee_id:'qa-employee'};
+const run=options=>saveHrDocumentUpload({file,companyId:'qa-A',form,...options},{upload:async({companyId,file:f})=>{uploads++;assert.equal(companyId,'qa-A');assert.equal(f,file);form.employee_id='changed-while-uploading';return {file_url:url};},create:async value=>{writes++;return {...value,id:'qa-doc'};}});
+const r=await run();assert.equal(r.company_id,'qa-A');assert.equal(r.archivo_url,url);assert.equal(r.employee_id,'qa-employee');assert.equal(writes,1);
+await assert.rejects(()=>run({companyId:''}));assert.equal(uploads,1);assert.equal(writes,1);
+let attempts=0;
+await assert.rejects(()=>saveHrDocumentUpload({file,companyId:'qa-A',form},{upload:async()=>{attempts++;throw new Error('STORAGE_OFFLINE');},create:async()=>{throw new Error('Must not write');}}),/STORAGE_OFFLINE/);assert.equal(attempts,1);
+await assert.rejects(()=>saveHrDocumentUpload({file,companyId:'qa-A',form},{upload:async()=>({}),create:async()=>{throw new Error('Must not write');}}),/confirmar el archivo/);
+await assert.rejects(()=>saveHrDocumentUpload({file,companyId:'qa-A',form},{upload:async()=>({file_url:url}),create:async value=>({...value,id:'wrong',company_id:'qa-B'})}),/confirmar el registro/);
+let creates=0;await assert.rejects(()=>saveHrDocumentUpload({file,companyId:'qa-A',form},{upload:async()=>({file_url:url}),create:async()=>{creates++;throw new Error('AMBIGUOUS_CREATE_RESPONSE');}}),/AMBIGUOUS_CREATE_RESPONSE/);assert.equal(creates,1);
+console.log(JSON.stringify({ok:true,tenantBound:true,metadataSnapshotPreserved:true,storageFailureNeverCreatesRecord:true,noSilentSuccess:true,noAutomaticCreateRetry:true,externalCalls:0,realCustomerData:0}));
