@@ -1,3 +1,4 @@
+import {isBackupTransientError,resumableSnapshotJob,completedBackupResponse} from './backupResumption.mjs';
 import {snapshotPrivateAssetLedger} from './assetLedgerSnapshot.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
@@ -403,6 +404,7 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
+    if(!['status','backup','verify','inventory_preview','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
     const invocationStartedAt=Date.now(),timeBudgetMs=isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
@@ -481,6 +483,7 @@ Deno.serve(async (req) => {
       const metadataLimited=allRecords.length>500;
       const canonicalRecords = Object.values(latestBackupRecordMap(allRecords.slice(0,500)));
       return Response.json({
+        resumableBackupJobId:(recentJobs||[]).find(item=>resumableSnapshotJob(item,scopeCompanyId))?.id||null,
         connected: !!driveEmail,
         connectedEmail: driveEmail,
         isCorrectAccount: driveEmail === REQUIRED_EMAIL,
@@ -596,18 +599,33 @@ Deno.serve(async (req) => {
     // ── BACKUP action ──
     const now = getCanaryDate();
     const requestedJobId = String(body.resumeJobId || '').trim();
-    let job = requestedJobId ? await base44.asServiceRole.entities.BackupJob.get(requestedJobId).catch(() => null) : null;
+    if(requestedJobId&&!/^[A-Za-z0-9_-]{1,128}$/.test(requestedJobId))return Response.json({error:'Trabajo no válido.',code:'BACKUP_JOB_INVALID'},{status:400});
+    let job = requestedJobId ? await base44.asServiceRole.entities.BackupJob.get(requestedJobId).catch(error=>{if(Number(error?.status||error?.response?.status)===404)return null;throw error;}) : null;
+    if(requestedJobId&&!job)return Response.json({error:'Trabajo no disponible. No se ha iniciado otra copia.',code:'BACKUP_JOB_NOT_FOUND'},{status:404});
+    if(job&&String(job.scopeCompanyId||'')!==scopeCompanyId)return Response.json({error:'El trabajo corresponde a otro ámbito.',code:'BACKUP_JOB_SCOPE_MISMATCH'},{status:403});
+    const replay=completedBackupResponse(job);
+    if(replay){
+      if(!scopeCompanyId&&job.status==='completed'&&Date.parse(job.completedAt||'')>(Date.parse(config.lastSuccessfulBackupAt||'')||0)){
+        const active=await base44.asServiceRole.entities.BackupJob.filter({runVersion:'snapshot-v4',scopeCompanyId:'',status:{$in:['preparing','copying','verifying']}},'-startedAt',1);
+        await base44.asServiceRole.entities.BackupConfiguration.update(config.id,{lastSuccessfulBackupAt:job.completedAt,lastBackupStatus:active.length?'running':'success'});
+      }
+      return Response.json(replay);
+    }
+    if(requestedJobId&&job&&!resumableSnapshotJob(job,scopeCompanyId)&&!['preparing','copying'].includes(job.status))return Response.json({error:'La copia requiere revisión; no se ha iniciado otra automáticamente.',code:'BACKUP_NOT_RESUMABLE'},{status:409});
+    if(job&&resumableSnapshotJob(job,scopeCompanyId)&&!['preparing','copying'].includes(job.status))job=await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',internalErrorCode:'',safeErrorMessage:'Reanudada tras una interrupción temporal.'});
     const requestedJobType = isManual ? 'manual' : 'scheduled';
     if (job && (!['preparing', 'copying'].includes(job.status) || String(job.scopeCompanyId||'')!==scopeCompanyId)) job = null;
     if (!job) {
       const recentJobs = (await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50)).filter(item=>String(item.scopeCompanyId||'')===scopeCompanyId);
       const nowMs = Date.now();
       const maxJobAge = item => item.jobType === 'scheduled' ? SCHEDULED_JOB_MAX_AGE_MS : MANUAL_JOB_MAX_AGE_MS;
-      job = recentJobs?.find(item =>
+      job = recentJobs.find(item=>resumableSnapshotJob(item,scopeCompanyId)) || recentJobs?.find(item =>
         ['preparing', 'copying'].includes(item.status) &&
         nowMs - new Date(item.lastHeartbeatAt || item.startedAt || 0).getTime() < maxJobAge(item)
       ) || null;
+      if(job&&resumableSnapshotJob(job,scopeCompanyId)&&!['preparing','copying'].includes(job.status))job=await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',internalErrorCode:'',safeErrorMessage:'Reanudada tras una interrupción temporal.'});
       for (const stale of recentJobs || []) {
+        if(stale.id===job?.id&&resumableSnapshotJob(stale,scopeCompanyId))continue;
         if (!['preparing', 'copying'].includes(stale.status)) continue;
         if (nowMs - new Date(stale.lastHeartbeatAt || stale.startedAt || 0).getTime() < maxJobAge(stale)) continue;
         await base44.asServiceRole.entities.BackupJob.update(stale.id, {
@@ -751,6 +769,7 @@ Deno.serve(async (req) => {
         try {
           contentBytes = await downloadBackupFile(fileUrl,base44,user,record[source.companyField],deadline);
         } catch (e) {
+          if(isBackupTransientError(e))throw e;
           if(Date.now()>=deadline-250||e?.message==='BACKUP_CHUNK_DEADLINE')throw new Error('BACKUP_CHUNK_DEADLINE');
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
@@ -824,6 +843,7 @@ Deno.serve(async (req) => {
             status: 'copied', lastVerifiedAt: nowIso,
           }};
         } catch (e) {
+          if(isBackupTransientError(e))throw e;
           if(Date.now()>=deadline-250||e?.message==='BACKUP_CHUNK_DEADLINE')throw new Error('BACKUP_CHUNK_DEADLINE');
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
@@ -851,6 +871,8 @@ Deno.serve(async (req) => {
         if (Date.now() - invocationStartedAt >= timeBudgetMs) break;
         const batch = documents.slice(i, i + BACKUP_BATCH_SIZE);
         const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
+        const transient=results.find(result=>result.status==='rejected'&&isBackupTransientError(result.reason));
+        if(transient?.status==='rejected')throw transient.reason;
         if(results.some(result=>result.status==='rejected'&&result.reason?.message==='BACKUP_CHUNK_DEADLINE'))break;
         for (const result of results) {
           if (result.status === 'fulfilled') {
@@ -1093,23 +1115,24 @@ Deno.serve(async (req) => {
       });
 
     } catch (error) {
-      if(error?.message==='BACKUP_CHUNK_DEADLINE'||Number(error?.status||error?.response?.status)===429||/HTTP_429/.test(String(error?.message||''))){
-        await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',lastHeartbeatAt:new Date().toISOString(),safeErrorMessage:error?.message==='BACKUP_CHUNK_DEADLINE'?'La copia continuará en el siguiente bloque.':'Limitación temporal. La copia se puede reanudar.'}).catch(()=>{});
+      if(error?.message==='BACKUP_CHUNK_DEADLINE'||isBackupTransientError(error)||/HTTP_429/.test(String(error?.message||''))){
+        await base44.asServiceRole.entities.BackupJob.updateMany({id:job.id,status:{$in:['preparing','copying','verifying']}},{$set:{status:'copying',lastHeartbeatAt:new Date().toISOString(),internalErrorCode:error?.message==='BACKUP_CHUNK_DEADLINE'?'':'BACKUP_TRANSIENT',safeErrorMessage:error?.message==='BACKUP_CHUNK_DEADLINE'?'La copia continuará en el siguiente bloque.':'Interrupción temporal del proveedor. El progreso se conserva para reanudar.'}}).catch(()=>{});
         return Response.json({status:'copying',jobId:job.id,continueRequired:true,retryAfterSeconds:error?.message==='BACKUP_CHUNK_DEADLINE'?1:5,rateLimited:error?.message!=='BACKUP_CHUNK_DEADLINE'},{status:202,headers:{'Retry-After':'5'}});
       }
       const failAt = new Date().toISOString();
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
         status: 'failed', completedAt: failAt, lastHeartbeatAt: failAt,
         durationSeconds: Math.max(0, Math.round((new Date(failAt).getTime() - new Date(job.startedAt || failAt).getTime()) / 1000)),
-        safeErrorMessage: error.message?.substring(0, 500) || 'Error no identificado',
+        internalErrorCode:/^BACKUP_[A-Z_]+$/.test(error?.message||'')?error.message:'BACKUP_RUN_FAILED',
+        safeErrorMessage:'La copia requiere revisión. Se conservan los documentos y el último respaldo válido.',
       });
       if(!scopeCompanyId)await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'failed' });
-      return Response.json({ error: error.message, jobId: job.id }, { status: 500 });
+      return Response.json({error:'La copia requiere revisión. El progreso y los originales se conservan.',code:/^BACKUP_[A-Z_]+$/.test(error?.message||'')?error.message:'BACKUP_RUN_FAILED',jobId:job.id},{status:500});
     }
 
   } catch (error) {
     console.error('[documentBackupToDrive] backup_unavailable');
-    return Response.json({ error: 'No se pudo completar la copia. Puedes reintentar sin borrar documentos.' }, { status: 500 });
+    return Response.json({error:'No se pudo completar la consulta. El progreso se conserva para reanudar.',code:isBackupTransientError(error)?'BACKUP_TEMPORARY_UNAVAILABLE':'BACKUP_UNAVAILABLE'},{status:isBackupTransientError(error)?503:500,headers:{'Retry-After':'5'}});
   }finally{if(lease&&leaseEntity)await releaseBackupLease(leaseEntity,lease).catch(()=>{});}
 });
 
@@ -1119,3 +1142,5 @@ Deno.serve(async (req) => {
 // C1 admin backup notification preference 20261031.1
 
 // Extended manual operator chunks remain manual jobs; no workflow is enabled.
+
+// C1 same-job provider interruption recovery and completed replay v1.

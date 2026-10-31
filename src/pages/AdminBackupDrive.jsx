@@ -56,7 +56,7 @@ export default function AdminBackupDrive() {
       setStatus(res.data);
       setJobs(res.data?.recentJobs || []);
     } catch (e) {
-      console.error(e);
+      console.warn('[Backup] status_unavailable');
       setLoadError(e.response?.data?.error || e.message || 'No se pudo consultar el estado de las copias.');
     } finally {
       setLoading(false);
@@ -69,7 +69,7 @@ export default function AdminBackupDrive() {
     setShowModal(false);
     setRunning(true);
     setRunResult(null);
-    let resumeJobId = null;
+    let resumeJobId = (runResult?.continueRequired&&runResult?.jobId)||status?.resumableBackupJobId||null;
     let completed = false;
     try {
       // Each request processes a short, persisted chunk. This avoids browser/proxy timeouts
@@ -95,7 +95,7 @@ export default function AdminBackupDrive() {
       setRunResult(previous => ({
         ...(previous || {}),
         status: 'failed',
-        error: e.response?.data?.error || e.message,
+        error: e.response?.data?.code==='BACKUP_NOT_RESUMABLE'?'La copia necesita revisión; no se iniciará otra automáticamente.':'La copia se ha interrumpido. Se conserva el progreso y puedes reanudarla.',
       }));
     } finally {
       setRunning(false);
@@ -161,7 +161,7 @@ export default function AdminBackupDrive() {
     <div className="space-y-6">
       <PageHeader
         title="Seguridad y Copias"
-        subtitle="Copia de seguridad documental automática en Google Drive"
+        subtitle="Copias documentales en Google Drive · inventario, continuación y verificación"
         actions={
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleVerify} disabled={verifying || !isCorrectAccount || !hasVerifiableBackup} className="gap-2">

@@ -1,0 +1,17 @@
+import assert from'node:assert/strict';
+import{isBackupTransientError,resumableSnapshotJob,completedBackupResponse}from'../base44/functions/documentBackupToDrive/backupResumption.mjs';
+import{requestBackupChunk}from'../src/lib/backupClient.mjs';
+let checks=0;const ok=(a,b)=>{assert.deepEqual(a,b);checks++;};
+for(const error of [{message:'db.invalid: timed out (configured timeouts: timeoutMS: 20000)'},{response:{status:400,data:{error:'connection timed out (configured timeouts: connectTimeoutMS: 30000)'}}},{status:503},{status:429},{code:'ETIMEDOUT'},{message:'MongoNetworkError'}])ok(isBackupTransientError(error),true);
+for(const error of [{status:401},{status:403},{status:400,message:'Validation error: required field'},{message:'BACKUP_INDEX_HASH_MISMATCH'},{status:500,message:'ReferenceError: coding bug'}])ok(isBackupTransientError(error),false);
+const job={id:'job-qa',runVersion:'snapshot-v4',scopeCompanyId:'',status:'copying',nextCursor:100};
+for(const status of ['preparing','copying','verifying'])ok(resumableSnapshotJob({...job,status}),true);
+ok(resumableSnapshotJob({...job,status:'failed',safeErrorMessage:'db.invalid: timed out (configured timeouts: timeoutMS: 20000)'}),true);
+ok(resumableSnapshotJob({...job,status:'failed',internalErrorCode:'BACKUP_TRANSIENT'}),true);
+for(const patch of [{status:'completed'},{status:'cancelled'},{status:'failed',safeErrorMessage:'BACKUP_INDEX_HASH_MISMATCH'},{runVersion:'resumable-v2'},{scopeCompanyId:'qa-other'}])ok(resumableSnapshotJob({...job,...patch}),false);
+ok(completedBackupResponse(job),null);ok(completedBackupResponse({...job,status:'completed'}),null);
+const completed=completedBackupResponse({...job,status:'completed',manifestDriveFileId:'manifest-qa',documentsScanned:200,documentsCopied:3,documentsSkipped:197});ok(completed.jobId,job.id);ok(completed.alreadyCompleted,true);ok(completed.continueRequired,false);ok(completed.documentsCopied+completed.documentsSkipped,200);
+let calls=0;const payload={action:'backup',resumeJobId:job.id};const seen=[];
+const result=await requestBackupChunk(async(_name,body)=>{calls++;seen.push({...body});if(calls<3)throw{response:{status:503,data:{code:'BACKUP_TEMPORARY_UNAVAILABLE'}}};return{data:completed};},payload,{pause:async()=>{}});ok(calls,3);ok(seen.every(item=>item.resumeJobId===job.id),true);ok(result.data.alreadyCompleted,true);
+let denied=0;await assert.rejects(()=>requestBackupChunk(async()=>{denied++;throw{response:{status:409,data:{code:'BACKUP_NOT_RESUMABLE'}}};},payload,{pause:async()=>{}}));checks++;ok(denied,1);
+console.log(JSON.stringify({ok:true,checks,externalCalls:0,financialWrites:0,coverage:'Provider timeouts, resumable same-job snapshots, completed replay, same-ID retry and fatal/foreign-scope refusal'}));

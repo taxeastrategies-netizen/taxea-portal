@@ -74,7 +74,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     portalFolderName: 'Taxea Portal',
     folderNamingMode: 'both',
   };
-  let job = null;const driveFiles=new Map();for(const record of records)if(record.driveFileId)driveFiles.set(record.driveFileId,{id:record.driveFileId,name:'existing-'+record.id,size:3,bytes:new Uint8Array([1,2,3])});if(corruptExisting&&driveFiles.has('drive-0'))driveFiles.get('drive-0').bytes=new Uint8Array([9,9,9]);let sourceScans=0,lost=false,forcePartialExpired=false;class ScenarioDate extends Date{static now(){return Date.now()+(forcePartialExpired?45000:0);}}
+  let job = null;let jobCreates=0;const driveFiles=new Map();for(const record of records)if(record.driveFileId)driveFiles.set(record.driveFileId,{id:record.driveFileId,name:'existing-'+record.id,size:3,bytes:new Uint8Array([1,2,3])});if(corruptExisting&&driveFiles.has('drive-0'))driveFiles.get('drive-0').bytes=new Uint8Array([9,9,9]);let sourceScans=0,lost=false,forcePartialExpired=false;class ScenarioDate extends Date{static now(){return Date.now()+(forcePartialExpired?45000:0);}}
   let recordCreates = 0;
   let itemCreates = 0;
   let mediaDownloads = 0;
@@ -91,7 +91,8 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     BackupJob: {
       list: async () => job ? [job] : [],
       get: async id => id === job?.id ? job : null,
-      create: async value => (job = { id: 'job-1', ...value }),
+      create: async value => {jobCreates++;return(job = { id: 'job-1', ...value });},
+      updateMany: async(q,patch)=>{if(!job||q.id!==job.id||q.status&&!q.status.$in.includes(job.status))return{updated:0};Object.assign(job,patch.$set);return{updated:1};},
       update: async (_id, value) => {Object.assign(job,value);if(interruptAndInsert&&value.status==='copying'&&value.nextCursor>0)forcePartialExpired=true;return job;},
     },
     BackupJobItem: {
@@ -102,7 +103,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     DocumentBackupRecord: {
       ...paged(records),
       create: async value => {
-        if(lostMetadataOnce&&!lost){lost=true;throw Object.assign(new Error('synthetic lost metadata'),{status:503});}
+        if(lostMetadataOnce&&!lost){lost=true;throw Object.assign(new Error('db.invalid: timed out (configured timeouts: timeoutMS: 20000)'),{status:400});}
         const created = { id: `new-record-${++recordCreates}`, ...value };
         records.unshift(created);
         return created;
@@ -207,7 +208,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
   let payload = await response.json();
   if(interruptAndInsert){assert.equal(payload.continueRequired,true,'Must exercise an actual persisted partial chunk');documents.unshift({...documents[0],id:'new-between-chunks',fileStorageUrl:fileUrl('new-between-chunks')});}
   for(let n=0;payload.continueRequired&&n<20;n++){forcePartialExpired=false;response=await handler(new Request('https://qa.invalid.test/documentBackupToDrive',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'backup',jobType:'manual',resumeJobId:payload.jobId})}));payload=await response.json();}
-  if(lostMetadataOnce){assert.equal(payload.status,'completed_with_errors');response=await handler(new Request('https://qa.invalid.test/documentBackupToDrive',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'backup',jobType:'manual'})}));payload=await response.json();}
+  if(lostMetadataOnce){assert.equal(payload.status,'completed');assert.equal(jobCreates,1,'A provider timeout must resume the same job, not create a new backup');assert.equal(payload.documentsFailed,0,'A transient tracking error must not become a permanent failed document');}
   return { payload, job, recordCreates, itemCreates, mediaDownloads, uploadAttempts,sourceScans,documentCopies:[...driveFiles.values()].filter(x=>x.name==='factura-0.pdf').length };
 
 }
@@ -298,4 +299,4 @@ const resumed=await executeScenario({documentCount:6,existingCount:0,interruptAn
 const recovered=await executeScenario({documentCount:1,existingCount:0,lostMetadataOnce:true});assert.equal(recovered.payload.status,'completed');assert.equal(recovered.documentCopies,1,'Lost tracking response must not create a second Drive copy');console.log(JSON.stringify({frozenIndexResumeVerified:true,newRowsDeferredToNextJob:true,lostMetadataCopyRecoveredWithoutDuplicate:true}));
 
 const corruptedCopy=await executeScenario({documentCount:1,existingCount:1,corruptExisting:true});assert.equal(corruptedCopy.payload.status,'completed');assert.equal(corruptedCopy.payload.documentsCopied,1);assert.equal(corruptedCopy.payload.documentsSkipped,0);assert.equal(corruptedCopy.recordCreates,0);assert.equal(corruptedCopy.mediaDownloads,1,'corrupted cached copy must be replaced from the original, not reused');
-const publicDestination=await executeScenario({documentCount:1,existingCount:0,sharedDestination:true});assert.match(publicDestination.payload.error,/BACKUP_DRIVE_SHARED_DESTINATION/);assert.equal(publicDestination.mediaDownloads,0);assert.equal(publicDestination.uploadAttempts,0,'no source bytes or filenames uploaded to a shared destination');console.log(JSON.stringify({corruptedCachedCopyRebuilt:true,sharedDestinationDeniedBeforeSourceRead:true}));
+const publicDestination=await executeScenario({documentCount:1,existingCount:0,sharedDestination:true});assert.equal(publicDestination.payload.code,'BACKUP_DRIVE_SHARED_DESTINATION');assert.equal(publicDestination.mediaDownloads,0);assert.equal(publicDestination.uploadAttempts,0,'no source bytes or filenames uploaded to a shared destination');console.log(JSON.stringify({corruptedCachedCopyRebuilt:true,sharedDestinationDeniedBeforeSourceRead:true}));

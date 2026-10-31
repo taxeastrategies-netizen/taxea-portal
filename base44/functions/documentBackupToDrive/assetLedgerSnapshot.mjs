@@ -8,7 +8,7 @@ export async function snapshotPrivateAssetLedger(service,user,documents,manifest
   const row=await service.entities.DocumentAsset.get(id).catch(()=>null);
   if(!row||row.company_id!==companyId||row.status!=='ready'||!String(row.object_name||'').startsWith('companies/'+companyId+'/')||!/^\d+$/.test(row.generation||'')||!/^[a-f0-9]{64}$/.test(row.sha256||'')||!Number.isSafeInteger(row.size)||row.size<1)throw Error('BACKUP_LEDGER_UNVERIFIED');
   const saved={};for(const key of ['id','company_id','object_name','generation','sha256','size','mime_type','original_name','status','storage_provider','uploaded_by','purpose','verified_at','restored_at','restore_source_generation'])if(row[key]!==undefined)saved[key]=row[key];
-  const copies=manifest.filter(m=>m.clientAccountId===companyId&&m.checksum===row.sha256&&m.size===row.size&&m.driveFileId&&['copied','skipped_existing','skipped_unchanged'].includes(m.status));
+  const copies=manifest.filter(m=>m.clientAccountId===companyId&&m.checksum===row.sha256&&m.size===row.size&&m.driveFileId&&['copied','skipped_existing','skipped_unchanged','backed_up'].includes(m.status));
   saved.backupReady=copies.length>0;saved.backupFileIds=[...new Set(copies.map(m=>m.driveFileId))];assets.push(saved);
  }
  return{version:1,assetCount:assets.length,referenceCount:refs.length,assets,references:refs,scope:'DocumentAsset metadata and attachment relations only; no invoice, journal or account data',restoresExecuted:0};
