@@ -129,6 +129,23 @@ const OCR_SCHEMA = {
 
 export default function LectorGastos({ reviewPage = false }) {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
+
+  const [qaReadProbe,setQaReadProbe]=useState(null);
+  const [qaReadAllowed,setQaReadAllowed]=useState(false);
+  useEffect(()=>{let live=true;base44.auth.me().then(u=>{if(live)setQaReadAllowed(u?.role==='user'&&u?.email==='taxeastrategies+qa-recc-2026@gmail.com');}).catch(()=>{});return()=>{live=false;};},[]);
+  const runQaReadProbe=async()=>{
+    const u=await base44.auth.me();
+    if(u?.role!=='user'||u?.email!=='taxeastrategies+qa-recc-2026@gmail.com')return;
+    const id='6ac4c79bbe3474810a3d0e06',result={qaOnly:true,role:u.role,rootCompanyMatches:u.company_id===id,nestedCompanyMatches:u.data?.company_id===id,contextMatches:company?.id===id,contextKeys:Object.keys(company||{}).sort()};
+    for(const [name,call] of [
+      ['get',()=>base44.entities.Company.get(id)],
+      ['filter',()=>base44.entities.Company.filter({owner_email:u.email},'-created_date',2)],
+      ['storage',()=>base44.functions.invoke('documentStorage',{action:'capabilities',companyId:id})],
+      ['ocr',()=>base44.functions.invoke('ocrDocumentIntake',{action:'list',companyId:id,documentType:'expense_invoice'})]
+    ]){try{const r=await call(),d=r?.data??r;result[name]={ok:true,status:r?.status||200,keys:Object.keys(d||{}).sort(),isArray:Array.isArray(d),count:Array.isArray(d)?d.length:null,companyMatches:(Array.isArray(d)?d[0]?.id:d?.id)===id,errorCode:typeof d?.error==='string'?d.error.slice(0,100):null};}catch(e){result[name]={ok:false,status:e?.response?.status||e?.status||0,code:String(e?.response?.data?.code||e?.code||'').slice(0,80),message:String(e?.response?.data?.error||e?.message||'').slice(0,160)};}}
+    setQaReadProbe(result);
+  };
+
   const navigate = useNavigate();
   const location = useLocation();
   const selectedReviewId = new URLSearchParams(location.search).get('doc');
@@ -448,6 +465,7 @@ export default function LectorGastos({ reviewPage = false }) {
           </Button>
         )}
       </PageHeader>
+      {qaReadAllowed&&<div><Button onClick={runQaReadProbe}>Diagnóstico lectura QA C1</Button>{qaReadProbe&&<pre data-qa-read-probe>{JSON.stringify(qaReadProbe,null,2)}</pre>}</div>}
 
       {!isAdmin && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 flex items-start gap-3">
