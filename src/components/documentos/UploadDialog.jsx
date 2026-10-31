@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import {uploadCompanyDocument} from '@/lib/privateDocuments';
 import { Upload, X, Sparkles, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -41,9 +42,9 @@ Responde SOLO con el id de la carpeta más apropiada (ej: "fiscal_modelos_aeat")
 }
 
 // Upload con timeout
-function uploadWithTimeout(file) {
+function uploadWithTimeout(file, companyId) {
   return Promise.race([
-    base44.integrations.Core.UploadFile({ file }),
+    uploadCompanyDocument({file,companyId}),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout al subir archivo')), 60000))
   ]);
 }
@@ -91,7 +92,7 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
     setUploading(true);
     setUploadError('');
     try {
-      const { file_url } = await uploadWithTimeout(file);
+      const { file_url } = await uploadWithTimeout(file, company.id);
       if (!file_url) throw new Error('No se obtuvo URL del archivo subido');
       const fiscalModel = MODELOS_AEAT.find(model => model.code === formData.fiscal_model_code);
       const documentRecord = await base44.entities.Document.create({
