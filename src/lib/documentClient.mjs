@@ -13,7 +13,7 @@ export function createDocumentClient(api,onSessionCleanup){
   if(!file||!/^[A-Za-z0-9_-]{1,128}$/.test(companyId||''))throw new Error('Selecciona una empresa antes de subir el documento.');
   const caps=await operation({action:'capabilities',companyId});
   if(!caps.privateStorageEnabled)return privateAttachment?api.integrations.Core.UploadPrivateFile({file}):api.integrations.Core.UploadFile({file});
-  if(file.size>caps.maxFileBytes)throw new Error('El documento supera el límite de 20 MB.');
+  if(file.size>caps.maxFileBytes)throw new Error('El documento supera el tamaño máximo permitido.');
   // Pass a File in a plain object: this SDK serializes it as multipart itself.
   const saved=await operation({action:'upload',companyId,file});
   if(!privateDocumentId(saved.file_url)||privateDocumentId(saved.file_url)!==saved.assetId)throw new Error('No se pudo verificar la referencia del archivo.');
@@ -29,7 +29,7 @@ export function createDocumentClient(api,onSessionCleanup){
   const response=await api.functions.fetch('/documentStorage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'download',assetId}),signal});
   if(!response.ok){const data=await response.json().catch(()=>null);const error=new Error(data?.error||'No se pudo abrir el documento privado.');error.status=response.status;throw error;}
   const hash=response.headers.get('X-Taxea-File-Sha256')||'',size=Number(response.headers.get('X-Taxea-File-Size'));
-  if(!/^[a-f0-9]{64}$/.test(hash)||!Number.isInteger(size)||size<=0||size>20*1024*1024)throw new Error('No se pudo verificar el documento recibido.');
+  if(!/^[a-f0-9]{64}$/.test(hash)||!Number.isInteger(size)||size<=0||size>25*1024*1024)throw new Error('No se pudo verificar el documento recibido.');
   const blob=await response.blob();if(blob.size!==size)throw new Error('La descarga está incompleta. Reintenta.');
   const actual=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
   if(actual!==hash)throw new Error('La descarga no coincide con el archivo original. Reintenta.');

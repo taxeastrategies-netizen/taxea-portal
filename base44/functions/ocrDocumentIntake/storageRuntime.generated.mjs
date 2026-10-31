@@ -1,5 +1,5 @@
 // GENERATED from documentStorage modules. Run node scripts/build-storage-runtime.mjs.
-// canonical-sha256: 0e58cb0086d5c95a0dfa73f4729075142828bab7b4bb1b8bb6d350a0bb5e61ec
+// canonical-sha256: 42499cc1a9bc89ded8b4a698c2b63ea61f676c7a71738432f8e83e60a98b995f
 // base44/functions/documentStorage/storageCredentials.mjs
 var encoder = new TextEncoder();
 var STORAGE_PROJECT = "plasma-minutia-510419-c4";
@@ -187,9 +187,12 @@ function privateFileFormat(file, bytes) {
   if (["jpg", "jpeg"].includes(ext) && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return { ext: "jpg", mime: "image/jpeg" };
   if (ext === "png" && [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v)) return { ext, mime: "image/png" };
   if (ext === "webp" && text.startsWith("RIFF") && text.slice(8) === "WEBP") return { ext, mime: "image/webp" };
+  if (ext === "gif" && /^GIF8[79]a/.test(text)) return { ext, mime: "image/gif" };
+  if (ext === "bmp" && bytes[0] === 66 && bytes[1] === 77) return { ext, mime: "image/bmp" };
+  if (ext === "zip" && bytes[0] === 80 && bytes[1] === 75 && (bytes[2] === 3 && bytes[3] === 4 || bytes[2] === 5 && bytes[3] === 6)) return { ext, mime: "application/zip" };
   if (["xlsx", "docx", "pptx"].includes(ext) && bytes[0] === 80 && bytes[1] === 75 && bytes[2] === 3 && bytes[3] === 4) return { ext, mime: { xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }[ext] };
-  if (["txt", "csv", "json"].includes(ext) && !bytes.slice(0, 8192).includes(0)) return { ext, mime: "application/octet-stream" };
-  if (["xls", "doc"].includes(ext) && [208, 207, 17, 224, 161, 177, 26, 225].every((v, i) => bytes[i] === v)) return { ext, mime: "application/octet-stream" };
+  if (["txt", "csv", "json", "xml"].includes(ext) && (!bytes.slice(0, 8192).includes(0) || (bytes[0] === 255 && bytes[1] === 254 || bytes[0] === 254 && bytes[1] === 255))) return { ext, mime: "application/octet-stream" };
+  if (["xls", "doc", "ppt"].includes(ext) && [208, 207, 17, 224, 161, 177, 26, 225].every((v, i) => bytes[i] === v)) return { ext, mime: "application/octet-stream" };
   throw new Error("STORAGE_UNSUPPORTED_FILE");
 }
 async function storageCompany(svc, user, id) {
@@ -199,7 +202,7 @@ async function storageCompany(svc, user, id) {
 }
 async function savePrivateAsset(svc, user, company, file, env, fetcher) {
   if (!mayAccessStorageCompany(user, company) || !storageEnabled(company, env)) throw new Error("STORAGE_COMPANY_NOT_ENABLED");
-  if (!file?.size || file.size > 20 * 1024 * 1024) throw new Error("STORAGE_INVALID_SIZE");
+  if (!file?.size || file.size > 25 * 1024 * 1024) throw new Error("STORAGE_INVALID_SIZE");
   const bytes = new Uint8Array(await file.arrayBuffer()), format = privateFileFormat(file, bytes), digest = await sha256(bytes);
   const previous = await svc.entities.DocumentAsset.filter({ company_id: company.id, sha256: digest, status: "ready" }, "-created_date", 1);
   if (previous[0]) return { asset: previous[0], file_url: assetReference(previous[0].id), reused: true };

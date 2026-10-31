@@ -21,7 +21,7 @@ Deno.serve(async req=>{
   const multipart=(req.headers.get('content-type')||'').includes('multipart/form-data');
   let body:any;
   try{
-   const bytes=await boundedBytes(req,multipart?20*1024*1024+32768:16384);
+   const bytes=await boundedBytes(req,multipart?25*1024*1024+32768:16384);
    body=multipart?Object.fromEntries((await new Response(bytes,{headers:{'content-type':req.headers.get('content-type')}}).formData()).entries()):JSON.parse(new TextDecoder().decode(bytes));
   }catch{return response({error:'Solicitud no válida o demasiado grande.'},400);}
   const action=body?.action;
@@ -59,7 +59,7 @@ Deno.serve(async req=>{
   }
   const company=await storageCompany(svc,user,body.companyId);
   if(!company)return response({error:'Empresa no disponible.'},403);
-  if(action==='capabilities')return response({ok:true,privateStorageEnabled:storageEnabled(company,Deno.env),maxFileBytes:20*1024*1024});
+  if(action==='capabilities')return response({ok:true,privateStorageEnabled:storageEnabled(company,Deno.env),maxFileBytes:25*1024*1024});
   if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
   if(!storageEnabled(company,Deno.env))return response({error:'El almacenamiento privado aún no está activado para esta empresa.'},409);
   const saved=await savePrivateAsset(svc,user,company,body.file,Deno.env);
