@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useMemo, useState } from 'react';
@@ -40,7 +41,7 @@ export default function ImporterCertificationPanel({ companyId, year, officialFi
   const save = useMutation({
     mutationFn: async () => {
       if (!proof) throw new Error('Adjunta una respuesta o captura de la validación oficial.');
-      const upload = await base44.integrations.Core.UploadFile({ file: proof });
+      const upload = await uploadCompanyDocument({ file: proof, companyId });
       const evidenceUrl = upload?.file_url;
       if (!evidenceUrl) throw new Error('No se obtuvo la URL de la evidencia.');
       return (await base44.functions.invoke('taxImporterCertification', {

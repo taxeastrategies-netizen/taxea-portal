@@ -1,3 +1,4 @@
+import { uploadRelatedDocument } from '@/lib/privateDocuments';
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -92,7 +93,7 @@ export default function AuditCaseDetail({ caseId, onBack }) {
     setUploading(true);
     try {
       for (const file of fileList) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await uploadRelatedDocument({file,contextKind:'audit',contextId:caseId});
         const ext = file.name.split('.').pop().toLowerCase();
         const mimeMap = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', xlsx: 'application/vnd.openxmlformats', xls: 'application/vnd.ms-excel', csv: 'text/csv', docx: 'application/vnd.openxmlformats', txt: 'text/plain', xml: 'application/xml', zip: 'application/zip' };
         await base44.entities.TaxeaAuditFile.create({

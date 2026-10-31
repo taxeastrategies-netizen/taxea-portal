@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useEffect, useMemo, useState } from 'react';
@@ -257,7 +258,7 @@ function FiledReturnImport({ companyId, modelCode, year, period, onImported }) {
     setWorking(true); setError(''); setNotice('');
     try {
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-      const [hash, upload] = await Promise.all([fileSha256(file), base44.integrations.Core.UploadFile({ file })]);
+      const [hash, upload] = await Promise.all([fileSha256(file), uploadCompanyDocument({ file, companyId })]);
       let rawContent = '';
       let extracted = /** @type {any} */ ({});
       if (isPdf) {

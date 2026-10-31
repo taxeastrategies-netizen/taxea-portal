@@ -19,6 +19,12 @@ export function createDocumentClient(api,onSessionCleanup){
   if(!privateDocumentId(saved.file_url)||privateDocumentId(saved.file_url)!==saved.assetId)throw new Error('No se pudo verificar la referencia del archivo.');
   return {...saved,file_uri:saved.file_url};
  };
+ const uploadContext=async({file,contextKind,contextId})=>{
+  if(!file||!['audit','mercantil'].includes(contextKind)||!/^[A-Za-z0-9_-]{1,128}$/.test(contextId||''))throw new Error('Selecciona un expediente válido antes de subir.');
+  const saved=await operation({action:'upload_related',contextKind,contextId,file});
+  if(!privateDocumentId(saved.file_url)||privateDocumentId(saved.file_url)!==saved.assetId)throw new Error('No se pudo verificar el documento del expediente.');
+  return saved;
+ };
  const uploadStaging=async file=>{
   const caps=await operation({action:'staging_capabilities'});
   return caps.privateStorageEnabled?operation({action:'upload_staging',file}):api.integrations.Core.UploadPublicFile({file});
@@ -38,5 +44,5 @@ export function createDocumentClient(api,onSessionCleanup){
   return {blob,name,mimeType:blob.type,sha256:hash};
  };
  const open=async(reference,options)=>{const epoch=sessionEpoch,file=await download(reference,options);if(epoch!==sessionEpoch)throw new Error('La sesión ha cambiado. Vuelve a abrir el documento.');const url=URL.createObjectURL(file.blob);liveUrls.add(url);return {...file,url,revoke:()=>revoke(url)};};
- return {upload,uploadStaging,assignStaged,download,open,clear};
+ return {upload,uploadContext,uploadStaging,assignStaged,download,open,clear};
 }

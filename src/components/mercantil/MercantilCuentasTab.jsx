@@ -1,3 +1,4 @@
+import { uploadRelatedDocument } from '@/lib/privateDocuments';
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -97,7 +98,7 @@ export default function MercantilCuentasTab({ expediente, user, onRefresh }) {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await uploadRelatedDocument({file,contextKind:'mercantil',contextId:expediente.sociedadId});
     await addDoc(file_url);
     setUploading(false);
   };

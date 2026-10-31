@@ -1,10 +1,14 @@
+import {contextStorageCompany} from './documentContexts.mjs';
+import {storageAccountEnabled,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 
 Deno.serve(async (req) => {
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if(!storageAccountEnabled(user))return Response.json({error:'Acceso suspendido.'},{status:403});
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Acceso no autorizado. Solo administradores.' }, { status: 403 });
     }
@@ -15,6 +19,8 @@ Deno.serve(async (req) => {
 
     const auditCase = await base44.asServiceRole.entities.TaxeaAuditCase.get(auditCaseId);
     if (!auditCase) return Response.json({ error: 'Expediente no encontrado' }, { status: 404 });
+
+    const storageScope=await contextStorageCompany(base44.asServiceRole,user,'audit',auditCaseId);
 
     // Update case status to processing
     await base44.asServiceRole.entities.TaxeaAuditCase.update(auditCaseId, {
@@ -55,6 +61,18 @@ Deno.serve(async (req) => {
           processingStatus: 'Extrayendo contenido con IA...'
         });
 
+        let providerFileUrl=file.storagePath;
+        const assetId=assetIdFromReference(file.storagePath);
+        if(assetId){
+          const asset=await authorizedAsset(base44.asServiceRole,user,assetId);
+          if(!asset||asset.company_id!==storageScope.id)throw new Error('PRIVATE_DOCUMENT_SCOPE_MISMATCH');
+          const resolved=await resolvePrivateAsset(base44.asServiceRole,user,assetId,Deno.env);
+          if(!resolved)throw new Error('PRIVATE_DOCUMENT_UNAVAILABLE');
+          providerFileUrl=resolved.url;
+        }else{
+          const u=new URL(file.storagePath);
+          if(u.protocol!=='https:'||u.hostname!=='base44.app'||u.port||u.username||u.password||u.hash||!u.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/'))throw new Error('INVALID_DOCUMENT_REFERENCE');
+        }
         // Use LLM to extract and classify document content
         const extractionPrompt = `Eres un analista documental forense experto en fiscalidad española y contabilidad. 
 Analiza el siguiente documento (archivo: ${file.originalName}, tipo: ${file.mimeType}) del expediente de auditoría "${auditCase.title}".
@@ -102,7 +120,7 @@ Reglas críticas:
 
         const llmResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
           prompt: extractionPrompt,
-          file_urls: [file.storagePath],
+          file_urls: [providerFileUrl],
           response_json_schema: {
             type: "object",
             properties: {

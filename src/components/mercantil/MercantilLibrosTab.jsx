@@ -1,3 +1,4 @@
+import { uploadRelatedDocument } from '@/lib/privateDocuments';
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
@@ -26,13 +27,13 @@ const ESTADO_CFG = {
   con_incidencia:{ label: 'Incidencia',   color: 'bg-red-100 text-red-700' },
 };
 
-function UploadBtn({ label, url, onUpload, disabled }) {
+function UploadBtn({ label, url, onUpload, disabled, sociedadId }) {
   const [uploading, setUploading] = useState(false);
   const handle = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await uploadRelatedDocument({file,contextKind:'mercantil',contextId:sociedadId});
     await onUpload(file_url);
     setUploading(false);
   };
@@ -149,11 +150,11 @@ export default function MercantilLibrosTab({ expediente, isAdmin, user, onRefres
                   <input type="checkbox" checked={!!libro.aplica} onChange={e => updateLibro(libro, { aplica: e.target.checked })} className="w-3.5 h-3.5" />
                   <span className="text-[10px] text-muted-foreground">{libro.aplica ? 'Aplica' : 'N/A'}</span>
                 </label>
-                <UploadBtn label="Subir fuente" url={libro.archivoFuenteUrl} disabled={!libro.aplica}
+                <UploadBtn sociedadId={expediente.sociedadId} label="Subir fuente" url={libro.archivoFuenteUrl} disabled={!libro.aplica}
                   onUpload={url => updateLibro(libro, { archivoFuenteUrl: url })} />
-                <UploadBtn label="Justificante" url={libro.justificantePresentacionUrl} disabled={!libro.aplica}
+                <UploadBtn sociedadId={expediente.sociedadId} label="Justificante" url={libro.justificantePresentacionUrl} disabled={!libro.aplica}
                   onUpload={url => updateLibro(libro, { justificantePresentacionUrl: url })} />
-                <UploadBtn label="Confirma. RM" url={libro.confirmacionRegistroUrl} disabled={!libro.aplica}
+                <UploadBtn sociedadId={expediente.sociedadId} label="Confirma. RM" url={libro.confirmacionRegistroUrl} disabled={!libro.aplica}
                   onUpload={url => updateLibro(libro, { confirmacionRegistroUrl: url })} />
                 <div className="space-y-0.5 text-[10px] text-muted-foreground">
                   <div>Prep: <Input type="date" value={libro.fechaPreparacion || ''} onChange={e => updateLibro(libro, { fechaPreparacion: e.target.value })} className="h-5 text-[10px] border-0 p-0 w-24 inline-block" /></div>

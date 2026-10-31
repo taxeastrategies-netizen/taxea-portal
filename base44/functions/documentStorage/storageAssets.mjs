@@ -25,7 +25,7 @@ export function privateFileFormat(file,bytes){
  if(ext==='bmp'&&bytes[0]===66&&bytes[1]===77)return {ext,mime:'image/bmp'};
  if(ext==='zip'&&bytes[0]===80&&bytes[1]===75&&((bytes[2]===3&&bytes[3]===4)||(bytes[2]===5&&bytes[3]===6)))return {ext,mime:'application/zip'};
  if(['xlsx','docx','pptx'].includes(ext)&&bytes[0]===80&&bytes[1]===75&&bytes[2]===3&&bytes[3]===4)return {ext,mime:({xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})[ext]};
- if(['txt','csv','json','xml'].includes(ext)&&(!bytes.slice(0,8192).includes(0)||((bytes[0]===255&&bytes[1]===254)||(bytes[0]===254&&bytes[1]===255))))return {ext,mime:'application/octet-stream'};
+ if(['txt','csv','json','xml','111','115','123','130','131','180','190','193','200','202','216','232','296','303','347','349','390','415','417','420','421','425'].includes(ext)&&(!bytes.slice(0,8192).includes(0)||((bytes[0]===255&&bytes[1]===254)||(bytes[0]===254&&bytes[1]===255))))return {ext,mime:'application/octet-stream'};
  if(['xls','doc','ppt'].includes(ext)&&[208,207,17,224,161,177,26,225].every((v,i)=>bytes[i]===v))return {ext,mime:'application/octet-stream'};
  throw new Error('STORAGE_UNSUPPORTED_FILE');
 }

@@ -1,3 +1,4 @@
+import {contextStorageCompany} from './documentContexts.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
 import { verifyStorageConnection, boundedBytes } from './storageTransport.mjs';
@@ -32,9 +33,15 @@ Deno.serve(async req=>{
    const config=storageConfiguration(Deno.env),certificate=await publicStorageCertificate(config);
    return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
   }
+  if(action==='upload_related'){
+   if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
+   let related;try{related=await contextStorageCompany(client.asServiceRole,user,String(body.contextKind||''),String(body.contextId||''));}catch{return response({error:'Expediente no disponible o empresa sin vinculación inequívoca.'},403);}
+   const saved=await savePrivateAsset(client.asServiceRole,user,{...related,private_document_storage_enabled:true},body.file,Deno.env);
+   return response({ok:true,file_url:saved.file_url,assetId:saved.asset.id,reused:saved.reused});
+  }
   if(['staging_capabilities','upload_staging','assign_staged_asset'].includes(action)){
    if(!admin)return response({error:'Acceso reservado a administración.'},403);
-   if(action==='staging_capabilities')return response({ok:true,privateStorageEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true'});
+   if(action==='staging_capabilities')return response({ok:true,privateStorageEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true'||Deno.env.get('TAXEA_PRIVATE_DMS_ENFORCED')==='true'});
    if(action==='upload_staging'){
     if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
     const staged=await savePrivateAsset(client.asServiceRole,user,{id:'__admin_staging__',activa:true,private_document_storage_enabled:true},body.file,Deno.env);

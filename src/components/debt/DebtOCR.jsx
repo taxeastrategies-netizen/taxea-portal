@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,7 +47,7 @@ export default function DebtOCR({ companyId, onImported }) {
     setAnalysis(null);
 
     // Upload file
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: f });
+    const { file_url } = await uploadCompanyDocument({ file: f, companyId });
     setFileUrl(file_url);
 
     // Extract + analyze with LLM

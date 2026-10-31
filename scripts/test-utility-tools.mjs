@@ -106,7 +106,7 @@ await check('new entities deny all direct client access',async()=>{
     for(const operation of ['create','read','update','delete'])assert.equal(schema.rls[operation],false);
   }
 });
-const source=(await fs.readFile('base44/functions/utilityOperations/entry.ts','utf8')).replace("import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';",'const createClientFromRequest = () => globalThis.__client;');
+const source=(await fs.readFile('base44/functions/utilityOperations/entry.ts','utf8')).replace("import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';",'const createClientFromRequest = () => globalThis.__client;').replace("import {savePrivateAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';",'const {savePrivateAsset,resolvePrivateAsset}=globalThis.__privateStorage;');
 const compiled=await build({stdin:{contents:source,resolveDir:process.cwd()+'/base44/functions/utilityOperations',loader:'ts'},bundle:true,write:false,platform:'node',format:'iife',logLevel:'silent'});
 let handler,identity=normal,serial=0,ocrCalls=0,privateUploads=0;
 const tables={UtilityDeadline:[],UtilityDocument:[],CoreIntegrationUsage:[]};
@@ -118,9 +118,12 @@ for(const [name,table] of Object.entries(tables))entities[name]={
   update:async(id,payload)=>{const row=table.find(item=>item.id===id);Object.assign(row,payload,{updated_date:'v'+(++serial)});return {...row};},
   delete:async id=>{const index=table.findIndex(row=>row.id===id);if(index>=0)table.splice(index,1);}
 };
-const sandbox={Request,Response,File,FormData,URL,TextDecoder,Uint8Array,crypto,Date,console,Deno:{serve:fn=>{handler=fn;}},__client:{auth:{me:async()=>identity},asServiceRole:{entities,integrations:{Core:{
-  UploadPrivateFile:async()=>{privateUploads++;return{file_uri:'private/test/document.pdf'};},
-  CreateFileSignedUrl:async()=>({signed_url:'https://base44.app/signed-test'}),
+const sandbox={Request,Response,File,FormData,URL,TextDecoder,Uint8Array,crypto,Date,console,__privateStorage:{
+ savePrivateAsset:async(svc,user,company,file)=>{assert.equal(company.id,'companyA');assert.equal(user.id,normal.id);assert.equal(company.private_document_storage_enabled,true);privateUploads++;return{file_url:'https://taxeaportal.com/private-document/qa-utility',asset:{id:'qa-utility'}};},
+ resolvePrivateAsset:async(svc,user,id)=>{assert.equal(id,'qa-utility');return{url:'https://synthetic.test/signed-private'};}
+},Deno:{serve:fn=>{handler=fn;}},__client:{auth:{me:async()=>identity},asServiceRole:{entities,integrations:{Core:{
+  UploadPrivateFile:async()=>{throw Error('NATIVE PRIVATE SIGNER MUST NOT BE USED');},
+  CreateFileSignedUrl:async()=>{throw Error('NATIVE PRIVATE SIGNER MUST NOT BE USED');},
   ExtractDataFromUploadedFile:async()=>{ocrCalls++;return{status:'success',output:{fecha:'2026-01-10',proveedor:'Proveedor ficticio',numero:'QA-1',total:42}};}
 }}}}};
 vm.runInNewContext(compiled.outputFiles[0].text,sandbox);
@@ -168,7 +171,7 @@ await check('private OCR route and owner-scoped cache retry',async()=>{
   const response=await extract(a);assert.equal(response.status,200);assert.equal((await response.json()).result.total,42);
   assert.equal(privateUploads,1);assert.equal(ocrCalls,1);
   assert.equal((await (await extract(a)).json()).cached,true);assert.equal(ocrCalls,1);
-  assert.equal(tables.UtilityDocument[0].company_id,'companyA');assert.equal(tables.UtilityDocument[0].user_id,normal.id);
+  assert.equal(tables.UtilityDocument[0].file_uri,'https://taxeaportal.com/private-document/qa-utility');assert.equal(tables.UtilityDocument[0].company_id,'companyA');assert.equal(tables.UtilityDocument[0].user_id,normal.id);
 });
 await check('OCR minute/day quotas prevent new chargeable work',async()=>{
   const now=new Date().toISOString();

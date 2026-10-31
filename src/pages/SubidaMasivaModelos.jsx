@@ -1,3 +1,4 @@
+import { uploadUnassignedDocument, uploadCompanyDocument, assignStagedDocument } from '@/lib/privateDocuments';
 import { useState, useRef, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -95,7 +96,7 @@ export default function SubidaMasivaModelos() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, estado: 'procesando' } : i));
     
     // 1. Subir PDF primero
-    const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
+    const { file_url } = await uploadUnassignedDocument(file);
     
     // 2. IA lee el PDF completo
     const extraccion = await extraerConIA(file_url, file.name);
@@ -144,7 +145,7 @@ export default function SubidaMasivaModelos() {
     // Asegura una URL de archivo válida: si el PDF no se subió durante el procesamiento, se sube ahora
     let archivoUrl = typeof item.previewUrl === 'string' && item.previewUrl.trim() !== '' ? item.previewUrl : '';
     if (!archivoUrl && item.file) {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: item.file });
+      const { file_url } = await uploadCompanyDocument({ file: item.file, companyId: empresa.id });
       archivoUrl = file_url;
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, previewUrl: archivoUrl } : i));
     }
@@ -153,6 +154,9 @@ export default function SubidaMasivaModelos() {
       return;
     }
 
+    // Copy a verified admin-staging asset to the confirmed company. Preserve the
+    // original in staging until archival completes; never infer ownership in AI.
+    archivoUrl = (await assignStagedDocument(archivoUrl, empresa.id)).file_url;
     // 1. Archivar PDF en Documentos
     const docData = {
       company_id: empresa.id,

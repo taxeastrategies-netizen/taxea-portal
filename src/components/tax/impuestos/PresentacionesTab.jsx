@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useMemo, useState } from 'react';
@@ -27,7 +28,7 @@ function EvidenceEditor({ filing, companyId, onSaved, onCancel }) {
   const save = useMutation({
     mutationFn: async () => {
       let justificantePdfUrl = '';
-      if (file) justificantePdfUrl = (await base44.integrations.Core.UploadFile({ file })).file_url;
+      if (file) justificantePdfUrl = (await uploadCompanyDocument({ file, companyId })).file_url;
       return (await base44.functions.invoke('taxModelOperations', { action: 'attach_filing_evidence', companyId, filingId: filing.id, numeroJustificante: form.numeroJustificante, csv: form.csv, respuestaAdministracion: form.respuestaAdministracion, justificantePdfUrl, confirmEvidence: form.confirmed })).data;
     },
     onSuccess: onSaved,

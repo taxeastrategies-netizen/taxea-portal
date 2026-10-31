@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 /**
  * ExcelImportWizard V4 — Lee el Excel REAL del usuario via IA
  * Nunca usa datos demo cuando hay archivo real subido.
@@ -171,7 +172,7 @@ export default function ExcelImportWizard({ importType, companyId, company, onCo
     try {
       const processFile = async (file, tipo) => {
         await setMsg(`Subiendo ${file.name}…`, 400);
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const { file_url } = await uploadCompanyDocument({ file, companyId });
 
         await setMsg(`Extrayendo datos de ${file.name} con IA…`, 500);
 

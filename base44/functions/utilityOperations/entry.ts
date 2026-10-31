@@ -1,3 +1,4 @@
+import {savePrivateAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { canAccessCompany, deadlinePayload } from './policy.mjs';
 const schema = { type: 'object', properties: {
@@ -70,8 +71,11 @@ Deno.serve(async req => {
     const active = events;
     if (active.length>=15 || active.filter((row:any)=>row.minuteKey===minuteKey).length>=4) return Response.json({error:'Límite OCR: 4 documentos por minuto y 15 al día. Puedes revisar los ya analizados y reintentar más tarde.'}, {status:429});
     usage = await svc.entities.CoreIntegrationUsage.create({userId:user.id,companyId,dayKey,minuteKey,operation:'extract',targetId:'utility:'+digest,status:'reserved'});
-    const {file_uri} = await svc.integrations.Core.UploadPrivateFile({file});
-    const {signed_url} = await svc.integrations.Core.CreateFileSignedUrl({file_uri,expires_in:600});
+    const saved=await savePrivateAsset(svc,user,{...company,private_document_storage_enabled:true},file,Deno.env);
+    const file_uri=saved.file_url;
+    const resolved=await resolvePrivateAsset(svc,user,saved.asset.id,Deno.env);
+    if(!resolved)throw new Error('PRIVATE_ASSET_UNAVAILABLE');
+    const signed_url=resolved.url;
     const extracted = await svc.integrations.Core.ExtractDataFromUploadedFile({file_url:signed_url,json_schema:schema});
     if (extracted?.status === 'error') throw new Error('OCR unavailable');
     const raw = extracted?.output || extracted?.data || extracted;

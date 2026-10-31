@@ -1,9 +1,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import {storageAccountEnabled,storageCompany,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
+const nativeAppFile=value=>{try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='base44.app'&&!u.port&&!u.username&&!u.password&&!u.hash&&u.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/');}catch{return false;}};
 
 Deno.serve(async (req) => {
+  if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
   const base44 = createClientFromRequest(req);
   const user = await base44.auth.me().catch(() => null);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if(!storageAccountEnabled(user))return Response.json({error:'Acceso suspendido.'},{status:403});
 
   const { document_id } = await req.json().catch(() => ({}));
   if (!document_id) return Response.json({ error: 'document_id required' }, { status: 400 });
@@ -12,11 +16,17 @@ Deno.serve(async (req) => {
   const doc = docs[0];
   if (!doc) return Response.json({ error: 'Document not found' }, { status: 404 });
 
-  const isAdmin = ['admin', 'super_admin'].includes(user.role);
-  const userCompanyId = user.data?.company_id;
-  if (!isAdmin && (!userCompanyId || doc.company_id !== userCompanyId)) {
-    return Response.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const company=await storageCompany(base44.asServiceRole,user,doc.company_id);
+  if(!company)return Response.json({error:'Empresa no autorizada.'},{status:403});
+  let providerFileUrl=doc.file_url;
+  const assetId=assetIdFromReference(doc.file_url);
+  if(assetId){
+    const asset=await authorizedAsset(base44.asServiceRole,user,assetId);
+    if(!asset||asset.company_id!==company.id)return Response.json({error:'Documento no disponible.'},{status:404});
+    const resolved=await resolvePrivateAsset(base44.asServiceRole,user,assetId,Deno.env);
+    if(!resolved)return Response.json({error:'Documento no disponible.'},{status:404});
+    providerFileUrl=resolved.url;
+  }else if(!nativeAppFile(doc.file_url))return Response.json({error:'Referencia de documento no válida.'},{status:400});
 
   try {
     await base44.asServiceRole.entities.LaborOcrDocument.update(doc.id, { ocr_status: 'procesando' });
@@ -247,7 +257,7 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt,
-      file_urls: [doc.file_url],
+      file_urls: [providerFileUrl],
       model: 'claude_sonnet_4_6',
       response_json_schema: {
         type: 'object',
@@ -401,11 +411,11 @@ Devuelve EXACTAMENTE este JSON (sin markdown, sin texto adicional):
     return Response.json({ success: true, ocr_status, confidence: conf, document_type: data.document_type });
 
   } catch (err) {
-    console.error('OCR error for doc', doc.id, ':', err.message);
+    console.error('[processLaborOcr] processing_failed');
     await base44.asServiceRole.entities.LaborOcrDocument.update(doc.id, {
       ocr_status: 'error',
-      notes: err?.message || 'Error durante análisis OCR',
+      notes: 'No se pudo completar el análisis OCR. Puedes volver a intentarlo.',
     });
-    return Response.json({ error: err.message }, { status: 500 });
+    return Response.json({ error: 'No se pudo completar el análisis OCR.' }, { status: 502 });
   }
 });

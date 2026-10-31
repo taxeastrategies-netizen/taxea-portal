@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 /**
@@ -197,7 +198,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
       for (let i = 0; i < pdfFiles.length; i++) {
         if (cancelledRef.current) return;
         setMsg(`Subiendo ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].file.name}…`, Math.round(5 + (i / pdfFiles.length) * 20));
-        const { file_url } = await base44.integrations.Core.UploadFile({ file: pdfFiles[i].file });
+        const { file_url } = await uploadCompanyDocument({ file: pdfFiles[i].file, companyId });
         uploadedUrls.push({ url: file_url, type: pdfFiles[i].type, nombre: pdfFiles[i].file.name });
       }
 

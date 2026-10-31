@@ -1,3 +1,4 @@
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
 import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
@@ -69,7 +70,7 @@ export default function LaborOcrWorkspace({ company, user }) {
     // Upload all files and create doc records first
     const docIds = [];
     for (const file of files) {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const { file_url } = await uploadCompanyDocument({ file, companyId: company.id });
       const doc = await base44.entities.LaborOcrDocument.create({
         batch_id: batch.id,
         company_id: company.id,
