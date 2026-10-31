@@ -129,17 +129,6 @@ const OCR_SCHEMA = {
 
 export default function LectorGastos({ reviewPage = false }) {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-
-  const [qaKnowledgeProbe,setQaKnowledgeProbe]=useState(null);
-  const [qaKnowledgeAllowed,setQaKnowledgeAllowed]=useState(false);
-  useEffect(()=>{let live=true;base44.auth.me().then(u=>{if(live)setQaKnowledgeAllowed(u?.role==='user'&&u?.email==='taxeastrategies+qa-recc-2026@gmail.com');}).catch(()=>{});return()=>{live=false;};},[]);
-  const runQaKnowledgeProbe=async()=>{
-    const user=await base44.auth.me();if(user?.role!=='user'||user?.email!=='taxeastrategies+qa-recc-2026@gmail.com')return;
-    const data={titulo:'QA C1 PERMISSION PROBE - DATOS FICTICIOS',pregunta_tipo:'Prueba de permisos, sin consulta fiscal',respuesta:'Documento sintético, no reutilizar',palabras_clave:['QA_C1_PERMISSION_PROBE'],impuesto:'general',nivel_riesgo:'rojo',activa:false,aprobada:true,creada_por:user.email};
-    const result={role:user.role,syntheticOnly:true};
-    for(const[name,call]of [['nativeCreate',()=>base44.entities.AIRespuestaBase.create(data)],['adminEndpoint',()=>base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',data})]]){try{const response=await call();result[name]={denied:false,unexpectedRecordId:(response?.data??response)?.id||null};}catch(error){result[name]={denied:[401,403].includes(Number(error?.response?.status||error?.status)),status:Number(error?.response?.status||error?.status||0)};}}
-    setQaKnowledgeProbe(result);
-  };
   const navigate = useNavigate();
   const location = useLocation();
   const selectedReviewId = new URLSearchParams(location.search).get('doc');
@@ -459,7 +448,6 @@ export default function LectorGastos({ reviewPage = false }) {
           </Button>
         )}
       </PageHeader>
-      {qaKnowledgeAllowed&&<div><Button onClick={runQaKnowledgeProbe}>Verificar permisos conocimiento QA</Button>{qaKnowledgeProbe&&<pre data-qa-knowledge-probe>{JSON.stringify(qaKnowledgeProbe,null,2)}</pre>}</div>}
 
       {!isAdmin && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 flex items-start gap-3">

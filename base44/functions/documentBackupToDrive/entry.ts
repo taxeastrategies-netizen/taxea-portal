@@ -1,3 +1,4 @@
+import {snapshotPrivateAssetLedger} from './assetLedgerSnapshot.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
 import {assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
@@ -968,7 +969,9 @@ Deno.serve(async (req) => {
       });
 
       // ── Create manifests ──
+      const privateAssetLedger=await snapshotPrivateAssetLedger(base44.asServiceRole,user,documents,manifestEntries);
       const manifestJson = JSON.stringify({
+        privateAssetLedger,
         backupDate: now.full,
         mode: config.backupMode,
         environment: Deno.env.get('BASE44_APP_ID') || 'taxea-portal',
