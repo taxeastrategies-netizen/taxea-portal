@@ -4,6 +4,7 @@
  * únicamente después de que Gmail confirme el envío.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { sendInvoiceReminder } from './invoiceReminder.mjs';
 import { assetIdFromReference, authorizedAsset, readPrivateAssetBytes } from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
@@ -277,6 +278,10 @@ Deno.serve(async (req) => {
     );
     if (!company || company.activa === false || (!isAdmin && !isMember)) {
       return Response.json({ error: 'La empresa activa no es válida.' }, { status: 403 });
+    }
+    if (body.action === 'reminder') {
+      const reminderInvoice=await base44.asServiceRole.entities.Invoice.get(String(body.invoice_id||'')).catch(()=>null);
+      return await sendInvoiceReminder({service:base44.asServiceRole,user,company,invoice:reminderInvoice,connection,getConnectedEmail,buildRawMessage,toBase64Url,fetchImpl:fetch});
     }
     if (body.invoice_id) {
       invoice = await base44.asServiceRole.entities.Invoice.get(body.invoice_id).catch(() => null);

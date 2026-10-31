@@ -26,6 +26,11 @@ const own = { id: 'own', owner_email: 'owner@example.test', email: 'owner@exampl
 const other = { id: 'other', owner_email: 'other@example.test', email: 'other@example.test', activa: true };
 const client = {
   auth: { async me() { return user; } },
+  functions: { async invoke(name,params) {
+    assert.equal(name,'sendEmail');assert.equal(params.action,'reminder');
+    if(providerCalls.some(row=>row.op==='gmail'&&row.params.invoice_id===params.invoice_id))throw {response:{status:409,data:{error:'reminder_already_requested'}}};
+    providerCalls.push({op:'gmail',params});return{data:{ok:true,via:'gmail'}};
+  } },
   asServiceRole: {
     entities: {
       Company: { async get(id) { return id === 'own' ? own : id === 'other' ? other : null; } },
@@ -43,7 +48,7 @@ const client = {
     } },
   },
 };
-vm.runInContext(bundle.outputFiles[0].text, vm.createContext({TextEncoder,TextDecoder,URL,Uint8Array, console, Request, Response, URL, __client: client, Deno: { env:{get:()=>undefined}, serve(fn) { handler = fn; } } }));
+vm.runInContext(bundle.outputFiles[0].text, vm.createContext({ TextEncoder,TextDecoder,Uint8Array,console,Request,Response,URL, __client: client, Deno: { serve(fn) { handler = fn; } } }));
 async function invoke(body) {
   const response = await handler(new Request('https://taxea.test/limited', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -62,7 +67,9 @@ assert.equal((await invoke(extract)).status, 200);
 assert.equal(providerCalls.length, 1);
 assert.equal((await invoke({ operation: 'reminder', companyId: 'own', invoiceId: 'i1' })).status, 200);
 assert.equal(providerCalls.length, 2);
-assert.equal(providerCalls[1].params.to, 'client@example.test');
+assert.equal(providerCalls[1].op,'gmail');
+assert.equal(JSON.stringify(providerCalls[1].params),JSON.stringify({action:'reminder',company_id:'own',invoice_id:'i1'}));
+assert.equal(providerCalls[1].params.to,undefined);
 assert.equal((await invoke({ operation: 'reminder', companyId: 'own', invoiceId: 'i1' })).status, 409);
 assert.equal(providerCalls.length, 2);
 user = { id: 'a1', email: 'admin@example.test', role: 'admin' };

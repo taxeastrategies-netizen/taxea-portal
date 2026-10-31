@@ -82,23 +82,12 @@ Deno.serve(async (req) => {
       targetId = String(body.file_url);
       params = { file_url: providerFileUrl, json_schema: schema };
     } else if (operation === 'reminder') {
-      const invoice = await svc.entities.Invoice.get(String(body.invoiceId || '')).catch(() => null);
-      if (!invoice || invoice.company_id !== companyId || invoice.tipo !== 'emitida' || invoice.anulada || invoice.estado_cobro === 'cobrada') {
-        return Response.json({ error: 'Factura no disponible' }, { status: 404 });
-      }
-      const recipient = norm(invoice.cliente_email);
-      if (!EMAIL_RE.test(recipient)) return Response.json({ error: 'Falta el correo válido del cliente' }, { status: 400 });
-      targetId = String(invoice.id);
-      params = {
-        to: recipient,
-        from_name: 'Taxea Strategies',
-        subject: 'Recordatorio de pago — Factura ' + String(invoice.numero_factura || '').slice(0, 80),
-        body: 'Estimado/a cliente,\n\nLe recordamos que la factura '
-          + String(invoice.numero_factura || '').slice(0, 80)
-          + ' está pendiente de pago.\nFecha de vencimiento: '
-          + String(invoice.fecha_vencimiento || 'no indicada').slice(0, 20)
-          + '\n\nSi ya realizó el pago, ignore este aviso.\n\nEquipo Taxea',
-      };
+      // Preserve the authenticated caller so Base44 resolves that user's Gmail.
+      // Never send client reminders through the shared Core email identity.
+      const response = await client.functions.invoke('sendEmail', {
+        action: 'reminder', company_id: companyId, invoice_id: String(body.invoiceId || ''),
+      });
+      return Response.json(response?.data ?? response);
     } else {
       const document = await svc.entities.Document.get(String(body.documentId || '')).catch(() => null);
       if (!document || document.company_id !== companyId || document.fiscal_document_kind !== 'justificante_presentacion') {
@@ -142,6 +131,11 @@ Deno.serve(async (req) => {
         status: 'error', completedAt: new Date().toISOString(),
       }).catch(() => {});
     }
-    return Response.json({ error: 'No se pudo completar la operación' }, { status: 502 });
+    const upstream=error?.response?.data;
+    const safeCodes=['gmail_not_connected','gmail_identity_unavailable','gmail_authorization_expired','reminder_busy','reminder_already_requested','reminder_limit','reminder_delivery_uncertain','reminder_rejected','invoice_unavailable'];
+    const code=safeCodes.includes(upstream?.error)?upstream.error:'operation_failed';
+    const messages={gmail_not_connected:'Conecta tu Gmail para enviar el recordatorio desde tu correo.',gmail_identity_unavailable:'No se pudo identificar tu Gmail.',gmail_authorization_expired:'Vuelve a conectar tu Gmail.',reminder_busy:'Hay un envío en curso. Espera antes de volver a intentarlo.',reminder_already_requested:'Este recordatorio ya se solicitó hoy. Revisa tu carpeta Enviados.',reminder_limit:'Límite temporal de recordatorios alcanzado.',reminder_delivery_uncertain:'Gmail no confirmó el resultado. Revisa Enviados antes de repetir; el portal no reenviará automáticamente.',reminder_rejected:'Gmail no aceptó el recordatorio. No se ha enviado.',invoice_unavailable:'Factura no disponible para este recordatorio.'};
+    const status=Number(error?.response?.status);
+    return Response.json({error:code,message:messages[code]||'No se pudo completar la operación'}, {status:[400,401,403,404,409,429,502,503,504].includes(status)?status:502});
   }
 });

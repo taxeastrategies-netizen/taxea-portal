@@ -99,6 +99,20 @@
       },
       "default": false,
       "type": "boolean"
+    },
+    "reminder_delivery_lock_token": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "reminder_delivery_lock_expires_at": {
+      "type": "number",
+      "rls": {
+        "read": false,
+        "write": false
+      }
     }
   },
   "required": [
