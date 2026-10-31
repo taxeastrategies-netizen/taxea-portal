@@ -2,9 +2,10 @@ import {storageTransport,sha256} from './storageTransport.mjs';
 import {signedStorageRead} from './storageSigning.mjs';
 const norm=value=>String(value||'').trim().toLowerCase();
 export const isStorageAdmin=user=>['admin','super_admin'].includes(user?.role);
+export const storageAccountEnabled=user=>!!user?.id&&![user,user.data].filter(Boolean).some(state=>state.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(norm(state.status))||['disabled','deleted','blocked','suspended'].includes(norm(state.accountAccessStatus)));
+export const storageEnabled=(company,env)=>company?.private_document_storage_enabled===true||env?.get?.('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true';
 export function mayAccessStorageCompany(user,company){
- if(!user?.id||!company||company.activa===false)return false;
- if([user,user.data].filter(Boolean).some(state=>state.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(norm(state.status))||['disabled','deleted','blocked','suspended'].includes(norm(state.accountAccessStatus))))return false;
+ if(!storageAccountEnabled(user)||!company||company.activa===false)return false;
  if(isStorageAdmin(user))return true;
  const email=norm(user.email);return !!email&&(norm(company.owner_email)===email||(Array.isArray(company.usuarios_autorizados)&&company.usuarios_autorizados.some(value=>norm(value)===email)));
 }
@@ -30,7 +31,7 @@ export async function storageCompany(svc,user,id){
  const company=await svc.entities.Company.get(id).catch(()=>null);return mayAccessStorageCompany(user,company)?company:null;
 }
 export async function savePrivateAsset(svc,user,company,file,env,fetcher){
- if(!mayAccessStorageCompany(user,company)||company.private_document_storage_enabled!==true)throw new Error('STORAGE_COMPANY_NOT_ENABLED');
+ if(!mayAccessStorageCompany(user,company)||!storageEnabled(company,env))throw new Error('STORAGE_COMPANY_NOT_ENABLED');
  if(!file?.size||file.size>20*1024*1024)throw new Error('STORAGE_INVALID_SIZE');
  const bytes=new Uint8Array(await file.arrayBuffer()),format=privateFileFormat(file,bytes),digest=await sha256(bytes);
  const previous=await svc.entities.DocumentAsset.filter({company_id:company.id,sha256:digest,status:'ready'},'-created_date',1);
@@ -44,10 +45,18 @@ export async function savePrivateAsset(svc,user,company,file,env,fetcher){
  return {asset,file_url:assetReference(asset.id),reused:false};
 }
 export async function authorizedAsset(svc,user,id){
- if(!/^[A-Za-z0-9_-]{1,128}$/.test(id||''))return null;
+ if(!storageAccountEnabled(user)||!/^[A-Za-z0-9_-]{1,128}$/.test(id||''))return null;
  const asset=await svc.entities.DocumentAsset.get(id).catch(()=>null);
  if(!asset||asset.status!=='ready'||!asset.object_name?.startsWith('companies/'+asset.company_id+'/'))return null;
+ if(asset.company_id==='__admin_staging__')return isStorageAdmin(user)?asset:null;
  return await storageCompany(svc,user,asset.company_id)?asset:null;
+}
+export async function readPrivateAssetBytes(svc,user,reference,env,companyId){
+ const asset=await authorizedAsset(svc,user,assetIdFromReference(reference));
+ if(!asset||(companyId&&asset.company_id!==companyId))throw new Error('STORAGE_ASSET_FORBIDDEN');
+ const transport=await storageTransport(env),bytes=await transport.get(asset.object_name,asset.generation);
+ if(bytes.length!==asset.size||await sha256(bytes)!==asset.sha256)throw new Error('STORAGE_HASH_MISMATCH');
+ return {asset,bytes};
 }
 export async function resolvePrivateAsset(svc,user,id,env){
  const asset=await authorizedAsset(svc,user,id);if(!asset)return null;
