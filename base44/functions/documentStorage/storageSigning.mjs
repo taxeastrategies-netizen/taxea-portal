@@ -21,7 +21,7 @@ export async function verifySignedStorageConnection(env){
   const response=await globalThis.fetch(signed.url,{redirect:'manual',signal:AbortSignal.timeout(25000)});
   if(response.status!==200)throw new Error('STORAGE_SIGNED_READ_FAILED_'+response.status);
   const actual=await boundedBytes(response,4096);
-  result={signedReadVerified:await sha256(actual)===await sha256(bytes),expiresInSeconds:120,syntheticOnly:true,checkedAt:new Date().toISOString()};
+  result={signedReadVerified:await sha256(actual)===await sha256(bytes),noStoreVerified:(response.headers.get('cache-control')||'').includes('no-store'),expiresInSeconds:120,syntheticOnly:true,checkedAt:new Date().toISOString()};
   if(!result.signedReadVerified)throw new Error('STORAGE_HASH_MISMATCH');
  }finally{await storage.remove(name,object.generation);}
  return {...result,cleanupVerified:true};
