@@ -21,7 +21,7 @@ export async function storageTransport(env,fetcher=fetch){
  const signature=base64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(payload))));
  const tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature})},16384,fetcher);
  let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_FAILED');}
- if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer')throw new Error('STORAGE_AUTH_FAILED');
+ if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer')throw new Error('STORAGE_AUTH_FAILED_'+tokenResponse.status);
  const auth={Authorization:'Bearer '+token.access_token};
  const objectUrl=name=>'https://storage.googleapis.com/storage/v1/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(name);
  const validName=name=>{if(typeof name!=='string'||name.length>512||!/^(__taxea_security_probe__|companies)\/[a-zA-Z0-9_/-]+(?:\.[a-zA-Z0-9]+)?$/.test(name)||name.includes('..'))throw new Error('STORAGE_INVALID_OBJECT');return name;};
@@ -30,7 +30,7 @@ export async function storageTransport(env,fetcher=fetch){
    validName(name);if(!(bytes instanceof Uint8Array)||!bytes.length||bytes.length>50*1024*1024)throw new Error('STORAGE_INVALID_SIZE');
    const url='https://storage.googleapis.com/upload/storage/v1/b/'+STORAGE_BUCKET+'/o?uploadType=media&ifGenerationMatch=0&name='+encodeURIComponent(name);
    const r=await boundedFetch(url,{method:'POST',headers:{...auth,'Content-Type':mime},body:bytes},32768,fetcher);
-   if(r.status!==200)throw new Error('STORAGE_UPLOAD_FAILED');
+   if(r.status!==200)throw new Error('STORAGE_UPLOAD_FAILED_'+r.status);
    const meta=JSON.parse(new TextDecoder().decode(r.bytes));
    if(meta.name!==name||meta.bucket!==STORAGE_BUCKET||Number(meta.size)!==bytes.length||!/^\d+$/.test(meta.generation))throw new Error('STORAGE_UPLOAD_UNVERIFIED');
    return {name,generation:meta.generation,size:Number(meta.size),contentType:meta.contentType};
@@ -38,7 +38,7 @@ export async function storageTransport(env,fetcher=fetch){
   async get(name,generation){
    validName(name);if(!/^\d+$/.test(generation))throw new Error('STORAGE_INVALID_GENERATION');
    const r=await boundedFetch(objectUrl(name)+'?alt=media&generation='+generation,{headers:auth},50*1024*1024,fetcher);
-   if(r.status!==200)throw new Error('STORAGE_DOWNLOAD_FAILED');return r.bytes;
+   if(r.status!==200)throw new Error('STORAGE_DOWNLOAD_FAILED_'+r.status);return r.bytes;
   },
   async remove(name,generation){
    validName(name);if(!/^\d+$/.test(generation))throw new Error('STORAGE_INVALID_GENERATION');
