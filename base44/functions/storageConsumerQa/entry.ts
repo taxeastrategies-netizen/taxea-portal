@@ -57,8 +57,8 @@ Deno.serve(async req=>{
    return Response.json({ok:true,syntheticOnly:true,companySpecificFlagRestored:true,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',accountingWrites:0,realCustomerWrites:0});
   }
   if(body.action==='inspect_global_ocr'){
-   const records=await svc.entities.OcrInvoiceDocument.filter({company_id:COMPANY,originalFileName:'QA-C1-GLOBAL-OCR-20261031.pdf'},'-created_date',5);
-   return Response.json({ok:true,syntheticOnly:true,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',companySpecificFlag:company.private_document_storage_enabled===true,documents:records.map(row=>({id:row.id,status:row.status,privateReference:String(row.fileStorageUrl||'').startsWith('https://taxeaportal.com/private-document/'),hasExtraction:Boolean(row.extractedData),linkedInvoice:Boolean(row.linkedInvoiceId),linkedJournal:Boolean(row.linkedJournalEntryId)})),accountingWrites:0,realCustomerWrites:0});
+   const records=await svc.entities.OcrInvoiceDocument.filter({company_id:COMPANY,originalFileName:{$in:['QA-C1-GLOBAL-OCR-20261031.pdf','QA-C1-GLOBAL-OCR-PROD-20261031.pdf']}},'-created_date',5);
+   return Response.json({ok:true,syntheticOnly:true,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',companySpecificFlag:company.private_document_storage_enabled===true,documents:records.map(row=>({id:row.id,name:row.originalFileName,status:row.status,privateReference:String(row.fileStorageUrl||'').startsWith('https://taxeaportal.com/private-document/'),hasExtraction:Boolean(row.extractedData),linkedInvoice:Boolean(row.linkedInvoiceId),linkedJournal:Boolean(row.linkedJournalEntryId)})),accountingWrites:0,realCustomerWrites:0});
   }
   if(body.action==='catalog_probe'){
    const cutoff=new Date().toISOString(),query={company_id:COMPANY,created_date:{$lte:cutoff},status:'ready'};
