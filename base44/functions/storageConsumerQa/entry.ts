@@ -8,7 +8,7 @@ Deno.serve(async req=>{
   if(!['admin','super_admin'].includes(user.role)||[user,user.data].filter(Boolean).some(x=>x.is_deleted||['disabled','deleted','blocked','suspended'].includes(x.accountAccessStatus)))return Response.json({error:'Admin only'},{status:403});
   const body=await req.json().catch(()=>({})),svc=client.asServiceRole;
   const company=await svc.entities.Company.get(COMPANY);
-  if(company.owner_email!=='taxeastrategies+qa-recc-2026@gmail.com'||!String(company.razon_social||company.nombre_comercial).includes('QA RECC')||company.private_document_storage_enabled!==true)throw Error('QA_SCOPE_NOT_VERIFIED');
+  if(company.owner_email!=='taxeastrategies+qa-recc-2026@gmail.com'||![company.razon_social,company.nombre_comercial].some(x=>String(x||'').includes('QA RECC'))||company.private_document_storage_enabled!==true)throw Error('QA_SCOPE_NOT_VERIFIED');
   if(body.action==='prepare'){
    let cases=await svc.entities.TaxeaAuditCase.filter({title:'QA C1 PRIVATE DOCUMENTS 20261031'},'-created_date',10);
    if(cases.length>1||cases.some(x=>x.clientId!==COMPANY))throw Error('QA_AMBIGUOUS');
@@ -28,5 +28,5 @@ Deno.serve(async req=>{
    return Response.json({ok:true,syntheticOnly:true,assets:assets.map(x=>({id:x.id,name:x.original_name,bytes:x.size,sha256:x.sha256,ready:x.status==='ready',companyScoped:x.company_id===COMPANY})),labor:docs.map(x=>({id:x.id,name:x.original_file_name,private:String(x.file_url).startsWith('https://taxeaportal.com/private-document/'),status:x.ocr_status})),utility:utility.map(x=>({id:x.id,private:String(x.file_uri).startsWith('https://taxeaportal.com/private-document/')})),accountingWrites:0,realCustomerWrites:0});
   }
   return Response.json({error:'Unsupported action'},{status:400});
- }catch{return Response.json({error:'QA_OPERATION_FAILED'},{status:500});}
+ }catch(error){return Response.json({error:/^QA_[A-Z_]+$/.test(error?.message||'')?error.message:'QA_OPERATION_FAILED'},{status:500});}
 });
