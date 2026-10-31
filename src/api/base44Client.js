@@ -70,3 +70,6 @@ export const base44 = new Proxy(sdkBase44, {
     return Reflect.get(target, property, receiver);
   }
 });
+
+// Temporary synthetic QA probe. Remove before the C1 release closes.
+export const nativeEntitiesForC1Qa=sdkBase44.entities;
