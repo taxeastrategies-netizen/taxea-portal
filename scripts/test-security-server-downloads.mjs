@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { webcrypto } from 'node:crypto';
+import { webcrypto, generateKeyPairSync, createHash } from 'node:crypto';
 import * as esbuild from 'esbuild';
 
 const appId = '6a00fec50cc522a74ddde4b2';
@@ -9,18 +9,23 @@ const companyId = 'qa-company';
 const pdfUrl = `https://base44.app/api/apps/${appId}/files/mp/public/${appId}/qa.pdf`;
 const mediaUrl = `https://media.base44.com/files/public/${appId}/qa.pdf`;
 const marker = 'INTERNAL_PROVIDER_SECRET_MUST_NOT_LEAK';
+const privatePdfUrl='https://taxeaportal.com/private-document/qa-private-asset';
+const syntheticPdf=new TextEncoder().encode('%PDF-1.7\nSynthetic document only');
+const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+const syntheticCredentials={type:'service_account',project_id:'plasma-minutia-510419-c4',client_email:'taxea-portal-storage@plasma-minutia-510419-c4.iam.gserviceaccount.com',private_key:privateKey.export({format:'pem',type:'pkcs8'}),token_uri:'https://oauth2.googleapis.com/token'};
 let checks = 0;
 const check = (value, label) => { assert.ok(value, label); checks++; };
 const sourceOf = path => globalThis.__taxeaSecurityCandidate?.[path] ?? fs.readFileSync(path, 'utf8');
 
 async function load(name, settings = {}) {
-  let handler, serviceReads = 0, providerCalls = 0, gmailCalls = 0, creates = 0, cancelled = 0;
+  let handler, serviceReads = 0, providerCalls = 0, gmailCalls = 0, creates = 0, cancelled = 0, envReads = 0;
   const urls = [];
   const user = settings.user ?? { id: 'qa-user', email: 'qa@example.test', role: 'user', data: { company_id: companyId } };
-  const invoice = { id: 'qa-invoice', company_id: companyId, tipo: 'emitida', qr_url: 'https://aeat.invalid.test/qa', qr_pdf_url: pdfUrl, public_token: 'qa-token' };
+  const invoice = { id: 'qa-invoice', company_id: companyId, tipo: 'emitida', qr_url: 'https://aeat.invalid.test/qa', qr_pdf_url: settings.pdfUrl ?? pdfUrl, public_token: 'qa-token' };
   const entities = new Proxy({}, { get(_, entity) { return {
     async get(id) {
       if (entity === 'Company') return id === companyId ? { id, owner_email: user.email, activa: settings.companyActive ?? true } : null;
+      if (entity === 'DocumentAsset') return {id:'qa-private-asset',company_id:companyId,object_name:'companies/'+companyId+'/11111111-1111-4111-8111-111111111111.pdf',generation:'123',status:'ready',mime_type:'application/pdf',size:syntheticPdf.length,sha256:createHash('sha256').update(syntheticPdf).digest('hex'),...settings.asset};
       if (entity === 'Invoice') return id === invoice.id ? invoice : null;
       throw Error('Unexpected read ' + entity);
     },
@@ -31,7 +36,7 @@ async function load(name, settings = {}) {
   const service = { entities, connectors: { async getCurrentAppUserConnection() { return { accessToken: 'synthetic-not-a-credential', connectionConfig: { email: user.email } }; } }, integrations: { Core: new Proxy({}, { get() { return async () => { providerCalls++; return { synthetic: true }; }; } }) } };
   const client = { auth: { async me() { return user; } }, get asServiceRole() { serviceReads++; return service; } };
   const built = await esbuild.build({
-    stdin: { contents: sourceOf(`base44/functions/${name}/entry.ts`), loader: 'ts',resolveDir:process.cwd()+'/base44/functions/'+name },
+    stdin: { contents: sourceOf(`base44/functions/${name}/entry.ts`), loader: 'ts', resolveDir: process.cwd()+'/base44/functions/'+name },
     bundle: true, write: false, platform: 'node', format: 'cjs',
     plugins: [{ name: 'synthetic-sdk', setup(b) {
       b.onResolve({ filter: /^npm:@base44\/sdk/ }, () => ({ path: 'sdk', namespace: 'qa' }));
@@ -40,6 +45,8 @@ async function load(name, settings = {}) {
   });
   const fakeFetch = async (url, options) => {
     if (url === 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send') { gmailCalls++; return Response.json({ id: 'qa-gmail-id' }); }
+    if (url==='https://oauth2.googleapis.com/token') { urls.push('synthetic-oauth'); return Response.json({access_token:'synthetic-only',token_type:'Bearer'}); }
+    if (String(url).startsWith('https://storage.googleapis.com/storage/v1/')) { urls.push('synthetic-storage'); return new Response(settings.corruptPrivate ? new Uint8Array([0,1,2]) : syntheticPdf); }
     urls.push(String(url));
     check(options?.redirect === 'manual', 'PDF download must never follow unchecked redirects');
     check(options?.signal instanceof AbortSignal, 'PDF download must have an abort signal');
@@ -47,18 +54,18 @@ async function load(name, settings = {}) {
     return new Response('%PDF-1.7\nSynthetic document only', { headers: { 'content-type': 'application/pdf' } });
   };
   const context = vm.createContext({
-    __client: client, Request, Response, URL, URLSearchParams, TextEncoder, Uint8Array, AbortController, crypto: webcrypto, btoa,
+    __client: client, Request, Response, URL, URLSearchParams, TextEncoder, Uint8Array, AbortController, crypto: webcrypto, btoa, atob, TextDecoder, Blob, AbortSignal,
     setTimeout: settings.setTimeout ?? setTimeout, clearTimeout: settings.clearTimeout ?? clearTimeout,
-    fetch: fakeFetch, console: { log() {}, warn() {}, error() {} }, Deno: { serve(fn) { handler = fn; } },
+    fetch: fakeFetch, console: { log() {}, warn() {}, error() {} }, Deno: { env:{get(name){envReads++;return ({TAXEA_GCS_CREDENTIALS_JSON:JSON.stringify(syntheticCredentials),TAXEA_GCS_BUCKET:'taxea-portal-private-es-6a00fec5',TAXEA_GCS_PROJECT_ID:'plasma-minutia-510419-c4'})[name];}}, serve(fn) { handler = fn; } },
   });
   vm.runInContext(built.outputFiles[0].text, context);
   return {
     async invoke(extra = {}, method = 'POST') {
-      const body = { action: 'send', company_id: companyId, invoice_id: invoice.id, public_invoice_url: 'https://taxeaportal.com/public/invoice/qa-token', to: ['recipient@example.test'], subject: 'QA', html: '<p>QA</p>', attachments: [{ url: pdfUrl, name: 'qa.pdf' }], ...extra };
+      const body = { action: 'send', company_id: companyId, invoice_id: invoice.id, public_invoice_url: 'https://taxeaportal.com/public/invoice/qa-token', to: ['recipient@example.test'], subject: 'QA', html: '<p>QA</p>', attachments: [{ url: settings.pdfUrl ?? pdfUrl, name: 'qa.pdf' }], ...extra };
       const response = await handler(new Request('https://qa.invalid.test/' + name, { method, ...(method === 'GET' ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) }));
       return { status: response.status, body: await response.json() };
     },
-    counts() { return { serviceReads, providerCalls, gmailCalls, creates, cancelled, urls }; },
+    counts() { return { serviceReads, providerCalls, gmailCalls, creates, cancelled, envReads, urls }; },
   };
 }
 
@@ -139,3 +146,25 @@ const inactiveCompany = await load('sendEmail', { companyActive: false });
 check((await inactiveCompany.invoke()).status === 403, 'Inactive company cannot send');
 check(inactiveCompany.counts().gmailCalls === 0, 'No Gmail use for inactive company');
 console.log(JSON.stringify({ ok: true, checks, realSends: 0, realCustomerData: 0, test: 'server-download-security' }));
+
+const privateInvoice=await load('sendEmail',{pdfUrl:privatePdfUrl});
+const privateResponse=await privateInvoice.invoke(); check(privateResponse.status===200,'Private PDF send supported in simulation: '+JSON.stringify(privateResponse));
+check(privateInvoice.counts().gmailCalls===1,'One simulated Gmail call for a verified private PDF');
+check(privateInvoice.counts().urls.every(x=>x.startsWith('synthetic-')),'Private reference is never fetched as a public URL');
+for(const settings of [
+ {asset:{company_id:'foreign-company'},expected:404},
+ {asset:{mime_type:'text/html'},expected:415},
+ {asset:{size:10*1024*1024+1},expected:413},
+ {asset:{status:'failed'},expected:404},
+]){
+ const run=await load('sendEmail',{pdfUrl:privatePdfUrl,...settings});
+ check((await run.invoke()).status===settings.expected,'Invalid private asset rejected');
+ check(run.counts().gmailCalls===0&&run.counts().urls.length===0&&run.counts().envReads===0,'Private asset rejection occurs before secret reads and network');
+}
+const corruptPrivate=await load('sendEmail',{pdfUrl:privatePdfUrl,corruptPrivate:true});
+check((await corruptPrivate.invoke()).status===502,'Corrupt private download rejected');
+check(corruptPrivate.counts().gmailCalls===0,'Hash mismatch never sends mail');
+const substituted=await load('sendEmail',{pdfUrl:privatePdfUrl});
+check((await substituted.invoke({attachments:[{url:privatePdfUrl+'-other'}]})).status===400,'Private attachment cannot be substituted');
+check(substituted.counts().gmailCalls===0&&substituted.counts().envReads===0,'Substitution rejected before secrets');
+console.log(JSON.stringify({ok:true,checks,privatePdfAttachmentTests:true,realSends:0,realCustomerData:0}));
