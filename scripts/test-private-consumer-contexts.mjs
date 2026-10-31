@@ -8,7 +8,7 @@ const owner={id:'user-a',email:a.owner_email,role:'user'},admin={id:'admin',emai
 function service({duplicate=false,reference='account-a'}={}){let writes=0,reads=0;return{get writes(){return writes;},get reads(){return reads;},entities:{
  Company:{get:async id=>{reads++;return id===a.id?a:id===b.id?b:null;},filter:async()=>duplicate?[a,{...a,id:'duplicate-company'}]:[a],update:async()=>{writes++;throw Error('NO PROFILE WRITES');}},
  ClientAccount:{get:async id=>{reads++;return id==='account-a'?{id,email:'a@example.test',taxId:'QA-A'}:null;}},
- MercantilSociedad:{get:async id=>{reads++;return id==='sociedad-a'?{id,clienteAccountId:reference}:null;}},
+  MercantilSociedad:{get:async id=>{reads++;return id==='sociedad-a'?{id,clienteAccountId:reference,visibilidadCliente:true}:null;}},
  TaxeaAuditCase:{get:async id=>{reads++;return id==='audit-a'?{id,clientId:reference}:null;}}
 }};}
 let svc=service();check((await contextStorageCompany(svc,owner,'mercantil','sociedad-a')).id===a.id,'society maps account email and exact tax ID, not sociedad ID');check((await linkedStorageCompany(svc,owner,a.id)).id===a.id,'explicit Company link supported');

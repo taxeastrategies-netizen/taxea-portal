@@ -1,3 +1,4 @@
+import {createMercantilEntities} from '@/lib/mercantilEntities.mjs';
 import { createClient } from '@base44/sdk';
 import { appParams } from '@/lib/app-params';
 import { forgetSessionIdentity } from '@/lib/sessionSecurity.mjs';
@@ -12,6 +13,8 @@ const sdkBase44 = createClient({
   requiresAuth: false,
   appBaseUrl
 });
+
+const mercantilEntities=createMercantilEntities(sdkBase44);
 
 const limitedCore = new Proxy(sdkBase44.integrations.Core, {
   get(target, property, receiver) {
@@ -61,6 +64,7 @@ const sessionAuth = new Proxy(sdkBase44.auth, {
 export const base44 = new Proxy(sdkBase44, {
   get(target, property, receiver) {
     if (property === 'auth') return sessionAuth;
+    if (property === 'entities') return mercantilEntities;
     if (property === 'integrations') return limitedIntegrations;
     if (property === 'controlledCore') return limitedCore;
     return Reflect.get(target, property, receiver);

@@ -58,6 +58,20 @@
     "visibilidadCliente": {
       "type": "boolean",
       "default": false
+    },
+    "documentOperationLockToken": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "documentOperationLockExpiresAt": {
+      "type": "number",
+      "rls": {
+        "read": false,
+        "write": false
+      }
     }
   },
   "required": [

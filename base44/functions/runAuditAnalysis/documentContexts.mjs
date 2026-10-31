@@ -29,5 +29,6 @@ export async function contextStorageCompany(service,user,kind,id){
  if(kind==='audit'&&!isStorageAdmin(user))throw Error('STORAGE_CONTEXT_FORBIDDEN');
  const record=await service.entities[kind==='audit'?'TaxeaAuditCase':'MercantilSociedad'].get(id).catch(()=>null);
  if(!record)throw Error('STORAGE_CONTEXT_NOT_FOUND');
+ if(kind==='mercantil'&&!isStorageAdmin(user)&&record.visibilidadCliente!==true)throw Error('STORAGE_CONTEXT_FORBIDDEN');
  return linkedStorageCompany(service,user,kind==='audit'?record.clientId:record.clienteAccountId);
 }
