@@ -220,7 +220,7 @@ assert.equal(paginated.payload.documentsCopied, 0);
 assert.equal(paginated.payload.documentsSkipped, 600);
 assert.equal(paginated.mediaDownloads, 0, 'existing records beyond page 500 must not be downloaded again');
 assert.equal(paginated.recordCreates, 0, 'existing records beyond page 500 must not create duplicate metadata');
-assert.equal(paginated.uploadAttempts,206,'Two inventory pages, source index, 200 copy-manifest parts and three final manifests; no duplicate document upload');
+assert.equal(paginated.uploadAttempts,211,'Two inventory pages, source index, 200 copy-manifest parts, five compacted pages and three final manifests; no duplicate document upload');
 
 const augustBaseline = await executeScenario({
   documentCount: 600,

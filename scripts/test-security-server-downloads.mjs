@@ -62,7 +62,7 @@ async function load(name, settings = {}) {
   return {
     async invoke(extra = {}, method = 'POST') {
       const body = { action: 'send', company_id: companyId, invoice_id: invoice.id, public_invoice_url: 'https://taxeaportal.com/public/invoice/qa-token', to: ['recipient@example.test'], subject: 'QA', html: '<p>QA</p>', attachments: [{ url: settings.pdfUrl ?? pdfUrl, name: 'qa.pdf' }], ...extra };
-      const response = await handler(new Request('https://qa.invalid.test/' + name, { method, ...(method === 'GET' ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) }));
+      const response = await handler(new Request('https://qa.invalid.test/' + name, { method, ...(method === 'GET' ? {} : { headers: { 'content-type': 'application/json', Authorization: 'Bearer synthetic-test-token' }, body: JSON.stringify(body) }) }));
       return { status: response.status, body: await response.json() };
     },
     counts() { return { serviceReads, providerCalls, gmailCalls, creates, cancelled, envReads, urls }; },

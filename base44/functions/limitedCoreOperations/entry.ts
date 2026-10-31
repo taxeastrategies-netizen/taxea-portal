@@ -45,6 +45,12 @@ Deno.serve(async (req) => {
   let event: any;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
+    // The SDK reads the caller from Authorization, separately from its service token.
+    // Reject absent or malformed user credentials before constructing a privileged client.
+    const callerAuthorization = req.headers.get('Authorization') || '';
+    if (!/^Bearer [^\s]{1,16384}$/.test(callerAuthorization)) {
+      return Response.json({ error: 'No autenticado' }, { status: 401 });
+    }
     client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });

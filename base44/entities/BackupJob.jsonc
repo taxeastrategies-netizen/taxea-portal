@@ -178,6 +178,9 @@
     },
     "notificationsSuppressed": {
       "type": "boolean"
+    },
+    "manifestAssemblyData": {
+      "type": "object"
     }
   },
   "required": [

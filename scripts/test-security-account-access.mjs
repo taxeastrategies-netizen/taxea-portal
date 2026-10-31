@@ -40,7 +40,7 @@ function instantiate(code,settings){
  handler??=module.exports.default;
  if(typeof handler!=='function')throw Error('No request handler captured');
  return {counts,async invoke(body={},method='POST'){
-  const response=await handler(new Request('https://qa.invalid.test/',{method,...(method==='GET'?{}:{headers:{'content-type':'application/json'},body:JSON.stringify(body)})}));
+  const response=await handler(new Request('https://qa.invalid.test/',{method,...(method==='GET'?{}:{headers:{'content-type':'application/json',Authorization:'Bearer synthetic-test-token'},body:JSON.stringify(body)})}));
   return {status:response.status,body:await response.json()};
  }};
 }

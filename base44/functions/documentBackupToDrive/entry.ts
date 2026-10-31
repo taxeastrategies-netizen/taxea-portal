@@ -1,3 +1,5 @@
+import{advanceManifestAssembly,readAssembledManifest}from'./manifestAssembly.mjs';
+import{loadLegacyProtectionPlan}from'./legacyPlanLoader.mjs';
 import {isBackupTransientError,resumableSnapshotJob,completedBackupResponse} from './backupResumption.mjs';
 import {snapshotPrivateAssetLedger} from './assetLedgerSnapshot.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
@@ -404,7 +406,7 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
-    if(!['status','backup','verify','inventory_preview','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
+    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
     const invocationStartedAt=Date.now(),timeBudgetMs=isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
@@ -469,6 +471,14 @@ Deno.serve(async (req) => {
       leaseEntity=base44.asServiceRole.entities.BackupConfiguration;
       lease=await acquireBackupLease(leaseEntity,config.id);
       if(!lease)return Response.json({error:'Ya hay una copia o verificación en curso. Espera y reintenta.',code:'BACKUP_BUSY'},{status:409});
+    }
+    if(action==='legacy_protection_plan'){
+      try{
+        const result=await loadLegacyProtectionPlan({service:base44.asServiceRole,user,jobId:body.backupJobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,
+          readPrivateDriveFile:async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));}
+        });
+        return Response.json({ok:true,summary:result.summary},{headers:{'Cache-Control':'no-store'}});
+      }catch(error){const code=/^PROTECTION_[A-Z_]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'No se pudo preparar el plan desde una copia completa verificada.',code},{status:409});}
     }
     if(action==='inventory_preview'){
       const result=await inventoryPreview({service:base44.asServiceRole,user,body,scopeCompanyId,deadline,hash:computeChecksum,snapshot:backupSnapshot});
@@ -949,15 +959,14 @@ Deno.serve(async (req) => {
 
       const manifestEntries=[];
       if(resumableManifest){
-       let cursor=0;
-       for(const part of copyManifestParts){
-        if(part.start!==cursor)throw new Error('BACKUP_MANIFEST_PART_GAP');
-        const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(part.id)+'?alt=media',accessToken);if(!response.ok)throw new Error('BACKUP_MANIFEST_PART_UNAVAILABLE');
-        const bytes=new Uint8Array(await response.arrayBuffer());if(await computeChecksum(bytes)!==part.sha256)throw new Error('BACKUP_MANIFEST_PART_HASH_MISMATCH');
-        const page=JSON.parse(new TextDecoder().decode(bytes));if(page.version!==1||page.jobId!==job.id||page.start!==cursor||page.entries?.length!==part.count)throw new Error('BACKUP_MANIFEST_PART_INVALID');
-        for(const item of page.entries){const expected=documents[cursor++];if(item.documentEntity!==expected?.source.entity||item.documentId!==expected?.record.id)throw new Error('BACKUP_MANIFEST_SOURCE_MISMATCH');manifestEntries.push(item);}
-       }
-       if(cursor!==documents.length)throw new Error('BACKUP_MANIFEST_COUNT_MISMATCH');
+       const assemblyOptions={jobId:job.id,sourceIndexChecksum:job.sourceIndexChecksum,documents,sourceParts:copyManifestParts,state:job.manifestAssemblyData,hash:computeChecksum,deadline,
+        readPart:async id=>{const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!response.ok)throw Error('BACKUP_MANIFEST_PART_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(response,MAX_BACKUP_FILE_BYTES));},
+        writePart:async(name,text)=>uploadTextFile(name,dayFolder.id,text,accessToken),
+        persist:async state=>{await base44.asServiceRole.entities.BackupJob.update(job.id,{manifestAssemblyData:state,lastHeartbeatAt:new Date().toISOString()});job={...job,manifestAssemblyData:state};}
+       };
+       const assembly=await advanceManifestAssembly(assemblyOptions);
+       if(!assembly.ready)return Response.json({status:'copying',phase:'manifest_finalization',jobId:job.id,continueRequired:true,documentsScanned:documents.length,documentsProcessed:documents.length,documentsRemaining:0,documentsCopied:copied,documentsSkipped:skipped,documentsFailed:failed,bytesCopied,progressPercent:100,manifestPartsDone:assembly.partsDone,manifestPartsTotal:assembly.partsTotal,retryAfterSeconds:1},{status:202});
+       manifestEntries.push(...await readAssembledManifest({...assemblyOptions,parts:assembly.parts}));
       }else{
       for (const { record, source } of documents) {
         const backupRecord = recordMap[`${source.entity}:${record.id}`];

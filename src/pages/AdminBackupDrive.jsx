@@ -1,3 +1,4 @@
+import LegacyProtectionPlanPreview from '@/components/backup/LegacyProtectionPlanPreview';
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -254,7 +255,9 @@ export default function AdminBackupDrive() {
         </CardContent>
       </Card>
 
+      {runResult?.phase==='manifest_finalization'&&<p className="text-sm text-blue-700">Documentos copiados. Cerrando el manifiesto por bloques: {runResult.manifestPartsDone} de {runResult.manifestPartsTotal} fragmentos del nivel actual.</p>}
       <InventoryProtectionPreview disabled={running||verifying}/>
+      <LegacyProtectionPlanPreview jobs={jobs} busy={running||verifying} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

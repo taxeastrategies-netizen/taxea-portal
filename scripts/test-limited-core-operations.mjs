@@ -51,7 +51,7 @@ const client = {
 vm.runInContext(bundle.outputFiles[0].text, vm.createContext({ TextEncoder,TextDecoder,Uint8Array,console,Request,Response,URL, __client: client, Deno: { serve(fn) { handler = fn; } } }));
 async function invoke(body) {
   const response = await handler(new Request('https://taxea.test/limited', {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST', headers: { 'content-type': 'application/json', Authorization: 'Bearer synthetic-test-token' }, body: JSON.stringify(body),
   }));
   return { status: response.status, body: await response.json() };
 }

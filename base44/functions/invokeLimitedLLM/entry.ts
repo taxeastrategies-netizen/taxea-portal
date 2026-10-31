@@ -83,9 +83,15 @@ Deno.serve(async (req) => {
   let eventId: string | undefined;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
+    // The SDK reads the caller from Authorization, separately from its service token.
+    // Reject absent or malformed user credentials before constructing a privileged client.
+    const callerAuthorization = req.headers.get('Authorization') || '';
+    if (!/^Bearer [^\s]{1,16384}$/.test(callerAuthorization)) {
+      return Response.json({ error: 'No autenticado' }, { status: 401 });
+    }
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
     if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
