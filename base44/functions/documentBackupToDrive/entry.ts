@@ -1109,3 +1109,5 @@ Deno.serve(async (req) => {
   }finally{if(lease&&leaseEntity)await releaseBackupLease(leaseEntity,lease).catch(()=>{});}
 });
 
+
+// C1 inventory diagnostics version 20261031.1
