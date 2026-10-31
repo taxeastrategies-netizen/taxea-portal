@@ -28,6 +28,14 @@ Deno.serve(async req=>{
    if(asset.company_id!==testCompany.id||asset.original_name!=='QA-C1-RESTORE-LEDGER-20261031.txt')throw Error('QA_SCOPE_NOT_VERIFIED');
    return{testCompany,asset};
   };
+  if(body.action==='identity_inventory'){
+   const users=[];
+   for(const email of ['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com']){
+    const rows=await svc.entities.User.filter({email},'-created_date',2);
+    users.push({label:email.includes('qa-recc')?'A':'B',registered:rows.length===1,ambiguous:rows.length>1,role:rows[0]?.role||null,companyLinked:Boolean(rows[0]?.company_id||rows[0]?.data?.company_id)});
+   }
+   return Response.json({ok:true,syntheticOnly:true,users,realCustomerWrites:0});
+  }
   if(body.action==='stage_private_qa'){
    phase='qa-staging-upload';
    const source=await readPrivateAssetBytes(svc,user,assetReference('6ae5e7066914df82b5243183'),Deno.env,COMPANY);
