@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     try {
       event = await stripe.webhooks.constructEventAsync(body, signature, WEBHOOK_SECRET);
     } catch (err) {
-      console.error('Firma webhook inválida:', err.message);
+      console.error('[stripeWebhook] invalid_signature');
       return Response.json({ error: 'Firma inválida' }, { status: 400 });
     }
 
@@ -305,8 +305,8 @@ Deno.serve(async (req) => {
 
     return Response.json({ received: true });
   } catch (error) {
-    console.error('Error en stripeWebhook:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('[stripeWebhook] processing_failed');
+    return Response.json({error:'No se pudo procesar el evento.',code:'WEBHOOK_PROCESSING_FAILED'},{status:500,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
   }
 });
 
