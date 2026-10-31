@@ -23,7 +23,7 @@ Deno.serve(async req=>{
   return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
  } catch(error) {
   const detail=String(error?.message||'');
-  const safeCode=/^(STORAGE_AUTH_(NETWORK_(TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|NOT_JSON_\d{3}|FAILED_\d{3}_(INVALID_GRANT|INVALID_CLIENT|INVALID_REQUEST|INVALID_SCOPE|UNAUTHORIZED_CLIENT|ACCESS_DENIED|UNEXPECTED))|STORAGE_STEP_AUTH_(TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|STORAGE_STEP_(AUTH|UPLOAD|READ|UNSIGNED|CLEANUP)|STORAGE_(AUTH|UPLOAD|DOWNLOAD)_FAILED_\d{3}|STORAGE_(PROBE|CLEANUP)_FAILED|PRIVATE_STORAGE_(NOT_CONFIGURED|INVALID_CONFIG))$/.test(detail)?detail:'PRIVATE_STORAGE_CUSTODY_UNVERIFIED';
+  const safeCode=/^(STORAGE_AUTH_(NETWORK_(TLS|DNS|TIMEOUT|BODY|CONNECT|TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|NOT_JSON_\d{3}|FAILED_\d{3}_(INVALID_GRANT|INVALID_CLIENT|INVALID_REQUEST|INVALID_SCOPE|UNAUTHORIZED_CLIENT|ACCESS_DENIED|UNEXPECTED))|STORAGE_STEP_AUTH_(TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|STORAGE_STEP_(AUTH|UPLOAD|READ|UNSIGNED|CLEANUP)|STORAGE_(AUTH|UPLOAD|DOWNLOAD)_FAILED_\d{3}|STORAGE_(PROBE|CLEANUP)_FAILED|PRIVATE_STORAGE_(NOT_CONFIGURED|INVALID_CONFIG))$/.test(detail)?detail:'PRIVATE_STORAGE_CUSTODY_UNVERIFIED';
   return response({error:'No se ha podido validar la custodia del almacenamiento privado.',code:safeCode},503);
  }
 });
