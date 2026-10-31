@@ -62,6 +62,7 @@ const AccountDeletionInfo = lazy(() => import('./pages/AccountDeletionInfo'));
 const SetupPassword = lazy(() => import('./pages/SetupPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Register = lazy(() => import('./pages/Register'));
+const PrivateDocument = lazy(() => import('./pages/PrivateDocument'));
 
 const PageLoader = () => (
   <div className="fixed inset-0 flex items-center justify-center bg-background safe-area-padded">
@@ -90,6 +91,7 @@ function AppWithContext({ user }) {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
+        <Route path="/private-document/:assetId" element={<PrivateDocument />} />
         <Route element={<AppLayout user={user} company={company} isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} userRole={user?.role} loadingCompany={loadingCompany} refreshCompany={refreshCompany} />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/timeline" element={<Timeline />} />
