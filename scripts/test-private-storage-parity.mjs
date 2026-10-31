@@ -5,7 +5,7 @@ const names=['storageAssets.mjs','storageCredentials.mjs','storageTransport.mjs'
 const digest=createHash('sha256');
 for(const name of names)digest.update(name+'\n'+await readFile('base44/functions/documentStorage/'+name));
 const hash=digest.digest('hex');
-const consumers=['ocrDocumentIntake','invokeLimitedLLM','limitedCoreOperations','documentBackupToDrive','sendEmail','invoiceOperations','getPublicInvoice','processLaborOcr','utilityOperations','runAuditAnalysis','mercantilDocumentOperations','storageConsumerQa','mercantilDocumentOperations','mercantilDocumentOperations'];
+const consumers=["ocrDocumentIntake","invokeLimitedLLM","limitedCoreOperations","documentBackupToDrive","sendEmail","invoiceOperations","getPublicInvoice","processLaborOcr","utilityOperations","runAuditAnalysis","mercantilDocumentOperations"];
 let canonical;
 for(const name of consumers){
  const content=await readFile('base44/functions/'+name+'/storageRuntime.generated.mjs','utf8');
