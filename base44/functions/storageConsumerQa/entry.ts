@@ -21,9 +21,9 @@ Deno.serve(async req=>{
    if(societies.length>1||societies.some(x=>x.clienteAccountId!==COMPANY))throw Error('QA_AMBIGUOUS');
    const society=societies[0]||await svc.entities.MercantilSociedad.create({nombreFiscal:'QA C1 MERCANTIL PRIVATE 20261031',nif:'QA-C1-FAKE',clienteAccountId:COMPANY,visibilidadCliente:true,observaciones:'Prueba sintética de privacidad. No presentar en registros.'});
    phase='prepare-expediente';
-   let records=await svc.entities.MercantilExpediente.filter({sociedadId:society.id,ejercicio:2026},'-created_date',10);
+   let records=await svc.entities.MercantilExpediente.filter({sociedadId:society.id,ejercicio:'2026'},'-created_date',10);
    if(records.length>1)throw Error('QA_AMBIGUOUS');
-   const record=records[0]||await svc.entities.MercantilExpediente.create({sociedadId:society.id,sociedadNombre:society.nombreFiscal,ejercicio:2026,observaciones:'QA privacidad únicamente. Sin asientos ni presentaciones.'});
+   const record=records[0]||await svc.entities.MercantilExpediente.create({sociedadId:society.id,sociedadNombre:society.nombreFiscal,ejercicio:'2026',observaciones:'QA privacidad únicamente. Sin asientos ni presentaciones.'});
    return Response.json({ok:true,syntheticOnly:true,auditCaseId:audit.id,sociedadId:society.id,expedienteId:record.id,accountingWrites:0,realCustomerWrites:0});
   }
   if(body.action==='inspect'){
