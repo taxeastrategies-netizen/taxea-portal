@@ -31,7 +31,7 @@ async function load(name, settings = {}) {
   const service = { entities, connectors: { async getCurrentAppUserConnection() { return { accessToken: 'synthetic-not-a-credential', connectionConfig: { email: user.email } }; } }, integrations: { Core: new Proxy({}, { get() { return async () => { providerCalls++; return { synthetic: true }; }; } }) } };
   const client = { auth: { async me() { return user; } }, get asServiceRole() { serviceReads++; return service; } };
   const built = await esbuild.build({
-    stdin: { contents: sourceOf(`base44/functions/${name}/entry.ts`), loader: 'ts' },
+    stdin: { contents: sourceOf(`base44/functions/${name}/entry.ts`), loader: 'ts',resolveDir:process.cwd()+'/base44/functions/'+name },
     bundle: true, write: false, platform: 'node', format: 'cjs',
     plugins: [{ name: 'synthetic-sdk', setup(b) {
       b.onResolve({ filter: /^npm:@base44\/sdk/ }, () => ({ path: 'sdk', namespace: 'qa' }));
