@@ -19,8 +19,9 @@ export async function storageTransport(env,fetcher=fetch){
  const segment=value=>base64url(encoder.encode(JSON.stringify(value)));
  const payload=segment({alg:'RS256',typ:'JWT'})+'.'+segment({iss:STORAGE_ACCOUNT,scope:'https://www.googleapis.com/auth/devstorage.read_write',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+600});
  const signature=base64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(payload))));
- let tokenResponse;try{tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature})},16384,fetcher);}catch(error){
-  const kind=['TypeError','AbortError','OperationError','InvalidAccessError','ReferenceError'].includes(error?.name)?error.name:'Error';
+ let tokenResponse;try{tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature}).toString()},16384,fetcher);}catch(error){
+  const message=String(error?.message||'').toLowerCase();
+  const kind=/certificate|certificat|tls|ssl/.test(message)?'TLS':/dns|resolve|lookup/.test(message)?'DNS':/timed? ?out|abort/.test(message)?'TIMEOUT':/duplex|body|serializ/.test(message)?'BODY':/connect|network|fetch/.test(message)?'CONNECT':['TypeError','AbortError','OperationError','InvalidAccessError','ReferenceError'].includes(error?.name)?error.name:'Error';
   throw new Error('STORAGE_AUTH_NETWORK_'+kind);
  }
  let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_NOT_JSON_'+tokenResponse.status);}
