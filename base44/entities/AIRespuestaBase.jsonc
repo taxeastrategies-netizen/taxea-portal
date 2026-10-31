@@ -58,6 +58,18 @@
     },
     "creada_por": {
       "type": "string"
+    },
+    "approval_version": {
+      "type": "string"
+    },
+    "approved_by_admin_id": {
+      "type": "string"
+    },
+    "approved_at": {
+      "type": "string"
+    },
+    "approval_sha256": {
+      "type": "string"
     }
   },
   "required": [
@@ -66,26 +78,35 @@
     "respuesta"
   ],
   "rls": {
-    "create": {
-      "data.creada_por": "{{user.email}}"
-    },
+    "create": false,
     "read": {
       "$or": [
-        {
-          "data.creada_por": "{{user.email}}"
-        },
         {
           "user_condition": {
             "role": "admin"
           }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
         }
       ]
     },
-    "update": {
-      "data.creada_por": "{{user.email}}"
-    },
+    "update": false,
     "delete": {
-      "data.creada_por": "{{user.email}}"
+      "$or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
+        }
+      ]
     }
   }
 }

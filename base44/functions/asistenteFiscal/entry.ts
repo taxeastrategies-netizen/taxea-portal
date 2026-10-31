@@ -1,3 +1,4 @@
+import {trustedKnowledge} from './knowledgePolicy.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 // ─────────────────────────────────────────────
@@ -154,10 +155,12 @@ Responde ÚNICAMENTE con este JSON sin texto adicional:
 // ─────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido'},{status:405});
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    if([user,user.data].filter(Boolean).some(s=>s.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(String(s.status||'').toLowerCase())||['disabled','deleted','blocked','suspended'].includes(String(s.accountAccessStatus||'').toLowerCase())))return Response.json({error:'Acceso suspendido'},{status:403});
     const { pregunta, company_id, historial = [], sesion_id } = await req.json().catch(() => ({}));
     if (!pregunta || typeof pregunta !== 'string' || !company_id) {
       return Response.json({ error: 'Faltan parámetros' }, { status: 400 });
@@ -168,7 +171,7 @@ Deno.serve(async (req) => {
 
     const isAdmin = ['admin', 'super_admin'].includes(user.role);
     const company = await base44.asServiceRole.entities.Company.get(company_id).catch(() => null);
-    if (!company) return Response.json({ error: 'Empresa no encontrada' }, { status: 404 });
+    if (!company || (!isAdmin && company.activa === false)) return Response.json({ error: 'Empresa no encontrada' }, { status: 404 });
     const email = String(user.email || '').trim().toLowerCase();
     const ownerEmail = String(company.owner_email || '').trim().toLowerCase();
     const authorizedEmails = Array.isArray(company.usuarios_autorizados)
@@ -187,6 +190,7 @@ Deno.serve(async (req) => {
     const preguntaLower = pregunta.toLowerCase();
 
     for (const rb of respuestasBase) {
+      if(!await trustedKnowledge(rb))continue;
       const palabras = rb.palabras_clave || [];
       const coincidencias = palabras.filter(p => preguntaLower.includes(p.toLowerCase()));
       if (coincidencias.length >= 2 || (palabras.length === 1 && coincidencias.length === 1)) {

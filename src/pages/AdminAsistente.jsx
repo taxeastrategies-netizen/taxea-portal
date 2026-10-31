@@ -38,6 +38,7 @@ export default function AdminAsistente() {
   const [form, setForm] = useState(defaultRespuesta);
   const [kwInput, setKwInput] = useState('');
   const [busqueda, setBusqueda] = useState('');
+  const [knowledgeError,setKnowledgeError]=useState('');
 
   useEffect(() => { if (isAdmin) loadAll(); }, [isAdmin]);
 
@@ -92,14 +93,12 @@ export default function AdminAsistente() {
 
   const guardarRespuesta = async () => {
     if (!form.titulo || !form.respuesta) return;
-    const data = { ...form, creada_por: user?.email };
-    if (editando) {
-      await base44.entities.AIRespuestaBase.update(editando.id, data);
-    } else {
-      await base44.entities.AIRespuestaBase.create(data);
-    }
-    setShowForm(false);
-    loadAll();
+    setKnowledgeError('');
+    try{
+      const response=await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:editando?.id,expectedUpdatedAt:editando?.updated_date,data:form});
+      if(response?.data?.ok!==true)throw Error('No se pudo guardar la respuesta.');
+      setShowForm(false);loadAll();
+    }catch(error){setKnowledgeError(error?.response?.data?.error||'No se pudo guardar. Actualiza y vuelve a intentarlo.');}
   };
 
   const eliminarRespuesta = async (id) => {
@@ -108,8 +107,12 @@ export default function AdminAsistente() {
   };
 
   const toggleAprobada = async (r) => {
-    await base44.entities.AIRespuestaBase.update(r.id, { aprobada: !r.aprobada });
-    loadAll();
+    setKnowledgeError('');
+    try{
+      const approved=r.aprobada&&r.approval_version==='admin-reviewed-v1';
+      await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:r.id,expectedUpdatedAt:r.updated_date,data:{aprobada:!approved}});
+      loadAll();
+    }catch(error){setKnowledgeError(error?.response?.data?.error||'No se pudo confirmar la revisión. Actualiza antes de reintentar.');}
   };
 
   const crearTareaDesdeConsulta = async (consulta) => {
@@ -134,6 +137,7 @@ export default function AdminAsistente() {
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
+      {knowledgeError&&<p role="alert" className="text-sm text-destructive">{knowledgeError}</p>}
       <PageHeader
         title="Panel IA Fiscal"
         subtitle="Gestión del Asistente Fiscal Taxea — consultas, entrenamiento y analítica"
@@ -283,7 +287,7 @@ export default function AdminAsistente() {
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
                       <span className="font-semibold text-sm">{r.titulo}</span>
                       <RiesgoBadge nivel={r.nivel_riesgo} compact />
-                      {r.aprobada
+                      {r.aprobada&&r.approval_version==='admin-reviewed-v1'
                         ? <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Aprobada</span>
                         : <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">Pendiente</span>
                       }
@@ -301,7 +305,7 @@ export default function AdminAsistente() {
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <Button size="sm" variant="outline" onClick={() => toggleAprobada(r)} className="text-xs h-7">
-                      {r.aprobada ? 'Desaprobar' : 'Aprobar'}
+                      {r.aprobada&&r.approval_version==='admin-reviewed-v1' ? 'Desaprobar' : 'Revisar y aprobar'}
                     </Button>
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => abrirForm(r)}>
                       <Pencil className="w-3.5 h-3.5" />
