@@ -3,6 +3,8 @@ import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import { uploadCompanyDocument } from '@/lib/privateDocuments';
+import { saveHrDocumentUpload } from '@/lib/hrDocumentUpload.mjs';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { FileText, Upload, Search, File, X, ExternalLink } from 'lucide-react';
@@ -21,6 +23,7 @@ export default function HRDocuments() {
   const [showUpload, setShowUpload] = useState(false);
   const [form, setForm] = useState({ nombre: '', tipo: 'contrato', employee_id: '' });
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const load = async () => {
     if (!companyId) { setLoading(false); return; }
@@ -34,13 +37,23 @@ export default function HRDocuments() {
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const input = e.target;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.entities.HRDocument.create({ company_id: companyId, nombre: form.nombre || file.name, tipo: form.tipo, archivo_url: file_url, employee_id: form.employee_id });
-    setUploading(false);
-    setShowUpload(false);
-    setForm({ nombre: '', tipo: 'contrato', employee_id: '' });
-    load();
+    setUploadError('');
+    try {
+      await saveHrDocumentUpload({file,companyId,form}, {
+        upload: uploadCompanyDocument,
+        create: value => base44.entities.HRDocument.create(value),
+      });
+      setShowUpload(false);
+      setForm({ nombre: '', tipo: 'contrato', employee_id: '' });
+      try { await load(); } catch { setUploadError('El documento se guardó, pero no se pudo actualizar la lista. Actualiza la página antes de volver a subirlo.'); }
+    } catch (error) {
+      setUploadError(error?.message || 'No se pudo subir el documento. Reintenta.');
+    } finally {
+      setUploading(false);
+      input.value = '';
+    }
   };
 
   const filtered = docs.filter(d => {
@@ -64,12 +77,13 @@ export default function HRDocuments() {
             <p className="text-sm text-slate-400">{docs.length} documentos · Gestión documental y firma digital</p>
           </div>
         </div>
-        <button onClick={() => setShowUpload(true)}
+        <button disabled={!companyId || uploading} onClick={() => { setUploadError(''); setShowUpload(true); }}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-taxea-red text-white hover:bg-taxea-red/90 transition-all shadow-sm self-start sm:self-auto">
           <Upload className="w-4 h-4" /> Subir documento
         </button>
       </div>
 
+      {!showUpload && uploadError && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{uploadError}</p>}
       {/* Type breakdown */}
       {byType.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -118,7 +132,7 @@ export default function HRDocuments() {
                   </div>
                   <span className={cn("text-[11px] font-semibold px-2 py-1 rounded-full border", ss.cls)}>{ss.label}</span>
                   {d.archivo_url && (
-                    <a href={d.archivo_url} target="_blank" rel="noopener noreferrer"
+                    <a href={d.archivo_url} target="_blank" rel="noopener noreferrer" aria-label={"Abrir " + d.nombre}
                       className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -153,8 +167,9 @@ export default function HRDocuments() {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-500 mb-1 block">Archivo</label>
-              <input type="file" onChange={handleUpload} disabled={uploading}
+              <input type="file" onChange={handleUpload} disabled={uploading || !companyId}
                 className="w-full text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-600 hover:file:bg-violet-100" />
+              {uploadError && <p role="alert" className="mt-2 text-xs text-red-700">{uploadError}</p>}
               {uploading && <p className="text-xs text-violet-500 mt-1 animate-pulse">Subiendo…</p>}
             </div>
           </motion.div>
