@@ -1,3 +1,4 @@
+import {assetIdFromReference,authorizedAsset} from './storageRuntime.generated.mjs';
 import { reviewFilter } from './advisorReview.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
@@ -63,6 +64,14 @@ const normalizeKeyPart = value => cleanText(value, 240)
   .toUpperCase()
   .replace(/[^A-Z0-9]/g, '');
 
+async function assertPrivateInvoiceAsset(base44,user,companyId,reference,mime,size){
+ if(!assetIdFromReference(reference))return;
+ const asset=await authorizedAsset(base44.asServiceRole,user,assetIdFromReference(reference));
+ if(!asset||asset.company_id!==companyId)throw Object.assign(new Error('El archivo no pertenece a la empresa de esta factura.'),{status:404});
+ // Text/CSV/XML are served as octet-stream to avoid active browser content.
+ const mimeMatches=asset.mime_type===mime||(asset.mime_type==='application/octet-stream'&&['text/plain','text/csv'].includes(mime));
+ if(!mimeMatches||asset.size!==size||asset.size<=0||asset.size>MAX_ATTACHMENT_BYTES)throw Object.assign(new Error('Los metadatos del archivo no coinciden con el original verificado.'),{status:400});
+}
 async function sha256(value) {
   const bytes = new TextEncoder().encode(String(value || ''));
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -719,6 +728,10 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
       }, '-uploaded_at', MAX_ATTACHMENTS_PER_INVOICE);
       const signed = await Promise.all((attachments || []).map(async attachment => {
+        if(assetIdFromReference(attachment.file_uri)){
+          const asset=await authorizedAsset(base44.asServiceRole,user,assetIdFromReference(attachment.file_uri));
+          return {...attachment,signed_url:asset?.company_id===companyId?attachment.file_uri:'',unavailable:!asset||asset.company_id!==companyId};
+        }
         const signedResult = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
           file_uri: attachment.file_uri,
           expires_in: 900,
@@ -735,9 +748,10 @@ Deno.serve(async (req) => {
       if (invoice.qr_pdf_url) return Response.json({ ok: true, pdf_url: invoice.qr_pdf_url, duplicate: true });
       const fileUrl = cleanText(body.file_url, 1600);
       const sizeBytes = Math.round(Number(body.size_bytes) || 0);
-      if (!isSafeHttpsUrl(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
+      if (!isSafeHttpsUrl(fileUrl) && !assetIdFromReference(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
       if (cleanText(body.mime_type, 100).toLowerCase() !== 'application/pdf') return Response.json({ error: 'El documento debe ser PDF.' }, { status: 400 });
       if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El PDF debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      await assertPrivateInvoiceAsset(base44,user,companyId,fileUrl,'application/pdf',sizeBytes);
       const saved = await base44.asServiceRole.entities.Invoice.update(invoice.id, {
         qr_pdf_url: fileUrl,
         ...(invoice.archivo_url ? {} : { archivo_url: fileUrl }),
@@ -760,9 +774,10 @@ Deno.serve(async (req) => {
       if (invoice.archivo_url) return Response.json({ error: 'La factura ya tiene un PDF principal. No se ha sobrescrito.' }, { status: 409 });
       const fileUrl = cleanText(body.file_url, 1600);
       const sizeBytes = Math.round(Number(body.size_bytes) || 0);
-      if (!isSafeHttpsUrl(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
+      if (!isSafeHttpsUrl(fileUrl) && !assetIdFromReference(fileUrl)) return Response.json({ error: 'La URL del PDF no es válida.' }, { status: 400 });
       if (cleanText(body.mime_type, 100).toLowerCase() !== 'application/pdf') return Response.json({ error: 'El documento principal debe ser PDF.' }, { status: 400 });
       if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El PDF debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      await assertPrivateInvoiceAsset(base44,user,companyId,fileUrl,'application/pdf',sizeBytes);
       await base44.asServiceRole.entities.Invoice.update(invoice.id, { archivo_url: fileUrl });
       await recordTimeline(base44, {
         invoice_id: invoice.id,
@@ -790,10 +805,11 @@ Deno.serve(async (req) => {
       const filename = cleanText(body.filename, 180).replace(/[\r\n]/g, '');
       const mimeType = cleanText(body.mime_type, 150).toLowerCase();
       const sizeBytes = Math.round(Number(body.size_bytes) || 0);
-      if (!isPrivateFileUri(fileUri)) return Response.json({ error: 'La referencia del archivo no es válida.' }, { status: 400 });
+      if (!isPrivateFileUri(fileUri) && !assetIdFromReference(fileUri)) return Response.json({ error: 'La referencia del archivo no es válida.' }, { status: 400 });
       if (!filename || filename.includes('/') || filename.includes('\\')) return Response.json({ error: 'El nombre del archivo no es válido.' }, { status: 400 });
       if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) return Response.json({ error: 'Este tipo de archivo no está permitido.' }, { status: 400 });
       if (sizeBytes <= 0 || sizeBytes > MAX_ATTACHMENT_BYTES) return Response.json({ error: 'El archivo debe ocupar entre 1 byte y 10 MB.' }, { status: 400 });
+      await assertPrivateInvoiceAsset(base44,user,companyId,fileUri,mimeType,sizeBytes);
       const attachment = await base44.asServiceRole.entities.InvoiceAttachment.create({
         company_id: companyId,
         invoice_id: invoice.id,

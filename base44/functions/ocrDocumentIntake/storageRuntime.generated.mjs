@@ -1,5 +1,5 @@
 // GENERATED from documentStorage modules. Run node scripts/build-storage-runtime.mjs.
-// canonical-sha256: 2a2d6acf7f80f25ebb3b1645131760d06d845cf0ffca215808db8a33e7992e67
+// canonical-sha256: c05cefc1a222d106b84215e160fcda55afa25f8dbc3b0a28d0fb3c0a7b87aac3
 // base44/functions/documentStorage/storageCredentials.mjs
 var encoder = new TextEncoder();
 var STORAGE_PROJECT = "plasma-minutia-510419-c4";
@@ -244,9 +244,37 @@ async function authorizedAsset(svc, user, id) {
 async function readPrivateAssetBytes(svc, user, reference, env, companyId) {
   const asset = await authorizedAsset(svc, user, assetIdFromReference(reference));
   if (!asset || companyId && asset.company_id !== companyId) throw new Error("STORAGE_ASSET_FORBIDDEN");
+  return readVerifiedAssetBytes(asset, env);
+}
+async function readVerifiedAssetBytes(asset, env) {
   const transport = await storageTransport(env), bytes = await transport.get(asset.object_name, asset.generation);
   if (bytes.length !== asset.size || await sha256(bytes) !== asset.sha256) throw new Error("STORAGE_HASH_MISMATCH");
   return { asset, bytes };
+}
+var invoicePdfReference = (invoice) => invoice?.qr_url && invoice.tipo === "emitida" ? invoice.qr_pdf_url : invoice?.archivo_url;
+function publicInvoiceCapabilityValid(invoice, token, now = Date.now()) {
+  if (!invoice || invoice.anulada || invoice.public_token_revoked_at || !/^[A-Za-z0-9_-]{1,128}$/.test(String(invoice.company_id || ""))) return false;
+  if (typeof token !== "string" || !/^[a-f0-9]{64}$/i.test(token) || typeof invoice.public_token !== "string" || invoice.public_token.length !== 64) return false;
+  let difference = 0;
+  for (let i = 0; i < 64; i++) difference |= token.charCodeAt(i) ^ invoice.public_token.charCodeAt(i);
+  if (difference) return false;
+  if (invoice.public_token_expires_at) {
+    const expiry = Date.parse(invoice.public_token_expires_at);
+    if (!Number.isFinite(expiry) || expiry <= now) return false;
+  }
+  return true;
+}
+async function readPublicInvoicePdf(svc, invoice, token, env) {
+  if (!publicInvoiceCapabilityValid(invoice, token)) throw new Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
+  const company = await svc.entities.Company.get(invoice.company_id).catch(() => null);
+  if (!company || company.activa === false) throw new Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
+  const id = assetIdFromReference(invoicePdfReference(invoice));
+  const asset = id ? await svc.entities.DocumentAsset.get(id).catch(() => null) : null;
+  if (!asset || asset.status !== "ready" || asset.company_id !== invoice.company_id || !asset.object_name?.startsWith("companies/" + invoice.company_id + "/")) throw new Error("STORAGE_ASSET_FORBIDDEN");
+  if (asset.mime_type !== "application/pdf" || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 25 * 1024 * 1024) throw new Error("STORAGE_INVALID_PUBLIC_PDF");
+  const result = await readVerifiedAssetBytes(asset, env);
+  if (new TextDecoder().decode(result.bytes.slice(0, 5)) !== "%PDF-") throw new Error("STORAGE_INVALID_PUBLIC_PDF");
+  return result;
 }
 async function resolvePrivateAsset(svc, user, id, env) {
   const asset = await authorizedAsset(svc, user, id);
@@ -257,10 +285,13 @@ export {
   assetIdFromReference,
   assetReference,
   authorizedAsset,
+  invoicePdfReference,
   isStorageAdmin,
   mayAccessStorageCompany,
   privateFileFormat,
+  publicInvoiceCapabilityValid,
   readPrivateAssetBytes,
+  readPublicInvoicePdf,
   resolvePrivateAsset,
   savePrivateAsset,
   storageAccountEnabled,

@@ -1,3 +1,4 @@
+import {createDocumentClient} from '@/lib/documentClient.mjs';
 /**
  * invoicePremiumEmail.js — Generador de email HTML premium para facturas
  * Taxea Strategies · No requiere librerías externas
@@ -479,7 +480,7 @@ export async function ensureInvoicePdf(invoice, company, base44Client) {
     const pdfBlob = doc.output('blob');
     const fileName = `Factura_${(invoice.numero_factura || 'factura').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
     const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
-    const { file_url } = await base44Client.integrations.Core.UploadFile({ file });
+    const { file_url } = await createDocumentClient(base44Client).upload({file,companyId:invoice.company_id});
 
     // Vincular el PDF mediante el backend para mantener la frontera de mutación
     // y la trazabilidad de la factura en un único flujo autorizado.

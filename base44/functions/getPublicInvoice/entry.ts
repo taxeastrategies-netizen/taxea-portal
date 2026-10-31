@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import {assetIdFromReference,invoicePdfReference,publicInvoiceCapabilityValid,readPublicInvoicePdf} from './storageRuntime.generated.mjs';
+import {readPublicInvoiceRequest} from './publicInvoiceRequest.mjs';
 
 const pick = (source, keys) => Object.fromEntries(
   keys.filter(key => source?.[key] !== undefined).map(key => [key, source[key]])
@@ -13,7 +15,9 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== 'POST') return publicJson({ error: 'Método no permitido.' }, { status: 405 });
     const base44 = createClientFromRequest(req);
-    const body = await req.json().catch(() => ({}));
+    let body;try{body=await readPublicInvoiceRequest(req);}catch{return publicJson({error:'Solicitud no válida.'},{status:400});}
+    const action=body.action||'view';
+    if(!['view','download','download_pdf'].includes(action))return publicJson({error:'Operación no admitida.'},{status:400});
     const token = String(body.token || '').trim();
 
     if (!/^[a-f0-9]{64}$/i.test(token)) {
@@ -35,8 +39,15 @@ Deno.serve(async (req) => {
       return publicJson({ error: 'Este enlace ha caducado.' }, { status: 410 });
     }
 
+    if(!publicInvoiceCapabilityValid(invoice,token))return publicJson({error:'Este enlace no está disponible.'},{status:410});
     const company = await base44.asServiceRole.entities.Company.get(invoice.company_id);
-    if (!company) return publicJson({ error: 'Emisor no encontrado.' }, { status: 404 });
+    if (!company || company.activa===false) return publicJson({ error: 'Emisor no disponible.' }, { status: 404 });
+    let privatePdf;
+    const privatePdfReference=assetIdFromReference(invoicePdfReference(invoice));
+    if(action==='download_pdf'){
+      if(!privatePdfReference)return publicJson({error:'El PDF privado no está disponible.'},{status:404});
+      try{privatePdf=await readPublicInvoicePdf(base44.asServiceRole,invoice,token,Deno.env);}catch{return publicJson({error:'No se pudo verificar el PDF de esta factura.'},{status:404});}
+    }
 
     const logs = await base44.asServiceRole.entities.InvoiceEmailLog.filter({
       invoice_id: invoice.id,
@@ -50,7 +61,7 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
-    const isDownload = body.action === 'download';
+    const isDownload = action === 'download' || action === 'download_pdf';
     const publicEventType = isDownload ? 'enlace_publico_descarga' : 'enlace_publico_abierto';
     const recentEvents = await base44.asServiceRole.entities.InvoiceTimelineEvent.filter({
       invoice_id: invoice.id,
@@ -76,6 +87,10 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
+    if(privatePdf){
+      const name=('Factura_'+String(invoice.numero_factura||'documento')+'.pdf').replace(/[\x00-\x1f\x7f]/g,'').slice(0,180);
+      return new Response(privatePdf.bytes,{status:200,headers:{'Content-Type':'application/pdf','Content-Length':String(privatePdf.bytes.length),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name),'Cache-Control':'private, no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Taxea-File-Sha256':privatePdf.asset.sha256,'X-Taxea-File-Size':String(privatePdf.bytes.length),'Access-Control-Expose-Headers':'X-Taxea-File-Sha256,X-Taxea-File-Size,Content-Type'}});
+    }
     const publicInvoice = pick(invoice, [
       'numero_factura', 'fecha_emision', 'fecha_vencimiento', 'tipo', 'cliente_nombre',
       'cliente_nif', 'cliente_direccion', 'proveedor_nombre', 'proveedor_nif', 'proveedor_direccion', 'concepto', 'base_imponible',
@@ -83,6 +98,7 @@ Deno.serve(async (req) => {
       'total_factura', 'moneda', 'estado_cobro', 'importe_pagado', 'importe_pendiente', 'forma_pago', 'coletilla_fiscal',
       'archivo_url', 'qr_url', 'qr_mode', 'qr_pdf_url', 'es_rectificativa', 'factura_rectificada',
     ]);
+    if(privatePdfReference){delete publicInvoice.archivo_url;delete publicInvoice.qr_pdf_url;publicInvoice.has_private_pdf=true;}
     const publicCompany = pick(company, [
       'nombre_comercial', 'razon_social', 'nif_cif', 'direccion_fiscal',
       'email', 'telefono', 'logo_url', 'datos_bancarios', 'tipo_impuesto',
@@ -90,7 +106,7 @@ Deno.serve(async (req) => {
 
     return publicJson({ ok: true, invoice: publicInvoice, company: publicCompany });
   } catch (error) {
-    console.error('[getPublicInvoice]', error);
+    console.error('[getPublicInvoice] Operación no disponible.');
     return publicJson({ error: 'No se pudo abrir la factura.' }, { status: 500 });
   }
 });

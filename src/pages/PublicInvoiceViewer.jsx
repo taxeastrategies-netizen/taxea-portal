@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { downloadPublicInvoiceDocument } from '@/lib/publicInvoiceDocument.mjs';
 import { Download, Printer, AlertTriangle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getWithholdingAmount } from '@/lib/accountingUtils';
@@ -183,6 +184,7 @@ export default function PublicInvoiceViewer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [token, setToken] = useState('');
+  const [downloading,setDownloading]=useState(false),[downloadError,setDownloadError]=useState('');
 
   useEffect(() => {
     // Extraer token de la URL: /public/invoice/:token
@@ -215,9 +217,16 @@ export default function PublicInvoiceViewer() {
   };
 
   const downloadUrl = invoice?.qr_url && invoice?.tipo === 'emitida' ? invoice?.qr_pdf_url : invoice?.archivo_url;
-  const canDownload = Boolean(downloadUrl || (invoice?.qr_url && invoice?.tipo === 'emitida'));
+  const canDownload = Boolean(invoice?.has_private_pdf || downloadUrl || (invoice?.qr_url && invoice?.tipo === 'emitida'));
   const handleDownload = async () => {
-    if (!canDownload) return;
+    if (!canDownload || downloading) return;
+    setDownloading(true);setDownloadError('');
+    try {
+    if(invoice.has_private_pdf){
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),35000);
+      try{const file=await downloadPublicInvoiceDocument(base44,{token,signal:controller.signal});const url=URL.createObjectURL(file.blob),a=document.createElement('a');a.href=url;a.download='Factura_'+String(invoice.numero_factura||'documento').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}finally{clearTimeout(timer);}
+      return;
+    }
     if (downloadUrl) {
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -228,6 +237,7 @@ export default function PublicInvoiceViewer() {
       await exportInvoiceToPdf(invoice, company);
     }
     base44.functions.invoke('getPublicInvoice', { token, action: 'download' }).catch(() => {});
+    }catch(error){setDownloadError(error?.message||'No se pudo descargar la factura. Reintenta.');}finally{setDownloading(false);}
   };
 
   const isOverdue = invoice?.fecha_vencimiento && new Date(invoice.fecha_vencimiento) < new Date()
@@ -292,7 +302,7 @@ export default function PublicInvoiceViewer() {
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {canDownload && (
-                <Button onClick={handleDownload} variant="outline" size="sm" className="gap-2 h-8 text-xs">
+                <Button onClick={handleDownload} disabled={downloading} variant="outline" size="sm" className="gap-2 h-8 text-xs">
                   <Download className="w-3.5 h-3.5" /> Descargar PDF
                 </Button>
               )}
@@ -303,6 +313,7 @@ export default function PublicInvoiceViewer() {
           </div>
         </div>
 
+        {downloadError&&<p role="alert" className="mx-auto max-w-5xl px-4 pt-4 text-sm text-red-700">{downloadError}</p>}
         {/* ── Contenido ──────────────────────────────────────────── */}
         <div className="max-w-5xl mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -313,7 +324,7 @@ export default function PublicInvoiceViewer() {
                 <InvoicePublicRender invoice={invoice} company={company} />
               </div>
               {canDownload && (
-                <button onClick={handleDownload}
+                <button onClick={handleDownload} disabled={downloading}
                   className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                   <Download className="w-4 h-4" /> Descargar PDF
                 </button>

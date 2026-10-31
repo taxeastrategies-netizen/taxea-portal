@@ -1,3 +1,4 @@
+import {uploadCompanyDocument} from '@/lib/privateDocuments';
 /**
  * InvoiceOperationalSidePanel — Panel lateral operativo de factura
  * Pestañas: General, Mensajes, Historial
@@ -232,7 +233,7 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
           throw new Error(`El archivo “${file.name}” debe ocupar menos de 10 MB.`);
         }
         if (needsPrimaryPdf && mimeType === 'application/pdf') {
-          const upload = await base44.integrations.Core.UploadFile({ file });
+          const upload = await uploadCompanyDocument({file,companyId:invoice.company_id});
           const data = await invokeInvoiceOperation({
             action: 'set_primary_pdf',
             file_url: upload.file_url,
@@ -243,7 +244,7 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
           if (!data?.ok) throw new Error(data?.error || 'No se pudo guardar el PDF principal.');
           needsPrimaryPdf = false;
         } else {
-          const upload = await base44.integrations.Core.UploadPrivateFile({ file });
+          const upload = await uploadCompanyDocument({file,companyId:invoice.company_id,privateAttachment:true});
           const data = await invokeInvoiceOperation({
             action: 'add_attachment',
             file_uri: upload.file_uri,
