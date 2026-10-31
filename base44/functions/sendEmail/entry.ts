@@ -4,6 +4,7 @@
  * únicamente después de que Gmail confirme el envío.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
+import { assetIdFromReference, authorizedAsset, readPrivateAssetBytes } from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -160,7 +161,7 @@ async function getConnectedEmail(connection) {
   return EMAIL_RE.test(userinfo.email || '') ? userinfo.email : '';
 }
 
-async function loadAttachments(input, allowedUrl, requireInvoicePdf) {
+async function loadAttachments(input, allowedUrl, requireInvoicePdf, context) {
   const attachments = Array.isArray(input) ? input : [];
   if (requireInvoicePdf && attachments.length !== 1) {
     throw Object.assign(new Error('La factura debe enviarse con un único PDF adjunto.'), { status: 400 });
@@ -172,10 +173,24 @@ async function loadAttachments(input, allowedUrl, requireInvoicePdf) {
   let totalSize = 0;
   for (const item of attachments) {
     const url = typeof item === 'string' ? item : item?.url;
-    if (!url || url !== allowedUrl || !isSafeRemoteUrl(url)) {
+    if (!url || url !== allowedUrl || (!isSafeRemoteUrl(url) && !assetIdFromReference(url))) {
       throw Object.assign(new Error('El adjunto no coincide con el PDF de la factura.'), { status: 400 });
     }
-    const bytes = await downloadInvoicePdf(url);
+    let bytes;
+    if (assetIdFromReference(url)) {
+      const asset = await authorizedAsset(context.service, context.user, assetIdFromReference(url));
+      if (!asset || asset.company_id !== context.companyId) throw Object.assign(new Error('El adjunto no pertenece a la empresa de la factura.'), { status: 404 });
+      if (asset.mime_type !== 'application/pdf') throw Object.assign(new Error('El adjunto no es un PDF válido.'), { status: 415 });
+      if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_ATTACHMENT_BYTES) throw Object.assign(new Error('El PDF supera el límite de 10 MB o tiene un tamaño inválido.'), { status: 413 });
+      try {
+        ({ bytes } = await readPrivateAssetBytes(context.service, context.user, url, Deno.env, context.companyId));
+      } catch {
+        throw Object.assign(new Error('No se pudo verificar el PDF privado. No se ha enviado el correo.'), { status: 502 });
+      }
+      if (bytes.byteLength > MAX_ATTACHMENT_BYTES || String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') throw Object.assign(new Error('El adjunto no es un PDF válido.'), { status: 415 });
+    } else {
+      bytes = await downloadInvoicePdf(url);
+    }
     totalSize += bytes.byteLength;
     if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('Los adjuntos superan el límite total de 20 MB.');
     loaded.push({
@@ -331,7 +346,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const attachments = await loadAttachments(body.attachments, allowedInvoicePdfUrl, Boolean(invoice));
+    const attachments = await loadAttachments(body.attachments, allowedInvoicePdfUrl, Boolean(invoice), { service: base44.asServiceRole, user, companyId });
     const connectedEmail = await getConnectedEmail(connection);
     if (!connectedEmail) {
       return Response.json({ error: 'gmail_identity_unavailable', message: 'No se pudo identificar el buzón Gmail conectado.' }, { status: 502 });
@@ -426,7 +441,7 @@ Deno.serve(async (req) => {
       warning: trackingWarning || undefined,
     });
   } catch (error) {
-    console.error('[sendEmail]', error);
+    console.error('[sendEmail] La operación no pudo completarse.');
     if (base44 && invoice && companyId) {
       await base44.asServiceRole.entities.InvoiceEmailLog.create({
         invoice_id: invoice.id,
