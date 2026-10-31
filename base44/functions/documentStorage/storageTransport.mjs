@@ -11,7 +11,8 @@ export async function boundedBytes(response,max=50*1024*1024){
 }
 async function boundedFetch(url,init,max,fetcher){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
- try{const response=await fetcher(url,{...init,redirect:'error',signal:controller.signal});return {status:response.status,headers:response.headers,bytes:await boundedBytes(response,max)};}
+ // Base44's runtime accepts manual/follow. Manual keeps credentials from following any redirect.
+ try{const response=await fetcher(url,{...init,redirect:'manual',signal:controller.signal});return {status:response.status,headers:response.headers,bytes:await boundedBytes(response,max)};}
  finally{clearTimeout(timer);}
 }
 export async function storageTransport(env,fetcher=(...args)=>globalThis.fetch(...args)){
