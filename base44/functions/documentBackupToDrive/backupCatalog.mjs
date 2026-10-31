@@ -1,5 +1,6 @@
 // Document references only. No invoice, journal or account is written by this module.
 const direct=(entity,urlField,companyField='company_id',extra={})=>({entity,urlField,companyField,...extra});
+export const canonicalInventoryJson=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
 export const BACKUP_DOCUMENT_SOURCES=[
  direct('OcrInvoiceDocument','fileStorageUrl','company_id',{mimeField:'fileMimeType',sizeField:'fileSize'}),
  direct('Invoice','archivo_url'),direct('Invoice','qr_pdf_url','company_id',{variant:true}),

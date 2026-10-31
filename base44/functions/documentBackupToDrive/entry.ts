@@ -683,12 +683,12 @@ Deno.serve(async (req) => {
         documents=backupSnapshot(index.documents,DOC_SOURCES);
       }else{
         let state;
-        try{state=job.inventoryState?JSON.parse(job.inventoryState):freshInventory(job.id,job.startedAt,scopeCompanyId);}catch{throw new Error('BACKUP_INVENTORY_INVALID');}
+        try{state=job.inventoryStateData||(job.inventoryState?JSON.parse(job.inventoryState):freshInventory(job.id,job.startedAt,scopeCompanyId));}catch{throw new Error('BACKUP_INVENTORY_INVALID');}
         if(state.jobId!==job.id||state.scopeCompanyId!==scopeCompanyId)throw new Error('BACKUP_INVENTORY_SCOPE_MISMATCH');
         const resolveCompany=createBackupContextResolver(base44.asServiceRole);
         state=await advanceDocumentInventory({service:base44.asServiceRole,state,resolveCompany,deadline,
          uploadPage:async page=>{const content=JSON.stringify({...page,documents:backupSnapshot(page.documents,DOC_SOURCES)}),bytes=new TextEncoder().encode(content);const saved=await uploadTextFile('inventory_'+job.id+'_'+page.index+'.json',dayFolder.id,content,accessToken);return{id:saved.id,sha256:await computeChecksum(bytes)};},
-         persist:async current=>{const patch={inventoryState:JSON.stringify(current),documentsScanned:current.count,lastHeartbeatAt:new Date().toISOString()};await base44.asServiceRole.entities.BackupJob.update(job.id,patch);job={...job,...patch};}
+         persist:async current=>{const patch={inventoryStateData:current,documentsScanned:current.count,lastHeartbeatAt:new Date().toISOString()};await base44.asServiceRole.entities.BackupJob.update(job.id,patch);job={...job,...patch};}
         });
         if(!state.done)return Response.json({status:'copying',phase:'inventory',jobId:job.id,continueRequired:true,documentsScanned:state.count,documentsProcessed:0,inventorySourcesCompleted:state.source,inventorySourcesTotal:BACKUP_DOCUMENT_SOURCES.length,retryAfterSeconds:1},{status:202});
         documents=backupSnapshot(await loadInventoryDocuments(state,async id=>{const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!response.ok)throw new Error('BACKUP_INVENTORY_PART_UNAVAILABLE');return new Uint8Array(await response.arrayBuffer());},computeChecksum),DOC_SOURCES);
@@ -842,7 +842,7 @@ Deno.serve(async (req) => {
       // instead of keeping one request open for four minutes.
 
       let nextCursor = startCursor;
-      let copyManifestParts=job.copyManifestParts?JSON.parse(job.copyManifestParts):[];
+      let copyManifestParts=job.copyManifestPartsData||(job.copyManifestParts?JSON.parse(job.copyManifestParts):[]);
       if(!Array.isArray(copyManifestParts))throw new Error('BACKUP_MANIFEST_PARTS_INVALID');
 
       for (let i = startCursor; i < documents.length; i += BACKUP_BATCH_SIZE) {
@@ -901,7 +901,7 @@ Deno.serve(async (req) => {
           documentsFailed: failed,
           bytesCopied,
           nextCursor,
-          ...(resumableManifest?{copyManifestParts:JSON.stringify(copyManifestParts)}:{}),
+          ...(resumableManifest?{copyManifestPartsData:copyManifestParts}:{}),
           lastHeartbeatAt: new Date().toISOString(),
         });
       }
@@ -1110,4 +1110,4 @@ Deno.serve(async (req) => {
 });
 
 
-// C1 inventory diagnostics version 20261031.1
+// C1 inventory structured metadata version 20261031.2

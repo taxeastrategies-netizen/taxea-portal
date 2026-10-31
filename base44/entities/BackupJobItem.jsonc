@@ -67,6 +67,9 @@
     },
     "inventoryIndex": {
       "type": "number"
+    },
+    "inventoryPageData": {
+      "type": "object"
     }
   },
   "required": [
