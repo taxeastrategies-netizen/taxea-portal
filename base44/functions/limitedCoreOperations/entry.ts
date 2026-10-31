@@ -131,6 +131,7 @@ Deno.serve(async (req) => {
     await svc.entities.CoreIntegrationUsage.update(event.id, { status: 'success', completedAt: new Date().toISOString() });
     return Response.json({ ok: true, result });
   } catch (error) {
+    if (/^Invalid (?:service role )?authorization header format/.test(String(error?.message||''))) return Response.json({error:'No autenticado'},{status:401});
     console.error('[limitedCoreOperations] provider_or_internal_error');
     if (event?.id && client?.asServiceRole?.entities?.CoreIntegrationUsage) {
       await client.asServiceRole.entities.CoreIntegrationUsage.update(event.id, {

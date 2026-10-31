@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ result });
   } catch (error) {
+    if (/^Invalid (?:service role )?authorization header format/.test(String(error?.message||''))) return Response.json({error:'No autenticado'},{status:401});
     console.error('[invokeLimitedLLM] provider_or_internal_error');
     if (eventId) {
       try {
