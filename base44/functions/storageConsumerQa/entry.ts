@@ -28,6 +28,14 @@ Deno.serve(async req=>{
    if(asset.company_id!==testCompany.id||asset.original_name!=='QA-C1-RESTORE-LEDGER-20261031.txt')throw Error('QA_SCOPE_NOT_VERIFIED');
    return{testCompany,asset};
   };
+  if(body.action==='catalog_probe'){
+   const cutoff=new Date().toISOString(),query={company_id:COMPANY,created_date:{$lte:cutoff},status:'ready'};
+   const first=await svc.entities.DocumentAsset.filter(query,'id',2);
+   const last=first.at(-1)?.id;
+   const second=last?await svc.entities.DocumentAsset.filter({...query,id:{$gt:last}},'id',2):[];
+   const ordered=first.every((row,i)=>!i||row.id>first[i-1].id)&&second.every(row=>row.id>last);
+   return Response.json({ok:first.length===2&&second.length>0&&ordered,syntheticOnly:true,keysetQuerySupported:ordered&&second.length>0,firstCount:first.length,nextCount:second.length,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',dmsPrivateEnabled:Deno.env.get('TAXEA_PRIVATE_DMS_ENFORCED')==='true',realCustomerWrites:0});
+  }
   if(body.action==='identity_inventory'){
    const users=[];
    for(const email of ['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com']){
