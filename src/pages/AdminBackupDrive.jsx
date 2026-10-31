@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
+import {requestBackupChunk,backupContinuationDelay} from '@/lib/backupClient.mjs';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -73,19 +74,19 @@ export default function AdminBackupDrive() {
       // Each request processes a short, persisted chunk. This avoids browser/proxy timeouts
       // and makes an interrupted run safely resumable without duplicating Drive files.
       for (let chunk = 0; chunk < 200; chunk += 1) {
-        const res = await base44.functions.invoke('documentBackupToDrive', {
+        const res = await requestBackupChunk((name,payload)=>base44.functions.invoke(name,payload), {
           action: 'backup',
           jobType: 'manual',
           resumeJobId,
         });
         const data = res.data || {};
-        setRunResult(data);
+        setRunResult(previous=>({...previous,...data}));
         resumeJobId = data.jobId || resumeJobId;
         if (!data.continueRequired) {
           completed = true;
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, backupContinuationDelay(data)));
       }
       if (!completed) throw new Error('La copia no pudo finalizar dentro del límite de bloques. Puedes reanudarla sin duplicar archivos.');
       await loadStatus();
@@ -134,7 +135,7 @@ export default function AdminBackupDrive() {
   if (loadError && !status) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Seguridad y Copias" subtitle="Copia de seguridad documental automática en Google Drive" />
+        <PageHeader title="Seguridad y Copias" subtitle="Copias documentales en Google Drive · manuales y programadas" />
         <Card className="border-red-200 bg-red-50/50">
           <CardContent className="pt-5 flex items-start gap-3">
             <XCircle className="w-5 h-5 text-red-600 mt-0.5" />
