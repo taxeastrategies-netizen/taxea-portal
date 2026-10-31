@@ -7,12 +7,28 @@ Deno.serve(async req=>{
   if(!user?.id)return Response.json({error:'Inicia sesión.'},{status:401});
   if([user,user.data].filter(Boolean).some(x=>x.is_deleted===true||['disabled','suspended','blocked','deleted'].includes(String(x.accountAccessStatus||'').toLowerCase())||['eliminado','bloqueado','suspendido'].includes(String(x.status||'').toLowerCase())))return Response.json({error:'Acceso suspendido.'},{status:403});
   if(!['admin','super_admin'].includes(user.role))return Response.json({error:'Solo administración.'},{status:403});
-  const body=await req.json().catch(()=>({}));if(!['prepare','revoke'].includes(body.action))return Response.json({error:'Acción no válida.'},{status:400});
+  const body=await req.json().catch(()=>({}));if(!['prepare','revoke','verify'].includes(body.action))return Response.json({error:'Acción no válida.'},{status:400});
   const svc=client.asServiceRole,company=await svc.entities.Company.get(COMPANY);
   if(company.id!==COMPANY||company.owner_email!=='taxeastrategies+qa-security-b-20261023@gmail.com'||!String(company.razon_social).includes('DATOS FICTICIOS')||company.private_document_storage_enabled!==true)throw new Error('QA_COMPANY_NOT_VERIFIED');
   const asset=await svc.entities.DocumentAsset.get(ASSET);if(asset.company_id!==COMPANY||asset.status!=='ready'||!String(asset.original_name).includes('synthetic'))throw new Error('QA_ASSET_NOT_VERIFIED');
   const rows=await svc.entities.Invoice.filter({company_id:COMPANY,numero_factura:NUMBER},'-created_date',2);
   if(rows.length>1)throw new Error('QA_DUPLICATE_FIXTURE');let invoice=rows[0];
+  if(body.action==='verify'){
+   if(!invoice||invoice.creation_idempotency_key!=='QA-C1-PRIVATE-PDF-20261031'||invoice.archivo_url!=='https://taxeaportal.com/private-document/'+ASSET)throw new Error('QA_FIXTURE_NOT_VERIFIED');
+   const call=async action=>{
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+    try{const response=await fetch('https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/functions/getPublicInvoice',{method:'POST',redirect:'manual',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,token:invoice.public_token}),signal:controller.signal});
+     const reader=response.body?.getReader(),parts=[];let size=0;
+     if(reader)try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>2*1024*1024)throw new Error('QA_RESPONSE_TOO_LARGE');parts.push(value);}}finally{void reader.cancel().catch(()=>{});reader.releaseLock();}
+     const bytes=new Uint8Array(size);let at=0;for(const p of parts){bytes.set(p,at);at+=p.length;}return {status:response.status,bytes};
+    }finally{clearTimeout(timer);}
+   };
+   const view=await call('view'),pdf=await call('download_pdf');
+   if(invoice.public_token_revoked_at)return Response.json({ok:view.status===410&&pdf.status===410,syntheticOnly:true,revokedMetadataStatus:view.status,revokedPdfStatus:pdf.status,credentialsSent:false,accountingWrites:0});
+   let dto;try{dto=JSON.parse(new TextDecoder().decode(view.bytes));}catch{dto=null;}
+   const sha=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pdf.bytes)),x=>x.toString(16).padStart(2,'0')).join('');
+   return Response.json({ok:view.status===200&&pdf.status===200&&sha===asset.sha256&&dto?.invoice?.has_private_pdf===true&&!dto?.invoice?.archivo_url&&!dto?.invoice?.qr_pdf_url,syntheticOnly:true,metadataStatus:view.status,pdfStatus:pdf.status,bytes:pdf.bytes.length,hashVerified:sha===asset.sha256,privateReferenceHidden:!dto?.invoice?.archivo_url&&!dto?.invoice?.qr_pdf_url,credentialsSent:false,accountingWrites:0});
+  }
   if(body.action==='revoke'){
    if(!invoice||invoice.creation_idempotency_key!=='QA-C1-PRIVATE-PDF-20261031')throw new Error('QA_FIXTURE_NOT_VERIFIED');
    await svc.entities.Invoice.update(invoice.id,{public_token_revoked_at:new Date().toISOString()});
