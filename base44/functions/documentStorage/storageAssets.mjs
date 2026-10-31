@@ -4,6 +4,7 @@ const norm=value=>String(value||'').trim().toLowerCase();
 export const isStorageAdmin=user=>['admin','super_admin'].includes(user?.role);
 export function mayAccessStorageCompany(user,company){
  if(!user?.id||!company||company.activa===false)return false;
+ if([user,user.data].filter(Boolean).some(state=>state.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(norm(state.status))||['disabled','deleted','blocked','suspended'].includes(norm(state.accountAccessStatus))))return false;
  if(isStorageAdmin(user))return true;
  const email=norm(user.email);return !!email&&(norm(company.owner_email)===email||(Array.isArray(company.usuarios_autorizados)&&company.usuarios_autorizados.some(value=>norm(value)===email)));
 }
