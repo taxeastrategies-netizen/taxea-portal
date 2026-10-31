@@ -21,7 +21,9 @@ Deno.serve(async req=>{
   const config=storageConfiguration(Deno.env);
   const certificate=await publicStorageCertificate(config);
   return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
- } catch {
-  return response({error:'No se ha podido validar la custodia del almacenamiento privado.',code:'PRIVATE_STORAGE_CUSTODY_UNVERIFIED'},503);
+ } catch(error) {
+  const detail=String(error?.message||'');
+  const safeCode=/^(STORAGE_(AUTH|UPLOAD|DOWNLOAD)_FAILED_\d{3}|STORAGE_(PROBE|CLEANUP)_FAILED|PRIVATE_STORAGE_(NOT_CONFIGURED|INVALID_CONFIG))$/.test(detail)?detail:'PRIVATE_STORAGE_CUSTODY_UNVERIFIED';
+  return response({error:'No se ha podido validar la custodia del almacenamiento privado.',code:safeCode},503);
  }
 });
