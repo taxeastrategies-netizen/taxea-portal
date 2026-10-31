@@ -57,6 +57,28 @@ export async function storageTransport(env,fetcher=(...args)=>globalThis.fetch(.
    const r=await boundedFetch(objectUrl(name)+'?alt=media&generation='+generation,{headers:auth},50*1024*1024,fetcher);
    if(r.status!==200)throw new Error('STORAGE_DOWNLOAD_FAILED_'+r.status);return r.bytes;
   },
+  async metadata(name,{generation,softDeleted=false}={}){
+   validName(name);if(generation!==undefined&&!/^\d+$/.test(generation))throw new Error('STORAGE_INVALID_GENERATION');
+   if(softDeleted&&!generation)throw new Error('STORAGE_INVALID_GENERATION');
+   const query=new URLSearchParams({fields:'name,bucket,generation,size,contentType,cacheControl,contentDisposition,softDeleteTime,hardDeleteTime'});
+   if(generation)query.set('generation',generation);if(softDeleted)query.set('softDeleted','true');
+   const r=await boundedFetch(objectUrl(name)+'?'+query,{headers:auth},32768,fetcher);if(r.status===404)return null;
+   if(r.status!==200)throw new Error('STORAGE_METADATA_FAILED_'+r.status);
+   const meta=JSON.parse(new TextDecoder().decode(r.bytes));
+   if(meta.name!==name||meta.bucket!==STORAGE_BUCKET||!/^\d+$/.test(meta.generation)||!Number.isSafeInteger(Number(meta.size))||Number(meta.size)<=0||Number(meta.size)>50*1024*1024)throw new Error('STORAGE_METADATA_UNVERIFIED');
+   if(meta.cacheControl!=='private, no-store')throw new Error('STORAGE_METADATA_UNVERIFIED');
+   return{generation:meta.generation,size:Number(meta.size),mimeType:meta.contentType,softDeleteTime:meta.softDeleteTime,hardDeleteTime:meta.hardDeleteTime};
+  },
+  async restore(name,generation){
+   validName(name);if(!/^\d+$/.test(generation))throw new Error('STORAGE_INVALID_GENERATION');
+   // Google requires no request body. Generation zero prevents overwriting a
+   // live object while restoring a previously soft-deleted generation.
+   const r=await boundedFetch(objectUrl(name)+'/restore?generation='+generation+'&ifGenerationMatch=0',{method:'POST',headers:auth},32768,fetcher);
+   if(r.status!==200)throw new Error('STORAGE_RESTORE_FAILED_'+r.status);
+   const meta=JSON.parse(new TextDecoder().decode(r.bytes));
+   if(meta.name!==name||meta.bucket!==STORAGE_BUCKET||!/^\d+$/.test(meta.generation)||meta.cacheControl!=='private, no-store')throw new Error('STORAGE_RESTORE_UNVERIFIED');
+   return{generation:meta.generation,size:Number(meta.size),mimeType:meta.contentType};
+  },
   async remove(name,generation){
    validName(name);if(!/^\d+$/.test(generation))throw new Error('STORAGE_INVALID_GENERATION');
    const r=await boundedFetch(objectUrl(name)+'?ifGenerationMatch='+generation,{method:'DELETE',headers:auth},8192,fetcher);

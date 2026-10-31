@@ -1,3 +1,4 @@
+import {privateAssetRecoveryPlan,restorePrivateAsset} from './storageRecovery.mjs';
 import {contextStorageCompany} from './documentContexts.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
@@ -32,6 +33,15 @@ Deno.serve(async req=>{
    if(action==='verify_signed_connection')return response({ok:true,...await verifySignedStorageConnection(Deno.env)});
    const config=storageConfiguration(Deno.env),certificate=await publicStorageCertificate(config);
    return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
+  }
+  if(['asset_recovery_plan','restore_asset'].includes(action)){
+   if(!admin)return response({error:'Acceso reservado a administración.'},403);
+   try{
+    return response({ok:true,...(action==='asset_recovery_plan'?await privateAssetRecoveryPlan(client.asServiceRole,user,body.assetId,Deno.env):await restorePrivateAsset(client.asServiceRole,user,body,Deno.env))});
+   }catch(error){
+    const code=/^RECOVERY_[A-Z_]+$/.test(error?.recoveryCode||'')?error.recoveryCode:'RECOVERY_UNAVAILABLE';
+    return response({error:'No se pudo confirmar la recuperación del documento.',code},[403,404,409].includes(error?.status)?error.status:503);
+   }
   }
   if(action==='upload_related'){
    if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);

@@ -1,5 +1,5 @@
 // GENERATED from documentStorage modules. Run node scripts/build-storage-runtime.mjs.
-// canonical-sha256: 6645646495b66c973ec9d4e46d3c5e3d865a487f2a8352403c3e37b9d9d3379b
+// canonical-sha256: 8a0590c3ef96c33b6b9f0894b6d05f0dbcb730bb9b97a367001615f468987394
 // base44/functions/documentStorage/storageCredentials.mjs
 var encoder = new TextEncoder();
 var STORAGE_PROJECT = "plasma-minutia-510419-c4";
@@ -126,6 +126,30 @@ async function storageTransport(env, fetcher = (...args) => globalThis.fetch(...
       const r = await boundedFetch(objectUrl(name) + "?alt=media&generation=" + generation, { headers: auth }, 50 * 1024 * 1024, fetcher);
       if (r.status !== 200) throw new Error("STORAGE_DOWNLOAD_FAILED_" + r.status);
       return r.bytes;
+    },
+    async metadata(name, { generation, softDeleted = false } = {}) {
+      validName(name);
+      if (generation !== void 0 && !/^\d+$/.test(generation)) throw new Error("STORAGE_INVALID_GENERATION");
+      if (softDeleted && !generation) throw new Error("STORAGE_INVALID_GENERATION");
+      const query = new URLSearchParams({ fields: "name,bucket,generation,size,contentType,cacheControl,contentDisposition,softDeleteTime,hardDeleteTime" });
+      if (generation) query.set("generation", generation);
+      if (softDeleted) query.set("softDeleted", "true");
+      const r = await boundedFetch(objectUrl(name) + "?" + query, { headers: auth }, 32768, fetcher);
+      if (r.status === 404) return null;
+      if (r.status !== 200) throw new Error("STORAGE_METADATA_FAILED_" + r.status);
+      const meta = JSON.parse(new TextDecoder().decode(r.bytes));
+      if (meta.name !== name || meta.bucket !== STORAGE_BUCKET || !/^\d+$/.test(meta.generation) || !Number.isSafeInteger(Number(meta.size)) || Number(meta.size) <= 0 || Number(meta.size) > 50 * 1024 * 1024) throw new Error("STORAGE_METADATA_UNVERIFIED");
+      if (meta.cacheControl !== "private, no-store") throw new Error("STORAGE_METADATA_UNVERIFIED");
+      return { generation: meta.generation, size: Number(meta.size), mimeType: meta.contentType, softDeleteTime: meta.softDeleteTime, hardDeleteTime: meta.hardDeleteTime };
+    },
+    async restore(name, generation) {
+      validName(name);
+      if (!/^\d+$/.test(generation)) throw new Error("STORAGE_INVALID_GENERATION");
+      const r = await boundedFetch(objectUrl(name) + "/restore?generation=" + generation + "&ifGenerationMatch=0", { method: "POST", headers: auth }, 32768, fetcher);
+      if (r.status !== 200) throw new Error("STORAGE_RESTORE_FAILED_" + r.status);
+      const meta = JSON.parse(new TextDecoder().decode(r.bytes));
+      if (meta.name !== name || meta.bucket !== STORAGE_BUCKET || !/^\d+$/.test(meta.generation) || meta.cacheControl !== "private, no-store") throw new Error("STORAGE_RESTORE_UNVERIFIED");
+      return { generation: meta.generation, size: Number(meta.size), mimeType: meta.contentType };
     },
     async remove(name, generation) {
       validName(name);
@@ -296,5 +320,6 @@ export {
   savePrivateAsset,
   storageAccountEnabled,
   storageCompany,
-  storageEnabled
+  storageEnabled,
+  storageTransport
 };

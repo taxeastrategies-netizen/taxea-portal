@@ -52,6 +52,15 @@
     },
     "error_code": {
       "type": "string"
+    },
+    "restored_at": {
+      "type": "string"
+    },
+    "restored_by": {
+      "type": "string"
+    },
+    "restore_source_generation": {
+      "type": "string"
     }
   },
   "required": [

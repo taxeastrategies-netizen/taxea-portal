@@ -1,3 +1,4 @@
+import {storageAccountEnabled,readPrivateAssetBytes,savePrivateAsset,storageTransport,assetReference} from './storageRuntime.generated.mjs';
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.48';
 const COMPANY='6ac4c79bbe3474810a3d0e06';
 Deno.serve(async req=>{
@@ -6,11 +7,63 @@ Deno.serve(async req=>{
   if(req.method!=='POST')return Response.json({error:'Method not allowed'},{status:405});
   const client=createClientFromRequest(req),user=await client.auth.me().catch(()=>null);
   if(!user?.id)return Response.json({error:'Unauthorized'},{status:401});
-  if(!['admin','super_admin'].includes(user.role)||[user,user.data].filter(Boolean).some(x=>x.is_deleted||['disabled','deleted','blocked','suspended'].includes(x.accountAccessStatus)))return Response.json({error:'Admin only'},{status:403});
+  if(!['admin','super_admin'].includes(user.role)||!storageAccountEnabled(user))return Response.json({error:'Admin only'},{status:403});
   const body=await req.json().catch(()=>({})),svc=client.asServiceRole;
   const company=await svc.entities.Company.get(COMPANY);
   phase='verify-qa-scope';
   if(company.owner_email!=='taxeastrategies+qa-recc-2026@gmail.com'||![company.razon_social,company.nombre_comercial].some(x=>String(x||'').includes('QA RECC'))||company.private_document_storage_enabled!==true)throw Error('QA_SCOPE_NOT_VERIFIED');
+  const unwrap=response=>response?.data??response;
+  const recoveryOwner='taxeastrategies+qa-c1-recovery-20261031@gmail.com';
+  const recoveryText='TAXEA QA PRIVATE ASSET RECOVERY 20261031\n';
+  const recoveryFixture=async()=>{
+   const matches=await svc.entities.Company.filter({owner_email:recoveryOwner},'-created_date',2);
+   if(matches.length>1)throw Error('QA_AMBIGUOUS');
+   let testCompany=matches[0];
+   if(testCompany&&(!String(testCompany.razon_social||'').includes('QA C1 RECOVERY')||!String(testCompany.razon_social||'').includes('DATOS FICTICIOS')||testCompany.private_document_storage_enabled!==true))throw Error('QA_SCOPE_NOT_VERIFIED');
+   testCompany ||= await svc.entities.Company.create({razon_social:'TAXEA QA C1 RECOVERY 20261031 - DATOS FICTICIOS',nombre_comercial:'TAXEA QA C1 RECOVERY 20261031 - DATOS FICTICIOS',nif_cif:'QA-C1-RECOVERY',owner_email:recoveryOwner,activa:true,private_document_storage_enabled:true});
+   const existing=await svc.entities.DocumentAsset.filter({company_id:testCompany.id,purpose:'qa-c1-ledger-restore-20261031',status:'ready'},'-created_date',2);
+   if(existing.length>1)throw Error('QA_AMBIGUOUS');
+   let asset=existing[0];
+   if(!asset){const saved=await savePrivateAsset(svc,user,testCompany,new File([recoveryText],'QA-C1-RESTORE-LEDGER-20261031.txt',{type:'text/plain'}),Deno.env);asset=await svc.entities.DocumentAsset.update(saved.asset.id,{purpose:'qa-c1-ledger-restore-20261031'});}
+   if(asset.company_id!==testCompany.id||asset.original_name!=='QA-C1-RESTORE-LEDGER-20261031.txt')throw Error('QA_SCOPE_NOT_VERIFIED');
+   return{testCompany,asset};
+  };
+  if(body.action==='stage_private_qa'){
+   phase='qa-staging-upload';
+   const source=await readPrivateAssetBytes(svc,user,assetReference('6ae5e7066914df82b5243183'),Deno.env,COMPANY);
+   const file=new File([source.bytes],'QA-C1-ADMIN-STAGING-20261031.pdf',{type:'application/pdf'});
+   const uploaded=unwrap(await client.functions.invoke('documentStorage',{action:'upload_staging',file}));
+   if(!uploaded.ok||!uploaded.assetId)throw Error('QA_STAGING_FAILED');
+   const staged=await svc.entities.DocumentAsset.get(uploaded.assetId);
+   if(staged.company_id!=='__admin_staging__'||staged.sha256!==source.asset.sha256||staged.status!=='ready')throw Error('QA_STAGING_FAILED');
+   phase='qa-staging-extraction';
+   const extracted=unwrap(await client.functions.invoke('invokeLimitedLLM',{prompt:'Este es un documento sintético de prueba. Devuelve is_synthetic=true si contiene PRUEBA INTERNA o DATOS FICTICIOS. No contabilices nada.',file_urls:[uploaded.file_url],response_json_schema:{type:'object',properties:{is_synthetic:{type:'boolean'}}}}));
+   phase='qa-staging-assignment';
+   const assigned=unwrap(await client.functions.invoke('documentStorage',{action:'assign_staged_asset',assetId:uploaded.assetId,companyId:COMPANY}));
+   const target=await svc.entities.DocumentAsset.get(assigned.assetId),retained=await svc.entities.DocumentAsset.get(staged.id);
+   return Response.json({ok:assigned.ok===true&&target.company_id===COMPANY&&target.sha256===source.asset.sha256&&retained.status==='ready',syntheticOnly:true,stagingPrivate:staged.company_id==='__admin_staging__',aiResolvedPrivateDocument:extracted?.result?.is_synthetic===true,assignedToQa:target.company_id===COMPANY,sourceRetained:retained.status==='ready',hashVerified:target.sha256===source.asset.sha256,accountingWrites:0,realCustomerWrites:0});
+  }
+  if(body.action==='prepare_recovery_fixture'){
+   phase='qa-recovery-prepare';const {testCompany,asset}=await recoveryFixture();
+   return Response.json({ok:true,syntheticOnly:true,companyId:testCompany.id,assetId:asset.id,file_url:assetReference(asset.id),bytes:asset.size,sha256:asset.sha256,expectedGeneration:asset.generation,accountingWrites:0,realCustomerWrites:0});
+  }
+  if(body.action==='simulate_recovery_loss'){
+   phase='qa-recovery-loss';
+   if(body.confirmation!=='QA_SYNTHETIC_SOFT_DELETE_RESTORE_TEST')throw Error('QA_CONFIRMATION_REQUIRED');
+   const {testCompany,asset}=await recoveryFixture();
+   if(asset.restored_at)return Response.json({ok:true,syntheticOnly:true,alreadyRestored:true,repeatedDeletionPrevented:true});
+   const transport=await storageTransport(Deno.env);
+   try{const original=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env,testCompany.id);if(new TextDecoder().decode(original.bytes)!==recoveryText)throw Error('QA_SCOPE_NOT_VERIFIED');await transport.remove(asset.object_name,asset.generation);}
+   catch(error){if(error?.message!=='STORAGE_DOWNLOAD_FAILED_404')throw error;}
+   const plan=unwrap(await client.functions.invoke('documentStorage',{action:'asset_recovery_plan',assetId:asset.id}));
+   return Response.json({ok:plan.ok===true&&plan.mode==='soft_delete',syntheticOnly:true,assetId:asset.id,file_url:assetReference(asset.id),planMode:plan.mode,expectedGeneration:plan.expectedGeneration,expectedSha256:plan.sha256,bytes:asset.size,accountingWrites:0,realCustomerWrites:0});
+  }
+  if(body.action==='recover_fixture'){
+   phase='qa-recovery-apply';const {testCompany,asset}=await recoveryFixture();
+   const result=unwrap(await client.functions.invoke('documentStorage',{action:'restore_asset',assetId:asset.id,expectedGeneration:body.expectedGeneration,expectedSha256:body.expectedSha256}));
+   const reread=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env,testCompany.id),after=await svc.entities.DocumentAsset.get(asset.id),transport=await storageTransport(Deno.env),unsignedStatus=await transport.unsignedStatus(after.object_name);
+   return Response.json({ok:result.ok===true&&new TextDecoder().decode(reread.bytes)===recoveryText&&[401,403,404].includes(unsignedStatus),syntheticOnly:true,assetId:asset.id,file_url:assetReference(asset.id),bytes:reread.bytes.length,hashVerified:after.sha256===asset.sha256,generationChanged:after.generation!==body.expectedGeneration,referenceUnchanged:result.file_url===assetReference(asset.id),publicAccessDenied:[401,403,404].includes(unsignedStatus),alreadyRestored:result.alreadyRestored===true,accountingWrites:0,realCustomerWrites:0});
+  }
   if(body.action==='prepare'){
    phase='prepare-audit';
    let cases=await svc.entities.TaxeaAuditCase.filter({title:'QA C1 PRIVATE DOCUMENTS 20261031'},'-created_date',10);

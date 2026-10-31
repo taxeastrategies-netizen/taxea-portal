@@ -109,3 +109,5 @@ export async function resolvePrivateAsset(svc,user,id,env){
  const asset=await authorizedAsset(svc,user,id);if(!asset)return null;
  return {...await signedStorageRead(env,asset),mimeType:asset.mime_type,name:asset.original_name,size:asset.size,sha256:asset.sha256};
 }
+
+export {storageTransport};
