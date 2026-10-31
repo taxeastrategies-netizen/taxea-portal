@@ -69,7 +69,10 @@ export async function authorizedAsset(svc,user,id){
  const asset=await svc.entities.DocumentAsset.get(id).catch(()=>null);
  if(!asset||asset.status!=='ready'||!asset.object_name?.startsWith('companies/'+asset.company_id+'/'))return null;
  if(asset.company_id==='__admin_staging__')return isStorageAdmin(user)?asset:null;
- return await storageCompany(svc,user,asset.company_id)?asset:null;
+ const company=await svc.entities.Company.get(asset.company_id).catch(()=>null);
+ if(!company)return null;
+ // Administrative recovery must include archived companies; uploads still require an active company.
+ return isStorageAdmin(user)||mayAccessStorageCompany(user,company)?asset:null;
 }
 export async function readPrivateAssetBytes(svc,user,reference,env,companyId){
  const asset=await authorizedAsset(svc,user,assetIdFromReference(reference));
