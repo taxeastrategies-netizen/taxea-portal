@@ -21,7 +21,10 @@ export async function storageTransport(env,fetcher=fetch){
  const signature=base64url(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(payload))));
  const tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature})},16384,fetcher);
  let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_FAILED');}
- if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer')throw new Error('STORAGE_AUTH_FAILED_'+tokenResponse.status);
+ if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer'){
+  const reason=['invalid_grant','invalid_client','invalid_request','invalid_scope','unauthorized_client','access_denied'].includes(token.error)?token.error.toUpperCase():'UNEXPECTED';
+  throw new Error('STORAGE_AUTH_FAILED_'+tokenResponse.status+'_'+reason);
+ }
  const auth={Authorization:'Bearer '+token.access_token};
  const objectUrl=name=>'https://storage.googleapis.com/storage/v1/b/'+STORAGE_BUCKET+'/o/'+encodeURIComponent(name);
  const validName=name=>{if(typeof name!=='string'||name.length>512||!/^(__taxea_security_probe__|companies)\/[a-zA-Z0-9_/-]+(?:\.[a-zA-Z0-9]+)?$/.test(name)||name.includes('..'))throw new Error('STORAGE_INVALID_OBJECT');return name;};
@@ -49,7 +52,7 @@ export async function storageTransport(env,fetcher=fetch){
  };
 }
 export async function verifyStorageConnection(env,fetcher=fetch){
- let storage;try{storage=await storageTransport(env,fetcher);}catch{throw new Error('STORAGE_STEP_AUTH');}
+ let storage;try{storage=await storageTransport(env,fetcher);}catch(error){if(/^STORAGE_AUTH_FAILED_\d{3}_[A-Z_]+$/.test(error?.message||''))throw error;throw new Error('STORAGE_STEP_AUTH');}
  const name='__taxea_security_probe__/'+crypto.randomUUID()+'.txt';
  const expected=encoder.encode('TAXEA SYNTHETIC STORAGE PROBE - NO CUSTOMER DATA\n');
  let uploaded;try{uploaded=await storage.put(name,expected,'text/plain');}catch{throw new Error('STORAGE_STEP_UPLOAD');}let report;
