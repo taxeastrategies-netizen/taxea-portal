@@ -627,6 +627,7 @@ Deno.serve(async (req) => {
         backupMode: config.backupMode,
         nextCursor: 0,
         runVersion: 'snapshot-v4',
+        notificationsSuppressed: body.suppressNotifications === true,
         scopeCompanyId,
         documentsScanned: 0, documentsCopied: 0, documentsSkipped: 0, documentsFailed: 0, bytesCopied: 0,
       });
@@ -1059,7 +1060,7 @@ Deno.serve(async (req) => {
       });
 
       // ── Alert email on failures ──
-      if (finalStatus !== 'completed'&&!scopeCompanyId) {
+      if (finalStatus !== 'completed'&&!scopeCompanyId&&job.notificationsSuppressed!==true) {
         const alertEmail = config.alertEmail || Deno.env.get('ENVIO_FACTURAS');
         if (alertEmail) {
           try {
@@ -1111,3 +1112,5 @@ Deno.serve(async (req) => {
 
 
 // C1 inventory structured metadata version 20261031.2
+
+// C1 admin backup notification preference 20261031.1

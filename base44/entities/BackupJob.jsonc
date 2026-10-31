@@ -175,6 +175,9 @@
       "items": {
         "type": "object"
       }
+    },
+    "notificationsSuppressed": {
+      "type": "boolean"
     }
   },
   "required": [
