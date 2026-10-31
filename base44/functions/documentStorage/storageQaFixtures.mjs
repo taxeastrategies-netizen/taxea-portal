@@ -11,10 +11,12 @@ export async function prepareStorageQa(svc,user,env){
  const own=await svc.entities.Company.filter({owner_email:QA_A},'-created_date',20);
  const candidates=own.filter(c=>c.razon_social==='TAXEA QA RECC 2026 — DATOS FICTICIOS');
  if(candidates.length!==1)throw new Error('QA_EXISTING_COMPANY_NOT_VERIFIED');
- const companyA=await svc.entities.Company.update(candidates[0].id,{private_document_storage_enabled:true});
  const label='TAXEA QA PRIVATE STORAGE B 2026-10-31 - DATOS FICTICIOS';
  const matches=await svc.entities.Company.filter({owner_email:QA_B,razon_social:label},'-created_date',2);
  if(matches.length>1)throw new Error('QA_AMBIGUOUS_COMPANY');
+ await svc.entities.Company.update(candidates[0].id,{private_document_storage_enabled:true});
+ const companyA=await svc.entities.Company.get(candidates[0].id);
+ if(companyA.owner_email!==QA_A||companyA.private_document_storage_enabled!==true)throw new Error('QA_COMPANY_NOT_VERIFIED');
  const companyB=matches[0]||await svc.entities.Company.create({razon_social:label,nif_cif:'QA-PRIVATE-STORAGE-B-20261031',owner_email:QA_B,usuarios_autorizados:[],activa:true,private_document_storage_enabled:true});
  if(companyB.razon_social!==label||companyB.owner_email!==QA_B||companyB.private_document_storage_enabled!==true)throw new Error('QA_COMPANY_NOT_VERIFIED');
  const file=new File([syntheticPdf()],'taxea-private-storage-synthetic-B.pdf',{type:'application/pdf'});
