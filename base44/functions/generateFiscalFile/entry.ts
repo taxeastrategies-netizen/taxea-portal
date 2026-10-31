@@ -1,3 +1,4 @@
+import{enabledPortalUser,requirePortalCompany,requirePortalCompanyBatch,portalBoundaryError}from'./portalAccess.generated.mjs';
 /**
  * generateFiscalFile — cálculo interno y exportación de revisión tributaria.
  *
@@ -245,10 +246,14 @@ async function hashContent(text) {
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    userAuthenticated=true;
+    if(!enabledPortalUser(user))return Response.json({error:'Acceso suspendido.'},{status:403});
 
     const { modeloCodigo, companyId, ejercicio, periodo, taxDraftId } = await req.json().catch(() => ({}));
     if (!modeloCodigo || !companyId || !ejercicio || !periodo) {
@@ -256,10 +261,7 @@ Deno.serve(async (req) => {
     }
 
     // 1. Validar empresa activa y cargar sus datos reales
-    if (user.data?.company_id !== companyId) {
-      return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
-    }
-    const company = await base44.asServiceRole.entities.Company.get(companyId);
+    const company=await requirePortalCompany(base44.asServiceRole,user,companyId);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
 
     // 2. Cargar facturas del período
@@ -412,7 +414,5 @@ Deno.serve(async (req) => {
       avisos,
     });
 
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+  }catch(error){if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});const safe=portalBoundaryError(error);return Response.json(safe.body,{status:safe.status,headers:{'Cache-Control':'no-store'}});}
 });

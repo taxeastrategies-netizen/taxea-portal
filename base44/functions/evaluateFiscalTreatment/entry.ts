@@ -1,10 +1,15 @@
+import{enabledPortalUser,requirePortalCompany,requirePortalCompanyBatch,portalBoundaryError}from'./portalAccess.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    userAuthenticated=true;
+    if(!enabledPortalUser(user))return Response.json({error:'Acceso suspendido.'},{status:403});
 
     const body = await req.json().catch(() => ({}));
     const { ocrData, companyId, direction, counterpartyTaxId, counterpartyName, invoiceTotal, invoiceBase, invoiceTaxRate, invoiceTaxAmount, invoiceWithholdingRate, invoiceWithholdingAmount, esProveedorExtranjero, detectedOperationType } = body;
@@ -15,9 +20,7 @@ Deno.serve(async (req) => {
 
     const isAdmin = ['admin', 'super_admin'].includes(user.role);
     const userCompanyId = user.data?.company_id;
-    if (!isAdmin && (!userCompanyId || companyId !== userCompanyId)) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    await requirePortalCompany(base44.asServiceRole,user,companyId);
 
     // 1. Load fiscal profile for company
     const profiles = await base44.asServiceRole.entities.FiscalProfile.filter({ company_id: companyId, active: true });
@@ -413,8 +416,5 @@ Deno.serve(async (req) => {
       },
     });
 
-  } catch (error) {
-    console.error('[evaluateFiscalTreatment] Error:', error.message, error.stack);
-    return Response.json({ error: error.message || 'Error interno' }, { status: 500 });
-  }
+  }catch(error){if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});const safe=portalBoundaryError(error);return Response.json(safe.body,{status:safe.status,headers:{'Cache-Control':'no-store'}});}
 });

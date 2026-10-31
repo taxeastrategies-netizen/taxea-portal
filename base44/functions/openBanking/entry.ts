@@ -1,3 +1,4 @@
+import{enabledPortalUser,requirePortalCompany,requirePortalCompanyBatch,portalBoundaryError}from'./portalAccess.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import {
   buildInvoicePosting,
@@ -136,24 +137,10 @@ function normalizedEmail(value: unknown) {
   return clean(value, 320).toLowerCase();
 }
 
-async function assertCompany(base44: any, user: any, requestedCompanyId: unknown) {
-  const profileCompanyId = clean(user.data?.company_id, 120);
-  const companyId = clean(requestedCompanyId, 120) || profileCompanyId;
-  const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-  if (!companyId) throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
-  if (isAdmin || companyId === profileCompanyId) return companyId;
-
-  const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
-  const userEmail = normalizedEmail(user.email);
-  const ownerEmail = normalizedEmail(company?.owner_email);
-  const authorizedEmails = Array.isArray(company?.usuarios_autorizados)
-    ? company.usuarios_autorizados.map(normalizedEmail)
-    : [];
-  if (!company || !userEmail || (ownerEmail !== userEmail && !authorizedEmails.includes(userEmail))) {
-    throw Object.assign(new Error('No tienes acceso a la empresa indicada.'), { status: 403 });
-  }
-  return companyId;
-}
+async function assertCompany(base44: any,user: any,requestedCompanyId: unknown){
+    const companyId=clean(requestedCompanyId,120)||clean(user.company_id||user.data?.company_id,120);
+    await requirePortalCompany(base44.asServiceRole,user,companyId);return companyId;
+   }
 
 async function ownedAccount(base44: any, companyId: string, accountId: unknown) {
   const id = clean(accountId, 120);
@@ -778,10 +765,14 @@ async function startAuthorization(base44: any, token: string, user: any, company
 }
 
 Deno.serve(async (request) => {
+  let userAuthenticated=false;
   try {
+    if(request.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44 = createClientFromRequest(request);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    userAuthenticated=true;
+    if(!enabledPortalUser(user))return Response.json({error:'Acceso suspendido.'},{status:403});
     const body = await request.json().catch(() => ({}));
     const action = clean(body.action, 80) || 'scheduled_sync_all';
 
@@ -1298,6 +1289,7 @@ Deno.serve(async (request) => {
 
     return Response.json({ error: 'Acción no soportada.' }, { status: 400 });
   } catch (error: any) {
+    if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});
     console.error('[openBanking]', publicError(error));
     return Response.json({ error: publicError(error), code: error?.code || null }, { status: Number(error?.status) || 500 });
   }

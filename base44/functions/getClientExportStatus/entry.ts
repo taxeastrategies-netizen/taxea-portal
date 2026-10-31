@@ -1,42 +1,38 @@
+import{enabledPortalUser,requirePortalCompany,requirePortalCompanyBatch,portalBoundaryError}from'./portalAccess.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    userAuthenticated=true;
+    if(!enabledPortalUser(user))return Response.json({error:'Acceso suspendido.'},{status:403});
 
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     const userCompanyId = user.data?.company_id;
 
     const body = await req.json().catch(() => ({}));
-    const { clientIds, anio } = body;
+    let { clientIds, anio } = body;
 
     if (!Array.isArray(clientIds) || clientIds.length === 0) {
       return Response.json({ error: 'clientIds array is required' }, { status: 400 });
     }
 
-    // Authorization: non-admin users can only query their own company_id
-    if (!isAdmin) {
-      if (!userCompanyId) {
-        return Response.json({ error: 'Forbidden: no company context' }, { status: 403 });
-      }
-      const foreign = clientIds.filter(cid => cid !== userCompanyId);
-      if (foreign.length > 0) {
-        return Response.json({ error: 'Forbidden: cannot access data from other companies' }, { status: 403 });
-      }
-    }
+    clientIds=await requirePortalCompanyBatch(base44.asServiceRole,user,clientIds);
 
     const year = anio ? parseInt(anio) : null;
 
     // Fetch invoices and expenses for all clients in parallel using service role
     const results = {};
-    const tasks = clientIds.map(async (cid) => {
+    const tasks = clientIds.map((cid) => async () => {
       const filter = { company_id: cid };
       if (year) filter.anio = year;
       const [invs, exps] = await Promise.all([
-        base44.asServiceRole.entities.Invoice.filter(filter, '-fecha_emision', 5000).catch(() => []),
-        base44.asServiceRole.entities.Expense.filter(filter, '-fecha', 5000).catch(() => []),
+        base44.asServiceRole.entities.Invoice.filter(filter, '-fecha_emision', 5000),
+        base44.asServiceRole.entities.Expense.filter(filter, '-fecha', 5000),
       ]);
       const activeInvs = (invs || []).filter(i => !i.anulada);
       const activeExps = (exps || []).filter(e => !e.anulada);
@@ -47,11 +43,8 @@ Deno.serve(async (req) => {
       };
     });
 
-    await Promise.all(tasks);
+    for(let at=0;at<tasks.length;at+=5)await Promise.all(tasks.slice(at,at+5).map(task=>task()));
 
     return Response.json({ clients: results });
-  } catch (error) {
-    console.error('[getClientExportStatus] Error:', error.message);
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+  }catch(error){if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});const safe=portalBoundaryError(error);return Response.json(safe.body,{status:safe.status,headers:{'Cache-Control':'no-store'}});}
 });

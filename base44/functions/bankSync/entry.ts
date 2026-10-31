@@ -1,3 +1,4 @@
+import{enabledPortalUser,requirePortalCompany,requirePortalCompanyBatch,portalBoundaryError}from'./portalAccess.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
 // ─── CSV Helpers ─────────────────────────────────────────────────────────────
@@ -414,12 +415,17 @@ async function createGoCardlessRequisition(bankId, redirectUrl, company_id) {
 // ─── Handler principal ────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
+  try {
+  if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
   const startMs = Date.now();
   const base44 = createClientFromRequest(req);
 
   let user;
   try { user = await base44.auth.me().catch(() => null); } catch { user = null; }
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  userAuthenticated=true;
+  if(!enabledPortalUser(user))return Response.json({error:'Acceso suspendido.'},{status:403});
 
   const body = await req.json().catch(() => ({}));
   const { action, bank_account_id, company_id } = body;
@@ -429,9 +435,7 @@ Deno.serve(async (req) => {
   }
 
   const isAdmin = user.role === 'admin' || user.role === 'super_admin';
-  if (!isAdmin && company_id !== user.data?.company_id) {
-    return Response.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  await requirePortalCompany(base44.asServiceRole,user,company_id);
   const accountRows = await base44.asServiceRole.entities.BankAccount.filter({ id: bank_account_id });
   const account = accountRows?.[0];
   if (!account || account.company_id !== company_id) {
@@ -507,7 +511,7 @@ Deno.serve(async (req) => {
         await base44.entities.BankSyncLog.update(syncLog.id, { estado: 'error', error_detalle: err.message });
       }
       await base44.asServiceRole.entities.BankAccount.update(bank_account_id, { estado_conexion: 'error' });
-      return Response.json({ error: err.message }, { status: 500 });
+      return Response.json({error:'No se pudo sincronizar la cuenta. Revisa la conexión y reintenta.',code:'BANK_SYNC_UNAVAILABLE'},{status:500});
     }
   }
 
@@ -625,4 +629,5 @@ Deno.serve(async (req) => {
   }
 
   return Response.json({ error: 'Acción no reconocida' }, { status: 400 });
+  }catch(error){if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});const safe=portalBoundaryError(error);return Response.json(safe.body,{status:safe.status});}
 });
