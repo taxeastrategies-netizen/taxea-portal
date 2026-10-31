@@ -70,6 +70,9 @@
     },
     "approval_sha256": {
       "type": "string"
+    },
+    "approval_revision": {
+      "type": "string"
     }
   },
   "required": [

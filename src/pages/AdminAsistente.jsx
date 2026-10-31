@@ -95,7 +95,7 @@ export default function AdminAsistente() {
     if (!form.titulo || !form.respuesta) return;
     setKnowledgeError('');
     try{
-      const response=await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:editando?.id,expectedUpdatedAt:editando?.updated_date,data:form});
+      const response=await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:editando?.id,expectedRevision:editando?.approval_revision||'',data:form});
       if(response?.data?.ok!==true)throw Error('No se pudo guardar la respuesta.');
       setShowForm(false);loadAll();
     }catch(error){setKnowledgeError(error?.response?.data?.error||'No se pudo guardar. Actualiza y vuelve a intentarlo.');}
@@ -110,7 +110,7 @@ export default function AdminAsistente() {
     setKnowledgeError('');
     try{
       const approved=r.aprobada&&r.approval_version==='admin-reviewed-v1';
-      await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:r.id,expectedUpdatedAt:r.updated_date,data:{aprobada:!approved}});
+      await base44.functions.invoke('fiscalKnowledgeOperations',{action:'save',id:r.id,expectedRevision:r.approval_revision||'',data:{aprobada:!approved}});
       loadAll();
     }catch(error){setKnowledgeError(error?.response?.data?.error||'No se pudo confirmar la revisión. Actualiza antes de reintentar.');}
   };

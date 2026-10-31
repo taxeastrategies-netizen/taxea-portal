@@ -27,11 +27,11 @@ export async function saveKnowledge(service,user,body){
  if(!knowledgeAdmin(user))throw Object.assign(Error('KNOWLEDGE_ADMIN_ONLY'),{status:403});
  if(body?.action!=='save')throw Object.assign(Error('KNOWLEDGE_INVALID_ACTION'),{status:400});
  let current;
- if(body.id){if(!id(body.id))throw Object.assign(Error('KNOWLEDGE_INVALID'),{status:400});current=await service.entities.AIRespuestaBase.get(body.id).catch(()=>null);if(!current)throw Object.assign(Error('KNOWLEDGE_UNAVAILABLE'),{status:404});if(typeof body.expectedUpdatedAt!=='string'||body.expectedUpdatedAt!==current.updated_date)throw Object.assign(Error('KNOWLEDGE_CHANGED'),{status:409});}
+ if(body.id){if(!id(body.id))throw Object.assign(Error('KNOWLEDGE_INVALID'),{status:400});current=await service.entities.AIRespuestaBase.get(body.id).catch(()=>null);if(!current)throw Object.assign(Error('KNOWLEDGE_UNAVAILABLE'),{status:404});if(String(body.expectedRevision||'')!==String(current.approval_revision||''))throw Object.assign(Error('KNOWLEDGE_CHANGED'),{status:409});}
  const data=normalizeKnowledge(body.data,current);
- Object.assign(data,data.aprobada?{approval_version:KNOWLEDGE_APPROVAL_VERSION,approved_by_admin_id:user.id,approved_at:new Date().toISOString(),approval_sha256:await knowledgeDigest(data)}:{approval_version:'',approved_by_admin_id:'',approved_at:'',approval_sha256:''});
+ Object.assign(data,{approval_revision:crypto.randomUUID()},data.aprobada?{approval_version:KNOWLEDGE_APPROVAL_VERSION,approved_by_admin_id:user.id,approved_at:new Date().toISOString(),approval_sha256:await knowledgeDigest(data)}:{approval_version:'',approved_by_admin_id:'',approved_at:'',approval_sha256:''});
  if(!current){data.creada_por=user.email;return service.entities.AIRespuestaBase.create(data);}
- const update=await service.entities.AIRespuestaBase.updateMany({id:current.id,updated_date:current.updated_date},{$set:data});
+ const update=await service.entities.AIRespuestaBase.updateMany({id:current.id,approval_revision:current.approval_revision||{$in:[null,'']}},{$set:data});
  if(Number(update?.updated)!==1)throw Object.assign(Error('KNOWLEDGE_CHANGED'),{status:409});
  return service.entities.AIRespuestaBase.get(current.id);
 }

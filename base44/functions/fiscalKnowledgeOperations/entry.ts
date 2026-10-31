@@ -16,3 +16,4 @@ Deno.serve(async req=>{
   return answer({ok:true,result});
  }catch(error){const code=/^KNOWLEDGE_[A-Z_]+$/.test(error?.message||'')?error.message:'KNOWLEDGE_UNAVAILABLE';return answer({error:code==='KNOWLEDGE_CHANGED'?'Otra revisión ha cambiado esta respuesta. Actualiza antes de guardar.':'No se pudo guardar la respuesta revisada.',code},error?.status||400);}
 });
+// C1 approval revision CAS v2, independent of provider date serialization.
