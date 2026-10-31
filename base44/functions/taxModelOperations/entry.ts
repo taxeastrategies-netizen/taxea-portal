@@ -1,3 +1,4 @@
+import{taxModelUserEnabled,taxModelCompanyAllowed,taxModelValidation,taxModelPublicError}from'./taxModelAccess.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { isZeroResidualReccFinal } from './reccAdvances.mjs';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
@@ -316,16 +317,7 @@ function sourceFingerprint(values: unknown[]) {
 }
 
 function authorize(user: any, companyId: string, company: any) {
-  const role = clean(user?.role).toLowerCase();
-  if (['admin', 'super_admin'].includes(role)) return;
-  const ownCompanyId = clean(user?.data?.company_id || user?.company_id);
-  const userEmail = clean(user?.email).toLowerCase();
-  const ownerEmail = clean(company?.owner_email).toLowerCase();
-  const authorizedEmails = Array.isArray(company?.usuarios_autorizados)
-    ? company.usuarios_autorizados.map((email: unknown) => clean(email).toLowerCase())
-    : [];
-  if (companyId && (ownCompanyId === companyId || (!!userEmail && ownerEmail === userEmail) || authorizedEmails.includes(userEmail))) return;
-  throw Object.assign(new Error('No tienes permiso para consultar la empresa seleccionada.'), { status: 403 });
+ if(!taxModelCompanyAllowed(user,companyId,company))throw taxModelValidation('No tienes permiso para consultar la empresa seleccionada.',403);
 }
 
 async function listAll(entity: any, filter: any, sort = '-created_date') {
@@ -390,7 +382,7 @@ function bounds(year: number, periodInput: string) {
     return { start: `${year}-${period}-01`, end: `${year}-${period}-${String(last).padStart(2, '0')}`, cumulativeStart: `${year}-01-01` };
   }
   const quarterMatch = /^([1-4])T$/.exec(period);
-  if (!quarterMatch) throw new Error(`Período fiscal no válido: ${periodInput}`);
+  if (!quarterMatch) throw taxModelValidation(`Período fiscal no válido: ${periodInput}`);
   const quarter = Number(quarterMatch[1]);
   const firstMonth = (quarter - 1) * 3 + 1;
   const lastMonth = quarter * 3;
@@ -1014,7 +1006,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     const metadata = reccMetadata(invoice);
     if (invoice.es_rectificativa === true) {
       const original = (data.invoices || []).find((row: any) => row.id === metadata.originalInvoiceId && !row.anulada && row.fiscal_review_status === 'validado');
-      if (!original || !metadata.adjustmentDate || !metadata.reason) throw new Error('Rectificativa sin original y criterio temporal confirmado por asesor.');
+      if (!original || !metadata.adjustmentDate || !metadata.reason) throw taxModelValidation('Rectificativa sin original y criterio temporal confirmado por asesor.');
       if (metadata.adjustmentMode === 'tax_adjustment') {
         schedule = { forcedRecognitionDate: metadata.adjustmentDate, cancelledFactor: 0 };
         events = [{ id: invoice.id, date: reccDate(metadata.adjustmentDate), factor: 1, kind: 'reviewed_tax_adjustment',
@@ -1022,9 +1014,9 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       } else if (money(invoice.base_imponible) < 0) {
         const originalPayments = (data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id);
         const originalRawPayments = (data.rawInvoicePayments || data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id);
-        if (originalPayments.length !== originalRawPayments.length || originalPayments.some((row: any) => row.operation_status && row.operation_status !== 'committed')) throw new Error('La rectificativa depende de pagos originales no confirmados.');
+        if (originalPayments.length !== originalRawPayments.length || originalPayments.some((row: any) => row.operation_status && row.operation_status !== 'committed')) throw taxModelValidation('La rectificativa depende de pagos originales no confirmados.');
         const originalLine = (data.taxLines || []).find((row: any) => (row.invoiceId || row.invoice?.id) === original.id && Number(row.rate) === Number(line.rate));
-        if (!originalLine) throw new Error('No se localiza el tipo de IVA de la rectificativa en el desglose original.');
+        if (!originalLine) throw taxModelValidation('No se localiza el tipo de IVA de la rectificativa en el desglose original.');
         const originalMetadata = reccMetadata(original);
         schedule = reccSchedule({ invoiceId: original.id, invoiceNet: invoicePayable(original),
           operationDate: clean(original.fecha_operacion || original.fecha_emision), advanceConfirmed: originalMetadata.advanceConfirmed,
@@ -1032,10 +1024,10 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
           payments: (data.invoicePayments || []).filter((row: any) => row.invoice_id === original.id).map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })),
           corrections: reccCorrections(original, data.invoices, originalLine, data.taxLines) });
         const correction = schedule.correctionRecognitions.find((row: any) => row.id === invoice.id);
-        if (!correction) throw new Error('La rectificativa no se ha podido relacionar con el saldo original.');
+        if (!correction) throw taxModelValidation('La rectificativa no se ha podido relacionar con el saldo original.');
         events = [{ ...correction, sourceIds: unique([line.sourceId, `Invoice:${original.id}`, `Invoice:${invoice.id}`]), type: 'rectification' }];
       } else {
-        if (metadata.adjustmentMode !== 'price_change') throw new Error('El asesor debe confirmar si el aumento de precio sigue cobros o exige ajuste de cuotas en un período revisado (artículos 89 y 114).');
+        if (metadata.adjustmentMode !== 'price_change') throw taxModelValidation('El asesor debe confirmar si el aumento de precio sigue cobros o exige ajuste de cuotas en un período revisado (artículos 89 y 114).');
         schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable,
           operationDate: clean(original.fecha_operacion || original.fecha_emision), advanceConfirmed: metadata.advanceConfirmed,
           insolvencyDate: metadata.insolvencyDate, payments: payments.map((row: any) => ({ id: row.id, date: row.payment_date, amount: row.amount, status: row.operation_status })) });
@@ -1045,7 +1037,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable, operationDate,
         advanceConfirmed: metadata.advanceConfirmed, insolvencyDate: metadata.insolvencyDate,
         payments: payments.map((payment: any) => {
-          if (clean(payment.currency) && clean(payment.currency) !== 'EUR') throw new Error('Pago RECC en moneda sin convertir.');
+          if (clean(payment.currency) && clean(payment.currency) !== 'EUR') throw taxModelValidation('Pago RECC en moneda sin convertir.');
           return { id: payment.id, date: payment.payment_date, amount: payment.amount, status: payment.operation_status };
         }), corrections: reccCorrections(invoice, data.invoices, line, data.taxLines) });
       events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
@@ -2525,7 +2517,7 @@ function calculate(model: string, data: any, b: any, adjustments: any) {
   if (model === '425') return calculateIndirectTax(data, b, 'igic', true);
   if (model === '347' || model === '415') return calculateThirdParties(data, b, model);
   if (model === '180' || model === '190' || model === '193') return calculateAnnualRetention(data, b, model);
-  throw Object.assign(new Error(`Modelo ${model} no implementado.`), { status: 400 });
+  throw Object.assign(taxModelValidation(`Modelo ${model} no implementado.`), { status: 400 });
 }
 
 function normalizedText(value: unknown, length: number) {
@@ -2666,7 +2658,7 @@ function parsedModel200Boxes(value: unknown) {
   for(const rawLine of clean(value).split(/[\r\n;]+/)) {
     const line=rawLine.trim(); if(!line) continue;
     const match=line.match(/^([0-9A-Z]{5})[.:]([0-9]{5})\s*=\s*(-?\d+(?:[.,]\d+)?)$/i);
-    if(!match) throw Object.assign(new Error(`Casilla 200 no válida: "${line}". Usa PAGINA.CASILLA=IMPORTE, por ejemplo 14000.00552=12500,00.`),{status:422});
+    if(!match) throw Object.assign(taxModelValidation(`Casilla 200 no válida: "${line}". Usa PAGINA.CASILLA=IMPORTE, por ejemplo 14000.00552=12500,00.`),{status:422});
     result[`${match[1].toUpperCase()}.${match[2]}`]=Number(match[3].replace(',','.'));
   }
   return result;
@@ -2677,7 +2669,7 @@ function parsedModel200TextFields(value: unknown) {
   for(const rawLine of clean(value).split(/[\r\n]+/)) {
     const line=rawLine.trim(); if(!line) continue;
     const match=line.match(/^([0-9A-Z]{5})[.:](\d+)[.:](\d+)\s*=\s*(.*)$/i);
-    if(!match) throw Object.assign(new Error(`Campo 200 no válido: "${line}". Usa PAGINA.POSICION.LONGITUD=VALOR.`),{status:422});
+    if(!match) throw Object.assign(taxModelValidation(`Campo 200 no válido: "${line}". Usa PAGINA.POSICION.LONGITUD=VALOR.`),{status:422});
     result.push({pageCode:match[1].toUpperCase(),position:Number(match[2]),length:Number(match[3]),value:match[4]});
   }
   return result;
@@ -2697,9 +2689,9 @@ function model200AutomaticBoxes(calculation:any) {
 }
 
 function export200(company:any, year:number, calculation:any, developerTaxId:string) {
-  if(year!==2025) throw Object.assign(new Error('El diseño oficial disponible del modelo 200 corresponde al ejercicio 2025. No se genera un fichero con diseño de otro ejercicio.'),{status:422});
+  if(year!==2025) throw Object.assign(taxModelValidation('El diseño oficial disponible del modelo 200 corresponde al ejercicio 2025. No se genera un fichero con diseño de otro ejercicio.'),{status:422});
   const adjustments=calculation.adjustmentsSnapshot||{}, discriminator=clean(adjustments.statementDiscriminator||'0').toUpperCase();
-  if(!['0','A','E','I','G'].includes(discriminator)) throw Object.assign(new Error('Discriminante 200 no válido. Usa 0, A, E, I o G según el tipo de entidad.'),{status:422});
+  if(!['0','A','E','I','G'].includes(discriminator)) throw Object.assign(taxModelValidation('Discriminante 200 no válido. Usa 0, A, E, I o G según el tipo de entidad.'),{status:422});
   const layoutByCode=new Map(MODEL200_LAYOUT.map((item:any)=>[item.code,item]));
   const defaultPages=['01000','01B00','02000','02B00','03000','04000','05000','06000','07000','08000','09000','10000','11000','12000','13000','14000','14B00','DID00'];
   const requested=clean(adjustments.model200PageCodesText).toUpperCase().split(/[\s,;]+/).filter(Boolean);
@@ -2708,8 +2700,8 @@ function export200(company:any, year:number, calculation:any, developerTaxId:str
   required.add('01000'); required.add('DID00');
   Object.keys(customBoxes).forEach(key=>required.add(key.split('.')[0])); customText.forEach(field=>required.add(field.pageCode));
   const unknown=[...required].filter(code=>!layoutByCode.has(code));
-  if(unknown.length) throw Object.assign(new Error(`Páginas 200 no reconocidas en DR200e25: ${unknown.join(', ')}.`),{status:422});
-  if(discriminator!=='0'&&!requested.length) throw Object.assign(new Error('Las entidades aseguradoras, de crédito, inversión colectiva o garantía recíproca deben indicar expresamente sus páginas oficiales 200.'),{status:422});
+  if(unknown.length) throw Object.assign(taxModelValidation(`Páginas 200 no reconocidas en DR200e25: ${unknown.join(', ')}.`),{status:422});
+  if(discriminator!=='0'&&!requested.length) throw Object.assign(taxModelValidation('Las entidades aseguradoras, de crédito, inversión colectiva o garantía recíproca deben indicar expresamente sus páginas oficiales 200.'),{status:422});
   const boxValues={...model200AutomaticBoxes(calculation),...customBoxes};
   const startDate=aeatDate(adjustments.fiscalPeriodStart||`${year}-01-01`,year), endDate=aeatDate(adjustments.fiscalPeriodEnd||`${year}-12-31`,year);
   const pageValues=MODEL200_LAYOUT.filter((layout:any)=>required.has(layout.code)).map((layout:any)=>{
@@ -2731,7 +2723,7 @@ function export200(company:any, year:number, calculation:any, developerTaxId:str
       const iban=clean(adjustments.iban).replace(/\s+/g,'').toUpperCase(); if(iban){place(buffer,242,1,'1');place(buffer,243,34,normalizedText(iban,34));}
     }
     customText.filter(field=>field.pageCode===layout.code).forEach(field=>{
-      if(field.position<13||field.position+field.length-1>layout.length-endMarker.length) throw Object.assign(new Error(`El campo manual ${field.pageCode}.${field.position}.${field.length} invade el identificador o cierre de página.`),{status:422});
+      if(field.position<13||field.position+field.length-1>layout.length-endMarker.length) throw Object.assign(taxModelValidation(`El campo manual ${field.pageCode}.${field.position}.${field.length} invade el identificador o cierre de página.`),{status:422});
       place(buffer,field.position,field.length,normalizedText(field.value,field.length));
     });
     return buffer.join('');
@@ -3698,12 +3690,17 @@ function taxPeriodOutcome(model: string, value: number) {
 }
 
 Deno.serve(async (req) => {
+  let userAuthenticated=false;
   try {
+    if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
     const base44=createClientFromRequest(req); const user=await base44.auth.me().catch(() => null);
-    if(!user) return Response.json({error:'Unauthorized'},{status:401});
+    if(!user?.id) return Response.json({error:'Unauthorized'},{status:401});
+    userAuthenticated=true;
+    if(!taxModelUserEnabled(user))return Response.json({error:'Acceso al portal suspendido.'},{status:403});
     const body=await req.json().catch(()=>({})); const action=clean(body.action||'catalog');
     if(action==='catalog') { const developer=developerTaxIdStatus(); return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),readiness:{developerTaxIdConfigured:developer.configured,developerTaxIdValid:developer.valid},recommendedExtensions:[],sources:SOURCES}); }
     if(action==='self_test') {
+      if(!['admin','super_admin'].includes(String(user.role||'')))return Response.json({error:'Solo administración.'},{status:403});
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
       const standard={result:21,fields:[{code:'01',value:1},{code:'02',value:100},{code:'03',value:15},{code:'04',value:1},{code:'05',value:100},{code:'06',value:15},{code:'07',value:1},{code:'08',value:100},{code:'09',value:15},{code:'12',value:19},{code:'14',value:19},{code:'19',value:20},{code:'21',value:21},{code:'28',value:30},{code:'30',value:30},{code:'110',value:0},{code:'78',value:0},{code:'87',value:0}],details:[{}],operations:{rates:[{rate:21,base:100,quota:21}],outputQuota:21,deductibleBase:0,deductibleQuota:0,rawResult:21,reverseBase:0,reverseQuota:0,intraBase:0,intraQuota:0,exports:0,intraSupplies:0,nonSubject:0}};
       const sample131={result:200,fields:[{code:'01',value:10000},{code:'02',value:200},{code:'03',value:0},{code:'04',value:0},{code:'05',value:0},{code:'06',value:0},{code:'07',value:200},{code:'08',value:0},{code:'09',value:0},{code:'10',value:200},{code:'11',value:0},{code:'12',value:0},{code:'13',value:200},{code:'14',value:0},{code:'15',value:200}],details:[{recordKey:'M131:test',iaeCode:'722',netYield:10000,paymentRate:2,quarterPayment:200,module1Units:1,module1Amount:10000,ownerHours:1800,quarterDays:90,specialDataConfirmed:true}],adjustmentsSnapshot:{noBaseRate:2,agricultureRate:2,previousYearNet:13000}};
@@ -3771,13 +3768,13 @@ Deno.serve(async (req) => {
         model347Design2025AndFollowing:validation347Data.blockers.length===0&&record347_2026.split('\r\n').every((row:string)=>row.length===500)&&transferLayoutErrors('347',record347_2026).length===0,
       };
       const accessCompany={id:'company-test',owner_email:'owner@example.test',usuarios_autorizados:['authorized@example.test']};
-      const authorizationCheck:any={model:'legacy user authorization',owner:false,authorized:false,directCompany:false,crossCompanyDenied:false,developerIdentityValidation:false};
-      try{authorize({role:'user',email:'owner@example.test'},'company-test',accessCompany);authorizationCheck.owner=true;}catch{}
-      try{authorize({role:'user',email:'authorized@example.test'},'company-test',accessCompany);authorizationCheck.authorized=true;}catch{}
-      try{authorize({role:'user',company_id:'company-test'},'company-test',accessCompany);authorizationCheck.directCompany=true;}catch{}
-      try{authorize({role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
+      const authorizationCheck:any={model:'server company membership authorization',owner:false,authorized:false,mutableCompanyDenied:false,crossCompanyDenied:false,developerIdentityValidation:false};
+      try{authorize({id:'qa-selftest',role:'user',email:'owner@example.test'},'company-test',accessCompany);authorizationCheck.owner=true;}catch{}
+      try{authorize({id:'qa-selftest',role:'user',email:'authorized@example.test'},'company-test',accessCompany);authorizationCheck.authorized=true;}catch{}
+      try{authorize({id:'qa-selftest',role:'user',company_id:'company-test'},'company-test',accessCompany);}catch{authorizationCheck.mutableCompanyDenied=true;}
+      try{authorize({id:'qa-selftest',role:'user',email:'other@example.test',company_id:'other-company'},'company-test',accessCompany);}catch{authorizationCheck.crossCompanyDenied=true;}
       authorizationCheck.developerIdentityValidation=validDeveloperSpanishTaxId('12345678Z')&&validDeveloperSpanishTaxId('B12345674')&&!validDeveloperSpanishTaxId('B12345678');
-      authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.directCompany&&authorizationCheck.crossCompanyDenied&&authorizationCheck.developerIdentityValidation;
+      authorizationCheck.valid=authorizationCheck.owner&&authorizationCheck.authorized&&authorizationCheck.mutableCompanyDenied&&authorizationCheck.crossCompanyDenied&&authorizationCheck.developerIdentityValidation;
       const model202WithoutTaxRate=wrap('202',2026,'1P',export202(company,2026,'1P',calculate202({company:{...company,cnae:'6920'},warnings:[],blockers:[]},bounds(2026,'1P'),{method:'40_3',cnae:'6920',fiscalPeriodStart:'2026-01-01',currentTaxableBase:10000,paymentPercentage:17,withholdings:100,previousInstalmentPayments:200,commonTerritoryPercentage:100})),'B12345678');
       const parsed130=parseFiledText('130',samples['130']); const parsed131=parseFiledText('131',samples['131']); const parsed202=parseFiledText('202',samples['202']); const parsed216=parseFiledText('216',samples['216']); const parsed303=parseFiledText('303',samples['303']); const parsed190=parseFiledText('190',record190Content); const parsed296=parseFiledText('296',record296Content); const parsed349=parseFiledText('349',record349Content); const parsed390=parseFiledText('390',model390Content); const parsed415=parseFiledText('415',import415Content);
       const prior130=previous130FromFilings({year:2026,period:'3T',filings:[
@@ -4480,5 +4477,5 @@ Deno.serve(async (req) => {
       return Response.json({...result,file:{id:artifact.id,filename,extension:'json',format:'Borrador técnico de revisión',hash,contentBase64}});
     }
     return Response.json({error:'Acción no soportada.'},{status:400});
-  } catch(error){const status=Number((error as any)?.status)||500; return Response.json({error:(error as Error).message||'Error interno'},{status});}
+  } catch(error){if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});const safe=taxModelPublicError(error);return Response.json({error:safe.message,code:safe.code},{status:safe.status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 });

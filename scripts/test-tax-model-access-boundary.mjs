@@ -1,0 +1,23 @@
+import assert from'node:assert/strict';import{build}from'esbuild';import vm from'node:vm';
+import{taxModelCompanyAllowed,taxModelValidation,taxModelPublicError}from'../base44/functions/taxModelOperations/taxModelAccess.mjs';
+let user=null,handler,checks=0,sdkCalls=0,privateReads=0,failSdk=false,failCompany=false;
+const marker='SYNTHETIC-INTERNAL-ERROR-MUST-NOT-LEAK',companies={own:{id:'own',owner_email:'owner@example.test',activa:true,usuarios_autorizados:['member@example.test']},foreign:{id:'foreign',owner_email:'foreign@example.test',activa:true,usuarios_autorizados:[]}};
+const client={auth:{async me(){return user;}},asServiceRole:{entities:{Company:{async get(id){if(failCompany)throw Error(marker);return companies[id]||null;}},FiscalProfile:{async filter(){privateReads++;return[];}}}}};
+const built=await build({entryPoints:['base44/functions/taxModelOperations/entry.ts'],bundle:true,write:false,format:'cjs',platform:'node',plugins:[{name:'sdk',setup(b){b.onResolve({filter:/^npm:@base44\/sdk/},()=>({path:'sdk',namespace:'qa'}));b.onLoad({filter:/.*/,namespace:'qa'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__sdk();',loader:'js'}));}}]});
+vm.runInNewContext(built.outputFiles[0].text,{Request,Response,TextEncoder,TextDecoder,Uint8Array,URL,URLSearchParams,Date,console,crypto:globalThis.crypto,atob,btoa,__sdk(){sdkCalls++;if(failSdk)throw Error(marker);return client;},Deno:{env:{get(){return'';}},serve(fn){handler=fn;}}});
+async function invoke(body={action:'context',companyId:'own'},method='POST'){const r=await handler(new Request('https://synthetic.test/tax',{method,...(method==='POST'?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})}));return{status:r.status,body:await r.json()};}
+const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
+equal((await invoke({},'GET')).status,405);equal(sdkCalls,0);
+for(const candidate of [null,{}, {email:'owner@example.test'}]){user=candidate;equal((await invoke()).status,401);}equal(privateReads,0);
+for(const role of ['user','admin'])for(const state of [{is_deleted:true},{status:'bloqueado'},{status:'suspendido'},{accountAccessStatus:'disabled'}])for(const nested of [false,true]){user={id:'qa',role,email:'owner@example.test',...(nested?{data:state}:state)};equal((await invoke()).status,403);}equal(privateReads,0);
+user={id:'normal',role:'user',email:'owner@example.test'};equal((await invoke()).status,200);equal(privateReads,1);
+user={id:'forged',role:'user',email:'other@example.test',company_id:'foreign',data:{company_id:'foreign',role:'admin',advisor:true},advisor:true};const before=privateReads;equal((await invoke({action:'context',companyId:'foreign',role:'admin',advisor:true})).status,403);equal(privateReads,before);
+user={id:'member',role:'user',email:' MEMBER@example.test '};equal((await invoke()).status,200);
+user={id:'blank',role:'user',email:''};companies.own.usuarios_autorizados.push('');equal((await invoke()).status,403);companies.own.usuarios_autorizados.pop();
+user={id:'normal',role:'user',email:'owner@example.test'};companies.own.activa=false;equal((await invoke()).status,403);
+for(const role of ['admin','super_admin']){user={id:'admin',role,email:'admin@example.test'};equal((await invoke()).status,200);equal((await invoke({action:'context',companyId:'foreign'})).status,200);}companies.own.activa=true;
+user={id:'normal',role:'user',email:'owner@example.test'};equal((await invoke({action:'self_test'})).status,403);equal((await invoke({action:'catalog'})).status,200);
+failSdk=true;let result=await invoke();equal(result.status,401);equal(JSON.stringify(result.body).includes(marker),false);failSdk=false;failCompany=true;result=await invoke();equal(result.status,500);equal(result.body.code,'TAX_MODEL_UNAVAILABLE');equal(JSON.stringify(result.body).includes(marker),false);failCompany=false;
+equal(taxModelPublicError(taxModelValidation('Validación fiscal útil',422)),{status:422,message:'Validación fiscal útil',code:'TAX_MODEL_VALIDATION'});equal(taxModelPublicError(Object.assign(Error(marker),{status:422})).message.includes(marker),false);
+equal(taxModelCompanyAllowed({...user,company_id:'foreign'},'foreign',companies.foreign),false);equal(taxModelCompanyAllowed({...user,role:'admin'},'other-id',companies.foreign),false);
+console.log(JSON.stringify({ok:true,checks,actualHandler:true,mutableCompanyFieldDenied:true,disabledUsersAndAdminsDenied:true,realFinancialWrites:0,taxSubmissions:0,realExternalCalls:0}));
