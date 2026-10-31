@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useState, useEffect, useMemo } from 'react';
 import usePageRefresh from '@/hooks/usePageRefresh';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
@@ -245,9 +246,9 @@ export default function Facturas() {
                                )}
                                {inv.archivo_url && (
                                  <DropdownMenuItem asChild>
-                                   <a href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                                   <ProtectedDocumentLink href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2" companyId={inv.company_id}>
                                      <Download className="w-3.5 h-3.5" /> Descargar archivo
-                                   </a>
+                                   </ProtectedDocumentLink>
                                  </DropdownMenuItem>
                                )}
                                {!inv.archivo_url && inv.tipo === 'emitida' && (

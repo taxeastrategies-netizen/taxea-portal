@@ -1,3 +1,4 @@
+import{legacyDocumentMappings}from'./storageAssets.mjs';
 import {privateAssetRecoveryPlan,restorePrivateAsset,privateAssetBackupPlan,restorePrivateAssetFromBackup} from './storageRecovery.mjs';
 import {contextStorageCompany} from './documentContexts.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
@@ -43,6 +44,12 @@ Deno.serve(async req=>{
     const code=/^RECOVERY_[A-Z_]+$/.test(error?.recoveryCode||'')?error.recoveryCode:'RECOVERY_UNAVAILABLE';
     return response({error:'No se pudo confirmar la recuperación del documento.',code},[403,404,409].includes(error?.status)?error.status:503);
    }
+  }
+  if(action==='resolve_legacy_references'){
+   if(multipart||!Array.isArray(body.references)||body.references.length<1||body.references.length>20)return response({error:'Referencias no válidas.'},400);
+   let companyId=String(body.companyId||'');
+   if(body.contextKind){try{const company=await contextStorageCompany(client.asServiceRole,user,String(body.contextKind),String(body.contextId||''));if(companyId&&company.id!==companyId)return response({error:'Ámbito documental no disponible.'},403);companyId=company.id;}catch{return response({error:'Ámbito documental no disponible.'},403);}}
+   try{return response({ok:true,mappings:await legacyDocumentMappings(client.asServiceRole,user,companyId,body.references)});}catch{return response({error:'No se pudo verificar el acceso a los documentos.'},403);}
   }
   if(action==='upload_related'){
    if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);

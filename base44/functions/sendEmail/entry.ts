@@ -5,7 +5,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 import { sendInvoiceReminder } from './invoiceReminder.mjs';
-import { assetIdFromReference, authorizedAsset, readPrivateAssetBytes } from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference, assetIdFromReference, authorizedAsset, readPrivateAssetBytes } from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -177,20 +177,21 @@ async function loadAttachments(input, allowedUrl, requireInvoicePdf, context) {
     if (!url || url !== allowedUrl || (!isSafeRemoteUrl(url) && !assetIdFromReference(url))) {
       throw Object.assign(new Error('El adjunto no coincide con el PDF de la factura.'), { status: 400 });
     }
+    const readReference=await resolveStoredDocumentReference(context.service,context.user,url,context.companyId);
     let bytes;
-    if (assetIdFromReference(url)) {
-      const asset = await authorizedAsset(context.service, context.user, assetIdFromReference(url));
+    if (assetIdFromReference(readReference)) {
+      const asset = await authorizedAsset(context.service, context.user, assetIdFromReference(readReference));
       if (!asset || asset.company_id !== context.companyId) throw Object.assign(new Error('El adjunto no pertenece a la empresa de la factura.'), { status: 404 });
       if (asset.mime_type !== 'application/pdf') throw Object.assign(new Error('El adjunto no es un PDF válido.'), { status: 415 });
       if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_ATTACHMENT_BYTES) throw Object.assign(new Error('El PDF supera el límite de 10 MB o tiene un tamaño inválido.'), { status: 413 });
       try {
-        ({ bytes } = await readPrivateAssetBytes(context.service, context.user, url, Deno.env, context.companyId));
+        ({ bytes } = await readPrivateAssetBytes(context.service, context.user, readReference, Deno.env, context.companyId));
       } catch {
         throw Object.assign(new Error('No se pudo verificar el PDF privado. No se ha enviado el correo.'), { status: 502 });
       }
       if (bytes.byteLength > MAX_ATTACHMENT_BYTES || String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') throw Object.assign(new Error('El adjunto no es un PDF válido.'), { status: 415 });
     } else {
-      bytes = await downloadInvoicePdf(url);
+      bytes = await downloadInvoicePdf(readReference);
     }
     totalSize += bytes.byteLength;
     if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) throw new Error('Los adjuntos superan el límite total de 20 MB.');

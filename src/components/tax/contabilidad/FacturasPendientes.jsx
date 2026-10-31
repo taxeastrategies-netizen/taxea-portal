@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
@@ -304,9 +305,9 @@ export default function FacturasPendientes() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1 flex-wrap">
                         {inv.archivo_url && (
-                          <a href={inv.archivo_url} target="_blank" rel="noreferrer">
+                          <ProtectedDocumentLink href={inv.archivo_url} target="_blank" rel="noreferrer" companyId={inv.company_id}>
                             <Button size="sm" variant="ghost" className="h-6 w-6 p-0"><Eye className="w-3 h-3" /></Button>
-                          </a>
+                          </ProtectedDocumentLink>
                         )}
                         {!inv.anulada && (inv.estado_contable === 'pendiente' || inv.estado_contable === 'asiento_propuesto' || inv.estado_contable === 'requiere_correccion') && (
                           <Button size="sm" className="h-6 px-2 text-[10px]" onClick={() => openModal(inv)}>

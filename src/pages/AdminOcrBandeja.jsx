@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -696,9 +697,9 @@ export default function AdminOcrBandeja() {
                         </span>
                         <div className="flex items-center gap-0.5 flex-shrink-0">
                           {doc.fileStorageUrl && (
-                            <a href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento">
+                            <ProtectedDocumentLink href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento" companyId={doc.company_id}>
                               <Eye className="w-3.5 h-3.5" />
-                            </a>
+                            </ProtectedDocumentLink>
                           )}
                           {(doc.status === 'pending' || doc.status === 'analysis_failed') && (
                             <button onClick={() => processOcr(doc)} disabled={isProcessing} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal disabled:opacity-50" title="Procesar OCR">

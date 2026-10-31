@@ -1,0 +1,21 @@
+import assert from'node:assert/strict';
+import{saveLegacyProtectionAsset}from'../base44/functions/documentStorage/storageAssets.mjs';
+import{bindProtectedAssetBackup}from'../base44/functions/documentBackupToDrive/privateBackupBinding.mjs';
+const bytes=new TextEncoder().encode('%PDF-1.7\nSYNTHETIC COPY ONLY\n'),file=new File([bytes],'QA.pdf',{type:'application/pdf'}),hash=async b=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',b))].map(n=>n.toString(16).padStart(2,'0')).join(''),digest=await hash(bytes),user={id:'qa-admin',role:'admin'},env={get:()=> 'true'};let checks=0;
+const ok=(a,b)=>{assert.deepEqual(a,b);checks++;};
+function fixture(options={}){
+ const rows=[],records=[],objects=new Map(),counts={puts:0,creates:0,bindings:0,companyReads:0,financialWrites:0};let failedOnce=false;
+ const match=(row,q)=>Object.entries(q).every(([k,v])=>v&&typeof v==='object'?v.$in.includes(row[k]):row[k]===v);
+ const service={entities:{Company:{async get(){counts.companyReads++;return{id:'company-a',activa:false};}},DocumentAsset:{async filter(q){return rows.filter(r=>match(r,q)).map(r=>({...r}));},async create(p){counts.creates++;const r={id:'asset-'+counts.creates,...p};rows.push(r);if(options.intentLostAck&&!failedOnce){failedOnce=true;throw Error('Lost intent ack');}return{...r};},async update(id,p){Object.assign(rows.find(r=>r.id===id),p);if(options.commitLostAck)throw Error('Lost commit ack');},async get(id){return{...rows.find(r=>r.id===id)};}},DocumentBackupRecord:{async filter(q){return records.filter(r=>match(r,q));},async create(p){counts.bindings++;records.push({id:'binding',...p});if(options.bindingLostAck)throw Error('Lost binding ack');}}}};
+ const transport={async metadata(name){return objects.has(name)?{generation:'1',size:bytes.length}:null;},async put(name,b){counts.puts++;objects.set(name,options.corrupt?new Uint8Array(b.length):b);if(options.interrupted&&!failedOnce){failedOnce=true;throw Error('Interrupted upload');}return{generation:'1',size:b.length};},async get(name){return objects.get(name);}};
+ const save=(u=user)=>saveLegacyProtectionAsset(service,u,'company-a',file,env,async()=>transport);
+ return{save,service,rows,records,objects,counts};
+}
+for(const opts of [{},{intentLostAck:true},{commitLostAck:true},{interrupted:true}]){const f=fixture(opts),saved=await f.save();ok(saved.asset.status,'ready');ok(saved.asset.sha256,digest);ok(f.counts.puts,1);ok(f.counts.creates,1);const again=await f.save();ok(again.asset.id,saved.asset.id);ok(again.reused,true);ok(f.counts.puts,1);ok(f.counts.creates,1);}
+const interrupted=fixture();interrupted.rows.push({id:'pending',company_id:'company-a',sha256:digest,size:bytes.length,purpose:'legacy-protection',status:'uploading',object_name:'companies/company-a/pending.pdf',generation:''});interrupted.objects.set('companies/company-a/pending.pdf',bytes);ok((await interrupted.save()).asset.id,'pending');ok(interrupted.counts.puts,0);ok(interrupted.counts.creates,0);
+const corrupt=fixture({corrupt:true});await assert.rejects(()=>corrupt.save(),/UNVERIFIED/);checks++;ok(corrupt.rows[0].status,'uploading');
+for(const u of [null,{...user,role:'user'},{...user,status:'bloqueado'},{...user,data:{accountAccessStatus:'disabled'}}]){const f=fixture();await assert.rejects(()=>f.save(u),/ADMIN_ONLY/);checks++;ok(f.counts.companyReads,0);ok(f.counts.puts,0);}
+const f=fixture({bindingLostAck:true}),saved=await f.save(),group={companyId:'company-a',sha256:digest,size:bytes.length,backupFileIds:['drive-qa']},options={service:f.service,user,asset:saved.asset,group,planDigest:'a'.repeat(64),backupJobId:'backup-qa'};
+ok((await bindProtectedAssetBackup(options)).linked,true);ok((await bindProtectedAssetBackup(options)).reused,true);ok(f.counts.bindings,1);ok(f.records[0].fileStorageUrl,'https://taxeaportal.com/private-document/'+saved.asset.id);
+await assert.rejects(()=>bindProtectedAssetBackup({...options,group:{...group,companyId:'foreign'}}),/BINDING_INVALID/);checks++;
+ok(f.counts.financialWrites,0);console.log(JSON.stringify({ok:true,checks,cloudCalls:0,financialWrites:0,originalsDeleted:0,coverage:'Copy readback, archive recovery, lost acknowledgements, pending object reuse and verified Drive metadata binding'}));

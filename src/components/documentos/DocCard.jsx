@@ -1,10 +1,11 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useState } from 'react';
 import { Download, Eye, MoreVertical, FileText, FileImage, FileSpreadsheet, File, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { getCarpetaLabel } from './CarpetasTree';
 import { cn } from '@/lib/utils';
 import { safeDocumentUrl } from '@/lib/safeDocumentUrl';
-import {openPrivateDocument,privateDocumentId} from '@/lib/privateDocuments';
+import {resolveDocumentReference,openPrivateDocument,privateDocumentId} from '@/lib/privateDocuments';
 import {useToast} from '@/components/ui/use-toast';
 
 async function downloadFile(url, filename) {
@@ -139,11 +140,11 @@ function DocActions({ doc, isAdmin, onUpdate, busy }) {
     if (!documentUrl || downloading) return;
     setDownloading(true);
     try {
-      await downloadFile(documentUrl, doc.nombre || 'documento');
+      const verifiedUrl=await resolveDocumentReference(documentUrl,{companyId:doc.company_id,force:true});
+      await downloadFile(verifiedUrl, doc.nombre || 'documento');
     } catch {
       // Fallback: abrir en nueva pestaña como último recurso
-      if(privateDocumentId(documentUrl))toast({variant:'destructive',title:'No se pudo descargar',description:'Vuelve a abrir el documento con tu sesión activa y reintenta.'});
-      else window.open(documentUrl, '_blank', 'noopener,noreferrer');
+      toast({variant:'destructive',title:'No se pudo descargar',description:'Vuelve a abrir el documento con tu sesión activa y reintenta.'});
     }
     setDownloading(false);
   };
@@ -159,9 +160,9 @@ function DocActions({ doc, isAdmin, onUpdate, busy }) {
         {documentUrl && (
           <>
             <DropdownMenuItem asChild>
-              <a href={documentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+              <ProtectedDocumentLink href={documentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2" companyId={doc.company_id}>
                 <Eye className="w-3.5 h-3.5" /> Ver documento
-              </a>
+              </ProtectedDocumentLink>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDownload} disabled={downloading}>
               {downloading

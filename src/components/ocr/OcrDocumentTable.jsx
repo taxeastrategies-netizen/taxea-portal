@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useState } from 'react';
 import { FileText, Image, Eye, RefreshCw, Play, CheckCircle, Loader2, Ban, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -138,9 +139,9 @@ export default function OcrDocumentTable({
                   </span>
                   <div className="flex items-center gap-0.5 flex-shrink-0">
                     {doc.fileStorageUrl && (
-                      <a href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento">
+                      <ProtectedDocumentLink href={doc.fileStorageUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-teal" title="Ver documento" companyId={doc.company_id}>
                         <Eye className="w-3.5 h-3.5" />
-                      </a>
+                      </ProtectedDocumentLink>
                     )}
                     {needsOcrAnalysis(doc) && (
                       <button

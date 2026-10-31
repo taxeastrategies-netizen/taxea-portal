@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
-import {assetIdFromReference,invoicePdfReference,publicInvoiceCapabilityValid,readPublicInvoicePdf} from './storageRuntime.generated.mjs';
+import {assetIdFromReference,publicInvoicePdfStoredReference,invoicePdfReference,publicInvoiceCapabilityValid,readPublicInvoicePdf} from './storageRuntime.generated.mjs';
 import {readPublicInvoiceRequest} from './publicInvoiceRequest.mjs';
 
 const pick = (source, keys) => Object.fromEntries(
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     const company = await base44.asServiceRole.entities.Company.get(invoice.company_id);
     if (!company || company.activa===false) return publicJson({ error: 'Emisor no disponible.' }, { status: 404 });
     let privatePdf;
-    const privatePdfReference=assetIdFromReference(invoicePdfReference(invoice));
+    const privatePdfReference=assetIdFromReference(await publicInvoicePdfStoredReference(base44.asServiceRole,invoice,token));
     if(action==='download_pdf'){
       if(!privatePdfReference)return publicJson({error:'El PDF privado no está disponible.'},{status:404});
       try{privatePdf=await readPublicInvoicePdf(base44.asServiceRole,invoice,token,Deno.env);}catch{return publicJson({error:'No se pudo verificar el PDF de esta factura.'},{status:404});}

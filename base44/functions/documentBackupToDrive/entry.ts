@@ -1,10 +1,14 @@
+import{runLegacyProtectionJob,protectionJobSummary}from'./legacyProtectionJob.mjs';
+import{protectLegacyGroup,verifyProtectionSourceBindings}from'./legacyProtectionExecutor.mjs';
+import{bindProtectedAssetBackup}from'./privateBackupBinding.mjs';
+import{normalizeLegacyDocumentReference}from'./legacyNativeReference.mjs';
 import{advanceManifestAssembly,readAssembledManifest}from'./manifestAssembly.mjs';
 import{loadLegacyProtectionPlan}from'./legacyPlanLoader.mjs';
 import {isBackupTransientError,resumableSnapshotJob,completedBackupResponse} from './backupResumption.mjs';
 import {snapshotPrivateAssetLedger} from './assetLedgerSnapshot.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
-import {assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference,saveLegacyProtectionAsset,assetReference,assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
 import {inventoryPreview} from './inventoryPreview.mjs';
 import {BACKUP_DOCUMENT_SOURCES,createBackupContextResolver,freshInventory,advanceDocumentInventory,loadInventoryDocuments,isBackupReference} from './backupCatalog.mjs';
 
@@ -76,6 +80,7 @@ function validateBackupFileUrl(value) {
 }
 
 async function downloadBackupFile(value,base44,user,companyId,deadline) {
+  value=await resolveStoredDocumentReference(base44.asServiceRole,user,value,companyId);
   if(assetIdFromReference(value))return (await readPrivateAssetBytes(base44.asServiceRole,user,value,Deno.env,companyId)).bytes;
   if(!isBackupReference(value))throw new Error('BACKUP_FILE_ORIGIN_DENIED');
   let reference=value;
@@ -406,7 +411,7 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
-    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
+    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
     const invocationStartedAt=Date.now(),timeBudgetMs=isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
@@ -477,8 +482,29 @@ Deno.serve(async (req) => {
         const result=await loadLegacyProtectionPlan({service:base44.asServiceRole,user,jobId:body.backupJobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,
           readPrivateDriveFile:async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));}
         });
-        return Response.json({ok:true,summary:result.summary},{headers:{'Cache-Control':'no-store'}});
+        const resumable=await base44.asServiceRole.entities.DocumentProtectionJob.filter({planDigest:result.digest,backupJobId:result.plan.backupJobId,scopeCompanyId},'id',100);
+        const completeSelection=resumable.filter(j=>Array.isArray(j.selectionKeys)&&j.selectionKeys.length===0);
+        if(completeSelection.length>1)throw Error('PROTECTION_JOB_AMBIGUOUS');
+        return Response.json({ok:true,summary:result.summary,protectionJob:completeSelection[0]?protectionJobSummary(completeSelection[0]):null},{headers:{'Cache-Control':'no-store'}});
       }catch(error){const code=/^PROTECTION_[A-Z_]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'No se pudo preparar el plan desde una copia completa verificada.',code},{status:409});}
+    }
+    if(['protect_legacy_documents','legacy_protection_status','rollback_legacy_protection'].includes(action)){
+      try{
+        const service=base44.asServiceRole,resolveCompany=createBackupContextResolver(service);
+        const readPrivateDriveFile=async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));};
+        const loadPlan=async jobId=>loadLegacyProtectionPlan({service,user,jobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,readPrivateDriveFile});
+        const result=await runLegacyProtectionJob({service,user,body,scopeCompanyId,leaseHeld:!!lease,loadPlan,hash:computeChecksum,deadline,
+          protectGroup:async(group,planDigest,protectionJobId,reactivateDisabled,backupJobId)=>protectLegacyGroup({service,user,group,planDigest,expectedPlanDigest:body.planDigest,protectionJobId,reactivateDisabled,normalizeReference:normalizeLegacyDocumentReference,hash:computeChecksum,
+            verifySources:g=>verifyProtectionSourceBindings({service,group:g,sources:DOC_SOURCES,resolveCompany,normalizeReference:normalizeLegacyDocumentReference}),
+            readBackup:async g=>{for(const id of g.backupFileIds){try{const bytes=await readPrivateDriveFile(id);if(bytes.length===g.size&&await computeChecksum(bytes)===g.sha256)return bytes;}catch{}}throw Error('PROTECTION_BACKUP_UNVERIFIED');},
+            readSource:g=>downloadBackupFile(g.reference,base44,user,g.companyId,deadline),
+            saveAsset:async({companyId,bytes,name,mimeType})=>saveLegacyProtectionAsset(service,user,companyId,new File([bytes],name,{type:mimeType||'application/octet-stream'}),Deno.env),
+            readAsset:(id,companyId)=>readPrivateAssetBytes(service,user,assetReference(id),Deno.env,companyId),
+            onAssetVerified:(asset,g)=>bindProtectedAssetBackup({service,user,asset,group:g,planDigest,backupJobId})
+          })
+        });
+        return Response.json(result,{status:result.continueRequired?202:200,headers:{'Cache-Control':'no-store'}});
+      }catch(error){const code=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'El proceso se ha detenido. Se conservan originales y progreso; revisa la incidencia antes de continuar.',code},{status:409,headers:{'Cache-Control':'no-store'}});}
     }
     if(action==='inventory_preview'){
       const result=await inventoryPreview({service:base44.asServiceRole,user,body,scopeCompanyId,deadline,hash:computeChecksum,snapshot:backupSnapshot});

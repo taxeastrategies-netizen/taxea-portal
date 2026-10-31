@@ -1,3 +1,4 @@
+import ProtectedDocumentPreview from '@/components/documentos/ProtectedDocumentPreview';
 import { useState,lazy,Suspense } from 'react';
 import {privateDocumentId} from '../../lib/documentClient.mjs';
 const PrivateDocumentPreview=lazy(()=>import('@/components/documentos/PrivateDocumentPreview'));
@@ -58,19 +59,19 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnTo
           </div>
           <div className={expanded ? 'flex min-h-0 flex-1 items-start justify-center overflow-auto p-4' : 'flex flex-1 items-start justify-center overflow-auto p-4'}>
             {privatePreview ? <Suspense fallback={<p role="status">Abriendo documento...</p>}><PrivateDocumentPreview reference={doc.fileUrl} expanded={expanded}/></Suspense> : isPDF ? (
-              <iframe
-                src={doc.fileUrl}
+              <ProtectedDocumentPreview
+                reference={doc.fileUrl}
                 className="w-full rounded border border-border"
                 style={{ height: expanded ? 'calc(100vh - 195px)' : '460px', transform: `scale(${zoom})`, transformOrigin: 'top center' }}
                 title="Preview"
-              />
+               companyId={companyId} mimeType="application/pdf"/>
             ) : doc.fileUrl ? (
-              <img
-                src={doc.fileUrl}
-                alt="Preview"
+              <ProtectedDocumentPreview
+                reference={doc.fileUrl}
+                title="Preview"
                 className="max-w-full rounded border border-border object-contain"
                 style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', maxHeight: expanded ? 'calc(100vh - 195px)' : '460px' }}
-              />
+               companyId={companyId} mimeType="image/*"/>
             ) : (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
                 <FileText className="w-10 h-10 opacity-30 mb-2" />

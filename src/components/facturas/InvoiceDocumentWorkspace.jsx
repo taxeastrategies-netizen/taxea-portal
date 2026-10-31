@@ -1,3 +1,5 @@
+import ProtectedDocumentPreview from '@/components/documentos/ProtectedDocumentPreview';
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 /**
  * InvoiceDocumentWorkspace V3 — Vista completa de documento
  * Layout: Cabecera superior · Visor PDF/factura izquierda · Panel operativo derecha
@@ -109,13 +111,13 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             <Printer className="w-3.5 h-3.5" />
           </button>
           {hasPdf ? (
-            <a
+            <ProtectedDocumentLink
               href={documentPdfUrl}
               download={`Factura_${invoice.numero_factura}.pdf`}
               className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-              title="Descargar PDF">
+              title="Descargar PDF" companyId={invoice.company_id}>
               <Download className="w-3.5 h-3.5" />
-            </a>
+            </ProtectedDocumentLink>
           ) : !isRecibida && (
             <button
               onClick={() => exportInvoiceToPdf(invoice, company)}
@@ -133,12 +135,12 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
           // ── Factura recibida: mostrar el PDF escaneado original ──
           hasPdf ? (
             <div className="w-full" style={{ height: '100%', minHeight: '800px' }}>
-              <iframe
-                src={invoice.archivo_url}
+              <ProtectedDocumentPreview
+                reference={invoice.archivo_url}
                 className="w-full rounded-lg shadow-lg border border-border"
                 style={{ height: '800px', minHeight: '800px' }}
                 title={`Factura recibida ${invoice.numero_factura}`}
-              />
+               companyId={invoice.company_id} mimeType="application/pdf"/>
             </div>
           ) : (
             // Sin PDF: mostrar los datos guardados, independientemente de su origen
@@ -465,9 +467,9 @@ export default function InvoiceDocumentWorkspace({
             <DropdownMenuContent align="end" className="text-sm w-44">
               {documentPdfUrl ? (
                 <DropdownMenuItem asChild>
-                  <a href={documentPdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                  <ProtectedDocumentLink href={documentPdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2" companyId={invoice.company_id}>
                     <Download className="w-3.5 h-3.5" /> Descargar PDF
-                  </a>
+                  </ProtectedDocumentLink>
                 </DropdownMenuItem>
               ) : !isRecibida && (
                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(invoice, company)}>

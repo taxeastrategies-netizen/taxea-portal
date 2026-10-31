@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect } from 'react';
@@ -132,10 +133,10 @@ export default function HRDocuments() {
                   </div>
                   <span className={cn("text-[11px] font-semibold px-2 py-1 rounded-full border", ss.cls)}>{ss.label}</span>
                   {d.archivo_url && (
-                    <a href={d.archivo_url} target="_blank" rel="noopener noreferrer" aria-label={"Abrir " + d.nombre}
-                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                    <ProtectedDocumentLink href={d.archivo_url} target="_blank" rel="noopener noreferrer" aria-label={"Abrir " + d.nombre}
+                      className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" companyId={d.company_id}>
                       <ExternalLink className="w-4 h-4" />
-                    </a>
+                    </ProtectedDocumentLink>
                   )}
                 </div>
               );

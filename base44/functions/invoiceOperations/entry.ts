@@ -1,4 +1,5 @@
-import {assetIdFromReference,authorizedAsset} from './storageRuntime.generated.mjs';
+import{requirePortalCompany}from'./portalAccess.generated.mjs';
+import {resolveStoredDocumentReference,assetIdFromReference,authorizedAsset} from './storageRuntime.generated.mjs';
 import { reviewFilter } from './advisorReview.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
@@ -57,7 +58,7 @@ const isSafeHttpsUrl = (value) => {
   }
 };
 
-const roleOf = user => cleanText(user?.role || user?.data?.role, 80).toLowerCase();
+const roleOf = user => cleanText(user?.role, 80).toLowerCase();
 const normalizeKeyPart = value => cleanText(value, 240)
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -65,6 +66,7 @@ const normalizeKeyPart = value => cleanText(value, 240)
   .replace(/[^A-Z0-9]/g, '');
 
 async function assertPrivateInvoiceAsset(base44,user,companyId,reference,mime,size){
+ reference=await resolveStoredDocumentReference(base44.asServiceRole,user,reference,companyId);
  if(!assetIdFromReference(reference))return;
  const asset=await authorizedAsset(base44.asServiceRole,user,assetIdFromReference(reference));
  if(!asset||asset.company_id!==companyId)throw Object.assign(new Error('El archivo no pertenece a la empresa de esta factura.'),{status:404});
@@ -78,20 +80,9 @@ async function sha256(value) {
   return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function authorizeCompany(base44, user, requestedCompanyId) {
-  const companyId = cleanText(requestedCompanyId || user?.data?.company_id || user?.company_id, 120);
-  if (!companyId) throw Object.assign(new Error('Selecciona una empresa activa.'), { status: 403 });
-  const company = await base44.asServiceRole.entities.Company.get(companyId).catch(() => null);
-  if (!company) throw Object.assign(new Error('Empresa no encontrada.'), { status: 404 });
-  const email = cleanText(user?.email, 240).toLowerCase();
-  const authorizedEmails = Array.isArray(company.usuarios_autorizados)
-    ? company.usuarios_autorizados.map(value => cleanText(value, 240).toLowerCase())
-    : [];
-  const allowed = ['admin', 'super_admin'].includes(roleOf(user))
-    || (email && cleanText(company.owner_email, 240).toLowerCase() === email)
-    || (email && authorizedEmails.includes(email));
-  if (!allowed) throw Object.assign(new Error('No tienes permiso para operar en esta empresa.'), { status: 403 });
-  return { company, companyId };
+async function authorizeCompany(base44,user,requestedCompanyId){
+ const companyId=cleanText(requestedCompanyId||user?.company_id||user?.data?.company_id,120);
+ const company=await requirePortalCompany(base44.asServiceRole,user,companyId);return{company,companyId};
 }
 
 function invoiceCreationPayload(input, companyId, user) {
@@ -463,11 +454,13 @@ async function commitPaymentPostingUnit(base44, companyId, payment, paymentPosti
 
 Deno.serve(async (req) => {
   let currentAction = '';
+  let userAuthenticated=false;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    userAuthenticated=true;
     if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
@@ -728,15 +721,15 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
       }, '-uploaded_at', MAX_ATTACHMENTS_PER_INVOICE);
       const signed = await Promise.all((attachments || []).map(async attachment => {
-        if(assetIdFromReference(attachment.file_uri)){
-          const asset=await authorizedAsset(base44.asServiceRole,user,assetIdFromReference(attachment.file_uri));
-          return {...attachment,signed_url:asset?.company_id===companyId?attachment.file_uri:'',unavailable:!asset||asset.company_id!==companyId};
-        }
-        const signedResult = await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({
-          file_uri: attachment.file_uri,
-          expires_in: 900,
-        }).catch(() => null);
-        return { ...attachment, signed_url: signedResult?.signed_url || '' };
+        try {
+          const readReference=await resolveStoredDocumentReference(base44.asServiceRole,user,attachment.file_uri,companyId);
+          if(assetIdFromReference(readReference)){
+            const asset=await authorizedAsset(base44.asServiceRole,user,assetIdFromReference(readReference));
+            return {...attachment,signed_url:asset?.company_id===companyId?readReference:'',unavailable:!asset||asset.company_id!==companyId};
+          }
+          const signedResult=await base44.asServiceRole.integrations.Core.CreateFileSignedUrl({file_uri:readReference,expires_in:900});
+          return {...attachment,signed_url:signedResult?.signed_url||'',unavailable:!signedResult?.signed_url};
+        }catch{return {...attachment,signed_url:'',unavailable:true};}
       }));
       return Response.json({ ok: true, attachments: signed });
     }
@@ -1079,8 +1072,10 @@ Deno.serve(async (req) => {
 
     return Response.json({ error: 'Acción no soportada.' }, { status: 400 });
   } catch (error) {
-    console.error('[invoiceOperations]', error);
+    if(!userAuthenticated)return Response.json({error:'Unauthorized'},{status:401});
+    console.error('[invoiceOperations]',{status:Number(error?.status)||500});
     const status = Number(error?.status) || 500;
+    if(status>=500)return Response.json({error:'No se pudo completar la operación. Reintenta.',code:'INVOICE_OPERATION_UNAVAILABLE'},{status:500});
     if (currentAction === 'reconcile' || currentAction === 'reconcile_multiple' || currentAction === 'list_reconciliation_candidates') {
       return businessError(error?.message || 'No se pudo completar la conciliación.', status);
     }

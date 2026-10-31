@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { uploadRelatedDocument } from '@/lib/privateDocuments';
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
@@ -207,9 +208,9 @@ export default function MercantilCuentasTab({ expediente, user, onRefresh }) {
                   </SelectContent>
                 </Select>
                 {doc.fileUrl && (
-                  <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80">
+                  <ProtectedDocumentLink href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary/80" contextKind="mercantil" contextId={expediente.sociedadId}>
                     <ExternalLink className="w-4 h-4" />
-                  </a>
+                  </ProtectedDocumentLink>
                 )}
               </div>
             ))}

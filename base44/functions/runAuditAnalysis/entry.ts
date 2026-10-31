@@ -1,5 +1,5 @@
 import {contextStorageCompany} from './documentContexts.mjs';
-import {storageAccountEnabled,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference,storageAccountEnabled,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 
 Deno.serve(async (req) => {
@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
           processingStatus: 'Extrayendo contenido con IA...'
         });
 
-        let providerFileUrl=file.storagePath;
-        const assetId=assetIdFromReference(file.storagePath);
+        let providerFileUrl=await resolveStoredDocumentReference(base44.asServiceRole,user,file.storagePath,storageScope.id);
+        const assetId=assetIdFromReference(providerFileUrl);
         if(assetId){
           const asset=await authorizedAsset(base44.asServiceRole,user,assetId);
           if(!asset||asset.company_id!==storageScope.id)throw new Error('PRIVATE_DOCUMENT_SCOPE_MISMATCH');
@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
           if(!resolved)throw new Error('PRIVATE_DOCUMENT_UNAVAILABLE');
           providerFileUrl=resolved.url;
         }else{
-          const u=new URL(file.storagePath);
+          const u=new URL(providerFileUrl);
           if(u.protocol!=='https:'||u.hostname!=='base44.app'||u.port||u.username||u.password||u.hash||!u.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/'))throw new Error('INVALID_DOCUMENT_REFERENCE');
         }
         // Use LLM to extract and classify document content

@@ -1,5 +1,5 @@
 // GENERATED from documentStorage modules. Run node scripts/build-storage-runtime.mjs.
-// canonical-sha256: 8a0590c3ef96c33b6b9f0894b6d05f0dbcb730bb9b97a367001615f468987394
+// canonical-sha256: ca72cd62b702b07f2472fa4b930e9ac73c0fb750365239d12b91c030f47ac956
 // base44/functions/documentStorage/storageCredentials.mjs
 var encoder = new TextEncoder();
 var STORAGE_PROJECT = "plasma-minutia-510419-c4";
@@ -292,7 +292,7 @@ async function readPublicInvoicePdf(svc, invoice, token, env) {
   if (!publicInvoiceCapabilityValid(invoice, token)) throw new Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
   const company = await svc.entities.Company.get(invoice.company_id).catch(() => null);
   if (!company || company.activa === false) throw new Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
-  const id = assetIdFromReference(invoicePdfReference(invoice));
+  const id = assetIdFromReference(await publicInvoicePdfStoredReference(svc, invoice, token));
   const asset = id ? await svc.entities.DocumentAsset.get(id).catch(() => null) : null;
   if (!asset || asset.status !== "ready" || asset.company_id !== invoice.company_id || !asset.object_name?.startsWith("companies/" + invoice.company_id + "/")) throw new Error("STORAGE_ASSET_FORBIDDEN");
   if (asset.mime_type !== "application/pdf" || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > 25 * 1024 * 1024) throw new Error("STORAGE_INVALID_PUBLIC_PDF");
@@ -305,18 +305,172 @@ async function resolvePrivateAsset(svc, user, id, env) {
   if (!asset) return null;
   return { ...await signedStorageRead(env, asset), mimeType: asset.mime_type, name: asset.original_name, size: asset.size, sha256: asset.sha256 };
 }
+var LEGACY_APP = "6a00fec50cc522a74ddde4b2";
+function normalizeLegacyDocumentReference(value) {
+  if (typeof value !== "string" || value.length > 4096) return "";
+  let text = value.trim();
+  if (/^mp\/(public|private)\//.test(text)) text = "https://base44.app/api/apps/" + LEGACY_APP + "/files/" + text;
+  try {
+    const u = new URL(text);
+    if (u.protocol !== "https:" || u.username || u.password || u.port) return "";
+    let path = text.replace(/^https:\/\/[^/]+/i, "").split(/[?#]/)[0];
+    for (let i = 0; i < 3; i++) {
+      const decoded = decodeURIComponent(path);
+      if (decoded === path) break;
+      path = decoded;
+    }
+    if (/[\\\u0000-\u001f\u007f]/.test(path) || path.split("/").some((part) => part === "." || part === "..")) return "";
+    const own = u.hostname === "media.base44.com" && ["files", "images"].some((kind) => ["public", "private"].some((access) => u.pathname.startsWith("/" + kind + "/" + access + "/" + LEGACY_APP + "/"))) || u.hostname === "base44.app" && ["public", "private"].some((access) => u.pathname.startsWith("/api/apps/" + LEGACY_APP + "/files/mp/" + access + "/" + LEGACY_APP + "/"));
+    if (!own) return "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return "";
+  }
+}
+async function legacyReferenceDigest(reference) {
+  const normalized = normalizeLegacyDocumentReference(reference);
+  if (!normalized) throw Error("STORAGE_LEGACY_REFERENCE_INVALID");
+  return sha256(new TextEncoder().encode(normalized));
+}
+async function authorizeLegacyCompany(svc, user, companyId) {
+  if (!storageAccountEnabled(user) || !/^[A-Za-z0-9_-]{1,128}$/.test(companyId || "")) throw Error("STORAGE_LEGACY_COMPANY_FORBIDDEN");
+  const company = await svc.entities.Company.get(companyId).catch((error) => {
+    if (Number(error?.status || error?.response?.status) === 404) return null;
+    throw error;
+  });
+  if (!company || !isStorageAdmin(user) && !mayAccessStorageCompany(user, company)) throw Error("STORAGE_LEGACY_COMPANY_FORBIDDEN");
+  return company;
+}
+async function legacyAssetsForCompany(svc, companyId, references) {
+  const normalized = references.map(normalizeLegacyDocumentReference);
+  if (normalized.some((value) => !value)) throw Error("STORAGE_LEGACY_REFERENCE_INVALID");
+  const digests = await Promise.all(normalized.map((value) => sha256(new TextEncoder().encode(value))));
+  const aliases = await svc.entities.DocumentLegacyReference.filter({ company_id: companyId, reference_digest: { $in: [...new Set(digests)] } }, "id", references.length * 2 + 1);
+  if (aliases.length > references.length * 2) throw Error("STORAGE_LEGACY_REFERENCE_AMBIGUOUS");
+  const byDigest = /* @__PURE__ */ new Map();
+  for (const alias of aliases) {
+    if (alias.company_id !== companyId || !digests.includes(alias.reference_digest)) throw Error("STORAGE_LEGACY_ASSET_UNVERIFIED");
+    if (byDigest.has(alias.reference_digest)) throw Error("STORAGE_LEGACY_REFERENCE_AMBIGUOUS");
+    byDigest.set(alias.reference_digest, alias);
+  }
+  const unknown = [...new Set(digests.filter((digest) => !byDigest.has(digest)))];
+  if (unknown.length) {
+    const protectedElsewhere = await svc.entities.DocumentLegacyReference.filter({ reference_digest: { $in: unknown } }, "id", 1);
+    if (protectedElsewhere.length) throw Error("STORAGE_LEGACY_COMPANY_FORBIDDEN");
+  }
+  const assetIds = [...new Set(aliases.map((row) => row.asset_id))];
+  const assets = assetIds.length ? await svc.entities.DocumentAsset.filter({ id: { $in: assetIds }, company_id: companyId, status: "ready" }, "id", assetIds.length + 1) : [];
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  return digests.map((digest) => {
+    const alias = byDigest.get(digest);
+    if (!alias) return null;
+    const asset = byId.get(alias.asset_id);
+    if (alias.status !== "verified" || !asset || asset.company_id !== companyId || asset.status !== "ready" || !/^[a-f0-9]{64}$/.test(asset.sha256 || "") || !Number.isSafeInteger(asset.size) || asset.size < 1 || asset.sha256 !== alias.sha256 || asset.size !== alias.size || !String(asset.object_name || "").startsWith("companies/" + companyId + "/")) throw Error("STORAGE_LEGACY_ASSET_UNVERIFIED");
+    return asset;
+  });
+}
+async function resolveStoredDocumentReference(svc, user, reference, companyId) {
+  if (assetIdFromReference(reference)) return reference;
+  if (!normalizeLegacyDocumentReference(reference)) return reference;
+  if (!companyId) {
+    if (!storageAccountEnabled(user)) throw Error("STORAGE_LEGACY_COMPANY_FORBIDDEN");
+    const digest = await legacyReferenceDigest(reference), aliases = await svc.entities.DocumentLegacyReference.filter({ reference_digest: { $in: [digest] } }, "id", 3);
+    if (!aliases.length) return reference;
+    if (aliases.length !== 1) throw Error("STORAGE_LEGACY_REFERENCE_AMBIGUOUS");
+    const alias = aliases[0], asset2 = await authorizedAsset(svc, user, alias.asset_id);
+    if (alias.status !== "verified" || !asset2 || asset2.company_id !== alias.company_id || asset2.sha256 !== alias.sha256 || asset2.size !== alias.size) throw Error("STORAGE_LEGACY_ASSET_UNVERIFIED");
+    return assetReference(asset2.id);
+  }
+  await authorizeLegacyCompany(svc, user, companyId);
+  const [asset] = await legacyAssetsForCompany(svc, companyId, [reference]);
+  return asset ? assetReference(asset.id) : reference;
+}
+async function legacyDocumentMappings(svc, user, companyId, references) {
+  if (!Array.isArray(references) || references.length < 1 || references.length > 20) throw Error("STORAGE_LEGACY_REFERENCE_INVALID");
+  await authorizeLegacyCompany(svc, user, companyId);
+  const assets = await legacyAssetsForCompany(svc, companyId, references);
+  return assets.map((asset, index) => ({ index, mapped: !!asset, ...asset ? { file_url: assetReference(asset.id) } : {} }));
+}
+async function publicInvoicePdfStoredReference(svc, invoice, token) {
+  if (!publicInvoiceCapabilityValid(invoice, token)) throw Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
+  const company = await svc.entities.Company.get(invoice.company_id).catch(() => null);
+  if (!company || company.activa === false) throw Error("STORAGE_PUBLIC_CAPABILITY_INVALID");
+  const reference = invoicePdfReference(invoice);
+  if (assetIdFromReference(reference) || !normalizeLegacyDocumentReference(reference)) return reference;
+  const [asset] = await legacyAssetsForCompany(svc, invoice.company_id, [reference]);
+  return asset ? assetReference(asset.id) : reference;
+}
+async function saveLegacyProtectionAsset(svc, user, companyId, file, env, makeTransport = storageTransport) {
+  if (!storageAccountEnabled(user) || !isStorageAdmin(user) || !/^[A-Za-z0-9_-]{1,128}$/.test(companyId || "")) throw Error("PROTECTION_ADMIN_ONLY");
+  const company = await svc.entities.Company.get(companyId);
+  if (!company || company.id !== companyId || !storageEnabled(company, env)) throw Error("PROTECTION_COMPANY_UNAVAILABLE");
+  if (!file?.size || file.size > 25 * 1024 * 1024) throw Error("PROTECTION_FILE_SIZE_INVALID");
+  const bytes = new Uint8Array(await file.arrayBuffer()), format = privateFileFormat(file, bytes), digest = await sha256(bytes), entity = svc.entities.DocumentAsset;
+  const transport = await makeTransport(env), valid = (asset2) => asset2?.company_id === companyId && asset2.sha256 === digest && asset2.size === bytes.length && String(asset2.object_name || "").startsWith("companies/" + companyId + "/");
+  const previous = await entity.filter({ company_id: companyId, sha256: digest, status: "ready" }, "id", 2);
+  for (const asset2 of previous) {
+    if (!valid(asset2) || !/^\d+$/.test(asset2.generation || "")) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+    const reread = await transport.get(asset2.object_name, asset2.generation);
+    if (reread.length !== bytes.length || await sha256(reread) !== digest) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+    return { asset: asset2, file_url: assetReference(asset2.id), reused: true };
+  }
+  const interrupted = await entity.filter({ company_id: companyId, sha256: digest, purpose: "legacy-protection", status: { $in: ["uploading", "failed"] } }, "id", 2);
+  if (interrupted.length > 1) throw Error("PROTECTION_UPLOAD_AMBIGUOUS");
+  let pending = interrupted[0];
+  if (pending && !valid(pending)) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+  if (!pending) {
+    const objectName = "companies/" + companyId + "/" + crypto.randomUUID() + "." + format.ext;
+    const intent = { company_id: companyId, object_name: objectName, generation: "", sha256: digest, size: bytes.length, mime_type: format.mime, original_name: String(file.name || "documento").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 240), status: "uploading", uploaded_by: user.id, storage_provider: "gcs", purpose: "legacy-protection" };
+    try {
+      pending = await entity.create(intent);
+    } catch (error) {
+      const found = await entity.filter({ company_id: companyId, object_name: objectName }, "id", 2);
+      if (found.length !== 1 || !valid(found[0])) throw error;
+      pending = found[0];
+    }
+  }
+  let metadata = await transport.metadata(pending.object_name);
+  if (!metadata) {
+    if (pending.generation) throw Error("PROTECTION_GENERATION_MISSING_REVIEW");
+    try {
+      metadata = await transport.put(pending.object_name, bytes, format.mime);
+    } catch (error) {
+      metadata = await transport.metadata(pending.object_name);
+      if (!metadata) throw error;
+    }
+  }
+  if (!/^\d+$/.test(metadata.generation || "") || metadata.size !== bytes.length) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+  const stored = await transport.get(pending.object_name, metadata.generation);
+  if (stored.length !== bytes.length || await sha256(stored) !== digest) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+  try {
+    await entity.update(pending.id, { generation: metadata.generation, status: "ready", verified_at: (/* @__PURE__ */ new Date()).toISOString(), error_code: "" });
+  } catch (error) {
+    const readback = await entity.get(pending.id);
+    if (!valid(readback) || readback.status !== "ready" || readback.generation !== metadata.generation) throw error;
+  }
+  const asset = await entity.get(pending.id);
+  if (!valid(asset) || asset.status !== "ready" || asset.generation !== metadata.generation) throw Error("PROTECTION_PRIVATE_COPY_UNVERIFIED");
+  return { asset, file_url: assetReference(asset.id), reused: !!interrupted[0] };
+}
 export {
   assetIdFromReference,
   assetReference,
   authorizedAsset,
   invoicePdfReference,
   isStorageAdmin,
+  legacyDocumentMappings,
+  legacyReferenceDigest,
   mayAccessStorageCompany,
+  normalizeLegacyDocumentReference,
   privateFileFormat,
   publicInvoiceCapabilityValid,
+  publicInvoicePdfStoredReference,
   readPrivateAssetBytes,
   readPublicInvoicePdf,
   resolvePrivateAsset,
+  resolveStoredDocumentReference,
+  saveLegacyProtectionAsset,
   savePrivateAsset,
   storageAccountEnabled,
   storageCompany,

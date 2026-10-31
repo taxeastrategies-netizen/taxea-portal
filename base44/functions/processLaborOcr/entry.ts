@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import {storageAccountEnabled,storageCompany,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference,storageAccountEnabled,storageCompany,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 const nativeAppFile=value=>{try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='base44.app'&&!u.port&&!u.username&&!u.password&&!u.hash&&u.pathname.startsWith('/api/apps/6a00fec50cc522a74ddde4b2/files/mp/');}catch{return false;}};
 
 Deno.serve(async (req) => {
@@ -18,17 +18,17 @@ Deno.serve(async (req) => {
 
   const company=await storageCompany(base44.asServiceRole,user,doc.company_id);
   if(!company)return Response.json({error:'Empresa no autorizada.'},{status:403});
-  let providerFileUrl=doc.file_url;
-  const assetId=assetIdFromReference(doc.file_url);
+  try {
+  let providerFileUrl=await resolveStoredDocumentReference(base44.asServiceRole,user,doc.file_url,company.id);
+  const assetId=assetIdFromReference(providerFileUrl);
   if(assetId){
     const asset=await authorizedAsset(base44.asServiceRole,user,assetId);
     if(!asset||asset.company_id!==company.id)return Response.json({error:'Documento no disponible.'},{status:404});
     const resolved=await resolvePrivateAsset(base44.asServiceRole,user,assetId,Deno.env);
     if(!resolved)return Response.json({error:'Documento no disponible.'},{status:404});
     providerFileUrl=resolved.url;
-  }else if(!nativeAppFile(doc.file_url))return Response.json({error:'Referencia de documento no válida.'},{status:400});
+  }else if(!nativeAppFile(providerFileUrl))return Response.json({error:'Referencia de documento no válida.'},{status:400});
 
-  try {
     await base44.asServiceRole.entities.LaborOcrDocument.update(doc.id, { ocr_status: 'procesando' });
 
     const prompt = `Eres un motor OCR especializado en nóminas españolas con conocimiento laboral, fiscal y contable. Tu misión es extraer datos con máxima precisión y marcar como dudoso cualquier dato que no puedas leer con claridad.

@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -235,7 +236,7 @@ export default function ObligacionesFiscales() {
                       <FileCheck2 className="w-5 h-5 text-primary shrink-0" />
                       <div className="flex-1 min-w-0"><p className="text-sm font-semibold truncate">{doc.nombre}</p><p className="text-xs text-muted-foreground">{doc.detected?.code ? `Modelo ${doc.detected.code}` : 'Sin modelo'} · {doc.detected?.period || 'Sin período'} · {doc.detected?.fiscalYear || 'Sin ejercicio'} · {doc.fiscal_document_kind || 'Documento fiscal'}</p></div>
                       <span className="text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-1">{doc.estado || 'pendiente'}</span>
-                      {doc.archivo_url && <a href={doc.archivo_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">Abrir documento</a>}
+                      {doc.archivo_url && <ProtectedDocumentLink href={doc.archivo_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline" companyId={doc.company_id}>Abrir documento</ProtectedDocumentLink>}
                     </div>
                   ))}
                   {bundle.documents.length === 0 && <div className="p-12 text-center text-sm text-muted-foreground">Todavía no hay documentos fiscales en este perfil.</div>}
@@ -260,7 +261,7 @@ export default function ObligacionesFiscales() {
             <div className="space-y-1.5"><Label>Importe</Label><Input type="number" step="0.01" value={form.amount} onChange={event => setForm(prev => ({ ...prev, amount: event.target.value }))} disabled={!canManage} /></div>
             <div className="md:col-span-2 space-y-1.5"><Label>Comentarios del asesor</Label><Textarea value={form.comments} onChange={event => setForm(prev => ({ ...prev, comments: event.target.value }))} disabled={!canManage} rows={3} /></div>
           </div>
-          {selected?.documents?.length > 0 && <div className="mt-4 rounded-xl border border-border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Documentos vinculados</p>{selected.documents.map(doc => <a key={doc.id} href={doc.archivo_url} target="_blank" rel="noreferrer" className="block text-sm text-primary hover:underline py-1">{doc.nombre}</a>)}</div>}
+          {selected?.documents?.length > 0 && <div className="mt-4 rounded-xl border border-border p-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Documentos vinculados</p>{selected.documents.map(doc => <ProtectedDocumentLink key={doc.id} href={doc.archivo_url} target="_blank" rel="noreferrer" className="block text-sm text-primary hover:underline py-1" companyId={doc.company_id}>{doc.nombre}</ProtectedDocumentLink>)}</div>}
           <div className="flex justify-end gap-2 mt-5"><Button variant="outline" onClick={() => setShowForm(false)}>Cerrar</Button>{canManage && <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>}</div>
         </DialogContent>
       </Dialog>

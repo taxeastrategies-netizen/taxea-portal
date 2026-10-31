@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import {assetIdFromReference,resolvePrivateAsset} from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference,assetIdFromReference,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -60,6 +60,7 @@ async function validateFileUrls(value: unknown, maxFiles: number, svc: any, user
   if (!Array.isArray(value) || value.length > maxFiles) throw new Error('Demasiados archivos adjuntos');
   return Promise.all(value.map(async (raw) => {
     if (typeof raw !== 'string' || raw.length > 2048) throw new Error('URL de archivo no válida');
+    raw=await resolveStoredDocumentReference(svc,user,raw);
     const assetId=assetIdFromReference(raw);
     if(assetId){
       const resolved=await resolvePrivateAsset(svc,user,assetId,Deno.env);

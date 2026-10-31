@@ -1,0 +1,99 @@
+{
+  "name": "DocumentProtectionJob",
+  "type": "object",
+  "properties": {
+    "planDigest": {
+      "type": "string"
+    },
+    "backupJobId": {
+      "type": "string"
+    },
+    "scopeCompanyId": {
+      "type": "string"
+    },
+    "selectionDigest": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "completed",
+        "incidents",
+        "rolling_back",
+        "rolled_back"
+      ]
+    },
+    "startedBy": {
+      "type": "string"
+    },
+    "startedAt": {
+      "type": "string"
+    },
+    "finishedAt": {
+      "type": "string"
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cursor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verified": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reused": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "issueCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rollbackCursor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "disabledAliases": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selectionKeys": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "previousIssues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "planDigest",
+    "backupJobId",
+    "selectionDigest",
+    "status"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

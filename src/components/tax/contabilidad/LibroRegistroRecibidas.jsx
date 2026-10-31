@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { fiscalTreatmentLabel } from '@/lib/fiscalTreatmentLabel';
 import { useEffect, useState } from 'react';
@@ -190,9 +191,9 @@ export default function LibroRegistroRecibidas({ companyId }) {
                   </td>
                   <td className="px-3 py-2">
                     {inv.archivo_url ? (
-                      <a href={inv.archivo_url} target="_blank" rel="noreferrer">
+                      <ProtectedDocumentLink href={inv.archivo_url} target="_blank" rel="noreferrer" companyId={inv.company_id}>
                         <Button size="sm" variant="ghost" className="h-5 w-5 p-0"><Eye className="w-3 h-3" /></Button>
-                      </a>
+                      </ProtectedDocumentLink>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2"><span className="text-xs text-muted-foreground" title={inv.fiscal_legal_basis || ''}>{fiscalTreatmentLabel(inv.fiscal_treatment)}</span></td>

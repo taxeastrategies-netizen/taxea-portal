@@ -1,3 +1,6 @@
+import{privateDocumentId}from'@/lib/privateDocuments';
+import ProtectedDocumentPreview from '@/components/documentos/ProtectedDocumentPreview';
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { X, Download, Printer, FileText } from 'lucide-react';
@@ -85,20 +88,20 @@ export default function InvoiceViewer({ open, onOpenChange, invoice, company }) 
         {/* Content */}
         <div className="overflow-y-auto flex-1 bg-gray-100 p-4">
           {/* Archivo adjunto (no emitida) */}
-          {!showTemplate && isPdf && (
-            <iframe src={invoice.archivo_url} className="w-full rounded-lg border bg-white shadow"
-              style={{ height: '75vh' }} title="Factura PDF" />
+          {!showTemplate && (isPdf||privateDocumentId(invoice.archivo_url)) && (
+            <ProtectedDocumentPreview reference={invoice.archivo_url} className="w-full rounded-lg border bg-white shadow"
+              style={{ height: '75vh' }} title="Factura PDF"  companyId={invoice.company_id} mimeType="application/pdf"/>
           )}
           {!showTemplate && isImage && (
-            <img src={invoice.archivo_url} alt="Factura"
-              className="max-w-full mx-auto rounded-lg border shadow bg-white" />
+            <ProtectedDocumentPreview reference={invoice.archivo_url} title="Factura"
+              className="max-w-full mx-auto rounded-lg border shadow bg-white"  companyId={invoice.company_id} mimeType="image/*"/>
           )}
-          {!showTemplate && !isPdf && !isImage && (
+          {!showTemplate && !isPdf && !isImage && !privateDocumentId(invoice.archivo_url) && (
             <div className="text-center py-16 bg-white rounded-xl border">
               <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" />
               <p className="text-muted-foreground">No se puede previsualizar este archivo.</p>
               <Button variant="outline" size="sm" className="mt-3" asChild>
-                <a href={invoice.archivo_url} target="_blank" rel="noreferrer">Descargar para revisar</a>
+                <ProtectedDocumentLink href={invoice.archivo_url} target="_blank" rel="noreferrer" companyId={invoice.company_id}>Descargar para revisar</ProtectedDocumentLink>
               </Button>
             </div>
           )}

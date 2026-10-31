@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import {assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
+import {resolveStoredDocumentReference,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -74,15 +74,15 @@ Deno.serve(async (req) => {
     let params: Record<string, unknown> = {};
 
     if (operation === 'extract') {
-      let providerFileUrl=body.file_url;
-      const assetId=assetIdFromReference(body.file_url);
+      let providerFileUrl=await resolveStoredDocumentReference(svc,user,body.file_url,companyId);
+      const assetId=assetIdFromReference(providerFileUrl);
       if(assetId){
         const asset=await authorizedAsset(svc,user,assetId);
         if(!asset||asset.company_id!==companyId)return Response.json({error:'Archivo no disponible'},{status:404});
         const resolved=await resolvePrivateAsset(svc,user,assetId,Deno.env);
         if(!resolved)return Response.json({error:'Archivo no disponible'},{status:404});
         providerFileUrl=resolved.url;
-      }else if (!safeAppFileUrl(body.file_url)) return Response.json({ error: 'Archivo no admitido' }, { status: 400 });
+      }else if (!safeAppFileUrl(providerFileUrl)) return Response.json({ error: 'Archivo no admitido' }, { status: 400 });
       const schema = body.json_schema;
       if (!schema || typeof schema !== 'object' || Array.isArray(schema) || JSON.stringify(schema).length > 30000) {
         return Response.json({ error: 'Esquema de extracción no válido' }, { status: 400 });

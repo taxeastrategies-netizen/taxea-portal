@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import {uploadCompanyDocument} from '@/lib/privateDocuments';
 /**
  * InvoiceOperationalSidePanel — Panel lateral operativo de factura
@@ -363,9 +364,9 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
               <DropdownMenuContent align="end" className="text-sm">
                 {invoice.archivo_url && (
                   <DropdownMenuItem asChild>
-                    <a href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2">
+                    <ProtectedDocumentLink href={invoice.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2" companyId={invoice.company_id}>
                       <Download className="w-3.5 h-3.5" /> Descargar PDF
-                    </a>
+                    </ProtectedDocumentLink>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={copyPortalLink}>Copiar enlace portal</DropdownMenuItem>
@@ -548,10 +549,10 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
                     <p className="text-xs truncate text-foreground font-medium">PDF principal de la factura</p>
                     <p className="text-[10px] text-muted-foreground">Documento usado en el envío</p>
                   </div>
-                  <a href={invoice.archivo_url} target="_blank" rel="noreferrer" title="Descargar PDF principal"
-                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
+                  <ProtectedDocumentLink href={invoice.archivo_url} target="_blank" rel="noreferrer" title="Descargar PDF principal"
+                    className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" companyId={invoice.company_id}>
                     <Download className="w-3.5 h-3.5" />
-                  </a>
+                  </ProtectedDocumentLink>
                 </div>
               ) : (
                 <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
@@ -573,10 +574,10 @@ export default function InvoiceOperationalSidePanel({ invoice: sourceInvoice, on
                         <p className="text-[10px] text-muted-foreground">{fmtBytes(attachment.size_bytes)} · {attachment.uploaded_by || 'Usuario'}</p>
                       </div>
                       {attachment.signed_url && (
-                        <a href={attachment.signed_url} target="_blank" rel="noreferrer" title="Descargar adjunto"
-                          className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground">
+                        <ProtectedDocumentLink href={attachment.signed_url} target="_blank" rel="noreferrer" title="Descargar adjunto"
+                          className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground" companyId={invoice.company_id}>
                           <Download className="w-3.5 h-3.5" />
-                        </a>
+                        </ProtectedDocumentLink>
                       )}
                       <button type="button" onClick={() => removeAttachment(attachment)} title="Quitar adjunto"
                         className="p-1 hover:bg-red-50 rounded text-muted-foreground hover:text-red-600">

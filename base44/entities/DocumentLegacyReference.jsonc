@@ -1,0 +1,64 @@
+{
+  "name": "DocumentLegacyReference",
+  "type": "object",
+  "properties": {
+    "company_id": {
+      "type": "string"
+    },
+    "reference_digest": {
+      "type": "string"
+    },
+    "asset_id": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string"
+    },
+    "size": {
+      "type": "integer"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "disabled"
+      ]
+    },
+    "source_references": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "linked_by": {
+      "type": "string"
+    },
+    "linked_at": {
+      "type": "string"
+    },
+    "disabled_at": {
+      "type": "string"
+    },
+    "protection_job_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "company_id",
+    "reference_digest",
+    "asset_id",
+    "sha256",
+    "size",
+    "plan_id",
+    "status"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

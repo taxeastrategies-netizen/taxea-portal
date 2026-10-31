@@ -1,3 +1,4 @@
+import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { uploadCompanyDocument } from '@/lib/privateDocuments';
 import { useState, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
@@ -318,10 +319,10 @@ Instrucciones especiales:
                     <p className="text-[10px] text-slate-400">{file ? (file.size / 1024).toFixed(1) + ' KB' : ''} · Procesado con IA</p>
                   </div>
                   {fileUrl && (
-                    <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+                    <ProtectedDocumentLink href={fileUrl} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-medium">
                       <Download className="w-3 h-3" /> Ver
-                    </a>
+                    </ProtectedDocumentLink>
                   )}
                 </div>
 
