@@ -143,6 +143,20 @@
     },
     "runVersion": {
       "type": "string"
+    },
+    "scopeCompanyId": {
+      "type": "string",
+      "default": ""
+    },
+    "sourceIndexDriveFileId": {
+      "type": "string"
+    },
+    "sourceIndexChecksum": {
+      "type": "string"
+    },
+    "sourceIndexCount": {
+      "type": "number",
+      "default": 0
     }
   },
   "required": [

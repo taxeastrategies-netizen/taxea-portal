@@ -76,6 +76,14 @@
     "portalFolderName": {
       "type": "string",
       "default": "Taxea Portal"
+    },
+    "backupLockToken": {
+      "type": "string",
+      "default": ""
+    },
+    "backupLockExpiresAt": {
+      "type": "number",
+      "default": 0
     }
   },
   "required": [
