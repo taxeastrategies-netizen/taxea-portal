@@ -11,7 +11,7 @@ Deno.serve(async req=>{
   const body=await req.json().catch(()=>({})),svc=client.asServiceRole;
   const company=await svc.entities.Company.get(COMPANY);
   phase='verify-qa-scope';
-  if(company.owner_email!=='taxeastrategies+qa-recc-2026@gmail.com'||![company.razon_social,company.nombre_comercial].some(x=>String(x||'').includes('QA RECC'))||company.private_document_storage_enabled!==true)throw Error('QA_SCOPE_NOT_VERIFIED');
+  if(company.owner_email!=='taxeastrategies+qa-recc-2026@gmail.com'||![company.razon_social,company.nombre_comercial].some(x=>String(x||'').includes('QA RECC'))||(company.private_document_storage_enabled!==true&&!['restore_qa_private_flag','inspect_global_ocr'].includes(body.action)))throw Error('QA_SCOPE_NOT_VERIFIED');
   const unwrap=response=>response?.data??response;
   const recoveryOwner='taxeastrategies+qa-c1-recovery-20261031@gmail.com';
   const recoveryText='TAXEA QA PRIVATE ASSET RECOVERY 20261031\n';
@@ -46,6 +46,19 @@ Deno.serve(async req=>{
    const result=unwrap(await client.functions.invoke('documentStorage',{action:'restore_asset_backup',assetId:asset.id,expectedGeneration:body.expectedGeneration,expectedSha256:body.expectedSha256}));
    const current=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env,testCompany.id),transport=await storageTransport(Deno.env),unsigned=await transport.unsignedStatus(current.asset.object_name);
    return Response.json({ok:result.ok===true&&new TextDecoder().decode(current.bytes)===recoveryText&&[401,403,404].includes(unsigned),syntheticOnly:true,backupVerified:result.backupVerified===true,alreadyRestored:result.alreadyRestored===true,bytes:current.bytes.length,hashVerified:current.asset.sha256===body.expectedSha256,referenceUnchanged:result.file_url===assetReference(asset.id),publicAccessDenied:[401,403,404].includes(unsigned),realCustomerWrites:0,accountingWrites:0});
+  }
+  if(body.action==='prepare_global_ocr_fixture'){
+   if(Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')!=='true')throw Error('QA_GLOBAL_FLAG_NOT_ACTIVE');
+   await svc.entities.Company.update(COMPANY,{private_document_storage_enabled:false});
+   return Response.json({ok:true,syntheticOnly:true,companySpecificFlag:false,globalPrivateOcrEnabled:true,accountingWrites:0,realCustomerWrites:0});
+  }
+  if(body.action==='restore_qa_private_flag'){
+   await svc.entities.Company.update(COMPANY,{private_document_storage_enabled:true});
+   return Response.json({ok:true,syntheticOnly:true,companySpecificFlagRestored:true,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',accountingWrites:0,realCustomerWrites:0});
+  }
+  if(body.action==='inspect_global_ocr'){
+   const records=await svc.entities.OcrInvoiceDocument.filter({company_id:COMPANY,originalFileName:'QA-C1-GLOBAL-OCR-20261031.pdf'},'-created_date',5);
+   return Response.json({ok:true,syntheticOnly:true,globalPrivateOcrEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true',companySpecificFlag:company.private_document_storage_enabled===true,documents:records.map(row=>({id:row.id,status:row.status,privateReference:String(row.fileStorageUrl||'').startsWith('https://taxeaportal.com/private-document/'),hasExtraction:Boolean(row.extractedData),linkedInvoice:Boolean(row.linkedInvoiceId),linkedJournal:Boolean(row.linkedJournalEntryId)})),accountingWrites:0,realCustomerWrites:0});
   }
   if(body.action==='catalog_probe'){
    const cutoff=new Date().toISOString(),query={company_id:COMPANY,created_date:{$lte:cutoff},status:'ready'};
