@@ -1,4 +1,4 @@
-import {privateAssetRecoveryPlan,restorePrivateAsset} from './storageRecovery.mjs';
+import {privateAssetRecoveryPlan,restorePrivateAsset,privateAssetBackupPlan,restorePrivateAssetFromBackup} from './storageRecovery.mjs';
 import {contextStorageCompany} from './documentContexts.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
@@ -34,10 +34,11 @@ Deno.serve(async req=>{
    const config=storageConfiguration(Deno.env),certificate=await publicStorageCertificate(config);
    return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
   }
-  if(['asset_recovery_plan','restore_asset'].includes(action)){
+  if(['asset_recovery_plan','restore_asset','asset_backup_recovery_plan','restore_asset_backup'].includes(action)){
    if(!admin)return response({error:'Acceso reservado a administración.'},403);
    try{
-    return response({ok:true,...(action==='asset_recovery_plan'?await privateAssetRecoveryPlan(client.asServiceRole,user,body.assetId,Deno.env):await restorePrivateAsset(client.asServiceRole,user,body,Deno.env))});
+    const result=action==='asset_recovery_plan'?await privateAssetRecoveryPlan(client.asServiceRole,user,body.assetId,Deno.env):action==='asset_backup_recovery_plan'?await privateAssetBackupPlan(client.asServiceRole,user,body.assetId):action==='restore_asset_backup'?await restorePrivateAssetFromBackup(client.asServiceRole,user,body,Deno.env):await restorePrivateAsset(client.asServiceRole,user,body,Deno.env);
+    return response({ok:true,...result});
    }catch(error){
     const code=/^RECOVERY_[A-Z_]+$/.test(error?.recoveryCode||'')?error.recoveryCode:'RECOVERY_UNAVAILABLE';
     return response({error:'No se pudo confirmar la recuperación del documento.',code},[403,404,409].includes(error?.status)?error.status:503);

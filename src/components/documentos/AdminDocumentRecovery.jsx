@@ -10,9 +10,10 @@ export default function AdminDocumentRecovery({assetId,onRestored}){
  const operate=async action=>{
   if(busy)return;setBusy(true);setMessage('');
   try{
-   const response=await base44.functions.invoke('documentStorage',action==='asset_recovery_plan'?{action,assetId}:{action,assetId,expectedGeneration:plan.expectedGeneration,expectedSha256:plan.sha256});
+   const response=await base44.functions.invoke('documentStorage',['asset_recovery_plan','asset_backup_recovery_plan'].includes(action)?{action,assetId}:{action,assetId,expectedGeneration:plan.expectedGeneration,expectedSha256:plan.sha256});
    const data=response?.data??response;if(!data?.ok)throw new Error('No se pudo verificar la recuperación.');
-   if(action==='asset_recovery_plan'){
+   if(action==='asset_backup_recovery_plan'){setPlan({...data,mode:'backup_required',canRestore:false});setMessage(data.backupAvailable?'Hay una copia registrada en Drive. Se verificará su propietario, privacidad, tamaño y hash antes de restaurar.':'No hay una copia registrada que coincida con el hash y la empresa. No se ha cambiado el documento.');}
+   else if(action==='asset_recovery_plan'){
     setPlan(data);
     if(data.mode==='available')setMessage('El archivo está íntegro. Puedes volver a abrirlo.');
     if(data.mode==='backup_required')setMessage('No hay una versión recuperable en el almacenamiento. Se necesita una copia de seguridad verificada; no se ha cambiado ningún documento.');
@@ -25,6 +26,8 @@ export default function AdminDocumentRecovery({assetId,onRestored}){
   <p className="text-xs text-muted-foreground">Comprueba la versión del archivo y su hash. La recuperación conserva la referencia y no modifica facturas, asientos ni subcuentas.</p>
   {message&&<p role="status">{message}</p>}
   {plan?.canRestore&&<div className="space-y-2 break-words text-xs"><p>{plan.name} · {plan.size} bytes</p><p>SHA-256: {plan.sha256}</p>{plan.expiresAt&&<p>Versión recuperable hasta: {new Date(plan.expiresAt).toLocaleString('es-ES')}</p>}<Button disabled={busy} onClick={()=>operate('restore_asset')}>{busy&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Restaurar y verificar este archivo</Button></div>}
+  {plan?.mode==='backup_required'&&!plan?.backupAvailable&&<Button variant="outline" disabled={busy} onClick={()=>operate('asset_backup_recovery_plan')}>Buscar copia de seguridad en Drive</Button>}
+  {plan?.backupAvailable&&<Button disabled={busy} onClick={()=>operate('restore_asset_backup')}>{busy&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Restaurar desde Drive y verificar</Button>}
   {!plan?.canRestore&&<Button variant="outline" disabled={busy} onClick={()=>operate('asset_recovery_plan')}>{busy&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Analizar recuperación</Button>}
  </div>;
 }

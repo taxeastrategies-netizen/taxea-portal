@@ -1,3 +1,4 @@
+import {driveBackupCandidates,readDriveRecoveryBytes} from './driveRecovery.mjs';
 import {authorizedAsset,assetReference,isStorageAdmin,storageAccountEnabled} from './storageAssets.mjs';
 import {storageTransport,sha256} from './storageTransport.mjs';
 const fail=(code,status=409)=>Object.assign(new Error(code),{recoveryCode:code,status});
@@ -49,4 +50,25 @@ export async function restorePrivateAsset(service,user,request,env,makeTransport
  if(after?.company_id!==asset.company_id||after.object_name!==asset.object_name||after.sha256!==asset.sha256||after.size!==asset.size||after.generation!==generation||after.status!=='ready')throw fail('RECOVERY_LEDGER_CHANGED');
  if(Number(updated?.updated)!==1&&after.restore_source_generation!==asset.generation)throw fail('RECOVERY_LEDGER_CHANGED');
  return{ok:true,restored:true,assetId:asset.id,file_url:assetReference(asset.id),sha256:asset.sha256,size:asset.size,generationChanged:generation!==asset.generation,verified:true,financialWrites:0};
+}
+
+export async function privateAssetBackupPlan(service,user,id){
+ const asset=await snapshot(service,user,id),records=await driveBackupCandidates(service,user,asset);
+ return{ok:true,assetId:asset.id,companyId:asset.company_id,name:asset.original_name,size:asset.size,sha256:asset.sha256,expectedGeneration:asset.generation,backupAvailable:records.length>0,backupContentVerified:false,financialWrites:0};
+}
+export async function restorePrivateAssetFromBackup(service,user,request,env,makeTransport=storageTransport,readBackup=readDriveRecoveryBytes){
+ const asset=await snapshot(service,user,request?.assetId);
+ if(request.expectedSha256!==asset.sha256)throw fail('RECOVERY_PLAN_STALE');
+ const transport=await makeTransport(env);
+ if(request.expectedGeneration!==asset.generation){
+  if(asset.restore_source_generation===request.expectedGeneration){await verify(asset,await transport.get(asset.object_name,asset.generation));return{ok:true,alreadyRestored:true,file_url:assetReference(asset.id),sha256:asset.sha256,size:asset.size,financialWrites:0};}
+  throw fail('RECOVERY_PLAN_STALE');
+ }
+ const state=await inspect(asset,transport);
+ if(['available','relink'].includes(state.mode))return restorePrivateAsset(service,user,request,env,()=>transport);
+ const copy=await readBackup(service,user,asset);await verify(asset,copy.bytes);
+ try{await transport.put(asset.object_name,copy.bytes,asset.mime_type);}
+ catch(error){const current=await transport.metadata(asset.object_name).catch(()=>null);if(!current)throw error;await verify(asset,await transport.get(asset.object_name,current.generation));}
+ const result=await restorePrivateAsset(service,user,request,env,()=>transport);
+ return{...result,backupVerified:true,backupRecordId:copy.backupRecordId};
 }

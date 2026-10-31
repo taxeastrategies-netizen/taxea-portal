@@ -28,6 +28,25 @@ Deno.serve(async req=>{
    if(asset.company_id!==testCompany.id||asset.original_name!=='QA-C1-RESTORE-LEDGER-20261031.txt')throw Error('QA_SCOPE_NOT_VERIFIED');
    return{testCompany,asset};
   };
+  if(body.action==='simulate_backup_required'){
+   phase='qa-drive-backup-loss';if(body.confirmation!=='QA_SYNTHETIC_DRIVE_RESTORE_TEST')throw Error('QA_CONFIRMATION_REQUIRED');
+   const {testCompany,asset}=await recoveryFixture();
+   if(asset.object_name.includes('-backup-recovery-qa')&&asset.restored_at)return Response.json({ok:true,alreadyRestored:true,repeatedLossPrevented:true,syntheticOnly:true});
+   const backup=unwrap(await client.functions.invoke('documentStorage',{action:'asset_backup_recovery_plan',assetId:asset.id}));if(!backup.backupAvailable)throw Error('QA_BACKUP_NOT_READY');
+   if(!asset.object_name.includes('-backup-recovery-qa')){
+    const source=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env,testCompany.id);if(new TextDecoder().decode(source.bytes)!==recoveryText)throw Error('QA_SCOPE_NOT_VERIFIED');
+    const newPath=asset.object_name.replace(/(\.[A-Za-z0-9]+)$/,'-backup-recovery-qa$1');if(newPath===asset.object_name)throw Error('QA_SCOPE_NOT_VERIFIED');
+    await svc.entities.DocumentAsset.update(asset.id,{object_name:newPath,restored_at:'',restored_by:'',restore_source_generation:''});
+   }
+   const plan=unwrap(await client.functions.invoke('documentStorage',{action:'asset_recovery_plan',assetId:asset.id}));
+   return Response.json({ok:plan.mode==='backup_required',syntheticOnly:true,assetId:asset.id,expectedGeneration:plan.expectedGeneration,expectedSha256:plan.sha256,mode:plan.mode,originalCloudObjectRetained:true,realCustomerWrites:0});
+  }
+  if(body.action==='recover_fixture_from_backup'){
+   phase='qa-drive-restore';const {testCompany,asset}=await recoveryFixture();
+   const result=unwrap(await client.functions.invoke('documentStorage',{action:'restore_asset_backup',assetId:asset.id,expectedGeneration:body.expectedGeneration,expectedSha256:body.expectedSha256}));
+   const current=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env,testCompany.id),transport=await storageTransport(Deno.env),unsigned=await transport.unsignedStatus(current.asset.object_name);
+   return Response.json({ok:result.ok===true&&new TextDecoder().decode(current.bytes)===recoveryText&&[401,403,404].includes(unsigned),syntheticOnly:true,backupVerified:result.backupVerified===true,alreadyRestored:result.alreadyRestored===true,bytes:current.bytes.length,hashVerified:current.asset.sha256===body.expectedSha256,referenceUnchanged:result.file_url===assetReference(asset.id),publicAccessDenied:[401,403,404].includes(unsigned),realCustomerWrites:0,accountingWrites:0});
+  }
   if(body.action==='catalog_probe'){
    const cutoff=new Date().toISOString(),query={company_id:COMPANY,created_date:{$lte:cutoff},status:'ready'};
    const first=await svc.entities.DocumentAsset.filter(query,'id',2);
