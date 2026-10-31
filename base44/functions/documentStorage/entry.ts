@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
 import { verifyStorageConnection, boundedBytes } from './storageTransport.mjs';
 import { storageCompany, isStorageAdmin, savePrivateAsset, resolvePrivateAsset } from './storageAssets.mjs';
+import { verifySignedStorageConnection } from './storageSigning.mjs';
 
 const disabled=(user:any)=>[user,user?.data].filter(Boolean).some(state=>state.is_deleted===true
  ||['eliminado','bloqueado','suspendido'].includes(String(state.status||'').trim().toLowerCase())
@@ -24,9 +25,10 @@ Deno.serve(async req=>{
    body=multipart?Object.fromEntries((await new Response(bytes,{headers:{'content-type':req.headers.get('content-type')}}).formData()).entries()):JSON.parse(new TextDecoder().decode(bytes));
   }catch{return response({error:'Solicitud no válida o demasiado grande.'},400);}
   const action=body?.action;
-  if(['public_certificate','verify_connection'].includes(action)){
+  if(['public_certificate','verify_connection','verify_signed_connection'].includes(action)){
    if(!admin)return response({error:'Acceso reservado a administración.'},403);
    if(action==='verify_connection')return response({ok:true,...await verifyStorageConnection(Deno.env)});
+   if(action==='verify_signed_connection')return response({ok:true,...await verifySignedStorageConnection(Deno.env)});
    const config=storageConfiguration(Deno.env),certificate=await publicStorageCertificate(config);
    return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
   }
