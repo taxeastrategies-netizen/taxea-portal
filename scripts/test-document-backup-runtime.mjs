@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
+import {build} from 'esbuild';
 
-const functionSource = fs.readFileSync('base44/functions/documentBackupToDrive/entry.ts', 'utf8')
-  .replace(/^import .*?;\s*/s, '');
+const entry=process.env.BACKUP_ENTRY||'base44/functions/documentBackupToDrive/entry.ts';
+const rawSource=fs.readFileSync(entry,'utf8');
+const compiled=await build({entryPoints:[entry],bundle:true,write:false,format:'cjs',platform:'node',plugins:[{name:'sdk-stub',setup(b){b.onResolve({filter:/^npm:@base44/},()=>({path:'sdk',namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({loader:'js',contents:'export const createClientFromRequest=(req)=>globalThis.__factory(req);'}));}}]});
+const functionSource=compiled.outputFiles[0].text;
 
 function responseJson(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -19,7 +22,7 @@ function paged(rows) {
   };
 }
 
-async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false, redirectFirstDownload = false }) {
+async function executeScenario({ documentCount, existingCount, throttleFirstUpload = false, addNewerPendingDuplicates = false, redirectFirstDownload = false,interruptAndInsert=false,lostMetadataOnce=false }) {
   const fileUrl = id => `https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/6a00fec50cc522a74ddde4b2/${id}.pdf`;
   const documents = Array.from({ length: documentCount }, (_, index) => ({
     id: `doc-${index}`,
@@ -64,7 +67,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     portalFolderName: 'Taxea Portal',
     folderNamingMode: 'both',
   };
-  let job = null;
+  let job = null;const driveFiles=new Map();let sourceScans=0,lost=false,forcePartialExpired=false;class ScenarioDate extends Date{static now(){return Date.now()+(forcePartialExpired?45000:0);}}
   let recordCreates = 0;
   let itemCreates = 0;
   let mediaDownloads = 0;
@@ -76,12 +79,13 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
       list: async () => [config],
       create: async value => Object.assign(config, value, { id: 'config-1' }),
       update: async (_id, value) => Object.assign(config, value),
+      updateMany: async (q,patch)=>{if(q.backupLockToken&&q.backupLockToken!==config.backupLockToken)return {updated:0};if(q.$or&&config.backupLockToken&&config.backupLockExpiresAt>Date.now())return {updated:0};Object.assign(config,patch.$set);return {updated:1};},
     },
     BackupJob: {
       list: async () => job ? [job] : [],
       get: async id => id === job?.id ? job : null,
       create: async value => (job = { id: 'job-1', ...value }),
-      update: async (_id, value) => Object.assign(job, value),
+      update: async (_id, value) => {Object.assign(job,value);if(interruptAndInsert&&value.status==='copying'&&value.nextCursor>0)forcePartialExpired=true;return job;},
     },
     BackupJobItem: {
       create: async value => ({ id: `item-${++itemCreates}`, ...value }),
@@ -91,6 +95,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     DocumentBackupRecord: {
       ...paged(records),
       create: async value => {
+        if(lostMetadataOnce&&!lost){lost=true;throw Object.assign(new Error('synthetic lost metadata'),{status:503});}
         const created = { id: `new-record-${++recordCreates}`, ...value };
         records.unshift(created);
         return created;
@@ -101,7 +106,7 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
         return current;
       },
     },
-    OcrInvoiceDocument: paged(documents),
+    OcrInvoiceDocument:{list:async(...args)=>{sourceScans++;return paged(documents).list(...args);}},
     Invoice: paged([]),
     Document: paged([]),
     HRDocument: paged([]),
@@ -120,9 +125,12 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
   const fetchMock = async (url, options = {}) => {
     const target = String(url);
     if (target.includes('/drive/v3/about')) return responseJson({ user: { emailAddress: 'taxeastrategies@gmail.com' } });
-    if (target.includes('/drive/v3/files?') && options.method !== 'POST') {
-      return responseJson({ files: [{ id: `folder-${Math.random()}`, name: 'folder' }] });
+    if(target.includes('/drive/v3/files?')&&options.method!=='POST'){
+      const query=new URL(target).searchParams.get('q')||'';
+      if(query.includes('taxeaBackupKey')){const key=query.match(/value='([^']+)'/)?.[1];return responseJson({files:[...driveFiles.values()].filter(x=>x.appProperties?.taxeaBackupKey===key).map(({bytes,...x})=>x)});}
+      return responseJson({files:[{id:'folder-canonical',name:'folder'}]});
     }
+    if(target.includes('/drive/v3/files/')&&target.includes('alt=media')){const id=new URL(target).pathname.split('/').pop();return driveFiles.has(id)?new Response(driveFiles.get(id).bytes):new Response(null,{status:404});}
     if (target.startsWith('https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/')) {
       mediaDownloads++;
       if (redirectFirstDownload) {
@@ -150,14 +158,17 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
         firstUploadThrottled = true;
         return responseJson({ error: 'rateLimitExceeded' }, 429, { 'retry-after': '0' });
       }
-      return responseJson({ id: `uploaded-${uploadAttempts}`, size: 3, name: 'uploaded' });
+      const body=Buffer.from(options.body),boundary=options.headers['Content-Type'].split('boundary=')[1];
+      const first=body.indexOf('\r\n\r\n')+4,metadataEnd=body.indexOf('\r\n--'+boundary,first),metadata=JSON.parse(body.subarray(first,metadataEnd).toString());
+      const second=body.indexOf('\r\n\r\n',metadataEnd)+4,end=body.indexOf('\r\n--'+boundary,second),bytes=new Uint8Array(body.subarray(second,end));
+      const file={...metadata,id:'uploaded-'+uploadAttempts,size:bytes.length,bytes};driveFiles.set(file.id,file);const {bytes:_,...visible}=file;return responseJson(visible);
     }
     throw new Error(`Unexpected fetch: ${target}`);
   };
 
   let handler;
   const context = {
-    createClientFromRequest: () => base44,
+    __factory: () => base44,
     Deno: {
       env: { get: key => key === 'BASE44_APP_ID' ? '6a00fec50cc522a74ddde4b2' : null },
       serve: fn => { handler = fn; },
@@ -167,26 +178,30 @@ async function executeScenario({ documentCount, existingCount, throttleFirstUplo
     Request,
     Headers,
     URL,
-    TextEncoder,
+    TextEncoder,TextDecoder,atob,btoa,URLSearchParams,
     Uint8Array,
     AbortController,
     crypto: webcrypto,
-    setTimeout,
+    setTimeout:(fn,ms)=>setTimeout(fn,ms>=20000?ms:0),
     clearTimeout,
     console,
     Math,
-    Date,
+    Date:ScenarioDate,
     Intl,
   };
   vm.runInNewContext(functionSource, context, { filename: 'documentBackupToDrive/entry.ts' });
   assert.equal(typeof handler, 'function');
 
-  const response = await handler(new Request('https://qa.invalid.test/documentBackupToDrive', {
+  let response = await handler(new Request('https://qa.invalid.test/documentBackupToDrive', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'backup', jobType: 'manual' }),
   }));
-  const payload = await response.json();
-  return { payload, job, recordCreates, itemCreates, mediaDownloads, uploadAttempts };
+  let payload = await response.json();
+  if(interruptAndInsert){assert.equal(payload.continueRequired,true,'Must exercise an actual persisted partial chunk');documents.unshift({...documents[0],id:'new-between-chunks',fileStorageUrl:fileUrl('new-between-chunks')});}
+  for(let n=0;payload.continueRequired&&n<20;n++){forcePartialExpired=false;response=await handler(new Request('https://qa.invalid.test/documentBackupToDrive',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'backup',jobType:'manual',resumeJobId:payload.jobId})}));payload=await response.json();}
+  if(lostMetadataOnce){assert.equal(payload.status,'completed_with_errors');response=await handler(new Request('https://qa.invalid.test/documentBackupToDrive',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'backup',jobType:'manual'})}));payload=await response.json();}
+  return { payload, job, recordCreates, itemCreates, mediaDownloads, uploadAttempts,sourceScans,documentCopies:[...driveFiles.values()].filter(x=>x.name==='factura-0.pdf').length };
+
 }
 
 const paginated = await executeScenario({ documentCount: 600, existingCount: 600 });
@@ -196,7 +211,7 @@ assert.equal(paginated.payload.documentsCopied, 0);
 assert.equal(paginated.payload.documentsSkipped, 600);
 assert.equal(paginated.mediaDownloads, 0, 'existing records beyond page 500 must not be downloaded again');
 assert.equal(paginated.recordCreates, 0, 'existing records beyond page 500 must not create duplicate metadata');
-assert.equal(paginated.uploadAttempts, 3, 'only the three manifests should be uploaded');
+assert.equal(paginated.uploadAttempts,4,'Source index and three final manifests must be uploaded');
 
 const augustBaseline = await executeScenario({
   documentCount: 600,
@@ -214,7 +229,7 @@ assert.equal(throttled.payload.documentsCopied, 1);
 assert.equal(throttled.recordCreates, 1);
 assert.equal(throttled.itemCreates, 1);
 assert.equal(throttled.mediaDownloads, 1);
-assert.equal(throttled.uploadAttempts, 5, 'one retried document upload plus three manifests expected');
+assert.equal(throttled.uploadAttempts,6,'One rate-limited upload, source index, one document, three final manifests');
 
 const redirected = await executeScenario({
   documentCount: 1,
@@ -237,17 +252,17 @@ assert.match(panelSource, /for \(let chunk = 0; chunk < 200; chunk \+= 1\)/);
 assert.match(panelSource, /resumeJobId/);
 const appSource = fs.readFileSync('src/App.jsx', 'utf8');
 assert.match(appSource, /path="\/admin\/backup-drive" element=\{<AdminOnlyRoute isAdmin=\{isPlatformAdmin\}>/);
-assert.match(functionSource, /nextCursor/);
-assert.match(functionSource, /lastHeartbeatAt/);
-assert.match(functionSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
-assert.match(functionSource, /driveEmail !== REQUIRED_EMAIL/);
-assert.match(functionSource, /const entries = manifest\?\.documents/);
-assert.match(functionSource, /manifestChecksum !== lastJob\.manifestChecksum/);
-assert.match(functionSource, /entries\.slice\(cursor, cursor \+ 25\)/);
-assert.match(functionSource, /computeChecksum\(restoredBytes\)/);
-assert.match(functionSource, /verificationChecked: checked, documentsVerified: verified/);
-assert.match(functionSource, /remaining > 0 \? 'partial'/);
-assert.match(functionSource, /existing\.driveFileId && !!existing\.checksum && sourceUnchanged/);
+assert.match(rawSource, /nextCursor/);
+assert.match(rawSource, /lastHeartbeatAt/);
+assert.match(rawSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
+assert.match(rawSource, /driveEmail !== REQUIRED_EMAIL/);
+assert.match(rawSource, /const entries = manifest\?\.documents/);
+assert.match(rawSource, /manifestChecksum !== lastJob\.manifestChecksum/);
+assert.match(rawSource, /entries\.slice\(cursor, cursor \+ 25\)/);
+assert.match(rawSource, /computeChecksum\(restoredBytes\)/);
+assert.match(rawSource, /verificationChecked: checked, documentsVerified: verified/);
+assert.match(rawSource, /remaining > 0 \? 'partial'/);
+assert.match(rawSource, /existing\.driveFileId && !!existing\.checksum && sourceUnchanged/);
 
 console.log(JSON.stringify({
   ok: true,
@@ -270,3 +285,6 @@ console.log(JSON.stringify({
     missingDriveIdCannotBeSkipped: true,
   },
 }, null, 2));
+
+const resumed=await executeScenario({documentCount:6,existingCount:0,interruptAndInsert:true});assert.equal(resumed.payload.status,'completed');assert.equal(resumed.payload.documentsScanned,6);assert.equal(resumed.sourceScans,1,'Resume must use the frozen Drive index, not rescan shifting sources');
+const recovered=await executeScenario({documentCount:1,existingCount:0,lostMetadataOnce:true});assert.equal(recovered.payload.status,'completed');assert.equal(recovered.documentCopies,1,'Lost tracking response must not create a second Drive copy');console.log(JSON.stringify({frozenIndexResumeVerified:true,newRowsDeferredToNextJob:true,lostMetadataCopyRecoveredWithoutDuplicate:true}));

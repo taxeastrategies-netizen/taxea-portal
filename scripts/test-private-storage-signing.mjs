@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';import {generateKeyPairSync,verify,createHash} from 'node:crypto';import {signedStorageRead} from '../base44/functions/documentStorage/storageSigning.mjs';import {STORAGE_PROJECT,STORAGE_BUCKET,STORAGE_ACCOUNT} from '../base44/functions/documentStorage/storageCredentials.mjs';
+const {privateKey,publicKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+const config={type:'service_account',project_id:STORAGE_PROJECT,client_email:STORAGE_ACCOUNT,token_uri:'https://oauth2.googleapis.com/token',private_key:privateKey.export({format:'pem',type:'pkcs8'})};
+const env={get:name=>({TAXEA_GCS_CREDENTIALS_JSON:JSON.stringify(config),TAXEA_GCS_BUCKET:STORAGE_BUCKET,TAXEA_GCS_PROJECT_ID:STORAGE_PROJECT})[name]};
+const asset={object_name:'companies/qa-company/0a000000-0000-0000-0000-000000000001.pdf',generation:'12345'},now=new Date('2026-10-31T11:30:00.000Z');
+const signed=await signedStorageRead(env,asset,now),url=new URL(signed.url);assert.equal(url.hostname,'storage.googleapis.com');assert.equal(url.searchParams.get('X-Goog-Expires'),'120');assert.equal(url.searchParams.get('generation'),'12345');assert.equal(url.searchParams.get('X-Goog-Date'),'20261031T113000Z');assert.equal(signed.expiresAt,'2026-10-31T11:32:00.000Z');
+const signature=url.searchParams.get('X-Goog-Signature');url.searchParams.delete('X-Goog-Signature');
+const query=signed.url.split('?')[1].split('&X-Goog-Signature=')[0];
+const canonical=['GET',url.pathname,query,'host:storage.googleapis.com\n','host','UNSIGNED-PAYLOAD'].join('\n');
+const toSign=['GOOG4-RSA-SHA256','20261031T113000Z','20261031/auto/storage/goog4_request',createHash('sha256').update(canonical).digest('hex')].join('\n');
+assert.ok(verify('RSA-SHA256',Buffer.from(toSign),publicKey,Buffer.from(signature,'hex')));assert.equal(signed.url.includes('PRIVATE'),false);
+await assert.rejects(()=>signedStorageRead(env,{...asset,object_name:'companies/qa-company/../../x.pdf'},now));await assert.rejects(()=>signedStorageRead(env,{...asset,generation:'123&x=1'},now));
+console.log(JSON.stringify({ok:true,independentSignatureVerified:true,twoMinuteExpiry:true,generationPinned:true,privateKeyAbsent:true,pathTraversalDenied:true}));

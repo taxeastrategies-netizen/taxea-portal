@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {generateKeyPairSync,X509Certificate,createPublicKey} from 'node:crypto';
+import {publicStorageCertificate,storageConfiguration,STORAGE_PROJECT,STORAGE_BUCKET,STORAGE_ACCOUNT} from '../base44/functions/documentStorage/storageCredentials.mjs';
+const {privateKey}=generateKeyPairSync('rsa',{modulusLength:2048});
+const config={type:'service_account',project_id:STORAGE_PROJECT,client_email:STORAGE_ACCOUNT,token_uri:'https://oauth2.googleapis.com/token',private_key:privateKey.export({format:'pem',type:'pkcs8'}).toString()};
+const env={get:k=>({TAXEA_GCS_CREDENTIALS_JSON:JSON.stringify(config),TAXEA_GCS_BUCKET:STORAGE_BUCKET,TAXEA_GCS_PROJECT_ID:STORAGE_PROJECT})[k]};
+assert.deepEqual(storageConfiguration(env),config);
+for(const patch of [{project_id:'foreign'},{client_email:'other@test.invalid'},{token_uri:'https://evil.invalid'}])assert.throws(()=>storageConfiguration({get:k=>k==='TAXEA_GCS_CREDENTIALS_JSON'?JSON.stringify({...config,...patch}):env.get(k)}));
+const result=await publicStorageCertificate(config,new Date('2026-10-31T11:00:00Z'));
+const certificate=new X509Certificate(result.certificate);
+assert.equal(certificate.subject,'CN=unused');assert.equal(certificate.issuer,'CN=unused');
+assert.ok(certificate.verify(createPublicKey(privateKey)));
+assert.ok(certificate.checkPrivateKey(privateKey));assert.equal(certificate.validTo,'Oct 31 11:00:00 2027 GMT');
+assert.equal(result.certificate.includes('PRIVATE'),false);assert.ok(/^[a-f0-9]{64}$/.test(result.fingerprint));
+console.log(JSON.stringify({ok:true,certificateSignatureVerified:true,samePrivateKey:true,privateKeyOutput:false,configurationBoundaries:true}));

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {createDocumentClient,privateDocumentId} from '../src/lib/documentClient.mjs';
+const reference='https://taxeaportal.com/private-document/asset-a',bytes=Buffer.from('%PDF-1.4\nSYNTHETIC ONLY\n'),hash=createHash('sha256').update(bytes).digest('hex');
+let cleanup,nativeCalls=0,enabled=true,failed=false,corrupt=false,release;
+const response=()=>new Response(corrupt?'CORRUPTED':bytes,{headers:{'Content-Type':'application/pdf','X-Taxea-File-Sha256':hash,'X-Taxea-File-Size':String(bytes.length),'X-Taxea-File-Name':encodeURIComponent('Prueba sintética.pdf')}});
+const api={functions:{invoke:async(name,body)=>{assert.equal(name,'documentStorage');if(failed)throw Object.assign(new Error('Denied'),{status:403});if(body.action==='capabilities')return {data:{ok:true,privateStorageEnabled:enabled,maxFileBytes:20*1024*1024}};assert.equal(body.action,'upload');assert.ok(body.file instanceof File);assert.equal(body.companyId,'company-a');return {data:{ok:true,file_url:reference,assetId:'asset-a'}};},fetch:async(path,init)=>{assert.equal(path,'/documentStorage');assert.deepEqual(JSON.parse(init.body),{action:'download',assetId:'asset-a'});if(failed)return Response.json({error:'Documento no disponible.'},{status:404});if(release===true)return new Promise(resolve=>{release=()=>resolve(response());});return response();}},integrations:{Core:{UploadFile:async()=>{nativeCalls++;return {file_url:'https://native.example.test/file.pdf'};}}}};
+const client=createDocumentClient(api,fn=>cleanup=fn),file=new File([bytes],'synthetic.pdf',{type:'application/pdf'});
+assert.equal(privateDocumentId(reference),'asset-a');assert.equal(privateDocumentId(reference+'?other=1'),'');assert.equal(privateDocumentId('https://evil.test/private-document/asset-a'),'');
+await assert.rejects(()=>client.upload({file,companyId:''}));assert.equal(nativeCalls,0);
+const saved=await client.upload({file,companyId:'company-a'});assert.equal(saved.file_uri,reference);assert.equal(nativeCalls,0);
+enabled=false;await client.upload({file,companyId:'company-a'});assert.equal(nativeCalls,1);enabled=true;
+failed=true;await assert.rejects(()=>client.upload({file,companyId:'company-a'}));await assert.rejects(()=>client.open(reference),error=>error.status===404);assert.equal(nativeCalls,1);failed=false;
+const opened=await client.open(reference);assert.equal(opened.name,'Prueba sintética.pdf');assert.ok(opened.url.startsWith('blob:'));assert.equal(await (await fetch(opened.url)).text(),bytes.toString());cleanup();await assert.rejects(()=>fetch(opened.url));
+corrupt=true;await assert.rejects(()=>client.open(reference));corrupt=false;
+release=true;const pending=client.open(reference);await new Promise(resolve=>setImmediate(resolve));cleanup();release();await assert.rejects(()=>pending,/sesión ha cambiado/);
+console.log(JSON.stringify({ok:true,plainFileMultipartContract:true,legacyCompanyPreserved:true,privateErrorsNeverDowngrade:true,authenticatedBinaryDownload:true,hashVerified:true,corruptionDenied:true,logoutRevokesLocalUrls:true,logoutRaceDenied:true,noGoogleUrlInClient:true}));
