@@ -22,7 +22,10 @@ export async function storageTransport(env,fetcher=(...args)=>globalThis.fetch(.
  let tokenResponse;try{tokenResponse=await boundedFetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:payload+'.'+signature}).toString()},16384,fetcher);}catch(error){
   const message=String(error?.message||'').toLowerCase();
   const kind=/illegal invocation|brand check|does not implement/.test(message)?'BINDING':/certificate|certificat|tls|ssl/.test(message)?'TLS':/dns|resolve|lookup/.test(message)?'DNS':/timed? ?out|abort/.test(message)?'TIMEOUT':/duplex|body|serializ/.test(message)?'BODY':/connect|network|fetch/.test(message)?'CONNECT':['TypeError','AbortError','OperationError','InvalidAccessError','ReferenceError'].includes(error?.name)?error.name:'Error';
-  throw new Error('STORAGE_AUTH_NETWORK_'+kind);
+  const failure=new Error('STORAGE_AUTH_NETWORK_'+kind);
+  const words=new Set(['illegal','invocation','headers','signal','abortsignal','argument','class','constructor','url','required','not','supported','fetch','failed','object','function','request','response','readable','locked','release','valid','invalid','cannot','value','promise','undefined','type','read','properties','data','bytes','array','buffer','cancel','decoder','length','duplex','controller','clone','getreader','redirect']);
+  failure.storageHints=[...new Set(message.split(/\W+/).filter(word=>words.has(word)))].slice(0,12);
+  throw failure;
  }
  let token;try{token=JSON.parse(new TextDecoder().decode(tokenResponse.bytes));}catch{throw new Error('STORAGE_AUTH_NOT_JSON_'+tokenResponse.status);}
  if(tokenResponse.status!==200||typeof token.access_token!=='string'||token.token_type!=='Bearer'){
