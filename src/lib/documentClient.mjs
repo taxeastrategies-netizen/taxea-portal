@@ -24,10 +24,11 @@ export function createDocumentClient(api,onSessionCleanup){
   return caps.privateStorageEnabled?operation({action:'upload_staging',file}):api.integrations.Core.UploadPublicFile({file});
  };
  const assignStaged=async(reference,companyId)=>privateDocumentId(reference)?operation({action:'assign_staged_asset',assetId:privateDocumentId(reference),companyId}):{file_url:reference};
+ /** @param {string} reference @param {{signal?: AbortSignal}} [options] */
  const download=async(reference,{signal}={})=>{
   const assetId=privateDocumentId(reference);if(!assetId)throw new Error('Referencia privada no válida.');
   const response=await api.functions.fetch('/documentStorage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'download',assetId}),signal});
-  if(!response.ok){const data=await response.json().catch(()=>null);const error=new Error(data?.error||'No se pudo abrir el documento privado.');error.status=response.status;throw error;}
+  if(!response.ok){const data=await response.json().catch(()=>null);throw Object.assign(new Error(data?.error||'No se pudo abrir el documento privado.'),{status:response.status});}
   const hash=response.headers.get('X-Taxea-File-Sha256')||'',size=Number(response.headers.get('X-Taxea-File-Size'));
   if(!/^[a-f0-9]{64}$/.test(hash)||!Number.isInteger(size)||size<=0||size>25*1024*1024)throw new Error('No se pudo verificar el documento recibido.');
   const blob=await response.blob();if(blob.size!==size)throw new Error('La descarga está incompleta. Reintenta.');
