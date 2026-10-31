@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
 import { verifyStorageConnection, boundedBytes } from './storageTransport.mjs';
-import { storageCompany, isStorageAdmin, savePrivateAsset, resolvePrivateAsset } from './storageAssets.mjs';
+import { storageCompany, isStorageAdmin, savePrivateAsset, resolvePrivateAsset, storageEnabled, authorizedAsset, readPrivateAssetBytes, assetReference } from './storageAssets.mjs';
 import { verifySignedStorageConnection } from './storageSigning.mjs';
 import { prepareStorageQa, inspectStorageQa } from './storageQaFixtures.mjs';
 
@@ -38,6 +38,22 @@ Deno.serve(async req=>{
    const config=storageConfiguration(Deno.env),certificate=await publicStorageCertificate(config);
    return response({ok:true,...certificate,account:STORAGE_ACCOUNT,bucket:STORAGE_BUCKET,privateKeyExposed:false});
   }
+  if(['staging_capabilities','upload_staging','assign_staged_asset'].includes(action)){
+   if(!admin)return response({error:'Acceso reservado a administración.'},403);
+   if(action==='staging_capabilities')return response({ok:true,privateStorageEnabled:Deno.env.get('TAXEA_PRIVATE_STORAGE_ENFORCED')==='true'});
+   if(action==='upload_staging'){
+    if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
+    const staged=await savePrivateAsset(client.asServiceRole,user,{id:'__admin_staging__',activa:true,private_document_storage_enabled:true},body.file,Deno.env);
+    return response({ok:true,file_url:staged.file_url,assetId:staged.asset.id,reused:staged.reused});
+   }
+   const source=await authorizedAsset(client.asServiceRole,user,body.assetId);
+   const target=await storageCompany(client.asServiceRole,user,body.companyId);
+   if(!source||source.company_id!=='__admin_staging__'||!target)return response({error:'Documento o empresa no disponibles.'},404);
+   const {bytes}=await readPrivateAssetBytes(client.asServiceRole,user,assetReference(source.id),Deno.env);
+   const file=new File([bytes],source.original_name,{type:source.mime_type});
+   const saved=await savePrivateAsset(client.asServiceRole,user,{...target,private_document_storage_enabled:true},file,Deno.env);
+   return response({ok:true,file_url:saved.file_url,assetId:saved.asset.id,reused:saved.reused});
+  }
   if(!['capabilities','upload','resolve'].includes(action))return response({error:'Operación no admitida.'},400);
   const svc=client.asServiceRole;
   if(action==='resolve'){
@@ -46,15 +62,15 @@ Deno.serve(async req=>{
   }
   const company=await storageCompany(svc,user,body.companyId);
   if(!company)return response({error:'Empresa no disponible.'},403);
-  if(action==='capabilities')return response({ok:true,privateStorageEnabled:company.private_document_storage_enabled===true,maxFileBytes:20*1024*1024});
+  if(action==='capabilities')return response({ok:true,privateStorageEnabled:storageEnabled(company,Deno.env),maxFileBytes:20*1024*1024});
   if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);
-  if(company.private_document_storage_enabled!==true)return response({error:'El almacenamiento privado aún no está activado para esta empresa.'},409);
+  if(!storageEnabled(company,Deno.env))return response({error:'El almacenamiento privado aún no está activado para esta empresa.'},409);
   const saved=await savePrivateAsset(svc,user,company,body.file,Deno.env);
   return response({ok:true,file_url:saved.file_url,assetId:saved.asset.id,reused:saved.reused,sha256:saved.asset.sha256,size:saved.asset.size});
  }catch(error){
   const detail=String(error?.message||'');
   const safeCode=/^(STORAGE_AUTH_(NETWORK_(BINDING|TLS|DNS|TIMEOUT|BODY|CONNECT|TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|NOT_JSON_\d{3}|FAILED_\d{3}_(INVALID_GRANT|INVALID_CLIENT|INVALID_REQUEST|INVALID_SCOPE|UNAUTHORIZED_CLIENT|ACCESS_DENIED|UNEXPECTED))|STORAGE_STEP_AUTH_(TypeError|AbortError|OperationError|InvalidAccessError|ReferenceError|Error)|STORAGE_STEP_(AUTH|UPLOAD|READ|UNSIGNED|CLEANUP)|STORAGE_(AUTH|UPLOAD|DOWNLOAD)_FAILED_\d{3}|STORAGE_(PROBE|CLEANUP)_FAILED|PRIVATE_STORAGE_(NOT_CONFIGURED|INVALID_CONFIG)|STORAGE_(UNSUPPORTED_FILE|INVALID_SIZE|HASH_MISMATCH))$/.test(detail)?detail:'PRIVATE_STORAGE_UNAVAILABLE';
-  const code=admin&&/^(QA_(ADMIN_ONLY|EXISTING_COMPANY_NOT_VERIFIED|AMBIGUOUS_COMPANY|COMPANY_NOT_VERIFIED)|STORAGE_(SIGNED_READ_FAILED_\d{3}|UPLOAD_UNVERIFIED|METADATA_UNVERIFIED|COMPANY_NOT_ENABLED))$/.test(detail)?detail:safeCode;
+  const code=admin&&/^(QA_(ADMIN_ONLY|EXISTING_COMPANY_NOT_VERIFIED|AMBIGUOUS_COMPANY|COMPANY_NOT_VERIFIED)|STORAGE_(SIGNED_READ_FAILED_\d{3}|UPLOAD_UNVERIFIED|METADATA_HTTP_\d{3}|METADATA_UNVERIFIED|COMPANY_NOT_ENABLED))$/.test(detail)?detail:safeCode;
   const status=code==='STORAGE_UNSUPPORTED_FILE'?415:code==='STORAGE_INVALID_SIZE'?413:503;
   return response({error:'No se ha podido completar la operación de almacenamiento privado.',code,...(admin&&Array.isArray(error?.storageHints)?{diagnosticHints:error.storageHints}:{})},status);
  }
