@@ -91,6 +91,14 @@
     "activa": {
       "type": "boolean",
       "default": true
+    },
+    "private_document_storage_enabled": {
+      "rls": {
+        "read": true,
+        "write": false
+      },
+      "default": false,
+      "type": "boolean"
     }
   },
   "required": [
