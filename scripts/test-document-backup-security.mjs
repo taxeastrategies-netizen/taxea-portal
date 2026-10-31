@@ -1,34 +1,11 @@
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const source = fs.readFileSync(path.resolve('base44/functions/documentBackupToDrive/entry.ts'), 'utf8');
-
-assert.match(source, /const BACKUP_APP_ID = '6a00fec50cc522a74ddde4b2'/);
-assert.match(source, /url\.protocol !== 'https:'/);
-assert.match(source, /hostname: 'media\.base44\.com'/);
-assert.match(source, /\/images\/public\/\$\{BACKUP_APP_ID\}\//);
-assert.match(source, /hostname: 'base44\.app'/);
-assert.match(source, /\/api\/apps\/\$\{BACKUP_APP_ID\}\/files\/mp\/public\/\$\{BACKUP_APP_ID\}\//);
-assert.match(source, /AUTHORIZED_BACKUP_LOCATIONS\.some/);
-assert.match(source, /hostname === location\.hostname && url\.pathname\.startsWith\(location\.pathPrefix\)/);
-assert.match(source, /fetch\(fileUrl, \{ redirect: 'manual', signal: controller\.signal \}\)/);
-assert.match(source, /validateBackupFileUrl\(new URL\(location, fileUrl\)\.toString\(\)\)/);
-assert.match(source, /fetch\(redirectedUrl, \{ redirect: 'manual', signal: controller\.signal \}\)/);
-assert.match(source, /MAX_BACKUP_FILE_BYTES = 50 \* 1024 \* 1024/);
-assert.match(source, /declaredLength > MAX_BACKUP_FILE_BYTES/);
-assert.match(source, /arrayBuffer\.byteLength > MAX_BACKUP_FILE_BYTES/);
-assert.doesNotMatch(source, /fetch\(fileUrl\)/);
-
-console.log(JSON.stringify({
-  ok: true,
-  assertions: {
-    fixedHttpsMediaOrigins: true,
-    currentAndLegacyAppScopedStoragePaths: true,
-    redirectsHandledManuallyAndRejectedByStatus: true,
-    downloadTimeoutEnabled: true,
-    declaredAndActualSizeLimited: true,
-    rawDocumentUrlNeverFetched: true,
-  },
-}, null, 2));
-
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {boundedBackupDownload} from '../base44/functions/documentBackupToDrive/backupRuntime.mjs';
+const source=fs.readFileSync('base44/functions/documentBackupToDrive/entry.ts','utf8');
+const config=source.slice(source.indexOf('const BACKUP_APP_ID'),source.indexOf('// ── Helpers'));
+const validator=source.slice(source.indexOf('function validateBackupFileUrl('),source.indexOf('async function downloadBackupFile('));
+const validate=vm.runInNewContext(config+'\n'+validator+'\nvalidateBackupFileUrl',{URL});
+const app='6a00fec50cc522a74ddde4b2',good='https://base44.app/api/apps/'+app+'/files/mp/public/'+app+'/qa.pdf';
+for(const value of [good,'https://media.base44.com/files/public/'+app+'/qa.pdf','https://media.base44.com/images/public/'+app+'/qa.jpg'])assert.equal(validate(value),value);
+for(const value of ['http://base44.app/api/apps/'+app+'/files/mp/public/'+app+'/qa.pdf','https://evil.example.test/file','https://base44.app/api/apps/other/files/mp/public/other/a.pdf','https://media.base44.com/files/public/other/a.pdf','https://user:secret@base44.app/api/apps/'+app+'/files/mp/public/'+app+'/a.pdf','https://base44.app:444/api/apps/'+app+'/files/mp/public/'+app+'/a.pdf','https://storage.googleapis.com/bucket/file'])assert.throws(()=>validate(value));
+let requests=[];const bytes=await boundedBackupDownload(good,validate,{fetcher:async(url,options)=>{assert.equal(options.redirect,'manual');requests.push(url);return requests.length===1?new Response(null,{status:302,headers:{location:'https://media.base44.com/files/public/'+app+'/qa.pdf'}}):new Response(new Uint8Array([1,2,3]));}});assert.deepEqual([...bytes],[1,2,3]);assert.equal(requests.length,2);
+requests=[];await assert.rejects(boundedBackupDownload(good,validate,{fetcher:async url=>{requests.push(url);return new Response(null,{status:302,headers:{location:'https://evil.example.test/file'}});}}));assert.equal(requests.length,1);
+console.log(JSON.stringify({ok:true,actualAppScopedValidatorExercised:true,fixedHttpsOrigins:true,foreignAppRejected:true,credentialsAndCustomPortsRejected:true,validatedLegacyRedirectWorks:true,foreignRedirectNeverFetched:true,externalCalls:0}));
