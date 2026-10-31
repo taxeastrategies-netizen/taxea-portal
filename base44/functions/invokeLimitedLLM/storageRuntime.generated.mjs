@@ -1,5 +1,5 @@
 // GENERATED from documentStorage modules. Run node scripts/build-storage-runtime.mjs.
-// canonical-sha256: 42499cc1a9bc89ded8b4a698c2b63ea61f676c7a71738432f8e83e60a98b995f
+// canonical-sha256: 2a2d6acf7f80f25ebb3b1645131760d06d845cf0ffca215808db8a33e7992e67
 // base44/functions/documentStorage/storageCredentials.mjs
 var encoder = new TextEncoder();
 var STORAGE_PROJECT = "plasma-minutia-510419-c4";
@@ -237,7 +237,9 @@ async function authorizedAsset(svc, user, id) {
   const asset = await svc.entities.DocumentAsset.get(id).catch(() => null);
   if (!asset || asset.status !== "ready" || !asset.object_name?.startsWith("companies/" + asset.company_id + "/")) return null;
   if (asset.company_id === "__admin_staging__") return isStorageAdmin(user) ? asset : null;
-  return await storageCompany(svc, user, asset.company_id) ? asset : null;
+  const company = await svc.entities.Company.get(asset.company_id).catch(() => null);
+  if (!company) return null;
+  return isStorageAdmin(user) || mayAccessStorageCompany(user, company) ? asset : null;
 }
 async function readPrivateAssetBytes(svc, user, reference, env, companyId) {
   const asset = await authorizedAsset(svc, user, assetIdFromReference(reference));
