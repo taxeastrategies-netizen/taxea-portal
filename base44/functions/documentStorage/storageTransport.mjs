@@ -39,16 +39,17 @@ export async function storageTransport(env,fetcher=(...args)=>globalThis.fetch(.
  return {
   async put(name,bytes,mime='application/octet-stream'){
    validName(name);if(!(bytes instanceof Uint8Array)||!bytes.length||bytes.length>50*1024*1024)throw new Error('STORAGE_INVALID_SIZE');
-   const url='https://storage.googleapis.com/upload/storage/v1/b/'+STORAGE_BUCKET+'/o?uploadType=media&ifGenerationMatch=0&name='+encodeURIComponent(name);
-   const r=await boundedFetch(url,{method:'POST',headers:{...auth,'Content-Type':mime},body:bytes},32768,fetcher);
+   if(!/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/i.test(mime))throw new Error('STORAGE_INVALID_MIME');
+   const disposition=/^(application\/pdf|image\/(jpeg|png|webp))$/.test(mime)?'inline':'attachment';
+   const boundary='taxea_'+crypto.randomUUID().replace(/-/g,'');
+   const metadata={name,contentType:mime,cacheControl:'private, no-store',contentDisposition:disposition};
+   const body=new Blob(['--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(metadata)+'\r\n--'+boundary+'\r\nContent-Type: '+mime+'\r\n\r\n',bytes,'\r\n--'+boundary+'--\r\n']);
+   const url='https://storage.googleapis.com/upload/storage/v1/b/'+STORAGE_BUCKET+'/o?uploadType=multipart&ifGenerationMatch=0';
+   const r=await boundedFetch(url,{method:'POST',headers:{...auth,'Content-Type':'multipart/related; boundary='+boundary},body},32768,fetcher);
    if(r.status!==200)throw new Error('STORAGE_UPLOAD_FAILED_'+r.status);
    const meta=JSON.parse(new TextDecoder().decode(r.bytes));
    if(meta.name!==name||meta.bucket!==STORAGE_BUCKET||Number(meta.size)!==bytes.length||!/^\d+$/.test(meta.generation))throw new Error('STORAGE_UPLOAD_UNVERIFIED');
-   const disposition=/^(application\/pdf|image\/(jpeg|png|webp))$/.test(mime)?'inline':'attachment';
-   const policy=await boundedFetch(objectUrl(name)+'?ifGenerationMatch='+meta.generation,{method:'PATCH',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({cacheControl:'private, no-store',contentDisposition:disposition})},32768,fetcher);
-   if(policy.status!==200)throw new Error('STORAGE_METADATA_HTTP_'+policy.status);
-   const stored=JSON.parse(new TextDecoder().decode(policy.bytes));
-   if(stored.name!==name||stored.generation!==meta.generation||stored.cacheControl!=='private, no-store'||stored.contentDisposition!==disposition){const error=new Error('STORAGE_METADATA_UNVERIFIED');error.storageHints=[...(stored.name!==name?['name']:[]),...(stored.generation!==meta.generation?['generation']:[]),...(stored.cacheControl!=='private, no-store'?['cache_policy']:[]),...(stored.contentDisposition!==disposition?['disposition']:[])];throw error;}
+   if(meta.cacheControl!=='private, no-store'||meta.contentDisposition!==disposition)throw new Error('STORAGE_METADATA_UNVERIFIED');
    return {name,generation:meta.generation,size:Number(meta.size),contentType:meta.contentType};
   },
   async get(name,generation){
