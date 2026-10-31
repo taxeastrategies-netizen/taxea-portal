@@ -404,7 +404,7 @@ Deno.serve(async (req) => {
     }
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
-    const invocationStartedAt=Date.now(),timeBudgetMs=isManual?MANUAL_TIME_BUDGET_MS:SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
+    const invocationStartedAt=Date.now(),timeBudgetMs=isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
     const {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders,assertPrivateDriveDestination}=createDriveHelpers(deadline);
     const scopeCompanyId=typeof body.qaCompanyId==='string'?body.qaCompanyId.trim():'';
     if(scopeCompanyId){
@@ -1114,3 +1114,5 @@ Deno.serve(async (req) => {
 // C1 inventory structured metadata version 20261031.2
 
 // C1 admin backup notification preference 20261031.1
+
+// Extended manual operator chunks remain manual jobs; no workflow is enabled.
