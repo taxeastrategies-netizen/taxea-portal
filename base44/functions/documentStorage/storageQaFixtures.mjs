@@ -1,5 +1,9 @@
 import {savePrivateAsset,isStorageAdmin} from './storageAssets.mjs';
 const QA_A='taxeastrategies+qa-recc-2026@gmail.com',QA_B='taxeastrategies+qa-security-b-20261023@gmail.com';
+export async function inspectStorageQa(svc,user){
+ if(!isStorageAdmin(user))throw new Error('QA_ADMIN_ONLY');
+ const result={};for(const [label,email] of [['A',QA_A],['B',QA_B]]){const rows=await svc.entities.Company.filter({owner_email:email},'-created_date',20);result[label]=rows.map(c=>({id:c.id,name:c.razon_social,display:c.nombre_comercial,enabled:c.private_document_storage_enabled===true}));}return {syntheticOnly:true,companies:result};
+}
 export function syntheticPdf(){
  const content='BT /F1 14 Tf 40 140 Td (TAXEA SYNTHETIC STORAGE - NO CUSTOMER DATA) Tj ET';
  const objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 500 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length '+content.length+' >>\nstream\n'+content+'\nendstream'];
