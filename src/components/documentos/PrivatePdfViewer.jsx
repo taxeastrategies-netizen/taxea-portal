@@ -11,7 +11,7 @@ class LocalPdfAssets{
   const folder={cMapUrl:'cmaps',standardFontDataUrl:'standard_fonts',wasmUrl:'wasm'}[kind];
   if(!folder||!/^[A-Za-z0-9_.-]+$/.test(filename))throw new Error('Recurso PDF no admitido.');
   const url=assets['/node_modules/pdfjs-dist/'+folder+'/'+filename];
-  if(!url)throw new Error('Recurso PDF no disponible.');
+  if(typeof url!=='string'||!url)throw new Error('Recurso PDF no disponible.');
   if(url.startsWith('data:'))return Uint8Array.from(atob(url.split(',')[1]),c=>c.charCodeAt(0));
   if(new URL(url,location.href).origin!==location.origin)throw new Error('Origen de recurso PDF no admitido.');
   const response=await fetch(url,{credentials:'omit',cache:'force-cache'});
