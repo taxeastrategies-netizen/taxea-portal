@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE_ACCOUNT } from './storageCredentials.mjs';
+import { verifyStorageConnection } from './storageTransport.mjs';
 
 const disabled=(user:any)=>[user,user?.data].filter(Boolean).some(state=>state.is_deleted===true
  ||['eliminado','bloqueado','suspendido'].includes(String(state.status||'').trim().toLowerCase())
@@ -15,6 +16,7 @@ Deno.serve(async req=>{
   if(disabled(user))return response({error:'Acceso al portal suspendido.'},403);
   if(!['admin','super_admin'].includes(user.role))return response({error:'Acceso reservado a administración.'},403);
   const body=await req.json().catch(()=>({}));
+  if(body.action==='verify_connection')return response({ok:true,...await verifyStorageConnection(Deno.env)});
   if(body.action!=='public_certificate')return response({error:'Operación no admitida.'},400);
   const config=storageConfiguration(Deno.env);
   const certificate=await publicStorageCertificate(config);
