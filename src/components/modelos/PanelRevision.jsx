@@ -1,3 +1,4 @@
+import ProtectedDocumentPreview from '@/components/documentos/ProtectedDocumentPreview';
 import { useState } from 'react';
 import { CheckCircle2, RotateCcw, X, User, Search, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +49,7 @@ export default function PanelRevision({ item, companies, onConfirmar, onIgnorar,
       {/* Vista PDF */}
       {item.previewUrl && (
         <div className="mx-4 mt-4 border border-border rounded-xl overflow-hidden bg-secondary/20" style={{ height: 280 }}>
-          <iframe src={item.previewUrl} className="w-full h-full" title="Preview PDF" />
+          <ProtectedDocumentPreview reference={item.previewUrl} className="w-full h-full" title="Preview PDF" />
         </div>
       )}
 

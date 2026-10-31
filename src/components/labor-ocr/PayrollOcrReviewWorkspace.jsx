@@ -1,3 +1,4 @@
+import ProtectedDocumentPreview from '@/components/documentos/ProtectedDocumentPreview';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
@@ -214,7 +215,7 @@ export default function PayrollOcrReviewWorkspace({ document: doc, company, user
             <div className="px-4 py-2 border-b border-border bg-secondary/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Documento</div>
             <div className="flex-1 overflow-auto p-3">
               {doc?.file_url ? (
-                <iframe src={doc.file_url} className="w-full h-full min-h-[600px] rounded-lg border border-border" title="Nómina" />
+                <ProtectedDocumentPreview reference={doc.file_url} className="w-full h-full min-h-[600px] rounded-lg border border-border" title="Nómina" />
               ) : (
                 <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                   <FileText className="w-12 h-12 mb-2 opacity-20" />
