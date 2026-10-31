@@ -54,11 +54,14 @@ Deno.serve(async req=>{
    const saved=await savePrivateAsset(client.asServiceRole,user,{...target,private_document_storage_enabled:true},file,Deno.env);
    return response({ok:true,file_url:saved.file_url,assetId:saved.asset.id,reused:saved.reused});
   }
-  if(!['capabilities','upload','resolve'].includes(action))return response({error:'Operación no admitida.'},400);
+  if(!['capabilities','upload','resolve','download'].includes(action))return response({error:'Operación no admitida.'},400);
   const svc=client.asServiceRole;
-  if(action==='resolve'){
-   const result=await resolvePrivateAsset(svc,user,body.assetId,Deno.env);
-   return result?response({ok:true,...result}):response({error:'Documento no disponible.'},404);
+  if(['resolve','download'].includes(action)){
+   const asset=await authorizedAsset(svc,user,body.assetId);
+   if(!asset)return response({error:'Documento no disponible.'},404);
+   if(action==='resolve')return response({ok:true,mimeType:asset.mime_type,name:asset.original_name,size:asset.size,sha256:asset.sha256});
+   const {bytes}=await readPrivateAssetBytes(svc,user,assetReference(asset.id),Deno.env);
+   return new Response(bytes,{status:200,headers:{'Content-Type':asset.mime_type,'Content-Length':String(bytes.length),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cross-Origin-Resource-Policy':'same-origin','X-Taxea-File-Sha256':asset.sha256,'X-Taxea-File-Size':String(bytes.length),'X-Taxea-File-Name':encodeURIComponent(asset.original_name),'Access-Control-Expose-Headers':'X-Taxea-File-Sha256,X-Taxea-File-Size,X-Taxea-File-Name,Content-Type'}});
   }
   const company=await storageCompany(svc,user,body.companyId);
   if(!company)return response({error:'Empresa no disponible.'},403);
