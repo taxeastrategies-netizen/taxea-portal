@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
+import {assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -65,28 +67,9 @@ function validateBackupFileUrl(value) {
   return url.toString();
 }
 
-async function downloadBackupFile(value) {
-  const fileUrl = validateBackupFileUrl(value);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BACKUP_DOWNLOAD_TIMEOUT_MS);
-  let response;
-  try {
-    response = await fetch(fileUrl, { redirect: 'manual', signal: controller.signal });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
-      if (!location) throw new Error('Redirección de descarga sin destino.');
-      const redirectedUrl = validateBackupFileUrl(new URL(location, fileUrl).toString());
-      response = await fetch(redirectedUrl, { redirect: 'manual', signal: controller.signal });
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const declaredLength = Number(response.headers.get('content-length') || 0);
-  if (declaredLength > MAX_BACKUP_FILE_BYTES) throw new Error('El documento supera el límite de 50 MB.');
-  const arrayBuffer = await response.arrayBuffer();
-  if (arrayBuffer.byteLength > MAX_BACKUP_FILE_BYTES) throw new Error('El documento supera el límite de 50 MB.');
-  return new Uint8Array(arrayBuffer);
+async function downloadBackupFile(value,base44,user,companyId,deadline) {
+  if(assetIdFromReference(value))return (await readPrivateAssetBytes(base44.asServiceRole,user,value,Deno.env,companyId)).bytes;
+  return boundedBackupDownload(value,validateBackupFileUrl,{max:MAX_BACKUP_FILE_BYTES,timeoutMs:Math.max(1,Math.min(BACKUP_DOWNLOAD_TIMEOUT_MS,deadline-Date.now()))});
 }
 
 function getCanaryDate() {
@@ -139,6 +122,7 @@ function getDisplayName(entityName, record) {
 
 // ── Google Drive API helpers ──
 
+function createDriveHelpers(deadline){
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function driveFetch(url, options = {}) {
@@ -146,16 +130,26 @@ async function driveFetch(url, options = {}) {
   let lastError = null;
   for (let attempt = 0; attempt < DRIVE_RETRY_ATTEMPTS; attempt++) {
     try {
-      const response = await fetch(url, options);
+      const remaining=deadline-Date.now();if(remaining<1000)throw new Error('BACKUP_CHUNK_DEADLINE');
+      const parsed=new URL(url);
+      if(parsed.protocol!=='https:'||parsed.hostname!=='www.googleapis.com'||parsed.username||parsed.password||parsed.port)throw new Error('BACKUP_DRIVE_ORIGIN_DENIED');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),Math.min(25000,remaining));
+      let response;
+      try{const raw=await fetch(url,{...options,redirect:'manual',signal:controller.signal});
+        const bytes=await boundedBackupBody(raw,MAX_BACKUP_FILE_BYTES,controller.signal);
+        response=new Response([204,205,304].includes(raw.status)?null:bytes,{status:raw.status,headers:raw.headers});
+      }finally{clearTimeout(timer);}
+      if(response.status>=300&&response.status<400)throw new Error('BACKUP_DRIVE_REDIRECT_DENIED');
       lastResponse = response;
-      if (response.status !== 429 && response.status < 500) return response;
+      if (response.status !== 429 && (response.status < 500 || String(options.method||'GET').toUpperCase()!=='GET')) return response;
       if (attempt === DRIVE_RETRY_ATTEMPTS - 1) return response;
       const retryAfter = Number(response.headers.get('retry-after') || 0);
       const delay = retryAfter > 0 ? retryAfter * 1000 : 400 * (2 ** attempt) + Math.floor(Math.random() * 200);
       await sleep(Math.min(delay, 5000));
     } catch (error) {
+      if(Date.now()>=deadline-250||error?.message==='BACKUP_CHUNK_DEADLINE')throw new Error('BACKUP_CHUNK_DEADLINE');
       lastError = error;
-      if (attempt === DRIVE_RETRY_ATTEMPTS - 1) throw error;
+      if (String(options.method||'GET').toUpperCase()!=='GET'||attempt === DRIVE_RETRY_ATTEMPTS - 1) throw error;
       await sleep(400 * (2 ** attempt));
     }
   }
@@ -212,7 +206,14 @@ async function findOrCreateFolderCached(name, parentId, token) {
 
 async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) {
   const boundary = 'taxea_backup_' + Math.random().toString(36).slice(2);
-  const metadata = JSON.stringify({ name, parents: parentId ? [parentId] : [] });
+  const checksum=await computeChecksum(contentBytes);
+  const backupKey=await computeChecksum(new TextEncoder().encode((parentId||'')+'|'+name+'|'+checksum));
+  const query="trashed=false and appProperties has { key='taxeaBackupKey' and value='"+backupKey+"' }";
+  const existing=await driveGet(DRIVE_API+'/files?q='+encodeURIComponent(query)+'&fields=files(id,size,name,appProperties)&orderBy=createdTime&pageSize=2',token);
+  if(!existing.ok)throw new Error('BACKUP_DRIVE_LOOKUP_HTTP_'+existing.status);
+  const previous=(await existing.json()).files?.find(file=>file.appProperties?.taxeaSha256===checksum&&Number(file.size)===contentBytes.length);
+  if(previous){const restored=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(previous.id)+'?alt=media',token);if(!restored.ok||await computeChecksum(new Uint8Array(await restored.arrayBuffer()))!==checksum)throw new Error('BACKUP_EXISTING_COPY_HASH_MISMATCH');return previous;}
+  const metadata = JSON.stringify({ name, parents: parentId ? [parentId] : [],appProperties:{taxeaBackupKey:backupKey,taxeaSha256:checksum} });
   const encoder = new TextEncoder();
   const header = encoder.encode(
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
@@ -229,10 +230,12 @@ async function uploadFileToDrive(name, parentId, contentBytes, mimeType, token) 
     body: fullBody,
   });
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Drive upload failed (${res.status}): ${errText.substring(0, 200)}`);
+    throw new Error(`BACKUP_DRIVE_UPLOAD_HTTP_${res.status}`);
   }
-  return await res.json();
+  const uploaded=await res.json();
+  const restored=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(uploaded.id)+'?alt=media',token);
+  if(!restored.ok||await computeChecksum(new Uint8Array(await restored.arrayBuffer()))!==checksum)throw new Error('BACKUP_UPLOADED_COPY_HASH_MISMATCH');
+  return uploaded;
 }
 
 async function uploadTextFile(name, parentId, text, token) {
@@ -291,6 +294,10 @@ async function trashExactFailedBackupFolders(token) {
 
 // ── Document sources ──
 
+
+return {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders};
+}
+
 const DOC_SOURCES = [
   { entity: 'OcrInvoiceDocument', urlField: 'fileStorageUrl', companyField: 'company_id', mimeField: 'fileMimeType', sizeField: 'fileSize' },
   { entity: 'Invoice', urlField: 'archivo_url', companyField: 'company_id', mimeField: null, sizeField: null },
@@ -326,11 +333,14 @@ function latestBackupRecordMap(records) {
   return map;
 }
 
-async function scanDocumentSource(base44, src) {
+async function scanDocumentSource(base44, src,scopeCompanyId='') {
+  if(scopeCompanyId&&src.entity==='MercantilDocumento')return [];
   const all = [];
   for (let skip = 0; skip < 10000; skip += 500) {
     // Oldest-first keeps cursor pagination stable when new documents arrive during a resumed run.
-    const batch = await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip);
+    const batch = scopeCompanyId
+      ? await base44.asServiceRole.entities[src.entity].filter({[src.companyField]:scopeCompanyId},'created_date',500,skip)
+      : await base44.asServiceRole.entities[src.entity].list('created_date', 500, skip);
     if (!batch?.length) break;
     for (const rec of batch) {
       const url = rec[src.urlField];
@@ -338,12 +348,13 @@ async function scanDocumentSource(base44, src) {
       all.push({ record: rec, source: src });
     }
     if (batch.length < 500) break;
+    if(skip+500>=10000)throw new Error('BACKUP_SOURCE_LIMIT_REACHED');
   }
   return all;
 }
 
-async function scanAllDocuments(base44) {
-  const groups = await Promise.all(DOC_SOURCES.map(src => scanDocumentSource(base44, src)));
+async function scanAllDocuments(base44,scopeCompanyId='') {
+  const groups=[];for(const src of DOC_SOURCES)groups.push(await scanDocumentSource(base44,src,scopeCompanyId));
   return groups.flat();
 }
 
@@ -372,9 +383,10 @@ function clientFolderName(companyId, companyName, mode) {
 // ── Main handler ──
 
 Deno.serve(async (req) => {
+  let lease=null,leaseEntity;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
-    const base44 = createClientFromRequest(req);
+    let base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'status';
 
@@ -385,7 +397,15 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
+    base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
+    const invocationStartedAt=Date.now(),timeBudgetMs=isManual?MANUAL_TIME_BUDGET_MS:SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
+    const {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders}=createDriveHelpers(deadline);
+    const scopeCompanyId=typeof body.qaCompanyId==='string'?body.qaCompanyId.trim():'';
+    if(scopeCompanyId){
+      const qa=await base44.asServiceRole.entities.Company.get(scopeCompanyId).catch(()=>null);
+      if(!qa?.private_document_storage_enabled||!['taxeastrategies+qa-recc-2026@gmail.com','taxeastrategies+qa-security-b-20261023@gmail.com'].includes(String(qa.owner_email||'').toLowerCase())||!/DATOS FICTICIOS/.test(qa.razon_social||''))return Response.json({error:'Solo empresas ficticias verificadas para la prueba aislada.'},{status:403});
+    }
 
     // Get Drive connection
     let accessToken;
@@ -393,7 +413,7 @@ Deno.serve(async (req) => {
       const conn = await base44.asServiceRole.connectors.getConnection('googledrive');
       accessToken = conn.accessToken;
     } catch (e) {
-      return Response.json({ error: 'Google Drive no conectado', detail: e.message }, { status: 503 });
+      return Response.json({ error: 'Google Drive no conectado' }, { status: 503 });
     }
 
     const driveEmail = await getDriveUserEmail(accessToken);
@@ -436,6 +456,11 @@ Deno.serve(async (req) => {
       });
     }
 
+    if(action!=='status'){
+      leaseEntity=base44.asServiceRole.entities.BackupConfiguration;
+      lease=await acquireBackupLease(leaseEntity,config.id);
+      if(!lease)return Response.json({error:'Ya hay una copia o verificación en curso. Espera y reintenta.',code:'BACKUP_BUSY'},{status:409});
+    }
     // ── STATUS action ──
     if (action === 'status') {
       const [recentJobs, allRecords] = await Promise.all([
@@ -449,7 +474,7 @@ Deno.serve(async (req) => {
         isCorrectAccount: driveEmail === REQUIRED_EMAIL,
         requiredEmail: REQUIRED_EMAIL,
         config,
-        recentJobs: recentJobs || [],
+        recentJobs: (recentJobs || []).filter(item=>String(item.scopeCompanyId||'')===scopeCompanyId),
         pendingCount: canonicalRecords.filter(record => record.backupStatus === 'pending').length,
         failedCount: canonicalRecords.filter(record => record.backupStatus === 'failed').length,
         trackedDocuments: canonicalRecords.length,
@@ -460,7 +485,7 @@ Deno.serve(async (req) => {
     // ── VERIFY action: verify the whole manifest, including skipped documents ──
     if (action === 'verify') {
       const recentCompleted = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
-      const lastJob = recentCompleted?.find(item => ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
+      const lastJob = recentCompleted?.find(item => String(item.scopeCompanyId||'')===scopeCompanyId && ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
       if (!lastJob) return Response.json({ error: 'No hay copias finalizadas con manifiesto para verificar' }, { status: 404 });
 
       const restart = body.restartVerification === true;
@@ -558,13 +583,12 @@ Deno.serve(async (req) => {
     const requestedJobId = String(body.resumeJobId || '').trim();
     let job = requestedJobId ? await base44.asServiceRole.entities.BackupJob.get(requestedJobId).catch(() => null) : null;
     const requestedJobType = isManual ? 'manual' : 'scheduled';
-    if (job && (!['preparing', 'copying'].includes(job.status) || job.jobType !== requestedJobType)) job = null;
+    if (job && (!['preparing', 'copying'].includes(job.status) || String(job.scopeCompanyId||'')!==scopeCompanyId)) job = null;
     if (!job) {
-      const recentJobs = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
+      const recentJobs = (await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50)).filter(item=>String(item.scopeCompanyId||'')===scopeCompanyId);
       const nowMs = Date.now();
       const maxJobAge = item => item.jobType === 'scheduled' ? SCHEDULED_JOB_MAX_AGE_MS : MANUAL_JOB_MAX_AGE_MS;
       job = recentJobs?.find(item =>
-        item.jobType === requestedJobType &&
         ['preparing', 'copying'].includes(item.status) &&
         nowMs - new Date(item.lastHeartbeatAt || item.startedAt || 0).getTime() < maxJobAge(item)
       ) || null;
@@ -588,7 +612,8 @@ Deno.serve(async (req) => {
         driveAccountEmail: driveEmail,
         backupMode: config.backupMode,
         nextCursor: 0,
-        runVersion: 'resumable-v2',
+        runVersion: 'snapshot-v3',
+        scopeCompanyId,
         documentsScanned: 0, documentsCopied: 0, documentsSkipped: 0, documentsFailed: 0, bytesCopied: 0,
       });
     }
@@ -599,6 +624,8 @@ Deno.serve(async (req) => {
         config = await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { driveConnectedAccountEmail: driveEmail });
       }
 
+      // QA uses a separate destination and does not change production success markers.
+      if(scopeCompanyId)config={...config,portalFolderName:(config.portalFolderName||'Taxea Portal')+' — QA INTERNA'};
       // Ensure folder structure
       const rootFolder = await findOrCreateFolder(config.rootFolderName || 'Taxea Strategies - Backups', null, accessToken);
       const portalFolder = await findOrCreateFolder(config.portalFolderName || 'Taxea Portal', rootFolder.id, accessToken);
@@ -615,7 +642,7 @@ Deno.serve(async (req) => {
         driveBackupFolderId: dayFolder.id,
         driveBackupFolderPath: `${config.rootFolderName}/${config.portalFolderName}/${now.year}/${now.month}/${now.full}`,
       });
-      await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'running' });
+      if(!scopeCompanyId)await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'running' });
 
       // Load the complete history and keep one canonical record per source document.
       const existingRecords = await listAllEntity(base44.asServiceRole.entities.DocumentBackupRecord, '-updated_date', 10000);
@@ -630,13 +657,29 @@ Deno.serve(async (req) => {
       const failedItems = [];
 
       // Scan all documents
-      const documents = await scanAllDocuments(base44);
+      let documents;
+      if(job.sourceIndexDriveFileId){
+        const response=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(job.sourceIndexDriveFileId)+'?alt=media',accessToken);
+        if(!response.ok)throw new Error('BACKUP_INDEX_UNAVAILABLE');
+        const bytes=new Uint8Array(await response.arrayBuffer());
+        if(await computeChecksum(bytes)!==job.sourceIndexChecksum)throw new Error('BACKUP_INDEX_HASH_MISMATCH');
+        const index=JSON.parse(new TextDecoder().decode(bytes));
+        if(index.jobId!==job.id||index.scopeCompanyId!==scopeCompanyId||!Array.isArray(index.documents)||index.documents.length!==job.sourceIndexCount)throw new Error('BACKUP_INDEX_INVALID');
+        documents=backupSnapshot(index.documents,DOC_SOURCES);
+      }else{
+        documents=backupSnapshot(await scanAllDocuments(base44,scopeCompanyId),DOC_SOURCES);
+        const sourceIndex=JSON.stringify({version:3,jobId:job.id,scopeCompanyId,documents});
+        const uploadedIndex=await uploadTextFile('source_index_'+job.id+'.json',dayFolder.id,sourceIndex,accessToken);
+        const patch={sourceIndexDriveFileId:uploadedIndex.id,sourceIndexChecksum:await computeChecksum(new TextEncoder().encode(sourceIndex)),sourceIndexCount:documents.length,...(job.runVersion!=='snapshot-v3'?{nextCursor:0,documentsCopied:0,documentsSkipped:0,documentsFailed:0,bytesCopied:0,runVersion:'snapshot-v3'}:{})};
+        await base44.asServiceRole.entities.BackupJob.update(job.id,patch);job={...job,...patch};
+      }
       const startCursor = Math.min(Math.max(0, Number(job.nextCursor || 0)), documents.length);
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
         documentsScanned: documents.length,
         lastHeartbeatAt: new Date().toISOString(),
       });
 
+      copied=Number(job.documentsCopied||0);skipped=Number(job.documentsSkipped||0);failed=Number(job.documentsFailed||0);bytesCopied=Number(job.bytesCopied||0);
       // Per-document processing (extracted for parallel batching)
       const processDoc = async ({ record, source }) => {
         const fileUrl = record[source.urlField];
@@ -667,15 +710,16 @@ Deno.serve(async (req) => {
         // Download file from storage
         let contentBytes;
         try {
-          contentBytes = await downloadBackupFile(fileUrl);
+          contentBytes = await downloadBackupFile(fileUrl,base44,user,record[source.companyField],deadline);
         } catch (e) {
+          if(Date.now()>=deadline-250||e?.message==='BACKUP_CHUNK_DEADLINE')throw new Error('BACKUP_CHUNK_DEADLINE');
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             status: 'failed', action: 'fail', safeErrorMessage: `download: ${e.message}`, attempts: 1,
           });
           if (existing) {
-            await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, { backupStatus: 'failed', safeErrorMessage: `download: ${e.message}` });
+            await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, { ...(existing.driveFileId&&existing.checksum?{}:{backupStatus:'failed'}),safeErrorMessage:'BACKUP_DOWNLOAD_FAILED' });
           }
           return { type: 'failed', docId, error: `download: ${e.message}` };
         }
@@ -741,6 +785,7 @@ Deno.serve(async (req) => {
             status: 'copied', lastVerifiedAt: nowIso,
           }};
         } catch (e) {
+          if(Date.now()>=deadline-250||e?.message==='BACKUP_CHUNK_DEADLINE')throw new Error('BACKUP_CHUNK_DEADLINE');
           await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
@@ -748,9 +793,9 @@ Deno.serve(async (req) => {
           });
           if (existing) {
             const failedRecord = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
-              backupStatus: 'failed', safeErrorMessage: `upload: ${e.message}`,
+              ...(existing.driveFileId&&existing.checksum?{}:{backupStatus:'failed'}),safeErrorMessage:'BACKUP_UPLOAD_FAILED',
             });
-            recordMap[key] = { ...existing, ...failedRecord, backupStatus: 'failed' };
+            recordMap[key] = { ...existing, ...failedRecord };
           }
           return { type: 'failed', docId, error: `upload: ${e.message}` };
         }
@@ -758,14 +803,14 @@ Deno.serve(async (req) => {
 
       // Process a bounded chunk and persist the cursor. Manual runs continue through short requests
       // instead of keeping one request open for four minutes.
-      const invocationStartedAt = Date.now();
-      const timeBudgetMs = isManual ? MANUAL_TIME_BUDGET_MS : SCHEDULED_TIME_BUDGET_MS;
+
       let nextCursor = startCursor;
 
       for (let i = startCursor; i < documents.length; i += BACKUP_BATCH_SIZE) {
         if (Date.now() - invocationStartedAt >= timeBudgetMs) break;
         const batch = documents.slice(i, i + BACKUP_BATCH_SIZE);
         const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
+        if(results.some(result=>result.status==='rejected'&&result.reason?.message==='BACKUP_CHUNK_DEADLINE'))break;
         for (const result of results) {
           if (result.status === 'fulfilled') {
             const item = result.value;
@@ -816,7 +861,7 @@ Deno.serve(async (req) => {
         const backupRecord = recordMap[`${source.entity}:${record.id}`];
         const displayName = getDisplayName(source.entity, record);
         const companyName = await getCompanyName(record[source.companyField], base44, companyCache);
-        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus) && !!backupRecord?.driveFileId && !!backupRecord?.checksum;
+        const isBackedUp = ['backed_up', 'verified'].includes(backupRecord?.backupStatus) && !!backupRecord?.driveFileId && !!backupRecord?.checksum && (!backupRecord.fileStorageUrl||backupRecord.fileStorageUrl===record[source.urlField]);
         manifestEntries.push({
           documentId: record.id,
           documentEntity: source.entity,
@@ -829,7 +874,7 @@ Deno.serve(async (req) => {
           checksum: backupRecord?.checksum || '',
           driveFileId: backupRecord?.driveFileId || '',
           drivePath: backupRecord?.drivePath || '',
-          status: isBackedUp ? 'backed_up' : (backupRecord?.backupStatus || 'missing'),
+          status: isBackedUp ? 'backed_up' : 'missing_or_stale',
           lastVerifiedAt: backupRecord?.backupStatus === 'verified' ? (backupRecord.lastVerifiedAt || '') : '',
         });
       }
@@ -885,18 +930,21 @@ Deno.serve(async (req) => {
         const mj = await uploadTextFile('manifest.json', dayFolder.id, manifestJson, accessToken);
         manifestFileId = mj.id;
       } catch (error) {
+        if(error?.message==='BACKUP_CHUNK_DEADLINE')throw error;
         manifestErrors.push(`manifest.json: ${error.message}`);
       }
       try {
         const mc = await uploadTextFile('manifest.csv', dayFolder.id, manifestCsv, accessToken);
         csvFileId = mc.id;
       } catch (error) {
+        if(error?.message==='BACKUP_CHUNK_DEADLINE')throw error;
         manifestErrors.push(`manifest.csv: ${error.message}`);
       }
       try {
         const sf = await uploadTextFile('resumen_backup.txt', dayFolder.id, summary, accessToken);
         summaryFileId = sf.id;
       } catch (error) {
+        if(error?.message==='BACKUP_CHUNK_DEADLINE')throw error;
         manifestErrors.push(`resumen_backup.txt: ${error.message}`);
       }
 
@@ -923,7 +971,7 @@ Deno.serve(async (req) => {
         safeErrorMessage: finalErrorMessage,
       });
 
-      await base44.asServiceRole.entities.BackupConfiguration.update(config.id, {
+      if(!scopeCompanyId)await base44.asServiceRole.entities.BackupConfiguration.update(config.id, {
         lastSuccessfulBackupAt: finalStatus === 'completed' ? completedAt : config.lastSuccessfulBackupAt,
         lastBackupStatus: finalStatus === 'completed' ? 'success' : 'completed_with_errors',
         driveRootFolderId: rootFolder.id,
@@ -931,7 +979,7 @@ Deno.serve(async (req) => {
       });
 
       // ── Alert email on failures ──
-      if (finalStatus !== 'completed') {
+      if (finalStatus !== 'completed'&&!scopeCompanyId) {
         const alertEmail = config.alertEmail || Deno.env.get('ENVIO_FACTURAS');
         if (alertEmail) {
           try {
@@ -961,19 +1009,23 @@ Deno.serve(async (req) => {
       });
 
     } catch (error) {
+      if(error?.message==='BACKUP_CHUNK_DEADLINE'||Number(error?.status||error?.response?.status)===429||/HTTP_429/.test(String(error?.message||''))){
+        await base44.asServiceRole.entities.BackupJob.update(job.id,{status:'copying',lastHeartbeatAt:new Date().toISOString(),safeErrorMessage:'Limitación temporal. La copia se puede reanudar.'}).catch(()=>{});
+        return Response.json({status:'copying',jobId:job.id,continueRequired:true,retryAfterSeconds:5,rateLimited:true},{status:202,headers:{'Retry-After':'5'}});
+      }
       const failAt = new Date().toISOString();
       await base44.asServiceRole.entities.BackupJob.update(job.id, {
         status: 'failed', completedAt: failAt, lastHeartbeatAt: failAt,
         durationSeconds: Math.max(0, Math.round((new Date(failAt).getTime() - new Date(job.startedAt || failAt).getTime()) / 1000)),
         safeErrorMessage: error.message?.substring(0, 500) || 'Error no identificado',
       });
-      await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'failed' });
+      if(!scopeCompanyId)await base44.asServiceRole.entities.BackupConfiguration.update(config.id, { lastBackupStatus: 'failed' });
       return Response.json({ error: error.message, jobId: job.id }, { status: 500 });
     }
 
   } catch (error) {
-    console.error('[documentBackupToDrive]', error);
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+    console.error('[documentBackupToDrive] backup_unavailable');
+    return Response.json({ error: 'No se pudo completar la copia. Puedes reintentar sin borrar documentos.' }, { status: 500 });
+  }finally{if(lease&&leaseEntity)await releaseBackupLease(leaseEntity,lease).catch(()=>{});}
 });
 
