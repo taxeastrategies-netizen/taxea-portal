@@ -4,10 +4,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { getCarpetaLabel } from './CarpetasTree';
 import { cn } from '@/lib/utils';
 import { safeDocumentUrl } from '@/lib/safeDocumentUrl';
+import {openPrivateDocument,privateDocumentId} from '@/lib/privateDocuments';
+import {useToast} from '@/components/ui/use-toast';
 
 async function downloadFile(url, filename) {
   const safeUrl = safeDocumentUrl(url);
   if (!safeUrl) throw new Error('URL de documento no permitida');
+  if(privateDocumentId(safeUrl)){
+    const opened=await openPrivateDocument(safeUrl);
+    const link=document.createElement('a');link.href=opened.url;link.download=filename||opened.name;document.body.appendChild(link);link.click();link.remove();setTimeout(opened.revoke,30000);return;
+  }
   const res = await fetch(safeUrl);
   if (!res.ok) throw new Error('No se pudo descargar el archivo');
   const blob = await res.blob();
@@ -124,6 +130,7 @@ export function DocumentStatusBadge({doc}) {
 }
 
 function DocActions({ doc, isAdmin, onUpdate, busy }) {
+  const {toast}=useToast();
   const [downloading, setDownloading] = useState(false);
   const documentUrl = safeDocumentUrl(doc.archivo_url);
 
@@ -135,7 +142,8 @@ function DocActions({ doc, isAdmin, onUpdate, busy }) {
       await downloadFile(documentUrl, doc.nombre || 'documento');
     } catch {
       // Fallback: abrir en nueva pestaña como último recurso
-      window.open(documentUrl, '_blank', 'noopener,noreferrer');
+      if(privateDocumentId(documentUrl))toast({variant:'destructive',title:'No se pudo descargar',description:'Vuelve a abrir el documento con tu sesión activa y reintenta.'});
+      else window.open(documentUrl, '_blank', 'noopener,noreferrer');
     }
     setDownloading(false);
   };
