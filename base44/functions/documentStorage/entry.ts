@@ -3,6 +3,7 @@ import { storageConfiguration, publicStorageCertificate, STORAGE_BUCKET, STORAGE
 import { verifyStorageConnection, boundedBytes } from './storageTransport.mjs';
 import { storageCompany, isStorageAdmin, savePrivateAsset, resolvePrivateAsset } from './storageAssets.mjs';
 import { verifySignedStorageConnection } from './storageSigning.mjs';
+import { prepareStorageQa } from './storageQaFixtures.mjs';
 
 const disabled=(user:any)=>[user,user?.data].filter(Boolean).some(state=>state.is_deleted===true
  ||['eliminado','bloqueado','suspendido'].includes(String(state.status||'').trim().toLowerCase())
@@ -25,6 +26,10 @@ Deno.serve(async req=>{
    body=multipart?Object.fromEntries((await new Response(bytes,{headers:{'content-type':req.headers.get('content-type')}}).formData()).entries()):JSON.parse(new TextDecoder().decode(bytes));
   }catch{return response({error:'Solicitud no válida o demasiado grande.'},400);}
   const action=body?.action;
+  if(action==='prepare_storage_qa'){
+   if(!admin)return response({error:'Acceso reservado a administración.'},403);
+   return response({ok:true,...await prepareStorageQa(client.asServiceRole,user,Deno.env)});
+  }
   if(['public_certificate','verify_connection','verify_signed_connection'].includes(action)){
    if(!admin)return response({error:'Acceso reservado a administración.'},403);
    if(action==='verify_connection')return response({ok:true,...await verifyStorageConnection(Deno.env)});
