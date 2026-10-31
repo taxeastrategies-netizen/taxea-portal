@@ -37,12 +37,29 @@ export async function savePrivateAsset(svc,user,company,file,env,fetcher){
  const previous=await svc.entities.DocumentAsset.filter({company_id:company.id,sha256:digest,status:'ready'},'-created_date',1);
  if(previous[0])return {asset:previous[0],file_url:assetReference(previous[0].id),reused:true};
  const objectName='companies/'+company.id+'/'+crypto.randomUUID()+'.'+format.ext;
- const transport=await storageTransport(env,fetcher),object=await transport.put(objectName,bytes,format.mime);
- // A saved reference is emitted only after a complete readback, not just an upload acknowledgment.
- const read=await transport.get(objectName,object.generation);
- if(await sha256(read)!==digest)throw new Error('STORAGE_HASH_MISMATCH');
- const asset=await svc.entities.DocumentAsset.create({company_id:company.id,object_name:objectName,generation:object.generation,sha256:digest,size:bytes.length,mime_type:format.mime,original_name:String(file.name||'documento').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,240),status:'ready',uploaded_by:String(user.id),storage_provider:'gcs'});
- return {asset,file_url:assetReference(asset.id),reused:false};
+ // Record intent before the remote write, so an interrupted upload remains traceable.
+ const pending=await svc.entities.DocumentAsset.create({company_id:company.id,object_name:objectName,generation:'',sha256:digest,size:bytes.length,mime_type:format.mime,original_name:String(file.name||'documento').replace(/[\u0000-\u001f\u007f]/g,'').slice(0,240),status:'uploading',uploaded_by:String(user.id),storage_provider:'gcs'});
+ let object,bytesVerified=false;
+ try{
+  const transport=await storageTransport(env,fetcher);object=await transport.put(objectName,bytes,format.mime);
+  await svc.entities.DocumentAsset.update(pending.id,{generation:object.generation});
+  const read=await transport.get(objectName,object.generation);
+  if(await sha256(read)!==digest)throw new Error('STORAGE_HASH_MISMATCH');
+  bytesVerified=true;
+  await svc.entities.DocumentAsset.update(pending.id,{status:'ready',verified_at:new Date().toISOString(),error_code:''});
+  const asset=await svc.entities.DocumentAsset.get(pending.id);
+  if(asset.status!=='ready'||asset.sha256!==digest||asset.generation!==object.generation||asset.company_id!==company.id)throw new Error('STORAGE_ASSET_UNVERIFIED');
+  return {asset,file_url:assetReference(asset.id),reused:false};
+ }catch(error){
+  if(bytesVerified){
+   const recovered=await svc.entities.DocumentAsset.get(pending.id).catch(()=>null);
+   if(recovered?.status==='ready'&&recovered.sha256===digest&&recovered.generation===object?.generation&&recovered.company_id===company.id)return {asset:recovered,file_url:assetReference(recovered.id),reused:true};
+  }else{
+   const code=/^STORAGE_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'STORAGE_UPLOAD_INTERRUPTED';
+   await svc.entities.DocumentAsset.update(pending.id,{status:'failed',generation:object?.generation||'',error_code:code}).catch(()=>{});
+  }
+  throw error;
+ }
 }
 export async function authorizedAsset(svc,user,id){
  if(!storageAccountEnabled(user)||!/^[A-Za-z0-9_-]{1,128}$/.test(id||''))return null;
