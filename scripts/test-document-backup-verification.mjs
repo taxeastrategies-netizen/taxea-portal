@@ -43,7 +43,7 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
       update: async (_id, data) => Object.assign(job, data),
     } } },
   };
-  const context = { action: 'verify', body: {}, base44, accessToken: 'synthetic',
+  const context = { action: 'verify', body: {}, scopeCompanyId:'', base44, accessToken: 'synthetic',
     driveGet, computeChecksum: hash, DRIVE_API: 'https://drive.example/files',
     Response, TextDecoder, Uint8Array, encodeURIComponent, Date, Number, Set, JSON };
   const execute = vm.runInNewContext('(async () => {' + branch + '})', context);
