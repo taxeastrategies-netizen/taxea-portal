@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       const response = await client.functions.invoke('sendEmail', {
         action: 'reminder', company_id: companyId, invoice_id: String(body.invoiceId || ''),
       });
-      return Response.json(response?.data ?? response);
+      return Response.json({ok:true,result:response?.data ?? response});
     } else {
       const document = await svc.entities.Document.get(String(body.documentId || '')).catch(() => null);
       if (!document || document.company_id !== companyId || document.fiscal_document_kind !== 'justificante_presentacion') {
