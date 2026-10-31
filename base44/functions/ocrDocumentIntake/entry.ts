@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import {storageEnabled,savePrivateAsset,storageAccountEnabled} from './storageRuntime.generated.mjs';
 
 const lower = (value: unknown) => String(value || '').trim().toLowerCase();
 const types = { expense_invoice: 'ocr_expense', income_invoice: 'ocr_income' };
@@ -30,8 +31,7 @@ Deno.serve(async req => {
     const client = createClientFromRequest(req);
     const user = await client.auth.me().catch(() => null);
     if (!user?.id || !user.email) return fail('Tu sesión ha caducado. Vuelve a entrar.', 401, 'AUTH_EXPIRED');
-    if (user.is_deleted || ['eliminado','bloqueado','suspendido'].includes(user.status)
-      || user.accountAccessStatus === 'suspended') return fail('Acceso al portal suspendido.', 403, 'ACCOUNT_DISABLED');
+    if (!storageAccountEnabled(user)) return fail('Acceso al portal suspendido.', 403, 'ACCOUNT_DISABLED');
     const multipart = (req.headers.get('content-type') || '').includes('multipart/form-data');
     let body: any;
     try { body = multipart ? Object.fromEntries((await req.formData()).entries()) : await req.json(); }
@@ -65,7 +65,9 @@ Deno.serve(async req => {
       const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).map(b => b.toString(16).padStart(2,'0')).join('');
       const previous = await documents.filter({ company_id: companyId, documentType, fileHash: digest }, '-created_date', 1);
       if (previous[0]) return Response.json({ ok: true, document: previous[0], reused: true });
-      const uploaded = await svc.integrations.Core.UploadFile({ file });
+      const uploaded = storageEnabled(company,Deno.env)
+        ? await savePrivateAsset(svc,user,company,file,Deno.env)
+        : await svc.integrations.Core.UploadFile({ file });
       if (!uploaded?.file_url) return fail('El servidor no confirmó la subida. Reintenta.', 502, 'NO_URL_RETURNED');
       const now = new Date().toISOString();
       const captureMethod = ['camera','drag_drop','file_picker'].includes(body.captureMethod) ? body.captureMethod : 'file_picker';

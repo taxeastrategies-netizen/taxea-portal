@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState,lazy,Suspense } from 'react';
+import {privateDocumentId} from '../../lib/documentClient.mjs';
+const PrivateDocumentPreview=lazy(()=>import('@/components/documentos/PrivateDocumentPreview'));
 import { CheckCircle, XCircle, AlertCircle, ZoomIn, ZoomOut, FileText, Loader2, MinusCircle, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +13,7 @@ import { canReturnOcrToPending, canRejectOcrDocument } from '@/lib/ocrIntake.mjs
 export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnToPending, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '', expanded = false }) {
   const [form, setForm] = useState(() => ({ ...doc.formData, fiscal_activity_id: doc.formData?.fiscal_activity_id || (fiscalActivities.length === 1 ? fiscalActivities[0].id : '') }));
   const [zoom, setZoom] = useState(1);
+  const privatePreview=!!privateDocumentId(doc.fileUrl);
   const isPDF = doc.fileUrl?.toLowerCase().includes('.pdf') || doc.file?.name?.toLowerCase().endsWith('.pdf');
   const manualAccount = String(form.cuenta_contable_manual || '').trim();
   const accountPrefix = tipo === 'ingresos' ? '7' : '6';
@@ -47,14 +50,14 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnTo
         <div className="border-b lg:border-b-0 lg:border-r border-border bg-secondary/20 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
             <span className="text-xs text-muted-foreground font-medium">Vista previa</span>
-            <div className="ml-auto flex items-center gap-1">
+            {!privatePreview&&<div className="ml-auto flex items-center gap-1">
               <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} className="p-1 rounded hover:bg-secondary text-muted-foreground"><ZoomOut className="w-3.5 h-3.5" /></button>
               <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-1 rounded hover:bg-secondary text-muted-foreground"><ZoomIn className="w-3.5 h-3.5" /></button>
-            </div>
+            </div>}
           </div>
           <div className={expanded ? 'flex min-h-0 flex-1 items-start justify-center overflow-auto p-4' : 'flex flex-1 items-start justify-center overflow-auto p-4'}>
-            {isPDF ? (
+            {privatePreview ? <Suspense fallback={<p role="status">Abriendo documento...</p>}><PrivateDocumentPreview reference={doc.fileUrl} expanded={expanded}/></Suspense> : isPDF ? (
               <iframe
                 src={doc.fileUrl}
                 className="w-full rounded border border-border"

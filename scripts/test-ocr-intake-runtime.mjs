@@ -34,14 +34,14 @@ const client = { auth: { me: async () => user }, get asServiceRole() {
     get JournalEntry(){throw new Error('Intake must never touch accounting');},
   }, integrations:{Core:{UploadFile:async()=>{uploads++;return {file_url:'https://base44.app/api/apps/qa/files/mp/public/fake.jpg'};}}} };
 } };
-const bundle=await esbuild.build({entryPoints:[process.env.OCR_INTAKE_ENTRY || 'base44/functions/ocrDocumentIntake/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{
+const bundle=await esbuild.build({entryPoints:[process.env.OCR_INTAKE_ENTRY || 'base44/functions/ocrDocumentIntake/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',plugins:[{
   name:'stub-sdk',setup(build){
     build.onResolve({filter:/^npm:@base44\/sdk/},()=>({path:'sdk',namespace:'stub'}));
     build.onLoad({filter:/.*/,namespace:'stub'},()=>({contents:'export const createClientFromRequest=()=>globalThis.__client;',loader:'js'}));
   },
 }]});
 let handler;
-vm.runInContext(bundle.outputFiles[0].text,vm.createContext({__client:client,console,Date,Response,Request,File,TextDecoder,Uint8Array,crypto,Deno:{serve:fn=>{handler=fn;}}}));
+vm.runInContext(bundle.outputFiles[0].text,vm.createContext({TextEncoder,TextDecoder,URL,Uint8Array,__client:client,console,Date,Response,Request,File,TextDecoder,Uint8Array,crypto,Deno:{env:{get:()=>undefined},serve:fn=>{handler=fn;}}}));
 const call=async body=>handler(new Request('https://qa.invalid/intake',{method:'POST',headers:body instanceof FormData?{}:{'content-type':'application/json'},body:body instanceof FormData?body:JSON.stringify(body)}));
 const image = new File([Uint8Array.from([255,216,255,224,12,34])],'factura-qa.jpg',{type:'image/jpeg'});
 const request=(params={})=>{const body=new FormData();for(const [k,v] of Object.entries({action:'upload',companyId:'own',documentType:'expense_invoice',captureMethod:'camera',deviceType:'mobile',file:image,...params}))body.set(k,v);return body;};
@@ -196,7 +196,7 @@ const zoneBundle=await esbuild.build({entryPoints:['src/components/lector/BulkDr
   },
 }]});
 const exports={};
-const uiContext=vm.createContext({module:{exports},exports,React:{createElement:(type,props,...children)=>({type,props:props || {},children})}});
+const uiContext=vm.createContext({TextEncoder,TextDecoder,URL,Uint8Array,module:{exports},exports,React:{createElement:(type,props,...children)=>({type,props:props || {},children})}});
 vm.runInContext(zoneBundle.outputFiles[0].text,uiContext);
 const zone=uiContext.module.exports.default,deliveries=[];
 const tree=zone({onFilesAdded:(files,method)=>deliveries.push({files,method})});
@@ -214,19 +214,19 @@ disabled.props.onDrop({preventDefault(){},dataTransfer:{files:[image]}});
 const walk=node=>Array.isArray(node)?node.flatMap(walk):node && typeof node==='object'?[node,...walk(node.children || [])]:[];
 const textOf=node=>Array.isArray(node)?node.map(textOf).join(''):node && typeof node==='object'?textOf(node.children || []):String(node ?? '');
 for(const component of ['src/components/lector/ReviewPanel.jsx','src/components/ocr/OcrDocumentTable.jsx']) {
-  const build=await esbuild.build({entryPoints:[component],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{
+  const build=await esbuild.build({entryPoints:[component],bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',plugins:[{
     name:'review-ui',setup(b){
       b.onResolve({filter:/ocrIntake\.mjs$/},()=>({path:process.cwd()+'/src/lib/ocrIntake.mjs'}));
       b.onResolve({filter:/^(react($|\/jsx-runtime$)|lucide-react$|@\/)|OcrFiscalFields$/},args=>({path:args.path,namespace:'review-ui'}));
       b.onLoad({filter:/.*/,namespace:'review-ui'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'
         ? 'export const jsx=(type,props)=>({type,props:props || {},children:[].concat(props?.children || [])});export const jsxs=jsx;export const Fragment="Fragment";'
-        : args.path==='react' ? 'export const useState=initial=>[typeof initial==="function"?initial():initial,()=>{}];'
+        : args.path==='react' ? 'export const lazy=()=>"PrivateDocumentPreview",Suspense="Suspense";export const useState=initial=>[typeof initial==="function"?initial():initial,()=>{}];'
         : args.path==='lucide-react' ? 'export const FileText="FileText",Image="Image",Eye="Eye",RefreshCw="RefreshCw",Play="Play",CheckCircle="CheckCircle",Loader2="Loader2",Ban="Ban",Undo2="Undo2",XCircle="XCircle",AlertCircle="AlertCircle",ZoomIn="ZoomIn",ZoomOut="ZoomOut",MinusCircle="MinusCircle";'
         : args.path.includes('utils') ? 'export const cn=(...args)=>args.join(" ");'
         : 'export const Button="Button",Input="Input",Label="Label",Checkbox="Checkbox",Select="Select",SelectContent="SelectContent",SelectItem="SelectItem",SelectTrigger="SelectTrigger",SelectValue="SelectValue";export default "FiscalFields";'}));
     },
   }]});
-  const exported={},context=vm.createContext({module:{exports:exported},exports:exported});
+  const exported={},context=vm.createContext({TextEncoder,TextDecoder,URL,Uint8Array,module:{exports:exported},exports:exported});
   vm.runInContext(build.outputFiles[0].text,context);
   const render=context.module.exports.default,events=[];
   const doc={id:'review-qa',status:'review_required',originalFileName:'QA.jpg',extractedData:'{"total":121}',formData:{},file:{name:'QA.jpg'}};
@@ -249,3 +249,5 @@ for(const component of ['src/components/lector/ReviewPanel.jsx','src/components/
   assert.deepEqual(events[0],['pending',doc.id]);
 }
 console.log('OCR intake: pending uploads, OCR to review, reject persistence, reset/reanalyse, idempotence, approval lease, canonical/linked invoice guards, stale response CAS, membership/auth, pagination and delivery methods pass. No external calls.');
+
+

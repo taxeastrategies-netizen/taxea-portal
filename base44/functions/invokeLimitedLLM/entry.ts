@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import {assetIdFromReference,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -54,11 +55,17 @@ function safeModel(value: unknown) {
   return value;
 }
 
-function validateFileUrls(value: unknown, maxFiles: number) {
+async function validateFileUrls(value: unknown, maxFiles: number, svc: any, user: any) {
   if (value == null) return undefined;
   if (!Array.isArray(value) || value.length > maxFiles) throw new Error('Demasiados archivos adjuntos');
-  return value.map((raw) => {
+  return Promise.all(value.map(async (raw) => {
     if (typeof raw !== 'string' || raw.length > 2048) throw new Error('URL de archivo no válida');
+    const assetId=assetIdFromReference(raw);
+    if(assetId){
+      const resolved=await resolvePrivateAsset(svc,user,assetId,Deno.env);
+      if(!resolved)throw new Error('Documento privado no válido o no autorizado');
+      return resolved.url;
+    }
     const url = new URL(raw);
     const appId = '6a00fec50cc522a74ddde4b2';
     const appFile = url.hostname === 'base44.app'
@@ -69,7 +76,7 @@ function validateFileUrls(value: unknown, maxFiles: number) {
       throw new Error('URL de archivo no válido: utiliza documentos de Taxea en HTTPS');
     }
     return url.toString();
-  });
+  }));
 }
 
 Deno.serve(async (req) => {
@@ -135,7 +142,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'La solicitud supera el tamaño máximo permitido' }, { status: 413 });
     }
 
-    const fileUrls = validateFileUrls(body.file_urls, maxFiles);
+    const fileUrls = await validateFileUrls(body.file_urls, maxFiles, base44.asServiceRole, user);
     const schema = body.response_json_schema;
     if (schema != null && (typeof schema !== 'object' || JSON.stringify(schema).length > maxSchemaChars)) {
       return Response.json({ error: 'El esquema de respuesta no es válido o es demasiado grande' }, { status: 400 });
@@ -205,7 +212,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ result });
   } catch (error) {
-    console.error('[invokeLimitedLLM] Error:', error);
+    console.error('[invokeLimitedLLM] provider_or_internal_error');
     if (eventId) {
       try {
         const retryClient = createClientFromRequest(req);

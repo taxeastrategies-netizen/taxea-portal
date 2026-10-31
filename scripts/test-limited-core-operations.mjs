@@ -43,7 +43,7 @@ const client = {
     } },
   },
 };
-vm.runInContext(bundle.outputFiles[0].text, vm.createContext({ console, Request, Response, URL, __client: client, Deno: { serve(fn) { handler = fn; } } }));
+vm.runInContext(bundle.outputFiles[0].text, vm.createContext({TextEncoder,TextDecoder,URL,Uint8Array, console, Request, Response, URL, __client: client, Deno: { env:{get:()=>undefined}, serve(fn) { handler = fn; } } }));
 async function invoke(body) {
   const response = await handler(new Request('https://taxea.test/limited', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),

@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import {assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
 function isTaxeaAccountDisabled(account) {
@@ -65,13 +66,21 @@ Deno.serve(async (req) => {
     let params: Record<string, unknown> = {};
 
     if (operation === 'extract') {
-      if (!safeAppFileUrl(body.file_url)) return Response.json({ error: 'Archivo no admitido' }, { status: 400 });
+      let providerFileUrl=body.file_url;
+      const assetId=assetIdFromReference(body.file_url);
+      if(assetId){
+        const asset=await authorizedAsset(svc,user,assetId);
+        if(!asset||asset.company_id!==companyId)return Response.json({error:'Archivo no disponible'},{status:404});
+        const resolved=await resolvePrivateAsset(svc,user,assetId,Deno.env);
+        if(!resolved)return Response.json({error:'Archivo no disponible'},{status:404});
+        providerFileUrl=resolved.url;
+      }else if (!safeAppFileUrl(body.file_url)) return Response.json({ error: 'Archivo no admitido' }, { status: 400 });
       const schema = body.json_schema;
       if (!schema || typeof schema !== 'object' || Array.isArray(schema) || JSON.stringify(schema).length > 30000) {
         return Response.json({ error: 'Esquema de extracción no válido' }, { status: 400 });
       }
       targetId = String(body.file_url);
-      params = { file_url: body.file_url, json_schema: schema };
+      params = { file_url: providerFileUrl, json_schema: schema };
     } else if (operation === 'reminder') {
       const invoice = await svc.entities.Invoice.get(String(body.invoiceId || '')).catch(() => null);
       if (!invoice || invoice.company_id !== companyId || invoice.tipo !== 'emitida' || invoice.anulada || invoice.estado_cobro === 'cobrada') {
@@ -127,7 +136,7 @@ Deno.serve(async (req) => {
     await svc.entities.CoreIntegrationUsage.update(event.id, { status: 'success', completedAt: new Date().toISOString() });
     return Response.json({ ok: true, result });
   } catch (error) {
-    console.error('[limitedCoreOperations]', error);
+    console.error('[limitedCoreOperations] provider_or_internal_error');
     if (event?.id && client?.asServiceRole?.entities?.CoreIntegrationUsage) {
       await client.asServiceRole.entities.CoreIntegrationUsage.update(event.id, {
         status: 'error', completedAt: new Date().toISOString(),
