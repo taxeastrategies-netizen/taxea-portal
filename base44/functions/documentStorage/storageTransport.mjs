@@ -49,11 +49,12 @@ export async function storageTransport(env,fetcher=fetch){
  };
 }
 export async function verifyStorageConnection(env,fetcher=fetch){
- const storage=await storageTransport(env,fetcher),name='__taxea_security_probe__/'+crypto.randomUUID()+'.txt';
+ let storage;try{storage=await storageTransport(env,fetcher);}catch{throw new Error('STORAGE_STEP_AUTH');}
+ const name='__taxea_security_probe__/'+crypto.randomUUID()+'.txt';
  const expected=encoder.encode('TAXEA SYNTHETIC STORAGE PROBE - NO CUSTOMER DATA\n');
- const uploaded=await storage.put(name,expected,'text/plain');let report;
- try{const bytes=await storage.get(name,uploaded.generation),unsignedStatus=await storage.unsignedStatus(name);report={hashVerified:await sha256(bytes)===await sha256(expected),publicAccessDenied:[401,403,404].includes(unsignedStatus),unsignedStatus,size:bytes.length};}
- finally{await storage.remove(name,uploaded.generation);}
+ let uploaded;try{uploaded=await storage.put(name,expected,'text/plain');}catch{throw new Error('STORAGE_STEP_UPLOAD');}let report;
+ try{let bytes,unsignedStatus;try{bytes=await storage.get(name,uploaded.generation);}catch{throw new Error('STORAGE_STEP_READ');}try{unsignedStatus=await storage.unsignedStatus(name);}catch{throw new Error('STORAGE_STEP_UNSIGNED');}report={hashVerified:await sha256(bytes)===await sha256(expected),publicAccessDenied:[401,403,404].includes(unsignedStatus),unsignedStatus,size:bytes.length};}
+ finally{try{await storage.remove(name,uploaded.generation);}catch{throw new Error('STORAGE_STEP_CLEANUP');}}
  if(!report.hashVerified||!report.publicAccessDenied)throw new Error('STORAGE_PROBE_FAILED');
  return {...report,syntheticOnly:true,cleanupVerified:true,checkedAt:new Date().toISOString()};
 }
