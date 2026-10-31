@@ -81,7 +81,7 @@ hookRelease();await hookPending;await new Promise(setImmediate);hook=render();as
 hookClient.clear();
 
 // Render actual cards. Only presentation, no download, external API or approval.
-const cardBuild=await esbuild.build({entryPoints:['src/components/documentos/DocCard.jsx'],bundle:true,write:false,format:'cjs',platform:'node',jsx:'automatic',alias:{'@':process.cwd()+'/src'},external:['react','react-dom','react/jsx-runtime']});
+const cardBuild=await esbuild.build({entryPoints:['src/components/documentos/DocCard.jsx'],bundle:true,write:false,format:'cjs',platform:'node',jsx:'automatic',alias:{'@':process.cwd()+'/src'},external:['react','react-dom','react/jsx-runtime'],plugins:[{name:'no-download-in-status-render',setup(b){b.onResolve({filter:/privateDocuments$/},()=>({path:'private-documents',namespace:'status-test'}));b.onLoad({filter:/.*/,namespace:'status-test'},()=>({loader:'js',contents:'export const privateDocumentId=()=>"";export const openPrivateDocument=async()=>{throw new Error("Download forbidden in status render test")};'}));}}]});
 const cardExports={},cardContext={exports:cardExports,module:{exports:cardExports},require:nativeRequire};vm.runInNewContext(cardBuild.outputFiles[0].text,cardContext);
 const Card=cardContext.module.exports.default;
 const pendingCard=renderToStaticMarkup(React.createElement(Card,{doc:{...previous,estado:'aprobado',_taxeaStatusPending:true},isAdmin:true,busy:true,onUpdate(){}}));
