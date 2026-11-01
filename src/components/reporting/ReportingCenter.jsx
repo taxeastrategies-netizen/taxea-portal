@@ -21,8 +21,7 @@ import MnAAnalytics from './MnAAnalytics';
 import ExecutiveCommentary from './ExecutiveCommentary';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { buildFinanceDashboardModel, reportingMetricSnapshot } from '@/lib/financeDashboardModel.mjs';
-import { reportingWindow, civilDay, daysBetween, shiftDay } from '@/lib/reportingPeriods.mjs';
-import { useFinanceObligations } from '@/hooks/useFinanceReporting';
+import { useFinanceObligations, useFinancePeriod } from '@/hooks/useFinanceReporting';
 import { financialReportReadiness } from '@/lib/verifiedFinancialMetrics';
 
 const TABS = [
@@ -52,10 +51,11 @@ export default function ReportingCenter() {
   const requestRef = useRef(0);
   const [loadedCompany, setLoadedCompany] = useState(null);
   const [debts, setDebts] = useState([]);
-  const [accountingReport, setAccountingReport] = useState(null);
+  const accounting = useFinancePeriod(companyId,'ytd');
+  const accountingReport = accounting.data?.current || null;
   const [auxiliaryLoading, setAuxiliaryLoading] = useState(true);
   const [auxiliaryError, setAuxiliaryError] = useState('');
-  const loading = financialLoading || auxiliaryLoading || calendar.isLoading || loadedCompany !== companyId;
+  const loading = financialLoading || auxiliaryLoading || calendar.isLoading || accounting.isLoading || loadedCompany !== companyId;
 
   const loadData = async () => {
     if (!companyId) { setAuxiliaryLoading(false); return; }
@@ -63,15 +63,9 @@ export default function ReportingCenter() {
     setAuxiliaryLoading(true);
     setAuxiliaryError('');
     try {
-      const [dbs, accountingResponse] = await Promise.all([
-        base44.entities.DebtInstrument.filter({ company_id: companyId }),
-        base44.functions.invoke('accountingOperations', { action: 'reports', companyId, year: new Date().getFullYear(), scope: 'confirmed' }),
-      ]);
-      const report = accountingResponse?.data?.report || accountingResponse?.report;
-      if (!report) throw new Error('No se pudo obtener la PyG contable confirmada.');
-      if(request !== requestRef.current)return;
-      setDebts(dbs || []);
-      setAccountingReport(report);
+      const dbs=await base44.entities.DebtInstrument.filter({company_id:companyId});
+      if(request!==requestRef.current)return;
+      setDebts(dbs||[]);
     } catch (error) {
       if(request !== requestRef.current)return;
       setAuxiliaryError(error?.message || 'No se pudieron cargar obligaciones o deudas.');
@@ -80,14 +74,12 @@ export default function ReportingCenter() {
     }
   };
 
-  useEffect(() => { setDebts([]); setAccountingReport(null); setLoadedCompany(null); loadData(); return () => {requestRef.current++;}; }, [companyId]);
+  useEffect(() => { setDebts([]); setLoadedCompany(null); loadData(); return () => {requestRef.current++;}; }, [companyId]);
 
   const financials = useMemo(() => {
-    const now=new Date(),end=civilDay(now),start=end.slice(0,4)+'-01-01',days=daysBetween(start,end)+1;
-    const window={...reportingWindow('365d',now),start,days,previous:{start:shiftDay(start,-days),end:shiftDay(start,-1)}};
-    const shared=buildFinanceDashboardModel({invoices,expenses,bankAccounts,bankTransactions:transactions,obligations,treasuryError,financialError,accountingError:auxiliaryError,accountingPeriod:accountingReport?{current:accountingReport,window}:null,now});
+    const shared=buildFinanceDashboardModel({invoices,expenses,bankAccounts,bankTransactions:transactions,obligations,treasuryError,financialError,accountingError:accounting.isError?'PyG anual no disponible':auxiliaryError,accountingPeriod:accounting.data,period:'ytd'});
     return reportingMetricSnapshot(shared,debts,accountingReport);
-  }, [invoices,expenses,bankAccounts,transactions,debts,treasuryError,financialError,auxiliaryError,accountingReport,calendar.data]);
+  }, [invoices,expenses,bankAccounts,transactions,debts,treasuryError,financialError,auxiliaryError,accountingReport,accounting.data,accounting.isError,calendar.data]);
 
   const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading };
 
@@ -103,8 +95,8 @@ export default function ReportingCenter() {
     );
   }
 
-  const readiness=financialReportReadiness({financials,financialError,treasuryError,auxiliaryError,calendarError:calendar.isError});
-  if (!loading && !readiness.ready) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">No se puede generar un informe financiero fiable: {readiness.reasons.join(' ')}<button type="button" onClick={() => {refresh();loadData();calendar.refetch();}} className="ml-3 underline">Reintentar</button></div>;
+  const readiness=financialReportReadiness({financials,financialError,treasuryError,auxiliaryError:auxiliaryError || (accounting.isError?'PyG no disponible':''),calendarError:calendar.isError});
+  if (!loading && !readiness.ready) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">No se puede generar un informe financiero fiable: {readiness.reasons.join(' ')}<button type="button" onClick={() => {refresh();loadData();calendar.refetch();accounting.refetch();}} className="ml-3 underline">Reintentar</button></div>;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-10">
@@ -122,7 +114,7 @@ export default function ReportingCenter() {
             <p className="text-sm text-slate-400 mt-0.5">Informes del ejercicio y análisis de datos registrados</p>
           </div>
         </div>
-        <button onClick={() => { refresh(); loadData(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all self-start sm:self-auto">
+        <button onClick={() => { refresh(); loadData(); accounting.refetch(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all self-start sm:self-auto">
           <RefreshCw className="w-3.5 h-3.5" /> Actualizar datos
         </button>
       </div>

@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
@@ -63,9 +64,9 @@ Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Período: ${format(new Date(), 'MMMM yyyy', { locale: es })}
 
 DATOS FINANCIEROS:
-- Ingresos: ${fmt(f.ingresos)} | EBITDA: ${fmt(f.ebitda)} (${f.margen?.toFixed(1)}% margen)
+- Ingresos: ${fmt(f.ingresos)} | EBITDA: ${fmt(f.ebitda)} (${financialPercentLabel(f.margen)} margen)
 - Beneficio neto: ${fmt(f.beneficio)}
-- Caja disponible: ${fmt(f.cashTotal)} | Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'}
+- Caja disponible: ${fmt(f.cashTotal)} | Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Burn rate: ${fmt(f.burnRate)}/mes
 - Deuda activa: ${fmt(f.deudaTotal)}
 - Working Capital: ${fmt(f.workingCapital)}

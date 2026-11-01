@@ -31,9 +31,14 @@ export function financialReportReadiness({financials=/** @type {{bankKnown?:bool
 }
 
 export function financialScoringReadiness(financials) {
- return Boolean(financials?.bankKnown && financials?.accountingKnown && !financials.accountingProvisional && financials.cashHistorySufficient && Number.isFinite(financials.runway) && Number.isFinite(financials.dso));
+ return Boolean(financials?.bankKnown && financials?.accountingKnown && !financials.accountingProvisional && financials.cashHistorySufficient && Number.isFinite(financials.runway) && Number.isFinite(financials.dso) && Number.isFinite(financials.margen));
 }
 export function financialExportNumber(value) {
  if(!['number','string'].includes(typeof value) || value === null || typeof value === 'string' && !value.trim() || !Number.isFinite(Number(value)))return 'No verificable';
  return Math.round(Number(value)*100)/100;
+}
+
+export function financialPercentLabel(value) {
+ if(value===null || value===undefined || value==='' || typeof value==='string' && !value.trim() || typeof value==='boolean' || !Number.isFinite(Number(value)))return 'No verificable';
+ return Number(value).toFixed(1)+'%';
 }

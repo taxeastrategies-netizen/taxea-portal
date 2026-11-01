@@ -20,6 +20,9 @@ equal(owned.data.current.profitAndLoss.result,100,'output VAT does not alter per
 equal(owned.data.current.includedEntries,1,'handler reports actual source coverage');
 equal(writes,0,'period reader performs no entity writes');
 const monthly=await invoke({action:'finance_period',companyId:company.id,period:'mtd'});
+const annual=await invoke({action:'finance_period',companyId:company.id,period:'ytd'});
+equal(annual.status,200,'annual reporting uses the authorized canonical reader');
+equal(annual.data.window.start,today.slice(0,4)+'-01-01','annual reporting does not include the previous fiscal year');
 equal(monthly.status,200,'monthly dashboard can request its actual accounting month');
 equal(monthly.data.window.start,today.slice(0,8)+'01','monthly source does not silently use rolling thirty days');
 equal((await invoke({action:'finance_period',companyId:company.id,period:'unbounded'})).status,400,'invalid period rejected');

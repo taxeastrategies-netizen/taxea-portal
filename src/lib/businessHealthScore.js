@@ -84,8 +84,9 @@ export function computeBusinessHealth(summary, fiscal, { now = new Date(), stale
   const activeWeight = active.reduce((sum, dimension) => sum + dimension.weight, 0);
   const score = activeWeight ? Math.round(active.reduce((sum, dimension) => sum + dimension.score * dimension.weight, 0) / activeWeight) : null;
   const reasons = [...active.flatMap((dimension) => dimension.reasons.map((reason) => ({ reason, score: dimension.score }))).sort((a, b) => a.score - b.score).map((item) => item.reason), ...dimensions.filter(dimension => !dimension.active).flatMap(dimension => dimension.reasons)].slice(0, 6);
-  const coreComplete = accountingActive && treasuryActive && readiness.active && !['Expense','InvoicePayment'].some(name => unavailable[name]);
-  if (!coreComplete) reasons.unshift('La puntuación global requiere contabilidad, calendario fiscal validado y saldo bancario verificable.');
+  const sourcesComplete = Object.keys(unavailable).length === 0;
+  const coreComplete = accountingActive && treasuryActive && readiness.active && sourcesComplete;
+  if (!coreComplete) reasons.unshift(sourcesComplete ? 'La puntuación global requiere contabilidad, calendario fiscal validado y saldo bancario verificable.' : 'Hay fuentes sin actualizar; la puntuación global queda sin verificar.');
   if (stale) reasons.unshift('La actualización no está completa; la puntuación queda sin verificar.');
   return { score: stale || !coreComplete ? null : score, coverage: activeWeight, dimensions, reasons };
 }

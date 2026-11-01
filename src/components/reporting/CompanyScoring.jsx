@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { financialScoringReadiness } from '@/lib/verifiedFinancialMetrics';
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
@@ -76,7 +77,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
 
     // Rentabilidad EBITDA (20%)
     const ebitdaScore = f.margen > 25 ? 95 : f.margen > 15 ? 80 : f.margen > 5 ? 60 : f.margen > 0 ? 35 : 10;
-    factors.push({ label: 'Rentabilidad (EBITDA)', score: Math.round(ebitdaScore), weight: 20, desc: `Margen: ${f.margen?.toFixed(1) || 0}% · EBITDA: ${fmt(f.ebitda)}` });
+    factors.push({ label: 'Rentabilidad (EBITDA)', score: Math.round(ebitdaScore), weight: 20, desc: `Margen: ${financialPercentLabel(f.margen)} · EBITDA: ${fmt(f.ebitda)}` });
 
     // Endeudamiento (15%)
     const deudaEbitda = f.ebitda > 0 ? f.deudaTotal / f.ebitda : 99;
@@ -89,7 +90,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
 
     // DSO/DPO (10%)
     const dsoScore = f.dso < 30 ? 95 : f.dso < 45 ? 80 : f.dso < 60 ? 60 : f.dso < 90 ? 40 : 20;
-    factors.push({ label: 'Eficiencia Cobros (DSO)', score: Math.round(dsoScore), weight: 10, desc: `DSO estimado: ~${f.dso || 0} días` });
+    factors.push({ label: 'Eficiencia Cobros (DSO)', score: Math.round(dsoScore), weight: 10, desc: `DSO estimado: ~${f.dso ?? 'No verificable'} días` });
 
     // Working Capital (10%)
     const wcScore = f.workingCapital > 0 ? Math.min(90, 50 + (f.workingCapital / (f.ingresos || 1)) * 100) : 20;
@@ -114,10 +115,10 @@ Analiza este perfil financiero empresarial y genera un comentario ejecutivo prof
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Score financiero: ${scoring.total}/100
 Ingresos: ${fmt(f.ingresos)}
-EBITDA: ${fmt(f.ebitda)} (${f.margen?.toFixed(1)}% margen)
-Caja: ${fmt(f.cashTotal)} (runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'})
+EBITDA: ${fmt(f.ebitda)} (${financialPercentLabel(f.margen)} margen)
+Caja: ${fmt(f.cashTotal)} (runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'})
 Deuda total: ${fmt(f.deudaTotal)}
-DSO: ~${f.dso || 0} días
+DSO: ~${f.dso ?? 'No verificable'} días
 Working Capital: ${fmt(f.workingCapital)}
 
 Factores de scoring:

@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
@@ -28,19 +29,19 @@ MÉTRICAS FINANCIERAS:
 - Ingresos totales: ${fmt(f.ingresos)}
 - Gastos totales: ${fmt(f.gastoTotal)}
 - Beneficio neto: ${fmt(f.beneficio)}
-- Margen neto: ${f.margen?.toFixed(1)}%
+- Margen neto: ${financialPercentLabel(f.margenNeto)}
 - EBITDA estimado: ${fmt(f.ebitda)}
 - Caja disponible: ${fmt(f.cashTotal)}
 - Burn rate mensual: ${fmt(f.burnRate)}
-- Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'}
+- Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Deuda total activa: ${fmt(f.deudaTotal)}
 - Cuotas mensuales deuda: ${fmt(f.cuotasMensuales)}
 - Intereses anuales: ${fmt(f.interesesAnuales)}
 - Cobros pendientes (AR): ${fmt(f.cobrosPendientes)}
 - Pagos pendientes (AP): ${fmt(f.pagosPendientes)}
 - Working Capital: ${fmt(f.workingCapital)}
-- DSO estimado: ~${f.dso || 0} días
-- DPO estimado: ~${f.dpo || 0} días
+- DSO estimado: ~${f.dso ?? 'No verificable'} días
+- DPO estimado: ~${f.dpo ?? 'No verificable'} días
 - Nº facturas emitidas: ${invoices.filter(i => i.tipo === 'emitida').length}
 - Nº instrumentos deuda activos: ${debts.filter(d => d.estado === 'activo').length}
 - Cuentas bancarias: ${bankAccounts.length}

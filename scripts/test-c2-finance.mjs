@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { reportingWindow, classifyObligations, civilDay, shiftDay } from '../src/lib/reportingPeriods.mjs';
-import { buildFinanceDashboardModel, reportingMetricSnapshot, bankObservation, bankFlows } from '../src/lib/financeDashboardModel.mjs';
+import { buildFinanceDashboardModel, confirmEmptyReportingPeriod, reportingMetricSnapshot, bankObservation, bankFlows } from '../src/lib/financeDashboardModel.mjs';
 import { financeAlerts, financeInsights, deriveFinanceHealth } from '../src/lib/financeSignals.mjs';
 import { buildFinancePeriod, reportForWindow } from '../base44/functions/businessDashboardOperations/financePeriod.mjs';
 const now = new Date('2026-11-01T12:00:00Z');
@@ -105,4 +105,11 @@ equal(reportingSnapshot.runway,3.7,'reporting runway uses observed bank flow, no
 equal(Object.values(reportingSnapshot).some(Array.isArray),false,'report metrics never include raw document or bank arrays');
 equal(reportingSnapshot.observation,undefined,'report sharing receives no raw bank observation');
 equal(reportingSnapshot.filteredInvoices,undefined,'report sharing receives no invoice objects');
+const emptyPeriod={includedEntries:0,excludedEntries:0,pendingEntriesInYear:0,frameworkReviewStatus:'validated',profitAndLoss:{totalIncome:0,totalExpenses:0,result:0,income:[],expenses:[]}};
+equal(confirmEmptyReportingPeriod(empty,emptyPeriod,true,true).totalIngresos,0,'confirmed annual history plus a complete empty monthly read is a true zero');
+equal(confirmEmptyReportingPeriod(empty,emptyPeriod,false,true).totalIngresos,null,'new empty company is not assumed to have verified zero accounting');
+equal(confirmEmptyReportingPeriod(empty,{...emptyPeriod,excludedEntries:1},true,true).totalIngresos,null,'excluded monthly postings prevent a false zero');
+equal(confirmEmptyReportingPeriod(empty,emptyPeriod,true,false).totalIngresos,null,'failed monthly read does not become zero');
+equal(reportingWindow('ytd',now).start,'2026-01-01','annual reporting starts on January first rather than rolling a year');
+equal(reportingWindow('ytd',now).days,305,'annual reporting includes each civil day through today');
 console.log(JSON.stringify({ ok: true, checks, scenarios: ['calendar-boundaries', 'confirmed-PnL', 'bank-absence-and-zero', 'bank-deduplication', 'observed-cashflow', 'source-failure', 'no-false-green'], externalCalls: 0, financialWrites: 0 }));

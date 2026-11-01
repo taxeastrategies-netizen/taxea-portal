@@ -1,45 +1,37 @@
-import { useState, useMemo } from 'react';
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
+import { useState, useMemo, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { RefreshCw, FileText, TrendingUp, TrendingDown, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, subMonths, parseISO, isSameMonth } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { useFinancePeriod } from '@/hooks/useFinanceReporting';
+import { buildFinanceDashboardModel, confirmEmptyReportingPeriod, reportingMetricSnapshot } from '@/lib/financeDashboardModel.mjs';
 import { es } from 'date-fns/locale';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n == null ? '—' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 
-export default function MonthlyReport({ financials, company, invoices, expenses, obligations }) {
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+export default function MonthlyReport({ financials, company, companyId, invoices = [], expenses = [], obligations = [], debts = [], bankAccounts = [], transactions = [] }) {
   const [loading, setLoading] = useState(false);
-  const [narrative, setNarrative] = useState('');
+  const [narrativeScope, setNarrativeScope] = useState({companyId:null,text:''});
+  const narrative = narrativeScope.companyId === companyId ? narrativeScope.text : '';
+  const [error, setError] = useState('');
 
-  const f = financials || {};
-
-  // Monthly trend data (last 6 months)
-  const monthlyData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const month = subMonths(new Date(), 5 - i);
-      const ingresos = invoices.filter(inv => {
-        try { return inv.tipo === 'emitida' && isSameMonth(parseISO(inv.fecha_emision), month); } catch { return false; }
-      }).reduce((s, inv) => s + (inv.total_factura || 0), 0);
-      const gastos = expenses.filter(exp => {
-        try { return exp.tipo === 'gasto' && isSameMonth(parseISO(exp.fecha), month); } catch { return false; }
-      }).reduce((s, exp) => s + (exp.total || 0), 0);
-      return {
-        mes: format(month, 'MMM', { locale: es }),
-        ingresos,
-        gastos,
-        beneficio: ingresos - gastos,
-      };
-    });
-  }, [invoices, expenses]);
-
-  const selectedData = monthlyData[monthlyData.length - 1] || {};
+  const accounting = useFinancePeriod(companyId, 'mtd');
+  const monthModel = useMemo(() => {
+    const model=buildFinanceDashboardModel({invoices,expenses,bankAccounts,bankTransactions:transactions,obligations,accountingPeriod:accounting.data,period:'mtd',accountingError:accounting.isError?'PyG mensual no disponible':''});
+    return confirmEmptyReportingPeriod(model,accounting.data?.current,financials?.accountingKnown===true,accounting.data?.success===true&&!accounting.isError);
+  },[invoices,expenses,bankAccounts,transactions,obligations,accounting.data,accounting.isError,financials?.accountingKnown]);
+  const f=reportingMetricSnapshot(monthModel,debts,accounting.data?.current);
+  const selectedMonth=new Date(monthModel.window.end+'T12:00:00Z');
+  const monthlyData=(accounting.data?.monthly||[]).slice(-6).map(row=>({mes:format(parseISO(row.month+'-01'),'MMM',{locale:es}),ingresos:row.income,gastos:row.expenses,beneficio:row.result}));
+  useEffect(()=>{setNarrativeScope({companyId:null,text:''});setError('');},[companyId,accounting.data]);
 
   const generateNarrative = async () => {
-    setLoading(true);
-    const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un analista financiero de Big4. Escribe un resumen ejecutivo mensual profesional en español (máx 150 palabras) estilo KPMG para:
+    if(accounting.isLoading || accounting.isError || !monthModel.accountingKnown)return;
+    setLoading(true);setError('');
+    try { const res = await base44.controlledCore.InvokeLLM({
+      prompt: `Escribe un resumen financiero mensual profesional en español (máx150 palabras) basado solo en los datos aportados. Distingue la PyG del mes de los saldos bancarios actuales. No presentes supuestos como hechos. Empresa:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Período: ${format(selectedMonth, 'MMMM yyyy', { locale: es })}
@@ -47,8 +39,8 @@ Período: ${format(selectedMonth, 'MMMM yyyy', { locale: es })}
 Datos del período:
 - Ingresos: ${fmt(f.ingresos)}
 - Gastos: ${fmt(f.gastoTotal)}
-- EBITDA: ${fmt(f.ebitda)} (${f.margen?.toFixed(1)}% margen)
-- Caja: ${fmt(f.cashTotal)}
+- EBITDA: ${fmt(f.ebitda)} (${financialPercentLabel(f.margen)} margen)
+- Saldo bancario observado actualmente: ${fmt(f.cashTotal)}
 - Cobros pendientes: ${fmt(f.cobrosPendientes)}
 - Deuda: ${fmt(f.deudaTotal)}
 
@@ -57,19 +49,20 @@ ${monthlyData.map(m => `${m.mes}: ingresos ${fmt(m.ingresos)} / gastos ${fmt(m.g
 
 Genera: resumen ejecutivo + evolución + alertas + perspectivas. Estilo corporativo profesional.`,
     });
-    setNarrative(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    setNarrativeScope({companyId,text:typeof res === 'string' ? res : res?.result || res?.text || ''});
+    } catch {setError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 
   const kpis = [
     { label: 'Ingresos', value: fmt(f.ingresos), delta: null, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Gastos', value: fmt(f.gastoTotal), delta: null, icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-50' },
-    { label: 'EBITDA', value: fmt(f.ebitda), sub: `${f.margen?.toFixed(1)}%`, icon: BarChart, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Caja', value: fmt(f.cashTotal), sub: f.runway ? `${f.runway.toFixed(1)}m runway` : '', icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'EBITDA', value: fmt(f.ebitda), sub: financialPercentLabel(f.margen), icon: BarChart, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Saldo bancario actual', value: fmt(f.cashTotal), sub: 'Saldo actual, no al cierre del mes', icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50' },
   ];
 
   return (
     <div className="space-y-6">
+      {(accounting.isLoading || accounting.isError || !monthModel.accountingKnown || monthModel.accountingProvisional || error) && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{accounting.isLoading ? 'Cargando PyG del mes.' : accounting.isError ? 'No se pudo leer la PyG mensual.' : !monthModel.accountingKnown ? 'No hay una lectura contable verificable para este mes.' : monthModel.accountingProvisional ? 'PyG mensual provisional: revisión contable pendiente.' : ''} {error}</p>}
       {/* Header report */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-slate-900 to-slate-700 px-6 py-5">
@@ -129,7 +122,7 @@ Genera: resumen ejecutivo + evolución + alertas + perspectivas. Estilo corporat
               <Brain className="w-4 h-4 text-taxea-red" />
               <p className="text-sm font-semibold text-foreground">Narrativa ejecutiva IA</p>
             </div>
-            <button onClick={generateNarrative} disabled={loading}
+            <button onClick={generateNarrative} disabled={loading || accounting.isLoading || accounting.isError || !monthModel.accountingKnown}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-taxea-red text-white hover:bg-taxea-red/90 disabled:opacity-50 transition-all">
               {loading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Brain className="w-3 h-3" />}
               {loading ? 'Generando…' : 'Generar'}
@@ -158,11 +151,11 @@ Genera: resumen ejecutivo + evolución + alertas + perspectivas. Estilo corporat
             { label: 'Ingresos totales', value: fmt(f.ingresos), type: 'positive' },
             { label: 'Gastos totales', value: fmt(f.gastoTotal), type: 'negative' },
             { label: 'Beneficio neto', value: fmt(f.beneficio), type: f.beneficio >= 0 ? 'positive' : 'negative' },
-            { label: 'Margen neto', value: `${f.margen?.toFixed(1) || 0}%`, type: f.margen >= 0 ? 'positive' : 'negative' },
+            { label: 'Margen neto', value: financialPercentLabel(f.margenNeto), type: f.margenNeto === null ? 'neutral' : f.margenNeto >= 0 ? 'positive' : 'negative' },
             { label: 'EBITDA estimado', value: fmt(f.ebitda), type: 'neutral' },
             { label: 'Caja disponible', value: fmt(f.cashTotal), type: 'neutral' },
             { label: 'Burn rate mensual', value: fmt(f.burnRate), type: 'neutral' },
-            { label: 'Runway estimado', value: f.runway ? `${f.runway.toFixed(1)} meses` : '—', type: 'neutral' },
+            { label: 'Runway estimado', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses` : '—', type: 'neutral' },
             { label: 'Cobros pendientes (AR)', value: fmt(f.cobrosPendientes), type: 'neutral' },
             { label: 'Pagos pendientes (AP)', value: fmt(f.pagosPendientes), type: 'neutral' },
             { label: 'Working Capital', value: fmt(f.workingCapital), type: f.workingCapital >= 0 ? 'positive' : 'negative' },

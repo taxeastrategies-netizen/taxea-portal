@@ -1,3 +1,5 @@
+import { financialScoringReadiness } from '@/lib/verifiedFinancialMetrics';
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Building2, RefreshCw, Brain, Shield, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
@@ -61,10 +63,10 @@ export default function BankReport({ financials, company, invoices, expenses, de
   const ratios = [
     { label: 'Deuda / EBITDA', value: f.ebitda > 0 ? `${(f.deudaTotal / f.ebitda).toFixed(2)}x` : '—', ok: f.ebitda > 0 && f.deudaTotal / f.ebitda < 3.5, warn: f.ebitda > 0 && f.deudaTotal / f.ebitda < 5 },
     { label: 'Cobertura intereses', value: f.ebitda > 0 && f.interesesAnuales > 0 ? `${(f.ebitda / f.interesesAnuales).toFixed(2)}x` : '—', ok: f.ebitda > 0 && f.interesesAnuales > 0 && f.ebitda / f.interesesAnuales > 1.5, warn: true },
-    { label: 'DSO (días cobro)', value: `~${f.dso || 0} días`, ok: f.dso < 45, warn: f.dso < 60 },
-    { label: 'DPO (días pago)', value: `~${f.dpo || 0} días`, ok: true, warn: true },
+    { label: 'DSO (días cobro)', value: `~${f.dso ?? 'No verificable'} días`, ok: f.dso < 45, warn: f.dso < 60 },
+    { label: 'DPO (días pago)', value: `~${f.dpo ?? 'No verificable'} días`, ok: true, warn: true },
     { label: 'Working Capital', value: fmt(f.workingCapital), ok: f.workingCapital > 0, warn: false },
-    { label: 'Margen EBITDA', value: `${f.margen?.toFixed(1) || 0}%`, ok: f.margen > 10, warn: f.margen > 0 },
+    { label: 'Margen EBITDA', value: financialPercentLabel(f.margen), ok: f.margen > 10, warn: f.margen > 0 },
     { label: 'Liquidez inmediata', value: fmt(f.cashTotal), ok: f.cashTotal > f.burnRate * 3, warn: f.cashTotal > f.burnRate },
     { label: 'Cuotas mensuales', value: fmt(f.cuotasMensuales), ok: f.cuotasMensuales < f.burnRate * 0.2, warn: f.cuotasMensuales < f.burnRate * 0.35 },
   ];
@@ -81,10 +83,10 @@ Fecha: ${format(new Date(), 'MMMM yyyy', { locale: es })}
 Bankability Score: ${score}/100
 
 RATIOS FINANCIEROS:
-- Ingresos: ${fmt(f.ingresos)} | EBITDA: ${fmt(f.ebitda)} (${f.margen?.toFixed(1)}% margen)
+- Ingresos: ${fmt(f.ingresos)} | EBITDA: ${fmt(f.ebitda)} (${financialPercentLabel(f.margen)} margen)
 - Deuda/EBITDA: ${f.ebitda > 0 ? (f.deudaTotal / f.ebitda).toFixed(2) + 'x' : 'N/A'}
 - Cobertura intereses: ${f.ebitda > 0 && f.interesesAnuales > 0 ? (f.ebitda / f.interesesAnuales).toFixed(2) + 'x' : 'N/A'}
-- Liquidez/Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'}
+- Liquidez/Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Working Capital: ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días
 
@@ -100,6 +102,8 @@ Estilo: técnico, objetivo, bancario.`,
     setAnalysis(typeof res === 'string' ? res : res?.result || res?.text || '');
     setLoading(false);
   };
+
+  if(!financialScoringReadiness(financials))return <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Índice bancario sin calcular: faltan datos revisados o muestras suficientes. No equivale a una calificación crediticia.</div>;
 
   return (
     <div className="space-y-6">
@@ -119,7 +123,7 @@ Estilo: técnico, objetivo, bancario.`,
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Ingresos', value: fmt(f.ingresos), sub: 'Base de ingresos' },
-          { label: 'EBITDA', value: fmt(f.ebitda), sub: `${f.margen?.toFixed(1) || 0}% margen` },
+          { label: 'EBITDA', value: fmt(f.ebitda), sub: `${financialPercentLabel(f.margen)} margen` },
           { label: 'Caja libre', value: fmt(f.cashTotal), sub: `${f.runway?.toFixed(1) || '—'} meses` },
           { label: 'Deuda total', value: fmt(f.deudaTotal), sub: `${fmt(f.cuotasMensuales)}/mes` },
         ].map((k, i) => (

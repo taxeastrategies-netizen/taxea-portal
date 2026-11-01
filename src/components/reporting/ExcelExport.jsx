@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { financialExportNumber } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { Download, FileSpreadsheet, CheckCircle2, Loader2 } from 'lucide-react';
@@ -95,7 +96,7 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
         [companyName, '', now],
         ['', '', ''],
         ['KPI', 'Valor', 'Criterio de lectura'],
-        ['Margen EBITDA', `${f.margen?.toFixed(1) || 0}%`, 'EBITDA / ingresos contables'],
+        ['Margen EBITDA', financialPercentLabel(f.margen), 'EBITDA / ingresos contables'],
         ['Deuda / EBITDA', deudaEbitda === null ? 'No aplicable' : `${deudaEbitda.toFixed(2)}x`, 'Deuda registrada / EBITDA'],
         ['Cobertura intereses', cobInt === null ? 'No aplicable' : `${cobInt.toFixed(2)}x`, 'EBITDA / intereses registrados'],
         ['DSO (días cobro)', `${f.dso ?? 'No verificable'} días`, 'Media de cobros completos con fecha'],

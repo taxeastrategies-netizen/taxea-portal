@@ -39,4 +39,6 @@ equal(credit.projected,80,'credit-note cash direction is preserved');
 const partialAccounting={accounting:{quality:{entries:1,confirmedEntries:1},pnl:{result:100}},treasury:{balanceKnown:false},finance:{},people:{},operations:{}};
 assert.equal(computeBusinessHealth(partialAccounting,null,{now}).score,null,'healthy accounting cannot certify missing fiscal and banking sources');checks++;
 equal(fiscalCoverage({...fiscal,items:[{state:'pendiente',filingDeadline:'bad'}]}).active,false,'undated obligations cannot certify fiscal readiness');
+const failedOptional={accounting:{quality:{entries:1,confirmedEntries:1},pnl:{result:100}},treasury:{balanceKnown:true,activityKnown:true,cashEur:1000,transactions:1,unreconciled:0},finance:{receivables:{documents:1},payables:{}},people:{},operations:{},sourceErrors:{Employee:'unavailable'}};
+equal(computeBusinessHealth(failedOptional,fiscal,{now}).score,null,'even an optional source failure cannot produce a complete global score');
 console.log(JSON.stringify({ok:true,checks,financialWrites:0,externalCalls:0}));

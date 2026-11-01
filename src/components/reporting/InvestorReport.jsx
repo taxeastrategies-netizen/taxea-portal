@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
@@ -28,9 +29,9 @@ Fecha: ${format(new Date(), 'MMMM yyyy', { locale: es })}
 
 MÉTRICAS:
 - Ingresos: ${fmt(f.ingresos)}
-- EBITDA: ${fmt(f.ebitda)} | Margen: ${f.margen?.toFixed(1)}%
+- EBITDA: ${fmt(f.ebitda)} | Margen: ${financialPercentLabel(f.margen)}
 - Caja: ${fmt(f.cashTotal)} | Burn: ${fmt(f.burnRate)}/mes
-- Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'}
+- Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Deuda neta: ${fmt(f.deudaTotal)}
 - Working Capital: ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días
@@ -50,9 +51,9 @@ Estilo: sofisticado, directo, orientado a inversor institucional.`,
 
   const metrics = [
     { label: 'ARR / Revenue', value: fmt(f.ingresos), note: 'Período actual' },
-    { label: 'EBITDA', value: fmt(f.ebitda), note: `${f.margen?.toFixed(1)}% margen` },
+    { label: 'EBITDA', value: fmt(f.ebitda), note: `${financialPercentLabel(f.margen)} margen` },
     { label: 'Gross Burn / mes', value: fmt(f.burnRate), note: 'Gasto operativo' },
-    { label: 'Cash Runway', value: f.runway ? `${f.runway.toFixed(1)} meses` : '—', note: `${fmt(f.cashTotal)} caja` },
+    { label: 'Cash Runway', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses` : '—', note: `${fmt(f.cashTotal)} caja` },
     { label: 'Net Debt', value: fmt(f.deudaTotal), note: 'Pasivos financieros' },
     { label: 'Working Capital', value: fmt(f.workingCapital), note: 'AR - AP' },
   ];

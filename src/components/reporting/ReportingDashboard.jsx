@@ -1,9 +1,10 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { motion } from 'framer-motion';
 import { FileText, BarChart2, Users, Building2, Brain, Award, TrendingUp, Download, Share2, Zap, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
-const fmtPct = n => `${(n || 0).toFixed(1)}%`;
+const fmtPct = financialPercentLabel;
 
 const REPORT_TYPES = [
   {
@@ -54,7 +55,7 @@ export default function ReportingDashboard({ financials, company, loading, onNav
   const KPIS = [
     { label: 'Ingresos totales', value: fmt(f.ingresos), sub: 'Total período', color: 'text-emerald-600' },
     { label: 'EBITDA', value: fmt(f.ebitda), sub: fmtPct(f.margen) + ' margen', color: 'text-blue-600' },
-    { label: 'Caja disponible', value: fmt(f.cashTotal), sub: f.runway ? `${f.runway.toFixed(1)} meses runway` : '—', color: 'text-violet-600' },
+    { label: 'Caja disponible', value: fmt(f.cashTotal), sub: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses runway` : '—', color: 'text-violet-600' },
     { label: 'Deuda activa', value: fmt(f.deudaTotal), sub: `${fmt(f.cuotasMensuales)}/mes cuotas`, color: 'text-amber-600' },
   ];
 

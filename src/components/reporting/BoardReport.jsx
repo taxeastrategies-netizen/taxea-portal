@@ -1,3 +1,4 @@
+import { financialPercentLabel } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -26,7 +27,7 @@ export default function BoardReport({ financials, company, invoices, expenses, d
 
   const deudaEbitda = f.ebitda > 0 ? (f.deudaTotal / f.ebitda).toFixed(1) : '—';
   const coberturaInt = f.ebitda > 0 && f.interesesAnuales > 0 ? (f.ebitda / f.interesesAnuales).toFixed(1) : '—';
-  const margenPct = f.margen?.toFixed(1) || 0;
+  const margenPct = financialPercentLabel(f.margen);
 
   const generateInsights = async () => {
     setLoading(true);
@@ -37,9 +38,9 @@ Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Fecha: ${format(new Date(), 'MMMM yyyy', { locale: es })}
 
 MÉTRICAS CLAVE:
-- Ingresos: ${fmt(f.ingresos)} | Margen: ${margenPct}%
+- Ingresos: ${fmt(f.ingresos)} | Margen: ${margenPct}
 - EBITDA: ${fmt(f.ebitda)}
-- Caja: ${fmt(f.cashTotal)} | Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : 'N/A'}
+- Caja: ${fmt(f.cashTotal)} | Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Deuda: ${fmt(f.deudaTotal)} | Deuda/EBITDA: ${deudaEbitda}x
 - DSO: ~${f.dso} días | Working Capital: ${fmt(f.workingCapital)}
 
@@ -57,8 +58,8 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
 
   const strategicKpis = [
     { label: 'Revenue', value: fmt(f.ingresos), color: 'border-l-emerald-500' },
-    { label: 'EBITDA Margin', value: `${margenPct}%`, color: 'border-l-blue-500' },
-    { label: 'Cash Runway', value: f.runway ? `${f.runway.toFixed(1)}M` : '—', color: 'border-l-violet-500' },
+    { label: 'EBITDA Margin', value: `${margenPct}`, color: 'border-l-blue-500' },
+    { label: 'Cash Runway', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)}M` : '—', color: 'border-l-violet-500' },
     { label: 'Net Debt', value: fmt(f.deudaTotal), color: 'border-l-amber-500' },
     { label: 'Debt/EBITDA', value: `${deudaEbitda}x`, color: 'border-l-indigo-500' },
     { label: 'Int. Coverage', value: `${coberturaInt}x`, color: 'border-l-taxea-red' },
@@ -136,8 +137,8 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
           {[
             {
               label: 'Liquidez',
-              status: f.runway > 6 ? 'ok' : f.runway > 3 ? 'warn' : 'risk',
-              text: f.runway ? `Runway: ${f.runway.toFixed(1)} meses` : 'Sin datos',
+              status: f.runway === null ? 'warn' : f.runway > 6 ? 'ok' : f.runway > 3 ? 'warn' : 'risk',
+              text: f.runway !== null && f.runway !== undefined ? `Runway: ${f.runway.toFixed(1)} meses` : 'Sin datos',
             },
             {
               label: 'Endeudamiento',
@@ -147,7 +148,7 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
             {
               label: 'Rentabilidad',
               status: f.margen > 15 ? 'ok' : f.margen > 5 ? 'warn' : 'risk',
-              text: `Margen: ${margenPct}%`,
+              text: `Margen: ${margenPct}`,
             },
           ].map((item, i) => {
             const Icon = item.status === 'ok' ? CheckCircle2 : item.status === 'warn' ? AlertTriangle : AlertTriangle;

@@ -65,7 +65,7 @@ export function reportingMetricSnapshot(shared, debts=[], accountingReport=null)
   const active=debts.filter(row=>row.estado==='activo'),debtValue=row=>Number(row.capital_pendiente??row.importe_inicial??0);
   return {
     ingresos:shared.totalIngresos,gastoTotal:shared.gastoTotal,beneficio:shared.beneficio,
-    margen:shared.totalIngresos>0&&shared.ebitda!==null?shared.ebitda/shared.totalIngresos*100:0,margenNeto:shared.margenNeto,
+    margen:shared.totalIngresos>0&&shared.ebitda!==null?shared.ebitda/shared.totalIngresos*100:null,margenNeto:shared.margenNeto,
     ebitda:shared.ebitda,accountingEbitda:deriveAccountingEbitda(accountingReport),cashTotal:shared.cashDisponible,
     bankKnown:shared.bankKnown,accountingKnown:shared.accountingKnown,accountingProvisional:shared.accountingProvisional,
     burnRate:shared.burnRate,runway:shared.runway,cashHistorySufficient:shared.cashHistorySufficient,
@@ -75,4 +75,9 @@ export function reportingMetricSnapshot(shared, debts=[], accountingReport=null)
     cuotasMensuales:active.filter(row=>row.periodicidad==='mensual').reduce((sum,row)=>sum+Number(row.cuota||0),0),
     interesesAnuales:active.reduce((sum,row)=>sum+debtValue(row)*Number(row.tin||0)/100,0),
   };
+}
+
+export function confirmEmptyReportingPeriod(model, report, hasConfirmedHistory=false, readComplete=false) {
+  if(!readComplete || !hasConfirmedHistory || model.accountingError || !report?.profitAndLoss || report.includedEntries!==0 || report.excludedEntries || report.pendingEntriesInYear || report.profitAndLoss.totalIncome!==0 || report.profitAndLoss.totalExpenses!==0 || report.profitAndLoss.result!==0)return model;
+  return {...model,accountingKnown:true,totalIngresos:0,gastoTotal:0,beneficio:0,ebitda:0,accountingProvisional:report.frameworkReviewStatus!=='validated',ebitdaProvisional:report.frameworkReviewStatus!=='validated'};
 }

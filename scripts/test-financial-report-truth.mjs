@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { deriveAccountingEbitda, financialReportReadiness, financialScoringReadiness, financialExportNumber } from '../src/lib/verifiedFinancialMetrics.js';
+import { deriveAccountingEbitda, financialReportReadiness, financialScoringReadiness, financialExportNumber, financialPercentLabel } from '../src/lib/verifiedFinancialMetrics.js';
 
 const report = {
   year: 2026, includedEntries: 8, pendingEntriesInYear: 1,
@@ -27,7 +27,9 @@ assert.match(hook, /treasuryError: error\?/);
 for(const value of [null,undefined,NaN,Infinity,false,''])assert.equal(financialExportNumber(value),'No verificable','unknown financial export cell is never zero');
 assert.equal(financialExportNumber(0),0,'observed zero is exportable as zero');
 assert.equal(financialExportNumber('12.34'),12.34,'numeric financial amount stays numeric');
-const complete={bankKnown:true,accountingKnown:true,accountingProvisional:false,cashHistorySufficient:true,runway:0,dso:0};
+const complete={bankKnown:true,accountingKnown:true,accountingProvisional:false,cashHistorySufficient:true,runway:0,dso:0,margen:0};
 assert.equal(financialScoringReadiness(complete),true,'actual zero runway and immediate observed collection are valid data');
 for(const patch of [{bankKnown:false},{accountingProvisional:true},{cashHistorySufficient:false},{runway:null},{dso:null}])assert.equal(financialScoringReadiness({...complete,...patch}),false,'incomplete coverage cannot generate a company score');
+assert.equal(financialPercentLabel(null),'No verificable','undefined margin is not zero percent');
+assert.equal(financialPercentLabel(0),'0.0%','measured zero margin remains zero');
 console.log(JSON.stringify({ ok: true, checks: ['ledger_derived_ebitda', 'provisional_marked', 'empty_ledger_blocked', 'treasury_failure_not_zero'] }));
