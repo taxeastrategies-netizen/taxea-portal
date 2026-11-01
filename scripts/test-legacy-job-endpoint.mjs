@@ -24,7 +24,7 @@ user=null;ok((await invoke({action:'drill_legacy_protection_recovery',protection
 user={id:'admin',role:'admin'};ok((await invoke({...body,planDigest:'f'.repeat(64)})).status,409);ok(cloudCopies,0);
 ok((await invoke({...body,selection:[{companyId:'foreign',referenceDigest:refDigest}]})).status,409);ok(cloudCopies,0);
 let result=await invoke(body);ok(result.status,200);ok(result.body.status,'completed');ok(result.body.verified,1);ok(cloudCopies,1);ok(aliases.length,1);ok(records.length,1);ok(records[0].fileStorageUrl,'https://taxeaportal.com/private-document/asset-qa');ok(JSON.stringify(original),before);
-const jobId=result.body.jobId;result=await invoke({...body,protectionJobId:jobId,retryIncidents:true,backupJobId:undefined});ok(result.body.status,'completed');ok(result.body.reused,1);ok(cloudCopies,1);ok(records.length,1);
+const jobId=result.body.jobId;result=await invoke({...body,protectionJobId:jobId,retryIncidents:true,backupJobId:undefined});ok(result.body.status,'completed');ok(result.body.reused,0);ok(result.body.alreadyCompleted,true);ok(cloudCopies,1);ok(records.length,1);
 result=await invoke({...body,action:'rollback_legacy_protection',protectionJobId:jobId,confirmDisableLinks:true});ok(result.body.status,'rolled_back');ok(aliases[0].status,'disabled');ok(cloudCopies,1);
 result=await invoke({...body,protectionJobId:jobId,reactivateDisabled:true});ok(result.body.status,'completed');ok(aliases[0].status,'verified');ok(cloudCopies,1);ok(jobs.length,1);ok(JSON.stringify(original),before);ok(secretReads,0);ok(financialWrites,0);
 console.log(JSON.stringify({ok:true,checks,actualHandler:true,realCloudCalls:0,realCustomerData:0,financialWrites:0,originalsDeleted:0}));
