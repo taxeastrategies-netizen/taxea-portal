@@ -1,46 +1,14 @@
-/**
- * promoteAdmin — Promueve un email específico a super_admin.
- * Solo puede ser invocado por quien ya es admin o super_admin.
- * El primer super_admin debe inicializarse de forma segura durante el despliegue
- * (ej. directamente desde el panel de Base44), no mediante coincidencia de email.
- */
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-
-Deno.serve(async (req) => {
-  try {
-    const base44 = createClientFromRequest(req);
-    const body = await req.json().catch(() => ({}));
-    const targetEmail = body.email;
-
-    if (!targetEmail) {
-      return Response.json({ error: 'email is required' }, { status: 400 });
-    }
-
-    // Solo admin/super_admin pueden promover — sin bypass por email
-    const caller = await base44.auth.me().catch(() => null);
-    const callerIsAdmin = caller && ['admin', 'super_admin'].includes(caller.role);
-
-    if (!callerIsAdmin) {
-      return Response.json({ error: 'Forbidden: admin access required' }, { status: 403 });
-    }
-
-    // Buscar el usuario por email
-    const users = await base44.asServiceRole.entities.User.filter({ email: targetEmail });
-    if (!users || users.length === 0) {
-      return Response.json({ error: `Usuario ${targetEmail} no encontrado. Debe registrarse primero en el portal.` }, { status: 404 });
-    }
-
-    const targetUser = users[0];
-
-    // Actualizar rol a super_admin
-    await base44.asServiceRole.entities.User.update(targetUser.id, { role: 'super_admin' });
-
-    return Response.json({
-      success: true,
-      message: `Usuario ${targetEmail} promovido a super_admin correctamente.`,
-      user: { email: targetEmail, role: 'super_admin' }
-    });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+import {createClientFromRequest} from 'npm:@base44/sdk@0.8.25';
+// Retired bootstrap route. User roles are managed through Base44's authorized user panel.
+// Keep the endpoint inert so old URLs cannot invoke a surviving privilege mutation.
+Deno.serve(async req=>{
+ try{
+  if(req.method!=='POST')return Response.json({error:'Método no permitido.'},{status:405});
+  if(!/^Bearer [^\s]{1,16384}$/.test(req.headers.get('Authorization')||''))return Response.json({error:'No autenticado.'},{status:401});
+  const client=createClientFromRequest(req),user=await client.auth.me().catch(()=>null);
+  if(!user?.id)return Response.json({error:'No autenticado.'},{status:401});
+  if([user,user.data].filter(Boolean).some(s=>s.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(String(s.status||'').trim().toLowerCase())||['disabled','deleted','blocked','suspended'].includes(String(s.accountAccessStatus||'').trim().toLowerCase())))return Response.json({error:'Acceso suspendido.'},{status:403});
+  if(!['admin','super_admin'].includes(user.role))return Response.json({error:'Acceso reservado a administración.'},{status:403});
+  return Response.json({error:'Esta operación se ha retirado. Gestiona los permisos desde el panel de usuarios de Base44.',code:'ROLE_PROMOTION_RETIRED',rolesChanged:0},{status:410,headers:{'Cache-Control':'no-store'}});
+ }catch{return Response.json({error:'No autenticado.'},{status:401});}
 });

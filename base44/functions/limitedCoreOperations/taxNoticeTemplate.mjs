@@ -1,0 +1,10 @@
+const clean=(value,max=240)=>String(value??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,max);
+const escape=value=>clean(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+export function taxDocumentNotice(company,document){
+ if(!company?.id||document?.company_id!==company.id||document.fiscal_document_kind!=='justificante_presentacion')throw Error('TAX_NOTICE_DOCUMENT_UNAVAILABLE');
+ const recipient=String(company.email||company.owner_email||'').trim().toLowerCase();
+ if(recipient.length>254||!/^[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(recipient))throw Error('TAX_NOTICE_RECIPIENT_UNAVAILABLE');
+ const rawModel=clean(document.fiscal_model_code,12),model=/^\d{3}$/.test(rawModel)?rawModel:'',rawPeriod=clean(document.fiscal_period||document.trimestre,12),period=/^(?:[1-4]T|[0-1]\d|anual|0A)$/i.test(rawPeriod)?rawPeriod:'',year=Number(document.fiscal_year||document.anio),validYear=Number.isInteger(year)&&year>=2000&&year<=2100?String(year):'';
+ const detail=[model?'Modelo '+model:'',period,validYear].filter(Boolean).join(' · '),title=detail?'Documentación fiscal disponible · '+detail:'Documentación fiscal disponible en Taxea Portal',name=clean(document.nombre||'Justificante fiscal'),companyName=clean(company.razon_social||company.nombre_comercial||'');
+ return{to:recipient,from_name:'Taxea Strategies',subject:title,body:'<div style="font-family:Arial,sans-serif;color:#14243b;max-width:620px;margin:auto;padding:24px"><h1 style="font-size:22px">Documentación fiscal disponible</h1><p>Hola'+(companyName?' '+escape(companyName):'')+',</p><p>Hemos incorporado un documento fiscal a tu espacio de Taxea Portal.</p>'+(detail?'<p><strong>'+escape(detail)+'</strong></p>':'')+'<p>'+escape(name)+'</p><p>Para consultar el justificante y revisar su contenido y estado, entra en tus documentos.</p><p><a href="https://taxeaportal.com/documentos" style="color:#087f8c">Abrir mis documentos</a></p><p>Taxea Strategies</p></div>'};
+}

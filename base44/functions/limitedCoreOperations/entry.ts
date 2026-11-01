@@ -1,3 +1,4 @@
+import{taxDocumentNotice}from'./taxNoticeTemplate.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import {resolveStoredDocumentReference,assetIdFromReference,authorizedAsset,resolvePrivateAsset} from './storageRuntime.generated.mjs';
 
@@ -11,7 +12,6 @@ function isTaxeaAccountDisabled(account) {
 
 
 const APP_ID = '6a00fec50cc522a74ddde4b2';
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const limits = {
   extract: { minute: 4, day: 15 },
   reminder: { minute: 2, day: 10 },
@@ -101,15 +101,8 @@ Deno.serve(async (req) => {
       if (!document || document.company_id !== companyId || document.fiscal_document_kind !== 'justificante_presentacion') {
         return Response.json({ error: 'Justificante fiscal no disponible' }, { status: 404 });
       }
-      const recipient = norm(company.email || company.owner_email);
-      if (!EMAIL_RE.test(recipient)) return Response.json({ error: 'Empresa sin correo válido' }, { status: 400 });
-      const subject = String(body.subject || '').trim();
-      const html = String(body.body || '');
-      if (!subject || subject.length > 240 || !html || html.length > 50000) {
-        return Response.json({ error: 'Correo fiscal no válido' }, { status: 400 });
-      }
-      targetId = String(document.id);
-      params = { to: recipient, from_name: 'Taxea Strategies', subject, body: html };
+      targetId=String(document.id);
+      try{params=taxDocumentNotice(company,document);}catch{return Response.json({error:'No se pudo preparar el aviso desde el documento y la empresa registrados.'},{status:400});}
     }
 
     const usage = await svc.entities.CoreIntegrationUsage.filter({

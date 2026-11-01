@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import ColaProcesamiento from '@/components/modelos/ColaProcesamiento';
 import PanelRevision from '@/components/modelos/PanelRevision';
-import { generarEmailPremium } from '@/lib/emailPremium';
 import { generarMensajeWhatsApp, formatearTelefono } from '@/lib/whatsappMensaje';
 
 let nextId = 1;
@@ -219,21 +218,8 @@ export default function SubidaMasivaModelos() {
 
     // 4. Email premium HTML
     if (emailEmpresa) {
-      const htmlEmail = generarEmailPremium({
-        modeloKey: ex.modelo,
-        ejercicio: ex.ejercicio,
-        periodo,
-        importe: ex.importe,
-        csv: ex.csv,
-        nrc: ex.nrc,
-        fechaPresentacion: now.toISOString(),
-        razonSocial: empresa.razon_social || empresa.nombre_comercial,
-        resultado: ex.resultado,
-      });
       await base44.controlledCore.SendEmail({
         operation: 'tax_notice', companyId: empresa.id, documentId: doc.id,
-        subject: `Tu ${modeloLabel} ha sido presentado correctamente — Taxea Strategies`,
-        body: htmlEmail,
       });
     }
 
