@@ -1,3 +1,5 @@
+import{withBackupWorkflow,assertVerifiedWorkflowJob}from'./backupWorkflow.mjs';
+import{runLegacyProtectionVerification,verifyLegacyProtectionGroup}from'./legacyProtectionVerification.mjs';
 import{runLegacyProtectionJob,protectionJobSummary}from'./legacyProtectionJob.mjs';
 import{protectLegacyGroup,verifyProtectionSourceBindings}from'./legacyProtectionExecutor.mjs';
 import{bindProtectedAssetBackup}from'./privateBackupBinding.mjs';
@@ -396,7 +398,7 @@ function clientFolderName(companyId, companyName, mode) {
 
 // ── Main handler ──
 
-Deno.serve(async (req) => {
+Deno.serve(withBackupWorkflow(async (req) => {
   let lease=null,leaseEntity;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
@@ -411,10 +413,10 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
-    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
+    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection','workflow_assert','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
-    const invocationStartedAt=Date.now(),timeBudgetMs=isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
+    const invocationStartedAt=Date.now(),timeBudgetMs=body.workflowChunk===true?90000:isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
     const {driveGet,getDriveUserEmail,findOrCreateFolder,findOrCreateFolderCached,uploadFileToDrive,uploadTextFile,trashExactFailedBackupFolders,assertPrivateDriveDestination}=createDriveHelpers(deadline);
     const scopeCompanyId=typeof body.qaCompanyId==='string'?body.qaCompanyId.trim():'';
     if(scopeCompanyId){
@@ -477,6 +479,10 @@ Deno.serve(async (req) => {
       lease=await acquireBackupLease(leaseEntity,config.id);
       if(!lease)return Response.json({error:'Ya hay una copia o verificación en curso. Espera y reintenta.',code:'BACKUP_BUSY'},{status:409});
     }
+    if(action==='workflow_assert'){
+      if(!/^[A-Za-z0-9_-]{1,128}$/.test(body.assertJobId||''))return Response.json({error:'Trabajo no válido.',code:'BACKUP_JOB_INVALID'},{status:400});
+      try{const proof=assertVerifiedWorkflowJob(await base44.asServiceRole.entities.BackupJob.get(body.assertJobId),scopeCompanyId);return Response.json(proof,{headers:{'Cache-Control':'no-store'}});}catch{return Response.json({error:'La copia no está completamente verificada.',code:'BACKUP_WORKFLOW_INCOMPLETE'},{status:409,headers:{'Cache-Control':'no-store'}});}
+    }
     if(action==='legacy_protection_plan'){
       try{
         const result=await loadLegacyProtectionPlan({service:base44.asServiceRole,user,jobId:body.backupJobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,
@@ -488,11 +494,23 @@ Deno.serve(async (req) => {
         return Response.json({ok:true,summary:result.summary,protectionJob:completeSelection[0]?protectionJobSummary(completeSelection[0]):null},{headers:{'Cache-Control':'no-store'}});
       }catch(error){const code=/^PROTECTION_[A-Z_]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'No se pudo preparar el plan desde una copia completa verificada.',code},{status:409});}
     }
-    if(['protect_legacy_documents','legacy_protection_status','rollback_legacy_protection'].includes(action)){
+    if(['protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection'].includes(action)){
       try{
         const service=base44.asServiceRole,resolveCompany=createBackupContextResolver(service);
         const readPrivateDriveFile=async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));};
         const loadPlan=async jobId=>loadLegacyProtectionPlan({service,user,jobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,readPrivateDriveFile,cacheTtlMs:120000});
+        if(action==='verify_legacy_protection'){
+          let recoveryFolderId='';
+          const result=await runLegacyProtectionVerification({service,user,body,scopeCompanyId,leaseHeld:!!lease,loadPlan,hash:computeChecksum,deadline,
+            verifyGroup:(group,planDigest)=>verifyLegacyProtectionGroup({service,user,group,planDigest,hash:computeChecksum,
+              verifySources:g=>verifyProtectionSourceBindings({service,group:g,sources:DOC_SOURCES,resolveCompany,normalizeReference:normalizeLegacyDocumentReference}),
+              readAsset:(id,companyId)=>readPrivateAssetBytes(service,user,assetReference(id),Deno.env,companyId)}),
+            writeArchive:async(name,text)=>{
+              if(!recoveryFolderId){const protection=await service.entities.DocumentProtectionJob.get(body.protectionJobId),backup=await service.entities.BackupJob.get(protection.backupJobId);if(!backup||String(backup.scopeCompanyId||'')!==scopeCompanyId||!/^[A-Za-z0-9_-]{1,200}$/.test(backup.driveBackupFolderId||''))throw Error('PROTECTION_ARCHIVE_DESTINATION_INVALID');recoveryFolderId=backup.driveBackupFolderId;}
+              const saved=await uploadTextFile(name,recoveryFolderId,text,accessToken);return{id:saved.id,sha256:await computeChecksum(new TextEncoder().encode(text))};
+            }
+          });return Response.json(result,{status:result.continueRequired?202:200,headers:{'Cache-Control':'no-store'}});
+        }
         const result=await runLegacyProtectionJob({service,user,body,scopeCompanyId,leaseHeld:!!lease,loadPlan,hash:computeChecksum,deadline,
           protectGroup:async(group,planDigest,protectionJobId,reactivateDisabled,backupJobId)=>protectLegacyGroup({service,user,group,planDigest,expectedPlanDigest:body.planDigest,protectionJobId,reactivateDisabled,normalizeReference:normalizeLegacyDocumentReference,hash:computeChecksum,
             verifySources:g=>verifyProtectionSourceBindings({service,group:g,sources:DOC_SOURCES,resolveCompany,normalizeReference:normalizeLegacyDocumentReference}),
@@ -537,8 +555,12 @@ Deno.serve(async (req) => {
 
     // ── VERIFY action: verify the whole manifest, including skipped documents ──
     if (action === 'verify') {
-      const recentCompleted = await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
-      const lastJob = recentCompleted?.find(item => String(item.scopeCompanyId||'')===scopeCompanyId && ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
+      const requestedVerifyId=String(body.verifyJobId||'').trim();
+      if(requestedVerifyId&&!/^[A-Za-z0-9_-]{1,128}$/.test(requestedVerifyId))return Response.json({error:'Trabajo no válido.',code:'BACKUP_JOB_INVALID'},{status:400});
+      const recentCompleted = requestedVerifyId?[]:await base44.asServiceRole.entities.BackupJob.list('-startedAt', 50);
+      const requestedVerifyJob=requestedVerifyId?await base44.asServiceRole.entities.BackupJob.get(requestedVerifyId):null;
+      if(requestedVerifyJob&&String(requestedVerifyJob.scopeCompanyId||'')!==scopeCompanyId)return Response.json({error:'Trabajo de otro ámbito.',code:'BACKUP_JOB_SCOPE_MISMATCH'},{status:403});
+      const lastJob = requestedVerifyJob&&['completed','completed_with_errors'].includes(requestedVerifyJob.status)&&requestedVerifyJob.manifestDriveFileId?requestedVerifyJob:requestedVerifyId?null:recentCompleted?.find(item => String(item.scopeCompanyId||'')===scopeCompanyId && ['completed', 'completed_with_errors'].includes(item.status) && item.manifestDriveFileId);
       if (!lastJob) return Response.json({ error: 'No hay copias finalizadas con manifiesto para verificar' }, { status: 404 });
 
       const restart = body.restartVerification === true;
@@ -1169,7 +1191,7 @@ Deno.serve(async (req) => {
     console.error('[documentBackupToDrive] backup_unavailable');
     return Response.json({error:'No se pudo completar la consulta. El progreso se conserva para reanudar.',code:isBackupTransientError(error)?'BACKUP_TEMPORARY_UNAVAILABLE':'BACKUP_UNAVAILABLE'},{status:isBackupTransientError(error)?503:500,headers:{'Retry-After':'5'}});
   }finally{if(lease&&leaseEntity)await releaseBackupLease(leaseEntity,lease).catch(()=>{});}
-});
+}));
 
 
 // C1 inventory structured metadata version 20261031.2

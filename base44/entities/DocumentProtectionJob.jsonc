@@ -82,6 +82,45 @@
       "items": {
         "type": "object"
       }
+    },
+    "verificationStatus": {
+      "type": "string"
+    },
+    "verificationStartedAt": {
+      "type": "string"
+    },
+    "verificationFinishedAt": {
+      "type": "string"
+    },
+    "recoveryManifestDriveFileId": {
+      "type": "string"
+    },
+    "recoveryManifestSha256": {
+      "type": "string"
+    },
+    "verificationCursor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verificationChecked": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verificationIssueCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "verificationIssues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "verificationParts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "required": [
