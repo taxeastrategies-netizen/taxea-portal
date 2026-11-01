@@ -60,7 +60,9 @@ export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='
  }
  if(['completed','incidents'].includes(job.status))return{ok:true,...protectionJobSummary(job),alreadyCompleted:true};
  if(job.status!=='processing')fail('PROTECTION_JOB_STATE_INVALID');
- if(job.cursor<groups.length&&now()<deadline-20000){
+ // Small bounded groups reuse the immutable plan and save the cursor after EACH file.
+ const fileBudget=body.fileBudget===3?3:1;
+ for(let processed=0;processed<fileBudget&&job.cursor<groups.length&&now()<deadline-20000;processed++){
   const at=job.cursor,group=groups[at];let result,errorCode='';
   try{result=await protectGroup(group,loaded.digest,job.id,body.reactivateDisabled===true,loaded.plan.backupJobId);if(!result?.ok)fail('PROTECTION_COPY_UNVERIFIED');}
   catch(error){errorCode=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_COPY_INTERRUPTED';}

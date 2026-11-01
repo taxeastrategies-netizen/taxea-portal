@@ -492,7 +492,7 @@ Deno.serve(async (req) => {
       try{
         const service=base44.asServiceRole,resolveCompany=createBackupContextResolver(service);
         const readPrivateDriveFile=async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));};
-        const loadPlan=async jobId=>loadLegacyProtectionPlan({service,user,jobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,readPrivateDriveFile});
+        const loadPlan=async jobId=>loadLegacyProtectionPlan({service,user,jobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,readPrivateDriveFile,cacheTtlMs:120000});
         const result=await runLegacyProtectionJob({service,user,body,scopeCompanyId,leaseHeld:!!lease,loadPlan,hash:computeChecksum,deadline,
           protectGroup:async(group,planDigest,protectionJobId,reactivateDisabled,backupJobId)=>protectLegacyGroup({service,user,group,planDigest,expectedPlanDigest:body.planDigest,protectionJobId,reactivateDisabled,normalizeReference:normalizeLegacyDocumentReference,hash:computeChecksum,
             verifySources:g=>verifyProtectionSourceBindings({service,group:g,sources:DOC_SOURCES,resolveCompany,normalizeReference:normalizeLegacyDocumentReference}),

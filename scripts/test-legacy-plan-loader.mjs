@@ -19,4 +19,16 @@ await assert.rejects(()=>loadLegacyProtectionPlan({...args,readPrivateDriveFile:
 await assert.rejects(()=>loadLegacyProtectionPlan({...args,readPrivateDriveFile:async()=>{throw Error('DRIVE_PRIVATE_ACL_DENIED');}}),/ACL_DENIED/);checks++;
 const result=await loadLegacyProtectionPlan(args),replay=await loadLegacyProtectionPlan(args);
 assert.equal(result.digest,replay.digest);assert.equal(result.summary.eligibleFiles,1);assert.equal(result.summary.blockedFiles,0);assert.equal(result.summary.migrationStarted,false);assert.equal(result.summary.financialWrites,0);assert.equal(result.summary.originalsDeleted,0);assert.equal(JSON.stringify(result.summary).includes(reference),false);assert.equal(JSON.stringify(result.summary).includes('copy-qa'),false);checks+=8;
+
+// The cache is opt-in, short-lived and never bypasses authority or verified-job checks.
+job=base;let stamp=1000;const cachedArgs={...args,cacheTtlMs:120000,now:()=>stamp};
+const beforeReads=reads,beforeGets=gets;const first=await loadLegacyProtectionPlan(cachedArgs),second=await loadLegacyProtectionPlan(cachedArgs);
+assert.equal(reads-beforeReads,2);assert.equal(gets-beforeGets,2);assert.equal(first.digest,second.digest);assert.equal(Object.isFrozen(second.plan.groups[0]),true);checks+=4;
+assert.throws(()=>second.plan.groups.push({companyId:'foreign'}));checks++;
+job={...base,verificationStatus:'incidents'};await assert.rejects(()=>loadLegacyProtectionPlan(cachedArgs),/BACKUP_NOT_VERIFIED/);checks++;
+job=base;await assert.rejects(()=>loadLegacyProtectionPlan({...cachedArgs,user:{id:'normal',role:'user'}}),/ADMIN_ONLY/);checks++;
+await assert.rejects(()=>loadLegacyProtectionPlan({...cachedArgs,scopeCompanyId:'foreign'}),/JOB_UNAVAILABLE/);checks++;
+job={...base,manifestChecksum:'d'.repeat(64)};await assert.rejects(()=>loadLegacyProtectionPlan(cachedArgs),/HASH_MISMATCH/);checks++;
+job=base;stamp=122001;const expiredBefore=reads;await loadLegacyProtectionPlan(cachedArgs);assert.equal(reads-expiredBefore,2);checks++;
+const noCacheBefore=reads;await loadLegacyProtectionPlan(args);assert.equal(reads-noCacheBefore,2);checks++;
 console.log(JSON.stringify({ok:true,checks,realDataRead:0,realCloudCalls:0,filesMoved:0,sourceWrites:0,deterministicSummaryOnly:true}));
