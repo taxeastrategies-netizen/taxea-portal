@@ -1,14 +1,22 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {build} from 'esbuild';
-const names=['BoardReport','InvestorReport','BankReport','ExecutiveCommentary','FinancialIntelligenceAI','CompanyScoring','MnAAnalytics','ExcelExport'];
+const names=['BoardReport','InvestorReport','BankReport','ExecutiveCommentary','FinancialIntelligenceAI','CompanyScoring','MnAAnalytics','ExcelExport','ReportingCenter'];
 const result=await build({stdin:{contents:names.map(name=>`export {default as ${name}} from './src/components/reporting/${name}.jsx';`).join('\n'),resolveDir:process.cwd(),loader:'js'},bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',alias:{'@':process.cwd()+'/src'},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'report-runtime-no-services',setup(b){
  b.onResolve({filter:/^react$/},args=>args.importer.includes('/src/components/reporting/')?{path:'react-fixture',namespace:'fixture'}:null);
+ b.onResolve({filter:/^\.\/\w+$/},args=>args.importer.endsWith('/ReportingCenter.jsx')?{path:args.path.slice(2),namespace:'report-child'}:null);
+ b.onLoad({filter:/.*/,namespace:'report-child'},({path})=>({loader:'js',contents:`export default function ${path}(){return null;}`}));
+ b.onResolve({filter:/^react-router-dom$/},args=>args.importer.endsWith('/ReportingCenter.jsx')?{path:'outlet',namespace:'fixture'}:null);
+ b.onResolve({filter:/^@\/hooks\/useFinancialData$/},()=>({path:'financial-data',namespace:'fixture'}));
+ b.onResolve({filter:/^@\/hooks\/useFinanceReporting$/},()=>({path:'finance-query',namespace:'fixture'}));
  b.onResolve({filter:/base44Client$/},()=>({path:'sdk',namespace:'fixture'}));
  b.onResolve({filter:/^framer-motion$/},()=>({path:'motion',namespace:'fixture'}));
  b.onResolve({filter:/^xlsx$/},()=>({path:'xlsx',namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({loader:'js',contents:({
-  'react-fixture':`export const useMemo=fn=>fn();export function useState(initial){const i=globalThis.__index++;if(!(i in globalThis.__states))globalThis.__states[i]=typeof initial==='function'?initial():initial;return [globalThis.__states[i],next=>{globalThis.__states[i]=typeof next==='function'?next(globalThis.__states[i]):next;}];}`,
+  'react-fixture':`export const useMemo=fn=>fn();export const useEffect=()=>{};export const useRef=value=>({current:value});export function useState(initial){const i=globalThis.__index++;if(!(i in globalThis.__states))globalThis.__states[i]=typeof initial==='function'?initial():initial;return [globalThis.__states[i],next=>{globalThis.__states[i]=typeof next==='function'?next(globalThis.__states[i]):next;}];}`,
+  outlet:`export const useOutletContext=()=>({company:globalThis.__company});`,
+  'financial-data':`export const useFinancialData=()=>globalThis.__financialData;`,
+  'finance-query':`export const useFinanceObligations=()=>globalThis.__calendar;export const useFinancePeriod=()=>globalThis.__accounting;`,
   sdk:`export const base44={controlledCore:{async InvokeLLM(){globalThis.__mockCalls++;throw Error('synthetic unavailable service');}}};`,
   motion:`export const motion=new Proxy({},{get:(_,name)=>name});`,
   xlsx:`export const utils={book_new:()=>({sheets:[]}),aoa_to_sheet:rows=>({rows}),book_append_sheet:(book,sheet,name)=>book.sheets.push({name,...sheet})};export const writeFile=(book,name)=>{if(globalThis.__exportFails)throw Error('synthetic download failure');globalThis.__exported={book,name};};`
@@ -50,4 +58,22 @@ const failedExport=walk(render('ExcelExport',exportProps));
 check(failedExport.some(node=>node.props?.role==='alert'),'failed file generation has an error');
 check(failedExport.find(node=>node.props?.onClick?.name==='exportExcel').props.disabled===false,'failed file generation releases loading');
 check(context.__mockCalls===7,'all seven failures were synthetic; no real AI request');
+context.__company={id:'synthetic-company-b'};
+context.__financialData={invoices:[],expenses:[],bankAccounts:[],bankTransactions:[],treasury:{},loading:false,error:'',treasuryError:'',refresh:()=>{}};
+context.__calendar={data:{rows:[]},isLoading:false,isError:false};
+context.__accounting={data:null,isLoading:false,isError:false};
+const center=(tab='dashboard',loaded='synthetic-company-b')=>{context.__states=[tab,loaded,[{estado:'activo',capital_pendiente:987654}],false,''];return render('ReportingCenter');};
+const switched=walk(center('dashboard','synthetic-company-a'));
+check(switched.length===1&&switched[0].props.role==='status','reporting waits for the new company before rendering previous auxiliary figures');
+check(!JSON.stringify(switched).includes('987654'),'previous-company debt never enters returned UI');
+const partial=walk(center());
+check(partial.some(node=>node.type?.name==='ReportingDashboard'),'missing bank does not block reading available accounting data');
+check(partial.some(node=>node.props?.role==='alert'),'partial report identifies missing source coverage');
+const blocked=walk(center('share'));
+check(!blocked.some(node=>node.type?.name==='ShareDashboard'),'incomplete report cannot render sharing controls');
+check(blocked.some(node=>node.props?.role==='status'),'blocked sharing explains how to complete sources');
+context.__financialData.bankAccounts=[{id:'synthetic-bank',moneda:'EUR',activa:true,estado_conexion:'conectado',saldo_disponible:0,fecha_ultima_sync:new Date().toISOString()}];
+context.__accounting.data={window:{period:'ytd',start:'2026-01-01',end:'2026-11-01',days:305,previous:{start:'2025-03-02',end:'2025-12-31'},timeZone:'Europe/Madrid'},current:{year:2026,includedEntries:1,excludedEntries:0,pendingEntriesInYear:0,frameworkReviewStatus:'validated',profitAndLoss:{totalIncome:100,totalExpenses:25,result:75,income:[{code:'700',amount:100}],expenses:[{code:'600',amount:25}]}}};
+const ready=walk(center('share'));
+check(ready.some(node=>node.type?.name==='ShareDashboard'),'completed sources restore existing sharing controls without creating a share');
 console.log(JSON.stringify({ok:true,checks,actualReportHandlers:true,externalCalls:0,customerWrites:0,filesWritten:0}));

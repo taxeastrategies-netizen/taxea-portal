@@ -22,7 +22,7 @@ export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankA
   const portfolio = active.filter(row => !['cobrada', 'pagada', 'anulada', 'cancelada'].includes(lower(row.estado_cobro)));
   const pending = type => !financialError ? money(portfolio.filter(row => row.tipo === type).reduce((sum, row) => sum + (Number(row.total_factura) < 0 ? -1 : 1) * getOutstandingAmount(row), 0)) : null;
   const cobrosPendientes = pending('emitida'), pagosPendientes = pending('recibida');
-  const measured = type => active.filter(row => row.tipo === type && ['cobrada', 'pagada'].includes(lower(row.estado_cobro)) && withinWindow(row.ultimo_pago_at, window, window.timeZone)).map(row => daysBetween(civilDay(row.fecha_emision, window.timeZone), civilDay(row.ultimo_pago_at, window.timeZone))).filter(value => Number.isFinite(value) && value >= 0);
+  const measured = type => active.filter(row => !financialError && Number(row.total_factura) > 0 && row.tipo === type && ['cobrada', 'pagada'].includes(lower(row.estado_cobro)) && withinWindow(row.ultimo_pago_at, window, window.timeZone)).map(row => daysBetween(civilDay(row.fecha_emision, window.timeZone), civilDay(row.ultimo_pago_at, window.timeZone))).filter(value => Number.isFinite(value) && value >= 0);
   const collections = measured('emitida'), payments = measured('recibida');
   const previousPnl = accountingPeriod?.previous;
   const ingresosDelta = accountingKnown && previousPnl?.includedEntries > 0 && previousPnl.profitAndLoss.totalIncome > 0 ? money((pnl.totalIncome - previousPnl.profitAndLoss.totalIncome) / previousPnl.profitAndLoss.totalIncome * 100) : null;

@@ -112,4 +112,8 @@ equal(confirmEmptyReportingPeriod(empty,{...emptyPeriod,excludedEntries:1},true,
 equal(confirmEmptyReportingPeriod(empty,emptyPeriod,true,false).totalIngresos,null,'failed monthly read does not become zero');
 equal(reportingWindow('ytd',now).start,'2026-01-01','annual reporting starts on January first rather than rolling a year');
 equal(reportingWindow('ytd',now).days,305,'annual reporting includes each civil day through today');
+const creditOnly=buildFinanceDashboardModel({now,invoices:[{id:'synthetic-credit',tipo:'emitida',total_factura:-121,fecha_emision:'2026-10-01',estado_cobro:'cobrada',ultimo_pago_at:'2026-10-31'},{id:'synthetic-zero',tipo:'recibida',total_factura:0,fecha_emision:'2026-10-01',estado_cobro:'pagada',ultimo_pago_at:'2026-10-31'}]});
+equal(creditOnly.dso,null,'a credit note refund is not an observed customer collection');
+equal(creditOnly.dpo,null,'a zero-value document is not an observed supplier payment');
+equal(buildFinanceDashboardModel({now,invoices,financialError:'synthetic incomplete document read'}).dso,null,'failed document coverage cannot publish an observed collection delay');
 console.log(JSON.stringify({ ok: true, checks, scenarios: ['calendar-boundaries', 'confirmed-PnL', 'bank-absence-and-zero', 'bank-deduplication', 'observed-cashflow', 'source-failure', 'no-false-green'], externalCalls: 0, financialWrites: 0 }));
