@@ -1,27 +1,6 @@
 {
-  "definition": {
-    "document": {
-      "dsl": "1.0.0",
-      "name": "dailydocumentbackuptodrive",
-      "version": "1.0",
-      "namespace": "base44"
-    },
-    "do": [
-      {
-        "run_function": {
-          "call": "invoke_backend_function",
-          "with": {
-            "function_name": "documentBackupToDrive",
-            "args": {
-              "action": "backup",
-              "jobType": "scheduled"
-            }
-          },
-          "then": "end"
-        }
-      }
-    ]
-  },
+  "name": "DailyDocumentBackupToDrive",
+  "description": "Copia de seguridad autom\u00e1tica diaria de toda la documentaci\u00f3n a Google Drive (taxeastrategies@gmail.com)",
   "trigger": {
     "condition": null,
     "config": {
@@ -39,8 +18,328 @@
       "ends_after_count": null
     }
   },
-  "name": "DailyDocumentBackupToDrive",
-  "description": "Copia de seguridad autom\u00e1tica diaria de toda la documentaci\u00f3n a Google Drive (taxeastrategies@gmail.com)",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "dailydocumentbackuptodrive",
+      "version": "2.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "chunk_0": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_0"
+        }
+      },
+      {
+        "check_0": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_0"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_0": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_1"
+        }
+      },
+      {
+        "chunk_1": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_1"
+        }
+      },
+      {
+        "check_1": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_1"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_1": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_2"
+        }
+      },
+      {
+        "chunk_2": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_2"
+        }
+      },
+      {
+        "check_2": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_2"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_2": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_3"
+        }
+      },
+      {
+        "chunk_3": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_3"
+        }
+      },
+      {
+        "check_3": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_3"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_3": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_4"
+        }
+      },
+      {
+        "chunk_4": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_4"
+        }
+      },
+      {
+        "check_4": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_4"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_4": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_5"
+        }
+      },
+      {
+        "chunk_5": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_5"
+        }
+      },
+      {
+        "check_5": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_5"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_5": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_6"
+        }
+      },
+      {
+        "chunk_6": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_6"
+        }
+      },
+      {
+        "check_6": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "wait_6"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "wait_6": {
+          "wait": {
+            "seconds": 2
+          },
+          "then": "chunk_7"
+        }
+      },
+      {
+        "chunk_7": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_step",
+              "workflowJobId": "${ .jobId // \"\" }",
+              "workflowPhase": "${ .workflowPhase // \"copy\" }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f",
+              "suppressNotifications": true
+            }
+          },
+          "then": "check_7"
+        }
+      },
+      {
+        "check_7": {
+          "switch": [
+            {
+              "when": "${ .continueRequired == true }",
+              "then": "limit_check"
+            },
+            {
+              "when": "${ true }",
+              "then": "end"
+            }
+          ]
+        }
+      },
+      {
+        "limit_check": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "documentBackupToDrive",
+            "args": {
+              "action": "workflow_assert",
+              "jobType": "scheduled",
+              "workflowChunk": true,
+              "assertJobId": "${ .jobId }",
+              "qaCompanyId": "6ae62f71c07c924928f2b71f"
+            }
+          },
+          "then": "end"
+        }
+      }
+    ]
+  },
   "x-base44-migrated-from-automation": {
     "legacy_payload_function": "documentBackupToDrive"
   }
