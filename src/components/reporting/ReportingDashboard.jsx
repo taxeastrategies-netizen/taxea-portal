@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FileText, BarChart2, Users, Building2, Brain, Award, TrendingUp, Download, Share2, Zap, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n == null || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 const fmtPct = financialPercentLabel;
 
 const REPORT_TYPES = [

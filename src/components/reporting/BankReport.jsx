@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 
 function BankabilityScore({ score }) {
   const color = score >= 70 ? '#16a34a' : score >= 50 ? '#d97706' : '#dc2626';
@@ -37,6 +37,7 @@ function BankabilityScore({ score }) {
 
 export default function BankReport({ financials, company, invoices, expenses, debts, bankAccounts }) {
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [analysis, setAnalysis] = useState('');
   const f = financials || {};
 
@@ -65,14 +66,15 @@ export default function BankReport({ financials, company, invoices, expenses, de
     { label: 'Cobertura intereses', value: f.ebitda > 0 && f.interesesAnuales > 0 ? `${(f.ebitda / f.interesesAnuales).toFixed(2)}x` : '—', ok: f.ebitda > 0 && f.interesesAnuales > 0 && f.ebitda / f.interesesAnuales > 1.5, warn: true },
     { label: 'DSO (días cobro)', value: `~${f.dso ?? 'No verificable'} días`, ok: f.dso < 45, warn: f.dso < 60 },
     { label: 'DPO (días pago)', value: `~${f.dpo ?? 'No verificable'} días`, ok: true, warn: true },
-    { label: 'Working Capital', value: fmt(f.workingCapital), ok: f.workingCapital > 0, warn: false },
+    { label: 'Cobros menos pagos pendientes', value: fmt(f.workingCapital), ok: f.workingCapital > 0, warn: false },
     { label: 'Margen EBITDA', value: financialPercentLabel(f.margen), ok: f.margen > 10, warn: f.margen > 0 },
     { label: 'Liquidez inmediata', value: fmt(f.cashTotal), ok: f.cashTotal > f.burnRate * 3, warn: f.cashTotal > f.burnRate },
     { label: 'Cuotas mensuales', value: fmt(f.cuotasMensuales), ok: f.cuotasMensuales < f.burnRate * 0.2, warn: f.cuotasMensuales < f.burnRate * 0.35 },
   ];
 
   const generateAnalysis = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista de riesgos bancarios. Prepara un informe de bankability en español (máx 200 palabras) para presentar a una entidad financiera:
 
@@ -87,7 +89,7 @@ RATIOS FINANCIEROS:
 - Deuda/EBITDA: ${f.ebitda > 0 ? (f.deudaTotal / f.ebitda).toFixed(2) + 'x' : 'N/A'}
 - Cobertura intereses: ${f.ebitda > 0 && f.interesesAnuales > 0 ? (f.ebitda / f.interesesAnuales).toFixed(2) + 'x' : 'N/A'}
 - Liquidez/Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
-- Working Capital: ${fmt(f.workingCapital)}
+- Cobros menos pagos documentales pendientes (no es capital circulante contable): ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días
 
 Estructura:
@@ -100,13 +102,14 @@ Estructura:
 Estilo: técnico, objetivo, bancario.`,
     });
     setAnalysis(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 
   if(!financialScoringReadiness(financials))return <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Índice bancario sin calcular: faltan datos revisados o muestras suficientes. No equivale a una calificación crediticia.</div>;
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-indigo-900 to-indigo-700 rounded-2xl p-6 text-white">
         <div className="flex items-start justify-between">

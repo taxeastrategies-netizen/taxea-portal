@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 
 const STYLES = [
   { id: 'deloitte', label: 'Deloitte', desc: 'Rigor técnico, precisión contable', color: 'bg-green-700' },
@@ -29,12 +29,14 @@ export default function ExecutiveCommentary({ financials, company }) {
   const [audience, setAudience] = useState('board');
   const [tone, setTone] = useState('neutral');
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [commentary, setCommentary] = useState('');
   const [copied, setCopied] = useState(false);
   const f = financials || {};
 
   const generate = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     setCommentary('');
     const styleDescriptions = {
       deloitte: 'Deloitte (rigor técnico contable, lenguaje financiero preciso, estructura clara)',
@@ -61,7 +63,7 @@ Escribe un executive commentary financiero en español (200-280 palabras) para: 
 Tono: ${toneDescriptions[tone]}.
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
-Período: ${format(new Date(), 'MMMM yyyy', { locale: es })}
+Período: acumulado del ejercicio hasta ${format(new Date(), 'd MMMM yyyy', { locale: es })}
 
 DATOS FINANCIEROS:
 - Ingresos: ${fmt(f.ingresos)} | EBITDA: ${fmt(f.ebitda)} (${financialPercentLabel(f.margen)} margen)
@@ -69,7 +71,7 @@ DATOS FINANCIEROS:
 - Caja disponible: ${fmt(f.cashTotal)} | Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Burn rate: ${fmt(f.burnRate)}/mes
 - Deuda activa: ${fmt(f.deudaTotal)}
-- Working Capital: ${fmt(f.workingCapital)}
+- Cobros menos pagos documentales pendientes (no es capital circulante contable): ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días | DPO: ~${f.dpo} días
 - Cobros pendientes: ${fmt(f.cobrosPendientes)}
 
@@ -85,7 +87,7 @@ Genera texto fluido, narrativo, NO bullets. Usa números del informe. Estilo cor
       model: 'claude_sonnet_4_6',
     });
     setCommentary(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 
   const copy = () => {
@@ -96,6 +98,7 @@ Genera texto fluido, narrativo, NO bullets. Usa números del informe. Estilo cor
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-purple-900 to-purple-700 rounded-2xl p-6 text-white">
         <div className="flex items-center gap-3">

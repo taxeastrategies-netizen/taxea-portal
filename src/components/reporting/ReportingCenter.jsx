@@ -81,7 +81,7 @@ export default function ReportingCenter() {
     return reportingMetricSnapshot(shared,debts,accountingReport);
   }, [invoices,expenses,bankAccounts,transactions,debts,treasuryError,financialError,auxiliaryError,accountingReport,accounting.data,accounting.isError,calendar.data]);
 
-  const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading };
+  const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading, monthlyLedger: accounting.data?.monthly || [] };
 
   if (!companyId) {
     return (
@@ -141,6 +141,8 @@ export default function ReportingCenter() {
         </div>
       </div>
 
+      {/* Reinicia resultados locales al cambiar de empresa. */}
+      <div key={companyId}>
       {/* Content */}
       {tab === 'dashboard'  && <ReportingDashboard {...sharedProps} onNavigate={setTab} />}
       {tab === 'monthly'    && <MonthlyReport {...sharedProps} />}
@@ -154,6 +156,7 @@ export default function ReportingCenter() {
       {tab === 'scoring'    && <CompanyScoring {...sharedProps} />}
       {tab === 'mna'        && <MnAAnalytics {...sharedProps} />}
       {tab === 'commentary' && <ExecutiveCommentary {...sharedProps} />}
+      </div>
     </motion.div>
   );
 }

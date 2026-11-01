@@ -6,11 +6,12 @@ import { TrendingUp, RefreshCw, Brain, DollarSign, Target } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 const fmtX = n => `${n?.toFixed(1) || '—'}x`;
 
 export default function InvestorReport({ financials, company, invoices, expenses, debts }) {
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [memo, setMemo] = useState('');
   const f = financials || {};
 
@@ -19,7 +20,8 @@ export default function InvestorReport({ financials, company, invoices, expenses
   const revMultiples = [1, 1.5, 2, 2.5, 3];
 
   const generateMemo = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres un analista de M&A / VC preparando un investor memo en español (máx 200 palabras) estilo Goldman Sachs / McKinsey:
 
@@ -33,7 +35,7 @@ MÉTRICAS:
 - Caja: ${fmt(f.cashTotal)} | Burn: ${fmt(f.burnRate)}/mes
 - Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Deuda neta: ${fmt(f.deudaTotal)}
-- Working Capital: ${fmt(f.workingCapital)}
+- Cobros menos pagos documentales pendientes (no es capital circulante contable): ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días
 
 Genera:
@@ -46,7 +48,7 @@ Genera:
 Estilo: sofisticado, directo, orientado a inversor institucional.`,
     });
     setMemo(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 
   const metrics = [
@@ -55,11 +57,12 @@ Estilo: sofisticado, directo, orientado a inversor institucional.`,
     { label: 'Gross Burn / mes', value: fmt(f.burnRate), note: 'Gasto operativo' },
     { label: 'Cash Runway', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses` : '—', note: `${fmt(f.cashTotal)} caja` },
     { label: 'Net Debt', value: fmt(f.deudaTotal), note: 'Pasivos financieros' },
-    { label: 'Working Capital', value: fmt(f.workingCapital), note: 'AR - AP' },
+    { label: 'Cobros menos pagos pendientes', value: fmt(f.workingCapital), note: 'AR - AP' },
   ];
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-900 to-emerald-700 rounded-2xl p-6 text-white">
         <div className="flex items-start justify-between">

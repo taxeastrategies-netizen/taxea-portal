@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { Brain, RefreshCw, TrendingUp, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 
 const ANALYSIS_TYPES = [
   { id: 'full', label: 'Análisis completo CFO', icon: Brain, desc: 'Evaluación 360° como Director Financiero', color: 'bg-slate-800 text-white' },
@@ -17,6 +17,7 @@ const ANALYSIS_TYPES = [
 export default function FinancialIntelligenceAI({ financials, company, invoices, expenses, debts, bankAccounts }) {
   const [selected, setSelected] = useState('full');
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [result, setResult] = useState(null);
 
   const f = financials || {};
@@ -26,6 +27,7 @@ Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Régimen fiscal: ${company?.regimen_fiscal || 'N/A'}
 
 MÉTRICAS FINANCIERAS:
+Las cifras de ingresos, gastos, resultado y EBITDA son acumuladas del ejercicio hasta hoy. El saldo bancario es actual. Las salidas observadas y la autonomía corresponden a la ventana indicada; no equivalen al gasto contable. No inventes cifras, tendencias, referencias sectoriales ni una calificación crediticia. Un dato «No verificable» o «N/A» debe mantenerse como desconocido.
 - Ingresos totales: ${fmt(f.ingresos)}
 - Gastos totales: ${fmt(f.gastoTotal)}
 - Beneficio neto: ${fmt(f.beneficio)}
@@ -39,7 +41,7 @@ MÉTRICAS FINANCIERAS:
 - Intereses anuales: ${fmt(f.interesesAnuales)}
 - Cobros pendientes (AR): ${fmt(f.cobrosPendientes)}
 - Pagos pendientes (AP): ${fmt(f.pagosPendientes)}
-- Working Capital: ${fmt(f.workingCapital)}
+- Cobros menos pagos documentales pendientes (no es capital circulante contable): ${fmt(f.workingCapital)}
 - DSO estimado: ~${f.dso ?? 'No verificable'} días
 - DPO estimado: ~${f.dpo ?? 'No verificable'} días
 - Nº facturas emitidas: ${invoices.filter(i => i.tipo === 'emitida').length}
@@ -96,7 +98,7 @@ Evalúa el performance financiero de esta empresa en español:
 1. KPIs DE RENDIMIENTO
 2. ANÁLISIS DE MÁRGENES
 3. EFICIENCIA OPERATIVA
-4. BENCHMARK SECTORIAL (estimado)
+4. LÍMITES DE COMPARACIÓN (sin fuente sectorial no existe benchmark)
 5. EVOLUCIÓN Y TENDENCIAS
 6. OPORTUNIDADES DE MEJORA
 7. CONCLUSIÓN EJECUTIVA
@@ -106,17 +108,19 @@ ${ctx}`,
   };
 
   const analyze = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     setResult(null);
     const ctx = buildContext();
     const prompt = PROMPTS[selected](ctx);
     const res = await base44.controlledCore.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
     setResult(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-700 rounded-2xl p-6 text-white">
         <div className="flex items-center gap-3 mb-3">

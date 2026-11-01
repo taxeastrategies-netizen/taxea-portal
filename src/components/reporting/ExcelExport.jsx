@@ -22,6 +22,7 @@ const SHEETS = [
 export default function ExcelExport({ financials, company, invoices, expenses, debts, bankAccounts, transactions }) {
   const [selected, setSelected] = useState(SHEETS.filter(s => s.checked).map(s => s.id));
   const [loading, setLoading] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [done, setDone] = useState(false);
   const f = financials || {};
 
@@ -30,7 +31,8 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
   };
 
   const exportExcel = async () => {
-    setLoading(true);
+    setLoading(true);setExportError('');
+    try {
     setDone(false);
     const wb = XLSX.utils.book_new();
     const companyName = company?.nombre_comercial || company?.razon_social || 'Empresa';
@@ -43,7 +45,7 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
         ['', '', ''],
         ['P&L SUMMARY', '', ''],
         ['Concepto', 'Importe (EUR)', 'Notas'],
-        ['Ingresos contables', fmt(f.ingresos), 'Período actual'],
+        ['Ingresos contables', fmt(f.ingresos), `${f.periodStart || 'Inicio no indicado'} a ${f.periodEnd || 'Fin no indicado'}`],
         ['Gastos contables', fmt(f.gastoTotal), ''],
         ['Resultado contable', fmt(f.beneficio), ''],
         ['Margen neto (%)', fmt(f.margenNeto), '%'],
@@ -80,8 +82,8 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
     if (selected.includes('debt')) {
       const headers = ['Nombre', 'Tipo', 'Entidad', 'Importe inicial', 'Capital pendiente', 'TIN %', 'Cuota', 'Estado', 'Vencimiento'];
       const rows = debts.map(d => [
-        d.nombre, d.tipo, d.entidad || '', fmt(d.importe_inicial), fmt(d.capital_pendiente || 0),
-        d.tin || 0, fmt(d.cuota || 0), d.estado, d.fecha_vencimiento || '',
+        d.nombre, d.tipo, d.entidad || '', fmt(d.importe_inicial), fmt(d.capital_pendiente),
+        fmt(d.tin), fmt(d.cuota), d.estado, d.fecha_vencimiento || '',
       ]);
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       ws['!cols'] = headers.map(() => ({ wch: 18 }));
@@ -132,7 +134,7 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
 
     if (selected.includes('transactions')) {
       const headers = ['Fecha', 'Concepto', 'Importe', 'Tipo', 'Categoría IA'];
-      const rows = transactions.slice(0, 500).map(t => [
+      const rows = transactions.map(t => [
         t.fecha_operacion, t.concepto, t.importe, t.tipo, t.categoria_ia || '',
       ]);
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -141,13 +143,14 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
 
     const filename = `Taxea_Financial_Report_${companyName.replace(/\s+/g, '_')}_${format(new Date(), 'yyyyMM')}.xlsx`;
     XLSX.writeFile(wb, filename);
-    setLoading(false);
     setDone(true);
     setTimeout(() => setDone(false), 3000);
+    } catch {setExportError('No se pudo crear el archivo. Reintenta la exportación.');} finally {setLoading(false);}
   };
 
   return (
     <div className="space-y-6">
+      {exportError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{exportError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-800 to-emerald-600 rounded-2xl p-6 text-white">
         <div className="flex items-center gap-3">

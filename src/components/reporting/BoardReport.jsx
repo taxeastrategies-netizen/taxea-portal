@@ -4,33 +4,26 @@ import { base44 } from '@/api/base44Client';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Users, Brain, RefreshCw, AlertTriangle, CheckCircle2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { format, subMonths, parseISO, isSameMonth } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
+const fmt = n => n === null || n === undefined || n === '' || !Number.isFinite(Number(n)) ? 'No verificable' : new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(n));
 
-export default function BoardReport({ financials, company, invoices, expenses, debts, bankAccounts }) {
+export default function BoardReport({ financials, company, invoices, expenses, debts, bankAccounts, monthlyLedger = [] }) {
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [insights, setInsights] = useState('');
   const f = financials || {};
 
-  const trendData = Array.from({ length: 6 }, (_, i) => {
-    const month = subMonths(new Date(), 5 - i);
-    const ingresos = invoices.filter(inv => {
-      try { return inv.tipo === 'emitida' && isSameMonth(parseISO(inv.fecha_emision), month); } catch { return false; }
-    }).reduce((s, inv) => s + (inv.total_factura || 0), 0);
-    const gastos = expenses.filter(exp => {
-      try { return exp.tipo === 'gasto' && isSameMonth(parseISO(exp.fecha), month); } catch { return false; }
-    }).reduce((s, exp) => s + (exp.total || 0), 0);
-    return { mes: format(month, 'MMM', { locale: es }), ingresos, ebitda: ingresos - gastos };
-  });
+  const trendData = monthlyLedger.slice(-6).map(row => ({mes:format(parseISO(row.month+'-01'),'MMM',{locale:es}),ingresos:row.income,resultado:row.result}));
 
   const deudaEbitda = f.ebitda > 0 ? (f.deudaTotal / f.ebitda).toFixed(1) : '—';
   const coberturaInt = f.ebitda > 0 && f.interesesAnuales > 0 ? (f.ebitda / f.interesesAnuales).toFixed(1) : '—';
   const margenPct = financialPercentLabel(f.margen);
 
   const generateInsights = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     const res = await base44.controlledCore.InvokeLLM({
       prompt: `Eres el CFO de la empresa presentando al Consejo de Administración. Genera "Board Insights" ejecutivos en español (máx 200 palabras):
 
@@ -42,7 +35,7 @@ MÉTRICAS CLAVE:
 - EBITDA: ${fmt(f.ebitda)}
 - Caja: ${fmt(f.cashTotal)} | Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
 - Deuda: ${fmt(f.deudaTotal)} | Deuda/EBITDA: ${deudaEbitda}x
-- DSO: ~${f.dso} días | Working Capital: ${fmt(f.workingCapital)}
+- DSO: ~${f.dso} días | Cobros menos pagos documentales pendientes: ${fmt(f.workingCapital)}
 
 Estructura: 
 1. SITUACIÓN ACTUAL (2-3 líneas ejecutivas)
@@ -53,7 +46,7 @@ Estructura:
 Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
     });
     setInsights(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 
   const strategicKpis = [
@@ -67,6 +60,7 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Board header */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-white">
         <div className="flex items-start justify-between">
@@ -92,15 +86,15 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
       {/* Charts + Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-sm font-semibold text-foreground mb-4">Revenue & EBITDA trend</p>
+          <p className="text-sm font-semibold text-foreground mb-4">Evolución de ingresos y resultado contable</p>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={v => fmt(v)} contentStyle={{ borderRadius: 10, fontSize: 12, border: '1px solid #e2e8f0' }} />
-              <Line type="monotone" dataKey="ingresos" name="Revenue" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="ebitda" name="EBITDA" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" />
+              <Line type="monotone" dataKey="ingresos" name="Ingresos contables" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="resultado" name="Resultado contable" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -137,17 +131,17 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
           {[
             {
               label: 'Liquidez',
-              status: f.runway === null ? 'warn' : f.runway > 6 ? 'ok' : f.runway > 3 ? 'warn' : 'risk',
+              status: !Number.isFinite(f.runway) ? 'warn' : f.runway > 6 ? 'ok' : f.runway > 3 ? 'warn' : 'risk',
               text: f.runway !== null && f.runway !== undefined ? `Runway: ${f.runway.toFixed(1)} meses` : 'Sin datos',
             },
             {
               label: 'Endeudamiento',
-              status: f.deudaTotal < f.ebitda * 2 ? 'ok' : f.deudaTotal < f.ebitda * 4 ? 'warn' : 'risk',
+              status: !f.accountingKnown || f.ebitda === null ? 'warn' : f.deudaTotal < f.ebitda * 2 ? 'ok' : f.deudaTotal < f.ebitda * 4 ? 'warn' : 'risk',
               text: `Deuda/EBITDA: ${deudaEbitda}x`,
             },
             {
               label: 'Rentabilidad',
-              status: f.margen > 15 ? 'ok' : f.margen > 5 ? 'warn' : 'risk',
+              status: !Number.isFinite(f.margen) ? 'warn' : f.margen > 15 ? 'ok' : f.margen > 5 ? 'warn' : 'risk',
               text: `Margen: ${margenPct}`,
             },
           ].map((item, i) => {

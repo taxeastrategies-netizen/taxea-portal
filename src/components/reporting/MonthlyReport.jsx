@@ -152,13 +152,13 @@ Genera: resumen ejecutivo + evolución + alertas + perspectivas. Estilo corporat
             { label: 'Gastos totales', value: fmt(f.gastoTotal), type: 'negative' },
             { label: 'Beneficio neto', value: fmt(f.beneficio), type: f.beneficio >= 0 ? 'positive' : 'negative' },
             { label: 'Margen neto', value: financialPercentLabel(f.margenNeto), type: f.margenNeto === null ? 'neutral' : f.margenNeto >= 0 ? 'positive' : 'negative' },
-            { label: 'EBITDA estimado', value: fmt(f.ebitda), type: 'neutral' },
+            { label: 'EBITDA contable', value: fmt(f.ebitda), type: 'neutral' },
             { label: 'Caja disponible', value: fmt(f.cashTotal), type: 'neutral' },
             { label: 'Burn rate mensual', value: fmt(f.burnRate), type: 'neutral' },
             { label: 'Runway estimado', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses` : '—', type: 'neutral' },
             { label: 'Cobros pendientes (AR)', value: fmt(f.cobrosPendientes), type: 'neutral' },
             { label: 'Pagos pendientes (AP)', value: fmt(f.pagosPendientes), type: 'neutral' },
-            { label: 'Working Capital', value: fmt(f.workingCapital), type: f.workingCapital >= 0 ? 'positive' : 'negative' },
+            { label: 'Cobros menos pagos pendientes', value: fmt(f.workingCapital), type: f.workingCapital >= 0 ? 'positive' : 'negative' },
             { label: 'Deuda activa', value: fmt(f.deudaTotal), type: 'neutral' },
           ].map((row, i) => (
             <div key={i} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/50">
