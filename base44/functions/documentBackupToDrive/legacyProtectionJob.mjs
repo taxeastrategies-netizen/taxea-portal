@@ -60,15 +60,24 @@ export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='
  }
  if(['completed','incidents'].includes(job.status))return{ok:true,...protectionJobSummary(job),alreadyCompleted:true};
  if(job.status!=='processing')fail('PROTECTION_JOB_STATE_INVALID');
- // Small bounded groups reuse the immutable plan and save the cursor after EACH file.
+ // At most three independent copies. Equal company/content never runs concurrently.
+ // The shared DB throttle and global lease remain active. Cursor commits stay ordered.
  const fileBudget=body.fileBudget===3?3:1;
- for(let processed=0;processed<fileBudget&&job.cursor<groups.length&&now()<deadline-20000;processed++){
-  const at=job.cursor,group=groups[at];let result,errorCode='';
-  try{result=await protectGroup(group,loaded.digest,job.id,body.reactivateDisabled===true,loaded.plan.backupJobId);if(!result?.ok)fail('PROTECTION_COPY_UNVERIFIED');}
-  catch(error){errorCode=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_COPY_INTERRUPTED';}
-  const issue=errorCode?{index:at,companyId:group.companyId,referenceDigest:group.referenceDigest,code:errorCode}:null;
-  const patch={cursor:at+1,verified:Number(job.verified||0)+(result?.ok?1:0),reused:Number(job.reused||0)+(result?.alreadyProtected?1:0),issueCount:Number(job.issueCount||0)+(issue?1:0),issues:issue?[...(job.issues||[]),issue].slice(0,100):job.issues||[]};
-  await entity.update(job.id,patch);job={...job,...patch};
+ if(job.cursor<groups.length&&now()<deadline-20000){
+  const batch=[],seen=new Set();
+  for(let index=job.cursor;index<groups.length&&batch.length<fileBudget;index++){
+   const group=groups[index],contentKey=group.companyId+'|'+(group.sha256||group.referenceDigest);
+   if(seen.has(contentKey))break;seen.add(contentKey);batch.push({index,group});
+  }
+  const results=await Promise.all(batch.map(async({index,group})=>{
+   try{const result=await protectGroup(group,loaded.digest,job.id,body.reactivateDisabled===true,loaded.plan.backupJobId);if(!result?.ok)fail('PROTECTION_COPY_UNVERIFIED');return{index,group,result};}
+   catch(error){return{index,group,errorCode:/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_COPY_INTERRUPTED'};}
+  }));
+  for(const{index,group,result,errorCode}of results){
+   const issue=errorCode?{index,companyId:group.companyId,referenceDigest:group.referenceDigest,code:errorCode}:null;
+   const patch={cursor:index+1,verified:Number(job.verified||0)+(result?.ok?1:0),reused:Number(job.reused||0)+(result?.alreadyProtected?1:0),issueCount:Number(job.issueCount||0)+(issue?1:0),issues:issue?[...(job.issues||[]),issue].slice(0,100):job.issues||[]};
+   await entity.update(job.id,patch);job={...job,...patch};
+  }
  }
  if(job.cursor===groups.length){const status=job.issueCount?'incidents':'completed';await entity.update(job.id,{status,finishedAt:new Date(now()).toISOString()});job={...job,status};}
  return{ok:true,...protectionJobSummary(job)};

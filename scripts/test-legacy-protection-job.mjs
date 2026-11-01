@@ -28,8 +28,12 @@ await assert.rejects(()=>f.invoke({protectionJobId:r.jobId,action:'rollback_lega
 f=fixture(8);r=await f.invoke({fileBudget:3});ok(r.cursor,3);ok(f.jobs.length,1);ok(f.writes.filter(w=>w.cursor).map(w=>w.cursor),[1,2,3]);
 r=await f.invoke({fileBudget:3,protectionJobId:r.jobId});ok(r.cursor,6);r=await f.invoke({fileBudget:3,protectionJobId:r.jobId});ok(r.cursor,8);ok(r.status,'completed');ok(f.calls.length,8);
 f=fixture(4);r=await f.invoke({fileBudget:2000});ok(r.cursor,1);
-f=fixture(4);let elapsed=0;r=await f.invoke({fileBudget:3},{now:()=>elapsed,deadline:40000,protectGroup:async()=>{elapsed+=25000;return{ok:true};}});ok(r.cursor,1);ok(r.continueRequired,true);
+f=fixture(4);r=await f.invoke({fileBudget:3},{deadline:19000});ok(r.cursor,0);ok(r.continueRequired,true);
 f=fixture(4,{failure:'1'.padStart(64,'0')});r=await f.invoke({fileBudget:3});ok(r.cursor,3);ok(r.verified,2);ok(r.issueCount,1);ok(f.writes.filter(w=>w.cursor).map(w=>w.cursor),[1,2,3]);
-f=fixture(4,{cursorLostAck:true});await assert.rejects(()=>f.invoke({fileBudget:3}),/Lost cursor/);checks++;r=await f.invoke({fileBudget:3});ok(r.cursor,4);ok(f.jobs.length,1);ok(f.calls.length,4);
+f=fixture(4,{cursorLostAck:true});await assert.rejects(()=>f.invoke({fileBudget:3}),/Lost cursor/);checks++;r=await f.invoke({fileBudget:3});ok(r.cursor,4);ok(f.jobs.length,1);ok(f.calls.length,6);ok(f.aliases.length,4);ok(r.reused,2);ok(r.verified,4);
 f=fixture(1203);r=await f.invoke({fileBudget:3});while(r.continueRequired)r=await f.invoke({fileBudget:3,protectionJobId:r.jobId});ok(r.verified,1203);ok(f.calls.length,1203);ok(f.jobs.length,1);ok(r.financialWrites,0);ok(r.originalsDeleted,0);
+
+f=fixture(6);let active=0,maxActive=0;r=await f.invoke({fileBudget:3},{protectGroup:async()=>{active++;maxActive=Math.max(maxActive,active);await new Promise(resolve=>setTimeout(resolve,5));active--;return{ok:true};}});ok(r.cursor,3);ok(maxActive,3);ok(active,0);
+f=fixture(4);f.groups[0].sha256='same-content';f.groups[1].sha256='same-content';r=await f.invoke({fileBudget:3});ok(r.cursor,1);ok(f.calls.length,1);r=await f.invoke({fileBudget:3,protectionJobId:r.jobId});ok(r.cursor,4);ok(f.calls.length,4);
+f=fixture(6);let attempts=0;r=await f.invoke({fileBudget:3},{protectGroup:async()=>{attempts++;if(attempts===2)throw Error('untrusted error with confidential details');return{ok:true};}});ok(r.cursor,3);ok(r.verified,2);ok(r.issueCount,1);ok(r.issues[0].code,'PROTECTION_COPY_INTERRUPTED');ok(JSON.stringify(r).includes('confidential'),false);
 console.log(JSON.stringify({ok:true,checks,largePlan:1203,resumable:true,financialWrites:0,cloudCalls:0,originalsDeleted:0}));
