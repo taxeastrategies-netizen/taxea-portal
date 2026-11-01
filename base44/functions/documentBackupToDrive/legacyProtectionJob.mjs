@@ -2,14 +2,18 @@ import{protectionAdmin,disableProtectionAlias}from'./legacyProtectionExecutor.mj
 const id=value=>/^[A-Za-z0-9_-]{1,128}$/.test(String(value||'')),hex=value=>/^[a-f0-9]{64}$/.test(String(value||'')),fail=code=>{throw Error(code);};
 const key=g=>g.companyId+'|'+g.referenceDigest;
 const canonical=value=>JSON.stringify(value,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
-export const PROTECTION_CONFIRMATION='PROTECT_VERIFIED_DOCUMENT_COPIES';
+// Intent flags are public UI confirmations, never credentials. Access requires an enabled admin and a server-verified plan.
 export function protectionJobSummary(job){return{jobId:job.id,backupJobId:job.backupJobId,planDigest:job.planDigest,status:job.status,total:job.total,cursor:job.cursor,verified:job.verified,reused:job.reused,issueCount:job.issueCount,issues:job.issues||[],rollbackCursor:job.rollbackCursor||0,disabledAliases:job.disabledAliases||0,continueRequired:['processing','rolling_back'].includes(job.status),originalsDeleted:0,sourceRecordsWritten:0,financialWrites:0};}
 async function readJob(entity,jobId,scope){if(!id(jobId))fail('PROTECTION_JOB_INVALID');const job=await entity.get(jobId).catch(e=>{if(Number(e?.status||e?.response?.status)===404)return null;throw e;});if(!job||String(job.scopeCompanyId||'')!==scope)fail('PROTECTION_JOB_UNAVAILABLE');return job;}
 export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='',leaseHeld=false,loadPlan,hash,protectGroup,now=Date.now,deadline=now()+40000}){
  if(!protectionAdmin(user))fail('PROTECTION_ADMIN_ONLY');if(!leaseHeld)fail('PROTECTION_LEASE_REQUIRED');
  const entity=service.entities.DocumentProtectionJob;
  if(body.action==='legacy_protection_status')return{ok:true,...protectionJobSummary(await readJob(entity,body.protectionJobId,scopeCompanyId))};
- if(!hex(body.planDigest)||body.confirmation!==PROTECTION_CONFIRMATION)fail('PROTECTION_CONFIRMATION_REQUIRED');
+ if(body.confirmation!==undefined)fail('PROTECTION_CLIENT_UPDATE_REQUIRED');
+ if(!hex(body.planDigest))fail('PROTECTION_CONFIRMATION_REQUIRED');
+ if(body.action==='rollback_legacy_protection'&&body.confirmDisableLinks!==true)fail('PROTECTION_ROLLBACK_CONFIRMATION_REQUIRED');
+ if(body.action==='protect_legacy_documents'&&body.confirmCopy!==true)fail('PROTECTION_CONFIRMATION_REQUIRED');
+ if(!['protect_legacy_documents','rollback_legacy_protection'].includes(body.action))fail('PROTECTION_ACTION_INVALID');
  let job=body.protectionJobId?await readJob(entity,body.protectionJobId,scopeCompanyId):null;
  if(job&&job.planDigest!==body.planDigest)fail('PROTECTION_PLAN_CHANGED');
  const loaded=await loadPlan(job?.backupJobId||body.backupJobId);
@@ -37,7 +41,6 @@ export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='
  }
  if(!Number.isInteger(job.cursor)||job.cursor<0||job.cursor>groups.length)fail('PROTECTION_JOB_CHANGED');
  if(body.action==='rollback_legacy_protection'){
-  if(body.rollbackConfirmation!=='DISABLE_PRIVATE_ALIASES_KEEP_ALL_FILES')fail('PROTECTION_ROLLBACK_CONFIRMATION_REQUIRED');
   if(job.status==='rolled_back')return{ok:true,...protectionJobSummary(job)};
   if(job.status!=='rolling_back'){await entity.update(job.id,{status:'rolling_back',rollbackCursor:0,disabledAliases:0});job={...job,status:'rolling_back',rollbackCursor:0,disabledAliases:0};}
   const at=Number(job.rollbackCursor||0);

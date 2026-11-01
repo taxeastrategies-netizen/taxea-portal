@@ -13,10 +13,10 @@ export default function LegacyProtectionPlanPreview({jobs=[],busy=false}){
   if(!result||!confirmed||pending||busy)return;setPending(true);setError('');stop.current=false;setPauseRequested(false);let protectionJobId=progress?.jobId;
   try{
    for(let chunk=0;chunk<2000&&!stop.current;chunk++){
-    const response=await requestBackupChunk((name,payload)=>base44.functions.invoke(name,payload),{action:rollback?'rollback_legacy_protection':'protect_legacy_documents',backupJobId:result.backupJobId,planDigest:result.planDigest,confirmation:'PROTECT_VERIFIED_DOCUMENT_COPIES',...(protectionJobId?{protectionJobId}:{}),...(rollback?{rollbackConfirmation:'DISABLE_PRIVATE_ALIASES_KEEP_ALL_FILES'}:{}),...(retry&&chunk===0?{retryIncidents:true}:{}),...(reactivate?{reactivateDisabled:true}:{})});
+    const response=await requestBackupChunk((name,payload)=>base44.functions.invoke(name,payload),{action:rollback?'rollback_legacy_protection':'protect_legacy_documents',backupJobId:result.backupJobId,planDigest:result.planDigest,...(protectionJobId?{protectionJobId}:{}),...(rollback?{confirmDisableLinks:true}:{confirmCopy:true}),...(retry&&chunk===0?{retryIncidents:true}:{}),...(reactivate?{reactivateDisabled:true}:{})});
     const data=response.data;if(!data?.ok||!data.jobId)throw Error('Respuesta no verificada');protectionJobId=data.jobId;setProgress(data);if(!data.continueRequired)break;
    }
-  }catch{setError('El proceso se ha interrumpido. Conserva el progreso y todos los originales. Puedes preparar el mismo plan y continuar sin duplicar archivos.');}finally{setPending(false);}
+  }catch(error){setError(error?.response?.data?.code==='PROTECTION_CLIENT_UPDATE_REQUIRED'?'Actualiza la página para continuar con la versión vigente. Se conserva el progreso.':'El proceso se ha interrumpido. Conserva el progreso y todos los originales. Puedes preparar el mismo plan y continuar sin duplicar archivos.');}finally{setPending(false);}
  }
  return <Card><CardContent className="pt-5 space-y-3">
   <div><h2 className="font-medium">Protección del histórico documental</h2><p className="text-sm text-muted-foreground">Prepara un plan desde una copia íntegra verificada. Después permite crear y comprobar copias privadas sin cambiar las referencias de facturas, asientos ni subcuentas.</p></div>

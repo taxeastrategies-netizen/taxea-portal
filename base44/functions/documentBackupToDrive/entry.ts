@@ -504,7 +504,7 @@ Deno.serve(async (req) => {
           })
         });
         return Response.json(result,{status:result.continueRequired?202:200,headers:{'Cache-Control':'no-store'}});
-      }catch(error){const code=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'El proceso se ha detenido. Se conservan originales y progreso; revisa la incidencia antes de continuar.',code},{status:409,headers:{'Cache-Control':'no-store'}});}
+      }catch(error){const code=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:code==='PROTECTION_CLIENT_UPDATE_REQUIRED'?'Actualiza la página para continuar con la versión vigente. Se conserva el progreso.':'El proceso se ha detenido. Se conservan originales y progreso; revisa la incidencia antes de continuar.',code},{status:409,headers:{'Cache-Control':'no-store'}});}
     }
     if(action==='inventory_preview'){
       const result=await inventoryPreview({service:base44.asServiceRole,user,body,scopeCompanyId,deadline,hash:computeChecksum,snapshot:backupSnapshot});
