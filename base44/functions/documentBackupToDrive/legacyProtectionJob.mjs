@@ -57,6 +57,26 @@ export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='
  if(body.action!=='protect_legacy_documents')fail('PROTECTION_ACTION_INVALID');
  if(job.status==='rolling_back')fail('PROTECTION_ROLLBACK_IN_PROGRESS');
  if(job.status==='rolled_back'&&!body.reactivateDisabled)fail('PROTECTION_REACTIVATION_REQUIRED');
+ if(body.retryIncidents===true&&job.status==='processing')fail('PROTECTION_COPY_IN_PROGRESS');
+ if(body.retryIncidents===true&&job.status==='completed')return{ok:true,...protectionJobSummary(job),alreadyCompleted:true};
+ // Repair only the recorded failures, under the same verified plan and global lease.
+ // Never reset successful totals or recopy the complete historical selection.
+ if(body.retryIncidents===true&&job.status==='incidents'&&job.issueCount===(job.issues||[]).length){
+  if(job.cursor!==groups.length||job.verified+job.issueCount!==groups.length)fail('PROTECTION_JOB_CHANGED');
+  const originalIssues=job.issues||[],seenIssues=new Set();
+  for(const issue of originalIssues){const group=groups[issue.index];if(!Number.isSafeInteger(issue.index)||!group||seenIssues.has(issue.index)||group.companyId!==issue.companyId||group.referenceDigest!==issue.referenceDigest)fail('PROTECTION_JOB_CHANGED');seenIssues.add(issue.index);}
+  let remaining=[...originalIssues];
+  for(const issue of originalIssues){
+   if(now()>=deadline-20000)break;
+   const group=groups[issue.index];let result,errorCode;
+   try{result=await protectGroup(group,loaded.digest,job.id,body.reactivateDisabled===true,loaded.plan.backupJobId);if(!result?.ok)fail('PROTECTION_COPY_UNVERIFIED');}
+   catch(error){errorCode=/^(PROTECTION|STORAGE)_[A-Z_0-9]+$/.test(error?.message||'')?error.message:'PROTECTION_COPY_INTERRUPTED';}
+   remaining=remaining.filter(old=>old.index!==issue.index);if(errorCode)remaining.push({...issue,code:errorCode});remaining.sort((a,b)=>a.index-b.index);
+   const patch={issues:remaining,issueCount:remaining.length,verified:Number(job.verified)+(result?.ok?1:0),reused:Number(job.reused||0)+(result?.alreadyProtected?1:0),previousIssues:originalIssues,status:remaining.length?'incidents':'completed',finishedAt:new Date(now()).toISOString()};
+   await entity.update(job.id,patch);job={...job,...patch};
+  }
+  return{ok:true,...protectionJobSummary(job),targetedRetry:true};
+ }
  if(body.retryIncidents===true||job.status==='rolled_back'&&body.reactivateDisabled===true){
   const patch={status:'processing',cursor:0,verified:0,reused:0,issueCount:0,previousIssues:job.issues||[],issues:[],attempt:Number(job.attempt||1)+1,rollbackCursor:0,disabledAliases:0};await entity.update(job.id,patch);job={...job,...patch};
  }

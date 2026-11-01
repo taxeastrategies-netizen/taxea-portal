@@ -15,6 +15,7 @@ export function protectionFileName(group,bytes){
  let ext='';const name=String(group.originalName||'documento').replace(/[\u0000-\u001f\u007f\\/]/g,'_').slice(0,210),provided=(name.split('.').pop()||'').toLowerCase();
  if(['pfx','p12','p8','pem','key','cer','crt'].includes(provided))fail('PROTECTION_CERTIFICATE_REVIEW');
  if(text.startsWith('%PDF-'))ext='pdf';else if([137,80,78,71,13,10,26,10].every((value,i)=>bytes[i]===value))ext='png';else if(bytes[0]===255&&bytes[1]===216&&bytes[2]===255)ext='jpg';else if(text.startsWith('RIFF')&&text.slice(8,12)==='WEBP')ext='webp';else if(/^GIF8[79]a/.test(text))ext='gif';else if(text.startsWith('BM'))ext='bmp';else if(bytes[0]===80&&bytes[1]===75)ext=['xlsx','docx','pptx'].includes(provided)?provided:'zip';else if([208,207,17,224,161,177,26,225].every((value,i)=>bytes[i]===value)&&['xls','doc','ppt'].includes(provided))ext=provided;
+ else if(/^\uFEFF?\s*<\?xml(?:\s|\?)/.test(text))ext='xml';
  else if(['txt','csv','json','xml','111','115','123','130','131','180','190','193','200','202','216','232','296','303','347','349','390','415','417','420','421','425'].includes(provided))ext=provided;
  if(!ext)fail('PROTECTION_FORMAT_REVIEW');return name.replace(/\.[A-Za-z0-9]{1,8}$/,'')+'.'+ext;
 }
