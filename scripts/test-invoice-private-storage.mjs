@@ -9,13 +9,15 @@ async function fixture(name,settings={}){
  let handler,envReads=0,invoiceReads=0,storageReads=0,signerCalls=0;const invoiceWrites=[],attachmentWrites=[],events=[];
  const user={id:'qa-user',email:'owner@qa.invalid',role:'user',...settings.user};
  const invoice={id:'qa-invoice',company_id:'A',tipo:'recibida',numero_factura:'QA-PRIVATE-1',archivo_url:url,public_token:token,public_token_expires_at:new Date(Date.now()+3600000).toISOString(),total_factura:121,base_imponible:100,cuota_iva:21,...settings.invoice};
+ if(invoice.qr_url){invoice.qr_integrity_hash=createHash('sha256').update(JSON.stringify(['taxea-qr-identity-v1',invoice.company_id,invoice.id,invoice.qr_url])).digest('hex').toUpperCase();invoice.qr_integrity_version='taxea-qr-identity-v1';invoice.qr_integrity_algorithm='SHA-256';invoice.qr_integrity_created_at='2026-11-01T00:00:00Z';}
  const assetA={id:'assetA',company_id:'A',object_name:'companies/A/11111111-1111-4111-8111-111111111111.pdf',generation:'123',status:'ready',size:pdf.length,mime_type:'application/pdf',sha256:hash,original_name:'qa.pdf',...settings.asset};
  const assetB={...assetA,id:'assetB',company_id:'B',object_name:'companies/B/11111111-1111-4111-8111-111111111111.pdf'};
  const company={id:'A',owner_email:'owner@qa.invalid',activa:settings.active!==false,razon_social:'QA SYNTHETIC',secret_should_not_leak:'NEVER_PUBLIC'};
  const entities={
   Company:{get:async id=>id==='A'?company:id==='B'?{id:'B',owner_email:'foreign@qa.invalid',activa:true}:null},
   Invoice:{get:async id=>id===invoice.id?invoice:null,filter:async query=>{invoiceReads++;return query.public_token===token?(settings.duplicate?[invoice,{...invoice,id:'duplicate'}]:[invoice]):[];},update:async(id,patch)=>{for(const key of Object.keys(patch))check(['archivo_url','qr_pdf_url'].includes(key),'Only attachment references may change');invoiceWrites.push(patch);Object.assign(invoice,patch);return invoice;}},
-  DocumentAsset:{get:async id=>id==='assetA'?assetA:id==='assetB'?assetB:null},
+  DocumentAsset:{get:async id=>id==='assetA'?assetA:id==='assetB'?assetB:null,filter:async query=>query.company_id==='A'?[assetA]:[]},
+  DocumentLegacyReference:{filter:async query=>{const digest=query.reference_digest?.$in?.[0];if(settings.legacy==='owned'&&(!query.company_id||query.company_id==='A'))return [{id:'aliasA',company_id:'A',asset_id:'assetA',reference_digest:digest,status:'verified',sha256:hash,size:pdf.length}];if(settings.legacy==='foreign'&&!query.company_id)return [{id:'aliasB',company_id:'B',asset_id:'assetB',reference_digest:digest,status:'verified',sha256:hash,size:pdf.length}];return [];}},
   InvoiceAttachment:{filter:async()=>settings.attachments||[],create:async value=>{attachmentWrites.push(value);return {...value,id:'qa-attachment'};}},
   InvoiceEmailLog:{filter:async()=>[],update:async()=>{throw new Error('No mail rows exist in this fixture');}},
   InvoiceTimelineEvent:{filter:async()=>[],create:async value=>{events.push(value);return {...value,id:'event'};}},
@@ -52,6 +54,16 @@ f=await fixture('invoiceOperations',{invoice:{archivo_url:''}});r=await f.invoke
 f=await fixture('invoiceOperations',{invoice:{archivo_url:''}});r=await f.invoke({action:'set_primary_pdf',file_url:url,mime_type:'application/pdf',size_bytes:1});check(r.status===400&&f.invoiceWrites.length===0,'Forged metadata rejected');
 f=await fixture('invoiceOperations');r=await f.invoke({action:'add_attachment',file_uri:url,filename:'qa.pdf',mime_type:'application/pdf',size_bytes:pdf.length});check(r.status===200&&f.attachmentWrites.length===1,'Private supporting attachment linked');check(f.invoiceWrites.length===0,'Supporting attachment does not modify invoice');
 f=await fixture('invoiceOperations',{attachments:[{id:'good',file_uri:url},{id:'foreign',file_uri:'https://taxeaportal.com/private-document/assetB'}]});r=await f.invoke({action:'list_attachments'});data=await r.json();check(r.status===200&&data.attachments[0].signed_url===url,'Own attachment opens protected viewer');check(data.attachments[1].signed_url===''&&data.attachments[1].unavailable,'Foreign attachment content stays inaccessible');check(f.counts().signerCalls===0,'Private attachment never uses native signer');
+const legacy='https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/private/6a00fec50cc522a74ddde4b2/synthetic-only.pdf';
+for(const action of ['set_primary_pdf','set_qr_pdf','add_attachment']){
+ for(const legacyKind of ['unmapped','foreign']){
+  f=await fixture('invoiceOperations',{legacy:legacyKind,invoice:{archivo_url:'',tipo:'emitida',qr_url:'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?nif=B12345678'}});
+  r=await f.invoke({action,file_url:legacy,file_uri:'private/synthetic-only.pdf',filename:'qa.pdf',mime_type:'application/pdf',size_bytes:pdf.length});
+  check(r.status===404,'Unverified or foreign legacy reference rejected: '+action+'/'+legacyKind+' status='+r.status+' body='+await r.clone().text());check(f.invoiceWrites.length===0&&f.attachmentWrites.length===0,'Rejected legacy reference performs no data mutation');check(f.counts().envReads===0,'Legacy rejection never reads storage secrets');
+ }
+}
+f=await fixture('invoiceOperations',{legacy:'owned',invoice:{archivo_url:''}});r=await f.invoke({action:'set_primary_pdf',file_url:legacy,mime_type:'application/pdf',size_bytes:pdf.length});check(r.status===200&&f.invoice.archivo_url===url,'Owned verified legacy alias is stored as canonical private reference');
+f=await fixture('invoiceOperations',{legacy:'owned',invoice:{archivo_url:''}});r=await f.invoke({action:'set_primary_pdf',file_url:legacy,mime_type:'application/pdf',size_bytes:1});check(r.status===400&&f.invoiceWrites.length===0,'Legacy metadata is verified against the owned private asset');
 const api={functions:{fetch:async()=>new Response(pdf,{headers:{'Content-Type':'application/pdf','X-Taxea-File-Sha256':hash,'X-Taxea-File-Size':String(pdf.length)}})}};
 check((await downloadPublicInvoiceDocument(api,{token})).blob.size===pdf.length,'Client verifies successful download');
 await assert.rejects(()=>downloadPublicInvoiceDocument({functions:{fetch:async()=>new Response('CORRUPT',{headers:{'Content-Type':'application/pdf','X-Taxea-File-Sha256':hash,'X-Taxea-File-Size':'7'}})}},{token}),/coincide/);checks++;

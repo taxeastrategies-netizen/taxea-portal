@@ -158,7 +158,8 @@ assert.equal(records.Invoice[0].qr_mode, 'no_verifactu');
 assert.match(records.Invoice[0].qr_integrity_hash, /^[A-F0-9]{64}$/);
 assert.equal(records.Invoice[0].qr_integrity_version, 'taxea-qr-identity-v1');
 const originalQrHash = records.Invoice[0].qr_integrity_hash;
-const qrPdfUrl = 'https://base44.app/api/apps/6a00fec50cc522a74ddde4b2/files/mp/public/test-qr.pdf';
+const qrPdfUrl = 'https://taxeaportal.com/private-document/qa-qr-pdf';
+records.DocumentAsset=[{id:'qa-qr-pdf',company_id:'company-a',status:'ready',object_name:'companies/company-a/11111111-1111-4111-8111-111111111111.pdf',mime_type:'application/pdf',size:4096,sha256:'a'.repeat(64),generation:'1'}];
 const foreignPdf = await invoke({
   action: 'set_qr_pdf', company_id: 'company-a', invoice_id: records.Invoice[0].id,
   file_url: 'https://external.example.org/invoice.pdf', mime_type: 'application/pdf', size_bytes: 4096,

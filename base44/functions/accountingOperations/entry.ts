@@ -1,3 +1,4 @@
+import {PublicAccountingError,publicAccountingFailure} from './publicAccountingError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import {
@@ -311,7 +312,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, user
     } catch (error) {
       result.issues.push({
         bankAccountId,
-        reason: error.message || 'cuenta_bancaria_contable_no_disponible',
+        reason: publicAccountingFailure(error).message,
       });
     }
   }
@@ -378,12 +379,12 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, user
         await updatePostingOperation(svc, operation, {
           status: 'recovery_required',
           stage: 'bank_link_failed',
-          lastError: String(error?.message || error),
+          lastError: publicAccountingFailure(error).message,
         }).catch(() => null);
       }
       result.issues.push({
         transactionId: transaction.id,
-        reason: error?.message || 'No se pudo recuperar el enlace contable del movimiento bancario.',
+        reason: publicAccountingFailure(error).message,
       });
       continue;
     }
@@ -408,7 +409,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, user
         status: 'confirmado',
         deferCommit: true,
       });
-      if (!posting.operation?.id) throw new Error('No se pudo reservar la unidad contable bancaria.');
+      if (!posting.operation?.id) throw new PublicAccountingError('No se pudo reservar la unidad contable bancaria.');
       try {
         const committed = await commitJournalEntry(svc, companyId, posting.entry, userEmail);
         const committedOperation = await updatePostingOperation(svc, posting.operation, { status: 'committed', stage: 'bank_link_pending', journalEntryId: committed.entry.id, bankTransactionId: transaction.id, committedAt: new Date().toISOString(), lastError: '' });
@@ -426,7 +427,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, user
         await updatePostingOperation(svc, committedOperation, { stage: 'committed' }).catch(() => null);
         return { ...posting, entry: committed.entry, operation: committedOperation };
       } catch (error) {
-        await updatePostingOperation(svc, posting.operation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: String(error?.message || error) }).catch(() => null);
+        await updatePostingOperation(svc, posting.operation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: publicAccountingFailure(error).message }).catch(() => null);
         throw error;
       }
     }).map(promise => promise.then(
@@ -441,7 +442,7 @@ async function postPendingBankBatch(svc, companyId, transactions, bankById, user
       } else {
         result.issues.push({
           transactionId: wave[index].id,
-          reason: outcome.error?.message || 'error_contabilizacion_555',
+          reason: publicAccountingFailure(outcome.error).message,
         });
       }
     }
@@ -777,16 +778,16 @@ async function loadBankReconciliationOverview(svc, companyId) {
 
 async function saveBankExchangeRate(svc, companyId, body, userEmail) {
   const transaction = await svc.entities.BankTransaction.get(String(body.transactionId || '')).catch(() => null);
-  if (!transaction || transaction.company_id !== companyId) throw new Error('El movimiento no pertenece a la empresa activa.');
+  if (!transaction || transaction.company_id !== companyId) throw new PublicAccountingError('El movimiento no pertenece a la empresa activa.');
   const bankAccount = await svc.entities.BankAccount.get(transaction.bank_account_id).catch(() => null);
   const currency = String(transaction.moneda || bankAccount?.moneda || 'EUR').trim().toUpperCase();
   const rate = Number(body.exchangeRate);
   const rateDate = String(body.exchangeRateDate || transaction.fecha_operacion || '').trim();
   const source = String(body.exchangeRateSource || '').trim();
-  if (currency === 'EUR') throw new Error('El movimiento ya está denominado en EUR.');
-  if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new Error('Indica un tipo de cambio válido a EUR, distinto de 1.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(rateDate)) throw new Error('Indica la fecha del tipo de cambio.');
-  if (source.length < 3) throw new Error('Indica la fuente del tipo de cambio (BCE, extracto bancario u otra fuente verificable).');
+  if (currency === 'EUR') throw new PublicAccountingError('El movimiento ya está denominado en EUR.');
+  if (!Number.isFinite(rate) || rate <= 0 || rate === 1) throw new PublicAccountingError('Indica un tipo de cambio válido a EUR, distinto de 1.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rateDate)) throw new PublicAccountingError('Indica la fecha del tipo de cambio.');
+  if (source.length < 3) throw new PublicAccountingError('Indica la fuente del tipo de cambio (BCE, extracto bancario u otra fuente verificable).');
 
   const currentEntry = transaction.journal_entry_id
     ? await svc.entities.JournalEntry.get(transaction.journal_entry_id).catch(() => null)
@@ -796,11 +797,11 @@ async function saveBankExchangeRate(svc, companyId, body, userEmail) {
   if (currentEntry && currentEntry.companyId === companyId && currentEntry.status === 'confirmado') {
     const prior = await svc.entities.JournalEntry.filter({ companyId }, '-created_date', 100000);
     const existingCorrection = (prior || []).find(entry => entry.status !== 'anulado' && String(entry.postingKey || '').startsWith(`bank-fx-correction:${transaction.id}:`));
-    if (existingCorrection) throw new Error('Este movimiento ya tiene una corrección de cambio activa. Para cambiarla, usa contraasiento y revisión contable.');
+    if (existingCorrection) throw new PublicAccountingError('Este movimiento ya tiene una corrección de cambio activa. Para cambiarla, usa contraasiento y revisión contable.');
     const currentLines = await resolveEntryLines(svc, companyId, currentEntry);
     const bankPostingAccount = await ensureBankPostingAccount(svc, companyId, bankAccount);
     const bankLine = (currentLines || []).find(line => line.accountId === bankPostingAccount.id || line.accountCode === bankPostingAccount.code);
-    if (!bankLine) throw new Error('El asiento existente no contiene la subcuenta bancaria esperada.');
+    if (!bankLine) throw new PublicAccountingError('El asiento existente no contiene la subcuenta bancaria esperada.');
     const currentSigned = money(Number(bankLine.debit || 0) - Number(bankLine.credit || 0));
     const targetSigned = money((transaction.tipo === 'entrada' ? 1 : -1) * Math.abs(Number(transaction.importe || 0)) * rate);
     delta = money(targetSigned - currentSigned);
@@ -812,7 +813,7 @@ async function saveBankExchangeRate(svc, companyId, body, userEmail) {
         : delta > 0
           ? await ensureAccount(svc, companyId, '76800000', 'Diferencias positivas de cambio', 'ingreso')
           : await ensureAccount(svc, companyId, '66800000', 'Diferencias negativas de cambio', 'gasto');
-      if (!counterpart) throw new Error('No se pudo resolver la contrapartida del ajuste de cambio.');
+      if (!counterpart) throw new PublicAccountingError('No se pudo resolver la contrapartida del ajuste de cambio.');
       const amount = money(Math.abs(delta));
       const description = `Corrección de cambio ${currency}/EUR · ${transaction.concepto || transaction.referencia || transaction.id}`;
       const now = new Date().toISOString();
@@ -837,29 +838,29 @@ async function saveBankExchangeRate(svc, companyId, body, userEmail) {
 async function reclassifyPendingBankTransaction(svc, companyId, transactionId, targetAccountId, userEmail) {
   const transaction = await svc.entities.BankTransaction.get(transactionId).catch(() => null);
   if (!transaction || transaction.company_id !== companyId) {
-    throw new Error('El movimiento no pertenece a la empresa activa.');
+    throw new PublicAccountingError('El movimiento no pertenece a la empresa activa.');
   }
   const targetAccount = await svc.entities.AccountingAccount.get(targetAccountId).catch(() => null);
   if (!targetAccount || targetAccount.companyId !== companyId || targetAccount.status === 'inactiva') {
-    throw new Error('La cuenta de contrapartida no pertenece a la empresa o está inactiva.');
+    throw new PublicAccountingError('La cuenta de contrapartida no pertenece a la empresa o está inactiva.');
   }
   if (targetAccount.code === '55500000' || targetAccount.type === 'banco') {
-    throw new Error('Selecciona una cuenta de contrapartida distinta de 555 y de la cuenta bancaria.');
+    throw new PublicAccountingError('Selecciona una cuenta de contrapartida distinta de 555 y de la cuenta bancaria.');
   }
   const pendingRows = await svc.entities.AccountingAccount.filter({ companyId, code: '55500000' }, '-created_date', 1);
   const pendingAccount = pendingRows?.[0];
   if (!pendingAccount || transaction.entidad_id !== pendingAccount.id || transaction.estado_conciliacion !== 'revisar') {
-    throw new Error('El movimiento ya no está pendiente en la cuenta 555.');
+    throw new PublicAccountingError('El movimiento ya no está pendiente en la cuenta 555.');
   }
   const bankEntry = transaction.journal_entry_id
     ? await svc.entities.JournalEntry.get(transaction.journal_entry_id).catch(() => null)
     : null;
   if (!bankEntry || bankEntry.companyId !== companyId || bankEntry.status !== 'confirmado') {
-    throw new Error('El asiento bancario original no existe o no está confirmado.');
+    throw new PublicAccountingError('El asiento bancario original no existe o no está confirmado.');
   }
   const bankLines = await resolveEntryLines(svc, companyId, bankEntry);
   if (!(bankLines || []).some(line => line.accountId === pendingAccount.id || line.accountCode === '55500000')) {
-    throw new Error('El asiento bancario original no contiene la cuenta 555.');
+    throw new PublicAccountingError('El asiento bancario original no contiene la cuenta 555.');
   }
 
   const postingKey = 'bank-reclass:' + transaction.id + ':' + SCHEMA_VERSION;
@@ -868,13 +869,13 @@ async function reclassifyPendingBankTransaction(svc, companyId, transactionId, t
   if (reclassification) {
     const duplicateLines = await resolveEntryLines(svc, companyId, reclassification);
     if (!(duplicateLines || []).some(line => line.accountId === targetAccount.id)) {
-      throw new Error('El movimiento ya fue reclasificado a otra cuenta. Debe corregirse mediante contraasiento.');
+      throw new PublicAccountingError('El movimiento ya fue reclasificado a otra cuenta. Debe corregirse mediante contraasiento.');
     }
   } else {
     const transactionCurrency = String(transaction.moneda || 'EUR').trim().toUpperCase();
     const transactionFxRate = transactionCurrency === 'EUR' ? 1 : Number(transaction.exchange_rate || transaction.tipo_cambio);
     if (!Number.isFinite(transactionFxRate) || transactionFxRate <= 0 || (transactionCurrency !== 'EUR' && transactionFxRate === 1)) {
-      throw new Error('El movimiento en divisa necesita un tipo de cambio a EUR validado antes de reclasificar la 555.');
+      throw new PublicAccountingError('El movimiento en divisa necesita un tipo de cambio a EUR validado antes de reclasificar la 555.');
     }
     const amount = money(Math.abs(transaction.importe) * transactionFxRate);
     const description = 'Reclasificación de 555 · ' + (transaction.concepto || transaction.referencia || transaction.id);
@@ -922,7 +923,7 @@ async function reclassifyPendingBankTransaction(svc, companyId, transactionId, t
 async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEmail) {
   const bankAccount = await svc.entities.BankAccount.get(bankAccountId).catch(() => null);
   if (!bankAccount || bankAccount.company_id !== companyId || bankAccount.activa === false) {
-    throw new Error('La cuenta bancaria no pertenece a la empresa activa.');
+    throw new PublicAccountingError('La cuenta bancaria no pertenece a la empresa activa.');
   }
   const [transactions, entries, lines] = await Promise.all([
     fetchAll(svc.entities.BankTransaction, { company_id: companyId, bank_account_id: bankAccount.id }, 'fecha_operacion', 100000),
@@ -939,7 +940,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
     && (!transaction.journal_entry_id || !activeEntryIds.has(transaction.journal_entry_id))
   );
   if (pendingTransactions.length) {
-    throw new Error('Hay movimientos bancarios sin asiento. Contabilízalos o corrige sus incidencias antes de regularizar la apertura.');
+    throw new PublicAccountingError('Hay movimientos bancarios sin asiento. Contabilízalos o corrige sus incidencias antes de regularizar la apertura.');
   }
   const confirmedEntryIds = new Set(
     activeEntries
@@ -956,7 +957,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
     ? money(bankAccount.saldo_contable)
     : money(bankAccount.saldo_disponible);
   if ((bankAccount.moneda || 'EUR') !== 'EUR' && Math.abs(bankBalance) > 0.01) {
-    throw new Error('La cuenta en divisa tiene saldo distinto de cero. Indica el contravalor EUR y el tipo de cambio antes de regularizarla.');
+    throw new PublicAccountingError('La cuenta en divisa tiene saldo distinto de cero. Indica el contravalor EUR y el tipo de cambio antes de regularizarla.');
   }
   const difference = money(bankBalance - ledgerBalance);
   if (Math.abs(difference) <= 0.01) {
@@ -965,7 +966,7 @@ async function createBankOpeningAdjustment(svc, companyId, bankAccountId, userEm
   const postingKey = 'bank-opening:' + bankAccount.id + ':' + SCHEMA_VERSION;
   const duplicate = activeEntries.find(entry => entry.postingKey === postingKey);
   if (duplicate) {
-    throw new Error('Ya existe una regularización de apertura para esta cuenta. La diferencia actual requiere revisión contable.');
+    throw new PublicAccountingError('Ya existe una regularización de apertura para esta cuenta. La diferencia actual requiere revisión contable.');
   }
   const firstDate = (transactions || [])
     .map(item => item.fecha_operacion)
@@ -1113,7 +1114,7 @@ const DEFAULT_CATEGORY_MAPPINGS = {
 
 async function ensureAccountingReady(svc, companyId, userEmail) {
   const company = await svc.entities.Company.get(companyId).catch(() => null);
-  if (!company || company.activa === false) throw new Error('La empresa no existe o está inactiva.');
+  if (!company || company.activa === false) throw new PublicAccountingError('La empresa no existe o está inactiva.');
 
   const pgc = await seedOperationalPgc(svc, companyId);
   const year = new Date().getUTCFullYear();
@@ -1180,7 +1181,7 @@ const MANUAL_INCOME_MAPPINGS = {
 };
 
 function manualRecordError(message, status = 400) {
-  const error = new Error(message) as Error & { status: number };
+  const error = new PublicAccountingError(message) as Error & { status: number };
   error.status = status;
   return error;
 }
@@ -1298,7 +1299,7 @@ async function manualResultAccount(svc, companyId, record) {
       if (configured) code = canonical8(configured);
     }
   } catch (error) {
-    console.warn('[accountingOperations] Mapeo manual no aplicable:', error.message);
+    console.warn('[accountingOperations] Mapeo manual no aplicable:', publicAccountingFailure(error).message);
   }
   if ((record.tipo === 'ingreso' && !code.startsWith('7')) || (record.tipo === 'gasto' && !code.startsWith('6'))) {
     code = fallbackCode;
@@ -1525,7 +1526,7 @@ Deno.serve(async (req) => {
           accounting_review_status: 'validado_contabilizado',
         });
       } catch (error) {
-        accountingWarning = error.message || 'No se pudo crear el asiento contable.';
+        accountingWarning = publicAccountingFailure(error).message;
         record = await svc.entities.Expense.update(record.id, {
           estado: 'en_revision',
           accounting_review_status: 'requiere_correccion',
@@ -1570,7 +1571,7 @@ Deno.serve(async (req) => {
           accounting_review_status: 'validado_contabilizado',
         });
       } catch (error) {
-        accountingWarning = error.message || 'No se pudo crear el asiento contable.';
+        accountingWarning = publicAccountingFailure(error).message;
         record = await svc.entities.Expense.update(record.id, {
           estado: 'en_revision',
           accounting_review_status: 'requiere_correccion',
@@ -1635,7 +1636,7 @@ Deno.serve(async (req) => {
       try {
         return Response.json({ success: true, preview: await closingPreview(svc, companyId, body.year) });
       } catch (error) {
-        return Response.json({ error: error.message || 'No se pudo analizar el cierre.' }, { status: 409 });
+        return Response.json({ error: publicAccountingFailure(error).message }, { status: 409 });
       }
     }
     if (action === 'closing_execute') {
@@ -1644,7 +1645,7 @@ Deno.serve(async (req) => {
         const result = await executeClosing(svc, companyId, body, user.email);
         return Response.json({ success: true, mode: 'apply', result });
       } catch (error) {
-        return Response.json({ error: error.message || 'No se pudo cerrar el ejercicio.' }, { status: 409 });
+        return Response.json({ error: publicAccountingFailure(error).message }, { status: 409 });
       }
     }
     if (action === 'reopen_fiscal_year') {
@@ -1653,7 +1654,7 @@ Deno.serve(async (req) => {
         const result = await reopenFiscalYear(svc, companyId, body, user.email);
         return Response.json({ success: true, mode: 'apply', result, periods: await listFiscalYears(svc, companyId) });
       } catch (error) {
-        return Response.json({ error: error.message || 'No se pudo reabrir el ejercicio.' }, { status: 409 });
+        return Response.json({ error: publicAccountingFailure(error).message }, { status: 409 });
       }
     }
 
@@ -1667,43 +1668,43 @@ Deno.serve(async (req) => {
       for (const field of accountFields) {
         const value = String(body[field] ?? existing?.[field] ?? defaults[field] ?? '').trim();
         if (!value && field === 'unmatchedOutgoingAccount') { payload[field] = ''; continue; }
-        if (!isCanonical8(value)) throw new Error(`La cuenta configurada en ${field} debe tener exactamente 8 dígitos.`);
+        if (!isCanonical8(value)) throw new PublicAccountingError(`La cuenta configurada en ${field} debe tener exactamente 8 dígitos.`);
         const account = await svc.entities.AccountingAccount.filter({ companyId, code: value }, '-created_date', 1);
-        if (!account?.[0] || account[0].status === 'inactiva') throw new Error(`La cuenta ${value} no existe o está inactiva.`);
+        if (!account?.[0] || account[0].status === 'inactiva') throw new PublicAccountingError(`La cuenta ${value} no existe o está inactiva.`);
         payload[field] = value;
       }
       const mappingsJson = String(body.mappingsJson ?? existing?.mappingsJson ?? '{}');
       let mappings;
-      try { mappings = JSON.parse(mappingsJson); } catch { throw new Error('El mapa de cuentas no contiene JSON válido.'); }
-      if (!mappings || typeof mappings !== 'object') throw new Error('El mapa de cuentas debe ser un objeto o lista JSON.');
+      try { mappings = JSON.parse(mappingsJson); } catch { throw new PublicAccountingError('El mapa de cuentas no contiene JSON válido.'); }
+      if (!mappings || typeof mappings !== 'object') throw new PublicAccountingError('El mapa de cuentas debe ser un objeto o lista JSON.');
       const mappedCodes = Array.isArray(mappings)
         ? mappings.map(item => String(item?.cuenta || '').trim()).filter(Boolean)
         : Object.values(mappings).map(value => String(value || '').trim()).filter(value => /^\d{8}$/.test(value));
       for (const code of [...new Set(mappedCodes)]) {
-        if (!isCanonical8(code)) throw new Error(`La cuenta ${code} del mapeo debe tener exactamente 8 dígitos.`);
+        if (!isCanonical8(code)) throw new PublicAccountingError(`La cuenta ${code} del mapeo debe tener exactamente 8 dígitos.`);
         const account = await svc.entities.AccountingAccount.filter({ companyId, code }, '-created_date', 1);
-        if (!account?.[0] || account[0].status === 'inactiva') throw new Error(`La cuenta ${code} del mapeo no existe o está inactiva.`);
+        if (!account?.[0] || account[0].status === 'inactiva') throw new PublicAccountingError(`La cuenta ${code} del mapeo no existe o está inactiva.`);
       }
       payload.mappingsJson = JSON.stringify(mappings);
       payload.accountDigits = 8;
       const currentYear = new Date().getUTCFullYear();
       const accountingFramework = String(body.accountingFramework || existing?.accountingFramework || (body.accountingModel === 'normal' ? 'pgc_normal' : 'pgc_pymes'));
-      if (!['pgc_normal', 'pgc_pymes'].includes(accountingFramework)) throw new Error('Selecciona PGC normal o PGC PYMES.');
+      if (!['pgc_normal', 'pgc_pymes'].includes(accountingFramework)) throw new PublicAccountingError('Selecciona PGC normal o PGC PYMES.');
       const microenterpriseCriteria = Object.prototype.hasOwnProperty.call(body, 'microenterpriseCriteria')
         ? body.microenterpriseCriteria === true
         : existing?.microenterpriseCriteria === true;
-      if (microenterpriseCriteria && accountingFramework !== 'pgc_pymes') throw new Error('Los criterios específicos de microempresa solo pueden aplicarse conjuntamente con PGC PYMES.');
+      if (microenterpriseCriteria && accountingFramework !== 'pgc_pymes') throw new PublicAccountingError('Los criterios específicos de microempresa solo pueden aplicarse conjuntamente con PGC PYMES.');
       const annualAccountsModel = String(body.annualAccountsModel || existing?.annualAccountsModel || (accountingFramework === 'pgc_normal' ? 'normal' : 'pyme'));
-      if (!['normal', 'abreviado', 'pyme'].includes(annualAccountsModel)) throw new Error('El modelo de cuentas anuales no es válido.');
-      if (accountingFramework === 'pgc_normal' && annualAccountsModel === 'pyme') throw new Error('El modelo PYME exige aplicar PGC PYMES.');
-      if (accountingFramework === 'pgc_pymes' && annualAccountsModel === 'normal') throw new Error('El PGC PYMES debe usar el modelo de cuentas anuales PYME o, cuando proceda, abreviado.');
+      if (!['normal', 'abreviado', 'pyme'].includes(annualAccountsModel)) throw new PublicAccountingError('El modelo de cuentas anuales no es válido.');
+      if (accountingFramework === 'pgc_normal' && annualAccountsModel === 'pyme') throw new PublicAccountingError('El modelo PYME exige aplicar PGC PYMES.');
+      if (accountingFramework === 'pgc_pymes' && annualAccountsModel === 'normal') throw new PublicAccountingError('El PGC PYMES debe usar el modelo de cuentas anuales PYME o, cuando proceda, abreviado.');
       const effectiveFrom = Number(body.frameworkEffectiveFrom || existing?.frameworkEffectiveFrom || currentYear);
-      if (!Number.isInteger(effectiveFrom) || effectiveFrom < 2008 || effectiveFrom > currentYear + 1) throw new Error('El ejercicio de inicio del marco contable no es válido.');
+      if (!Number.isInteger(effectiveFrom) || effectiveFrom < 2008 || effectiveFrom > currentYear + 1) throw new PublicAccountingError('El ejercicio de inicio del marco contable no es válido.');
       const changesFramework = Boolean(existing && (existing.accountingFramework || 'pgc_pymes') !== accountingFramework);
       const changesMicroCriteria = Boolean(existing && Boolean(existing.microenterpriseCriteria) !== microenterpriseCriteria);
       const lockedUntil = Number(existing?.frameworkMinimumUntil || 0);
       if ((changesFramework || changesMicroCriteria) && lockedUntil && currentYear <= lockedUntil && !String(body.frameworkReviewReason || '').trim()) {
-        throw new Error(`El criterio elegido tiene permanencia mínima hasta ${lockedUntil}. Indica y documenta el motivo legal del cambio.`);
+        throw new PublicAccountingError(`El criterio elegido tiene permanencia mínima hasta ${lockedUntil}. Indica y documenta el motivo legal del cambio.`);
       }
       payload.accountingFramework = accountingFramework;
       payload.annualAccountsModel = annualAccountsModel;
@@ -1713,10 +1714,10 @@ Deno.serve(async (req) => {
       payload.frameworkReviewStatus = body.frameworkReviewStatus === 'validado_asesor' ? 'validado_asesor' : 'pendiente_asesor';
       payload.frameworkReviewReason = String(body.frameworkReviewReason || '').trim().slice(0, 1000);
       payload.eligibilityEvidenceJson = String(body.eligibilityEvidenceJson || existing?.eligibilityEvidenceJson || '{}');
-      try { JSON.parse(payload.eligibilityEvidenceJson); } catch { throw new Error('La evidencia de elegibilidad debe contener JSON válido.'); }
+      try { JSON.parse(payload.eligibilityEvidenceJson); } catch { throw new PublicAccountingError('La evidencia de elegibilidad debe contener JSON válido.'); }
       payload.accountingModel = accountingFramework === 'pgc_normal' ? annualAccountsModel : 'pyme';
       payload.baseCurrency = String(body.baseCurrency || existing?.baseCurrency || 'EUR').toUpperCase();
-      if (payload.baseCurrency !== 'EUR') throw new Error('Taxea todavía no admite una moneda funcional distinta del euro. Puedes registrar operaciones en divisa con tipo de cambio, pero la moneda funcional debe ser EUR.');
+      if (payload.baseCurrency !== 'EUR') throw new PublicAccountingError('Taxea todavía no admite una moneda funcional distinta del euro. Puedes registrar operaciones en divisa con tipo de cambio, pero la moneda funcional debe ser EUR.');
       payload.unmatchedOutgoingMode = body.unmatchedOutgoingMode || existing?.unmatchedOutgoingMode || 'revision';
       payload.autoSeedAccounts = body.autoSeedAccounts === true;
       payload.accountingSchemaVersion = SCHEMA_VERSION;
@@ -2240,8 +2241,8 @@ Deno.serve(async (req) => {
               });
               if (committedOperation) await updatePostingOperation(svc, committedOperation, { stage: 'committed' }).catch(() => null);
             } catch (error) {
-              if (committedOperation) await updatePostingOperation(svc, committedOperation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: String(error?.message || error) }).catch(() => null);
-              result.issues.push({ transactionId: transaction.id, reason: error?.message || 'error_reparando_enlace_bancario' });
+              if (committedOperation) await updatePostingOperation(svc, committedOperation, { status: 'recovery_required', stage: 'bank_link_failed', lastError: publicAccountingFailure(error).message }).catch(() => null);
+              result.issues.push({ transactionId: transaction.id, reason: publicAccountingFailure(error).message });
               continue;
             }
             result.repairedLinks += 1;
@@ -2275,7 +2276,7 @@ Deno.serve(async (req) => {
           result.repairedLinks += batch.repairedLinks;
           result.issues.push(...batch.issues);
         } catch (error) {
-          result.issues.push({ reason: error.message || 'error_lote_contabilizacion_555' });
+          result.issues.push({ reason: publicAccountingFailure(error).message });
         }
       }
       const nextOffset = offset + page.length;
@@ -2379,7 +2380,7 @@ Deno.serve(async (req) => {
             const posting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
             if (!posting.alreadyPosted) result.posted += 1;
           } catch (error) {
-            result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: error.message || 'error_contabilizacion' });
+            result.issues.push({ invoiceId: invoice.id, number: invoice.numero_factura || '', reason: publicAccountingFailure(error).message });
           }
         }
       }
@@ -2486,7 +2487,7 @@ Deno.serve(async (req) => {
             });
             if (posting.alreadyPosted) result.repairedLinks += 1; else result.posted += 1;
           } catch (error) {
-            result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: error.message || 'error_contabilizacion_pago' });
+            result.issues.push({ paymentId: payment.id, invoiceId: invoice.id, reason: publicAccountingFailure(error).message });
           }
         }
       }
@@ -2791,11 +2792,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ error: 'Acción no válida.' }, { status: 400 });
   } catch (error) {
-    console.error('[accountingOperations]', error);
-    const status = Number(error?.status);
-    return Response.json(
-      { error: error.message || 'Error interno' },
-      { status: Number.isInteger(status) && status >= 400 && status < 600 ? status : 500 },
-    );
+    const failure=publicAccountingFailure(error);
+    return Response.json({error:failure.message,...failure.requestId?{requestId:failure.requestId}:{}},{status:failure.status});
   }
 });
