@@ -8,14 +8,19 @@ const TYPES = ['', 'Suministros', 'Servicios', 'Obras', 'Concesión de obras', '
 const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Taxea-Tenders-Revision': 'cache-v1' } });
 const text = (v: unknown, max = 100) => String(v ?? '').trim().slice(0, max);
 
+
+function disabledAccount(user) { return [user,user?.data].filter(Boolean).some(s=>s.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(String(s.status||'').trim().toLowerCase())||['suspended','blocked','disabled','deleted'].includes(String(s.accountAccessStatus||'').trim().toLowerCase())); }
+
 Deno.serve(async req => {
   try {
     if (req.method !== 'POST') return response({ error: 'Método no permitido.' }, 405);
     const sdk = createClientFromRequest(req);
-    if (!await sdk.auth.me().catch(() => null)) return response({ error: 'Inicia sesión para consultar licitaciones.' }, 401);
+    const authenticatedUser=await sdk.auth.me().catch(() => null);
+    if (!authenticatedUser?.id) return response({ error: 'Inicia sesión para consultar licitaciones.' }, 401);
+    if(disabledAccount(authenticatedUser))return response({error:'Cuenta no habilitada.'},403);
     const body = await req.json().catch(() => ({}));
     if (body.action === 'refresh_source') {
-      const user = await sdk.auth.me().catch(() => null);
+      const user = authenticatedUser;
       if (!['admin', 'super_admin'].includes(user?.role)) return response({ error: 'Acceso reservado al administrador.' }, 403);
       if (!isSource(body.source)) return response({ error: 'Fuente no válida.' }, 400);
       try {

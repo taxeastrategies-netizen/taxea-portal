@@ -29,11 +29,15 @@ async function loadSource(handler: any, filter: any, sort: string) {
   }
 }
 
+
+function disabledAccount(user) { return [user,user?.data].filter(Boolean).some(s=>s.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(String(s.status||'').trim().toLowerCase())||['suspended','blocked','disabled','deleted'].includes(String(s.accountAccessStatus||'').trim().toLowerCase())); }
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Sesión no válida.' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Sesión no válida.' }, { status: 401 });
+    if (disabledAccount(user)) return Response.json({ error: 'Cuenta no habilitada.' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const action = String(body.action || 'overview');
 
@@ -50,7 +54,11 @@ Deno.serve(async (req) => {
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const access = evaluateCompanyAccess(user, company);
-    if (!access.allowed) return Response.json({ error: 'No tienes una asignación válida para certificar esta empresa.' }, { status: 403 });
+    const email=String(user.email||'').trim().toLowerCase();
+    const platformAdmin=['admin','super_admin'].includes(user.role);
+    const companyMembers=Array.isArray(company.usuarios_autorizados)?company.usuarios_autorizados:[];
+    const serverCompanyAccess=platformAdmin||(company.activa!==false&&!!email&&(String(company.owner_email||'').trim().toLowerCase()===email||companyMembers.some(value=>String(value||'').trim().toLowerCase()===email)));
+    if (!access.allowed||!serverCompanyAccess) return Response.json({ error: 'No tienes una asignación válida para certificar esta empresa.' }, { status: 403 });
 
     const requests = {
       invoices: loadSource(svc.entities.Invoice, { company_id: companyId }, 'fecha_emision'),
