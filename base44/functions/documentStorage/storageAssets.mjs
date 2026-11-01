@@ -179,12 +179,24 @@ export async function publicInvoicePdfStoredReference(svc,invoice,token){
  const[asset]=await legacyAssetsForCompany(svc,invoice.company_id,[reference]);return asset?assetReference(asset.id):reference;
 }
 
+// Historical compatibility only. New uploads retain strict magic-at-byte-zero checks.
+// PDF.js also locates PDF headers in the first 1024 bytes; never strip the original prefix.
+export function legacyProtectionFileFormat(file,bytes){
+ try{return privateFileFormat(file,bytes);}catch(error){
+  if(error?.message!=='STORAGE_UNSUPPORTED_FILE'||String(file.name||'').split('.').pop().toLowerCase()!=='pdf')throw error;
+  const head=new TextDecoder().decode(bytes.slice(0,1024)),tail=new TextDecoder().decode(bytes.slice(-4096));
+  if(/<(?:!doctype\s+html|html|script)\b/i.test(head)||/-----BEGIN (?:RSA |EC |ENCRYPTED )?PRIVATE KEY-----/.test(head)||!/%%EOF(?:[\s\u0000]|$)/.test(tail))throw error;
+  const sig=[37,80,68,70,45];
+  for(let at=1;at<=Math.min(1015,bytes.length-9);at++)if(sig.every((v,i)=>bytes[at+i]===v)&&[49,50].includes(bytes[at+5])&&bytes[at+6]===46&&bytes[at+7]>=48&&bytes[at+7]<=57&&[10,13,32].includes(bytes[at+8]))return{ext:'pdf',mime:'application/pdf'};
+  throw error;
+ }
+}
 // Administrative historical copy only. Callers must hold the global backup lease.
 export async function saveLegacyProtectionAsset(svc,user,companyId,file,env,makeTransport=storageTransport){
  if(!storageAccountEnabled(user)||!isStorageAdmin(user)||!/^[A-Za-z0-9_-]{1,128}$/.test(companyId||''))throw Error('PROTECTION_ADMIN_ONLY');
  const company=await svc.entities.Company.get(companyId);if(!company||company.id!==companyId||!storageEnabled(company,env))throw Error('PROTECTION_COMPANY_UNAVAILABLE');
  if(!file?.size||file.size>25*1024*1024)throw Error('PROTECTION_FILE_SIZE_INVALID');
- const bytes=new Uint8Array(await file.arrayBuffer()),format=privateFileFormat(file,bytes),digest=await sha256(bytes),entity=svc.entities.DocumentAsset;
+ const bytes=new Uint8Array(await file.arrayBuffer()),format=legacyProtectionFileFormat(file,bytes),digest=await sha256(bytes),entity=svc.entities.DocumentAsset;
  const transport=await makeTransport(env),valid=asset=>asset?.company_id===companyId&&asset.sha256===digest&&asset.size===bytes.length&&String(asset.object_name||'').startsWith('companies/'+companyId+'/');
  const previous=await entity.filter({company_id:companyId,sha256:digest,status:'ready'},'id',2);
  for(const asset of previous){if(!valid(asset)||!/^\d+$/.test(asset.generation||''))throw Error('PROTECTION_PRIVATE_COPY_UNVERIFIED');const reread=await transport.get(asset.object_name,asset.generation);if(reread.length!==bytes.length||await sha256(reread)!==digest)throw Error('PROTECTION_PRIVATE_COPY_UNVERIFIED');return{asset,file_url:assetReference(asset.id),reused:true};}
