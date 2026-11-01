@@ -1,3 +1,4 @@
+import { fetchOfficialAtom } from './officialTransport.ts';
 import { XMLParser } from 'npm:fast-xml-parser@4.5.3';
 
 export const SOURCES = {
@@ -34,7 +35,7 @@ function safeLink(value: any): string | null {
 export function allowedFeedUrl(source: keyof typeof SOURCES, candidate: unknown): string {
   if (typeof candidate !== 'string' || candidate.length > 260) throw new Error('Cursor de búsqueda inválido.');
   const url = new URL(candidate);
-  if (url.protocol !== 'https:' || !['contrataciondelestado.es', 'contrataciondelsectorpublico.gob.es'].includes(url.hostname) || url.username || url.password || url.search || url.hash || !PATHS[source].test(url.pathname)) throw new Error('Cursor de búsqueda inválido.');
+  if (url.protocol !== 'https:' || !['contrataciondelestado.es', 'contrataciondelsectorpublico.gob.es'].includes(url.hostname) || url.username || url.password || url.port && url.port !== '443' || url.search || url.hash || !PATHS[source].test(url.pathname)) throw new Error('Cursor de búsqueda inválido.');
   return url.toString();
 }
 function nextLink(feed: any, source: keyof typeof SOURCES): string | null {
@@ -99,28 +100,20 @@ export function normalizeEntry(entry: any, source: keyof typeof SOURCES, now = d
     summary: kind === 'abierta' ? 'Expediente publicado con plazo de presentación vigente según los datos estructurados de la Plataforma.' : kind === 'anuncio_previo' ? 'Anuncio previo publicado. Aún no consta un plazo de presentación de ofertas: no equivale a una licitación abierta.' : 'Consulta preliminar de mercado. Puede permitir aportaciones, pero no constituye una convocatoria de ofertas.',
   };
 }
-export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: string | null) {
-  const url = requestedUrl ? allowedFeedUrl(source, requestedUrl) : SOURCES[source];
+export async function readFeed(source: keyof typeof SOURCES, requestedUrl?: string | null, { force = false } = {}) {
+  const url = allowedFeedUrl(source, requestedUrl || SOURCES[source]);
   const cached = cache.get(url);
-  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.value;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 75000);
-  try {
-    const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/atom+xml' } });
-    if (!response.ok) throw new Error('La Plataforma devolvió ' + response.status);
-    const declaredSize = Number(response.headers.get('content-length') || 0);
-    if (declaredSize > 25_000_000) throw new Error('Feed oficial demasiado grande');
-    const xml = await response.text();
-    if (xml.length > 25_000_000) throw new Error('Feed oficial demasiado grande');
-    const feed = parser.parse(xml)?.feed;
-    if (!feed || !feed.id || !feed.entry) throw new Error('Formato Atom oficial inesperado');
-    const entries = asArray(feed.entry);
-    const result = { rows: entries.map((entry: any) => normalizeEntry(entry, source)).filter(Boolean), next: nextLink(feed, source), updated: txt(feed.updated, 45) || null, examined: entries.length };
-    if (cache.size >= 24) { const oldest = cache.keys().next().value; if (oldest) cache.delete(oldest); }
-    cache.set(url, { at: Date.now(), value: result });
-    return result;
-  } finally { clearTimeout(timer); }
+  if (!force && cached && Date.now() - cached.at < CACHE_TTL) return { ...cached.value, observedAt: new Date(cached.at).toISOString() };
+  const xml = await fetchOfficialAtom(url, candidate => allowedFeedUrl(source, candidate));
+  const feed = parser.parse(xml)?.feed;
+  if (!feed || typeof feed !== 'object' || !feed.id) throw new Error('Formato Atom oficial inesperado');
+  const entries = asArray(feed.entry);
+  const result = { rows: entries.map((entry: any) => normalizeEntry(entry, source)).filter(Boolean), next: nextLink(feed, source), updated: txt(feed.updated, 45) || null, examined: entries.length };
+  if (cache.size >= 24) { const oldest = cache.keys().next().value; if (oldest) cache.delete(oldest); }
+  const at = Date.now(); cache.set(url, { at, value: result });
+  return { ...result, observedAt: new Date(at).toISOString() };
 }
+
 export function filterRows(rows: any[], filters: any) {
   const query = fold(filters.query);
   const provinceNuts = PROVINCE_NUTS[filters.provinceCode] || [];
@@ -130,10 +123,10 @@ export function filterRows(rows: any[], filters: any) {
   const type = txt(filters.contractType, 40);
   const min = filters.minAmount === '' || filters.minAmount == null ? null : Number(filters.minAmount);
   const max = filters.maxAmount === '' || filters.maxAmount == null ? null : Number(filters.maxAmount);
-  const today = dateToday();
   return rows.filter(row => {
-    if (row.kind === 'abierta' && row.deadline && row.deadline < today) return false;
-    if (row.kind === 'consulta' && row.consultationLimit && row.consultationLimit < today) return false;
+    const current = localNow(String(row.nuts || '').startsWith('ES70') ? 'Atlantic/Canary' : 'Europe/Madrid');
+    if (row.kind === 'abierta' && (!row.deadline || row.deadline < current.date || row.deadline === current.date && row.deadlineTime && row.deadlineTime <= current.time)) return false;
+    if (row.kind === 'consulta' && (row.consultationLimit ? row.consultationLimit < current.date : !row.plannedDate || row.plannedDate < current.date)) return false;
     if (kind !== 'all' && row.kind !== kind) return false;
     if (query && !fold([row.title, row.tenderId, row.contractingBody, row.province, row.cpv.join(' ')].join(' ')).includes(query)) return false;
     if (cpv && !row.cpv.some((code: string) => code.startsWith(cpv))) return false;

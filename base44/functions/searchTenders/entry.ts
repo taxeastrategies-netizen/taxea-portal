@@ -5,7 +5,7 @@ import { getSnapshot, isSource, refreshSnapshot } from './snapshot.ts';
 const SOURCE_KEYS = ['hosted', 'aggregated', 'consultations'] as const;
 const KINDS = ['all', 'abierta', 'anuncio_previo', 'consulta'];
 const TYPES = ['', 'Suministros', 'Servicios', 'Obras', 'Concesión de obras', 'Concesión de servicios', 'Administrativo especial', 'Privado', 'Contrato público'];
-const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Taxea-Tenders-Revision': 'cache-v1' } });
+const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store', 'X-Taxea-Tenders-Revision': 'verified-cache-v2' } });
 const text = (v: unknown, max = 100) => String(v ?? '').trim().slice(0, max);
 
 
@@ -24,9 +24,10 @@ Deno.serve(async req => {
       if (!['admin', 'super_admin'].includes(user?.role)) return response({ error: 'Acceso reservado al administrador.' }, 403);
       if (!isSource(body.source)) return response({ error: 'Fuente no válida.' }, 400);
       try {
+        const started = Date.now();
         const refreshed = await refreshSnapshot(sdk, body.source);
         if (refreshed.cacheStored === false) return response({ error: 'La fuente respondió, pero no se pudo guardar la actualización; se mantiene la copia anterior.' }, 502);
-        return response({ ok: true, source: body.source, fetchedAt: refreshed.fetchedAt, examined: refreshed.examined, matches: refreshed.rows.length });
+        return response({ ok: true, source: body.source, fetchedAt: refreshed.fetchedAt, examined: refreshed.examined, matches: refreshed.rows.length, cacheVerified: refreshed.cacheStored === true, durationMs: Date.now() - started });
       } catch (error) {
         console.error('Tender cache refresh failed:', String((error as Error)?.message || error).slice(0, 250));
         return response({ error: 'No se pudo renovar esta fuente oficial; se conserva la última copia correcta.' }, 502);
@@ -53,7 +54,7 @@ Deno.serve(async req => {
     }
     if (!requested.length) return response({ ok: true, tenders: [], nextCursor: null, hasMore: false, examinedEntries: 0, checkedAt: new Date().toISOString(), sourceUpdated: {}, partial: false, coverage: 'No quedan páginas adicionales de esta búsqueda.' });
     const fetched = await Promise.allSettled(requested.map(async ({ source, url }) => {
-      if (url) return { ...(await readFeed(source, url)), fetchedAt: new Date().toISOString(), cached: false };
+      if (url) { const feed = await readFeed(source, url); return { ...feed, fetchedAt: feed.observedAt, cached: false }; }
       const snapshot = await getSnapshot(sdk, source);
       if (snapshot) return { ...snapshot, cached: true };
       return { ...(await refreshSnapshot(sdk, source)), cached: false };
@@ -63,17 +64,19 @@ Deno.serve(async req => {
     const uncachedSources: string[] = [];
     const nextCursor: Record<string, string> = {};
     const sourceUpdated: Record<string, string | null> = {};
+    const sourceStatus: Record<string, unknown> = {};
     let examinedEntries = 0;
     const fetchedAt: Record<string, string> = {};
     let stale = false;
     fetched.forEach((result, index) => {
       const source = requested[index].source;
-      if (result.status === 'rejected') { errors.push(source); return; }
+      if (result.status === 'rejected') { errors.push(source); sourceStatus[source] = { status: 'unavailable', fetchedAt: null }; return; }
       rows.push(...result.value.rows);
       examinedEntries += result.value.examined;
       sourceUpdated[source] = result.value.updated;
       if (result.value.cacheStored === false) uncachedSources.push(source);
       fetchedAt[source] = result.value.fetchedAt;
+      sourceStatus[source] = { status: Date.now() - Date.parse(result.value.fetchedAt) > 90 * 60 * 1000 ? 'stale' : 'recent', fetchedAt: result.value.fetchedAt, officialUpdated: result.value.updated, cached: result.value.cached, examined: result.value.examined };
       if (Date.now() - Date.parse(result.value.fetchedAt) > 90 * 60 * 1000) stale = true;
       if (result.value.next) nextCursor[source] = result.value.next;
     });
@@ -81,7 +84,7 @@ Deno.serve(async req => {
     const tenders = filterRows(Array.from(new Map(rows.map(row => [row.id, row])).values()), filters);
     return response({
       ok: true, tenders, nextCursor: Object.keys(nextCursor).length ? nextCursor : null, hasMore: Object.keys(nextCursor).length > 0,
-      examinedEntries, checkedAt: new Date().toISOString(), sourceUpdated, fetchedAt,
+      examinedEntries, checkedAt: new Date().toISOString(), sourceUpdated, fetchedAt, sourceStatus,
       stale, partial: errors.length > 0, failedSources: errors, uncachedSources,
       coverage: 'Resultados de las páginas Atom oficiales examinadas y guardadas temporalmente. Los filtros se aplican a estos registros; puede haber más coincidencias en páginas siguientes. Las consultas preliminares y los anuncios previos no son licitaciones abiertas.',
     });
