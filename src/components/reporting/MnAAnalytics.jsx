@@ -10,6 +10,7 @@ const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: '
 
 export default function MnAAnalytics({ financials, company, invoices, debts }) {
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [analysis, setAnalysis] = useState('');
   const f = financials || {};
 
@@ -44,9 +45,12 @@ export default function MnAAnalytics({ financials, company, invoices, debts }) {
   ].filter(Boolean);
 
   const generateAnalysis = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un analista de M&A de una firma de inversión. Prepara un análisis preliminar de atractivo para adquisición/inversión en español (máx 220 palabras) estilo PE/VC:
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Eres un analista de M&A de una firma de inversión. Prepara un análisis preliminar de atractivo para adquisición/inversión en español (máx 220 palabras) estilo PE/VC:
 
 Target: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 CIF: ${company?.nif_cif || '—'} | Sector: ${company?.actividad || '—'}
@@ -70,7 +74,7 @@ Genera:
 Estilo: PE/VC, directo, orientado a decisión de inversión.`,
     });
     setAnalysis(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch {setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 
   const scoreColor = attractiveness >= 65 ? 'from-emerald-600 to-emerald-800' : attractiveness >= 40 ? 'from-amber-500 to-amber-700' : 'from-red-600 to-red-800';
@@ -80,6 +84,7 @@ Estilo: PE/VC, directo, orientado a decisión de inversión.`,
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Header */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-700 rounded-2xl p-6 text-white">
         <p className="text-[10px] tracking-[0.25em] text-slate-400 uppercase mb-2">M&A Preliminary Analytics — Confidential</p>

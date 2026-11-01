@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {build} from 'esbuild';
-const names=['BoardReport','InvestorReport','BankReport','ExecutiveCommentary','FinancialIntelligenceAI','ExcelExport'];
+const names=['BoardReport','InvestorReport','BankReport','ExecutiveCommentary','FinancialIntelligenceAI','CompanyScoring','MnAAnalytics','ExcelExport'];
 const result=await build({stdin:{contents:names.map(name=>`export {default as ${name}} from './src/components/reporting/${name}.jsx';`).join('\n'),resolveDir:process.cwd(),loader:'js'},bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',alias:{'@':process.cwd()+'/src'},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'report-runtime-no-services',setup(b){
  b.onResolve({filter:/^react$/},args=>args.importer.includes('/src/components/reporting/')?{path:'react-fixture',namespace:'fixture'}:null);
  b.onResolve({filter:/base44Client$/},()=>({path:'sdk',namespace:'fixture'}));
  b.onResolve({filter:/^framer-motion$/},()=>({path:'motion',namespace:'fixture'}));
  b.onResolve({filter:/^xlsx$/},()=>({path:'xlsx',namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({loader:'js',contents:({
-  'react-fixture':`export function useState(initial){const i=globalThis.__index++;if(!(i in globalThis.__states))globalThis.__states[i]=typeof initial==='function'?initial():initial;return [globalThis.__states[i],next=>{globalThis.__states[i]=typeof next==='function'?next(globalThis.__states[i]):next;}];}`,
+  'react-fixture':`export const useMemo=fn=>fn();export function useState(initial){const i=globalThis.__index++;if(!(i in globalThis.__states))globalThis.__states[i]=typeof initial==='function'?initial():initial;return [globalThis.__states[i],next=>{globalThis.__states[i]=typeof next==='function'?next(globalThis.__states[i]):next;}];}`,
   sdk:`export const base44={controlledCore:{async InvokeLLM(){globalThis.__mockCalls++;throw Error('synthetic unavailable service');}}};`,
   motion:`export const motion=new Proxy({},{get:(_,name)=>name});`,
   xlsx:`export const utils={book_new:()=>({sheets:[]}),aoa_to_sheet:rows=>({rows}),book_append_sheet:(book,sheet,name)=>book.sheets.push({name,...sheet})};export const writeFile=(book,name)=>{if(globalThis.__exportFails)throw Error('synthetic download failure');globalThis.__exported={book,name};};`
@@ -22,7 +22,7 @@ const props={financials,company:{id:'synthetic-only'},invoices:[],expenses:[],de
 const render=(name,extra={})=>{context.__index=0;return components[name]({...props,...extra});};
 const walk=node=>node==null||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(walk):[node,...walk(node.props?.children)];
 let checks=0;const check=(value,label)=>{assert.ok(value,label);checks++;};
-for(const [name,action] of Object.entries({BoardReport:'generateInsights',InvestorReport:'generateMemo',BankReport:'generateAnalysis',ExecutiveCommentary:'generate',FinancialIntelligenceAI:'analyze'})){
+for(const [name,action] of Object.entries({BoardReport:'generateInsights',InvestorReport:'generateMemo',BankReport:'generateAnalysis',ExecutiveCommentary:'generate',FinancialIntelligenceAI:'analyze',CompanyScoring:'generateAI',MnAAnalytics:'generateAnalysis'})){
  context.__states=[];
  const view=render(name);const button=walk(view).find(node=>node.props?.onClick?.name===action);
  check(button,'real '+name+' generation button found');await button.props.onClick();
@@ -49,5 +49,5 @@ await walk(render('ExcelExport',exportProps)).find(node=>node.props?.onClick?.na
 const failedExport=walk(render('ExcelExport',exportProps));
 check(failedExport.some(node=>node.props?.role==='alert'),'failed file generation has an error');
 check(failedExport.find(node=>node.props?.onClick?.name==='exportExcel').props.disabled===false,'failed file generation releases loading');
-check(context.__mockCalls===5,'all five failures were synthetic; no real AI request');
+check(context.__mockCalls===7,'all seven failures were synthetic; no real AI request');
 console.log(JSON.stringify({ok:true,checks,actualReportHandlers:true,externalCalls:0,customerWrites:0,filesWritten:0}));

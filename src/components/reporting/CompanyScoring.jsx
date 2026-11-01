@@ -61,6 +61,7 @@ function ScoreFactor({ label, score, weight, desc }) {
 
 export default function CompanyScoring({ financials, company, invoices, expenses, debts, bankAccounts }) {
   const [loading, setLoading] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [aiComment, setAiComment] = useState('');
 
   const scoring = useMemo(() => {
@@ -106,10 +107,13 @@ export default function CompanyScoring({ financials, company, invoices, expenses
   }, [financials, invoices, expenses, debts, bankAccounts]);
 
   const generateAI = async () => {
-    setLoading(true);
+    setLoading(true);setGenerationError('');
+    try {
     const f = financials || {};
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Analiza los datos financieros aportados y explica sus límites. 
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Analiza los datos financieros aportados y explica sus límites. 
 Analiza este perfil financiero empresarial y genera un comentario ejecutivo profesional en español (máximo 180 palabras), estilo consultoría estratégica:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
@@ -128,7 +132,7 @@ Genera: resumen ejecutivo + fortalezas clave + áreas de mejora + conclusión es
 Usa lenguaje corporativo, preciso y sofisticado. Sé conciso pero profundo.`,
     });
     setAiComment(typeof res === 'string' ? res : res?.result || res?.text || '');
-    setLoading(false);
+    } catch {setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 
   const s = scoring.total;
@@ -143,6 +147,7 @@ Usa lenguaje corporativo, preciso y sofisticado. Sé conciso pero profundo.`,
 
   return (
     <div className="space-y-6">
+      {generationError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{generationError}</p>}
       {/* Hero scoring */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className={cn("bg-gradient-to-br text-white rounded-2xl p-6 shadow-lg flex flex-col items-center justify-center gap-4", bgGrad)}>

@@ -25,7 +25,9 @@ export default function BoardReport({ financials, company, invoices, expenses, d
     setLoading(true);setGenerationError('');
     try {
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres el CFO de la empresa presentando al Consejo de Administración. Genera "Board Insights" ejecutivos en español (máx 200 palabras):
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Eres el CFO de la empresa presentando al Consejo de Administración. Genera "Board Insights" ejecutivos en español (máx 200 palabras):
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 Fecha: ${format(new Date(), 'MMMM yyyy', { locale: es })}
@@ -53,7 +55,7 @@ Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
     { label: 'Revenue', value: fmt(f.ingresos), color: 'border-l-emerald-500' },
     { label: 'EBITDA Margin', value: `${margenPct}`, color: 'border-l-blue-500' },
     { label: 'Cash Runway', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)}M` : '—', color: 'border-l-violet-500' },
-    { label: 'Net Debt', value: fmt(f.deudaTotal), color: 'border-l-amber-500' },
+    { label: 'Deuda registrada', value: fmt(f.deudaTotal), color: 'border-l-amber-500' },
     { label: 'Debt/EBITDA', value: `${deudaEbitda}x`, color: 'border-l-indigo-500' },
     { label: 'Int. Coverage', value: `${coberturaInt}x`, color: 'border-l-taxea-red' },
   ];

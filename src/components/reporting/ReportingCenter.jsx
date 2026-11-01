@@ -96,7 +96,8 @@ export default function ReportingCenter() {
   }
 
   const readiness=financialReportReadiness({financials,financialError,treasuryError,auxiliaryError:auxiliaryError || (accounting.isError?'PyG no disponible':''),calendarError:calendar.isError});
-  if (!loading && !readiness.ready) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">No se puede generar un informe financiero fiable: {readiness.reasons.join(' ')}<button type="button" onClick={() => {refresh();loadData();calendar.refetch();accounting.refetch();}} className="ml-3 underline">Reintentar</button></div>;
+  if (loading) return <div role="status" className="py-16 text-center text-sm text-muted-foreground">Actualizando los datos de esta empresa…</div>;
+  const deliveryBlocked = !readiness.ready && ['share','auto'].includes(tab);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-10">
@@ -124,6 +125,8 @@ export default function ReportingCenter() {
         {financials.accountingEbitda?.provisional && ' Cifra provisional: hay asientos pendientes, excluidos o marco contable por revisar.'}
       </p>
 
+      {!readiness.ready && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Informe parcial: {readiness.reasons.join(' ')} Los datos no verificados se muestran como desconocidos; compartir y programar informes requiere completar las fuentes.<button type="button" onClick={() => {refresh();loadData();calendar.refetch();accounting.refetch();}} className="ml-3 underline">Actualizar fuentes</button></div>}
+
       {/* Tabs */}
       <div className="overflow-x-auto">
         <div className="flex gap-1 bg-slate-100 rounded-xl p-1 min-w-max">
@@ -144,6 +147,7 @@ export default function ReportingCenter() {
       {/* Reinicia resultados locales al cambiar de empresa. */}
       <div key={companyId}>
       {/* Content */}
+      {deliveryBlocked ? <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Completa las fuentes indicadas antes de compartir o programar este informe. Puedes consultar y exportar los datos disponibles con sus límites.</p> : <>
       {tab === 'dashboard'  && <ReportingDashboard {...sharedProps} onNavigate={setTab} />}
       {tab === 'monthly'    && <MonthlyReport {...sharedProps} />}
       {tab === 'board'      && <BoardReport {...sharedProps} />}
@@ -156,6 +160,7 @@ export default function ReportingCenter() {
       {tab === 'scoring'    && <CompanyScoring {...sharedProps} />}
       {tab === 'mna'        && <MnAAnalytics {...sharedProps} />}
       {tab === 'commentary' && <ExecutiveCommentary {...sharedProps} />}
+      </>}
       </div>
     </motion.div>
   );

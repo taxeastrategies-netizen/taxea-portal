@@ -76,7 +76,9 @@ export default function BankReport({ financials, company, invoices, expenses, de
     setLoading(true);setGenerationError('');
     try {
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un analista de riesgos bancarios. Prepara un informe de bankability en español (máx 200 palabras) para presentar a una entidad financiera:
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Eres un analista de riesgos bancarios. Prepara un informe de bankability en español (máx 200 palabras) para presentar a una entidad financiera:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 CIF: ${company?.nif_cif || '—'} | Actividad: ${company?.actividad || '—'}

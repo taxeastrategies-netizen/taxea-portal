@@ -23,7 +23,9 @@ export default function InvestorReport({ financials, company, invoices, expenses
     setLoading(true);setGenerationError('');
     try {
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un analista de M&A / VC preparando un investor memo en español (máx 200 palabras) estilo Goldman Sachs / McKinsey:
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Eres un analista de M&A / VC preparando un investor memo en español (máx 200 palabras) estilo Goldman Sachs / McKinsey:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
 CIF: ${company?.nif_cif || '—'}
@@ -34,7 +36,7 @@ MÉTRICAS:
 - EBITDA: ${fmt(f.ebitda)} | Margen: ${financialPercentLabel(f.margen)}
 - Caja: ${fmt(f.cashTotal)} | Burn: ${fmt(f.burnRate)}/mes
 - Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : 'N/A'}
-- Deuda neta: ${fmt(f.deudaTotal)}
+- Deuda registrada: ${fmt(f.deudaTotal)}
 - Cobros menos pagos documentales pendientes (no es capital circulante contable): ${fmt(f.workingCapital)}
 - DSO: ~${f.dso} días
 
@@ -52,11 +54,11 @@ Estilo: sofisticado, directo, orientado a inversor institucional.`,
   };
 
   const metrics = [
-    { label: 'ARR / Revenue', value: fmt(f.ingresos), note: 'Período actual' },
+    { label: 'Ingresos contables acumulados', value: fmt(f.ingresos), note: 'Período actual' },
     { label: 'EBITDA', value: fmt(f.ebitda), note: `${financialPercentLabel(f.margen)} margen` },
-    { label: 'Gross Burn / mes', value: fmt(f.burnRate), note: 'Gasto operativo' },
+    { label: 'Salidas bancarias / 30d', value: fmt(f.burnRate), note: 'No equivale al gasto contable' },
     { label: 'Cash Runway', value: f.runway !== null && f.runway !== undefined ? `${f.runway.toFixed(1)} meses` : '—', note: `${fmt(f.cashTotal)} caja` },
-    { label: 'Net Debt', value: fmt(f.deudaTotal), note: 'Pasivos financieros' },
+    { label: 'Deuda registrada', value: fmt(f.deudaTotal), note: 'Pasivos financieros' },
     { label: 'Cobros menos pagos pendientes', value: fmt(f.workingCapital), note: 'AR - AP' },
   ];
 

@@ -58,7 +58,9 @@ export default function ExecutiveCommentary({ financials, company }) {
     };
 
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un consultor ejecutivo con estilo ${styleDescriptions[style]}.
+      prompt: `Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.
+
+Eres un consultor ejecutivo con estilo ${styleDescriptions[style]}.
 Escribe un executive commentary financiero en español (200-280 palabras) para: ${audienceDescriptions[audience]}.
 Tono: ${toneDescriptions[tone]}.
 
