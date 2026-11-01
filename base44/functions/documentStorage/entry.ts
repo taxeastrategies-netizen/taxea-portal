@@ -49,7 +49,7 @@ Deno.serve(async req=>{
    if(multipart||!Array.isArray(body.references)||body.references.length<1||body.references.length>20)return response({error:'Referencias no válidas.'},400);
    let companyId=String(body.companyId||'');
    if(body.contextKind){try{const company=await contextStorageCompany(client.asServiceRole,user,String(body.contextKind),String(body.contextId||''));if(companyId&&company.id!==companyId)return response({error:'Ámbito documental no disponible.'},403);companyId=company.id;}catch{return response({error:'Ámbito documental no disponible.'},403);}}
-   try{return response({ok:true,mappings:await legacyDocumentMappings(client.asServiceRole,user,companyId,body.references)});}catch{return response({error:'No se pudo verificar el acceso a los documentos.'},403);}
+   try{return response({ok:true,mappings:await legacyDocumentMappings(client.asServiceRole,user,companyId,body.references,body.mappingVersion===2)});}catch{return response({error:'No se pudo verificar el acceso a los documentos.'},403);}
   }
   if(action==='upload_related'){
    if(!multipart||!(body.file instanceof File))return response({error:'Archivo no válido.'},400);

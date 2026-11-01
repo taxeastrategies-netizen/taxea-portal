@@ -39,7 +39,7 @@ export default function LegacyProtectionPlanPreview({jobs=[],busy=false}){
    {progress.status==='rolling_back'&&<p>Vinculaciones revisadas: {progress.rollbackCursor} de {progress.total}.</p>}
    <p>Originales eliminados: 0 · Registros contables modificados: 0.</p>
    {!!progress.issues?.length&&<details><summary>Ver incidencias ({progress.issues.length} de {progress.issueCount})</summary><ul className="mt-2 space-y-1">{progress.issues.map(issue=><li key={issue.index}>Archivo {issue.index+1} · {issue.code}</li>)}</ul></details>}
-   {!pending&&progress.status!=='rolled_back'&&<details><summary>Desactivar las vinculaciones de este trabajo</summary><p className="text-xs my-2">El acceso a esas copias quedará bloqueado hasta reactivarlas. Se conservan todos los archivos y los datos originales.</p><Button variant="outline" disabled={!confirmed||busy} onClick={()=>run({rollback:true})}>{progress.status==='rolling_back'?'Continuar desactivación':'Desactivar vinculaciones de este trabajo'}</Button></details>}
+   {!pending&&progress.status!=='rolled_back'&&<details><summary>Desactivar las vinculaciones de este trabajo</summary><p className="text-xs my-2">Los enlaces históricos dejarán de resolver estas copias hasta reactivar sus vinculaciones. Se conservan los archivos privados y los datos originales.</p><Button variant="outline" disabled={!confirmed||busy} onClick={()=>run({rollback:true})}>{progress.status==='rolling_back'?'Continuar desactivación':'Desactivar vinculaciones de este trabajo'}</Button></details>}
   </div>}
  </CardContent></Card>;
 }

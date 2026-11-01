@@ -131,21 +131,22 @@ async function authorizeLegacyCompany(svc,user,companyId){
  const company=await svc.entities.Company.get(companyId).catch(error=>{if(Number(error?.status||error?.response?.status)===404)return null;throw error;});
  if(!company||(!isStorageAdmin(user)&&!mayAccessStorageCompany(user,company)))throw Error('STORAGE_LEGACY_COMPANY_FORBIDDEN');return company;
 }
-async function legacyAssetsForCompany(svc,companyId,references){
+async function legacyAssetsForCompany(svc,companyId,references,isolated=false){
  const normalized=references.map(normalizeLegacyDocumentReference);if(normalized.some(value=>!value))throw Error('STORAGE_LEGACY_REFERENCE_INVALID');
  const digests=await Promise.all(normalized.map(value=>sha256(new TextEncoder().encode(value))));
  const aliases=await svc.entities.DocumentLegacyReference.filter({company_id:companyId,reference_digest:{$in:[...new Set(digests)]}},'id',references.length*2+1);
  if(aliases.length>references.length*2)throw Error('STORAGE_LEGACY_REFERENCE_AMBIGUOUS');
- const byDigest=new Map();for(const alias of aliases){if(alias.company_id!==companyId||!digests.includes(alias.reference_digest))throw Error('STORAGE_LEGACY_ASSET_UNVERIFIED');if(byDigest.has(alias.reference_digest))throw Error('STORAGE_LEGACY_REFERENCE_AMBIGUOUS');byDigest.set(alias.reference_digest,alias);}
+ const rejected=new Set(),byDigest=new Map();for(const alias of aliases){if(alias.company_id!==companyId||!digests.includes(alias.reference_digest))throw Error('STORAGE_LEGACY_ASSET_UNVERIFIED');if(byDigest.has(alias.reference_digest)){if(!isolated)throw Error('STORAGE_LEGACY_REFERENCE_AMBIGUOUS');rejected.add(alias.reference_digest);}byDigest.set(alias.reference_digest,alias);}
  const unknown=[...new Set(digests.filter(digest=>!byDigest.has(digest)))];
- if(unknown.length){const protectedElsewhere=await svc.entities.DocumentLegacyReference.filter({reference_digest:{$in:unknown}},'id',1);if(protectedElsewhere.length)throw Error('STORAGE_LEGACY_COMPANY_FORBIDDEN');}
- const assetIds=[...new Set(aliases.map(row=>row.asset_id))];
+ if(unknown.length){const protectedElsewhere=await svc.entities.DocumentLegacyReference.filter({reference_digest:{$in:unknown}},'id',isolated?unknown.length*2+1:1);if(protectedElsewhere.length){if(!isolated)throw Error('STORAGE_LEGACY_COMPANY_FORBIDDEN');if(protectedElsewhere.length>unknown.length*2||protectedElsewhere.some(row=>!unknown.includes(row.reference_digest)))unknown.forEach(d=>rejected.add(d));else protectedElsewhere.forEach(row=>rejected.add(row.reference_digest));}}
+ const assetIds=[...new Set(aliases.map(row=>row.asset_id).filter(value=>/^[A-Za-z0-9_-]{1,128}$/.test(value||'')))];
  const assets=assetIds.length?await svc.entities.DocumentAsset.filter({id:{$in:assetIds},company_id:companyId,status:'ready'},'id',assetIds.length+1):[];
  const byId=new Map(assets.map(asset=>[asset.id,asset]));
  return digests.map(digest=>{
+  if(rejected.has(digest))return{unavailable:true};
   const alias=byDigest.get(digest);if(!alias)return null;
   const asset=byId.get(alias.asset_id);
-  if(alias.status!=='verified'||!asset||asset.company_id!==companyId||asset.status!=='ready'||!/^[a-f0-9]{64}$/.test(asset.sha256||'')||!Number.isSafeInteger(asset.size)||asset.size<1||asset.sha256!==alias.sha256||asset.size!==alias.size||!String(asset.object_name||'').startsWith('companies/'+companyId+'/'))throw Error('STORAGE_LEGACY_ASSET_UNVERIFIED');
+  if(alias.status!=='verified'||!asset||asset.company_id!==companyId||asset.status!=='ready'||!/^[a-f0-9]{64}$/.test(asset.sha256||'')||!Number.isSafeInteger(asset.size)||asset.size<1||asset.sha256!==alias.sha256||asset.size!==alias.size||!String(asset.object_name||'').startsWith('companies/'+companyId+'/')){if(isolated)return{unavailable:true};throw Error('STORAGE_LEGACY_ASSET_UNVERIFIED');}
   return asset;
  });
 }
@@ -164,11 +165,11 @@ export async function resolveStoredDocumentReference(svc,user,reference,companyI
  await authorizeLegacyCompany(svc,user,companyId);
  const [asset]=await legacyAssetsForCompany(svc,companyId,[reference]);return asset?assetReference(asset.id):reference;
 }
-export async function legacyDocumentMappings(svc,user,companyId,references){
+export async function legacyDocumentMappings(svc,user,companyId,references,isolated=false){
  if(!Array.isArray(references)||references.length<1||references.length>20)throw Error('STORAGE_LEGACY_REFERENCE_INVALID');
  await authorizeLegacyCompany(svc,user,companyId);
- const assets=await legacyAssetsForCompany(svc,companyId,references);
- return assets.map((asset,index)=>({index,mapped:!!asset,...(asset?{file_url:assetReference(asset.id)}:{})}));
+ const assets=await legacyAssetsForCompany(svc,companyId,references,isolated);
+ return assets.map((asset,index)=>asset?.unavailable?{index,mapped:false,unavailable:true}:{index,mapped:!!asset,...(asset?{file_url:assetReference(asset.id)}:{})});
 }
 
 export async function publicInvoicePdfStoredReference(svc,invoice,token){

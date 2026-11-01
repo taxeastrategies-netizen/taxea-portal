@@ -17,14 +17,14 @@ export function createLegacyReferenceClient(api,onSessionCleanup){
    let at=0;
    while(at<list.length){
     const batch=[];const scope=list[at].scope;
-    while(at<list.length&&batch.length<20){const candidate=[...batch,list[at]],body={action:'resolve_legacy_references',...scope,references:candidate.map(item=>item.reference)};if(new TextEncoder().encode(JSON.stringify(body)).length>14500){if(!batch.length){finish(list[at++],new Error('La referencia del archivo es demasiado larga.'));}break;}batch.push(list[at++]);}
+    while(at<list.length&&batch.length<20){const candidate=[...batch,list[at]],body={action:'resolve_legacy_references',mappingVersion:2,...scope,references:candidate.map(item=>item.reference)};if(new TextEncoder().encode(JSON.stringify(body)).length>14500){if(!batch.length){finish(list[at++],new Error('La referencia del archivo es demasiado larga.'));}break;}batch.push(list[at++]);}
     if(!batch.length)continue;
     try{
      if(batch.some(item=>item.epoch!==epoch))throw sessionError();
-     const response=await api.functions.invoke('documentStorage',{action:'resolve_legacy_references',...scope,references:batch.map(item=>item.reference)}),data=response?.data??response;
+     const response=await api.functions.invoke('documentStorage',{action:'resolve_legacy_references',mappingVersion:2,...scope,references:batch.map(item=>item.reference)}),data=response?.data??response;
      if(data?.ok!==true||!Array.isArray(data.mappings)||data.mappings.length!==batch.length)throw Error('No se pudo verificar el acceso al documento.');
-     const results=new Map();for(const row of data.mappings){if(!Number.isInteger(row.index)||row.index<0||row.index>=batch.length||results.has(row.index)||![true,false].includes(row.mapped)||(row.mapped&&!privateDocumentId(row.file_url)))throw Error('La respuesta documental no es válida.');results.set(row.index,row);}
-     for(let i=0;i<batch.length;i++){const row=results.get(i);finish(batch[i],null,row.mapped?row.file_url:safeDisplayDocumentReference(batch[i].reference));}
+     const results=new Map();for(const row of data.mappings){if(!Number.isInteger(row.index)||row.index<0||row.index>=batch.length||results.has(row.index)||![true,false].includes(row.mapped)||(row.mapped&&!privateDocumentId(row.file_url))||(row.unavailable!==undefined&&typeof row.unavailable!=='boolean')||(row.unavailable&&row.mapped))throw Error('La respuesta documental no es válida.');results.set(row.index,row);}
+     for(let i=0;i<batch.length;i++){const row=results.get(i);if(row.unavailable)finish(batch[i],new Error('No se pudo verificar el acceso al documento.'));else finish(batch[i],null,row.mapped?row.file_url:safeDisplayDocumentReference(batch[i].reference));}
     }catch(error){for(const item of batch)finish(item,error);}
    }
   }
