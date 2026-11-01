@@ -26,7 +26,12 @@ export function htmlSelectOptions(children){
 // A normal HTML select on desktop; a searchable picker on mobile. The single
 // native form control remains responsible for FormData and constraint validity.
 // Selection dispatches its real change event, preserving existing event handlers.
-const NativeSelect=React.forwardRef(function NativeSelect({children,value,defaultValue,className,style,onChange,onInvalid,onFocus,open:controlledOpen,defaultOpen=false,onOpenChange,...props},ref){
+const NativeSelect=React.forwardRef(
+/**
+ * @param {React.SelectHTMLAttributes<HTMLSelectElement> & {open?: boolean, defaultOpen?: boolean, onOpenChange?: (open: boolean) => void}} props
+ * @param {React.ForwardedRef<HTMLSelectElement>} ref
+ */
+function NativeSelect({children,value,defaultValue,className,style,onChange,onInvalid,onFocus,open:controlledOpen,defaultOpen=false,onOpenChange,...props},ref){
   const mobile=useMobileViewport(),options=React.useMemo(()=>htmlSelectOptions(children),[children]);
   const initial=defaultValue??options.find(option=>!option.disabled)?.value??'';
   const [localValue,setLocalValue]=React.useState(String(initial)),[localOpen,setLocalOpen]=React.useState(defaultOpen),[invalid,setInvalid]=React.useState(false),[fieldLabel,setFieldLabel]=React.useState('');

@@ -57,7 +57,16 @@ for (const path of [
 ]) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
   assert.match(source, /buildAeatQrUrl/);
-  assert.match(source, /qr_mode/);
+  if (source.includes('qr_mode')) {
+    assert.match(source, /qr_mode/);
+  } else {
+    // OCR delegates immutable QR fields to the shared integrity function.
+    assert.match(source, /await ensureInvoiceQrHash\(/);
+    assert.match(source, /'invoiceOperations',\s*\{action:'confirm_source_invoice'/);
+    const posting = await readFile(new URL('../base44/functions/invoiceOperations/sourcePosting.mjs', import.meta.url), 'utf8');
+    assert.match(posting, /qr_mode/);
+    assert.match(posting, /buildAeatQrUrl/);
+  }
 }
 for (const path of [
   '../src/components/facturas/InvoiceTemplate.jsx',

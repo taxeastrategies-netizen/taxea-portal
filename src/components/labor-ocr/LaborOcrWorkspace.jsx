@@ -153,13 +153,13 @@ Sé preciso. Si un campo no aparece, devuelve null. No inventes datos.`;
           company_tax_id: {},
           period_label: {},
           worked_days: {},
-          gross_salary: {},
-          total_accruals: {},
+          gross_salary: { type: ['number', 'null'] },
+          total_accruals: { type: ['number', 'null'] },
           total_deductions: {},
-          net_pay: {},
+          net_pay: { type: ['number', 'null'] },
           irpf_rate: {},
-          irpf_amount: {},
-          employee_ss_amount: {},
+          irpf_amount: { type: ['number', 'null'] },
+          employee_ss_amount: { type: ['number', 'null'] },
           employer_ss_amount: {},
           contribution_base_common: {},
           devengos: { type: 'array', items: { type: 'object' } },
@@ -269,7 +269,6 @@ Sé preciso. Si un campo no aparece, devuelve null. No inventes datos.`;
         company={company}
         user={user}
         onBack={() => { setView('batch'); setSelectedDocument(null); }}
-        onRefresh={() => {}}
       />
     );
   }

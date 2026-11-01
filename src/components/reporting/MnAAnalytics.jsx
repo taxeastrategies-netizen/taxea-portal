@@ -73,7 +73,7 @@ Genera:
 
 Estilo: PE/VC, directo, orientado a decisión de inversión.`,
     });
-    setAnalysis(typeof res === 'string' ? res : res?.result || res?.text || '');
+    setAnalysis(res);
     } catch {setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 

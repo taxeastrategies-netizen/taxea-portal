@@ -49,7 +49,7 @@ ${monthlyData.map(m => `${m.mes}: ingresos ${fmt(m.ingresos)} / gastos ${fmt(m.g
 
 Genera: resumen ejecutivo + evolución + alertas + perspectivas. Estilo corporativo profesional.`,
     });
-    setNarrativeScope({companyId,text:typeof res === 'string' ? res : res?.result || res?.text || ''});
+    setNarrativeScope({companyId,text:res});
     } catch {setError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 

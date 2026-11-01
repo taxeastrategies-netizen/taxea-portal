@@ -40,7 +40,7 @@ Si la pregunta es sobre legislación, aclara que es orientativo y no sustituye a
 
 Pregunta del empleado: ${q}`,
     });
-    const answer = typeof res === 'string' ? res : res?.result || res?.text || 'No pude generar respuesta.';
+    const answer = res;
     setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
     setLoading(false);
   };

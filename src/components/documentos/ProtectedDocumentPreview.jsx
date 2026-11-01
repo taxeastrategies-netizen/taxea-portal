@@ -7,7 +7,7 @@ import PrivatePdfViewer from'@/components/documentos/PrivatePdfViewer';
 import ProtectedDocumentLink from'@/components/documentos/ProtectedDocumentLink';
 import AdminDocumentRecovery from'@/components/documentos/AdminDocumentRecovery';
 import{Button}from'@/components/ui/button';
-export default function ProtectedDocumentPreview({reference:sourceReference,title='Documento',className='',style,companyId,contextKind,contextId,mimeType:hint=''}){
+export default function ProtectedDocumentPreview({reference:sourceReference,title='Documento',className='',style=undefined,companyId=undefined,contextKind=undefined,contextId=undefined,mimeType:hint=''}){
  const resolved=useResolvedDocumentReference(sourceReference,{companyId,contextKind,contextId}),reference=resolved.reference,privateId=privateDocumentId(reference),localBlob=reference?.startsWith('blob:'),[file,setFile]=useState(null),[error,setError]=useState(''),[attempt,setAttempt]=useState(0);
  useEffect(()=>{setFile(null);setError('');if(!privateId&&!localBlob)return;const controller=new AbortController();let disposed=false,opened;
   const load=async()=>{if(privateId)return openPrivateDocument(reference,{signal:controller.signal});const response=await fetch(reference,{signal:controller.signal});if(!response.ok)throw Error('No se pudo leer la vista previa local.');const blob=await response.blob();if(blob.size>25*1024*1024)throw Error('El documento supera 25 MB.');return{url:reference,blob,name:title,mimeType:blob.type||hint,revoke(){}};};

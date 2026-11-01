@@ -49,7 +49,7 @@ Genera:
 
 Estilo: sofisticado, directo, orientado a inversor institucional.`,
     });
-    setMemo(typeof res === 'string' ? res : res?.result || res?.text || '');
+    setMemo(res);
     } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 

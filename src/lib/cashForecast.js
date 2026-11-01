@@ -1,4 +1,4 @@
-import { getOutstandingAmount } from './financialCore';
+import { getOutstandingAmount } from './financialCore.js';
 
 const CLOSED = new Set(['pagado', 'finalizado', 'no_aplica', 'no_obligado', 'cancelado', 'anulado']);
 const money = value => Math.round((Number(value) || 0) * 100) / 100;

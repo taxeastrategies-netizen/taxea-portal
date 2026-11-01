@@ -114,7 +114,7 @@ ${ctx}`,
     const ctx = buildContext();
     const prompt = "Usa exclusivamente las cifras aportadas. No inventes datos, evolución, referencias sectoriales ni conclusiones de solvencia. Los valores no verificables permanecen desconocidos. Distingue ingresos, gastos y resultado contables de movimientos y saldo bancarios. Los resultados corresponden al ejercicio acumulado hasta hoy; el saldo bancario es actual. Identifica como orientativos los escenarios y umbrales propios.\n\n" + PROMPTS[selected](ctx);
     const res = await base44.controlledCore.InvokeLLM({ prompt, model: 'claude_sonnet_4_6' });
-    setResult(typeof res === 'string' ? res : res?.result || res?.text || '');
+    setResult(res);
     } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 

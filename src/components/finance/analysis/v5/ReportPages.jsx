@@ -10,7 +10,7 @@ import { AlertTriangle, CheckCircle2, Info, Clock } from 'lucide-react';
 const TAXEA_LOGO = 'https://media.base44.com/images/public/6a00fec50cc522a74ddde4b2/3ded74681_ChatGPTImage7may202610_56_53pm.png';
 
 // ── Helpers UI ─────────────────────────────────────────────────────────────────
-export function A4Page({ id, children, className }) {
+export function A4Page({ id, children, className = '' }) {
   return (
     <div id={id}
       className={cn('bg-white rounded-2xl border border-slate-200 shadow-sm p-8 mb-6 print:shadow-none print:border-0 print:rounded-none print:mb-0 print:page-break-after-always', className)}
@@ -62,7 +62,7 @@ export function SemCard({ label, estado, desc }) {
   );
 }
 
-export function KpiMini({ label, value, color, badge }) {
+export function KpiMini({ label, value, color = '', badge = '' }) {
   return (
     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3">
       <p className={cn('text-base font-jakarta font-bold', color || 'text-slate-800')}>{value}</p>
@@ -72,7 +72,7 @@ export function KpiMini({ label, value, color, badge }) {
   );
 }
 
-export function DataRow({ label, value, color, indent, note }) {
+export function DataRow({ label, value, color = '', indent = false, note = '' }) {
   return (
     <div className={cn('flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0', indent && 'pl-4')}>
       <div>
@@ -93,7 +93,7 @@ export function LimitNote({ children }) {
   );
 }
 
-export function RatioCard({ nombre, formula, valor, semColor, refValue, interpretacion, limitacion }) {
+export function RatioCard({ nombre, formula, valor, semColor, refValue, interpretacion, limitacion = '' }) {
   const bg = { verde: 'border-emerald-200 bg-emerald-50', ambar: 'border-amber-200 bg-amber-50', rojo: 'border-red-200 bg-red-50', gris: 'border-slate-200 bg-slate-50' };
   const vc = { verde: 'text-emerald-700', ambar: 'text-amber-700', rojo: 'text-red-700', gris: 'text-slate-500' };
   return (

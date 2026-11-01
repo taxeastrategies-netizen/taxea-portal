@@ -24,7 +24,7 @@ export default function CSVImporter({ account, companyId, onImported, onClose })
   const [error, setError] = useState(null);
   const [showFormats, setShowFormats] = useState(false);
   const [drag, setDrag] = useState(false);
-  const inputRef = useRef();
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const readFile = (f) => {
     if (!f) return;
@@ -33,7 +33,8 @@ export default function CSVImporter({ account, companyId, onImported, onClose })
     setError(null);
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target.result;
+      const text = typeof e.target.result === 'string' ? e.target.result : '';
+      if (!text.trim()) { setError('El archivo CSV está vacío o no se ha podido leer.'); return; }
       const lines = text.split('\n').filter(l => l.trim());
       setPreview({
         headers: lines[0],

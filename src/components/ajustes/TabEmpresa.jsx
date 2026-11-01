@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
-function Field({ label, required, error, colSpan, children }) {
+function Field({ label, required = false, error = null, colSpan = false, children }) {
   return (
     <div className={`space-y-1.5${colSpan ? ' col-span-2' : ''}`}>
       <Label>{label}{required ? ' *' : ''}</Label>
@@ -35,7 +35,7 @@ export default function TabEmpresa({ company, user, refreshCompany }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState(/** @type {Partial<Record<keyof typeof EMPTY_FORM, string>>} */ ({}));
   const [dirty, setDirty] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');

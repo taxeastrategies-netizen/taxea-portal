@@ -1,5 +1,5 @@
-import { getWithholdingAmount, roundMoney } from './accountingUtils';
-import { reconcileFinancialSources } from './financialSourceTruth';
+import { getWithholdingAmount, roundMoney } from './accountingUtils.js';
+import { reconcileFinancialSources } from './financialSourceTruth.js';
 
 /**
  * Financial Core - Capa de calculo financiero unificada
@@ -51,7 +51,7 @@ export function getOutstandingAmount(invoice) {
  * Filtra por ano y opcionalmente por trimestre.
  * Usa el campo `anio` si existe, sino lo deriva de la fecha.
  */
-export function filterByPeriod(items, { year, quarter } = {}) {
+export function filterByPeriod(items, { year = undefined, quarter = undefined } = {}) {
   let result = items || [];
   if (year) {
     const y = parseInt(year);
@@ -262,21 +262,21 @@ export function calculateMonthlyData(invoices, expenses, year) {
 
   activeExpenses(sourceTruth.expenses).filter(e => e.tipo === 'ingreso').forEach(e => {
     const d = new Date(e.fecha || e.created_date);
-    if (!isNaN(d) && d.getFullYear() === y) {
+    if (!Number.isNaN(d.getTime()) && d.getFullYear() === y) {
       data[d.getMonth()].ingresos += Number(e.total) || 0;
     }
   });
 
   activeInvoices(sourceTruth.invoices).filter(i => i.tipo === 'emitida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
-    if (!isNaN(d) && d.getFullYear() === y) {
+    if (!Number.isNaN(d.getTime()) && d.getFullYear() === y) {
       data[d.getMonth()].ingresos += Number(i.total_factura) || 0;
     }
   });
   
   activeExpenses(sourceTruth.expenses).filter(e => e.tipo === 'gasto').forEach(e => {
     const d = new Date(e.fecha || e.created_date);
-    if (!isNaN(d) && d.getFullYear() === y) {
+    if (!Number.isNaN(d.getTime()) && d.getFullYear() === y) {
       data[d.getMonth()].gastos += Number(e.total) || 0;
     }
   });
@@ -284,7 +284,7 @@ export function calculateMonthlyData(invoices, expenses, year) {
   // Anadir gastos de facturas recibidas
   activeInvoices(sourceTruth.invoices).filter(i => i.tipo === 'recibida').forEach(i => {
     const d = new Date(i.fecha_emision || i.created_date);
-    if (!isNaN(d) && d.getFullYear() === y) {
+    if (!Number.isNaN(d.getTime()) && d.getFullYear() === y) {
       data[d.getMonth()].gastos += Number(i.total_factura) || 0;
     }
   });

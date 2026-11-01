@@ -7,7 +7,7 @@ function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
-function CashKpi({ label, value, sub, trend, trendLabel, color = 'slate', delay = 0, large = false }) {
+function CashKpi({ label, value, sub = '', trend = 'neutral', trendLabel = '', color = 'slate', delay = 0, large = false }) {
   const colorMap = {
     emerald: { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
     blue:    { bg: 'bg-blue-50',    border: 'border-blue-100',    text: 'text-blue-700',    dot: 'bg-blue-500' },

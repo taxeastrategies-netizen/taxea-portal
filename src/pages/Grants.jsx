@@ -85,7 +85,7 @@ function GrantCard({ item }) {
 export default function Grants() {
   const [geo, setGeo] = useState(null);
   const [mapError, setMapError] = useState(false);
-  const [community, setCommunity] = useState('');
+  const [community, setCommunity] = useState(/** @type {'' | typeof COMMUNITIES[number]} */ (''));
   const [province, setProvince] = useState('');
   const [applicant, setApplicant] = useState('all');
   const [topic, setTopic] = useState('all');
@@ -114,7 +114,7 @@ export default function Grants() {
     let active = true;
     setLoading(true);
     setError('');
-    base44.functions.invoke('searchGrants', { communityCode: community?.code || '', province, applicant, topic, finality, administration, query, status: tab, page })
+    base44.functions.invoke('searchGrants', { communityCode: (community ? community.code : undefined) || '', province, applicant, topic, finality, administration, query, status: tab, page })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -145,7 +145,7 @@ export default function Grants() {
     if (item) changeGeography(item, feature.properties.name);
   };
   const mapStyle = feature => {
-    const selected = province ? province === feature.properties.name && community?.ine === feature.properties.cod_ccaa : community?.ine === feature.properties.cod_ccaa;
+    const selected = province ? province === feature.properties.name && (community ? community.ine : undefined) === feature.properties.cod_ccaa : (community ? community.ine : undefined) === feature.properties.cod_ccaa;
     return { color: selected ? '#b91c1c' : '#fff', weight: selected ? 2.4 : 1, fillColor: selected ? '#e74747' : '#255579', fillOpacity: selected ? 0.88 : 0.68 };
   };
   const tabs = [
@@ -167,14 +167,14 @@ export default function Grants() {
         <p className="mt-4 inline-flex items-center gap-2 text-xs text-slate-400"><ShieldCheck className="h-4 w-4 text-emerald-400" />Fuente activa: BDNS oficial · actualización al consultar (caché máxima: 10 min){checkedAt ? ' · ' + new Date(checkedAt).toLocaleString('es-ES') : ''}</p>
       </div>
     </section>
-    <OpportunityWatchPanel kind="grant" criteria={{ communityCode: community?.code || '', communityName: community?.name || '', province, applicant, topic, finality, administration, query }} onApply={applySavedSearch} />
+    <OpportunityWatchPanel kind="grant" criteria={{ communityCode: (community ? community.code : undefined) || '', communityName: (community ? community.name : undefined) || '', province, applicant, topic, finality, administration, query }} onApply={applySavedSearch} />
     <div className="grid gap-5 xl:grid-cols-[minmax(340px,0.95fr)_minmax(0,1.3fr)]">
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><MapPinned className="h-4 w-4 text-taxea-red" />Mapa de España</h2><span className="text-xs text-muted-foreground">Pulsa una provincia</span></div>
         {geo ? <div className="h-[390px] w-full">
           <MapContainer center={[38, -4]} zoom={5} minZoom={4} maxZoom={9} maxBounds={[[25, -20], [46, 7]]} scrollWheelZoom={false} className="h-full w-full" style={{ background: '#d7e6ef' }}>
             <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <GeoJSON key={(community?.code || 'all') + province} data={geo} style={mapStyle} onEachFeature={(feature, layer) => { layer.bindTooltip(feature.properties.name); layer.on('click', () => chooseProvince(feature)); }} />
+            <GeoJSON key={((community ? community.code : undefined) || 'all') + province} data={geo} style={mapStyle} onEachFeature={(feature, layer) => { layer.bindTooltip(feature.properties.name); layer.on('click', () => chooseProvince(feature)); }} />
           </MapContainer>
         </div> : <div className="flex h-[390px] items-center justify-center p-8 text-center text-sm text-muted-foreground">{mapError ? 'El mapa no se pudo cargar. Usa los selectores geográficos para seguir buscando.' : 'Cargando mapa interactivo…'}</div>}
         <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">El mapa orienta la búsqueda. Comprueba siempre el ámbito territorial y los requisitos en la convocatoria. Geometría: <a href="https://github.com/codeforgermany/click_that_hood" target="_blank" rel="noopener noreferrer" className="underline">Click That Hood (MIT)</a>.</p>
@@ -183,7 +183,7 @@ export default function Grants() {
         <h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><SlidersHorizontal className="h-4 w-4 text-taxea-red" />Ajusta la búsqueda</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="space-y-1.5 text-xs font-semibold">Comunidad autónoma
-            <NativeSelect value={community?.ine || ''} onChange={e => changeGeography(COMMUNITIES.find(row => row.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+            <NativeSelect value={(community ? community.ine : undefined) || ''} onChange={e => changeGeography(COMMUNITIES.find(row => row.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="">Toda España</option>{COMMUNITIES.map(row => <option key={row.ine} value={row.ine}>{row.name}</option>)}
             </NativeSelect>
           </label>

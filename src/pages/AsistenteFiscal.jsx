@@ -51,7 +51,8 @@ export default function AsistenteFiscal() {
     setCargando(true);
 
     const msgUsuario = {
-      id: Date.now(),
+      id: String(Date.now()),
+      nivel_riesgo: null,
       rol: 'user',
       contenido: pregunta,
       hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
@@ -72,7 +73,7 @@ export default function AsistenteFiscal() {
 
     const data = res.data;
     const msgAsistente = {
-      id: Date.now() + 1,
+      id: String(Date.now() + 1),
       rol: 'assistant',
       contenido: data.respuesta || 'No pude procesar tu consulta. Por favor, inténtalo de nuevo.',
       hora: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),

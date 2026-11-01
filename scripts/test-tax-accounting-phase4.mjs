@@ -15,6 +15,8 @@ async function compile(entry) {
   return build.outputFiles[0].text;
 }
 
+const fiscalProfileSchema = JSON.parse(fs.readFileSync('base44/entities/FiscalProfile.jsonc', 'utf8'));
+const fiscalProfileDefaults = Object.fromEntries(Object.entries(fiscalProfileSchema.properties).filter(([,field])=>field.default!==undefined).map(([key,field])=>[key,field.default]));
 function entity(records, name, writes) {
   records[name] ||= [];
   const match = (row, filter = {}) => Object.entries(filter).every(([key, value]) => row[key] === value);
@@ -22,7 +24,7 @@ function entity(records, name, writes) {
     list: async (_sort, limit = 50, skip = 0) => records[name].slice(skip, skip + limit),
     filter: async (filter, _sort, limit = 50, skip = 0) => records[name].filter(row => match(row, filter)).slice(skip, skip + limit),
     get: async id => records[name].find(row => row.id === id) || null,
-    create: async data => { const row = { id: `${name}-${records[name].length + 1}`, created_date: new Date().toISOString(), ...data }; records[name].push(row); writes.push({ name, action: 'create', row }); return row; },
+    create: async data => { const row = { id: `${name}-${records[name].length + 1}`, created_date: new Date().toISOString(), ...(name === 'FiscalProfile' ? fiscalProfileDefaults : {}), ...data }; records[name].push(row); writes.push({ name, action: 'create', row }); return row; },
     update: async (id, data) => { const row = records[name].find(item => item.id === id); if (!row) throw new Error('missing'); Object.assign(row, data); writes.push({ name, action: 'update', row: { ...row } }); return row; },
     delete: async id => { const index = records[name].findIndex(item => item.id === id); if (index >= 0) records[name].splice(index, 1); writes.push({ name, action: 'delete', id }); },
   };
@@ -92,6 +94,7 @@ const fiscal = await harness('base44/functions/fiscalOperations/entry.ts', fisca
 const profileBase = { fiscalName: 'Empresa A', taxId: 'B12345678', mainTerritory: 'peninsula_baleares', indirectTaxDefault: 'iva', profileStatus: 'validado_asesor', effectiveFrom: '2026-01-01', lastChangeReason: 'Alta sintética' };
 const first = await fiscal.call({ action: 'save_profile', companyId: 'company-a', profile: profileBase });
 const duplicate = await fiscal.call({ action: 'save_profile', companyId: 'company-a', profile: profileBase });
+const reasonOnly = await fiscal.call({ action: 'save_profile', companyId: 'company-a', profile: {...profileBase, lastChangeReason: 'Solo metadatos; mismo criterio'} });
 fiscal.setUser({ email: 'advisor@test.invalid', role: 'advisor', data: {} });
 const validated = await fiscal.call({ action: 'save_profile', companyId: 'company-a', profile: { ...profileBase, profileStatus: 'validado_asesor', lastChangeReason: 'Validación profesional' } });
 const fiscalBundle = await fiscal.call({ action: 'bundle', companyId: 'company-a' });
@@ -122,6 +125,8 @@ const checks = {
   userCannotSelfValidate: first.status === 200 && first.data.profile.profileStatus === 'pendiente_revision',
   firstVersionCreated: first.data.versionCreated === true && fiscalRecords.FiscalProfileVersion.length >= 1,
   duplicateProfileNoVersion: duplicate.status === 200 && duplicate.data.versionCreated === false,
+  schemaDefaultsDoNotCreateVersions: first.data.profile.version === duplicate.data.profile.version,
+  changeReasonAloneDoesNotCreateVersion: reasonOnly.status === 200 && reasonOnly.data.versionCreated === false,
   advisorCanValidate: validated.status === 200 && validated.data.profile.profileStatus === 'validado_asesor',
   versionHistoryReturned: fiscalBundle.status === 200 && fiscalBundle.data.profileVersions.length === 2,
   responsivePortfolio: advisorUi.includes('sm:flex-row') && advisorUi.includes('xl:grid-cols-6') && advisorUi.includes('pageSize'),

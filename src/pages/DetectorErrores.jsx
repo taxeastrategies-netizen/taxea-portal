@@ -130,7 +130,7 @@ export default function DetectorErrores() {
     const sevA = SEVERIDAD[a.severidad]?.order || 5;
     const sevB = SEVERIDAD[b.severidad]?.order || 5;
     if (sevA !== sevB) return sevA - sevB;
-    return new Date(b.created_date) - new Date(a.created_date);
+    return new Date(b.created_date).getTime() - new Date(a.created_date).getTime();
   });
 
   const filtered = sortedErrors.filter(e => {

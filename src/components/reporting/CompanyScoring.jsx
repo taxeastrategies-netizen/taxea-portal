@@ -131,7 +131,7 @@ ${scoring.factors.map(fac => `- ${fac.label}: ${fac.score}/100`).join('\n')}
 Genera: resumen ejecutivo + fortalezas clave + áreas de mejora + conclusión estratégica.
 Usa lenguaje corporativo, preciso y sofisticado. Sé conciso pero profundo.`,
     });
-    setAiComment(typeof res === 'string' ? res : res?.result || res?.text || '');
+    setAiComment(res);
     } catch {setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.');} finally {setLoading(false);}
   };
 

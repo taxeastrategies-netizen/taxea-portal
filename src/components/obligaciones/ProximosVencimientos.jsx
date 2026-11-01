@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 const CLOSED = new Set(['presentado', 'pagado', 'finalizado', 'no_aplica']);
 const fmt = value => value ? new Date(`${value}T12:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Según supuesto';
-const daysUntil = value => value ? Math.ceil((new Date(`${value}T23:59:59`) - new Date()) / 86400000) : null;
+const daysUntil = value => value ? Math.ceil((new Date(`${value}T23:59:59`).getTime() - Date.now()) / 86400000) : null;
 
 function Deadline({ item }) {
   const days = daysUntil(item.filingDeadline);

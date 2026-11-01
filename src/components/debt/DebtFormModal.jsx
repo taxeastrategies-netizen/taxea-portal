@@ -45,7 +45,7 @@ const DEFAULT = {
   notas: '',
 };
 
-function Field({ label, children, required }) {
+function Field({ label, children, required = false }) {
   return (
     <div>
       <label className="block text-xs font-medium text-slate-600 mb-1">{label}{required && <span className="text-red-400 ml-0.5">*</span>}</label>

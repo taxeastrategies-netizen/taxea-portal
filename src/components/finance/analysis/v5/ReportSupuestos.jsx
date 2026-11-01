@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Settings2, X, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-function InputField({ label, value, onChange, placeholder, note }) {
+function InputField({ label, value, onChange, placeholder, note = '' }) {
   return (
     <div>
       <label className="block text-[10px] font-semibold text-slate-600 mb-1 uppercase tracking-wide">{label}</label>

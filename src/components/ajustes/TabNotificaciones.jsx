@@ -17,7 +17,7 @@ const PREFS_DEFAULT = {
   notif_push: true,
 };
 
-function Toggle({ label, desc, checked, onChange,disabled }) {
+function Toggle({ label, desc, checked, onChange,disabled = false }) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
       <div>
@@ -40,7 +40,7 @@ export default function TabNotificaciones({ user }) {
   const [prefs, setPrefs] = useState(initial);
   const [saved, setSaved] = useState(false);
   const [saving,setSaving]=useState(false),[error,setError]=useState(''),[retry,setRetry]=useState(null);
-  const confirmed=useRef(initial()),flight=useRef(false),identity=useRef(user?.id);
+  const confirmed=useRef(initial()),flight=useRef(/** @type {false | object} */ (false)),identity=useRef(user?.id);
   const queryClient = useQueryClient();
   const mutation = useMutation(notificationPreferenceOptions({queryClient,
     persist: value => base44.auth.updateMe({notification_prefs:value}),

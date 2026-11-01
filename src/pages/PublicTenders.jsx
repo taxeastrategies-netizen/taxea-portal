@@ -62,7 +62,7 @@ function TenderCard({ row }) {
 export default function PublicTenders() {
   const [geo, setGeo] = useState(null);
   const [mapError, setMapError] = useState(false);
-  const [community, setCommunity] = useState('');
+  const [community, setCommunity] = useState(/** @type {'' | typeof COMMUNITIES[number]} */ (''));
   const [province, setProvince] = useState('');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
@@ -86,7 +86,7 @@ export default function PublicTenders() {
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    const timer = setTimeout(() => base44.functions.invoke('searchTenders', { kind, query, cpv, contractType, communityCode: community?.code || '', provinceCode: province, minAmount, maxAmount, cursor: requestCursor })
+    const timer = setTimeout(() => base44.functions.invoke('searchTenders', { kind, query, cpv, contractType, communityCode: (community ? community.code : undefined) || '', provinceCode: province, minAmount, maxAmount, cursor: requestCursor })
       .then(result => {
         if (!active) return;
         const value = result?.data || result;
@@ -122,8 +122,8 @@ export default function PublicTenders() {
   };
   const mapStyle = feature => {
     const selectedName = PROVINCES.find(item => item.code === province)?.name || '';
-    const selected = province ? normal(selectedName).split('/').some(name => name === normal(feature.properties.name)) && community?.ine === feature.properties.cod_ccaa : community?.ine === feature.properties.cod_ccaa;
-    return { color: selected ? '#e22c43' : '#ffffff', weight: selected ? 2 : 1, fillColor: selected ? '#e22c43' : community?.ine === feature.properties.cod_ccaa ? '#22d3ee' : '#254463', fillOpacity: selected ? 0.85 : 0.68 };
+    const selected = province ? normal(selectedName).split('/').some(name => name === normal(feature.properties.name)) && (community ? community.ine : undefined) === feature.properties.cod_ccaa : (community ? community.ine : undefined) === feature.properties.cod_ccaa;
+    return { color: selected ? '#e22c43' : '#ffffff', weight: selected ? 2 : 1, fillColor: selected ? '#e22c43' : (community ? community.ine : undefined) === feature.properties.cod_ccaa ? '#22d3ee' : '#254463', fillOpacity: selected ? 0.85 : 0.68 };
   };
   return <main className="mx-auto max-w-7xl space-y-7 px-4 py-7 md:px-7">
     <section className="relative overflow-hidden rounded-[28px] border border-cyan-500/20 bg-[#071425] p-7 text-white shadow-2xl md:p-10">
@@ -143,17 +143,17 @@ export default function PublicTenders() {
         { icon: CalendarClock, value: counts.consulta, label: 'Consultas preliminares encontradas', color: 'text-amber-600' },
       ].map(item => <div key={item.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm"><item.icon className={'h-5 w-5 ' + item.color} /><p className="mt-3 font-jakarta text-3xl font-extrabold">{item.value}</p><p className="mt-1 text-xs text-muted-foreground">{item.label}</p></div>)}
     </div>
-    <OpportunityWatchPanel kind="tender" criteria={{ communityCode: community?.code || '', communityName: community?.name || '', provinceCode: province, query, cpv, contractType, minAmount, maxAmount }} onApply={applySavedSearch} />
+    <OpportunityWatchPanel kind="tender" criteria={{ communityCode: (community ? community.code : undefined) || '', communityName: (community ? community.name : undefined) || '', provinceCode: province, query, cpv, contractType, minAmount, maxAmount }} onApply={applySavedSearch} />
     <div className="grid gap-5 xl:grid-cols-[minmax(310px,0.92fr)_minmax(0,1.08fr)]">
       <section className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-5 py-4"><h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><MapPinned className="h-4 w-4 text-taxea-red" />Mapa de oportunidades</h2><span className="text-xs text-muted-foreground">Selecciona provincia</span></div>
-        {geo ? <div className="h-[420px]"><MapContainer center={[38, -4]} zoom={5} minZoom={4} maxZoom={9} maxBounds={[[25, -20], [46, 7]]} scrollWheelZoom={false} className="h-full w-full" style={{ background: '#d7e6ef' }}><TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><GeoJSON key={(community?.code || 'all') + province} data={geo} style={mapStyle} onEachFeature={(feature, layer) => { layer.bindTooltip(feature.properties.name); layer.on('click', () => chooseProvince(feature)); }} /></MapContainer></div> : <div className="flex h-[420px] items-center justify-center p-7 text-center text-sm text-muted-foreground">{mapError ? 'Mapa no disponible. Usa los selectores geográficos.' : 'Cargando mapa…'}</div>}
+        {geo ? <div className="h-[420px]"><MapContainer center={[38, -4]} zoom={5} minZoom={4} maxZoom={9} maxBounds={[[25, -20], [46, 7]]} scrollWheelZoom={false} className="h-full w-full" style={{ background: '#d7e6ef' }}><TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /><GeoJSON key={((community ? community.code : undefined) || 'all') + province} data={geo} style={mapStyle} onEachFeature={(feature, layer) => { layer.bindTooltip(feature.properties.name); layer.on('click', () => chooseProvince(feature)); }} /></MapContainer></div> : <div className="flex h-[420px] items-center justify-center p-7 text-center text-sm text-muted-foreground">{mapError ? 'Mapa no disponible. Usa los selectores geográficos.' : 'Cargando mapa…'}</div>}
         <p className="border-t border-border px-5 py-3 text-[11px] leading-relaxed text-muted-foreground">El mapa filtra por lugar de ejecución cuando la ficha lo informa; no restringe quién puede licitar. Geometría: <a href="https://github.com/codeforgermany/click_that_hood" target="_blank" rel="noopener noreferrer" className="underline">Click That Hood (MIT)</a>.</p>
       </section>
       <section className="rounded-2xl border border-border bg-card p-5 md:p-6">
         <h2 className="flex items-center gap-2 font-jakarta text-sm font-bold"><Filter className="h-4 w-4 text-taxea-red" />Filtros de búsqueda</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="space-y-1.5 text-xs font-semibold">Comunidad autónoma<NativeSelect value={community?.ine || ''} onChange={e => selectCommunity(COMMUNITIES.find(item => item.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"><option value="">Toda España</option>{COMMUNITIES.map(item => <option key={item.ine} value={item.ine}>{item.name}</option>)}</NativeSelect></label>
+          <label className="space-y-1.5 text-xs font-semibold">Comunidad autónoma<NativeSelect value={(community ? community.ine : undefined) || ''} onChange={e => selectCommunity(COMMUNITIES.find(item => item.ine === e.target.value) || '')} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"><option value="">Toda España</option>{COMMUNITIES.map(item => <option key={item.ine} value={item.ine}>{item.name}</option>)}</NativeSelect></label>
           <label className="space-y-1.5 text-xs font-semibold">Provincia<NativeSelect value={province} disabled={!community} onChange={e => { setProvince(e.target.value); reset(); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50"><option value="">Todas las provincias</option>{options.map(item => <option key={item.code} value={item.code}>{item.name}</option>)}</NativeSelect></label>
           <label className="space-y-1.5 text-xs font-semibold">Tipo de contrato<NativeSelect value={contractType} onChange={e => { setContractType(e.target.value); reset(); }} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm"><option value="">Todos los tipos</option>{TYPES.map(item => <option key={item}>{item}</option>)}</NativeSelect></label>
           <label className="space-y-1.5 text-xs font-semibold">Código CPV<input value={cpv} onChange={e => { if (/^\d{0,8}$/.test(e.target.value)) { setCpv(e.target.value); reset(); } }} placeholder="Ej.: 72000000" inputMode="numeric" maxLength={8} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm" /></label>

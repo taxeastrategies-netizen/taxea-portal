@@ -26,7 +26,7 @@ function Select({children,value,defaultValue,onValueChange,...props}){
   const model=nativeSelectModel(children,{itemType:SelectItem,groupType:SelectGroup,labelType:SelectLabel,valueType:SelectValue,triggerType:SelectTrigger});
   const current=value===undefined?localValue:value;
   const change=next=>{if(value===undefined)setLocalValue(next);onValueChange?.(next);};
-  const customTrigger=React.Children.toArray(children).some(child=>child.type===SelectTrigger&&child.props.asChild);
+  const customTrigger=React.Children.toArray(children).some(child=>React.isValidElement(child)&&child.type===SelectTrigger&&child.props.asChild);
   // Form controls retain native validation/FormData. Their visual picker is
   // adaptive too; ordinary application choices use the direct drawer path.
   // Standard mobile controls all use NativeSelect, including empty/loading
@@ -52,14 +52,24 @@ function Select({children,value,defaultValue,onValueChange,...props}){
 
 const SelectGroup = SelectPrimitive.Group
 
-const SelectValue = React.forwardRef(({children,placeholder,...props},ref)=>{
+const SelectValue = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Value>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Value>>} ref
+ */
+({children,placeholder,...props},ref)=>{
   const picker=React.useContext(SelectUiContext);
   if(picker?.mode!=='desktop'&&picker)return <span {...props} ref={ref}>{children??picker.options.find(option=>option.value===String(picker.value))?.label??placeholder??''}</span>;
   return <SelectPrimitive.Value {...props} placeholder={placeholder} ref={ref}>{children}</SelectPrimitive.Value>;
 });
 SelectValue.displayName='SelectValue';
 
-const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }, ref) => {
+const SelectTrigger = React.forwardRef(
+/**
+ * @param {Omit<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, keyof React.DOMAttributes<HTMLButtonElement>> & React.DOMAttributes<HTMLElement>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Trigger>>} ref
+ */
+({ className, children,asChild,...props }, ref) => {
   const picker=React.useContext(SelectUiContext);
   const registeredTrigger=picker?.triggerRef;
   const assignedRef=React.useCallback(node=>{if(registeredTrigger)registeredTrigger.current=node;if(typeof ref==='function')ref(node);else if(ref)ref.current=node;},[registeredTrigger,ref]);
@@ -93,7 +103,12 @@ const SelectTrigger = React.forwardRef(({ className, children,asChild,...props }
 })
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName
 
-const SelectScrollUpButton = React.forwardRef(({ className, ...props }, ref) => (
+const SelectScrollUpButton = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.ScrollUpButton>>} ref
+ */
+({ className, ...props }, ref) => (
   <SelectPrimitive.ScrollUpButton
     ref={ref}
     className={cn("flex cursor-default items-center justify-center py-1", className)}
@@ -103,7 +118,12 @@ const SelectScrollUpButton = React.forwardRef(({ className, ...props }, ref) => 
 ))
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName
 
-const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) => (
+const SelectScrollDownButton = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.ScrollDownButton>>} ref
+ */
+({ className, ...props }, ref) => (
   <SelectPrimitive.ScrollDownButton
     ref={ref}
     className={cn("flex cursor-default items-center justify-center py-1", className)}
@@ -114,7 +134,12 @@ const SelectScrollDownButton = React.forwardRef(({ className, ...props }, ref) =
 SelectScrollDownButton.displayName =
   SelectPrimitive.ScrollDownButton.displayName
 
-const SelectContent = React.forwardRef(({ className, children, position = "popper", ...props }, ref) => {
+const SelectContent = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Content>>} ref
+ */
+({ className, children, position = "popper", ...props }, ref) => {
   const safePadding=useSafeAreaCollision();
   const picker=React.useContext(SelectUiContext);
   if(picker?.mode==='native'||picker?.mode==='sheet')return null;
@@ -144,7 +169,12 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
 })
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
-const SelectLabel = React.forwardRef(({ className, ...props }, ref) => (
+const SelectLabel = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Label>>} ref
+ */
+({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
     className={cn("px-2 py-1.5 text-sm font-semibold", className)}
@@ -152,7 +182,12 @@ const SelectLabel = React.forwardRef(({ className, ...props }, ref) => (
 ))
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
-const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => (
+const SelectItem = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Item>>} ref
+ */
+({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
@@ -170,7 +205,12 @@ const SelectItem = React.forwardRef(({ className, children, ...props }, ref) => 
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName
 
-const SelectSeparator = React.forwardRef(({ className, ...props }, ref) => (
+const SelectSeparator = React.forwardRef(
+/**
+ * @param {React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>} props
+ * @param {React.ForwardedRef<React.ElementRef<typeof SelectPrimitive.Separator>>} ref
+ */
+({ className, ...props }, ref) => (
   <SelectPrimitive.Separator
     ref={ref}
     className={cn("-mx-1 my-1 h-px bg-muted", className)}

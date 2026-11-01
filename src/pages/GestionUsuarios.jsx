@@ -61,7 +61,7 @@ function ModalShell({ title, onClose, children, maxW = 'max-w-md' }) {
   );
 }
 
-function ActionBtn({ title, onClick, danger, children }) {
+function ActionBtn({ title, onClick, danger = false, children }) {
   return (
     <button title={title} onClick={onClick}
       className={`p-1.5 rounded-lg transition-colors ${

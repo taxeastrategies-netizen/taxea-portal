@@ -100,6 +100,7 @@ const issuedForm={numero_factura:'minorista-sale',fecha_emision:'2026-07-12',cli
 const issued=await call('approveOcrDocument',{docId:issuedDoc.id,invoiceType:'emitida',form:issuedForm});
 const issuedInv=await entity('Invoice').get(issued.invoiceId);
 assert.equal(issuedInv.fiscal_treatment,'exempt_limited');assert.equal(issuedInv.fiscal_exemption_key,'IGIC_COMERCIANTE_MINORISTA');
+assert.equal(issuedInv.qr_mode,'no_verifactu');assert.match(issuedInv.qr_url,/^https:\/\/www2\.agenciatributaria\.gob\.es\//);
 assert.equal(issuedInv.estado_contable,'contabilizada');assert.match(issuedInv.qr_integrity_hash,/^[a-f0-9]{64}$/i);
 const issuedHash=issuedInv.qr_integrity_hash;
 await call('approveOcrDocument',{docId:issuedDoc.id,invoiceType:'emitida',form:issuedForm});

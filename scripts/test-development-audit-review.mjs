@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {reviewDevelopmentAudit} from './review-development-audit.mjs';
+const url='https://github.com/advisories/GHSA-g3hv-75wg-m249';
+const one={name:'minimatch',severity:'moderate',nodes:['node_modules/minimatch'],via:[{url}]};
+const report=item=>({metadata:{vulnerabilities:{total:item?1:0}},vulnerabilities:item?{[item.name]:item}:{}});
+assert.equal(reviewDevelopmentAudit(report()).status,'no_known_alerts');
+const reviewed=reviewDevelopmentAudit(report(one));
+assert.equal(reviewed.remainingAlerts,1);assert.equal(reviewed.status,'reviewed_development_exception');
+assert.match(reviewed.limitation,/npm still reports/);
+for(const item of [{...one,severity:'high'},{...one,name:'unreviewed-package'},{...one,via:[{url:'https://example.invalid/new-risk'}]},{...one,nodes:['node_modules/react']},{...one,via:['unreviewed-dependency']}])assert.throws(()=>reviewDevelopmentAudit(report(item)));
+assert.throws(()=>reviewDevelopmentAudit({}),/Incomplete/);
+console.log(JSON.stringify({ok:true,cases:8,newRisksFailClosed:true,productionExceptionForbidden:true,alertsStillVisible:true,externalCalls:0}));

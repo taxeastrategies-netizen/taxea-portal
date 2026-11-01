@@ -141,6 +141,42 @@ function authorize(user: any, companyId: string, company: any) {
   throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
 
+// Mirror schema defaults only for a stable content fingerprint; never overwrite profile fields.
+const PROFILE_SNAPSHOT_DEFAULTS = {
+  "entityType": "autonomo",
+  "mainTerritory": "peninsula_baleares",
+  "taxAuthority": "aeat",
+  "filingFrequency": "trimestral",
+  "active": true,
+  "isLargeCompany": false,
+  "isREDEME": false,
+  "usesSII": false,
+  "usesVeriFactu": false,
+  "verifactuObligation": "pendiente_confirmar",
+  "indirectTaxDefault": "iva",
+  "defaultVatRate": 21,
+  "defaultIgicRate": 7,
+  "subjectToIRPF": false,
+  "irpfEstimation": "no_aplica",
+  "irpfImputationMethod": "accrual",
+  "irpfImputationMethodConfirmed": false,
+  "defaultWithholdingRate": 0,
+  "isProfessionalWithRetention": false,
+  "isPropertyLessor": false,
+  "retainedIncomePercent": 0,
+  "model130ExemptionConfirmed": false,
+  "model130TerritorialRelief": "none",
+  "model130TerritorialReliefConfirmed": false,
+  "repepStatus": "no_aplica",
+  "paysEmploymentOrProfessionalIncome": false,
+  "paysUrbanRent": false,
+  "paysCapitalIncome": false,
+  "hasNonResidentOperations": false,
+  "hasThirdPartyReporting": false,
+  "profileStatus": "pendiente_revision",
+  "censusValidationSource": "pendiente_confirmar"
+};
+
 function stable(value: any): any {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
@@ -684,7 +720,7 @@ Deno.serve(async (req) => {
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
       (!['save_invoice_tax_line','review_context','source_context','confirm_invoice_source','evaluate'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
-      action === 'bundle' ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
+      ['bundle', 'save_profile'].includes(action) ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
     ]);
     const profile = profiles?.[0] || null;
 
@@ -857,7 +893,7 @@ Deno.serve(async (req) => {
         payload.reviewedAt = undefined;
       }
       if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
-      const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key]]));
+      const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key] !== undefined ? profile[key] : PROFILE_SNAPSHOT_DEFAULTS[key]]));
       snapshot.ruleSetVersion = RULESET;
       const contentHash = await sha256(snapshot);
       const latestVersion = [...(profileVersions || [])].sort((a: any, b: any) => Number(b.version || 0) - Number(a.version || 0))[0] || null;

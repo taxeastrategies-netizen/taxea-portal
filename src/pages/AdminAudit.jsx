@@ -64,7 +64,7 @@ export default function AdminAudit() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.TaxeaAuditCase.create({ ...data, createdBy: user?.email }),
+    mutationFn: (/** @type {Record<string, unknown>} */ data) => base44.entities.TaxeaAuditCase.create({ ...data, createdBy: user?.email }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auditCases'] });
       toast.success('Expediente de auditoría creado');

@@ -39,7 +39,7 @@ export default function DebtOCR({ companyId, onImported }) {
   const [importing, setImporting] = useState(false);
   const [imported, setImported] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const inputRef = useRef();
+  const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const handleFile = async (f) => {
     if (!f) return;

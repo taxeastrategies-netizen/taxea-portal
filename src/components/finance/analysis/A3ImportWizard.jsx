@@ -33,7 +33,7 @@ export default function A3ImportWizard({ companyId, company, onComplete, onCance
   const [showTemplateConfig, setShowTemplateConfig] = useState(false);
   const [templateConfig, setTemplateConfig] = useState({ separator: ';', dateFormat: 'dd/mm/yyyy', decimalSep: ',' });
   const [loading, setLoading] = useState(false);
-  const fileRef = useRef();
+  const fileRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const handleFileChange = async (e) => {
     const f = e.target.files[0];

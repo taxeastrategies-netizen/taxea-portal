@@ -76,7 +76,7 @@ export default function DocumentForm({ open, onOpenChange, editing, docType, com
   });
 
   const [form, setForm] = useState(getEmpty());
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState(/** @type {Partial<Record<string, string>>} */ ({}));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [customRetention, setCustomRetention] = useState(false);
@@ -113,12 +113,12 @@ export default function DocumentForm({ open, onOpenChange, editing, docType, com
   const numField = isQuote ? 'numero_presupuesto' : 'numero_proforma';
 
   const validate = () => {
-    const e = {};
+    const e = /** @type {Partial<Record<string, string>>} */ ({});
     if (!form[numField]?.trim()) e[numField] = 'Obligatorio';
     if (!form.fecha) e.fecha = 'Obligatorio';
     if (form.base_imponible === '' || isNaN(parseFloat(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
     else if (parseFloat(form.base_imponible) < 0) e.base_imponible = 'No puede ser negativo';
-    if (form.aplica_retencion && (form.retencion_irpf === '' || isNaN(parseFloat(form.retencion_irpf)))) {
+    if (form.aplica_retencion && (String(form.retencion_irpf) === '' || isNaN(parseFloat(String(form.retencion_irpf))))) {
       e.retencion_irpf = 'Introduce el porcentaje';
     }
     setErrors(e);
@@ -133,9 +133,9 @@ export default function DocumentForm({ open, onOpenChange, editing, docType, com
       ...form,
       company_id: company.id,
       base_imponible: parseFloat(form.base_imponible) || 0,
-      tipo_impuesto: parseFloat(form.tipo_impuesto) || 0,
+      tipo_impuesto: parseFloat(String(form.tipo_impuesto)) || 0,
       cuota_impuesto: cuota,
-      retencion_irpf: form.aplica_retencion ? (parseFloat(form.retencion_irpf) || 0) : 0,
+      retencion_irpf: form.aplica_retencion ? (parseFloat(String(form.retencion_irpf)) || 0) : 0,
       total: total,
     };
     try {

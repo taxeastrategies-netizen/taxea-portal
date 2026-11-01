@@ -160,7 +160,7 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
   const [filterConf, setFilterConf] = useState('all');
   const [approvalMode, setApprovalMode] = useState('');
   const [error, setError] = useState('');
-  const fileRef = useRef();
+  const fileRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [pendingFileType, setPendingFileType] = useState('balance_situacion');
   const cancelledRef = useRef(false);
 
@@ -202,7 +202,8 @@ export default function PDFAnalysisEngine({ importType, companyId, company, onCo
         uploadedUrls.push({ url: file_url, type: pdfFiles[i].type, nombre: pdfFiles[i].file.name });
       }
 
-      const schema = {
+      /** @satisfies {import('@/types/controlled-core').JsonSchema} */
+const schema = {
         type: 'object',
         properties: {
           paginas: {
@@ -486,7 +487,8 @@ VERIFICACIÓN FINAL:
             const targetFiles = balanceFiles.length > 0 ? balanceFiles : uploadedUrls;
 
             try {
-              const correctionSchema = {
+              /** @satisfies {import('@/types/controlled-core').JsonSchema} */
+const correctionSchema = {
                 type: 'object',
                 properties: {
                   cuentas_corregidas: {

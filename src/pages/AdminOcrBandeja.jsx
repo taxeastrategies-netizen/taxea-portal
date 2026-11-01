@@ -66,6 +66,7 @@ es_factura_completa (boolean), es_proveedor_extranjero (boolean),
 es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rectificada (numero de factura original rectificada, si aparece),
 datos_faltantes (array strings), alertas_fiscales (array strings), concepto`;
 
+/** @satisfies {import('@/types/controlled-core').JsonSchema} */
 const OCR_SCHEMA_EXPENSE = {
   type: 'object',
   properties: {
@@ -99,6 +100,7 @@ es_rectificativa (boolean, true si es factura rectificativa/abono), factura_rect
 cuenta_pgc (cuenta 7XX PGC sugerida para el ingreso), confianza_pgc (0-100), motivo_clasificacion (explicación breve; requiere revisión humana),
 alertas_fiscales (array strings), datos_faltantes (array strings)`;
 
+/** @satisfies {import('@/types/controlled-core').JsonSchema} */
 const OCR_SCHEMA_INCOME = {
   type: 'object',
   properties: {
@@ -258,7 +260,7 @@ export default function AdminOcrBandeja() {
   const counts = STATUS_FILTERS.reduce((acc, f) => {
     acc[f.key] = scopedDocuments.filter(d => f.match(d.status)).length;
     return acc;
-  }, {});
+  }, /** @type {Record<string, number>} */ ({}));
 
   const processOcr = async (doc) => {
     setProcessingIds(prev => new Set([...prev, doc.id]));
@@ -590,6 +592,8 @@ export default function AdminOcrBandeja() {
           {reviewing && (
             <div className="mb-5">
               <ReviewPanel
+                companyId={reviewing.company_id}
+                onReturnToPending={undefined}
                 doc={reviewing}
                 tipo={reviewing.documentType === 'expense_invoice' ? 'gastos' : 'ingresos'}
                 onApprove={handleApprove}

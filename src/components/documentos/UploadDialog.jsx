@@ -280,7 +280,7 @@ export default function UploadDialog({ open, onClose, company, user, onSuccess }
           <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => {
             const inp = document.createElement('input');
             inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
-            inp.onchange = e => e.target.files[0] && handleFile(e.target.files[0]);
+            inp.onchange = () => { const selectedFile = inp.files?.[0]; if (selectedFile) handleFile(selectedFile); };
             inp.click();
           }}>📷 Usar cámara</Button>
         </div>

@@ -36,7 +36,7 @@ export default function Productos() {
 
   const handleSave = async () => {
     setSaving(true);
-    const payload = { ...form, company_id: company.id, precio_base: parseFloat(form.precio_base) || 0, tipo_impuesto: parseFloat(form.tipo_impuesto) || 21 };
+    const payload = { ...form, company_id: company.id, precio_base: parseFloat(form.precio_base) || 0, tipo_impuesto: parseFloat(String(form.tipo_impuesto)) || 21 };
     if (editing) await base44.entities.ProductService.update(editing.id, payload);
     else await base44.entities.ProductService.create(payload);
     setSaving(false); setShowForm(false); setEditing(null); setForm(EMPTY); load();

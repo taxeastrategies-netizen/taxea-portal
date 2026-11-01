@@ -28,7 +28,7 @@ const CONF_BADGE = {
   no_fiable: 'bg-red-200 text-red-800 font-bold',
 };
 
-function ConfField({ label, value, conf = 'media', source, onEdit }) {
+function ConfField({ label, value, conf = 'media', source = '', onEdit = undefined }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
 
@@ -59,7 +59,7 @@ function ConfField({ label, value, conf = 'media', source, onEdit }) {
   );
 }
 
-function MathBadge({ ok, label, diff }) {
+function MathBadge({ ok, label, diff = null }) {
   return (
     <div className={cn('flex items-center gap-2 p-2 rounded-lg text-xs', ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
       {ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}

@@ -122,6 +122,7 @@ function buildPnL(invoices, expenses, year) {
   const recibidas = invoices.filter(i => i.tipo === 'recibida');
 
   const header = ['Mes', 'Ingresos Base (€)', 'Gastos estimados (€)', 'Beneficio Estimado (€)', 'Margen %', 'IVA/IGIC Repercutido (€)', 'IVA/IGIC Deducible clasificado (€)', 'Diferencia orientativa (€)'];
+  /** @type {(string | number)[][]} */
   const rows = [header];
 
   let totIng = 0, totGas = 0, totIvaR = 0, totIvaS = 0;
@@ -298,6 +299,7 @@ function buildLibroMayor(accounts) {
 // ─── Hoja 9: Resumen IVA/IGIC ────────────────────────────────────────────────
 function buildResumenIVA(invoices, expenses) {
   const header = ['Trimestre','Periodo','Base Imponible Ventas (€)','IVA/IGIC Repercutido (€)','Base Imponible Compras (€)','IVA/IGIC Deducible clasificado (€)','Diferencia orientativa (€)'];
+  /** @type {(string | number)[][]} */
   const rows = [['Resumen orientativo por fecha de operación. No sustituye el 303/420; las facturas RECC se excluyen y se detallan en la hoja RECC IVA.'], header];
   const ordinaryInvoices = invoices.filter(i => i.fiscal_regime !== 'criterio_caja');
   const periodos = { T1: 'Ene-Mar', T2: 'Abr-Jun', T3: 'Jul-Sep', T4: 'Oct-Dic' };
@@ -449,7 +451,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
     return { warning: 'Se han descargado solo los libros de facturas. No incluye Diario, Mayor ni Caja/Bancos.' + (a3Warning ? ' ' + a3Warning : '') };
   }
   const [accounting, reccBook] = await Promise.all([
-    onlyNew ? { entries: [], accounts: [] } : loadRealAccounting(companyId, year),
+    onlyNew ? { entries: [], accounts: [], warning: undefined } : loadRealAccounting(companyId, year),
     loadReccBook(companyId, year),
   ]);
   {

@@ -44,7 +44,7 @@ export default function APForecast({ invoices, expenses, obligations }) {
 
     // Alertas
     const alerts = [];
-    const maxWeek = byWeek.reduce((mx, w) => w.total > mx.total ? w : mx, byWeek[0] || { total: 0 });
+    const maxWeek = byWeek.reduce((mx, w) => w.total > mx.total ? w : mx, byWeek[0] || { week: 0, label: '', total: 0, facturas: 0, obligaciones: 0 });
     if (maxWeek?.total > 0) {
       alerts.push({ msg: `La semana ${maxWeek.week} concentra ${fmt(maxWeek.total)} en pagos. Revisa tu liquidez.`, level: 'warning' });
     }

@@ -3,9 +3,9 @@ const methods=new Set(['list','filter','get','create','bulkCreate','update','del
 export function createMercantilEntities(client){
  const cache=new Map();
  return new Proxy(client.entities,{get(target,name,receiver){
-  if(!MERCANTIL_ENTITIES.includes(name))return Reflect.get(target,name,receiver);
+  if(typeof name!=='string'||!MERCANTIL_ENTITIES.includes(name))return Reflect.get(target,name,receiver);
   if(!cache.has(name))cache.set(name,new Proxy({}, {get(_,method){
-   if(!methods.has(method))return undefined;
+   if(typeof method!=='string'||!methods.has(method))return undefined;
    return async(...args)=>{
     const response=await client.functions.invoke('mercantilDocumentOperations',{entity:name,method,args});
     const data=response?.data??response;

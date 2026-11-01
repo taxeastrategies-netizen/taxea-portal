@@ -8,7 +8,7 @@
  * @param {Object} opts
  * @param {number} [opts.concurrency] - max parallel workers (default 5)
  * @param {Function} [opts.onItemComplete] - (index, { ok, result, error }) => void
- * @returns {Promise<{ succeeded: number, failed: number, errors: Array }>}
+ * @returns {Promise<{ succeeded: number, failed: number, errors: Array, results: Array }>}
  */
 export async function runBatch(items, worker, opts = {}) {
   const concurrency = Math.min(opts.concurrency || 5, items.length || 1);

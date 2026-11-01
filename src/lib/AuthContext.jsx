@@ -6,7 +6,7 @@ import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
 import { acceptSessionIdentity, forgetSessionIdentity } from '@/lib/sessionSecurity.mjs';
 import '@/lib/query-client';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);

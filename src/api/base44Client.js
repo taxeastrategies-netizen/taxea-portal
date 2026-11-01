@@ -1,3 +1,4 @@
+import {limitedTextResult} from '@/lib/limitedCoreResult.mjs';
 import {createMercantilEntities} from '@/lib/mercantilEntities.mjs';
 import { createClient } from '@base44/sdk';
 import { appParams } from '@/lib/app-params';
@@ -25,7 +26,7 @@ const limitedCore = new Proxy(sdkBase44.integrations.Core, {
         if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'result')) {
           throw new Error(payload?.error || 'No se pudo completar la solicitud de IA');
         }
-        return payload.result;
+        return params?.response_json_schema ? payload.result : limitedTextResult(payload.result);
       };
     }
     if (property === 'ExtractDataFromUploadedFile' || property === 'SendEmail') {
@@ -61,7 +62,7 @@ const sessionAuth = new Proxy(sdkBase44.auth, {
 });
 
 // Los servicios que consumen créditos se invocan explícitamente en el backend.
-export const base44 = new Proxy(sdkBase44, {
+export const base44 = /** @type {typeof sdkBase44 & {controlledCore: import('@/types/controlled-core').ControlledCore}} */ (new Proxy(sdkBase44, {
   get(target, property, receiver) {
     if (property === 'auth') return sessionAuth;
     if (property === 'entities') return mercantilEntities;
@@ -69,4 +70,4 @@ export const base44 = new Proxy(sdkBase44, {
     if (property === 'controlledCore') return limitedCore;
     return Reflect.get(target, property, receiver);
   }
-});
+}));

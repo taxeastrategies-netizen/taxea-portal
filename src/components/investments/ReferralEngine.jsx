@@ -38,7 +38,7 @@ export default function ReferralEngine({ partners, onRefresh }) {
   const handleSave = async () => {
     if (!form.nombre) return;
     setSaving(true);
-    const data = { ...form, comision_valor: parseFloat(form.comision_valor) || 0, orden: parseInt(form.orden) || 0 };
+    const data = { ...form, comision_valor: parseFloat(form.comision_valor) || 0, orden: parseInt(String(form.orden)) || 0 };
     if (editing?.id) {
       await base44.entities.InvestmentPartner.update(editing.id, data);
     } else {

@@ -11,7 +11,7 @@ function fmt(n) {
 
 const COLORS = ['#be1a35', '#059669', '#2563eb', '#d97706', '#7c3aed', '#0891b2', '#dc2626'];
 
-const CustomTooltip = ({ active, payload }) => {
+const CustomTooltip = ({ active = false, payload = [] }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs">

@@ -47,7 +47,7 @@ Estructura:
 
 Estilo: preciso, ejecutivo, orientado a toma de decisiones estratégicas.`,
     });
-    setInsights(typeof res === 'string' ? res : res?.result || res?.text || '');
+    setInsights(res);
     } catch { setGenerationError('No se pudo generar el comentario. Puedes reintentarlo.'); } finally { setLoading(false); }
   };
 

@@ -10,6 +10,7 @@ import {allowsCopyText} from '@/lib/copyTextPreference.mjs';
 
 // A full-screen workspace must escape the animated page's containing/stacking
 // context. Its four safe insets are owned once, independently from AppLayout.
+/** @param {import('react').HTMLAttributes<HTMLDivElement> & {onBack?: () => void, busy?: boolean}} props */
 export default function FullscreenWorkspace({children,onBack,busy=false,className,...props}){
   const rootRef=useRef(null),anchorRef=useRef(null);
   const mobile=useMobileViewport(),copyMode=useCopyTextPreference();
@@ -19,7 +20,7 @@ export default function FullscreenWorkspace({children,onBack,busy=false,classNam
     const previous=document.activeElement;
     const update=()=>setInactive(!!anchorRef.current?.parentElement?.closest('[hidden],[inert]'));
     update();window.addEventListener(NAVIGATION_COMMITTED_EVENT,update);
-    return()=>{window.removeEventListener(NAVIGATION_COMMITTED_EVENT,update);if(previous?.isConnected&&!previous.closest('[hidden],[inert]'))previous.focus?.({preventScroll:true});};
+    return()=>{window.removeEventListener(NAVIGATION_COMMITTED_EVENT,update);if(previous instanceof HTMLElement&&previous.isConnected&&!previous.closest('[hidden],[inert]'))previous.focus?.({preventScroll:true});};
   },[]);
   useLayoutEffect(()=>{
     if(inactive||anchorRef.current?.parentElement?.closest('[hidden],[inert]'))return;

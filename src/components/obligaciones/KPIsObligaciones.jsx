@@ -1,7 +1,7 @@
 import { AlertTriangle, CheckCircle2, Clock3, FileCheck2, Landmark } from 'lucide-react';
 
 const CLOSED = new Set(['presentado', 'pagado', 'finalizado', 'no_aplica']);
-const daysUntil = value => value ? Math.ceil((new Date(`${value}T23:59:59`) - new Date()) / 86400000) : null;
+const daysUntil = value => value ? Math.ceil((new Date(`${value}T23:59:59`).getTime() - Date.now()) / 86400000) : null;
 
 export default function KPIsObligaciones({ obligations = [], profile }) {
   const pending = obligations.filter(row => !CLOSED.has(row.state));

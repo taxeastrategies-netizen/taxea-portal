@@ -55,7 +55,7 @@ function getLineaAccion(ex) {
 /**
  * Mensaje individual para un modelo
  */
-export function generarMensajeWhatsApp({ nombreCliente, modeloKey, ejercicio, periodo, importe, csv, nrc, resultado, portalUrl }) {
+export function generarMensajeWhatsApp({ nombreCliente, modeloKey, ejercicio, periodo, importe, csv, nrc, resultado, portalUrl = undefined }) {
   const modelo = MODELO_NOMBRES_CORTOS[modeloKey] || (modeloKey || 'Declaración').replace(/_/g, ' ');
   const portal = portalUrl || 'https://portal.taxea.es';
   const ex = { importe, csv, nrc, resultado };

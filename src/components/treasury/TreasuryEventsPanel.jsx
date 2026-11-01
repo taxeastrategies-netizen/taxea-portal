@@ -126,7 +126,7 @@ export default function TreasuryEventsPanel({ events, companyId, accounts, onRef
           <div className="text-center py-8">
             <p className="text-sm text-slate-300">Sin previsiones registradas</p>
           </div>
-        ) : list.sort((a, b) => new Date(a.fecha_prevista) - new Date(b.fecha_prevista)).map((e, i) => {
+        ) : list.sort((a, b) => new Date(a.fecha_prevista).getTime() - new Date(b.fecha_prevista).getTime()).map((e, i) => {
           const cfg = TIPO_CFG[e.tipo] || TIPO_CFG.otro;
           const Icon = cfg.icon;
           const prio = PRIORIDAD_CFG[e.prioridad] || PRIORIDAD_CFG.normal;

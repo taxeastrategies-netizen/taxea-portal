@@ -12,7 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 const fmt = n => typeof n === 'number' ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n) : '—';
 const pct = n => typeof n === 'number' ? `${n.toFixed(1)}%` : '—';
 
-function KpiCard({ label, value, sub, color, note, warn }) {
+function KpiCard({ label, value, sub = '', color = '', note = '', warn = false }) {
   return (
     <div className={cn("bg-white border rounded-2xl p-4 shadow-sm", warn ? 'border-red-200 bg-red-50/30' : 'border-slate-100')}>
       <p className={cn("text-xl font-jakarta font-bold", color || 'text-foreground')}>{value || '—'}</p>

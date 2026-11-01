@@ -10,7 +10,7 @@ export function getImpersonation() {
   }
 }
 
-export function startImpersonation({ clientAccountId, clientName, clientEmail, companyId }) {
+export function startImpersonation({ clientAccountId, clientName, clientEmail, companyId = '' }) {
   sessionStorage.setItem(KEY, JSON.stringify({
     clientAccountId,
     clientName,

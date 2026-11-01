@@ -95,7 +95,7 @@ const MASA_LABEL = {
 };
 
 function FileDropZone({ label, icon, file, onFile, onClear }) {
-  const ref = useRef();
+  const ref = useRef(/** @type {HTMLInputElement | null} */ (null));
   return (
     <div className={cn("border-2 border-dashed rounded-2xl p-5 text-center transition-all",
       file ? "border-emerald-400 bg-emerald-50/30" : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/10 cursor-pointer")}
@@ -176,7 +176,8 @@ export default function ExcelImportWizard({ importType, companyId, company, onCo
 
         await setMsg(`Extrayendo datos de ${file.name} con IA…`, 500);
 
-        const schema = {
+        /** @satisfies {import('@/types/controlled-core').JsonSchema} */
+const schema = {
           type: 'object',
           properties: {
             filas: {
