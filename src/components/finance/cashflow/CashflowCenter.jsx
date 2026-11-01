@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
-import { subDays, isAfter, parseISO, differenceInDays } from 'date-fns';
 import { useFinancialData } from '@/hooks/useFinancialData';
-import { getOutstandingAmount } from '@/lib/financialCore';
+import { buildFinanceDashboardModel } from '@/lib/financeDashboardModel.mjs';
+import { useFinanceObligations } from '@/hooks/useFinanceReporting';
 
 import CashPositionHeader from './CashPositionHeader';
 import CashKpiGrid from './CashKpiGrid';
@@ -20,134 +20,37 @@ export default function CashflowCenter() {
   const { company } = ctx;
   const companyId = company?.id;
 
-  const { invoices, expenses, bankTransactions, treasury, treasuryError, error: financialError, loading: financialLoading, refresh } = useFinancialData(companyId);
-  const [obligations, setObligations] = useState([]);
+  const { invoices, expenses, bankAccounts, bankTransactions, treasury, treasuryError, error: financialError, loading: financialLoading, refresh } = useFinancialData(companyId);
+  const calendar = useFinanceObligations(companyId);
+  const obligations = calendar.data?.rows || [];
   const [treasuryEvents, setTreasuryEvents] = useState([]);
   const [supportLoading, setSupportLoading] = useState(true);
   const [supportError, setSupportError] = useState('');
   const supportRequestRef = useRef(0);
-  const loading = financialLoading || supportLoading;
+  const loading = financialLoading || supportLoading || calendar.isLoading;
 
   const loadObligations = () => {
     const requestId = ++supportRequestRef.current;
-    if (!companyId) { setObligations([]); setTreasuryEvents([]); setSupportLoading(false); return; }
+    if (!companyId) { setTreasuryEvents([]); setSupportLoading(false); return; }
     setSupportLoading(true);
     setSupportError('');
     Promise.allSettled([
-      base44.entities.TaxObligation.filter({ company_id: companyId }),
       base44.entities.TreasuryEvent.filter({ company_id: companyId }),
-    ]).then(([obligationsResult, eventsResult]) => {
+    ]).then(([eventsResult]) => {
       if (requestId !== supportRequestRef.current) return;
-      setObligations(obligationsResult.status === 'fulfilled' ? obligationsResult.value || [] : []);
       setTreasuryEvents(eventsResult.status === 'fulfilled' ? eventsResult.value || [] : []);
-      setSupportError([obligationsResult.status !== 'fulfilled' ? 'impuestos' : '', eventsResult.status !== 'fulfilled' ? 'eventos' : ''].filter(Boolean).join(' y '));
+      setSupportError([eventsResult.status !== 'fulfilled' ? 'eventos' : ''].filter(Boolean).join(' y '));
     }).finally(() => { if (requestId === supportRequestRef.current) setSupportLoading(false); });
   };
 
-  useEffect(() => { setObligations([]); setTreasuryEvents([]); loadObligations(); return () => { supportRequestRef.current++; }; }, [companyId]);
+  useEffect(() => { setTreasuryEvents([]); loadObligations(); return () => { supportRequestRef.current++; }; }, [companyId]);
 
   const financials = useMemo(() => {
-    const now = new Date();
-    const cutoff = subDays(now, 30);
-    const prevCutoff = subDays(cutoff, 30);
-
-    const filteredInvoices = invoices.filter(i => {
-      try { return isAfter(parseISO(i.fecha_emision), cutoff); } catch { return false; }
-    });
-    const filteredExpenses = expenses.filter(e => {
-      try { return isAfter(parseISO(e.fecha), cutoff); } catch { return false; }
-    });
-
-    const filteredBankTransactions = (bankTransactions || []).filter(transaction => {
-      try {
-        return transaction.moneda === 'EUR'
-          && transaction.estado_proveedor !== 'pending'
-          && transaction.categoria_ia !== 'transferencia_interna'
-          && transaction.estado_conciliacion !== 'movimiento_interno'
-          && isAfter(parseISO(transaction.fecha_operacion), cutoff);
-      } catch { return false; }
-    });
-    const invoiceIngresos = filteredInvoices
-      .filter(i => i.tipo === 'emitida')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-    const totalIngresos = treasury.connectedEuroAccounts > 0
-      ? filteredBankTransactions.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
-      : invoiceIngresos;
-
-    const gastoFact = filteredInvoices
-      .filter(i => i.tipo === 'recibida')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-    const gastoExp = filteredExpenses
-      .filter(e => e.tipo === 'gasto')
-      .reduce((s, e) => s + (e.total || 0), 0);
-    const gastoTotal = treasury.connectedEuroAccounts > 0
-      ? filteredBankTransactions.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
-      : gastoFact + gastoExp;
-
-    const beneficio = totalIngresos - gastoTotal;
-
-    const bankKnown = treasury.connectedEuroAccounts > 0 && !treasuryError;
-    const cashDisponible = bankKnown ? treasury.availableCash : null;
-
-    const pendingStates = ['pendiente', 'parcial', 'vencida'];
-    const cobrosPendientes = invoices
-      .filter(i => i.tipo === 'emitida' && pendingStates.includes(i.estado_cobro))
-      .reduce((s, i) => s + getOutstandingAmount(i), 0);
-
-    const pagosPendientes = invoices
-      .filter(i => i.tipo === 'recibida' && pendingStates.includes(i.estado_cobro))
-      .reduce((s, i) => s + getOutstandingAmount(i), 0);
-
-    const burnRate = bankKnown ? gastoTotal : null; // Salidas bancarias observadas en 30 días, no un presupuesto.
-    const runway = bankKnown && cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
-
-    const observedCollections = invoices
-      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
-      .map(i => {
-        try { return Math.max(0, differenceInDays(parseISO(i.ultimo_pago_at), parseISO(i.fecha_emision))); }
-        catch { return null; }
-      })
-      .filter(value => value !== null);
-    const dso = observedCollections.length
-      ? observedCollections.reduce((sum, value) => sum + value, 0) / observedCollections.length
-      : null;
-
-    const workingCapital = cobrosPendientes - pagosPendientes;
-
-    const vencidas = invoices.filter(i => !i.anulada && i.tipo === 'emitida' && i.estado_cobro === 'vencida');
-
-    const prevIngresos = treasury.connectedEuroAccounts > 0
-      ? (bankTransactions || [])
-        .filter(transaction => {
-          try {
-            const d = parseISO(transaction.fecha_operacion);
-            return transaction.moneda === 'EUR'
-              && transaction.tipo === 'entrada'
-              && transaction.estado_proveedor !== 'pending'
-              && transaction.categoria_ia !== 'transferencia_interna'
-              && transaction.estado_conciliacion !== 'movimiento_interno'
-              && isAfter(d, prevCutoff)
-              && !isAfter(d, cutoff);
-          } catch { return false; }
-        })
-        .reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
-      : invoices
-        .filter(i => {
-          try {
-            const d = parseISO(i.fecha_emision);
-            return i.tipo === 'emitida' && isAfter(d, prevCutoff) && !isAfter(d, cutoff);
-          } catch { return false; }
-        })
-        .reduce((s, i) => s + (i.total_factura || 0), 0);
-    const ingresosDelta = prevIngresos > 0 ? ((totalIngresos - prevIngresos) / prevIngresos) * 100 : 0;
-
-    return {
-      totalIngresos, gastoTotal, beneficio,
-      cashDisponible, cashSource: bankKnown ? 'bank' : 'unavailable', bankKnown, bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
-      burnRate, runway, dso, workingCapital, vencidas, ingresosDelta,
-      filteredInvoices, filteredExpenses,
-    };
-  }, [invoices, expenses, bankTransactions, treasury, treasuryError]);
+    const shared = buildFinanceDashboardModel({ invoices, expenses, bankAccounts, bankTransactions, obligations, treasuryError, financialError, period: '30d' });
+    const totalIngresos = shared.bankKnown ? shared.bankInflows : shared.documentIncomeNet;
+    const gastoTotal = shared.bankKnown ? shared.bankOutflows : shared.documentExpenseNet;
+    return { ...shared, totalIngresos, gastoTotal, beneficio: totalIngresos === null || gastoTotal === null ? null : totalIngresos - gastoTotal, ingresosDelta: shared.bankDelta };
+  }, [invoices, expenses, bankAccounts, bankTransactions, treasuryError, financialError, calendar.data]);
 
   if (loading) {
     return (
@@ -173,7 +76,7 @@ export default function CashflowCenter() {
         lastSync={treasury.lastBankSync}
         bankKnown={financials.bankKnown}
         loading={loading}
-        onRefresh={() => { refresh(); loadObligations(); }}
+        onRefresh={() => { refresh(); loadObligations(); calendar.refetch(); }}
       />
 
       {financialError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Datos financieros no disponibles: {financialError}. Los importes de esta vista no son fiables hasta actualizar.</p>}
@@ -181,22 +84,22 @@ export default function CashflowCenter() {
       <CashKpiGrid financials={financials} />
 
       {/* Main chart */}
-      <CashflowForecastChart invoices={invoices} obligations={obligations} events={treasuryEvents} treasury={treasury} treasuryError={treasuryError} supportError={supportError} />
+      <CashflowForecastChart invoices={invoices} obligations={obligations} events={treasuryEvents} treasury={{ ...treasury, connectedAccounts: financials.bankKnown ? financials.bankConnected : 0, connectedEuroAccounts: financials.bankKnown ? financials.bankConnected : 0, availableCash: financials.cashDisponible }} treasuryError={treasuryError} supportError={[supportError, calendar.isError ? 'calendario fiscal' : ''].filter(Boolean).join(' y ')} />
 
       {/* Risk + Survival side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {financials.bankKnown ? <LiquidityRiskEngine financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Riesgo de liquidez no calculable sin saldo bancario verificado.</div>}
-        {financials.bankKnown ? <SurvivalMode financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">La autonomía de caja requiere banco conectado y salidas observadas. No se deduce de facturas cobradas.</div>}
+        {financials.bankKnown && financials.cashHistorySufficient ? <LiquidityRiskEngine financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Riesgo de liquidez sin calcular: se necesita saldo reciente e historial observado suficiente.</div>}
+        {financials.bankKnown && financials.cashHistorySufficient ? <SurvivalMode financials={financials} /> : <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">La autonomía de caja requiere banco conectado y salidas observadas. No se deduce de facturas cobradas.</div>}
       </div>
 
       {/* Alerts + Insights */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <CashAlertsPanel financials={financials} obligations={obligations} />
+        <CashAlertsPanel financials={financials} obligations={obligations} calendarError={calendar.isError} />
         <CashInsights financials={financials} />
       </div>
 
       {/* Timeline */}
-      <CashflowTimeline invoices={invoices} expenses={expenses} obligations={obligations} />
+      <CashflowTimeline invoices={invoices} expenses={expenses} obligations={obligations} calendarError={calendar.isError} />
     </motion.div>
   );
 }

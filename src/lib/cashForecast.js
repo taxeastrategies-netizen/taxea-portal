@@ -1,6 +1,6 @@
 import { getOutstandingAmount } from './financialCore';
 
-const CLOSED = new Set(['presentado', 'domiciliado', 'pagado', 'finalizado', 'no_aplica', 'cancelado']);
+const CLOSED = new Set(['pagado', 'finalizado', 'no_aplica', 'no_obligado', 'cancelado', 'anulado']);
 const money = value => Math.round((Number(value) || 0) * 100) / 100;
 const canaryToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const ymd = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
@@ -12,11 +12,12 @@ const addDays = (date, days) => {
 
 export function buildCashForecast({ invoices = [], obligations = [], events = [], treasury = {}, treasuryError = '', today = canaryToday(), days = 91 } = {}) {
   const opening = Number(treasury.availableCash);
-  const hasBankBalance = !treasuryError && Number(treasury.connectedEuroAccounts) > 0 && Number.isFinite(opening);
+  const hasBankBalance = treasury.availableCash !== null && treasury.availableCash !== undefined && treasury.balanceKnown !== false && !treasuryError && Number(treasury.connectedEuroAccounts) > 0 && Number.isFinite(opening);
   const horizon = Math.min(91, Math.max(1, Number(days) || 91));
   const lastDay = addDays(today, horizon - 1);
   const movements = [];
   let undated = 0;
+  let unpricedObligations = 0;
   const add = (kind, id, date, amount, label, certainty, route) => {
     const value = money(amount);
     if (!value) return;
@@ -28,21 +29,27 @@ export function buildCashForecast({ invoices = [], obligations = [], events = []
   const activeEvents = events.filter(row => !['ejecutado', 'cancelado'].includes(row.estado) && row.moneda !== 'USD' && (!row.moneda || row.moneda === 'EUR'));
   const linked = new Set(activeEvents.filter(row => row.entidad_id).map(row => String(row.entidad_id)));
   for (const invoice of invoices) {
-    if (invoice.anulada || linked.has(String(invoice.id)) || invoice.moneda && invoice.moneda !== 'EUR') continue;
+    if (['cobrada','pagada','anulada','cancelada','borrador'].includes(String(invoice.estado_cobro || invoice.estado || '').toLowerCase()) || invoice.anulada || linked.has(String(invoice.id)) || invoice.moneda && invoice.moneda !== 'EUR') continue;
     const outstanding = getOutstandingAmount(invoice);
     if (outstanding <= 0.009) continue;
     const date = invoice.fecha_vencimiento;
     const incoming = invoice.tipo === 'emitida';
     // Overdue receivables have no reliable collection date: do not count them as cash.
-    if (incoming && ymd(date) && ymd(date) < today) { undated++; continue; }
-    add('invoice', invoice.id, date, incoming ? outstanding : -outstanding,
+    if (incoming && Number(invoice.total_factura) >= 0 && ymd(date) && ymd(date) < today) { undated++; continue; }
+    const signedOutstanding = Number(invoice.total_factura) < 0 ? -outstanding : outstanding;
+    add('invoice', invoice.id, date, incoming ? signedOutstanding : -signedOutstanding,
       (incoming ? 'Cobro factura ' : 'Pago factura ') + (invoice.numero_factura || invoice.id),
       'previsto', incoming ? '/finance/ar' : '/finance/ap');
   }
   for (const obligation of obligations) {
     if (CLOSED.has(obligation.estado) || linked.has(String(obligation.id))) continue;
+    if (obligation.importe === null || obligation.importe === undefined || !Number.isFinite(Number(obligation.importe))) {
+      const date = ymd(obligation.fecha_limite);
+      if (date && date <= lastDay && !['180','190','193','296','347','349','390','415','425','232'].includes(String(obligation.modelo_codigo || obligation.modelo || '').replace('modelo_', ''))) unpricedObligations++;
+      continue;
+    }
     if (!['a_pagar', 'a_ingresar'].includes(obligation.resultado) || Number(obligation.importe) <= 0) continue;
-    add('tax', obligation.id, obligation.fecha_limite_domiciliacion || obligation.fecha_limite_presentacion || obligation.fecha_limite,
+    add('tax', obligation.id, obligation.fecha_limite_presentacion || obligation.fecha_limite,
       -Math.abs(obligation.importe), 'Modelo ' + (obligation.modelo_codigo || obligation.modelo || ''), 'previsto', '/tax-accounting/obligaciones');
   }
   for (const event of activeEvents) {
@@ -71,7 +78,7 @@ export function buildCashForecast({ invoices = [], obligations = [], events = []
   const inflows = money(movements.filter(row => row.amount > 0).reduce((sum, row) => sum + row.amount, 0));
   return {
     hasBankBalance, opening: hasBankBalance ? money(opening) : null,
-    points, movements, outflows, inflows, undated,
+    points, movements, outflows, inflows, undated, unpricedObligations,
     projected: hasBankBalance ? points.at(-1).cash : null,
     floor: hasBankBalance ? Math.min(...points.map(row => row.cash)) : null,
     source: hasBankBalance ? 'Saldo bancario conectado + vencimientos y eventos registrados' : 'Sin saldo bancario conectado verificable',

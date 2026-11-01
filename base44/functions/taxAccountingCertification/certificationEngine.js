@@ -1,4 +1,5 @@
-export const PHASE0_CERTIFICATION_VERSION = 'tax-accounting-phase0-2026.09.12-v1';
+import { civilDay } from './reportingPeriods.mjs';
+export const PHASE0_CERTIFICATION_VERSION = 'tax-accounting-integrity-2026.11.01-v2';
 
 export const TAX_MODEL_ENGINE_CODES = [
   '111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216',
@@ -298,33 +299,43 @@ export function buildPhase0Certification(input = {}) {
       .filter(line => (ledger?.id && clean(line.accountId) === clean(ledger.id)) || (ledgerCode && clean(line.accountCode) === ledgerCode))
       .reduce((sum, line) => sum + round(line.debit) - round(line.credit), 0));
     const currency = clean(bank.moneda || 'EUR').toUpperCase();
-    const bankBalance = round(bank.saldo_disponible ?? bank.saldo_contable);
+    const bankBalanceKnown = bank.saldo_contable !== null && bank.saldo_contable !== undefined && Number.isFinite(Number(bank.saldo_contable));
+    const balanceDate = civilDay(bank.fecha_ultima_sync);
+    const relevantLines = confirmedLines.filter(line => {
+      const entry = entryByReference.get(clean(line.journalEntryId));
+      const date = civilDay(entry?.date);
+      return date && balanceDate && date <= balanceDate;
+    });
+    const datedLedgerBalance = round(relevantLines.filter(line => (ledger?.id && clean(line.accountId) === clean(ledger.id)) || (ledgerCode && clean(line.accountCode) === ledgerCode)).reduce((sum, line) => sum + round(line.debit) - round(line.credit), 0));
+    const bankBalance = bankBalanceKnown ? round(bank.saldo_contable) : null;
     return {
       bankAccountId: bank.id,
       ledgerAccountId: ledger?.id || '',
       ledgerCode,
       currency,
       mapped: Boolean(ledger && /^572\d{5}$/.test(ledgerCode)),
-      comparable: currency === 'EUR',
+      comparable: currency === 'EUR' && bankBalanceKnown && Boolean(balanceDate),
+      balanceDate, balanceType: 'saldo_contable',
       bankBalance,
-      ledgerBalance,
-      difference: currency === 'EUR' ? round(bankBalance - ledgerBalance) : null,
+      ledgerBalance: datedLedgerBalance,
+      difference: currency === 'EUR' && bankBalanceKnown && balanceDate ? round(bankBalance - datedLedgerBalance) : null,
     };
   });
   const invalidBankMappings = bankBalances.filter(item => !item.mapped);
   const bankDifferences = bankBalances.filter(item => item.comparable && Math.abs(item.difference) > 0.01);
   const nonComparableBanks = bankBalances.filter(item => !item.comparable);
   const bankBlockers = duplicateBankAccounts.length + duplicateLedgerMappings.length + duplicateBankTransactions.length + reconciledWithoutEntry.length;
-  const bankWarnings = invalidBankMappings.length + bankDifferences.length + nonComparableBanks.length;
+  const bankWarnings = invalidBankMappings.length + bankDifferences.length + nonComparableBanks.length + (!bankAccounts.length && bankTransactions.length ? 1 : 0);
+  const bankNotApplicable = bankAccounts.length === 0 && bankTransactions.length === 0;
   checks.push(check(
     'bank_reconciliation',
     'Banco y subcuentas 572',
-    statusFor(bankBlockers, bankWarnings),
-    bankBlockers
+    bankNotApplicable ? 'not_applicable' : statusFor(bankBlockers, bankWarnings),
+    bankNotApplicable ? 'No hay cuentas ni movimientos bancarios en el conjunto leído. Este control no certifica saldos ni conciliación.' : bankBlockers
       ? 'Hay duplicados bancarios o conciliaciones sin asiento.'
       : bankWarnings
         ? 'No hay duplicados estructurales, pero quedan mapeos, divisas o diferencias banco–572 por revisar.'
-        : 'Movimientos únicos y saldos bancarios EUR conciliados con sus subcuentas 572.',
+        : 'Sin incidencias estructurales en el conjunto comparado. Se usa el saldo contable informado y el diario hasta la fecha de sincronización; no acredita cobertura completa del banco.',
     {
       bankAccounts: bankAccounts.length,
       bankTransactions: bankTransactions.length,
@@ -415,15 +426,21 @@ export function buildPhase0Certification(input = {}) {
   const blockingChecks = checks.filter(item => item.status === 'blocked');
   const reviewChecks = checks.filter(item => item.status === 'review');
   const passedChecks = checks.filter(item => item.status === 'pass');
-  const score = Math.max(0, Math.round(((passedChecks.length + reviewChecks.length * 0.5) / Math.max(1, checks.length)) * 100));
+  const notApplicableChecks = checks.filter(item => item.status === 'not_applicable');
+  const applicableChecks = checks.length - notApplicableChecks.length;
+  const hasActivity = ['invoices','entries','payments','bankAccounts','bankTransactions','taxDrafts','taxFilings'].some(name => (sources[name] || []).length > 0);
+  const score = hasActivity ? Math.max(0, Math.round(((passedChecks.length + reviewChecks.length * 0.5) / Math.max(1, applicableChecks)) * 100)) : null;
   return {
     version: PHASE0_CERTIFICATION_VERSION,
     generatedAt: new Date().toISOString(),
     companyId,
-    status: blockingChecks.length ? 'blocked' : reviewChecks.length ? 'review' : 'certified',
+    status: blockingChecks.length ? 'blocked' : !hasActivity ? 'no_data' : reviewChecks.length ? 'review' : 'certified',
     score,
     summary: {
       checks: checks.length,
+      applicable: applicableChecks,
+      notApplicable: notApplicableChecks.length,
+      hasActivity,
       passed: passedChecks.length,
       review: reviewChecks.length,
       blocked: blockingChecks.length,

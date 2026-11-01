@@ -53,7 +53,7 @@ export function useFinancialData(companyId, options = {}) {
       const treasuryRequest = includeTreasury
         ? base44.functions.invoke('openBanking', { action: 'treasury_snapshot', company_id: companyId })
           .catch(error => {
-            console.error('[useFinancialData] Treasury snapshot unavailable:', error);
+            console.error('[useFinancialData] Treasury snapshot unavailable');
             return { data: { accounts: [], transactions: [], summary: {}, treasuryError: error?.response?.data?.error || error?.message || 'Tesorería no disponible.' } };
           })
         : Promise.resolve({ data: { accounts: [], transactions: [], summary: {} } });
@@ -83,7 +83,7 @@ export function useFinancialData(companyId, options = {}) {
       });
       setLastSync(new Date());
     } catch (err) {
-      console.error('[useFinancialData] Error fetching unified financials:', err);
+      console.error('[useFinancialData] Unified source unavailable');
       if (mountedRef.current && requestId === requestIdRef.current) {
         setInvoices([]);
         setExpenses([]);
@@ -103,14 +103,16 @@ export function useFinancialData(companyId, options = {}) {
 
   useEffect(() => {
     mountedRef.current = true;
+    requestIdRef.current++;
     setLoading(true);
+    setError(''); setTreasuryError(''); setLastSync(null);
     setInvoices([]);
     setExpenses([]);
     setBankAccounts([]);
     setBankTransactions([]);
     setTreasury(EMPTY_TREASURY);
     fetch();
-    return () => { mountedRef.current = false; };
+    return () => { mountedRef.current = false; requestIdRef.current++; };
   }, [fetch]);
 
   useEffect(() => {

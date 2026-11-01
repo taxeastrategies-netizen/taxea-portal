@@ -2,59 +2,18 @@ import { motion } from 'framer-motion';
 import { Shield, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-function calcScore(financials) {
-  let score = 50;
-  const { margenNeto, runway, dso, ingresosDelta, vencidas, workingCapital, burnRate, totalIngresos } = financials;
-
-  // Margin
-  if (margenNeto > 20) score += 15;
-  else if (margenNeto > 10) score += 8;
-  else if (margenNeto > 0) score += 3;
-  else score -= 10;
-
-  // Runway
-  if (runway === null) {}
-  else if (runway > 12) score += 15;
-  else if (runway > 6) score += 8;
-  else if (runway > 3) score += 3;
-  else score -= 15;
-
-  // DSO
-  if (dso < 30) score += 10;
-  else if (dso < 45) score += 5;
-  else if (dso > 60) score -= 10;
-  else score -= 5;
-
-  // Ingresos trend
-  if (ingresosDelta > 10) score += 8;
-  else if (ingresosDelta > 0) score += 4;
-  else if (ingresosDelta < -15) score -= 12;
-  else if (ingresosDelta < -5) score -= 6;
-
-  // Vencidas
-  if (vencidas.length === 0) score += 5;
-  else if (vencidas.length > 3) score -= 8;
-  else score -= 3;
-
-  // Working capital
-  if (workingCapital > 0) score += 5;
-  else score -= 5;
-
-  // Burn rate
-  if (totalIngresos > 0 && burnRate < totalIngresos * 0.6) score += 5;
-
-  return Math.max(0, Math.min(100, Math.round(score)));
-}
+import { deriveFinanceHealth } from '@/lib/financeSignals.mjs';
 
 export default function FinanceHealthScore({ financials }) {
-  const score = calcScore(financials);
-  const pct = score / 100;
+  const health = deriveFinanceHealth(financials);
+  const score = health.score;
+  const pct = score === null ? 0 : score / 100;
 
-  const config = score >= 75
-    ? { label: 'Salud financiera sólida', color: 'text-emerald-600', ring: '#10b981', bg: 'bg-emerald-500/10', icon: TrendingUp }
+  const config = score === null ? { label: 'Lectura parcial: faltan fuentes', color: 'text-muted-foreground', ring: '#94a3b8', bg: 'bg-secondary', icon: Minus } : score >= 75
+    ? { label: 'Señales favorables en datos registrados', color: 'text-emerald-600', ring: '#10b981', bg: 'bg-emerald-500/10', icon: TrendingUp }
     : score >= 50
-      ? { label: 'Salud financiera moderada', color: 'text-amber-600', ring: '#f59e0b', bg: 'bg-amber-500/10', icon: Minus }
-      : { label: 'Salud financiera en riesgo', color: 'text-red-500', ring: '#ef4444', bg: 'bg-red-500/10', icon: TrendingDown };
+      ? { label: 'Hay indicadores que revisar', color: 'text-amber-600', ring: '#f59e0b', bg: 'bg-amber-500/10', icon: Minus }
+      : { label: 'Atención a los indicadores observados', color: 'text-red-500', ring: '#ef4444', bg: 'bg-red-500/10', icon: TrendingDown };
 
   const Icon = config.icon;
 
@@ -72,8 +31,8 @@ export default function FinanceHealthScore({ financials }) {
           <Shield className="w-4 h-4 text-primary" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Financial Health Score</h3>
-          <p className="text-xs text-muted-foreground">Puntuación de salud financiera</p>
+          <h3 className="text-sm font-semibold text-foreground">Seguimiento financiero</h3>
+          <p className="text-xs text-muted-foreground">Cobertura {health.coverage}% · resultado, saldo y vencimientos</p>
         </div>
       </div>
 
@@ -100,8 +59,8 @@ export default function FinanceHealthScore({ financials }) {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={cn("text-2xl font-jakarta font-bold", config.color)}>{score}</span>
-            <span className="text-[10px] text-muted-foreground font-medium">/100</span>
+            <span className={cn("text-2xl font-jakarta font-bold", config.color)}>{score ?? '—'}</span>
+            <span className="text-[10px] text-muted-foreground font-medium">{score === null ? 'sin datos completos' : '/100'}</span>
           </div>
         </div>
 
@@ -113,23 +72,19 @@ export default function FinanceHealthScore({ financials }) {
           </div>
 
           <div className="space-y-1.5 mt-2">
-            {[
-              { label: 'Rentabilidad', pct: Math.min(100, Math.max(0, (financials.margenNeto + 5) * 2)), color: config.ring },
-              { label: 'Liquidez', pct: financials.runway ? Math.min(100, (financials.runway / 12) * 100) : 0, color: '#3b82f6' },
-              { label: 'Cobros', pct: Math.max(0, 100 - (financials.dso / 90) * 100), color: '#10b981' },
-            ].map(bar => (
+            {health.dimensions.map(bar => (
               <div key={bar.label}>
                 <div className="flex justify-between mb-0.5">
                   <span className="text-[10px] text-muted-foreground">{bar.label}</span>
-                  <span className="text-[10px] text-muted-foreground">{Math.round(bar.pct)}%</span>
+                  <span className="text-[10px] text-muted-foreground">{bar.known ? `${Math.round(bar.score)}%` : 'N/D'}</span>
                 </div>
                 <div className="h-1 rounded-full bg-secondary overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${bar.pct}%` }}
+                    animate={{ width: `${bar.known ? bar.score : 0}%` }}
                     transition={{ duration: 0.8, delay: 0.5 }}
                     className="h-full rounded-full"
-                    style={{ background: bar.color }}
+                    style={{ background: bar.known ? '#3b82f6' : '#94a3b8' }}
                   />
                 </div>
               </div>

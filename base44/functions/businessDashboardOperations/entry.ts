@@ -1,6 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { accountingData, buildReports, fetchAll } from './accountingReportEngine.ts';
 import { reconcileFinancialSources } from './financialSourceTruth.js';
+import { buildFinancePeriod, loadFinancePeriodData } from './financePeriod.mjs';
+import { reportingWindow } from './reportingPeriods.mjs';
+import { bankObservation } from './observedBanking.mjs';
 
 const clean = (value: unknown) => String(value ?? '').trim();
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -23,20 +26,10 @@ async function authorize(svc: any, user: any, companyId: string) {
     ? company.usuarios_autorizados.map((value: unknown) => clean(value).toLowerCase())
     : [];
   const allowed = ['admin', 'super_admin'].includes(role)
-    || clean(user?.data?.company_id || user?.company_id) === companyId
     || (email && clean(company.owner_email).toLowerCase() === email)
     || (email && authorizedEmails.includes(email));
-  if (!allowed) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
+  if (!allowed || (company.activa === false && !['admin','super_admin'].includes(role))) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
   return company;
-}
-
-async function safeFetch(entity: any, query: any, sort = '-created_date', max = 100000) {
-  if (!entity) return [];
-  try { return await fetchAll(entity, query, sort, max); }
-  catch (error) {
-    console.warn('[businessDashboardOperations] optional source unavailable', error?.message || error);
-    return [];
-  }
 }
 
 function integrity(entry: any, rows: any[]) {
@@ -109,37 +102,22 @@ function financeSnapshot(invoices: any[], year: number) {
 }
 
 function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
-  const active = accounts.filter((account) => account.activa !== false);
-  const connected = active.filter((account) => ['conectado', 'conectada', 'connected', 'activa', 'active'].includes(clean(account.estado_conexion).toLowerCase()));
-  const accountIds = new Set(active.map((account) => account.id));
-  const visible = transactions.filter((tx) => {
-    const accountId = clean(tx.bank_account_id || tx.cuenta_bancaria_id || tx.account_id);
-    const reconciliationState = clean(tx.estado_conciliacion).toLowerCase();
-    const duplicate = tx.es_duplicado || tx.duplicado || tx.es_demo === true || ['duplicada', 'duplicado', 'duplicate'].includes(reconciliationState) || ['duplicado', 'duplicate'].includes(clean(tx.estado_proveedor).toLowerCase());
-    const booked = !tx.estado_proveedor || ['booked', 'contabilizado', 'confirmado'].includes(clean(tx.estado_proveedor).toLowerCase());
-    return (!accountId || accountIds.has(accountId)) && !duplicate && booked;
-  });
-  const yearRows = visible.filter((tx) => yearOf(tx, ['fecha_operacion', 'fecha_valor', 'fecha']) === year);
-  const resolved = new Set(['conciliado', 'reconciliada', 'conciliada_auto', 'conciliada_manual', 'descartada', 'movimiento_interno', 'auto', 'manual', 'ignored', 'ignorado']);
-  const reconciled = yearRows.filter((tx) => resolved.has(clean(tx.estado_conciliacion).toLowerCase())).length;
-  const unresolved = Math.max(0, yearRows.length - reconciled);
-  const latestSync = active.map((account) => dateOf(account, ['fecha_ultima_sync', 'last_sync_at', 'updated_date'])).filter(Boolean).sort().at(-1) || '';
-  const staleHours = latestSync ? (Date.now() - new Date(latestSync).getTime()) / 3600000 : null;
-  const issues = active.filter((account) => ['error', 'requiere_renovacion', 'expired', 'desconectada', 'desconectado'].includes(clean(account.estado_conexion).toLowerCase())).length;
+  const observed = bankObservation(accounts, transactions);
+  const yearRows = observed.rows.filter(tx => Number(tx.day.slice(0, 4)) === year);
+  const resolved = new Set(['conciliado','reconciliada','conciliada_auto','conciliada_manual','descartada','movimiento_interno','auto','manual','ignored','ignorado']);
+  const reconciled = yearRows.filter(tx => resolved.has(clean(tx.estado_conciliacion).toLowerCase())).length;
+  const active = accounts.filter(account => account.activa !== false && account.es_demo !== true);
+  const latestSync = active.map(account => dateOf(account, ['fecha_ultima_sync','last_sync_at'])).filter(Boolean).sort().at(-1) || '';
   return {
-    accounts: active.length,
-    connectedAccounts: connected.length,
-    connectionIssues: issues,
-    cashEur: money(connected.filter((account) => clean(account.moneda || 'EUR').toUpperCase() === 'EUR').reduce((sum, account) => sum + Number(account.saldo_disponible ?? account.saldo_actual ?? 0), 0)),
-    nonEurAccounts: connected.filter((account) => clean(account.moneda || 'EUR').toUpperCase() !== 'EUR').map((account) => clean(account.moneda)).filter(Boolean),
-    transactions: yearRows.length,
-    reconciled,
-    unreconciled: unresolved,
-    reconciliationRate: yearRows.length ? Math.round((reconciled / yearRows.length) * 100) : null,
-    inflows: money(yearRows.filter((tx) => Number(tx.importe || 0) > 0).reduce((sum, tx) => sum + Number(tx.importe || 0), 0)),
-    outflows: money(Math.abs(yearRows.filter((tx) => Number(tx.importe || 0) < 0).reduce((sum, tx) => sum + Number(tx.importe || 0), 0))),
-    lastSync: latestSync,
-    stale: staleHours !== null && staleHours > 72,
+    accounts: active.length, connectedAccounts: observed.connected, balanceKnown: observed.bankKnown,
+    connectionIssues: active.filter(account => ['error','requiere_renovacion','expired','desconectada','desconectado'].includes(clean(account.estado_conexion).toLowerCase())).length,
+    cashEur: observed.cash, nonEurAccounts: active.filter(account => clean(account.moneda).toUpperCase() !== 'EUR').map(account => clean(account.moneda)).filter(Boolean),
+    transactions: yearRows.length, reconciled, unreconciled: yearRows.length - reconciled,
+    reconciliationRate: yearRows.length ? Math.round(reconciled / yearRows.length * 100) : null,
+    inflows: money(yearRows.filter(tx => tx.signedAmount > 0).reduce((sum, tx) => sum + tx.signedAmount, 0)),
+    outflows: money(-yearRows.filter(tx => tx.signedAmount < 0).reduce((sum, tx) => sum + tx.signedAmount, 0)),
+    lastSync: latestSync, stale: observed.reasons.some(reason => reason.includes('sincronización')),
+    qualityReasons: observed.reasons, duplicateAccounts: observed.duplicateAccounts, duplicateTransactions: observed.duplicateTransactions,
   };
 }
 
@@ -189,6 +167,8 @@ export function buildBusinessSummary(data: any, year: number, user: any = {}) {
   const quality = accountingQuality(data.accounting, data.invoices, year);
   const finance = financeSnapshot(data.invoices, year);
   const treasury = treasurySnapshot(data.bankAccounts, data.bankTransactions, year);
+  const sourceErrors = data.sourceErrors || {};
+  if (sourceErrors.BankAccount || sourceErrors.BankTransaction) { treasury.balanceKnown = false; treasury.cashEur = null; treasury.qualityReasons.push('Fuente bancaria no disponible.'); }
   const people = peopleSnapshot(data.employees, data.absences, data.hrDocuments, data.laborDocs, data.payrolls, data.socialSecurity);
   const openTaskStates = new Set(['pendiente', 'en_progreso', 'pendiente_cliente', 'bloqueada']);
   const visibleTasks = privileged(user) ? data.tasks : data.tasks.filter((task: any) => !task.interna);
@@ -198,6 +178,8 @@ export function buildBusinessSummary(data: any, year: number, user: any = {}) {
   return {
     year,
     generatedAt: new Date().toISOString(),
+    sourceErrors,
+    coverage: { complete: Object.keys(sourceErrors).length === 0, unavailableSources: Object.keys(sourceErrors) },
     accounting: {
       pnl: { income: report.profitAndLoss.totalIncome, expenses: report.profitAndLoss.totalExpenses, result: report.profitAndLoss.result, margin: report.profitAndLoss.totalIncome ? Math.round((report.profitAndLoss.result / report.profitAndLoss.totalIncome) * 1000) / 10 : null },
       balance: { assets: report.balanceSheet.totalAssets, liabilities: report.balanceSheet.totalLiabilities, equity: report.balanceSheet.totalEquity, difference: report.balanceSheet.difference },
@@ -235,35 +217,52 @@ export function buildBusinessSummary(data: any, year: number, user: any = {}) {
 
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido.' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if ([user, user?.data].filter(Boolean).some(state => state.is_deleted === true || ['eliminado','bloqueado','suspendido'].includes(clean(state.status).toLowerCase()) || ['suspended','blocked','disabled','deleted'].includes(clean(state.accountAccessStatus).toLowerCase()))) return Response.json({ error: 'Cuenta no habilitada.' }, { status: 403 });
     const body = await req.json().catch(() => ({}));
     const companyId = clean(body.companyId || user.data?.company_id);
     const year = Number(body.year || new Date().getUTCFullYear());
     if (!companyId) return Response.json({ error: 'companyId es obligatorio.' }, { status: 400 });
     if (year < 2000 || year > 2100) return Response.json({ error: 'Ejercicio no valido.' }, { status: 400 });
-    if (clean(body.action || 'summary') !== 'summary') return Response.json({ error: 'Accion no soportada.' }, { status: 400 });
+    const action = clean(body.action || 'summary');
+    if (!['summary', 'finance_period'].includes(action)) return Response.json({ error: 'Accion no soportada.' }, { status: 400 });
     const svc = base44.asServiceRole;
-    await authorize(svc, user, companyId);
+    const company = await authorize(svc, user, companyId);
+    if (action === 'finance_period') {
+      const period = clean(body.period || '30d');
+      if (!['7d', '30d', '90d', '365d'].includes(period)) return Response.json({ error: 'Periodo financiero no válido.' }, { status: 400 });
+      const now = new Date();
+      const timeZone = company.timezone === 'Atlantic/Canary' ? 'Atlantic/Canary' : 'Europe/Madrid';
+      const window = reportingWindow(period, now, timeZone);
+      const accounting = await loadFinancePeriodData(svc, companyId, window);
+      return Response.json({ success: true, companyId, ...buildFinancePeriod(accounting, { period, now, timeZone }) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    const sourceErrors: Record<string,string> = {};
+    const optional = async (name: string, query: any, sort: string, max: number) => {
+      try { return await fetchAll(svc.entities[name], query, sort, max); }
+      catch { sourceErrors[name] = 'Source unavailable'; return []; }
+    };
     const [accounting, invoices, rawPayments, expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications, postingOperations] = await Promise.all([
       accountingData(svc, companyId, { year, includeBusinessData: false }),
       fetchAll(svc.entities.Invoice, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.InvoicePayment, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.Expense, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.BankAccount, { company_id: companyId }, 'created_date', 10000),
-      safeFetch(svc.entities.BankTransaction, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.Employee, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.HRAbsence, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.HRDocument, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.LaborOcrDocument, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.PayrollExtraction, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.SocialSecurityExtraction, { company_id: companyId }, 'created_date', 50000),
-      safeFetch(svc.entities.Task, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.FiscalError, { company_id: companyId }, 'created_date', 100000),
-      safeFetch(svc.entities.Document, { company_id: companyId }, 'created_date', 100000),
-      user.email ? safeFetch(svc.entities.Notification, { company_id: companyId, destinatario_email: user.email }, '-created_date', 1000) : Promise.resolve([]),
-      safeFetch(svc.entities.AccountingPostingOperation, { companyId }, '-created_date', 100000),
+      optional('InvoicePayment', { company_id: companyId }, 'created_date', 100000),
+      optional('Expense', { company_id: companyId }, 'created_date', 100000),
+      optional('BankAccount', { company_id: companyId }, 'created_date', 10000),
+      optional('BankTransaction', { company_id: companyId }, 'created_date', 100000),
+      optional('Employee', { company_id: companyId }, 'created_date', 50000),
+      optional('HRAbsence', { company_id: companyId }, 'created_date', 50000),
+      optional('HRDocument', { company_id: companyId }, 'created_date', 50000),
+      optional('LaborOcrDocument', { company_id: companyId }, 'created_date', 50000),
+      optional('PayrollExtraction', { company_id: companyId }, 'created_date', 50000),
+      optional('SocialSecurityExtraction', { company_id: companyId }, 'created_date', 50000),
+      optional('Task', { company_id: companyId }, 'created_date', 100000),
+      optional('FiscalError', { company_id: companyId }, 'created_date', 100000),
+      optional('Document', { company_id: companyId }, 'created_date', 100000),
+      user.email ? optional('Notification', { company_id: companyId, destinatario_email: user.email }, '-created_date', 1000) : Promise.resolve([]),
+      optional('AccountingPostingOperation', { companyId }, '-created_date', 100000),
     ]);
     const operationById = new Map((postingOperations || []).map(operation => [operation.id, operation]));
     const payments = (rawPayments || []).filter(payment => {
@@ -276,7 +275,7 @@ Deno.serve(async (req) => {
       success: true,
       companyId,
       sourceTruth: financialSources.sourceTruth,
-      ...buildBusinessSummary({ accounting, invoices: financialSources.invoices, payments, expenses: financialSources.expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications }, year, user),
+      ...buildBusinessSummary({ accounting, invoices: financialSources.invoices, payments, expenses: financialSources.expenses, bankAccounts, bankTransactions, employees, absences, hrDocuments, laborDocs, payrolls, socialSecurity, tasks, errors, documents, notifications, sourceErrors }, year, user),
     });
   } catch (error) {
     console.error('[businessDashboardOperations]', error?.message || error);

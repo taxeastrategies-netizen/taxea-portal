@@ -1,7 +1,8 @@
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Calendar, ArrowUpCircle, ArrowDownCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { parseISO } from 'date-fns';
+import { classifyObligations, daysBetween, obligationDay } from '@/lib/reportingPeriods.mjs';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -27,13 +28,13 @@ function Widget({ icon: WidgetIcon, iconColor, iconBg, title, items, emptyText, 
       ) : (
         <div className="space-y-2">
           {items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between gap-2">
+            <Link key={i} to={item.to || "#"} onClick={item.to ? undefined : event => event.preventDefault()} tabIndex={item.to ? 0 : -1} className={cn("flex items-center justify-between gap-2", item.to && "hover:text-primary underline-offset-2 hover:underline")}>
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", item.dotColor)} />
                 <span className="text-xs text-muted-foreground truncate">{item.label}</span>
               </div>
               <span className="text-xs font-semibold text-foreground flex-shrink-0">{item.value}</span>
-            </div>
+            </Link>
           ))}
         </div>
       )}
@@ -41,23 +42,14 @@ function Widget({ icon: WidgetIcon, iconColor, iconBg, title, items, emptyText, 
   );
 }
 
-export default function SmartWidgets({ financials, obligations }) {
+export default function SmartWidgets({ financials, obligations, calendarError = false }) {
   const { cobrosPendientes, pagosPendientes, vencidas } = financials;
 
-  // Upcoming obligations (next 30 days)
-  const upcomingObl = (obligations || [])
-    .filter(o => {
-      try {
-        const d = parseISO(o.fecha_limite);
-        const days = Math.ceil((d - new Date()) / 86400000);
-        return days >= 0 && days <= 30 && o.estado !== 'finalizado';
-      } catch { return false; }
-    })
-    .sort((a, b) => new Date(a.fecha_limite) - new Date(b.fecha_limite))
-    .slice(0, 4);
+  const dates = classifyObligations(obligations);
+  const upcomingObl = dates.upcoming.slice(0, 4);
 
   const oblItems = upcomingObl.map(o => {
-    const days = Math.ceil((new Date(o.fecha_limite) - new Date()) / 86400000);
+    const days = daysBetween(dates.today, obligationDay(o));
     return {
       label: `${(o.modelo || '').replace('modelo_', 'M. ')} · ${o.periodo || ''}`,
       value: `${days}d`,
@@ -72,7 +64,7 @@ export default function SmartWidgets({ financials, obligations }) {
       iconBg: 'bg-amber-500/10',
       title: 'Obligaciones próximas',
       items: oblItems,
-      emptyText: 'Sin vencimientos próximos',
+      emptyText: calendarError ? 'Calendario no disponible: revisa las obligaciones' : 'Sin vencimientos en los próximos 30 días',
       delay: 0,
     },
     {
@@ -84,7 +76,7 @@ export default function SmartWidgets({ financials, obligations }) {
         { label: 'Total a cobrar', value: fmt(cobrosPendientes), dotColor: 'bg-emerald-500' },
         { label: 'Facturas vencidas', value: `${vencidas.length}`, dotColor: vencidas.length > 0 ? 'bg-red-500' : 'bg-emerald-500' },
       ] : [],
-      emptyText: 'Sin cobros pendientes',
+      emptyText: financials.financialError ? 'Cobros no disponibles' : 'Sin cobros pendientes',
       delay: 0.05,
     },
     {
@@ -95,7 +87,7 @@ export default function SmartWidgets({ financials, obligations }) {
       items: pagosPendientes > 0 ? [
         { label: 'Total a pagar', value: fmt(pagosPendientes), dotColor: 'bg-red-500' },
       ] : [],
-      emptyText: 'Sin pagos pendientes',
+      emptyText: financials.financialError ? 'Pagos no disponibles' : 'Sin pagos pendientes',
       delay: 0.1,
     },
     {
@@ -104,10 +96,10 @@ export default function SmartWidgets({ financials, obligations }) {
       iconBg: 'bg-primary/10',
       title: 'Acciones rápidas',
       items: [
-        { label: 'Ver forecast', value: '→', dotColor: 'bg-blue-500' },
-        { label: 'Revisar cobros', value: '→', dotColor: 'bg-emerald-500' },
-        { label: 'Ver impuestos', value: '→', dotColor: 'bg-amber-500' },
-        { label: 'Exportar informe', value: '→', dotColor: 'bg-violet-500' },
+        { label: 'Centro de tesorería', value: '→', dotColor: 'bg-blue-500', to: '/finance/cashflow' },
+        { label: 'Revisar cobros', value: '→', dotColor: 'bg-emerald-500', to: '/finance/ar' },
+        { label: 'Ver impuestos', value: '→', dotColor: 'bg-amber-500', to: '/tax-accounting/obligaciones' },
+        { label: 'Libros e informes', value: '→', dotColor: 'bg-violet-500', to: '/tax-accounting/libros' },
       ],
       emptyText: '',
       delay: 0.15,

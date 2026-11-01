@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
 import FinanceHeader from './FinanceHeader';
 import KpiRow from './KpiRow';
@@ -11,195 +10,49 @@ import FinancialTimeline from './FinancialTimeline';
 import SmartWidgets from './SmartWidgets';
 import InsightsIA from './InsightsIA';
 import HealthScore from './FinanceHealthScore';
-import { subDays, subMonths, isAfter, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { calculateFinancialKPIs, activeInvoices } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { useFinancePeriod, useFinanceObligations } from '@/hooks/useFinanceReporting';
+import { buildFinanceDashboardModel } from '@/lib/financeDashboardModel.mjs';
 
 export default function FinanceDashboard() {
-  const ctx = useOutletContext() || {};
-  const { company } = ctx;
-
+  const { company } = useOutletContext() || {};
   const companyId = company?.id;
-  const { invoices, expenses, bankTransactions, treasury, loading: finLoading, lastSync } = useFinancialData(companyId);
-  const [obligations, setObligations] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
-
-  useEffect(() => {
-    if (!companyId) { setLoading(false); return; }
-    base44.entities.TaxObligation.filter({ company_id: companyId })
-      .then(obl => setObligations(obl || []))
-      .finally(() => setLoading(false));
-  }, [companyId]);
-
-  // ── Derived financial data (usa capa unificada) ───────────────────────────
-  const financials = useMemo(() => {
-    const now = new Date();
-    const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-    const cutoff = subDays(now, periodDays);
-
-    // Filtrar por periodo pero excluyendo anuladas (via activeInvoices)
-    const filteredInvoices = activeInvoices(invoices).filter(i => {
-      try { return isAfter(parseISO(i.fecha_emision), cutoff); } catch { return false; }
-    });
-    const filteredExpenses = (expenses || []).filter(e => {
-      try { return !e.anulada && isAfter(parseISO(e.fecha), cutoff); } catch { return false; }
-    });
-
-    // KPIs unificados del periodo filtrado
-    const finKPIs = calculateFinancialKPIs(filteredInvoices, filteredExpenses);
-
-    const totalIngresos = finKPIs.totalIngresos;
-    const gastoTotal = finKPIs.totalGastos;
-    const beneficio = finKPIs.resultado;
-    const margenNeto = totalIngresos > 0 ? (beneficio / totalIngresos) * 100 : 0;
-
-    // EBITDA = resultado neto real (sin amortizaciones inventadas)
-    const ebitda = beneficio;
-
-    // El saldo disponible procede de las cuentas bancarias conectadas.
-    // Solo se usa el antiguo cálculo por facturas si aún no existe conexión bancaria.
-    const invoiceCashFallback = activeInvoices(invoices)
-      .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada')
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-    const cashDisponible = treasury.connectedAccounts > 0 ? treasury.availableCash : invoiceCashFallback;
-    const cashSource = treasury.connectedAccounts > 0 ? 'bank' : 'invoices';
-
-    const cobrosPendientes = finKPIs.cobrosPendientes;
-    const pagosPendientes = finKPIs.pagosPendientes;
-
-    // Burn rate
-    const burnRate = gastoTotal / (periodDays / 30);
-    const runway = cashDisponible > 0 && burnRate > 0 ? cashDisponible / burnRate : null;
-
-    // DSO/DPO: solo periodos de cobro/pago observados, nunca vencimientos estimados.
-    const measuredDays = (type) => activeInvoices(invoices)
-      .filter(i => i.tipo === type && i.estado_cobro === 'cobrada' && i.fecha_emision && i.ultimo_pago_at)
-      .map(i => {
-        try { return Math.max(0, Math.round((parseISO(i.ultimo_pago_at) - parseISO(i.fecha_emision)) / 86400000)); }
-        catch { return null; }
-      })
-      .filter(value => value !== null);
-    const dsoDays = measuredDays('emitida');
-    const dpoDays = measuredDays('recibida');
-    const dso = dsoDays.length ? dsoDays.reduce((sum, value) => sum + value, 0) / dsoDays.length : 0;
-    const dpo = dpoDays.length ? dpoDays.reduce((sum, value) => sum + value, 0) / dpoDays.length : 0;
-
-    const workingCapital = cobrosPendientes - pagosPendientes;
-
-    const upcoming = obligations.filter(o => {
-      try {
-        const d = parseISO(o.fecha_limite);
-        return isAfter(d, now) && isAfter(subDays(d, 30), subDays(now, 1));
-      } catch { return false; }
-    });
-
-    const vencidas = finKPIs.facturasVencidasList;
-
-    // Previous period comparison
-    const prevCutoff = subDays(cutoff, periodDays);
-    const prevIngresos = activeInvoices(invoices)
-      .filter(i => {
-        try {
-          const d = parseISO(i.fecha_emision);
-          return i.tipo === 'emitida' && isAfter(d, prevCutoff) && !isAfter(d, cutoff);
-        } catch { return false; }
-      })
-      .reduce((s, i) => s + (i.total_factura || 0), 0);
-
-    const ingresosDelta = prevIngresos > 0 ? ((totalIngresos - prevIngresos) / prevIngresos) * 100 : 0;
-
-    // Spark data — series mensuales reales (7 meses) para mini-gráficas
-    const sparkMonths = Array.from({ length: 7 }, (_, i) => subMonths(now, 6 - i));
-    const sparkIngresos = sparkMonths.map(m => {
-      try {
-        return activeInvoices(invoices)
-          .filter(i => i.tipo === 'emitida' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) }))
-          .reduce((s, i) => s + (i.total_factura || 0), 0);
-      } catch { return 0; }
-    });
-    const sparkGastos = sparkMonths.map(m => {
-      try {
-        const exp = (expenses || []).filter(e => !e.anulada && e.tipo === 'gasto' && isWithinInterval(parseISO(e.fecha), { start: startOfMonth(m), end: endOfMonth(m) })).reduce((s, e) => s + (e.total || 0), 0);
-        const fac = activeInvoices(invoices).filter(i => i.tipo === 'recibida' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) })).reduce((s, i) => s + (i.total_factura || 0), 0);
-        return exp + fac;
-      } catch { return 0; }
-    });
-    const sparkCash = sparkMonths.map(m => {
-      try {
-        if (treasury.connectedAccounts > 0) {
-          return (bankTransactions || [])
-            .filter(t => t.moneda === 'EUR' && t.estado_proveedor !== 'pending' && t.categoria_ia !== 'transferencia_interna' && t.estado_conciliacion !== 'movimiento_interno' && isWithinInterval(parseISO(t.fecha_operacion), { start: startOfMonth(m), end: endOfMonth(m) }))
-            .reduce((sum, t) => sum + (t.tipo === 'entrada' ? Number(t.importe || 0) : -Number(t.importe || 0)), 0);
-        }
-        return activeInvoices(invoices)
-          .filter(i => i.tipo === 'emitida' && i.estado_cobro === 'cobrada' && isWithinInterval(parseISO(i.fecha_emision), { start: startOfMonth(m), end: endOfMonth(m) }))
-          .reduce((s, i) => s + (i.total_factura || 0), 0);
-      } catch { return 0; }
-    });
-    const sparkBeneficio = sparkIngresos.map((ing, i) => ing - sparkGastos[i]);
-    const sparkData = { ingresos: sparkIngresos, gastos: sparkGastos, cash: sparkCash, beneficio: sparkBeneficio, ebitda: sparkBeneficio };
-
-    return {
-      totalIngresos, gastoTotal, beneficio, margenNeto, ebitda,
-      cashDisponible, cashSource, bankConnected: treasury.connectedAccounts, bankUnreconciled: treasury.unreconciledTransactions, cobrosPendientes, pagosPendientes,
-      burnRate, runway, dso, dpo, workingCapital,
-      upcoming, vencidas, ingresosDelta,
-      filteredInvoices, filteredExpenses, sparkData,
-    };
-  }, [invoices, expenses, bankTransactions, treasury, obligations, period]);
-
+  const data = useFinancialData(companyId);
+  const accounting = useFinancePeriod(companyId, period);
+  const calendar = useFinanceObligations(companyId);
+  const obligations = calendar.data?.rows || [];
+  const financials = useMemo(() => buildFinanceDashboardModel({
+    ...data, obligations, accountingPeriod: accounting.data,
+    financialError: data.error, accountingError: accounting.isError ? 'No se pudo actualizar la PyG del periodo.' : '', period,
+  }), [data.invoices, data.expenses, data.bankAccounts, data.bankTransactions, data.error, data.treasuryError, accounting.data, accounting.isError, calendar.data, period]);
+  const loading = data.loading || accounting.isLoading || calendar.isLoading;
+  const refresh = () => { data.refresh(); accounting.refetch(); calendar.refetch(); };
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.35 }}
-      className="space-y-6 pb-8"
-    >
-      <FinanceHeader
-        company={company}
-        period={period}
-        setPeriod={setPeriod}
-        lastSync={lastSync}
-        loading={loading}
-      />
-
-      {!loading && !finLoading && (
-        <>
-          <KpiRow financials={financials} period={period} />
-
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <div className="xl:col-span-2">
-              <CashflowChart invoices={invoices} expenses={expenses} bankTransactions={bankTransactions} period={period} />
-            </div>
-            <div className="flex flex-col gap-5">
-              <ForecastPanel financials={financials} />
-              <HealthScore financials={financials} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <AlertasIA financials={financials} invoices={invoices} obligations={obligations} />
-            <InsightsIA financials={financials} />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            <div className="lg:col-span-2">
-              <FinancialTimeline invoices={invoices} expenses={expenses} obligations={obligations} />
-            </div>
-            <SmartWidgets financials={financials} obligations={obligations} />
-          </div>
-        </>
-      )}
-
-      {(loading || finLoading) && (
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-muted-foreground">Cargando datos financieros...</p>
-          </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }} className="space-y-6 pb-8">
+      <FinanceHeader company={company} period={period} setPeriod={setPeriod} lastSync={data.lastSync} loading={loading} onRefresh={refresh} />
+      {!loading && <>
+        <div role="status" className="rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground space-y-1">
+          <p>Resultado: asientos confirmados y cuadrados · {financials.window.start} a {financials.window.end}. Saldo: cuentas EUR conectadas con sincronización reciente.</p>
+          {!financials.accountingKnown && <p>No hay un resultado contable verificable para este periodo. Consulta los asientos y sus incidencias.</p>}
+          {financials.accountingProvisional && <p>Lectura parcial: {financials.accountingPending} asientos pendientes y {financials.accountingExcluded} excluidos. El marco contable requiere revisión cuando no está validado.</p>}
+          {!financials.bankKnown && <p>Saldo y autonomía de caja sin calcular: {financials.bankReasons.join(' ')}</p>}
+          {financials.duplicateBankAccounts + financials.duplicateBankTransactions > 0 && <p>La lectura ha omitido repeticiones de identidad bancaria: {financials.duplicateBankAccounts} cuentas y {financials.duplicateBankTransactions} movimientos. No se han borrado registros.</p>}
+          {calendar.data?.provisionalDates && <p>Hay fechas de un ejercicio posterior aún pendientes de contraste con su calendario oficial.</p>}
         </div>
-      )}
+        {(data.error || accounting.isError || calendar.isError) && <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          No se pudieron actualizar todas las fuentes. {data.error} {accounting.isError ? 'PyG no disponible.' : ''} {calendar.isError ? 'Calendario no disponible: no se afirma que no existan obligaciones.' : ''}
+          <button className="ml-2 font-semibold underline" onClick={refresh}>Reintentar</button>
+        </div>}
+        <KpiRow financials={financials} period={period} />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <div className="xl:col-span-2"><CashflowChart invoices={data.invoices} expenses={data.expenses} bankTransactions={data.bankTransactions} financials={financials} period={period} /></div>
+          <div className="flex flex-col gap-5"><ForecastPanel financials={financials} /><HealthScore financials={financials} /></div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5"><AlertasIA financials={financials} invoices={data.invoices} obligations={obligations} calendarError={calendar.isError} /><InsightsIA financials={financials} /></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5"><div className="lg:col-span-2"><FinancialTimeline invoices={data.invoices} expenses={data.expenses} obligations={obligations} calendarError={calendar.isError} /></div><SmartWidgets financials={financials} obligations={obligations} calendarError={calendar.isError} /></div>
+      </>}
+      {loading && <div className="flex items-center justify-center h-64"><div className="flex flex-col items-center gap-3"><div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" /><p className="text-sm text-muted-foreground">Cargando fuentes financieras...</p></div></div>}
     </motion.div>
   );
 }

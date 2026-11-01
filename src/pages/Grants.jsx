@@ -93,7 +93,7 @@ export default function Grants() {
   const [administration, setAdministration] = useState('');
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState('all');
+  const [tab, setTab] = useState('open');
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(false);

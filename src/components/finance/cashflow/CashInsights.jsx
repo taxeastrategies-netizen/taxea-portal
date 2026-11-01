@@ -11,7 +11,7 @@ function buildInsights(financials) {
   const { totalIngresos, gastoTotal, beneficio, ingresosDelta, dso, workingCapital, bankKnown } = financials;
   const insights = [];
 
-  if (bankKnown && ingresosDelta !== 0) {
+  if (bankKnown && ingresosDelta !== null && ingresosDelta !== 0) {
     insights.push({ trend: ingresosDelta > 0 ? 'up' : 'down',
       text: `Las entradas bancarias observadas ${ingresosDelta > 0 ? 'aumentan' : 'disminuyen'} un ${Math.abs(ingresosDelta).toFixed(1)}% frente a los 30 días anteriores. No equivale a ventas devengadas.` });
   }

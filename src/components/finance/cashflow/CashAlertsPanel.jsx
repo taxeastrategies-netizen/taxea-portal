@@ -1,55 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Zap, TrendingDown, Clock, Users, CreditCard, CheckCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getOutstandingAmount } from '@/lib/financialCore';
+import { financeAlerts } from '@/lib/financeSignals.mjs';
 
-function fmt(n) {
-  if (!n && n !== 0) return '—';
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
-}
 
-function buildAlerts(financials, obligations) {
-  const { cashDisponible, cobrosPendientes, pagosPendientes, runway, vencidas, dso, bankKnown } = financials;
-  const alerts = [];
-  if (!bankKnown) alerts.push({ id: 'unknown', severity: 'unknown', icon: AlertTriangle, title: 'Liquidez no verificable', desc: 'Conecta o revisa el banco para calcular alertas de caja con saldo real.' });
-
-  if (runway !== null && runway < 3) {
-    alerts.push({ id: 'runway', severity: 'critical', icon: Zap, title: 'Cobertura de salidas observadas baja',
-      desc: `El saldo cubre ${runway.toFixed(1)} meses al ritmo de salidas de los últimos 30 días, sin suponer cobros futuros. Revisa el pronóstico y los compromisos.` });
-  }
-  if (bankKnown && cashDisponible < pagosPendientes) {
-    alerts.push({ id: 'cash_low', severity: 'high', icon: AlertTriangle, title: 'Cash insuficiente para pagos comprometidos',
-      desc: `Tienes ${fmt(cashDisponible)} disponible pero ${fmt(pagosPendientes)} en pagos pendientes. Gap de ${fmt(pagosPendientes - cashDisponible)}.` });
-  }
-  if (vencidas && vencidas.length > 0) {
-    const total = vencidas.reduce((s, i) => s + getOutstandingAmount(i), 0);
-    alerts.push({ id: 'overdue', severity: 'high', icon: Clock, title: `${vencidas.length} facturas vencidas sin cobrar`,
-      desc: `${fmt(total)} en facturas vencidas. Riesgo de impago elevado. Revisa el estado de cada cliente.` });
-  }
-  if (dso > 60) {
-    alerts.push({ id: 'dso', severity: 'medium', icon: TrendingDown, title: 'Período medio de cobro elevado',
-      desc: `Tu DSO es de ${Math.round(dso)} días. Revisa las fechas de emisión y cobro de la muestra para valorar el riesgo.` });
-  }
-  const upcomingObl = obligations.filter(o => {
-    try { const diff = (new Date(o.fecha_limite) - new Date()) / 86400000; return diff >= 0 && diff <= 15 && !['finalizado', 'pagado', 'presentado', 'domiciliado', 'no_aplica'].includes(o.estado); }
-    catch { return false; }
-  });
-  if (upcomingObl.length > 0) {
-    const total = upcomingObl.reduce((s, o) => s + (o.importe || 0), 0);
-    alerts.push({ id: 'tax_soon', severity: 'medium', icon: CreditCard, title: `${upcomingObl.length} obligaciones fiscales en 15 días`,
-      desc: `${fmt(total)} en impuestos próximos. Asegúrate de tener cash disponible.` });
-  }
-  if (bankKnown && cashDisponible > 0 && cobrosPendientes > cashDisponible * 2) {
-    alerts.push({ id: 'pending_high', severity: 'medium', icon: Users, title: 'Concentración alta en cobros pendientes',
-      desc: `${fmt(cobrosPendientes)} en cobros pendientes supera 2x tu cash actual. Evalúa riesgo de concentración.` });
-  }
-  if (alerts.length === 0) {
-    alerts.push({ id: 'ok', severity: 'ok', icon: CheckCircle, title: 'Sin alertas de estas reglas', desc: 'El resultado depende de los datos bancarios y vencimientos disponibles; no es una certificación financiera.' });
-  }
-  return alerts;
-}
 
 const sevCfg = {
+  warning: { border: 'border-amber-200', bg: 'bg-amber-50', icon: 'text-amber-600', badge: 'bg-amber-100 text-amber-700', label: 'Revisar' },
   critical: { border: 'border-red-200',    bg: 'bg-red-50',    icon: 'text-red-600',    badge: 'bg-red-100 text-red-700',    label: 'Crítico' },
   high:     { border: 'border-orange-200', bg: 'bg-orange-50', icon: 'text-orange-600', badge: 'bg-orange-100 text-orange-700', label: 'Alto' },
   medium:   { border: 'border-amber-200',  bg: 'bg-amber-50',  icon: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700',  label: 'Moderado' },
@@ -57,8 +14,8 @@ const sevCfg = {
   unknown:  { border: 'border-slate-200',bg: 'bg-slate-50',icon: 'text-slate-600',badge: 'bg-slate-100 text-slate-700', label: 'Sin dato' },
 };
 
-export default function CashAlertsPanel({ financials, obligations }) {
-  const alerts = buildAlerts(financials, obligations);
+export default function CashAlertsPanel({ financials, obligations, calendarError = false }) {
+  const alerts = financeAlerts(financials, obligations, { calendarError });
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
@@ -74,7 +31,7 @@ export default function CashAlertsPanel({ financials, obligations }) {
         <AnimatePresence>
           {alerts.map((alert, i) => {
             const cfg = sevCfg[alert.severity];
-            const Icon = alert.icon;
+            const Icon = alert.severity === 'ok' ? CheckCircle : AlertTriangle;
             return (
               <motion.div key={alert.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.07 }}

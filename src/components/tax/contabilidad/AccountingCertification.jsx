@@ -14,8 +14,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const STATUS = {
+  no_data: { label: 'Sin actividad suficiente', description: 'No hay registros operativos suficientes para evaluar el conjunto. La ausencia de datos no acredita cumplimiento.', icon: Database, tone: 'border-slate-200 bg-slate-50 text-slate-700', ring: 'text-slate-500' },
   certified: {
-    label: 'Base certificada',
+    label: 'Integridad técnica comprobada',
     description: 'No se han detectado bloqueos estructurales en la lectura actual.',
     icon: BadgeCheck,
     tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -38,6 +39,7 @@ const STATUS = {
 };
 
 const CHECK_STATUS = {
+  not_applicable: { label: 'No aplicable', icon: Database, className: 'bg-slate-50 text-slate-600 border-slate-200' },
   pass: { label: 'Correcto', icon: CheckCircle2, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   review: { label: 'Revisar', icon: AlertTriangle, className: 'bg-amber-50 text-amber-700 border-amber-200' },
   blocked: { label: 'Bloqueo', icon: Ban, className: 'bg-red-50 text-red-700 border-red-200' },
@@ -114,14 +116,14 @@ export default function AccountingCertification({ companyId }) {
                 <ShieldCheck className="h-3.5 w-3.5" /> Solo lectura
               </span>
             </div>
-            <h2 className="mt-3 font-jakarta text-xl font-semibold text-foreground">Certificación contable, bancaria y fiscal</h2>
+            <h2 className="mt-3 font-jakarta text-xl font-semibold text-foreground">Control de integridad contable y de datos</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{config.description} Este control no corrige, contabiliza ni modifica datos por sí solo.</p>
-            <p className="mt-2 text-xs text-muted-foreground">Empresa: {query.data?.company?.name || 'Empresa activa'} · Ejecutado: {generatedAt}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Cobertura: {certification?.summary?.applicable ?? certification?.summary?.checks} controles aplicables · {certification?.summary?.notApplicable || 0} no aplicables. Empresa: {query.data?.company?.name || 'Empresa activa'} · Ejecutado: {generatedAt}</p>
           </div>
           <div className="flex items-center gap-4">
             <div className={cn('flex h-24 w-24 flex-col items-center justify-center rounded-full border-8 border-current/15 bg-background', config.ring)}>
-              <span className="font-jakarta text-2xl font-bold">{certification?.score ?? 0}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide">sobre 100</span>
+              <span className="font-jakarta text-2xl font-bold">{certification?.score ?? '—'}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide">{certification?.score == null ? 'sin datos' : 'sobre 100'}</span>
             </div>
             <Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>
               <RefreshCw className={cn('mr-2 h-4 w-4', query.isFetching && 'animate-spin')} /> Actualizar

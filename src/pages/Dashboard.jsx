@@ -13,7 +13,8 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { computeBusinessHealth } from '@/lib/businessHealthScore';
+import { computeBusinessHealth, fiscalCoverage } from '@/lib/businessHealthScore';
+import { classifyObligations } from '@/lib/reportingPeriods.mjs';
 
 const currentYear = new Date().getFullYear();
 const DEFAULT_YEARS = [currentYear, currentYear - 1, currentYear - 2];
@@ -95,7 +96,7 @@ function HealthDimensions({ health }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mt-3">
       {health.dimensions.map((dimension) => (
-        <div key={dimension.key} className="rounded-lg border border-border bg-background/60 px-2.5 py-2">
+        <div key={dimension.key} className="rounded-lg border border-border bg-background/60 px-2.5 py-2" title={dimension.reasons.join(' ')}>
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] text-muted-foreground truncate">{dimension.label}</span>
             <span className={cn('text-xs font-bold', dimension.score === null ? 'text-muted-foreground' : dimension.score >= 80 ? 'text-emerald-600' : dimension.score >= 55 ? 'text-amber-600' : 'text-red-600')}>{dimension.score ?? 'N/D'}</span>
@@ -120,9 +121,11 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const refreshTimer = useRef(null);
+  const requestVersion = useRef(0);
 
   const loadDashboard = useCallback(async ({ quiet = false } = {}) => {
     if (!company?.id) return;
+    const request = ++requestVersion.current;
     quiet ? setRefreshing(true) : setLoading(true);
     try {
       const [businessResponse, fiscalResponse] = await Promise.all([
@@ -133,15 +136,15 @@ export default function Dashboard() {
       const fiscalData = fiscalResponse?.data || fiscalResponse;
       if (businessData?.error) throw new Error(businessData.error);
       if (fiscalData?.error) throw new Error(fiscalData.error);
+      if (request !== requestVersion.current || businessData.companyId !== company.id || fiscalData.companyId !== company.id) return;
       setSummary(businessData);
       setFiscal(fiscalData);
       setError('');
     } catch (loadError) {
       console.error('[Dashboard] live load failed', loadError);
-      setError(loadError?.message || 'No se han podido actualizar todos los indicadores.');
+      if (request === requestVersion.current) setError('No se han podido actualizar todos los indicadores. Se conserva la última lectura válida de esta empresa.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (request === requestVersion.current) { setLoading(false); setRefreshing(false); }
     }
   }, [company?.id, selectedYear]);
 
@@ -151,8 +154,10 @@ export default function Dashboard() {
   }, [loadDashboard]);
 
   useEffect(() => {
+    setSummary(null); setFiscal(null); setError('');
     if (company?.id) loadDashboard();
     else if (!loadingCompany) setLoading(false);
+    return () => { requestVersion.current++; };
   }, [company?.id, loadingCompany, loadDashboard]);
 
   useEffect(() => {
@@ -174,17 +179,18 @@ export default function Dashboard() {
 
   const derived = useMemo(() => {
     const items = fiscal?.items || [];
-    const today = new Date().toISOString().slice(0, 10);
+    const dates = classifyObligations(items, { horizon: 15 });
     const openObligations = items.filter(fiscalOpen);
-    const overdueObligations = openObligations.filter((item) => item.filingDeadline && item.filingDeadline < today);
-    const urgentObligations = openObligations.filter((item) => item.filingDeadline && item.filingDeadline >= today && (new Date(item.filingDeadline) - new Date(today)) / 86400000 <= 15);
-    const health = computeBusinessHealth(summary, fiscal);
-    const fiscalStatus = overdueObligations.length || summary?.operations?.criticalErrors ? 'rojo' : urgentObligations.length || !fiscal?.profile || fiscal?.unlinkedDocuments?.length ? 'amarillo' : items.length ? 'verde' : 'gris';
+    const overdueObligations = dates.overdue;
+    const urgentObligations = dates.upcoming;
+    const health = computeBusinessHealth(summary, fiscal, { stale: Boolean(error) });
+    const readiness = fiscalCoverage(fiscal);
+    const fiscalStatus = overdueObligations.length || summary?.operations?.criticalErrors ? 'rojo' : urgentObligations.length || !readiness.active || fiscal?.unlinkedDocuments?.length ? 'amarillo' : items.length ? 'verde' : 'gris';
     const years = [...new Set([...(summary?.accounting?.report?.years || []), ...DEFAULT_YEARS, Number(selectedYear)])].sort((a, b) => b - a);
-    return { items, openObligations, overdueObligations, urgentObligations, health, fiscalStatus, years };
-  }, [summary, fiscal, selectedYear]);
+    return { items, openObligations, overdueObligations, urgentObligations, upcomingObligations: classifyObligations(items, { horizon: 30 }).upcoming, health, fiscalStatus, years, readiness };
+  }, [summary, fiscal, selectedYear, error]);
 
-  if (loading || loadingCompany) return <DashboardSkeleton />;
+  if (loading || loadingCompany || (summary && (summary.companyId !== company?.id || summary.year !== Number(selectedYear)))) return <DashboardSkeleton />;
   if (!company) return (
     <div className="animate-fade-in max-w-xl mx-auto mt-16 text-center">
       <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4"><Upload className="w-7 h-7 text-primary" /></div>
@@ -194,6 +200,8 @@ export default function Dashboard() {
     </div>
   );
 
+  if (!summary || !fiscal) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">{error || 'No hay una lectura completa disponible.'}<Button className="ml-3" variant="outline" onClick={() => loadDashboard()}>Reintentar</Button></div>;
+  const sourceKnown = (...names) => names.every(name => !summary.sourceErrors?.[name]);
   const accounting = summary?.accounting || {};
   const pnl = accounting.pnl || {};
   const quality = accounting.quality || {};
@@ -208,6 +216,7 @@ export default function Dashboard() {
 
   return (
     <main className="taxea-command-center animate-fade-in space-y-5">
+      {summary?.coverage?.complete === false && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Lectura parcial: faltan fuentes. Los apartados sin información no se consideran correctos por defecto.</p>}
       <header className="taxea-command-hero">
         <div className="relative z-10 min-w-0">
           <p className="taxea-command-kicker"><span />Taxea Business OS · datos reales</p>
@@ -255,12 +264,12 @@ export default function Dashboard() {
           <div className="bg-card border border-border rounded-xl px-5 py-4 space-y-3">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Indicadores clave reales</h2>
             {[
-              { label: 'Tesorería disponible EUR', value: currency(treasury.cashEur), warn: !treasury.connectedAccounts },
+              { label: 'Tesorería disponible EUR', value: treasury.balanceKnown ? currency(treasury.cashEur) : '—', warn: !treasury.connectedAccounts },
               { label: 'Pendiente de cobro', value: currency(receivables.outstanding), warn: receivables.overdue > 0 },
               { label: 'Pendiente de pago', value: currency(payables.outstanding), warn: payables.overdue > 0 },
               { label: 'Conciliación bancaria', value: treasury.reconciliationRate === null || treasury.reconciliationRate === undefined ? 'N/D' : `${treasury.reconciliationRate}%`, warn: treasury.unreconciled > 0 },
               { label: 'Facturas sin asiento válido', value: quality.pendingInvoicePostings || 0, warn: quality.pendingInvoicePostings > 0 },
-              { label: 'Revisión laboral pendiente', value: people.laborDocumentsReview || 0, warn: people.laborDocumentsReview > 0 },
+              { label: 'Revisión laboral pendiente', value: sourceKnown('LaborOcrDocument') ? people.laborDocumentsReview || 0 : 'N/D', warn: people.laborDocumentsReview > 0 },
             ].map((indicator) => <div key={indicator.label} className="flex items-center justify-between gap-3 border-b border-border/60 last:border-0 pb-2 last:pb-0"><span className="text-xs text-foreground">{indicator.label}</span><span className={cn('text-xs font-bold text-right', indicator.warn ? 'text-amber-600' : 'text-emerald-600')}>{indicator.value}</span></div>)}
           </div>
         </div>
@@ -271,10 +280,10 @@ export default function Dashboard() {
           { label: 'Asientos confirmados', value: quality.confirmedEntries || 0, sub: `${accounting.report?.excludedEntries || 0} excluidos del informe` },
           { label: 'Facturas sin asiento válido', value: quality.pendingInvoicePostings || 0, alert: quality.pendingInvoicePostings > 0 },
           { label: 'Obligaciones abiertas', value: derived.openObligations.length, warn: derived.urgentObligations.length > 0 },
-          { label: 'Incidencias contables/fiscales', value: operations.openErrors || 0, alert: operations.criticalErrors > 0 },
+          { label: 'Incidencias contables/fiscales', value: sourceKnown('FiscalError') ? operations.openErrors || 0 : 'N/D', alert: operations.criticalErrors > 0 },
         ]} tools={TAX_TOOLS} />
         <DeptCard icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100" title="Finanzas y tesorería" to="/finance/dashboard" kpis={[
-          { label: 'Saldo disponible EUR', value: currency(treasury.cashEur), sub: `${treasury.connectedAccounts || 0} cuenta(s) conectada(s)` },
+          { label: 'Saldo disponible EUR', value: treasury.balanceKnown ? currency(treasury.cashEur) : '—', sub: `${treasury.connectedAccounts || 0} cuenta(s) conectada(s)` },
           { label: 'Sin conciliar', value: treasury.unreconciled || 0, warn: treasury.unreconciled > 0, sub: treasury.reconciliationRate === null ? 'Sin movimientos' : `${treasury.reconciliationRate}% conciliado` },
           { label: 'Cobros vencidos', value: currency(receivables.overdueAmount), alert: receivables.overdue > 0, sub: `${receivables.overdue || 0} factura(s)` },
           { label: 'Pagos vencidos', value: currency(payables.overdueAmount), alert: payables.overdue > 0, sub: `${payables.overdue || 0} factura(s)` },
@@ -282,9 +291,9 @@ export default function Dashboard() {
         <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white"><div className="flex items-center gap-2"><MapPinned className="h-5 w-5 text-cyan-300" /><h3 className="font-jakarta text-sm font-bold">Subvenciones y Ayudas</h3></div><p className="mt-3 text-xs leading-relaxed text-slate-300">Mapa de España, ayudas para autónomos y búsqueda por provincia y actividad con fuente oficial.</p><Link to="/subvenciones" className="mt-5 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-50">Explorar ayudas</Link></div>
         <div className="rounded-xl border border-cyan-200 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 p-5 text-white"><div className="flex items-center gap-2"><Landmark className="h-5 w-5 text-cyan-300" /><h3 className="font-jakarta text-sm font-bold">Licitaciones y contratos públicos</h3></div><p className="mt-3 text-xs leading-relaxed text-slate-300">Busca expedientes abiertos, anuncios previos y consultas preliminares en las fuentes oficiales de contratación.</p><Link to="/licitaciones" className="mt-5 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-50">Explorar licitaciones</Link></div>
         <DeptCard icon={Heart} color="text-rose-700" bgLight="bg-rose-50/60" border="border-rose-100" title="Recursos humanos y personas" to="/people/dashboard" kpis={[
-          { label: 'Empleados activos', value: people.activeEmployees || 0, sub: `${people.employees || 0} total plantilla` },
-          { label: 'Ausencias actuales', value: people.currentAbsences || 0, sub: `${people.pendingAbsences || 0} pendientes` },
-          { label: 'Docs pendientes de firma', value: people.pendingSignature || 0, warn: people.pendingSignature > 0, sub: `${people.expiredDocuments || 0} expirados` },
+          { label: 'Empleados activos', value: sourceKnown('Employee') ? people.activeEmployees || 0 : 'N/D', sub: `${people.employees || 0} total plantilla` },
+          { label: 'Ausencias actuales', value: sourceKnown('HRAbsence') ? people.currentAbsences || 0 : 'N/D', sub: `${people.pendingAbsences || 0} pendientes` },
+          { label: 'Docs pendientes de firma', value: sourceKnown('HRDocument') ? people.pendingSignature || 0 : 'N/D', warn: people.pendingSignature > 0, sub: `${people.expiredDocuments || 0} expirados` },
           { label: 'Extracciones a revisar', value: people.laborDocumentsReview || 0, warn: people.laborDocumentsReview > 0, sub: `${people.payrollWarnings || 0} advertencias` },
         ]} tools={HR_TOOLS} />
       </section>
@@ -293,7 +302,7 @@ export default function Dashboard() {
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-border"><h2 className="text-sm font-jakarta font-semibold flex items-center gap-2"><Calendar className="w-3.5 h-3.5 text-muted-foreground" />Próximas obligaciones</h2><Link to="/tax-accounting/obligaciones" className="text-xs text-primary hover:underline">Ver calendario</Link></div>
           <div className="divide-y divide-border/60">
-            {derived.items.length === 0 ? <EmptyState icon={CheckCircle} text={fiscal?.profile ? 'Sin obligaciones para este ejercicio' : 'Configura el perfil fiscal para generar el calendario'} /> : derived.items.filter(fiscalOpen).slice(0, 5).map((item) => <div key={item.calendarKey || item.key} className="px-5 py-2.5 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs font-medium truncate">Modelo {item.code} · {item.name}</p><p className="text-[11px] text-muted-foreground">{item.period} · Presentación {shortDate(item.filingDeadline)}{item.domicileDeadline ? ` · Domiciliación ${shortDate(item.domicileDeadline)}` : ''}</p></div><StatusBadge status={item.state || 'pendiente_documentacion'} /></div>)}
+            {derived.upcomingObligations.length === 0 ? <EmptyState icon={CheckCircle} text={derived.readiness.active ? 'Sin vencimientos abiertos en los próximos 30 días' : derived.readiness.reason} /> : derived.upcomingObligations.slice(0, 5).map((item) => <div key={item.calendarKey || item.key} className="px-5 py-2.5 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs font-medium truncate">Modelo {item.code} · {item.name}</p><p className="text-[11px] text-muted-foreground">{item.period} · Presentación {shortDate(item.filingDeadline)}{item.domicileDeadline ? ` · Domiciliación ${shortDate(item.domicileDeadline)}` : ''}</p></div><StatusBadge status={item.state || 'pendiente_documentacion'} /></div>)}
           </div>
         </div>
 
@@ -313,9 +322,9 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-6 px-5 divide-y sm:divide-y-0">
           <SourcePulse label="Contabilidad" value={accounting.freshness || shortDate(summary?.freshness?.accounting)} ok={quality.unbalancedEntries === 0} />
           <SourcePulse label="Facturación" value={shortDate(summary?.freshness?.invoices)} ok={quality.pendingInvoicePostings === 0} />
-          <SourcePulse label="Banca" value={treasury.lastSync ? new Date(treasury.lastSync).toLocaleString('es-ES') : 'Sin sincronización'} ok={treasury.connectedAccounts > 0 && !treasury.stale} />
-          <SourcePulse label="Fiscalidad" value={fiscal?.profile ? `${fiscal.models?.length || 0} modelos activos` : 'Perfil sin validar'} ok={Boolean(fiscal?.profile)} />
-          <SourcePulse label="Laboral y documentos" value={shortDate(summary?.freshness?.labor || summary?.freshness?.documents)} ok={(people.laborDocumentsReview || 0) + (documents.rejected || 0) === 0} />
+          <SourcePulse label="Banca" value={treasury.lastSync ? new Date(treasury.lastSync).toLocaleString('es-ES') : 'Sin sincronización'} ok={treasury.balanceKnown === true} />
+          <SourcePulse label="Fiscalidad" value={derived.readiness.active ? `${fiscal.models?.length || 0} modelos activos` : derived.readiness.reason} ok={derived.readiness.active} />
+          <SourcePulse label="Laboral y documentos" value={shortDate(summary?.freshness?.labor || summary?.freshness?.documents)} ok={sourceKnown('LaborOcrDocument') && sourceKnown('Document') && (people.laborDocumentsReview || 0) + (documents.rejected || 0) === 0} />
         </div>
       </section>
     </main>

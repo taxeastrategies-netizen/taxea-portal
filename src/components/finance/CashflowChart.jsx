@@ -3,9 +3,11 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine
 } from 'recharts';
-import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { TrendingUp } from 'lucide-react';
+import { calculateFinancialKPIs } from '@/lib/financialCore';
+import { withinWindow, civilDay } from '@/lib/reportingPeriods.mjs';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
@@ -29,58 +31,19 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-export default function CashflowChart({ invoices, expenses, bankTransactions = [] }) {
-  const hasBankData = bankTransactions.some(transaction => transaction.moneda === 'EUR' && transaction.estado_proveedor !== 'pending');
+export default function CashflowChart({ invoices = [], expenses = [], financials }) {
+  const hasBankData = Boolean(financials?.bankKnown);
   const data = useMemo(() => {
     const months = Array.from({ length: 7 }, (_, i) => subMonths(new Date(), 6 - i));
     return months.map(month => {
-      const interval = { start: startOfMonth(month), end: endOfMonth(month) };
-
-      const bankInMonth = bankTransactions.filter(transaction => {
-        try {
-          return transaction.moneda === 'EUR'
-            && transaction.estado_proveedor !== 'pending'
-            && transaction.categoria_ia !== 'transferencia_interna'
-            && transaction.estado_conciliacion !== 'movimiento_interno'
-            && isWithinInterval(parseISO(transaction.fecha_operacion), interval);
-        } catch { return false; }
-      });
-      const ingresos = hasBankData
-        ? bankInMonth.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
-        : invoices
-          .filter(i => {
-            try { return i.tipo === 'emitida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
-            catch { return false; }
-          })
-          .reduce((s, i) => s + (i.total_factura || 0), 0);
-
-      const gastos = expenses
-        .filter(e => {
-          try { return e.tipo === 'gasto' && !e.anulada && isWithinInterval(parseISO(e.fecha), interval); }
-          catch { return false; }
-        })
-        .reduce((s, e) => s + (e.total || 0), 0);
-
-      const gastosFacturas = invoices
-        .filter(i => {
-          try { return i.tipo === 'recibida' && !i.anulada && isWithinInterval(parseISO(i.fecha_emision), interval); }
-          catch { return false; }
-        })
-        .reduce((s, i) => s + (i.total_factura || 0), 0);
-
-      const totalGastos = hasBankData
-        ? bankInMonth.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0)
-        : gastos + gastosFacturas;
-      const neto = ingresos - totalGastos;
-
-      return {
-        mes: format(month, 'MMM', { locale: es }),
-        Ingresos: Math.round(ingresos),
-        Gastos: Math.round(totalGastos),
-        Neto: Math.round(neto),
-      };
+      const window = { start: format(startOfMonth(month), 'yyyy-MM-dd'), end: [format(endOfMonth(month), 'yyyy-MM-dd'), civilDay(new Date())].sort()[0] };
+      const bankRows = (financials?.observation?.rows || []).filter(row => withinWindow(row.day, window));
+      const document = calculateFinancialKPIs(invoices.filter(row => withinWindow(row.fecha_emision, window)), expenses.filter(row => withinWindow(row.fecha, window)));
+      const ingresos = hasBankData ? bankRows.filter(row => row.signedAmount > 0).reduce((sum, row) => sum + row.signedAmount, 0) : document.baseIngresos;
+      const gastos = hasBankData ? -bankRows.filter(row => row.signedAmount < 0).reduce((sum, row) => sum + row.signedAmount, 0) : document.baseGastos;
+      return { mes: format(month, 'MMM', { locale: es }), Ingresos: Math.round(ingresos * 100) / 100, Gastos: Math.round(gastos * 100) / 100, Neto: Math.round((ingresos - gastos) * 100) / 100 };
     });
-  }, [invoices, expenses, bankTransactions, hasBankData]);
+  }, [invoices, expenses, financials, hasBankData]);
 
   return (
     <div className="bg-card border border-border rounded-2xl p-5 h-full">
@@ -90,8 +53,8 @@ export default function CashflowChart({ invoices, expenses, bankTransactions = [
             <TrendingUp className="w-4 h-4 text-blue-500" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Cashflow — Últimos 7 meses</h3>
-            <p className="text-xs text-muted-foreground">{hasBankData ? 'Movimientos bancarios contabilizados' : 'Estimación por facturas y gastos'}</p>
+            <h3 className="text-sm font-semibold text-foreground">{hasBankData ? 'Movimientos bancarios · 7 meses' : 'Documentos registrados · 7 meses'}</h3>
+            <p className="text-xs text-muted-foreground">{hasBankData ? 'Entradas y salidas EUR disponibles; no es la PyG' : 'Bases de facturas y gastos; no es flujo de caja ni cierre contable'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

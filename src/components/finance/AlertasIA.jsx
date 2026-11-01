@@ -1,115 +1,14 @@
 import { motion } from 'framer-motion';
-import { Brain, AlertTriangle, TrendingDown, Clock, Users, Flame, Shield } from 'lucide-react';
+import { Brain, AlertTriangle, Clock, Users, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { financeAlerts } from '@/lib/financeSignals.mjs';
 
 function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
 }
 
-export default function AlertasIA({ financials, invoices, obligations }) {
-  const { cashDisponible, burnRate, runway, gastoTotal, totalIngresos, vencidas, dso, ingresosDelta } = financials;
-
-  const alerts = [];
-
-  // Liquidez
-  if (runway !== null && runway < 3) {
-    alerts.push({
-      id: 'liquidez',
-      icon: Flame,
-      severity: 'critical',
-      title: 'Riesgo de liquidez crítico',
-      desc: `Tu empresa solo puede operar ${runway.toFixed(1)} meses con el gasto actual. Revisa los gastos urgentemente.`,
-    });
-  } else if (runway !== null && runway < 6) {
-    alerts.push({
-      id: 'runway-warning',
-      icon: AlertTriangle,
-      severity: 'warning',
-      title: 'Runway ajustado',
-      desc: `Tu runway es de ${runway.toFixed(1)} meses. Considera aumentar ingresos o reducir costes.`,
-    });
-  }
-
-  // Caída ingresos
-  if (ingresosDelta < -15) {
-    alerts.push({
-      id: 'ingresos-caida',
-      icon: TrendingDown,
-      severity: 'critical',
-      title: 'Caída significativa de ingresos',
-      desc: `Los ingresos han caído un ${Math.abs(ingresosDelta).toFixed(1)}% respecto al periodo anterior.`,
-    });
-  } else if (ingresosDelta < -5) {
-    alerts.push({
-      id: 'ingresos-leve',
-      icon: TrendingDown,
-      severity: 'warning',
-      title: 'Ingresos a la baja',
-      desc: `Los ingresos han disminuido un ${Math.abs(ingresosDelta).toFixed(1)}%. Analiza las causas.`,
-    });
-  }
-
-  // Impagos
-  if (vencidas.length > 0) {
-    const totalVencido = vencidas.reduce((s, i) => s + (i.total_factura || 0), 0);
-    alerts.push({
-      id: 'impagos',
-      icon: Users,
-      severity: vencidas.length > 3 ? 'critical' : 'warning',
-      title: `${vencidas.length} factura${vencidas.length > 1 ? 's' : ''} vencida${vencidas.length > 1 ? 's' : ''} sin cobrar`,
-      desc: `Tienes ${fmt(totalVencido)} pendientes de cobro en facturas vencidas. Contacta a los clientes.`,
-    });
-  }
-
-  // DSO elevado
-  if (dso > 60) {
-    alerts.push({
-      id: 'dso',
-      icon: Clock,
-      severity: 'warning',
-      title: 'Cobro lento (DSO elevado)',
-      desc: `El tiempo medio de cobro es ${dso.toFixed(0)} días. Lo recomendado es inferior a 45 días.`,
-    });
-  }
-
-  // Burn rate alto
-  if (burnRate > totalIngresos * 0.9 && totalIngresos > 0) {
-    alerts.push({
-      id: 'burn',
-      icon: Flame,
-      severity: 'warning',
-      title: 'Burn rate muy elevado',
-      desc: `Los gastos representan el ${((burnRate / totalIngresos) * 100).toFixed(0)}% de los ingresos. Margen muy ajustado.`,
-    });
-  }
-
-  // Obligaciones próximas
-  const urgentObl = (obligations || []).filter(o => {
-    try {
-      const days = Math.ceil((new Date(o.fecha_limite) - new Date()) / 86400000);
-      return days >= 0 && days <= 15 && o.estado !== 'finalizado' && o.estado !== 'presentado';
-    } catch { return false; }
-  });
-  if (urgentObl.length > 0) {
-    alerts.push({
-      id: 'fiscal',
-      icon: Shield,
-      severity: 'warning',
-      title: `${urgentObl.length} obligación${urgentObl.length > 1 ? 'es' : ''} fiscal${urgentObl.length > 1 ? 'es' : ''} próxima${urgentObl.length > 1 ? 's' : ''}`,
-      desc: `Tienes obligaciones fiscales con vencimiento en menos de 15 días. Revisa el calendario fiscal.`,
-    });
-  }
-
-  // No alerts
-  if (alerts.length === 0) {
-    alerts.push({
-      id: 'ok',
-      icon: Shield,
-      severity: 'ok',
-      title: 'Sin alertas financieras activas',
-      desc: 'La salud financiera de tu empresa está dentro de los parámetros normales. Sigue monitorizando.',
-    });
-  }
+export default function AlertasIA({ financials, invoices, obligations, calendarError = false }) {
+  const alerts = financeAlerts(financials, obligations, { calendarError }).map(row => ({ ...row, icon: row.id.includes('tax') ? Shield : row.id.includes('invoice') ? Users : row.id.includes('bank') ? Clock : AlertTriangle }));
 
   const severityConfig = {
     critical: { border: 'border-red-500/30', bg: 'bg-red-500/5', iconBg: 'bg-red-500/15', iconColor: 'text-red-500', badge: 'bg-red-500/15 text-red-600', badgeLabel: 'Crítico' },

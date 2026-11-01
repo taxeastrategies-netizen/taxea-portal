@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { SparklineChart } from './SparklineChart';
 
 function fmt(n) {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—';
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 function fmtPct(n) {
@@ -82,22 +82,22 @@ export default function KpiRow({ financials }) {
 
   const kpis = [
     {
-      title: 'Cash Disponible',
-      value: fmt(cashDisponible),
-      subtitle: cashSource === 'bank' ? bankConnected + ' cuentas conectadas' : 'Sin banco conectado: estimación por facturas',
+      title: 'Saldo bancario EUR',
+      value: financials.bankKnown ? fmt(cashDisponible) : '—',
+      subtitle: cashSource === 'bank' ? bankConnected + ' cuentas conectadas' : 'Sin saldo bancario verificable',
       icon: Wallet,
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-500',
       glowColor: 'emerald-500',
       delta: null,
-      deltaLabel: cashSource === 'bank' ? bankUnreconciled + ' movimientos por conciliar' : 'Conecta Tesorería para saldo real',
+      deltaLabel: cashSource === 'bank' ? bankUnreconciled + ' movimientos por conciliar' : 'Revisa la conexión y su sincronización',
       sparkData: sd?.cash || null,
       delay: 0,
     },
     {
-      title: 'Total Ingresos',
+      title: 'Ingresos contables',
       value: fmt(totalIngresos),
-      subtitle: 'Periodo seleccionado',
+      subtitle: 'Asientos confirmados del periodo',
       icon: TrendingUp,
       color: 'text-blue-600',
       bgColor: 'bg-blue-500',
@@ -108,9 +108,9 @@ export default function KpiRow({ financials }) {
       delay: 0.05,
     },
     {
-      title: 'Total Gastos',
+      title: 'Gastos contables',
       value: fmt(gastoTotal),
-      subtitle: 'Gastos + facturas recibidas',
+      subtitle: 'Según clasificación contable',
       icon: TrendingDown,
       color: 'text-red-500',
       bgColor: 'bg-red-500',
@@ -121,9 +121,9 @@ export default function KpiRow({ financials }) {
       delay: 0.1,
     },
     {
-      title: 'Resultado estimado',
+      title: 'Resultado contable',
       value: fmt(beneficio),
-      subtitle: 'Facturas del período · no cierre contable',
+      subtitle: financials.accountingProvisional ? 'Lectura parcial · revisión pendiente' : 'PyG de asientos admitidos',
       icon: beneficio >= 0 ? TrendingUp : TrendingDown,
       color: beneficio >= 0 ? 'text-primary' : 'text-destructive',
       bgColor: beneficio >= 0 ? 'bg-taxea-red' : 'bg-destructive',
@@ -135,27 +135,27 @@ export default function KpiRow({ financials }) {
     },
     {
       title: 'EBITDA contable',
-      value: '—',
-      subtitle: 'Consultar PyG confirmada',
+      value: fmt(financials.ebitda),
+      subtitle: financials.ebitda === null ? 'Sin desglose contable verificable' : 'Resultado ajustado por cuentas PGC',
       icon: BarChart3,
       color: 'text-violet-600',
       bgColor: 'bg-violet-500',
       glowColor: 'violet-500',
       delta: null,
-      deltaLabel: 'Sin estimación inventada',
+      deltaLabel: financials.ebitdaProvisional ? 'Indicador orientativo · revisar clasificación' : 'Sin intereses, amortización ni impuesto sobre beneficios',
       sparkData: null,
       delay: 0.2,
     },
     {
       title: 'Runway',
-      value: runway ? `${runway.toFixed(1)} meses` : '—',
-      subtitle: runway ? `Burn rate ${fmt(burnRate)}/mes` : 'Insuficiente histórico',
+      value: runway !== null ? `${runway.toFixed(1)} meses` : '—',
+      subtitle: runway !== null ? `Burn rate ${fmt(burnRate)}/mes` : 'Requiere saldo y 28 días de salidas observadas',
       icon: Clock,
-      color: runway && runway < 3 ? 'text-red-500' : runway && runway < 6 ? 'text-amber-500' : 'text-amber-600',
+      color: runway !== null && runway < 3 ? 'text-red-500' : runway && runway < 6 ? 'text-amber-500' : 'text-amber-600',
       bgColor: runway && runway < 3 ? 'bg-red-500' : 'bg-amber-500',
       glowColor: 'amber-500',
       delta: null,
-      deltaLabel: 'Operación estimada con gasto actual',
+      deltaLabel: 'Saldo / salidas bancarias mensuales observadas',
       sparkData: null,
       delay: 0.25,
     },

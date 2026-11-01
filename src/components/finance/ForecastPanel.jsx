@@ -7,11 +7,12 @@ function fmt(n) {
 }
 
 export default function ForecastPanel({ financials }) {
-  const { totalIngresos, gastoTotal, cashDisponible, burnRate } = financials;
+  const { cashDisponible, burnRate } = financials;
+  if (!financials.bankKnown || !financials.cashHistorySufficient || financials.bankInflows === null) return <div className="bg-card border border-border rounded-2xl p-5"><h3 className="text-sm font-semibold">Escenario de caja</h3><p className="text-xs text-muted-foreground mt-3">Requiere saldo bancario reciente y al menos 28 días de movimientos observados. No se proyecta caja a partir de facturas.</p></div>;
 
   // Simple linear projections
-  const avgMonthlyIngresos = totalIngresos / 1; // based on current period
-  const forecast7 = cashDisponible + (avgMonthlyIngresos * 0.25) - (burnRate * 0.25);
+  const avgMonthlyIngresos = financials.bankInflows / financials.periodDays * 30;
+  const forecast7 = cashDisponible + (avgMonthlyIngresos * (7 / 30)) - (burnRate * (7 / 30));
   const forecast30 = cashDisponible + avgMonthlyIngresos - burnRate;
   const forecast90 = cashDisponible + (avgMonthlyIngresos * 3) - (burnRate * 3);
 
@@ -19,8 +20,8 @@ export default function ForecastPanel({ financials }) {
     {
       label: '7 días',
       value: fmt(forecast7),
-      ingresos: fmt(avgMonthlyIngresos * 0.25),
-      pagos: fmt(burnRate * 0.25),
+      ingresos: fmt(avgMonthlyIngresos * (7 / 30)),
+      pagos: fmt(burnRate * (7 / 30)),
       risk: forecast7 < 0 ? 'critical' : forecast7 < cashDisponible * 0.5 ? 'warning' : 'ok',
       delay: 0,
     },
@@ -33,7 +34,7 @@ export default function ForecastPanel({ financials }) {
       delay: 0.05,
     },
     {
-      label: '13 semanas',
+      label: '90 días',
       value: fmt(forecast90),
       ingresos: fmt(avgMonthlyIngresos * 3),
       pagos: fmt(burnRate * 3),
@@ -55,8 +56,8 @@ export default function ForecastPanel({ financials }) {
           <Zap className="w-4 h-4 text-violet-500" />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">Forecast Financiero</h3>
-          <p className="text-xs text-muted-foreground">Proyección basada en datos reales</p>
+          <h3 className="text-sm font-semibold text-foreground">Escenario de caja</h3>
+          <p className="text-xs text-muted-foreground">Simulación con movimientos bancarios disponibles</p>
         </div>
       </div>
 
@@ -89,7 +90,7 @@ export default function ForecastPanel({ financials }) {
       </div>
 
       <p className="text-[10px] text-muted-foreground/50 mt-3 text-center">
-        Proyección lineal basada en datos históricos actuales
+        Simulación lineal; no incorpora nuevos compromisos, financiación ni impuestos sin importe confirmado
       </p>
     </div>
   );

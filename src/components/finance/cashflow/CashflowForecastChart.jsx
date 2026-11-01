@@ -23,6 +23,7 @@ export default function CashflowForecastChart({ invoices = [], obligations = [],
         <div className="flex rounded-lg bg-secondary p-0.5">{VIEWS.map(item => <button key={item.id} type="button" onClick={() => setView(item.id)} className={'rounded-md px-2.5 py-1 text-xs ' + (view === item.id ? 'bg-card font-semibold shadow-sm' : 'text-muted-foreground')}>{item.label}</button>)}</div>
       </div>
       {supportError && <p role="alert" className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Previsión parcial: no se pudieron leer {supportError}. El saldo proyectado puede omitir pagos o cobros.</p>}
+      {forecast.unpricedObligations > 0 && <p role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Hay {forecast.unpricedObligations} vencimientos fiscales sin importe confirmado. La curva no los considera pagos de cero euros.</p>}
       {!forecast.hasBankBalance ? (
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Sin saldo bancario conectado y verificable. Se muestran los vencimientos registrados, pero no un saldo futuro inventado. <Link to="/finance/treasury" className="font-semibold underline">Revisar bancos</Link></div>
       ) : (

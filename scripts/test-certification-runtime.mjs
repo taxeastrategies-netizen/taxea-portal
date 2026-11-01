@@ -49,7 +49,7 @@ const entity = name => ({
   async delete() { writeAttempts += 1; throw new Error('read_only_violation'); },
 });
 const entities = new Proxy({}, { get: (_target, name) => entity(String(name)) });
-let currentUser = { id: 'user-a', email: 'user@a.test', role: 'user', data: { company_id: 'company-a' } };
+let currentUser = { id: 'user-a', email: 'owner@a.test', role: 'user', data: { company_id: 'company-a' } };
 const client = { auth: { me: async () => currentUser }, asServiceRole: { entities } };
 let handler;
 const context = vm.createContext({
@@ -75,6 +75,10 @@ assert.equal(writeAttempts, 0);
 assert.ok(filters.length >= 10);
 assert.ok(filters.every(item => Object.values(item.query).includes('company-a')));
 
+currentUser = { id: 'assigned-only', email: 'unrelated@a.test', role: 'user', data: { company_id: 'company-a' } };
+const assignedOnly = await invoke({ action: 'overview', companyId: 'company-a' });
+assert.equal(assignedOnly.response.status, 403);
+
 currentUser = { id: 'advisor', email: 'advisor@taxea.test', role: 'advisor', data: {} };
 const authorizedAdvisor = await invoke({ action: 'overview', companyId: 'company-a' });
 assert.equal(authorizedAdvisor.response.status, 200);
@@ -84,4 +88,4 @@ const denied = await invoke({ action: 'overview', companyId: 'company-a' });
 assert.equal(denied.response.status, 403);
 assert.equal(writeAttempts, 0);
 
-console.log(JSON.stringify({ ok: true, assertions: { overviewIsReadOnly: true, allSourcesScoped: true, assignedUserAllowed: true, explicitAdvisorAllowed: true, unrelatedAdvisorDenied: true } }, null, 2));
+console.log(JSON.stringify({ ok: true, assertions: { overviewIsReadOnly: true, allSourcesScoped: true, ownerAllowed: true, assignedUserWithoutServerMembershipDenied: true, explicitAdvisorAllowed: true, unrelatedAdvisorDenied: true } }, null, 2));
