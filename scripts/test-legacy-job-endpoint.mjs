@@ -8,7 +8,8 @@ const table=rows=>({async get(id){return structuredClone(rows.find(r=>r.id===id)
 const entity={DocumentProtectionJob:table(jobs),DocumentLegacyReference:table(aliases),DocumentBackupRecord:table(records),BackupConfiguration:{async list(){return[{id:'config'}];},async updateMany(){return{updated:1};}},Company:{async get(id){return id===companyId?{id,owner_email:'owner@example.test',private_document_storage_enabled:true}:null;}},OcrInvoiceDocument:{async get(){return structuredClone(original);},async update(){financialWrites++;throw Error('SOURCE WRITE FORBIDDEN');}}};
 const service={entities:entity,connectors:{async getConnection(){return{accessToken:'SYNTHETIC-TEST-TOKEN'};}}};
 const asset={id:'asset-qa',company_id:companyId,sha256:digest,size:bytes.length,status:'ready',mime_type:'application/pdf',original_name:'QA.pdf'};
-const storageStub=`export const assetIdFromReference=x=>String(x).startsWith('https://taxeaportal.com/private-document/')?String(x).split('/').pop():'';
+const storageStub=`export const storageTransport=()=>{throw Error('UNEXPECTED_TRANSPORT_ACCESS');};
+export const assetIdFromReference=x=>String(x).startsWith('https://taxeaportal.com/private-document/')?String(x).split('/').pop():'';
 export const assetReference=id=>'https://taxeaportal.com/private-document/'+id;
 export const resolveStoredDocumentReference=async(_s,_u,r)=>r;
 export const saveLegacyProtectionAsset=(...a)=>globalThis.__copy(...a);
@@ -19,6 +20,7 @@ const body={action:'protect_legacy_documents',backupJobId:'backup-qa',planDigest
 const invoke=async input=>{const response=await handler(new Request('https://synthetic.test/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}));return{status:response.status,body:await response.json()};};
 ok((await invoke(body)).status,401);ok(fetches,0);
 for(const actor of [{id:'normal',role:'user'},{id:'disabled-admin',role:'admin',data:{accountAccessStatus:'disabled'}}]){user=actor;ok((await invoke(body)).status,403);ok(fetches,0);ok(jobs.length,0);}
+user=null;ok((await invoke({action:'drill_legacy_protection_recovery',protectionJobId:'qa',planDigest})).status,401);ok(fetches,0);user={id:'normal',role:'user'};ok((await invoke({action:'drill_legacy_protection_recovery',protectionJobId:'qa',planDigest})).status,403);ok(fetches,0);
 user={id:'admin',role:'admin'};ok((await invoke({...body,planDigest:'f'.repeat(64)})).status,409);ok(cloudCopies,0);
 ok((await invoke({...body,selection:[{companyId:'foreign',referenceDigest:refDigest}]})).status,409);ok(cloudCopies,0);
 let result=await invoke(body);ok(result.status,200);ok(result.body.status,'completed');ok(result.body.verified,1);ok(cloudCopies,1);ok(aliases.length,1);ok(records.length,1);ok(records[0].fileStorageUrl,'https://taxeaportal.com/private-document/asset-qa');ok(JSON.stringify(original),before);

@@ -1,3 +1,4 @@
+import{runLegacyRecoveryDrill}from'./legacyRecoveryDrill.mjs';
 import{withBackupWorkflow,assertVerifiedWorkflowJob}from'./backupWorkflow.mjs';
 import{runLegacyProtectionVerification,verifyLegacyProtectionGroup}from'./legacyProtectionVerification.mjs';
 import{runLegacyProtectionJob,protectionJobSummary}from'./legacyProtectionJob.mjs';
@@ -10,7 +11,7 @@ import {isBackupTransientError,resumableSnapshotJob,completedBackupResponse} fro
 import {snapshotPrivateAssetLedger} from './assetLedgerSnapshot.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import {throttledBackupClient,acquireBackupLease,releaseBackupLease,boundedBackupBody,boundedBackupDownload,backupSnapshot} from './backupRuntime.mjs';
-import {resolveStoredDocumentReference,saveLegacyProtectionAsset,assetReference,assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
+import {storageTransport,resolveStoredDocumentReference,saveLegacyProtectionAsset,assetReference,assetIdFromReference,readPrivateAssetBytes} from './storageRuntime.generated.mjs';
 import {inventoryPreview} from './inventoryPreview.mjs';
 import {BACKUP_DOCUMENT_SOURCES,createBackupContextResolver,freshInventory,advanceDocumentInventory,loadInventoryDocuments,isBackupReference} from './backupCatalog.mjs';
 
@@ -413,7 +414,7 @@ Deno.serve(withBackupWorkflow(async (req) => {
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       return Response.json({ error: 'Forbidden — solo admin' }, { status: 403 });
     }
-    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection','workflow_assert','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
+    if(!['status','backup','verify','inventory_preview','legacy_protection_plan','protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection','drill_legacy_protection_recovery','workflow_assert','cleanup_failed_backups'].includes(action))return Response.json({error:'Operación no admitida.'},{status:400});
     base44=throttledBackupClient(base44);
     const isManual = body.jobType !== 'scheduled';
     const invocationStartedAt=Date.now(),timeBudgetMs=body.workflowChunk===true?90000:isManual?(body.extendedManualRun===true?90000:MANUAL_TIME_BUDGET_MS):SCHEDULED_TIME_BUDGET_MS,deadline=invocationStartedAt+timeBudgetMs;
@@ -494,11 +495,22 @@ Deno.serve(withBackupWorkflow(async (req) => {
         return Response.json({ok:true,summary:result.summary,protectionJob:completeSelection[0]?protectionJobSummary(completeSelection[0]):null},{headers:{'Cache-Control':'no-store'}});
       }catch(error){const code=/^PROTECTION_[A-Z_]+$/.test(error?.message||'')?error.message:'PROTECTION_UNAVAILABLE';return Response.json({error:'No se pudo preparar el plan desde una copia completa verificada.',code},{status:409});}
     }
-    if(['protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection'].includes(action)){
+    if(['protect_legacy_documents','legacy_protection_status','rollback_legacy_protection','verify_legacy_protection','drill_legacy_protection_recovery'].includes(action)){
       try{
         const service=base44.asServiceRole,resolveCompany=createBackupContextResolver(service);
         const readPrivateDriveFile=async id=>{await assertPrivateDriveDestination(id,accessToken);const saved=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(id)+'?alt=media',accessToken);if(!saved.ok)throw Error('PROTECTION_BACKUP_UNAVAILABLE');return new Uint8Array(await boundedBackupBody(saved,32*1024*1024));};
         const loadPlan=async jobId=>loadLegacyProtectionPlan({service,user,jobId,scopeCompanyId,sources:DOC_SOURCES,privateId:assetIdFromReference,hash:computeChecksum,readPrivateDriveFile,cacheTtlMs:120000});
+        if(action==='drill_legacy_protection_recovery'){
+          let transportPromise;const companies=new Map();
+          const result=await runLegacyRecoveryDrill({service,user,body,scopeCompanyId,leaseHeld:!!lease,hash:computeChecksum,normalizeReference:normalizeLegacyDocumentReference,sources:DOC_SOURCES,readArchive:readPrivateDriveFile,deadline,
+            readArchivedAsset:async asset=>{
+              if(scopeCompanyId&&asset.company_id!==scopeCompanyId)throw Error('PROTECTION_ARCHIVE_COMPANY_MISMATCH');
+              if(!companies.has(asset.company_id))companies.set(asset.company_id,service.entities.Company.get(asset.company_id));
+              const company=await companies.get(asset.company_id);if(!company||company.id!==asset.company_id)throw Error('PROTECTION_ARCHIVE_COMPANY_UNAVAILABLE');
+              const transport=await(transportPromise||=storageTransport(Deno.env));return transport.get(asset.object_name,asset.generation);
+            }
+          });return Response.json(result,{status:result.continueRequired?202:200,headers:{'Cache-Control':'no-store'}});
+        }
         if(action==='verify_legacy_protection'){
           let recoveryFolderId='';
           const result=await runLegacyProtectionVerification({service,user,body,scopeCompanyId,leaseHeld:!!lease,loadPlan,hash:computeChecksum,deadline,

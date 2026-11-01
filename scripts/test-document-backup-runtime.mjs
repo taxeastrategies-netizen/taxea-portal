@@ -252,10 +252,24 @@ assert.equal(redirected.mediaDownloads, 2, 'the app-scoped redirect and its vali
 
 const workflow = JSON.parse(fs.readFileSync('base44/workflows/DailyDocumentBackupToDrive.jsonc', 'utf8'));
 assert.equal(workflow.trigger.config.timezone, 'Atlantic/Canary');
-assert.deepEqual(workflow.definition.do[0].run_function.with.args, {
-  action: 'backup',
-  jobType: 'scheduled',
-});
+const tasks=Object.fromEntries(workflow.definition.do.map(task=>Object.entries(task)[0]));
+assert.equal(tasks.chunk_0.call,'invoke_backend_function');
+assert.equal(tasks.chunk_0.with.function_name,'documentBackupToDrive');
+assert.deepEqual(tasks.chunk_0.with.args,{action:'workflow_step',workflowJobId:'',workflowPhase:'copy'});
+assert.equal(tasks.chunk_1.with.args.workflowJobId,'${ .chunk_0.jobId }');
+assert.equal(tasks.chunk_1.with.args.workflowPhase,'${ .chunk_0.workflowPhase }');
+assert.equal(tasks.check_0.switch[0].when,'${ .chunk_0.continueRequired == true }');
+assert.equal(tasks.check_0.switch[1].then,'assert_0');
+assert.equal(tasks.assert_0.with.args.action,'workflow_assert');
+assert.equal(tasks.assert_0.with.args.assertJobId,'${ .chunk_0.jobId }');
+assert.equal(tasks.assert_0.then,'end');
+assert.equal(tasks.check_383.switch[0].then,'assert_383');
+for(const[name,task]of Object.entries(tasks))if(task.call==='invoke_backend_function'){
+ assert.equal(task.with.function_name,'documentBackupToDrive');
+ assert.equal(Object.hasOwn(task.with.args,'qaCompanyId'),false,'A production workflow must not retain QA scope');
+ if(name.startsWith('chunk_'))assert.equal(task.then,'check_'+name.slice(6));
+ if(name.startsWith('assert_'))assert.equal(task.then,'end');
+}
 const panelSource = fs.readFileSync('src/pages/AdminBackupDrive.jsx', 'utf8');
 assert.match(panelSource, /for \(let chunk = 0; chunk < 200; chunk \+= 1\)/);
 assert.match(panelSource, /resumeJobId/);

@@ -121,6 +121,42 @@
       "items": {
         "type": "object"
       }
+    },
+    "recoveryDrillStatus": {
+      "type": "string"
+    },
+    "recoveryDrillStartedAt": {
+      "type": "string"
+    },
+    "recoveryDrillFinishedAt": {
+      "type": "string"
+    },
+    "recoveryDrillCursor": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "recoveryDrillVerified": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "recoveryDrillIssueCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "recoveryDrillIssues": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "recoveryDrillAliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recoveryDrillAssets": {
+      "type": "object"
     }
   },
   "required": [

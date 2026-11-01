@@ -1,10 +1,11 @@
+import{recoveryDrillSummary}from'./legacyRecoveryDrill.mjs';
 import{protectionVerificationSummary}from'./legacyProtectionVerification.mjs';
 import{protectionAdmin,disableProtectionAlias}from'./legacyProtectionExecutor.mjs';
 const id=value=>/^[A-Za-z0-9_-]{1,128}$/.test(String(value||'')),hex=value=>/^[a-f0-9]{64}$/.test(String(value||'')),fail=code=>{throw Error(code);};
 const key=g=>g.companyId+'|'+g.referenceDigest;
 const canonical=value=>JSON.stringify(value,(_k,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])):v);
 // Intent flags are public UI confirmations, never credentials. Access requires an enabled admin and a server-verified plan.
-export function protectionJobSummary(job){return{...protectionVerificationSummary(job),jobId:job.id,backupJobId:job.backupJobId,planDigest:job.planDigest,status:job.status,total:job.total,cursor:job.cursor,verified:job.verified,reused:job.reused,issueCount:job.issueCount,issues:job.issues||[],rollbackCursor:job.rollbackCursor||0,disabledAliases:job.disabledAliases||0,continueRequired:['processing','rolling_back'].includes(job.status),originalsDeleted:0,sourceRecordsWritten:0,financialWrites:0};}
+export function protectionJobSummary(job){return{...recoveryDrillSummary(job),...protectionVerificationSummary(job),jobId:job.id,backupJobId:job.backupJobId,planDigest:job.planDigest,status:job.status,total:job.total,cursor:job.cursor,verified:job.verified,reused:job.reused,issueCount:job.issueCount,issues:job.issues||[],rollbackCursor:job.rollbackCursor||0,disabledAliases:job.disabledAliases||0,continueRequired:['processing','rolling_back'].includes(job.status),originalsDeleted:0,sourceRecordsWritten:0,financialWrites:0};}
 async function readJob(entity,jobId,scope){if(!id(jobId))fail('PROTECTION_JOB_INVALID');const job=await entity.get(jobId).catch(e=>{if(Number(e?.status||e?.response?.status)===404)return null;throw e;});if(!job||String(job.scopeCompanyId||'')!==scope)fail('PROTECTION_JOB_UNAVAILABLE');return job;}
 export async function runLegacyProtectionJob({service,user,body,scopeCompanyId='',leaseHeld=false,loadPlan,hash,protectGroup,now=Date.now,deadline=now()+40000}){
  if(!protectionAdmin(user))fail('PROTECTION_ADMIN_ONLY');if(!leaseHeld)fail('PROTECTION_LEASE_REQUIRED');
