@@ -3,7 +3,7 @@ import { getOutstandingAmount } from './financialCore.js';
 const currency = value => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(value);
 export function deriveFinanceHealth(data) {
   const dimensions = [
-    { label: 'Resultado', known: data.accountingKnown && !data.accountingPending && !data.accountingExcluded, score: data.margenNeto === null ? 50 : Math.max(0, Math.min(100, 70 + data.margenNeto)), reason: data.accountingKnown ? 'Asientos admitidos del periodo' : 'Sin PyG verificable' },
+    { label: 'Resultado', known: data.accountingKnown && !data.accountingProvisional && !data.accountingPending && !data.accountingExcluded, score: data.margenNeto === null ? 50 : Math.max(0, Math.min(100, 70 + data.margenNeto)), reason: data.accountingKnown ? 'Asientos admitidos del periodo' : 'Sin PyG verificable' },
     { label: 'Saldo y facturas', known: data.bankKnown && data.pagosPendientes !== null, score: data.cashDisponible >= Math.max(0, data.pagosPendientes) ? 100 : data.cashDisponible < 0 ? 0 : 40, reason: data.bankKnown ? 'Saldo observado frente a facturas por pagar' : 'Sin saldo verificable' },
     { label: 'Cobros vencidos', known: !data.financialError && data.cobrosPendientes !== null, score: Math.max(0, 100 - data.vencidas.length * 15), reason: data.financialError ? 'Fuente documental no disponible' : `${data.vencidas.length} facturas vencidas registradas` },
   ];
@@ -32,6 +32,7 @@ export function financeAlerts(data, obligations = [], { calendarError = false, n
   const fiscal = classifyObligations(obligations, { now, horizon: 15, timeZone: data.window?.timeZone });
   if (calendarError) alerts.push({ id: 'calendar-data', severity: 'warning', title: 'Calendario sin verificar', desc: 'No se pudo actualizar el calendario. Consulta las obligaciones antes de dar el periodo por atendido.' });
   else if (fiscal.overdue.length) alerts.push({ id: 'overdue-tax', severity: 'critical', title: `${fiscal.overdue.length} obligaciones con fecha vencida`, desc: 'El calendario las mantiene abiertas. Revisa su presentación o su estado con el asesor.' });
+  if (!calendarError && fiscal.undated.length) alerts.push({ id: 'undated-tax', severity: 'warning', title: 'Obligaciones sin fecha verificable', desc: `Hay ${fiscal.undated.length} obligaciones abiertas sin vencimiento válido. Revísalas en el calendario.` });
   if (!calendarError && fiscal.upcoming.length) alerts.push({ id: 'upcoming-tax', severity: 'warning', title: `${fiscal.upcoming.length} obligaciones en los próximos 15 días`, desc: 'Incluye el día de hoy y excluye las obligaciones cerradas. Comprueba presentación y domiciliación en el calendario.' });
   if (!alerts.length) alerts.push({ id: 'ok', severity: 'ok', title: 'Sin alertas en los datos registrados', desc: 'No se han detectado vencimientos o señales de atención en las fuentes disponibles. Revisa su cobertura y fecha.' });
   return alerts;

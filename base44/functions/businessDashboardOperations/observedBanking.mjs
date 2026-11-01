@@ -4,6 +4,9 @@ const finite = value => value !== null && value !== undefined && value !== '' &&
 const lower = value => String(value || '').trim().toLowerCase();
 const accountKey = row => row.iban ? String(row.iban).replace(/\s/g, '').toUpperCase() : row.provider_account_id ? `${row.proveedor_integracion || ''}|${row.provider_account_id}` : row.id;
 
+const RESOLVED = new Set(['conciliado','reconciliada','conciliada_auto','conciliada_manual','descartada','movimiento_interno','auto','manual','ignored','ignorado']);
+export const bankTransactionResolved = row => RESOLVED.has(lower(row?.estado_conciliacion));
+
 export function bankObservation(accounts = [], transactions = [], { now = new Date(), treasuryError = '', timeZone = 'Europe/Madrid' } = {}) {
   const connected = accounts.filter(row => row.activa !== false && row.es_demo !== true && ['conectado', 'conectada', 'connected'].includes(lower(row.estado_conexion)));
   const euro = connected.filter(row => String(row.moneda || '').toUpperCase() === 'EUR');

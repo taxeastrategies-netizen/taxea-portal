@@ -79,6 +79,8 @@ export default function CashflowCenter() {
         onRefresh={() => { refresh(); loadObligations(); calendar.refetch(); }}
       />
 
+      {calendar.data?.provisionalDates && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Las fechas del próximo ejercicio son provisionales hasta contrastarlas con el calendario oficial.</p>}
+      {financials.bankActivityReasons.length > 0 && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Movimientos sin verificar: {financials.bankActivityReasons.join(" ")}</p>}
       {financialError && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Datos financieros no disponibles: {financialError}. Los importes de esta vista no son fiables hasta actualizar.</p>}
       {/* KPI Grid */}
       <CashKpiGrid financials={financials} />

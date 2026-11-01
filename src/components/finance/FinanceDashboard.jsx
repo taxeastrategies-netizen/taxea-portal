@@ -37,6 +37,7 @@ export default function FinanceDashboard() {
           {!financials.accountingKnown && <p>No hay un resultado contable verificable para este periodo. Consulta los asientos y sus incidencias.</p>}
           {financials.accountingProvisional && <p>Lectura parcial: {financials.accountingPending} asientos pendientes y {financials.accountingExcluded} excluidos. El marco contable requiere revisión cuando no está validado.</p>}
           {!financials.bankKnown && <p>Saldo y autonomía de caja sin calcular: {financials.bankReasons.join(' ')}</p>}
+          {financials.bankActivityReasons.length > 0 && <p>Movimientos sin verificar: {financials.bankActivityReasons.join(" ")}</p>}
           {financials.duplicateBankAccounts + financials.duplicateBankTransactions > 0 && <p>La lectura ha omitido repeticiones de identidad bancaria: {financials.duplicateBankAccounts} cuentas y {financials.duplicateBankTransactions} movimientos. No se han borrado registros.</p>}
           {calendar.data?.provisionalDates && <p>Hay fechas de un ejercicio posterior aún pendientes de contraste con su calendario oficial.</p>}
         </div>
@@ -44,9 +45,9 @@ export default function FinanceDashboard() {
           No se pudieron actualizar todas las fuentes. {data.error} {accounting.isError ? 'PyG no disponible.' : ''} {calendar.isError ? 'Calendario no disponible: no se afirma que no existan obligaciones.' : ''}
           <button className="ml-2 font-semibold underline" onClick={refresh}>Reintentar</button>
         </div>}
-        <KpiRow financials={financials} period={period} />
+        <KpiRow financials={financials} />
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <div className="xl:col-span-2"><CashflowChart invoices={data.invoices} expenses={data.expenses} bankTransactions={data.bankTransactions} financials={financials} period={period} /></div>
+          <div className="xl:col-span-2"><CashflowChart invoices={data.invoices} expenses={data.expenses} financials={financials} /></div>
           <div className="flex flex-col gap-5"><ForecastPanel financials={financials} /><HealthScore financials={financials} /></div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5"><AlertasIA financials={financials} invoices={data.invoices} obligations={obligations} calendarError={calendar.isError} /><InsightsIA financials={financials} /></div>

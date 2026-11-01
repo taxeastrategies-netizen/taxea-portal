@@ -13,6 +13,7 @@ const EMPTY_TREASURY = {
   connectedEuroAccounts: 0,
   availableCash: null,
   balanceKnown: false,
+  qualityReasons: [],
   reconciledTransactions: 0,
   unreconciledTransactions: 0,
   inflows: 0,

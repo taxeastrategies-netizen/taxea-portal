@@ -13,7 +13,7 @@ export function financialTimeline(invoices = [], expenses = [], obligations = []
   for (const expense of source.expenses) {
     const day = civilDay(expense.fecha);
     if (!day || day < from || day > today || expense.anulada) continue;
-    rows.push({ id: 'expense:' + expense.id, day, kind: 'document', label: expense.tipo === 'ingreso' ? 'Ingreso registrado' : 'Gasto registrado', detail: expense.concepto || 'Documento', amount: finite(expense.total) ? Number(expense.total) : null, route: '/tax-accounting/income-expenses' });
+    rows.push({ id: 'expense:' + expense.id, day, kind: 'document', label: expense.tipo === 'ingreso' ? 'Ingreso registrado' : 'Gasto registrado', detail: expense.concepto || 'Documento', amount: finite(expense.total) ? Number(expense.total) : null, route: '/tax-accounting/ingresos-gastos' });
   }
   const calendar = classifyObligations(obligations, { now, horizon: 30 });
   const upcoming = calendar.upcoming.slice(0, 5).map(row => ({ id: 'tax:' + (row.id || row.calendarKey || `${row.modelo}|${row.periodo}`), day: obligationDay(row), kind: 'tax', label: 'Vencimiento fiscal', detail: `Modelo ${row.code || row.modelo_codigo || row.modelo || ''} · ${row.period || row.periodo || ''}`, amount: finite(row.importe) ? Number(row.importe) : null, route: '/tax-accounting/obligaciones' }));

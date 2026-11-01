@@ -244,7 +244,7 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-card border border-border rounded-xl px-5 py-4 col-span-2 lg:col-span-1">
-          <div className="flex items-center gap-4"><ScoreRing score={derived.health.score} /><div className="min-w-0"><p className="text-sm font-jakarta font-bold">Health Score real</p><p className="text-xs text-muted-foreground mt-0.5">Cobertura {derived.health.coverage}% de áreas aplicables</p>{derived.health.reasons[0] && <p className="text-[11px] text-amber-600 mt-1 font-medium leading-snug">{derived.health.reasons[0]}</p>}</div></div>
+          <div className="flex items-center gap-4"><ScoreRing score={derived.health.score} /><div className="min-w-0"><p className="text-sm font-jakarta font-bold">Estado operativo</p><p className="text-xs text-muted-foreground mt-0.5">Cobertura {derived.health.coverage}% del índice con datos</p>{derived.health.reasons[0] && <p className="text-[11px] text-amber-600 mt-1 font-medium leading-snug">{derived.health.reasons[0]}</p>}</div></div>
           <HealthDimensions health={derived.health} />
         </div>
         <div className="bg-card border border-border rounded-xl px-5 py-4"><p className="text-2xl font-bold text-emerald-600">{currency(pnl.income)}</p><p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />Ingresos contables confirmados</p><p className="text-[10px] text-muted-foreground/70 mt-0.5">Solo asientos cuadrados · {selectedYear}</p></div>

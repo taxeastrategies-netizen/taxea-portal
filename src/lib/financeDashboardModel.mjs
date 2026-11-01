@@ -1,6 +1,6 @@
 import { calculateFinancialKPIs, getOutstandingAmount } from './financialCore.js';
 import { deriveAccountingEbitda } from './verifiedFinancialMetrics.js';
-import { bankObservation, bankFlows } from './observedBanking.mjs';
+import { bankObservation, bankFlows, bankTransactionResolved } from './observedBanking.mjs';
 export { bankObservation, bankFlows } from './observedBanking.mjs';
 import { reportingWindow, withinWindow, civilDay, daysBetween, classifyObligations } from './reportingPeriods.mjs';
 const money = value => Math.round((Number(value) || 0) * 100) / 100;
@@ -43,7 +43,7 @@ export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankA
     documentIncomeNet: !financialError ? document.baseIngresos : null, documentExpenseNet: !financialError ? document.baseGastos : null,
     documentIncomeGross: !financialError ? document.totalIngresos : null, documentExpenseGross: !financialError ? document.totalGastos : null,
     bankKnown: observation.bankKnown, cashDisponible: observation.cash, cashSource: observation.bankKnown ? 'bank' : 'unavailable',
-    bankConnected: observation.connected, bankReasons: observation.reasons, bankUnreconciled: observation.rows.filter(row => !['conciliada_auto', 'conciliada_manual', 'conciliado'].includes(lower(row.estado_conciliacion))).length,
+    bankConnected: observation.connected, bankReasons: observation.reasons, bankActivityReasons: observation.activityReasons, bankUnreconciled: observation.rows.filter(row => !bankTransactionResolved(row)).length,
     duplicateBankAccounts: observation.duplicateAccounts, duplicateBankTransactions: observation.duplicateTransactions,
     bankActivityKnown, bankInflows: bankActivityKnown ? flows.inflows : null, bankOutflows: bankActivityKnown ? flows.outflows : null, bankNet: bankActivityKnown ? flows.net : null,
     bankDelta: bankActivityKnown && previousFlows.count > 0 && previousFlows.inflows > 0 ? money((flows.inflows - previousFlows.inflows) / previousFlows.inflows * 100) : null,

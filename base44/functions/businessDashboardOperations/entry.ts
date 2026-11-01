@@ -3,7 +3,7 @@ import { accountingData, buildReports, fetchAll } from './accountingReportEngine
 import { reconcileFinancialSources } from './financialSourceTruth.js';
 import { buildFinancePeriod, loadFinancePeriodData } from './financePeriod.mjs';
 import { reportingWindow } from './reportingPeriods.mjs';
-import { bankObservation } from './observedBanking.mjs';
+import { bankObservation, bankTransactionResolved } from './observedBanking.mjs';
 
 const clean = (value: unknown) => String(value ?? '').trim();
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -104,8 +104,7 @@ function financeSnapshot(invoices: any[], year: number) {
 function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
   const observed = bankObservation(accounts, transactions);
   const yearRows = observed.rows.filter(tx => Number(tx.day.slice(0, 4)) === year);
-  const resolved = new Set(['conciliado','reconciliada','conciliada_auto','conciliada_manual','descartada','movimiento_interno','auto','manual','ignored','ignorado']);
-  const reconciled = yearRows.filter(tx => resolved.has(clean(tx.estado_conciliacion).toLowerCase())).length;
+  const reconciled = yearRows.filter(bankTransactionResolved).length;
   const active = accounts.filter(account => account.activa !== false && account.es_demo !== true);
   const latestSync = active.map(account => dateOf(account, ['fecha_ultima_sync','last_sync_at'])).filter(Boolean).sort().at(-1) || '';
   return {

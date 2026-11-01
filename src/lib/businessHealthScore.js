@@ -8,8 +8,9 @@ export function fiscalCoverage(fiscal) {
   const models = fiscal?.models?.length || 0;
   const items = fiscal?.items?.length || 0;
   const calendarPending = Number(fiscal?.fiscalYear) > Number(fiscal?.verifiedCalendarYear);
-  const active = reviewed && models > 0 && items > 0 && !calendarPending;
-  const reason = !configured ? 'Falta configurar el perfil fiscal.' : !reviewed ? 'El perfil fiscal está pendiente de validación por el asesor.' : !models || !items ? 'No hay modelos y obligaciones suficientes para evaluar el cumplimiento.' : calendarPending ? 'El calendario del ejercicio está pendiente de contraste oficial.' : '';
+  const undated = classifyObligations(fiscal?.items || []).undated.length;
+  const active = reviewed && models > 0 && items > 0 && !calendarPending && !undated;
+  const reason = !configured ? 'Falta configurar el perfil fiscal.' : !reviewed ? 'El perfil fiscal está pendiente de validación por el asesor.' : !models || !items ? 'No hay modelos y obligaciones suficientes para evaluar el cumplimiento.' : undated ? 'Hay obligaciones abiertas sin fecha verificable.' : calendarPending ? 'El calendario del ejercicio está pendiente de contraste oficial.' : '';
   return { configured, reviewed, models, items, active, reason };
 }
 

@@ -10,7 +10,7 @@ const addDays = (date, days) => {
   return copy.toISOString().slice(0, 10);
 };
 
-export function buildCashForecast({ invoices = [], obligations = [], events = [], treasury = {}, treasuryError = '', today = canaryToday(), days = 91 } = {}) {
+export function buildCashForecast({ invoices = [], obligations = [], events = [], treasury = /** @type {{availableCash?: number|null, balanceKnown?: boolean, connectedEuroAccounts?: number}} */ ({}), treasuryError = '', today = canaryToday(), days = 91 } = {}) {
   const opening = Number(treasury.availableCash);
   const hasBankBalance = treasury.availableCash !== null && treasury.availableCash !== undefined && treasury.balanceKnown !== false && !treasuryError && Number(treasury.connectedEuroAccounts) > 0 && Number.isFinite(opening);
   const horizon = Math.min(91, Math.max(1, Number(days) || 91));

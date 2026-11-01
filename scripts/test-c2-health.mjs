@@ -38,4 +38,5 @@ equal(credit.outflows,20,'issued credit note refund is an outflow, not an inflow
 equal(credit.projected,80,'credit-note cash direction is preserved');
 const partialAccounting={accounting:{quality:{entries:1,confirmedEntries:1},pnl:{result:100}},treasury:{balanceKnown:false},finance:{},people:{},operations:{}};
 assert.equal(computeBusinessHealth(partialAccounting,null,{now}).score,null,'healthy accounting cannot certify missing fiscal and banking sources');checks++;
+equal(fiscalCoverage({...fiscal,items:[{state:'pendiente',filingDeadline:'bad'}]}).active,false,'undated obligations cannot certify fiscal readiness');
 console.log(JSON.stringify({ok:true,checks,financialWrites:0,externalCalls:0}));

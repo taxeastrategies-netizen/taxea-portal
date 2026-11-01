@@ -13,7 +13,7 @@ function fmt(n) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active = false, payload = [], label = '' }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-[#0f1117] border border-white/10 rounded-xl p-3 shadow-2xl min-w-[160px]">
@@ -45,6 +45,7 @@ export default function CashflowChart({ invoices = [], expenses = [], financials
     });
   }, [invoices, expenses, financials, hasBankData]);
 
+  if (financials?.financialError) return <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Gráfico sin verificar: la fuente documental no está disponible. Actualiza los datos.</div>;
   return (
     <div className="bg-card border border-border rounded-2xl p-5 h-full">
       <div className="flex items-center justify-between mb-5">

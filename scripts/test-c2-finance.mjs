@@ -91,4 +91,7 @@ equal(financeAlerts(failed, [], { now, calendarError: true }).some(row => row.id
 equal(fs.readFileSync('src/lib/reportingPeriods.mjs', 'utf8'), fs.readFileSync('base44/functions/businessDashboardOperations/reportingPeriods.mjs', 'utf8'), 'server and client use identical date and obligation rules');
 equal(bankObservation([account], [{...tx('collision-a',10,'salida'),clave_transaccion:'collision'},{...tx('collision-b',20,'salida'),clave_transaccion:'collision'}], {now}).activityKnown, false, 'conflicting stable transaction identity prevents reliable flow projections');
 equal(fs.readFileSync('src/lib/observedBanking.mjs','utf8'),fs.readFileSync('base44/functions/businessDashboardOperations/observedBanking.mjs','utf8'),'bank observation rules identical in frontend and backend');
+equal(financeAlerts(bankModel,[{id:'undated',estado:'pendiente'}],{now}).some(row=>row.id==='undated-tax'),true,'undated obligations prevent an all-clear');
+const resolvedModel=buildFinanceDashboardModel({bankAccounts:[account],bankTransactions:[{...tx('resolved',10,'salida'),estado_conciliacion:'descartada'}],now});
+equal(resolvedModel.bankUnreconciled,0,'resolved legacy bank states are consistent across panels');
 console.log(JSON.stringify({ ok: true, checks, scenarios: ['calendar-boundaries', 'confirmed-PnL', 'bank-absence-and-zero', 'bank-deduplication', 'observed-cashflow', 'source-failure', 'no-false-green'], externalCalls: 0, financialWrites: 0 }));
