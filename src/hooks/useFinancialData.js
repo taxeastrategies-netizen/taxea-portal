@@ -21,14 +21,7 @@ const EMPTY_TREASURY = {
   lastBankSync: null,
 };
 
-export function useFinancialData(companyId, options = {}) {
-  const { year, autoRefresh = true, includeTreasury = true } = options;
-  const [invoices, setInvoices] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [bankAccounts, setBankAccounts] = useState([]);
-  const [bankTransactions, setBankTransactions] = useState([]);
-  const [treasury, setTreasury] = useState(EMPTY_TREASURY);
-  const [sourceTruth, setSourceTruth] = useState({
+const EMPTY_SOURCE_TRUTH = {
     version: 'financial-source-truth-v1',
     canonicalInvoiceCount: 0,
     rawExpenseCount: 0,
@@ -37,11 +30,22 @@ export function useFinancialData(companyId, options = {}) {
     reviewCandidateCount: 0,
     duplicate_links: [],
     review_candidates: [],
-  });
+  };
+
+export function useFinancialData(companyId, options = {}) {
+  const { year, autoRefresh = true, includeTreasury = true } = options;
+  const sourceScope = companyId ? JSON.stringify([companyId,year ?? null,includeTreasury]) : null;
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankTransactions, setBankTransactions] = useState([]);
+  const [treasury, setTreasury] = useState(EMPTY_TREASURY);
+  const [sourceTruth, setSourceTruth] = useState(EMPTY_SOURCE_TRUTH);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [treasuryError, setTreasuryError] = useState('');
   const [lastSync, setLastSync] = useState(null);
+  const [dataScope, setDataScope] = useState(null);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
 
@@ -87,6 +91,7 @@ export function useFinancialData(companyId, options = {}) {
         outflows: Number(summary.outflows || 0),
         lastBankSync: summary.last_sync || null,
       });
+      setDataScope(sourceScope);
       setLastSync(new Date());
     } catch (err) {
       console.error('[useFinancialData] Unified source unavailable');
@@ -96,12 +101,13 @@ export function useFinancialData(companyId, options = {}) {
         setBankAccounts([]);
         setBankTransactions([]);
         setTreasury(EMPTY_TREASURY);
+        setDataScope(sourceScope);
         setError(err?.response?.data?.error || err?.message || 'No se pudieron cargar los datos financieros.');
       }
     } finally {
       if (mountedRef.current && requestId === requestIdRef.current) setLoading(false);
     }
-  }, [companyId, year, includeTreasury]);
+  }, [companyId, year, includeTreasury, sourceScope]);
 
   const refresh = useCallback(() => {
     if (companyId) fetch();
@@ -111,6 +117,7 @@ export function useFinancialData(companyId, options = {}) {
     mountedRef.current = true;
     requestIdRef.current++;
     setLoading(true);
+    setDataScope(null); setSourceTruth(EMPTY_SOURCE_TRUTH);
     setError(''); setTreasuryError(''); setLastSync(null);
     setInvoices([]);
     setExpenses([]);
@@ -156,7 +163,8 @@ export function useFinancialData(companyId, options = {}) {
     return () => window.removeEventListener('financials:refresh', onRefresh);
   }, [fetch, autoRefresh]);
 
-  return { invoices, expenses, bankAccounts, bankTransactions, treasury, sourceTruth, loading, error, treasuryError, lastSync, refresh };
+  const scoped = Boolean(companyId) && dataScope === sourceScope;
+  return { invoices: scoped ? invoices : [], expenses: scoped ? expenses : [], bankAccounts: scoped ? bankAccounts : [], bankTransactions: scoped ? bankTransactions : [], treasury: scoped ? treasury : EMPTY_TREASURY, sourceTruth: scoped ? sourceTruth : EMPTY_SOURCE_TRUTH, loading: loading || Boolean(companyId && !scoped), error: scoped ? error : '', treasuryError: scoped ? treasuryError : '', lastSync: scoped ? lastSync : null, refresh };
 }
 
 export function triggerFinancialRefresh() {

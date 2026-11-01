@@ -19,6 +19,9 @@ equal(owned.data.current.profitAndLoss.totalIncome,100,'actual handler derives n
 equal(owned.data.current.profitAndLoss.result,100,'output VAT does not alter period result');
 equal(owned.data.current.includedEntries,1,'handler reports actual source coverage');
 equal(writes,0,'period reader performs no entity writes');
+const monthly=await invoke({action:'finance_period',companyId:company.id,period:'mtd'});
+equal(monthly.status,200,'monthly dashboard can request its actual accounting month');
+equal(monthly.data.window.start,today.slice(0,8)+'01','monthly source does not silently use rolling thirty days');
 equal((await invoke({action:'finance_period',companyId:company.id,period:'unbounded'})).status,400,'invalid period rejected');
 user={id:'foreign',email:'other@qa.test',role:'user',data:{company_id:'another-company'}};
 equal((await invoke({action:'finance_period',companyId:company.id,role:'admin'})).status,403,'body role cannot grant cross-company read');

@@ -1,3 +1,4 @@
+import { financialScoringReadiness } from '@/lib/verifiedFinancialMetrics';
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
@@ -8,7 +9,7 @@ const fmt = n => new Intl.NumberFormat('es-ES', { style: 'currency', currency: '
 
 function ScoreGauge({ score }) {
   const color = score >= 70 ? '#16a34a' : score >= 45 ? '#d97706' : '#dc2626';
-  const label = score >= 70 ? 'Saludable' : score >= 45 ? 'Vigilar' : 'Riesgo Elevado';
+  const label = score >= 70 ? 'Indicadores favorables' : score >= 45 ? 'Revisar indicadores' : 'Indicadores desfavorables';
   const bg = score >= 70 ? 'bg-emerald-50 border-emerald-200' : score >= 45 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200';
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (score / 100) * circumference;
@@ -71,7 +72,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
         ? Math.min(100, (f.cashTotal / f.burnRate) * 8.33)
         : 80
       : 10;
-    factors.push({ label: 'Liquidez & Runway', score: Math.round(liquidezScore), weight: 20, desc: `Caja: ${fmt(f.cashTotal)} · Runway: ${f.runway ? f.runway.toFixed(1) + ' meses' : '—'}` });
+    factors.push({ label: 'Liquidez & Runway', score: Math.round(liquidezScore), weight: 20, desc: `Caja: ${fmt(f.cashTotal)} · Runway: ${f.runway !== null && f.runway !== undefined ? f.runway.toFixed(1) + ' meses' : '—'}` });
 
     // Rentabilidad EBITDA (20%)
     const ebitdaScore = f.margen > 25 ? 95 : f.margen > 15 ? 80 : f.margen > 5 ? 60 : f.margen > 0 ? 35 : 10;
@@ -84,7 +85,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
 
     // Cashflow operativo (15%)
     const cfScore = f.beneficio > 0 ? Math.min(95, 50 + (f.margen / 40) * 45) : 15;
-    factors.push({ label: 'Generación de Caja', score: Math.round(cfScore), weight: 15, desc: `Beneficio: ${fmt(f.beneficio)}` });
+    factors.push({ label: 'Resultado contable', score: Math.round(cfScore), weight: 15, desc: `Beneficio: ${fmt(f.beneficio)}` });
 
     // DSO/DPO (10%)
     const dsoScore = f.dso < 30 ? 95 : f.dso < 45 ? 80 : f.dso < 60 ? 60 : f.dso < 90 ? 40 : 20;
@@ -92,7 +93,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
 
     // Working Capital (10%)
     const wcScore = f.workingCapital > 0 ? Math.min(90, 50 + (f.workingCapital / (f.ingresos || 1)) * 100) : 20;
-    factors.push({ label: 'Capital Circulante', score: Math.round(wcScore), weight: 10, desc: `WC: ${fmt(f.workingCapital)}` });
+    factors.push({ label: 'Cobros menos pagos pendientes', score: Math.round(wcScore), weight: 10, desc: `WC: ${fmt(f.workingCapital)}` });
 
     // Cobertura intereses (10%)
     const coberturaInt = f.ebitda > 0 && f.interesesAnuales > 0 ? f.ebitda / f.interesesAnuales : f.ebitda > 0 ? 10 : 0;
@@ -107,7 +108,7 @@ export default function CompanyScoring({ financials, company, invoices, expenses
     setLoading(true);
     const f = financials || {};
     const res = await base44.controlledCore.InvokeLLM({
-      prompt: `Eres un analista financiero senior de Big4 (Deloitte/KPMG). 
+      prompt: `Analiza los datos financieros aportados y explica sus límites. 
 Analiza este perfil financiero empresarial y genera un comentario ejecutivo profesional en español (máximo 180 palabras), estilo consultoría estratégica:
 
 Empresa: ${company?.nombre_comercial || company?.razon_social || 'N/A'}
@@ -137,6 +138,8 @@ Usa lenguaje corporativo, preciso y sofisticado. Sé conciso pero profundo.`,
       ? 'from-amber-500 to-amber-700'
       : 'from-red-600 to-red-800';
 
+  if(!financialScoringReadiness(financials))return <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Índice sin calcular: se necesitan PyG revisada, saldo reciente, historial bancario suficiente y cobros fechados. No se sustituyen los datos ausentes por ceros.</div>;
+
   return (
     <div className="space-y-6">
       {/* Hero scoring */}
@@ -145,7 +148,7 @@ Usa lenguaje corporativo, preciso y sofisticado. Sé conciso pero profundo.`,
           <ScoreGauge score={s} />
           <div className="text-center">
             <p className="text-sm font-bold opacity-90">{company?.nombre_comercial || company?.razon_social || 'Empresa'}</p>
-            <p className="text-xs opacity-60 mt-0.5">Company Financial Score — {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
+            <p className="text-xs opacity-60 mt-0.5">Índice interno orientativo · umbrales propios, sin referencia sectorial · {new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</p>
           </div>
         </div>
 

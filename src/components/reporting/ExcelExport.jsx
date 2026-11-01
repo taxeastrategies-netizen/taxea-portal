@@ -1,3 +1,4 @@
+import { financialExportNumber } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { Download, FileSpreadsheet, CheckCircle2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -5,15 +6,15 @@ import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const fmt = n => typeof n === 'number' ? n : 0;
+const fmt = financialExportNumber;
 
 const SHEETS = [
   { id: 'summary', label: 'P&L Summary', desc: 'Resumen ingresos, gastos y rentabilidad', checked: true },
   { id: 'cashflow', label: 'Cashflow', desc: 'Liquidez, caja, burn rate y runway', checked: true },
   { id: 'debt', label: 'Debt Schedule', desc: 'Instrumentos de deuda y cuotas', checked: true },
   { id: 'kpis', label: 'KPIs & Ratios', desc: 'Ratios financieros clave', checked: true },
-  { id: 'ar', label: 'Accounts Receivable', desc: 'Facturas pendientes de cobro', checked: false },
-  { id: 'ap', label: 'Accounts Payable', desc: 'Facturas pendientes de pago', checked: false },
+  { id: 'ar', label: 'Accounts Receivable', desc: 'Facturas emitidas y estado de cobro', checked: false },
+  { id: 'ap', label: 'Accounts Payable', desc: 'Facturas recibidas y estado de pago', checked: false },
   { id: 'transactions', label: 'Bank Transactions', desc: 'Movimientos bancarios', checked: false },
 ];
 
@@ -41,14 +42,14 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
         ['', '', ''],
         ['P&L SUMMARY', '', ''],
         ['Concepto', 'Importe (EUR)', 'Notas'],
-        ['Ingresos totales', fmt(f.ingresos), 'Período actual'],
-        ['Gastos totales', fmt(f.gastoTotal), ''],
-        ['Beneficio neto', fmt(f.beneficio), ''],
-        ['Margen neto (%)', fmt(f.margen), '%'],
-        ['EBITDA estimado', fmt(f.ebitda), ''],
+        ['Ingresos contables', fmt(f.ingresos), 'Período actual'],
+        ['Gastos contables', fmt(f.gastoTotal), ''],
+        ['Resultado contable', fmt(f.beneficio), ''],
+        ['Margen neto (%)', fmt(f.margenNeto), '%'],
+        ['EBITDA contable', fmt(f.ebitda), ''],
         ['Cobros pendientes (AR)', fmt(f.cobrosPendientes), ''],
         ['Pagos pendientes (AP)', fmt(f.pagosPendientes), ''],
-        ['Working Capital', fmt(f.workingCapital), ''],
+        ['Cobros menos pagos pendientes', fmt(f.workingCapital), ''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(data);
       ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 25 }];
@@ -62,12 +63,12 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
         ['', '', ''],
         ['Métrica', 'Valor', 'Unidad'],
         ['Caja disponible', fmt(f.cashTotal), 'EUR'],
-        ['Burn rate mensual', fmt(f.burnRate), 'EUR/mes'],
-        ['Runway estimado', f.runway ? Number(f.runway.toFixed(1)) : 0, 'meses'],
+        ['Salidas observadas / 30d', fmt(f.burnRate), 'EUR/mes'],
+        ['Runway estimado', f.runway == null ? 'No verificable' : Number(f.runway.toFixed(1)), 'meses'],
         ['Cuotas mensuales deuda', fmt(f.cuotasMensuales), 'EUR'],
         ['Intereses anuales', fmt(f.interesesAnuales), 'EUR'],
-        ['DSO (días cobro)', f.dso || 0, 'días'],
-        ['DPO (días pago)', f.dpo || 0, 'días'],
+        ['DSO (días cobro)', f.dso ?? 'No verificable', 'días'],
+        ['DPO (días pago)', f.dpo ?? 'No verificable', 'días'],
         ['Cuentas bancarias', bankAccounts.length, 'cuentas'],
       ];
       const ws = XLSX.utils.aoa_to_sheet(data);
@@ -87,21 +88,21 @@ export default function ExcelExport({ financials, company, invoices, expenses, d
     }
 
     if (selected.includes('kpis')) {
-      const deudaEbitda = f.ebitda > 0 ? f.deudaTotal / f.ebitda : 0;
-      const cobInt = f.ebitda > 0 && f.interesesAnuales > 0 ? f.ebitda / f.interesesAnuales : 0;
+      const deudaEbitda = f.ebitda > 0 ? f.deudaTotal / f.ebitda : null;
+      const cobInt = f.ebitda > 0 && f.interesesAnuales > 0 ? f.ebitda / f.interesesAnuales : null;
       const data = [
         ['KPIs & RATIOS FINANCIEROS', '', ''],
         [companyName, '', now],
         ['', '', ''],
-        ['KPI', 'Valor', 'Benchmark ref.'],
-        ['Margen EBITDA', `${f.margen?.toFixed(1) || 0}%`, '> 15% saludable'],
-        ['Deuda / EBITDA', `${deudaEbitda.toFixed(2)}x`, '< 3.5x saludable'],
-        ['Cobertura intereses', `${cobInt.toFixed(2)}x`, '> 1.5x saludable'],
-        ['DSO (días cobro)', `${f.dso || 0} días`, '< 45 días óptimo'],
-        ['DPO (días pago)', `${f.dpo || 0} días`, '30-45 días estándar'],
-        ['Working Capital', fmt(f.workingCapital), '> 0 positivo'],
-        ['Runway (meses)', f.runway ? f.runway.toFixed(1) : 0, '> 6 meses seguro'],
-        ['Burn Rate/mes', fmt(f.burnRate), ''],
+        ['KPI', 'Valor', 'Criterio de lectura'],
+        ['Margen EBITDA', `${f.margen?.toFixed(1) || 0}%`, 'EBITDA / ingresos contables'],
+        ['Deuda / EBITDA', deudaEbitda === null ? 'No aplicable' : `${deudaEbitda.toFixed(2)}x`, 'Deuda registrada / EBITDA'],
+        ['Cobertura intereses', cobInt === null ? 'No aplicable' : `${cobInt.toFixed(2)}x`, 'EBITDA / intereses registrados'],
+        ['DSO (días cobro)', `${f.dso ?? 'No verificable'} días`, 'Media de cobros completos con fecha'],
+        ['DPO (días pago)', `${f.dpo ?? 'No verificable'} días`, 'Media de pagos completos con fecha'],
+        ['Cobros menos pagos pendientes', fmt(f.workingCapital), 'Diferencia documental; no es fondo de maniobra'],
+        ['Runway (meses)', f.runway == null ? 'No verificable' : f.runway.toFixed(1), 'Escenario sin nuevos ingresos'],
+        ['Salidas observadas / 30d', fmt(f.burnRate), ''],
       ];
       const ws = XLSX.utils.aoa_to_sheet(data);
       ws['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 24 }];

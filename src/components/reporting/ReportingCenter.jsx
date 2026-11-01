@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
@@ -20,8 +20,10 @@ import CompanyScoring from './CompanyScoring';
 import MnAAnalytics from './MnAAnalytics';
 import ExecutiveCommentary from './ExecutiveCommentary';
 import { useFinancialData } from '@/hooks/useFinancialData';
-import { calculateFinancialKPIs } from '@/lib/financialCore';
-import { deriveAccountingEbitda } from '@/lib/verifiedFinancialMetrics';
+import { buildFinanceDashboardModel, reportingMetricSnapshot } from '@/lib/financeDashboardModel.mjs';
+import { reportingWindow, civilDay, daysBetween, shiftDay } from '@/lib/reportingPeriods.mjs';
+import { useFinanceObligations } from '@/hooks/useFinanceReporting';
+import { financialReportReadiness } from '@/lib/verifiedFinancialMetrics';
 
 const TABS = [
   { id: 'dashboard',   label: 'Centro',             icon: BarChart2,   color: 'text-slate-600' },
@@ -45,73 +47,47 @@ export default function ReportingCenter() {
 
   const [tab, setTab] = useState('dashboard');
   const { invoices, expenses, bankAccounts, bankTransactions: transactions, treasury, loading: financialLoading, error: financialError, treasuryError, refresh } = useFinancialData(companyId, { year: new Date().getFullYear() });
-  const [obligations, setObligations] = useState([]);
+  const calendar = useFinanceObligations(companyId);
+  const obligations = calendar.data?.rows || [];
+  const requestRef = useRef(0);
+  const [loadedCompany, setLoadedCompany] = useState(null);
   const [debts, setDebts] = useState([]);
   const [accountingReport, setAccountingReport] = useState(null);
   const [auxiliaryLoading, setAuxiliaryLoading] = useState(true);
   const [auxiliaryError, setAuxiliaryError] = useState('');
-  const loading = financialLoading || auxiliaryLoading;
+  const loading = financialLoading || auxiliaryLoading || calendar.isLoading || loadedCompany !== companyId;
 
   const loadData = async () => {
     if (!companyId) { setAuxiliaryLoading(false); return; }
+    const request = ++requestRef.current;
     setAuxiliaryLoading(true);
     setAuxiliaryError('');
     try {
-      const [obl, dbs, accountingResponse] = await Promise.all([
-        base44.entities.TaxObligation.filter({ company_id: companyId }),
+      const [dbs, accountingResponse] = await Promise.all([
         base44.entities.DebtInstrument.filter({ company_id: companyId }),
         base44.functions.invoke('accountingOperations', { action: 'reports', companyId, year: new Date().getFullYear(), scope: 'confirmed' }),
       ]);
       const report = accountingResponse?.data?.report || accountingResponse?.report;
       if (!report) throw new Error('No se pudo obtener la PyG contable confirmada.');
-      setObligations(obl || []);
+      if(request !== requestRef.current)return;
       setDebts(dbs || []);
       setAccountingReport(report);
     } catch (error) {
+      if(request !== requestRef.current)return;
       setAuxiliaryError(error?.message || 'No se pudieron cargar obligaciones o deudas.');
     } finally {
-      setAuxiliaryLoading(false);
+      if(request === requestRef.current){setAuxiliaryLoading(false);setLoadedCompany(companyId);}
     }
   };
 
-  useEffect(() => { loadData(); }, [companyId]);
+  useEffect(() => { setDebts([]); setAccountingReport(null); setLoadedCompany(null); loadData(); return () => {requestRef.current++;}; }, [companyId]);
 
   const financials = useMemo(() => {
-    const canonical = calculateFinancialKPIs(invoices, expenses);
-    const ingresos = canonical.totalIngresos;
-    const gastoTotal = canonical.totalGastos;
-    const beneficio = ingresos - gastoTotal;
-    const margenNeto = ingresos > 0 ? (beneficio / ingresos) * 100 : 0;
-    const accountingEbitda = deriveAccountingEbitda(accountingReport);
-    const ebitda = accountingEbitda?.value ?? 0;
-    const accountingIncome = Number(accountingReport?.profitAndLoss?.totalIncome || 0);
-    const margen = accountingIncome > 0 ? (ebitda / accountingIncome) * 100 : 0;
-    const deudaTotal = debts.filter(d => d.estado === 'activo').reduce((s, d) => s + (d.capital_pendiente || d.importe_inicial || 0), 0);
-    const cashTotal = treasury.connectedAccounts > 0 ? treasury.availableCash : 0;
-    const burnRate = gastoTotal / 12;
-    const runway = burnRate > 0 ? cashTotal / burnRate : null;
-    const cobrosPendientes = canonical.cobrosPendientes;
-    const pagosPendientes = canonical.pagosPendientes;
-    const workingCapital = cobrosPendientes - pagosPendientes;
-    const cuotasMensuales = debts.filter(d => d.estado === 'activo' && d.periodicidad === 'mensual').reduce((s, d) => s + (d.cuota || 0), 0);
-    const interesesAnuales = debts.filter(d => d.estado === 'activo').reduce((s, d) => {
-      const cap = d.capital_pendiente || d.importe_inicial || 0;
-      return s + cap * ((d.tin || 0) / 100);
-    }, 0);
-    const now = new Date();
-    const elapsedDays = Math.max(1, Math.ceil((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000));
-    const dso = canonical.totalIngresosFacturas > 0
-      ? Math.round((cobrosPendientes / canonical.totalIngresosFacturas) * elapsedDays)
-      : null;
-    const dpo = canonical.totalGastosFacturas > 0
-      ? Math.round((pagosPendientes / canonical.totalGastosFacturas) * elapsedDays)
-      : null;
-    return {
-      ingresos, gastoTotal, beneficio, margen, margenNeto, ebitda, accountingEbitda, deudaTotal,
-      cashTotal, burnRate, runway, cobrosPendientes, pagosPendientes,
-      workingCapital, cuotasMensuales, interesesAnuales, dso, dpo
-    };
-  }, [invoices, expenses, debts, treasury, accountingReport]);
+    const now=new Date(),end=civilDay(now),start=end.slice(0,4)+'-01-01',days=daysBetween(start,end)+1;
+    const window={...reportingWindow('365d',now),start,days,previous:{start:shiftDay(start,-days),end:shiftDay(start,-1)}};
+    const shared=buildFinanceDashboardModel({invoices,expenses,bankAccounts,bankTransactions:transactions,obligations,treasuryError,financialError,accountingError:auxiliaryError,accountingPeriod:accountingReport?{current:accountingReport,window}:null,now});
+    return reportingMetricSnapshot(shared,debts,accountingReport);
+  }, [invoices,expenses,bankAccounts,transactions,debts,treasuryError,financialError,auxiliaryError,accountingReport,calendar.data]);
 
   const sharedProps = { company, companyId, financials, invoices, expenses, obligations, debts, bankAccounts, transactions, loading };
 
@@ -127,12 +103,8 @@ export default function ReportingCenter() {
     );
   }
 
-  if (!loading && (financialError || treasuryError || auxiliaryError || treasury.connectedAccounts === 0 || !financials.accountingEbitda)) {
-    return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-      No se puede generar un informe financiero fiable: {financialError || treasuryError || auxiliaryError || (treasury.connectedAccounts === 0 ? 'no hay bancos conectados con saldo disponible en Tesorería.' : 'falta la PyG contable confirmada de este ejercicio.')}
-      <button type="button" onClick={() => { refresh(); loadData(); }} className="ml-3 underline">Reintentar</button>
-    </div>;
-  }
+  const readiness=financialReportReadiness({financials,financialError,treasuryError,auxiliaryError,calendarError:calendar.isError});
+  if (!loading && !readiness.ready) return <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">No se puede generar un informe financiero fiable: {readiness.reasons.join(' ')}<button type="button" onClick={() => {refresh();loadData();calendar.refetch();}} className="ml-3 underline">Reintentar</button></div>;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-10">
@@ -147,7 +119,7 @@ export default function ReportingCenter() {
               <h2 className="text-xl font-jakarta font-bold text-foreground">Reporting Center</h2>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">CFO SUITE</span>
             </div>
-            <p className="text-sm text-slate-400 mt-0.5">Informes ejecutivos, scoring financiero e inteligencia Big4</p>
+            <p className="text-sm text-slate-400 mt-0.5">Informes del ejercicio y análisis de datos registrados</p>
           </div>
         </div>
         <button onClick={() => { refresh(); loadData(); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all self-start sm:self-auto">
@@ -156,7 +128,7 @@ export default function ReportingCenter() {
       </div>
 
       <p className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-900">
-        Caja: saldo EUR de bancos conectados en Tesorería. EBITDA: derivado de la PyG contable confirmada de {financials.accountingEbitda?.year || new Date().getFullYear()}.
+        Datos acumulados del ejercicio hasta hoy. Caja: saldo EUR reciente y verificable. Entradas y salidas son movimientos bancarios, no ventas y gastos. EBITDA: derivado de la PyG contable confirmada de {financials.accountingEbitda?.year || new Date().getFullYear()}.
         {financials.accountingEbitda?.provisional && ' Cifra provisional: hay asientos pendientes, excluidos o marco contable por revisar.'}
       </p>
 

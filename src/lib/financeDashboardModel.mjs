@@ -59,3 +59,20 @@ export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankA
     financialError, accountingError, treasuryError,
   };
 }
+
+/** Numeric reporting boundary: never forward document/account/transaction objects in metrics. */
+export function reportingMetricSnapshot(shared, debts=[], accountingReport=null) {
+  const active=debts.filter(row=>row.estado==='activo'),debtValue=row=>Number(row.capital_pendiente??row.importe_inicial??0);
+  return {
+    ingresos:shared.totalIngresos,gastoTotal:shared.gastoTotal,beneficio:shared.beneficio,
+    margen:shared.totalIngresos>0&&shared.ebitda!==null?shared.ebitda/shared.totalIngresos*100:0,margenNeto:shared.margenNeto,
+    ebitda:shared.ebitda,accountingEbitda:deriveAccountingEbitda(accountingReport),cashTotal:shared.cashDisponible,
+    bankKnown:shared.bankKnown,accountingKnown:shared.accountingKnown,accountingProvisional:shared.accountingProvisional,
+    burnRate:shared.burnRate,runway:shared.runway,cashHistorySufficient:shared.cashHistorySufficient,
+    cobrosPendientes:shared.cobrosPendientes,pagosPendientes:shared.pagosPendientes,workingCapital:shared.workingCapital,dso:shared.dso,dpo:shared.dpo,
+    periodStart:shared.window.start,periodEnd:shared.window.end,
+    deudaTotal:active.reduce((sum,row)=>sum+debtValue(row),0),
+    cuotasMensuales:active.filter(row=>row.periodicidad==='mensual').reduce((sum,row)=>sum+Number(row.cuota||0),0),
+    interesesAnuales:active.reduce((sum,row)=>sum+debtValue(row)*Number(row.tin||0)/100,0),
+  };
+}

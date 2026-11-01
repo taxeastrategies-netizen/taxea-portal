@@ -19,3 +19,21 @@ export function deriveAccountingEbitda(report) {
     excludedEntries: Number(report.excludedEntries || 0),
   };
 }
+
+/** Readiness describes source coverage, not financial health or tax certification. */
+export function financialReportReadiness({financials=/** @type {{bankKnown?:boolean,accountingKnown?:boolean,accountingEbitda?:object|null}} */({}),financialError='',treasuryError='',auxiliaryError='',calendarError=false}={}) {
+  const reasons=[];
+  if(financialError)reasons.push('La lectura documental no está actualizada.');
+  if(treasuryError || !financials.bankKnown)reasons.push('Falta un saldo bancario EUR reciente y verificable.');
+  if(auxiliaryError || !financials.accountingKnown || !financials.accountingEbitda)reasons.push('Falta la PyG contable confirmada del ejercicio.');
+  if(calendarError)reasons.push('No se pudo actualizar el calendario fiscal.');
+  return {ready:reasons.length===0,reasons};
+}
+
+export function financialScoringReadiness(financials) {
+ return Boolean(financials?.bankKnown && financials?.accountingKnown && !financials.accountingProvisional && financials.cashHistorySufficient && Number.isFinite(financials.runway) && Number.isFinite(financials.dso));
+}
+export function financialExportNumber(value) {
+ if(!['number','string'].includes(typeof value) || value === null || typeof value === 'string' && !value.trim() || !Number.isFinite(Number(value)))return 'No verificable';
+ return Math.round(Number(value)*100)/100;
+}

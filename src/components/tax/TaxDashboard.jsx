@@ -10,7 +10,10 @@ import {
   Receipt, AlertCircle, Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import CashflowChart from '@/components/finance/CashflowChart';
+import { useFinancePeriod, useFinanceObligations } from '@/hooks/useFinanceReporting';
+import { buildFinanceDashboardModel } from '@/lib/financeDashboardModel.mjs';
+import { classifyObligations, obligationOpen, daysBetween } from '@/lib/reportingPeriods.mjs';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import GastosPorCategoria from './GastosPorCategoria';
 import { calculateFinancialKPIs, getOutstandingAmount } from '@/lib/financialCore';
@@ -20,43 +23,39 @@ const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep'
 
 export default function TaxDashboard({ onNavigate }) {
   const { company, isAdmin, loadingCompany } = useOutletContext() || {};
-  const { invoices, expenses, bankTransactions, treasury, loading: finLoading } = useFinancialData(company?.id);
-  const [obligations, setObligations] = useState([]);
-  const [quotes, setQuotes] = useState([]);
+  const financialData = useFinancialData(company?.id);
+  const { invoices, expenses, treasury, loading: finLoading } = financialData;
+  const calendar = useFinanceObligations(company?.id);
+  const accounting = useFinancePeriod(company?.id, 'mtd');
+  const obligations = calendar.data?.rows || [];
+  const financials = useMemo(() => buildFinanceDashboardModel({ ...financialData, obligations, accountingPeriod: accounting.data, period: 'mtd', financialError: financialData.error, accountingError: accounting.isError ? 'PyG mensual no disponible' : '' }), [financialData.invoices, financialData.expenses, financialData.bankAccounts, financialData.bankTransactions, financialData.error, financialData.treasuryError, accounting.data, accounting.isError, calendar.data]);
+  const [quoteScope, setQuoteScope] = useState({companyId:null,rows:[]});
+  const quotes = quoteScope.companyId === company?.id ? quoteScope.rows : [];
   const [loading, setLoading] = useState(true);
-  const [fiscalProfile, setFiscalProfile] = useState(null);
+  const fiscalProfile = calendar.data?.profile || null;
+  const [supportError, setSupportError] = useState('');
   const [aiAlerts, setAiAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
+  const currentYear = Number(financials.window.end.slice(0,4));
+  const currentMonth = Number(financials.window.end.slice(5,7))-1;
   const currentMonthLabel = MONTHS_ES[currentMonth];
 
   useEffect(() => {
-    if (company?.id) loadData();
-    else if (!loadingCompany) setLoading(false);
-  }, [company?.id, loadingCompany]);
-
-  const loadData = async () => {
+    let active = true; setQuoteScope({companyId:company?.id || null,rows:[]}); setAiAlerts([]); setSupportError('');
+    if (!company?.id) { setLoading(false); return; }
     setLoading(true);
-    const [oblData, qData, profiles] = await Promise.all([
-      base44.entities.TaxObligation.filter({ company_id: company.id }),
-      base44.entities.Quote.filter({ company_id: company.id }).catch(() => []),
-      base44.entities.FiscalProfile.filter({ company_id: company.id, active: true }).catch(() => []),
-    ]);
-    setObligations(oblData || []);
-    setQuotes(qData || []);
-    setFiscalProfile(profiles?.[0] || null);
-    setLoading(false);
-  };
+    base44.entities.Quote.filter({company_id:company.id}).then(rows => { if(active)setQuoteScope({companyId:company.id,rows:rows || []}); }).catch(() => { if(active)setSupportError('No se pudieron leer los presupuestos.'); }).finally(() => { if(active)setLoading(false); });
+    return () => { active = false; };
+  }, [company?.id]);
+  useEffect(() => { setAiAlerts([]); }, [company?.id, financialData.lastSync, calendar.data]);
 
   const generateAiAlerts = async () => {
     if (loadingAlerts || aiAlerts.length > 0) return;
     setLoadingAlerts(true);
-    const now = new Date();
-    const oblPendientes = obligations.filter(o => !['finalizado','presentado','pagado','domiciliado'].includes(o.estado));
-    const oblVencidas = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) < now);
-    const factVencidas = invoices.filter(i => i.estado_cobro === 'vencida' || (i.estado_cobro === 'pendiente' && i.fecha_vencimiento && new Date(i.fecha_vencimiento) < now));
+    const dates = classifyObligations(obligations, {horizon:15});
+    const oblVencidas = dates.overdue;
+    const factVencidas = financials.vencidas;
     const gastosSinCat = expenses.filter(e => !e.categoria);
     const factSinContabilizar = invoices.filter(i => i.estado_contable === 'pendiente');
 
@@ -66,16 +65,12 @@ export default function TaxDashboard({ onNavigate }) {
     if (gastosSinCat.length > 0) staticAlerts.push({ tipo: 'amarillo', texto: `${gastosSinCat.length} gasto(s) sin categoría contable asignada.`, accion: 'ingresos-gastos' });
     if (factSinContabilizar.length > 5) staticAlerts.push({ tipo: 'amarillo', texto: `${factSinContabilizar.length} facturas pendientes de contabilizar.`, accion: 'facturas' });
 
-    // Check for next obligation
-    const proxObl = oblPendientes
-      .filter(o => o.fecha_limite && new Date(o.fecha_limite) > now)
-      .sort((a, b) => new Date(a.fecha_limite).getTime() - new Date(b.fecha_limite).getTime())[0];
-    if (proxObl) {
-      const dias = Math.ceil((new Date(proxObl.fecha_limite).getTime() - now.getTime()) / 86400000);
-      if (dias <= 15) staticAlerts.push({ tipo: 'amarillo', texto: `Próximo vencimiento fiscal en ${dias} días: ${proxObl.modelo?.replace('modelo_', 'Modelo ').replace(/_/g, ' ')}.`, accion: 'obligaciones' });
-    }
-
-    if (staticAlerts.length === 0) staticAlerts.push({ tipo: 'verde', texto: 'Todo en orden. No se detectan alertas fiscales urgentes.', accion: null });
+    const proxObl = dates.upcoming[0];
+    if(proxObl)staticAlerts.push({tipo:'amarillo',texto:'Próximo vencimiento: modelo '+proxObl.modelo+' en '+daysBetween(dates.today,proxObl.fecha_limite)+' días.',accion:'obligaciones'});
+    if(dates.undated.length)staticAlerts.push({tipo:'amarillo',texto:'Hay obligaciones sin fecha verificable.',accion:'obligaciones'});
+    if(calendar.isError || financialData.error || accounting.isError)staticAlerts.push({tipo:'amarillo',texto:'No se han podido actualizar todas las fuentes. Revisa la cobertura.',accion:null});
+    if(fiscalProfile?.profileStatus!=='validado_asesor' || !calendar.data?.configuredModels)staticAlerts.push({tipo:'amarillo',texto:'Falta validar el perfil fiscal o sus modelos con el asesor.',accion:null});
+    if(staticAlerts.length===0)staticAlerts.push({tipo:'verde',texto:'Sin alertas de estas reglas en los datos registrados. No sustituye la revisión del asesor.',accion:null});
 
     setAiAlerts(staticAlerts);
     setLoadingAlerts(false);
@@ -83,27 +78,20 @@ export default function TaxDashboard({ onNavigate }) {
 
   // KPIs - Usa calculateFinancialKPIs para consistencia con todos los demas dashboards
   const kpis = useMemo(() => {
-    // KPIs del mes actual (mismas reglas que el resto de la app)
-    const monthInvs = invoices.filter(i => {
-      const d = new Date(i.fecha_emision || i.created_date);
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-    });
-    const monthExps = expenses.filter(e => {
-      const d = new Date(e.fecha || e.created_date);
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-    });
+    const monthInvs = financials.filteredInvoices;
+    const monthExps = financials.filteredExpenses;
     const monthKPIs = calculateFinancialKPIs(monthInvs, monthExps);
 
     const factPendientes = monthKPIs.emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
-    const oblPendientes = obligations.filter(o => !['finalizado','presentado','pagado','domiciliado'].includes(o.estado));
-    const proxObl = oblPendientes.filter(o => o.fecha_limite && new Date(o.fecha_limite) > new Date())
-      .sort((a, b) => new Date(a.fecha_limite).getTime() - new Date(b.fecha_limite).getTime())[0];
+    const dates = classifyObligations(obligations);
+    const oblPendientes = obligations.filter(row => obligationOpen(row) && Number(row.fiscalYear) === currentYear);
+    const proxObl = dates.upcoming[0];
 
     const quotesPendientes = quotes.filter(q => ['pendiente','enviado','borrador'].includes(q.estado) || !q.estado);
     return {
-      ingresosMes: monthKPIs.totalIngresos,
-      gastosMes: monthKPIs.totalGastos,
-      beneficioMes: monthKPIs.resultado,
+      ingresosMes: financials.totalIngresos,
+      gastosMes: financials.gastoTotal,
+      beneficioMes: financials.beneficio,
       ivaMes: monthKPIs.ivaNeto,
       irpfMes: monthKPIs.retencionIngresos,
       ivaRepercutido: monthKPIs.ivaRepercutido,
@@ -118,43 +106,7 @@ export default function TaxDashboard({ onNavigate }) {
       quotesPendientes: quotesPendientes.length,
       quotesPendientesImporte: quotesPendientes.reduce((s, q) => s + (q.total || q.importe_total || 0), 0),
     };
-  }, [invoices, expenses, obligations, quotes, currentYear, currentMonth]);
-
-  // Cashflow bancario real cuando hay cuentas conectadas; estimación documental solo como respaldo.
-  const cashflowData = useMemo(() => {
-    const hasBankData = treasury.connectedAccounts > 0;
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(currentYear, currentMonth - 5 + i, 1);
-      const m = d.getMonth();
-      const y = d.getFullYear();
-      if (hasBankData) {
-        const movements = (bankTransactions || []).filter(transaction => {
-          const fd = new Date(transaction.fecha_operacion);
-          return transaction.moneda === 'EUR'
-            && transaction.estado_proveedor !== 'pending'
-            && transaction.categoria_ia !== 'transferencia_interna'
-            && transaction.estado_conciliacion !== 'movimiento_interno'
-            && fd.getMonth() === m
-            && fd.getFullYear() === y;
-        });
-        const ing = movements.filter(transaction => transaction.tipo === 'entrada').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0);
-        const gas = movements.filter(transaction => transaction.tipo === 'salida').reduce((sum, transaction) => sum + Number(transaction.importe || 0), 0);
-        return { mes: MONTHS_ES[m], ingresos: Math.round(ing), gastos: Math.round(gas), beneficio: Math.round(ing - gas) };
-      }
-      const monthInvs = invoices.filter(inv => {
-        const fd = new Date(inv.fecha_emision || inv.created_date);
-        return fd.getMonth() === m && fd.getFullYear() === y && !inv.anulada;
-      });
-      const monthExps = expenses.filter(e => {
-        const fd = new Date(e.fecha || e.created_date);
-        return fd.getMonth() === m && fd.getFullYear() === y && !e.anulada;
-      });
-      const ing = monthInvs.filter(i => i.tipo === 'emitida').reduce((sum, invoice) => sum + Number(invoice.total_factura || 0), 0);
-      const gas = monthExps.filter(e => e.tipo === 'gasto').reduce((sum, expense) => sum + Number(expense.total || 0), 0)
-        + monthInvs.filter(i => i.tipo === 'recibida').reduce((sum, invoice) => sum + Number(invoice.total_factura || 0), 0);
-      return { mes: MONTHS_ES[m], ingresos: Math.round(ing), gastos: Math.round(gas), beneficio: Math.round(ing - gas) };
-    });
-  }, [invoices, expenses, bankTransactions, treasury.connectedAccounts, currentYear, currentMonth]);
+  }, [invoices, expenses, obligations, quotes, currentYear, currentMonth, financials]);
 
   // Recent activity
   const recentActivity = useMemo(() => {
@@ -166,17 +118,17 @@ export default function TaxDashboard({ onNavigate }) {
     return items.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 8);
   }, [invoices, expenses, obligations]);
 
-  if (loadingCompany || loading || finLoading) return (
+  if (loadingCompany || loading || finLoading || calendar.isLoading || accounting.isLoading) return (
     <div className="flex items-center justify-center h-48">
       <div className="w-6 h-6 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
     </div>
   );
   if (!company) return <NoCompanyState pageName="Fiscalidad y Contabilidad" />;
 
-  const fmt = (n) => n?.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00';
+  const fmt = (n) => n == null ? '—' : n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const taxLabel = company.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const fiscalSetupComplete = Boolean(
-    company.razon_social && company.nif_cif && company.actividad && company.regimen_fiscal && company.tipo_impuesto && fiscalProfile
+    company.razon_social && company.nif_cif && company.actividad && company.regimen_fiscal && company.tipo_impuesto && fiscalProfile?.profileStatus === 'validado_asesor'
   );
 
   return (
@@ -184,7 +136,7 @@ export default function TaxDashboard({ onNavigate }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-jakarta font-bold text-foreground">Tax &amp; Accounting</h1>
+          <h1 className="text-2xl font-jakarta font-bold text-foreground">Fiscalidad y Contabilidad</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{company.razon_social} · {currentMonthLabel} {currentYear}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -197,12 +149,14 @@ export default function TaxDashboard({ onNavigate }) {
         </div>
       </div>
 
+      {(financialData.error || accounting.isError || calendar.isError || supportError) && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Lectura parcial: {financialData.error || ''} {accounting.isError ? 'PyG mensual no disponible.' : ''} {calendar.isError ? 'Calendario no disponible.' : ''} {supportError}</p>}
+      {financials.accountingProvisional && <p role="status" className="text-xs text-amber-700">PyG mensual provisional: hay cobertura o marco contable pendientes de revisión.</p>}
       {!fiscalSetupComplete && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-900">Completa el encuadre fiscal antes de automatizar</p>
-            <p className="text-xs text-amber-800 mt-0.5">Actividad, régimen, IVA/IGIC e IRPF determinan cómo se proponen impuestos, retenciones y asientos. Las facturas permanecerán pendientes hasta disponer de una configuración revisada.</p>
+            <p className="text-xs text-amber-800 mt-0.5">El asesor debe revisar actividad, régimen, IVA/IGIC e IRPF. Esta vista informa de su estado; no confirma ni modifica facturas.</p>
           </div>
           <Button asChild size="sm" variant="outline" className="border-amber-300 bg-white">
             <Link to="/ajustes">Abrir ajustes fiscales</Link>
@@ -215,9 +169,9 @@ export default function TaxDashboard({ onNavigate }) {
           <Wallet className="w-4 h-4 text-blue-700" />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-semibold text-blue-900">Fuente financiera: {treasury.connectedAccounts > 0 ? 'banca sincronizada' : 'documentos contables'}</p>
+          <p className="text-sm font-semibold text-blue-900">Fuente financiera: {treasury.balanceKnown === true ? 'banca sincronizada' : 'documentos contables'}</p>
           <p className="text-xs text-blue-800 mt-0.5">
-            {treasury.connectedAccounts > 0
+            {treasury.balanceKnown === true
               ? `${treasury.connectedAccounts} cuentas conectadas · ${fmt(treasury.availableCash)} € disponibles · ${treasury.unreconciledTransactions} movimientos pendientes de revisar`
               : 'Conecta una cuenta para incorporar saldos, movimientos y conciliación al análisis financiero.'}
           </p>
@@ -232,7 +186,7 @@ export default function TaxDashboard({ onNavigate }) {
             <TrendingUp className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-lg font-bold text-foreground">{fmt(kpis.ingresosMes)} &#8364;</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Ingresos mes</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Ingresos contables del mes</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
             <p className="text-xs text-muted-foreground">{taxLabel} repercutido: <span className="font-medium text-foreground">{fmt(kpis.ivaRepercutido)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de ingresos: <span className="font-medium text-foreground">{fmt(kpis.irpfIngresos)} &#8364;</span></p>
@@ -243,14 +197,14 @@ export default function TaxDashboard({ onNavigate }) {
             <TrendingDown className="w-4 h-4 text-red-400" />
           </div>
           <p className="text-lg font-bold text-foreground">{fmt(kpis.gastosMes)} &#8364;</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Gastos mes</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Gastos contables del mes</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
             <p className="text-xs text-muted-foreground">{taxLabel} soportado: <span className="font-medium text-foreground">{fmt(kpis.ivaSoportado)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de gastos: <span className="font-medium text-foreground">{fmt(kpis.irpfGastos)} &#8364;</span></p>
           </div>
         </div>
         <KPICard
-          label="Beneficio estimado"
+          label="Resultado contable del mes"
           value={`${fmt(kpis.beneficioMes)} €`}
           icon={BarChart3}
           color={kpis.beneficioMes >= 0 ? "text-emerald-500" : "text-red-500"}
@@ -323,40 +277,7 @@ export default function TaxDashboard({ onNavigate }) {
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Cashflow Chart */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-jakarta font-semibold text-foreground">Cashflow — Últimos 6 meses</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">{treasury.connectedAccounts > 0 ? 'Entradas y salidas bancarias reales en EUR' : 'Estimación por facturas y gastos'}</p>
-            </div>
-            <Link to={treasury.connectedAccounts > 0 ? '/finance/treasury' : '/tax-accounting/libros'} className="text-xs text-taxea-red hover:underline flex items-center gap-1">
-              {treasury.connectedAccounts > 0 ? 'Tesorería' : 'Libros'} <ChevronRight className="w-3 h-3" />
-            </Link>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={cashflowData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="ingGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gasGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#888' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }}
-                formatter={(v, n) => [`${v.toLocaleString('es-ES')} €`, n === 'ingresos' ? 'Ingresos' : n === 'gastos' ? 'Gastos' : 'Beneficio']}
-              />
-              <Area type="monotone" dataKey="ingresos" stroke="#10b981" strokeWidth={2} fill="url(#ingGrad)" />
-              <Area type="monotone" dataKey="gastos" stroke="#f87171" strokeWidth={2} fill="url(#gasGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        <div className="lg:col-span-2"><CashflowChart invoices={invoices} expenses={expenses} financials={financials} /></div>
 
         {/* Gastos por categoría */}
         <GastosPorCategoria invoices={invoices} />
@@ -371,7 +292,7 @@ export default function TaxDashboard({ onNavigate }) {
               <div className="w-6 h-6 bg-taxea-red/10 rounded-md flex items-center justify-center">
                 <Brain className="w-3.5 h-3.5 text-taxea-red" />
               </div>
-              <h3 className="font-jakarta font-semibold text-foreground text-sm">Alertas IA</h3>
+              <h3 className="font-jakarta font-semibold text-foreground text-sm">Alertas del periodo</h3>
             </div>
             {aiAlerts.length === 0 && (
               <button

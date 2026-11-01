@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
     const company = await authorize(svc, user, companyId);
     if (action === 'finance_period') {
       const period = clean(body.period || '30d');
-      if (!['7d', '30d', '90d', '365d'].includes(period)) return Response.json({ error: 'Periodo financiero no válido.' }, { status: 400 });
+      if (!['7d', '30d', '90d', '365d', 'mtd'].includes(period)) return Response.json({ error: 'Periodo financiero no válido.' }, { status: 400 });
       const now = new Date();
       const timeZone = company.timezone === 'Atlantic/Canary' ? 'Atlantic/Canary' : 'Europe/Madrid';
       const window = reportingWindow(period, now, timeZone);

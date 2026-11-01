@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { reportingWindow, classifyObligations, civilDay, shiftDay } from '../src/lib/reportingPeriods.mjs';
-import { buildFinanceDashboardModel, bankObservation, bankFlows } from '../src/lib/financeDashboardModel.mjs';
+import { buildFinanceDashboardModel, reportingMetricSnapshot, bankObservation, bankFlows } from '../src/lib/financeDashboardModel.mjs';
 import { financeAlerts, financeInsights, deriveFinanceHealth } from '../src/lib/financeSignals.mjs';
 import { buildFinancePeriod, reportForWindow } from '../base44/functions/businessDashboardOperations/financePeriod.mjs';
 const now = new Date('2026-11-01T12:00:00Z');
@@ -94,4 +94,15 @@ equal(fs.readFileSync('src/lib/observedBanking.mjs','utf8'),fs.readFileSync('bas
 equal(financeAlerts(bankModel,[{id:'undated',estado:'pendiente'}],{now}).some(row=>row.id==='undated-tax'),true,'undated obligations prevent an all-clear');
 const resolvedModel=buildFinanceDashboardModel({bankAccounts:[account],bankTransactions:[{...tx('resolved',10,'salida'),estado_conciliacion:'descartada'}],now});
 equal(resolvedModel.bankUnreconciled,0,'resolved legacy bank states are consistent across panels');
+equal(reportingWindow('mtd',now).start,'2026-11-01','monthly dashboard starts on the first civil day');
+equal(reportingWindow('mtd',new Date('2026-10-31T12:00:00Z')).days,31,'monthly dashboard includes all days through month end');
+const reportingSnapshot=reportingMetricSnapshot(bankModel,[{estado:'activo',capital_pendiente:0,importe_inicial:9999}],accountingPeriod.current);
+equal(reportingSnapshot.ingresos,100,'reporting centre uses admitted ledger income, not invoices including tax');
+equal(reportingSnapshot.beneficio,75.8,'reporting centre keeps canonical ledger result');
+equal(reportingSnapshot.deudaTotal,0,'zero remaining debt is not replaced by its original principal');
+equal(reportingSnapshot.cashTotal,1000,'reporting uses the observed unique-account balance');
+equal(reportingSnapshot.runway,3.7,'reporting runway uses observed bank flow, not annual expense divided by twelve');
+equal(Object.values(reportingSnapshot).some(Array.isArray),false,'report metrics never include raw document or bank arrays');
+equal(reportingSnapshot.observation,undefined,'report sharing receives no raw bank observation');
+equal(reportingSnapshot.filteredInvoices,undefined,'report sharing receives no invoice objects');
 console.log(JSON.stringify({ ok: true, checks, scenarios: ['calendar-boundaries', 'confirmed-PnL', 'bank-absence-and-zero', 'bank-deduplication', 'observed-cashflow', 'source-failure', 'no-false-green'], externalCalls: 0, financialWrites: 0 }));

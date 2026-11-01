@@ -47,7 +47,7 @@ export function useFinanceObligations(companyId) {
       const payloads = responses.map(response => response.data);
       if (payloads.some(payload => !payload?.success || payload.companyId !== companyId)) throw new Error('No se pudo verificar el calendario fiscal de esta empresa.');
       const rows = payloads.flatMap(payload => (payload.items || []).map(item => ({ ...item, id: item.calendarKey || item.key, modelo: item.code, periodo: item.period, fecha_limite: item.filingDeadline, estado: item.state, calendarVerified: Number(payload.fiscalYear) <= Number(payload.verifiedCalendarYear), importe_a_pagar: item.filing?.importeFinal ?? item.taxPeriod?.importeConfirmado ?? item.obligation?.importe ?? null, importe: item.filing?.importeFinal ?? item.taxPeriod?.importeConfirmado ?? item.obligation?.importe ?? null, resultado: item.result || 'pendiente', modelo_codigo: item.code, fecha_limite_presentacion: item.filingDeadline, fecha_limite_domiciliacion: item.domicileDeadline })));
-      return { rows: [...new Map(rows.map(row => [row.id || `${row.modelo}|${row.periodo}|${row.fecha_limite}`, row])).values()], provisionalDates: payloads.some(payload => Number(payload.fiscalYear) > Number(payload.verifiedCalendarYear)), generatedAt: payloads.map(payload => payload.generatedAt).sort().at(-1) };
+      return { profile: payloads[0]?.profile || null, configuredModels: payloads[0]?.models?.length || 0, rows: [...new Map(rows.map(row => [row.id || `${row.modelo}|${row.periodo}|${row.fecha_limite}`, row])).values()], provisionalDates: payloads.some(payload => Number(payload.fiscalYear) > Number(payload.verifiedCalendarYear)), generatedAt: payloads.map(payload => payload.generatedAt).sort().at(-1) };
     },
   });
 }

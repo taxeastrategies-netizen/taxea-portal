@@ -1,3 +1,4 @@
+import { financialScoringReadiness } from '@/lib/verifiedFinancialMetrics';
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { FileText, RefreshCw, Brain, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -28,17 +29,16 @@ export default function MnAAnalytics({ financials, company, invoices, debts }) {
   const ebitdaMultiples = [4, 5, 6, 7, 8, 10, 12];
 
   const strengths = [
-    f.margen > 15 && 'Margen EBITDA saludable (>' + f.margen?.toFixed(0) + '%)',
-    f.cashTotal > f.burnRate * 6 && 'Posición de caja sólida (runway >' + f.runway?.toFixed(0) + ' meses)',
-    f.workingCapital > 0 && 'Working capital positivo',
-    f.deudaTotal < f.ebitda * 2 && 'Estructura de deuda conservadora',
-    invoices.filter(i => i.tipo === 'emitida').length > 20 && 'Base de facturación diversificada',
+    f.margen > 15 && 'Margen EBITDA registrado (' + f.margen?.toFixed(0) + '%)',
+    f.cashHistorySufficient && f.runway !== null && f.runway > 6 && 'Cobertura del saldo al ritmo observado (' + f.runway?.toFixed(0) + ' meses)',
+    f.workingCapital > 0 && 'Cobros pendientes superiores a facturas por pagar',
+    f.deudaTotal < f.ebitda * 2 && 'Deuda registrada inferior al doble del EBITDA',
   ].filter(Boolean);
 
   const weaknesses = [
-    f.margen < 10 && 'Margen operativo por debajo del benchmark sector',
-    f.runway < 6 && 'Runway ajustado (< 6 meses)',
-    f.workingCapital < 0 && 'Working capital negativo',
+    f.margen < 10 && 'Margen EBITDA inferior al 10% (umbral orientativo)',
+    f.runway !== null && f.runway < 6 && 'Runway ajustado (< 6 meses)',
+    f.workingCapital < 0 && 'Facturas por pagar superiores a cobros pendientes',
     f.deudaTotal > f.ebitda * 4 && 'Apalancamiento elevado (Deuda/EBITDA > 4x)',
     f.dso > 60 && 'Periodo medio de cobro elevado (DSO > 60 días)',
   ].filter(Boolean);
@@ -75,6 +75,8 @@ Estilo: PE/VC, directo, orientado a decisión de inversión.`,
 
   const scoreColor = attractiveness >= 65 ? 'from-emerald-600 to-emerald-800' : attractiveness >= 40 ? 'from-amber-500 to-amber-700' : 'from-red-600 to-red-800';
   const scoreLabel = attractiveness >= 65 ? 'Atractivo' : attractiveness >= 40 ? 'Condicionado' : 'No recomendable';
+
+  if(!financialScoringReadiness(financials))return <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Índice sin calcular: se necesitan PyG revisada, saldo reciente, historial bancario suficiente y cobros fechados. No se sustituyen los datos ausentes por ceros.</div>;
 
   return (
     <div className="space-y-6">

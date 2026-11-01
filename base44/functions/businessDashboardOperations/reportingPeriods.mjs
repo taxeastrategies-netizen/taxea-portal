@@ -23,8 +23,8 @@ export function withinWindow(value, window, timeZone = 'Europe/Madrid') {
   return Boolean(day && day >= window.start && day <= window.end);
 }
 export function reportingWindow(period = '30d', now = new Date(), timeZone = 'Europe/Madrid') {
-  const days = ({ '7d': 7, '30d': 30, '90d': 90, '365d': 365 })[period];
   const end = civilDay(now, timeZone);
+  const days = period === 'mtd' && end ? Number(end.slice(8, 10)) : ({ '7d': 7, '30d': 30, '90d': 90, '365d': 365 })[period];
   if (!days || !end) throw new RangeError('Periodo financiero no válido.');
   const start = shiftDay(end, 1 - days);
   return { period, days, start, end, previous: { start: shiftDay(start, -days), end: shiftDay(start, -1) }, timeZone };
