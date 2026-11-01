@@ -31,7 +31,7 @@ export function computeBusinessHealth(summary, fiscal, { now = new Date(), stale
 
   const treasury = summary.treasury || {};
   const unavailable = summary.sourceErrors || {};
-  const treasuryActive = treasury.balanceKnown === true && !unavailable.BankAccount && !unavailable.BankTransaction;
+  const treasuryActive = treasury.balanceKnown === true && treasury.activityKnown !== false && !unavailable.BankAccount && !unavailable.BankTransaction;
   let treasuryScore = treasury.connectedAccounts ? 100 : 40;
   const treasuryReasons = [];
   if (!treasuryActive) treasuryReasons.push('No hay un saldo bancario reciente verificable; tesorería no puntúa.');

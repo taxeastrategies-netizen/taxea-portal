@@ -89,4 +89,6 @@ const failed = buildFinanceDashboardModel({ invoices, now, financialError: 'unav
 equal(failed.cobrosPendientes, null, 'failed documentary source is not interpreted as zero receivables');
 equal(financeAlerts(failed, [], { now, calendarError: true }).some(row => row.id === 'ok'), false, 'failed sources cannot yield an all-clear alert');
 equal(fs.readFileSync('src/lib/reportingPeriods.mjs', 'utf8'), fs.readFileSync('base44/functions/businessDashboardOperations/reportingPeriods.mjs', 'utf8'), 'server and client use identical date and obligation rules');
+equal(bankObservation([account], [{...tx('collision-a',10,'salida'),clave_transaccion:'collision'},{...tx('collision-b',20,'salida'),clave_transaccion:'collision'}], {now}).activityKnown, false, 'conflicting stable transaction identity prevents reliable flow projections');
+equal(fs.readFileSync('src/lib/observedBanking.mjs','utf8'),fs.readFileSync('base44/functions/businessDashboardOperations/observedBanking.mjs','utf8'),'bank observation rules identical in frontend and backend');
 console.log(JSON.stringify({ ok: true, checks, scenarios: ['calendar-boundaries', 'confirmed-PnL', 'bank-absence-and-zero', 'bank-deduplication', 'observed-cashflow', 'source-failure', 'no-false-green'], externalCalls: 0, financialWrites: 0 }));

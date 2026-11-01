@@ -32,7 +32,7 @@ function CashKpi({ label, value, sub, trend, trendLabel, color = 'slate', delay 
         <span className={cn("w-1.5 h-1.5 rounded-full mt-1", c.dot)} />
       </div>
       <p className={cn("font-jakarta font-bold tracking-tight text-foreground", large ? "text-2xl" : "text-xl")}>
-        {typeof value === 'number' ? fmt(value) : value}
+        {typeof value === 'number' ? fmt(value) : value ?? '—'}
       </p>
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       {trendLabel && (
@@ -58,8 +58,8 @@ export default function CashKpiGrid({ financials }) {
     dso, ingresosDelta, bankKnown
   } = financials;
 
-  const liquidezNeta = bankKnown ? cashDisponible - pagosPendientes : null;
-  const runwayLabel = runway ? `${runway.toFixed(1)} meses de salidas al ritmo observado` : null;
+  const liquidezNeta = bankKnown && pagosPendientes !== null ? cashDisponible - pagosPendientes : null;
+  const runwayLabel = runway !== null ? `${runway.toFixed(1)} meses de salidas al ritmo observado` : null;
   const deltaLabel = ingresosDelta !== null && ingresosDelta !== 0 ? `${ingresosDelta > 0 ? '+' : ''}${ingresosDelta.toFixed(1)}% vs período anterior` : null;
 
   return (
@@ -70,22 +70,22 @@ export default function CashKpiGrid({ financials }) {
           trend={bankKnown && cashDisponible > 0 ? 'up' : 'neutral'} trendLabel={runwayLabel} color="emerald" delay={0} large />
         <CashKpi label="Cobros Pendientes" value={cobrosPendientes ?? '—'} sub="Sin cobrar" color="blue" delay={0.05} large />
         <CashKpi label="Pagos Pendientes" value={pagosPendientes ?? '—'} sub="Sin pagar" color="amber" delay={0.1} large />
-        <CashKpi label="Saldo tras facturas por pagar" value={bankKnown ? liquidezNeta : '—'} sub="Saldo observado menos facturas pendientes; no incluye todos los compromisos"
-          trend={!bankKnown ? 'neutral' : liquidezNeta >= 0 ? 'up' : 'down'}
-          trendLabel={!bankKnown ? null : liquidezNeta >= 0 ? 'Posición provisional positiva' : 'Posición provisional negativa'}
-          color={!bankKnown || liquidezNeta >= 0 ? 'emerald' : 'red'} delay={0.15} large />
+        <CashKpi label="Saldo tras facturas por pagar" value={liquidezNeta ?? '—'} sub="Saldo observado menos facturas pendientes; no incluye todos los compromisos"
+          trend={liquidezNeta === null ? 'neutral' : liquidezNeta >= 0 ? 'up' : 'down'}
+          trendLabel={liquidezNeta === null ? null : liquidezNeta >= 0 ? 'Posición provisional positiva' : 'Posición provisional negativa'}
+          color={liquidezNeta === null ? 'slate' : liquidezNeta >= 0 ? 'emerald' : 'red'} delay={0.15} large />
       </div>
       {/* Second row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <CashKpi label={bankKnown ? 'Entradas bancarias 30d' : 'Bases facturadas 30d'} value={totalIngresos ?? '—'}
           trend={ingresosDelta > 0 ? 'up' : ingresosDelta < 0 ? 'down' : 'neutral'} trendLabel={deltaLabel} color="blue" delay={0.2} />
         <CashKpi label={bankKnown ? 'Salidas bancarias 30d' : 'Bases de gastos 30d'} value={gastoTotal ?? '—'} color="red" delay={0.22} />
-        <CashKpi label={bankKnown ? 'Flujo neto 30d' : 'Diferencia documental 30d'} value={beneficio ?? '—'} trend={beneficio >= 0 ? 'up' : 'down'} color={beneficio >= 0 ? 'emerald' : 'red'} delay={0.24} />
+        <CashKpi label={bankKnown ? 'Flujo neto 30d' : 'Diferencia documental 30d'} value={beneficio ?? '—'} trend={beneficio === null ? 'neutral' : beneficio >= 0 ? 'up' : 'down'} color={beneficio === null ? 'slate' : beneficio >= 0 ? 'emerald' : 'red'} delay={0.24} />
         <CashKpi label="Salidas observadas / 30d" value={bankKnown ? burnRate : '—'} sub="No equivale a burn rate contable" color="amber" delay={0.26} />
         <CashKpi label="Plazo de cobro observado" value={dso === null ? '—' : `${Math.round(dso)} días`} sub={dso === null ? 'Sin cobros fechados suficientes' : 'Media de facturas cobradas con fecha registrada'}
           color={dso === null ? 'slate' : 'blue'} delay={0.28} />
-        <CashKpi label="Cobros menos pagos pendientes" value={workingCapital ?? '—'} trend={workingCapital >= 0 ? 'up' : 'down'}
-          color={workingCapital >= 0 ? 'emerald' : 'red'} delay={0.3} />
+        <CashKpi label="Cobros menos pagos pendientes" value={workingCapital ?? '—'} trend={workingCapital === null ? 'neutral' : workingCapital >= 0 ? 'up' : 'down'}
+          color={workingCapital === null ? 'slate' : workingCapital >= 0 ? 'emerald' : 'red'} delay={0.3} />
       </div>
     </div>
   );

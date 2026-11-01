@@ -109,7 +109,7 @@ function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
   const active = accounts.filter(account => account.activa !== false && account.es_demo !== true);
   const latestSync = active.map(account => dateOf(account, ['fecha_ultima_sync','last_sync_at'])).filter(Boolean).sort().at(-1) || '';
   return {
-    accounts: active.length, connectedAccounts: observed.connected, balanceKnown: observed.bankKnown,
+    accounts: active.length, connectedAccounts: observed.connected, balanceKnown: observed.bankKnown, activityKnown: observed.activityKnown,
     connectionIssues: active.filter(account => ['error','requiere_renovacion','expired','desconectada','desconectado'].includes(clean(account.estado_conexion).toLowerCase())).length,
     cashEur: observed.cash, nonEurAccounts: active.filter(account => clean(account.moneda).toUpperCase() !== 'EUR').map(account => clean(account.moneda)).filter(Boolean),
     transactions: yearRows.length, reconciled, unreconciled: yearRows.length - reconciled,
@@ -117,7 +117,7 @@ function treasurySnapshot(accounts: any[], transactions: any[], year: number) {
     inflows: money(yearRows.filter(tx => tx.signedAmount > 0).reduce((sum, tx) => sum + tx.signedAmount, 0)),
     outflows: money(-yearRows.filter(tx => tx.signedAmount < 0).reduce((sum, tx) => sum + tx.signedAmount, 0)),
     lastSync: latestSync, stale: observed.reasons.some(reason => reason.includes('sincronización')),
-    qualityReasons: observed.reasons, duplicateAccounts: observed.duplicateAccounts, duplicateTransactions: observed.duplicateTransactions,
+    qualityReasons: [...observed.reasons, ...observed.activityReasons], duplicateAccounts: observed.duplicateAccounts, duplicateTransactions: observed.duplicateTransactions,
   };
 }
 

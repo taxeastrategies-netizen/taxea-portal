@@ -6,11 +6,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
+import { bankObservation } from '@/lib/observedBanking.mjs';
 
 const EMPTY_TREASURY = {
   connectedAccounts: 0,
   connectedEuroAccounts: 0,
-  availableCash: 0,
+  availableCash: null,
+  balanceKnown: false,
   reconciledTransactions: 0,
   unreconciledTransactions: 0,
   inflows: 0,
@@ -71,10 +73,13 @@ export function useFinancialData(companyId, options = {}) {
       setBankAccounts(bankData?.accounts || []);
       setBankTransactions(bankData?.transactions || []);
       setTreasuryError(bankData?.treasuryError || '');
+      const observed = bankObservation(bankData?.accounts || [], bankData?.transactions || [], { treasuryError: bankData?.treasuryError || '' });
       setTreasury({
+        balanceKnown: observed.bankKnown,
+        qualityReasons: observed.reasons,
         connectedAccounts: Number(summary.connected_accounts || 0),
-        connectedEuroAccounts: (bankData?.accounts || []).filter(account => account.activa !== false && account.estado_conexion === 'conectado' && String(account.moneda || '').toUpperCase() === 'EUR').length,
-        availableCash: Number(summary.available_cash_eur || 0),
+        connectedEuroAccounts: observed.bankKnown ? observed.connected : 0,
+        availableCash: observed.cash,
         reconciledTransactions: Number(summary.reconciled_transactions || 0),
         unreconciledTransactions: Number(summary.unreconciled_transactions || 0),
         inflows: Number(summary.inflows || 0),

@@ -28,7 +28,7 @@ export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankA
   const ingresosDelta = accountingKnown && previousPnl?.includedEntries > 0 && previousPnl.profitAndLoss.totalIncome > 0 ? money((pnl.totalIncome - previousPnl.profitAndLoss.totalIncome) / previousPnl.profitAndLoss.totalIncome * 100) : null;
   const today = civilDay(now, window.timeZone);
   const vencidas = !financialError ? portfolio.filter(row => row.tipo === 'emitida' && Number(row.total_factura) > 0 && civilDay(row.fecha_vencimiento) && civilDay(row.fecha_vencimiento) < today && getOutstandingAmount(row) > 0) : [];
-  const bankActivityKnown = observation.bankKnown && flows.count > 0;
+  const bankActivityKnown = observation.bankKnown && observation.activityKnown && flows.count > 0;
   const observedDays = flows.first ? daysBetween(flows.first, window.end) + 1 : 0;
   const cashHistorySufficient = bankActivityKnown && window.days >= 30 && observedDays >= 28;
   const burnRate = cashHistorySufficient ? money(flows.outflows / window.days * 30) : null;

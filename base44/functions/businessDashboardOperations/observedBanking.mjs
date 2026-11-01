@@ -32,7 +32,7 @@ export function bankObservation(accounts = [], transactions = [], { now = new Da
     unique.set(groupKey, { ...account, balance: finite(balance) ? Number(balance) : null, ids: new Set([account.id]) });
   }
   const byId = new Map([...unique.values()].flatMap(account => [...account.ids].map(id => [id, account])));
-  const seen = new Set(), rows = []; let duplicates = 0;
+  const seen = new Map(), rows = [], activityReasons = []; let duplicates = 0;
   for (const row of transactions) {
     const account = byId.get(row.bank_account_id || row.cuenta_bancaria_id || row.account_id);
     if (!account || row.es_demo === true || row.es_duplicado || row.duplicado || ['pending', 'pendiente', 'duplicado', 'duplicate'].includes(lower(row.estado_proveedor)) || ['duplicada', 'duplicado', 'duplicate', 'movimiento_interno'].includes(lower(row.estado_conciliacion)) || row.categoria_ia === 'transferencia_interna' || String(row.moneda || account.moneda).toUpperCase() !== 'EUR') continue;
@@ -40,15 +40,16 @@ export function bankObservation(accounts = [], transactions = [], { now = new Da
     if (!day || day > civilDay(now, timeZone) || !finite(row.importe)) continue;
     const providerKey = row.clave_transaccion || row.proveedor_transaccion_id;
     const key = providerKey ? `${accountKey(account)}|${providerKey}` : row.id ? `row:${row.id}` : null;
-    if (key && seen.has(key)) { duplicates++; continue; }
-    if (key) seen.add(key);
     const direction = lower(row.tipo);
     const signedAmount = direction === 'salida' ? -Math.abs(Number(row.importe)) : direction === 'entrada' ? Math.abs(Number(row.importe)) : Number(row.importe);
+    if (key && seen.has(key)) { const earlier = seen.get(key); duplicates++; if (earlier.day !== day || money(earlier.signedAmount) !== money(signedAmount)) activityReasons.push('Hay movimientos con la misma identidad e importes o fechas incompatibles.'); continue; }
+    if (key) seen.set(key, { day, signedAmount });
     rows.push({ ...row, day, signedAmount });
   }
   return {
     bankKnown: unique.size > 0 && reasons.length === 0,
     cash: unique.size && reasons.length === 0 ? money([...unique.values()].reduce((sum, account) => sum + account.balance, 0)) : null,
+    activityKnown: activityReasons.length === 0, activityReasons: [...new Set(activityReasons)],
     connected: unique.size, nonEuroAccounts: connected.length - euro.length,
     reasons: [...new Set(reasons)], duplicateAccounts, duplicateTransactions: duplicates, rows,
   };
