@@ -1,10 +1,16 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
+// Only the server-authenticated User is authoritative; request role/status fields never grant access.
+function disabledAccount(user) {
+ return [user,user?.data].filter(Boolean).some(state=>state.is_deleted===true||['eliminado','bloqueado','suspendido'].includes(String(state.status||'').trim().toLowerCase())||['suspended','blocked','disabled','deleted'].includes(String(state.accountAccessStatus||'').trim().toLowerCase()));
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
-    if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (!user?.id) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    if (disabledAccount(user)) return Response.json({ error: 'Cuenta no habilitada' }, { status: 403 });
     if (['admin', 'super_admin'].includes(user.role)) {
       return Response.json({ tracked: false, reason: 'admin' });
     }
@@ -56,7 +62,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ tracked: true, firstAccess });
   } catch (error) {
-    console.error('[trackClientAccess] Error:', error);
+    console.error('[trackClientAccess]', { name: String(error?.name || 'Error') });
     return Response.json({ error: 'No se pudo registrar el acceso' }, { status: 500 });
   }
 });
