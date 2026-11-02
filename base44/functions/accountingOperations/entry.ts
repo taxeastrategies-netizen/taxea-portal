@@ -1495,7 +1495,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
 
-    if(String(action||'').startsWith('professional_export_')){try{return Response.json(await professionalExportOperation({svc,companyId,company,user,fetchAll,accountingData},body));}catch(error){if(error instanceof ExportError)return Response.json({success:false,error:error.message,details:error.details||[]},{status:error.status,headers:{'Cache-Control':'no-store'}});throw error;}}
+    if(String(action||'').startsWith('professional_export_')){try{return Response.json(await professionalExportOperation({svc:queuedAccountingClient(svc,{intervalMs:150,readRetries:3}),companyId,company,user,fetchAll,accountingData},body));}catch(error){if(error instanceof ExportError)return Response.json({success:false,error:error.message,details:error.details||[]},{status:error.status,headers:{'Cache-Control':'no-store'}});throw error;}}
     if (['c5_deduction_context','c5_deduction_preview','c5_deduction_post','c5_deduction_recover_lock'].includes(action)) return Response.json(await c5AdjustmentOperation({svc,companyId,user,createJournalEntry,ensureAccount},body));
     if (action === 'ensure_accounting_ready') {
       const result = await ensureAccountingReady(svc, companyId, user.email);

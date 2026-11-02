@@ -18,7 +18,7 @@ export default function TaxImporterProofPanel({companyId,year,modelCode,fileId,f
  return <section aria-label="Prueba del archivo en el importador" className="rounded-xl border bg-card p-4 text-sm"><h3 className="font-medium">Prueba en el importador oficial</h3><p className="mt-1 text-xs text-muted-foreground">La validación interna y la aceptación de la Administración se registran por separado. Una prueba solo acredita el fichero, campaña y alcance que has revisado.</p>
   {readiness.isError&&<p role="alert" className="mt-2 text-red-700">{message(readiness.error)}</p>}
   {summary?.corruptFiles>0&&<p role="alert" className="mt-2 text-red-700">Hay {summary.corruptFiles} archivo(s) con incidencia de integridad. Su aceptación no se da por acreditada; conserva el original y revisa la copia.</p>}
-  <p className="mt-2">{accepted.length?`${accepted.length} archivo(s) con aceptación registrada y revisada para este alcance.`:'Sin aceptación externa registrada para este archivo.'}</p>
+  <p className="mt-2">{readiness.isFetching?'Consultando la integridad y las evidencias…':accepted.length?`${accepted.length} archivo(s) con aceptación registrada y revisada para este alcance.`:'Sin aceptación externa registrada para este archivo.'}</p>
   {fileHash&&<p className="mt-1 break-all font-mono text-xs text-muted-foreground">SHA-256: {fileHash}</p>}
   {accepted.map(a=><p key={a.evidenceId} className="mt-1 text-xs">{a.design} · {a.period} · {a.regimes.join(', ')}</p>)}
   {(error||notice)&&<p role={error?'alert':'status'} className={`mt-3 rounded border p-3 text-xs ${error?'text-red-700':'text-teal-700'}`}>{error||notice}</p>}

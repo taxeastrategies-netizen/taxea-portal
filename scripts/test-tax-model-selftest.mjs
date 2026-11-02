@@ -79,6 +79,7 @@ const records = {
   TaxSubmission: [{ id: 'legacy-111', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', estado: 'presentado', fechaEnvio: '2026-04-19T09:00:00Z' }],
 };
 const matches = (item, query = {}) => Object.entries(query).every(([key, value]) => key==='$or'?value.some(clause=>matches(item,clause)):value&&typeof value==='object'&&'$exists'in value?(item?.[key]!==undefined)===value.$exists:item?.[key]===value);
+records.TaxOfficialFileChunk=[];
 const entity = name => ({
   async get(id) { return records[name].find(item => item.id === id) || null; },
   async filter(query = {}, sort = '-created_date', limit = 500, skip = 0) {
@@ -89,7 +90,9 @@ const entity = name => ({
       return (left < right ? -1 : left > right ? 1 : 0) * (descending ? -1 : 1);
     }).slice(skip, skip + limit);
   },
+  async bulkCreate(payloads){const saved=[];for(const payload of payloads)saved.push(await entity(name).create(payload));return saved;},
   async create(payload) {
+    if(payload.contentBase64&&payload.contentBase64.length>6000)throw Error("Synthetic native field limit");
     const now = new Date().toISOString();
     const item = { ...payload, id: `${name.toLowerCase()}-${++sequence}`, created_date: now, updated_date: now };
     records[name].push(item); return item;

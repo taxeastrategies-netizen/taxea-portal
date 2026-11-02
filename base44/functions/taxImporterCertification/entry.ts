@@ -1,3 +1,5 @@
+import {hydrateTaxFile} from './taxFileStorage.mjs';
+import {queuedAccountingClient} from './privateRequestQueue.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import {exportCapability} from './exportCapabilities.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
@@ -8,14 +10,11 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const REVIEWER_ROLES = new Set(['admin', 'super_admin', 'advisor', 'asesor']);
 const CERTIFIABLE_MODELS = new Set(['111','115','123','130','131','180','190','193','200','202','216','232','296','303','347','349','390','415']);
 
-async function companyAccess(svc: any, user: any, company: any) {
-  const role = lower(user?.role);
-  const email = lower(user?.email);
-  const id = clean(company?.id);
-  return ['admin', 'super_admin'].includes(role)
-    || (company.activa!==false && await verifiedCompanyAssignment(svc,user,id))
-    || (email && (email === lower(company?.owner_email)
-      || (Array.isArray(company?.usuarios_autorizados) && company.usuarios_autorizados.some((item: unknown) => lower(item) === email))));
+async function companyAccess(svc:any,user:any,company:any){
+ const role=lower(user?.role),email=lower(user?.email),id=clean(company?.id);
+ if(['admin','super_admin'].includes(role))return true;
+ if(email&&(email===lower(company?.owner_email)||(Array.isArray(company?.usuarios_autorizados)&&company.usuarios_autorizados.some((value:any)=>lower(value)===email))))return true;
+ return !!id&&company.activa!==false&&await verifiedCompanyAssignment(svc,user,id);
 }
 
 function eligibleFile(file: any) {
@@ -26,7 +25,7 @@ function eligibleFile(file: any) {
     ? authority === 'ATC' && format.startsWith('soporte de importación oficial programa atc 415')
     : authority === 'AEAT' && (format.startsWith('diseño de registro aeat') || format.startsWith('diseño lógico aeat'));
   return Boolean(CERTIFIABLE_MODELS.has(model) && exportCapability(model,Number(file?.ejercicio)).canExportOfficial && officialFormat && file?.immutable === true
-    && clean(file?.contentBase64) && SHA256.test(lower(file?.hash)));
+    && (clean(file?.contentBase64)||(file?.storageMode==='tax-private-chunks-v1'&&file?.storageState==='ready')) && SHA256.test(lower(file?.hash)));
 }
 
 function validEvidence(body: any) {
@@ -80,7 +79,7 @@ Deno.serve(async (req) => {
 
     const companyId = clean(body.companyId || user?.company_id || user?.data?.company_id);
     if (!companyId) return Response.json({ error: 'Selecciona una empresa.' }, { status: 400 });
-    const svc = base44.asServiceRole;
+    const svc = queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3});
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     if (!(await companyAccess(svc,user, company))) return Response.json({ error: 'Sin permiso para esta empresa.' }, { status: 403 });
@@ -90,7 +89,7 @@ Deno.serve(async (req) => {
       const year=Number(body.ejercicio);if(!Number.isInteger(year)||year<2019||year>2100)return Response.json({error:'Selecciona un ejercicio válido.'},{status:400});
       const files=await allRows(svc.entities.TaxOfficialFile,{companyId,ejercicio:year});
       const evidence=await allRows(svc.entities.TaxImporterEvidence,{companyId,ejercicio:year});
-      const integrity=await Promise.all(files.map(async file=>({id:file.id,valid:eligibleFile(file)&&await contentHash(clean(file.contentBase64)).catch(()=>false)===lower(file.hash)})));
+      const integrity=await Promise.all(files.map(async file=>({id:file.id,valid:eligibleFile(file)&&await hydrateTaxFile(svc,file).then(f=>contentHash(clean(f.contentBase64))).catch(()=>false)===lower(file.hash)})));
       const models=[...CERTIFIABLE_MODELS,...['417','420','421','425']].map(model=>{const own=files.filter(f=>clean(f.modeloCodigo)===model&&integrity.some(i=>i.id===f.id&&i.valid));const accepted=own.flatMap(file=>{const reviewed=evidence.filter(e=>e.taxOfficialFileId===file.id&&lower(e.fileHashSha256)===lower(file.hash)&&e.revisionAsesor==='revisada'&&Array.isArray(e.reviewedRegimeCodes)).sort((a,b)=>Date.parse(b.fechaRevision||b.fechaRegistro||b.fechaPrueba)-Date.parse(a.fechaRevision||a.fechaRegistro||a.fechaPrueba)||(a.resultado==='rechazado'?-1:b.resultado==='rechazado'?1:0));const seen=new Set();return reviewed.flatMap(e=>{const fresh=e.reviewedRegimeCodes.filter(r=>r!=='sin_especificar'&&!seen.has(r));for(const r of e.reviewedRegimeCodes)seen.add(r);return e.resultado==='aceptado'&&fresh.length?[{fileId:file.id,hash:file.hash,design:file.versionDiseno,period:file.periodo,regimes:fresh,evidenceId:e.id}]:[];});});const corruptFiles=files.filter(f=>clean(f.modeloCodigo)===model&&eligibleFile(f)&&!integrity.some(i=>i.id===f.id&&i.valid)).length;return {model,capability:exportCapability(model,year),files:own.length,corruptFiles,acceptedFiles:accepted,status:corruptFiles?'integrity_failed':accepted.length?'accepted_exact_files_only':own.length?'generated_not_tested':'no_official_file',completeForAllRegimes:false};});
       return Response.json({ok:true,year,models,notice:'Una aceptación se refiere al archivo, campaña y alcance revisados; no certifica otros regímenes ni una presentación.'});
     }
@@ -117,7 +116,7 @@ Deno.serve(async (req) => {
       if (!eligibleFile(file)) return Response.json({ error: 'Solo se certifican ficheros inmutables exactos con SHA-256; los traspasos guiados no son importaciones oficiales.' }, { status: 409 });
       const expectedAuthority = clean(file.modeloCodigo) === '415' ? 'ATC' : 'AEAT';
       if (clean(file.administracion) !== expectedAuthority) return Response.json({ error: `El modelo ${file.modeloCodigo} debe certificarse en ${expectedAuthority}, no en ${file.administracion || 'un importador sin identificar'}.` }, { status: 409 });
-      const hash = await contentHash(clean(file.contentBase64));
+      const hash = await contentHash(clean((await hydrateTaxFile(svc,file)).contentBase64));
       if (hash !== lower(file.hash)) return Response.json({ error: 'El contenido conservado no coincide con la huella SHA-256 del fichero.' }, { status: 409 });
       const existing = await allRows(svc.entities.TaxImporterEvidence, { companyId, taxOfficialFileId: fileId });
       const matched = existing.find((item: any) => item.resultado === clean(body.resultado) && item.respuestaImportador===clean(body.respuestaImportador)
@@ -143,7 +142,7 @@ Deno.serve(async (req) => {
       const originalFile = await svc.entities.TaxOfficialFile.get(clean(row.taxOfficialFileId)).catch(() => null);
       if (!originalFile || clean(originalFile.companyId) !== companyId || !eligibleFile(originalFile)
         || lower(originalFile.hash) !== lower(row.fileHashSha256)
-        || await contentHash(clean(originalFile.contentBase64)) !== lower(row.fileHashSha256)) return Response.json({ error: 'No se puede revisar: el fichero original ya no coincide con la evidencia conservada.' }, { status: 409 });
+        || await contentHash(clean((await hydrateTaxFile(svc,originalFile)).contentBase64)) !== lower(row.fileHashSha256)) return Response.json({ error: 'No se puede revisar: el fichero original ya no coincide con la evidencia conservada.' }, { status: 409 });
       const reviewedRegimes=[...new Set((Array.isArray(body.regimeCodes)?body.regimeCodes:row.regimeCodes||[]).map(clean).filter(v=>v!=='sin_especificar'&&/^[A-Za-z0-9_:.|/-]{1,120}$/.test(v)))];
       if(!reviewedRegimes.length)return Response.json({error:'Delimita al menos un régimen/caso revisado. Una aceptación no certifica todos los regímenes.'},{status:422});
       if (row.revisionAsesor === 'revisada' && JSON.stringify(row.reviewedRegimeCodes)===JSON.stringify(reviewedRegimes)) return Response.json({ ok: true, alreadyExisted: true, record: row });

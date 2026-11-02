@@ -1,0 +1,54 @@
+{
+  "name": "TaxOfficialFileChunk",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "fileId": {
+      "type": "string"
+    },
+    "index": {
+      "type": "number"
+    },
+    "contentBase64": {
+      "type": "string"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "companyId",
+    "fileId",
+    "index",
+    "contentBase64",
+    "hash"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

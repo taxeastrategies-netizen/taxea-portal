@@ -30,6 +30,7 @@ let handler;
 let writes = 0;
 let user = { id:'qa-user', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-qa' } };
 let serial = 0;
+records.User=[];
 const entity = name => ({
   get: async id => records[name].find(row => row.id === id) || null,
   filter: async (filter, _sort, limit, skip) => records[name].filter(row => Object.entries(filter).every(([key, value]) => row[key] === value)).slice(skip, skip + limit),
@@ -37,7 +38,7 @@ const entity = name => ({
   update: async (id, patch) => { writes++; const row = records[name].find(item => item.id === id); Object.assign(row, patch); return row; },
 });
 const client = { auth: { me: async () => user }, asServiceRole: { entities: Object.fromEntries(Object.keys(records).map(name => [name, entity(name)])) } };
-const context = vm.createContext({ Buffer, Response, crypto: webcrypto, atob, Date, console, __client: client, Deno: { serve: fn => { handler = fn; } } });
+const context = vm.createContext({ Buffer, Response, crypto: webcrypto, atob, TextEncoder, TextDecoder, setTimeout, clearTimeout, Date, console, __client: client, Deno: { serve: fn => { handler = fn; } } });
 vm.runInContext(build.outputFiles[0].text, context, { filename: entry });
 const call = async body => {
   const response = await handler(new Request('https://test.invalid', { method: 'POST', body: JSON.stringify(body) }));

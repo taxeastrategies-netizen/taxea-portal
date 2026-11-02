@@ -120,6 +120,21 @@
       "items": {
         "type": "string"
       }
+    },
+    "storageMode": {
+      "type": "string"
+    },
+    "storageState": {
+      "type": "string"
+    },
+    "chunkCount": {
+      "type": "number"
+    },
+    "declarationNumber": {
+      "type": "string"
+    },
+    "storageKey": {
+      "type": "string"
     }
   },
   "required": [

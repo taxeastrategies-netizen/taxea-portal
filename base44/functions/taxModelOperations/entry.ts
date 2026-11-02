@@ -1,3 +1,5 @@
+import {taxStorageClient,hydrateTaxFile} from './taxFileStorage.mjs';
+import {queuedAccountingClient} from './privateRequestQueue.mjs';
 import {ARTIFACT_PROTOCOL,acquireArtifactLease,existingArtifact,artifactScope,recoverArtifactLease} from './exportArtifactGuard.mjs';
 import {exportCapability,EXPORT_CAPABILITIES_VERSION} from './exportCapabilities.mjs';
 import {createCashTaxLineForPeriod} from './reccTaxLines.ts';
@@ -3929,7 +3931,7 @@ Deno.serve(async (req) => {
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=normalizedPeriod(body.periodo||'Anual');
     if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
-    const svc=base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
+    const svc=['export','download_official_file','export_review','export_handoff','export_296_annexes'].includes(action)?taxStorageClient(queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3})):base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
 
@@ -3965,7 +3967,7 @@ Deno.serve(async (req) => {
 
     if(action==='mark_official_file_downloaded') {
       const fileId=clean(body.fileId); if(!fileId) return Response.json({error:'fileId es obligatorio.'},{status:400});
-      const file=await svc.entities.TaxOfficialFile.get(fileId); if(!file||file.companyId!==companyId) return Response.json({error:'Fichero fiscal no encontrado.'},{status:404});
+      let file=await svc.entities.TaxOfficialFile.get(fileId); if(!file||file.companyId!==companyId) return Response.json({error:'Fichero fiscal no encontrado.'},{status:404});
       const saved=file.estado==='descargado'?file:await svc.entities.TaxOfficialFile.update(file.id,{estado:'descargado'});
       return Response.json({ok:true,file:saved});
     }
@@ -3988,8 +3990,9 @@ Deno.serve(async (req) => {
 
     if(action==='download_official_file') {
       const fileId=clean(body.fileId); if(!fileId) return Response.json({error:'fileId es obligatorio.'},{status:400});
-      const file=await svc.entities.TaxOfficialFile.get(fileId);
+      let file=await svc.entities.TaxOfficialFile.get(fileId);
       if(!file||file.companyId!==companyId) return Response.json({error:'Fichero fiscal no encontrado.'},{status:404});
+      file=await hydrateTaxFile(svc,file);
       if(!clean(file.contentBase64) || file.immutable !== true || !clean(file.hash)) return Response.json({error:'Este fichero histórico no conserva contenido inmutable verificable. Debe regenerarse desde su borrador congelado.'},{status:410});
       let contentBytes: Uint8Array;
       try { contentBytes=Uint8Array.from(atob(file.contentBase64),(char:string)=>char.charCodeAt(0)); }
@@ -4086,7 +4089,7 @@ Deno.serve(async (req) => {
         ...filings.map((item:any)=>({id:`filing:${item.id}`,type:'filing',date:item.fechaPresentacion||item.fechaImportacion||item.createdAt,title:`${item.tipoDeclaracion==='original'?'Presentación':'Declaración '+item.tipoDeclaracion} ${item.modeloCodigo}`,detail:`${item.periodo} ${item.ejercicio} · snapshot v${item.snapshotVersion}`,modeloCodigo:item.modeloCodigo,ejercicio:item.ejercicio,periodo:item.periodo,status:item.estadoPresentacion,result:item.importeFinal,hash:item.snapshotHash,sourceId:item.id})),
         ...officialFileRows.map((item:any)=>({id:`file:${item.id}`,type:'file',date:item.fechaGeneracion||item.created_date,title:`Fichero ${item.modeloCodigo}`,detail:`${item.nombreFichero||'Fichero fiscal'} · ${item.estado||'generado'}`,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,status:item.estado||'generado',hash:item.hash||'',sourceId:item.id})),
       ].filter((item:any)=>item.date).sort((a:any,b:any)=>new Date(b.date).getTime()-new Date(a.date).getTime());
-      const officialFiles=officialFileRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,administracion:item.administracion,nombreFichero:item.nombreFichero,extension:item.extension,formato:item.formato,versionDiseno:item.versionDiseno,fileUrl:item.fileUrl||'',hash:item.hash||'',contentSize:Number(item.contentSize||0),immutable:item.immutable===true,hasStoredContent:!!clean(item.contentBase64),sourceHash:item.sourceHash||'',snapshotHash:item.snapshotHash||'',generadoPor:item.generadoPor||'',fechaGeneracion:item.fechaGeneracion||item.created_date||'',estado:item.estado||'generado',errores:item.errores||[],avisos:item.avisos||[],taxDraftId:item.taxDraftId||''}));
+      const officialFiles=officialFileRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,administracion:item.administracion,nombreFichero:item.nombreFichero,extension:item.extension,formato:item.formato,versionDiseno:item.versionDiseno,fileUrl:item.fileUrl||'',hash:item.hash||'',contentSize:Number(item.contentSize||0),immutable:item.immutable===true,hasStoredContent:!!clean(item.contentBase64)||(item.storageMode==='tax-private-chunks-v1'&&item.storageState==='ready'),sourceHash:item.sourceHash||'',snapshotHash:item.snapshotHash||'',generadoPor:item.generadoPor||'',fechaGeneracion:item.fechaGeneracion||item.created_date||'',estado:item.estado||'generado',errores:item.errores||[],avisos:item.avisos||[],taxDraftId:item.taxDraftId||''}));
       const legacySubmissions=legacySubmissionRows.map((item:any)=>({id:item.id,modeloCodigo:item.modeloCodigo,ejercicio:Number(item.ejercicio),periodo:item.periodo,estado:item.estado||'pendiente',viaPresentacion:item.viaPresentacion||'',fechaEnvio:item.fechaEnvio||item.created_date||'',numeroJustificante:item.numeroJustificante||'',csv:item.csv||'',justificantePdfUrl:item.justificantePdfUrl||'',importeFinal:money(item.importeFinal),incorporadoAlHistorico:filingByKey.has(periodKey(item))}));
       return Response.json({ok:true,engineVersion:ENGINE_VERSION,generatedAt:new Date().toISOString(),year:year||null,profile:profile?{id:profile.id,profileStatus:profile.profileStatus,mainTerritory:profile.mainTerritory,taxAuthority:profile.taxAuthority,indirectTaxDefault:profile.indirectTaxDefault,filingFrequency:profile.filingFrequency,repepStatus:profile.repepStatus,usesSII:booleanValue(profile.usesSII),isREDEME:booleanValue(profile.isREDEME),isLargeCompany:booleanValue(profile.isLargeCompany)}:null,models:activeModels.map((item:any)=>({id:item.id,codigo:item.codigo,nombre:item.nombre,administracion:item.administracion,periodicidad:item.periodicidad,fuenteValidacion:item.fuenteValidacion,activo:item.activo!==false})),drafts,latestDrafts,filings,latestFilings:[...filingByKey.values()],periods:periodRows,officialFiles,legacySubmissions,validationIssues,events,stats:{drafts:drafts.length,latestDrafts:latestDrafts.length,filings:filings.length,presentedPeriods:periodRows.filter((item:any)=>item.estado==='presentado').length,officialFiles:officialFiles.length,blockers:0,warnings:validationIssues.length,recommendations:validationIssues.length,evidencePending:filings.filter((item:any)=>!item.numeroJustificante&&!item.csv&&!item.justificantePdfUrl&&!item.ficheroPresentadoUrl).length,legacyPending:legacySubmissions.filter((item:any)=>!item.incorporadoAlHistorico).length}});
     }
@@ -4307,7 +4310,7 @@ Deno.serve(async (req) => {
       const hash=await sha256(content); const contentBase64=encodeBase64(content); const filename=`${clean(company.nif_cif).toUpperCase()}_${year}_296_anexos_AB.txt`;
       const sourceHash=await sha256(JSON.stringify({companyId,year,contentHash:hash,records:[...state.aRecords,...state.bRecords].map((row:any)=>[row.recordId,row.recordKey,row.reviewStatus])}));
       const previousArtifacts=await svc.entities.TaxOfficialFile.filter({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',sourceHash},'-created_date',1);
-      const reusableArtifact=previousArtifacts?.[0]?.immutable===true && previousArtifacts[0].hash===hash && !!clean(previousArtifacts[0].contentBase64) ? previousArtifacts[0] : null;
+      const reusableArtifact=previousArtifacts?.[0]?.immutable===true&&previousArtifacts[0].hash===hash&&(clean(previousArtifacts[0].contentBase64)||(previousArtifacts[0].storageMode==='tax-private-chunks-v1'&&previousArtifacts[0].storageState==='ready'))?await hydrateTaxFile(svc,previousArtifacts[0]):null;
       const artifact=reusableArtifact||await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:'296',ejercicio:year,periodo:'Anual',administracion:'AEAT',nombreFichero:filename,extension:'txt',formato:'Diseño de registro AEAT modelo 296 · anexos A/B posteriores al modelo 210',versionDiseno:DEFINITIONS['296'].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:'',taxDraftId:'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:[],resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,workflow:'modelo296_annex_ab_after_210',annexA:state.aRecords.length,annexB:state.bRecords.length})});
       return Response.json({ok:true,alreadyGenerated:!!reusableArtifact,engineVersion:ENGINE_VERSION,calculation:{...calculation,annexes:state},validation:{blockers:[],warnings:[],recommendations:[],technicalErrors:[],canExport:true,canExportOfficial:true,requiresReview:false},file:{id:artifact.id,filename,extension:'txt',format:artifact.formato,design:artifact.versionDiseno,hash,contentBase64,nextStep:'Importa estos registros A/B en el flujo complementario del modelo 296 después de las solicitudes de devolución 210. La aceptación definitiva corresponde a la AEAT.'}});
     }
@@ -4373,25 +4376,26 @@ Deno.serve(async (req) => {
       const releaseArtifact=await acquireArtifactLease(svc,companyId);
       try{
       const existing=await existingArtifact(svc,companyId,exportKey,{model,year,period,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),design:DEFINITIONS[model].design});
-      if(existing){const layoutErrors=transferLayoutErrors(model,new TextDecoder().decode(Uint8Array.from(atob(existing.contentBase64),c=>c.charCodeAt(0))));if(layoutErrors.length)throw taxModelValidation('El archivo conservado ya no supera la comprobación estructural; se mantiene sin sobrescribir.',409);return Response.json({...result,artifactReused:true,file:{id:existing.id,regimeCodes:existing.regimeCodes||[],filename:existing.nombreFichero,extension:existing.extension,format:existing.formato,design:existing.versionDiseno,hash:existing.hash,contentBase64:existing.contentBase64,nextStep:'Se ha recuperado el archivo exacto. La descarga no implica aceptación ni presentación ante la Administración.'}});}
+      if(existing&&!existing.storageIncomplete){const layoutErrors=transferLayoutErrors(model,new TextDecoder().decode(Uint8Array.from(atob(existing.contentBase64),c=>c.charCodeAt(0))));if(layoutErrors.length)throw taxModelValidation('El archivo conservado ya no supera la comprobación estructural; se mantiene sin sobrescribir.',409);return Response.json({...result,artifactReused:true,file:{id:existing.id,regimeCodes:existing.regimeCodes||[],filename:existing.nombreFichero,extension:existing.extension,format:existing.formato,design:existing.versionDiseno,hash:existing.hash,contentBase64:existing.contentBase64,nextStep:'Se ha recuperado el archivo exacto. La descarga no implica aceptación ni presentación ante la Administración.'}});}
+      const declarationNumber=existing?.declarationNumber||(['180','190','193','296','347','349'].includes(model)?sequentialDeclarationNumber(model):'');
       let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
       if(model==='180') {
-        content=export180(company,year,calculation,sequentialDeclarationNumber('180'));
+        content=export180(company,year,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_180.txt`; extension='txt'; format='Diseño de registro AEAT modelo 180';
       } else if(model==='190') {
-        content=export190(company,year,calculation,sequentialDeclarationNumber('190'));
+        content=export190(company,year,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_190.txt`; extension='txt'; format='Diseño de registro AEAT modelo 190 completo';
       } else if(model==='193') {
-        content=export193(company,year,calculation,sequentialDeclarationNumber('193'));
+        content=export193(company,year,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_193.txt`; extension='txt'; format='Diseño de registro AEAT modelo 193 con anexo de gastos cuando proceda';
       } else if(model==='296') {
-        content=export296(company,year,calculation,sequentialDeclarationNumber('296'));
+        content=export296(company,year,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_296.txt`; extension='txt'; format='Diseño de registro AEAT modelo 296';
       } else if(model==='347') {
-        content=export347(company,year,calculation,sequentialDeclarationNumber('347'));
+        content=export347(company,year,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_347.txt`; extension='txt'; format='Diseño de registro AEAT modelo 347';
       } else if(model==='349') {
-        content=export349(company,year,period,calculation,sequentialDeclarationNumber('349'));
+        content=export349(company,year,period,calculation,declarationNumber);
         filename=`${clean(company.nif_cif).toUpperCase()}_${year}_${period}_349.txt`; extension='txt'; format='Diseño lógico AEAT modelo 349';
       } else if(model==='415') {
         content=export415Import(company,year,calculation);
@@ -4414,7 +4418,7 @@ Deno.serve(async (req) => {
       if(layoutErrors.length) return Response.json({ok:false,error:'El fichero generado no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
       const hash=await sha256(content);
       const contentBase64=encodeBase64(content);
-      const record=await svc.entities.TaxOfficialFile.create({exportKey,exportProtocolVersion:ARTIFACT_PROTOCOL,...artifactScope(taxLines,sourceIds),companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),taxDraftId:frozenDraft?.id||'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:recommendations,resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined,recommendations})});
+      const record=await svc.entities.TaxOfficialFile.create({declarationNumber,exportKey,exportProtocolVersion:ARTIFACT_PROTOCOL,...artifactScope(taxLines,sourceIds),companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),taxDraftId:frozenDraft?.id||'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:recommendations,resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined,recommendations})});
       const nextStep = model === '415'
         ? 'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Revisa sus avisos y genera allí el .dec.'
         : `Importa el fichero en la presentación del modelo ${model} de la sede AEAT. La validación definitiva corresponde a la AEAT; sus avisos no invalidan la descarga generada por Taxea.`;
