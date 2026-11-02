@@ -76,10 +76,19 @@ export function c5InvoiceRules(profile, activity, input, direction) {
     if (taxKind !== 'igic') throw new C5ValidationError('REPEP pertenece al IGIC, no al IVA.');
     const legacy=profile.profileStatus==='validado_asesor' && /^taxea-fiscal-es-/.test(profile.ruleSetVersion||'') && profile.ruleSetVersion!=='taxea-fiscal-es-2026.11.02-c5'
       && /^taxea-fiscal-es-/.test(activity.ruleSetVersion||'') && activity.ruleSetVersion!=='taxea-fiscal-es-2026.11.02-c5' && profile.repepPreviousTurnover==null;
-    if(legacy){
+    // Una actividad REPEP existente puede ser confirmada por su propio emisor
+    // aunque un guardado posterior del resumen censal no conserve sus campos.
+    // No se cambia el censo ni se presume volumen/censo confirmado. Compras y
+    // renuncias/exclusiones expresas siguen en el circuito previo.
+    const issuerChoice=direction==='ingreso' && input.issuerConfirmed===true
+      && activity.indirectTaxRegime===regime && activity.exemptionKey==='IGIC_REPEP'
+      && profile.repepPreviousTurnover==null
+      && ['','no_aplica','pendiente_confirmar'].includes(text(profile.repepStatus));
+    if(legacy || issuerChoice){
       if(profile.entityType!=='autonomo'||profile.mainTerritory!=='canarias')throw new C5ValidationError('La configuración REPEP anterior no identifica una persona física establecida en Canarias. Revisión del asesor.');
       if((profile.repepEffectiveFrom && date<profile.repepEffectiveFrom)||(profile.repepEffectiveUntil && date>profile.repepEffectiveUntil))throw new C5ValidationError('La operación queda fuera de la vigencia REPEP confirmada.');
       patch.legacyCensusReviewRequired=true;
+      if(issuerChoice)patch.issuerCensusReviewRequired=true;
     }else{
       validateRepepProfile(profile);
       if (!repepAt(profile,date)) throw new C5ValidationError('La operación no está dentro de la inclusión REPEP confirmada. Selecciona el régimen vigente en esa fecha.');

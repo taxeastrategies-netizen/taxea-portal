@@ -40,7 +40,7 @@ const entities = new Proxy({}, { get: (_target, name) => ({
   async update(id, payload) { const row = (records[name] || []).find(item => item.id === id); if (!row) throw new Error('Missing row'); Object.assign(row, payload); return row; },
 }) });
 const client = {
-  auth: { me: async () => ({ id: 'user-a', email: 'owner@test.invalid', role: canIssue ? 'admin' : 'user', data: { company_id: 'company-a' } }) },
+  auth: { me: async () => ({ id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } }) },
   asServiceRole: {
     entities,
     functions: { invoke: async (name, body) => {
@@ -48,7 +48,7 @@ const client = {
       if (name === 'accountingOperations') { counts.posting++; return {data:{ok:true}}; }
       assert.equal(name, 'fiscalOperations');
       assert.equal(body.requireValidatedProfile, true);
-      if (canIssue) return {data:{evaluation:{status:'ready',regime:'general',taxKind:'iva',taxRate:21,taxAmount:21,withholdingAmount:0,total:121,base:100,activityId:'activity-a'}}};
+      if (canIssue) return {data:{evaluation:{status:'review_required',regime:'general',taxKind:'iva',taxRate:21,taxAmount:21,withholdingAmount:0,total:121,base:100,activityId:'activity-a'}}};
       return { data: { evaluation: { status: 'review_required', reasons: ['Revisión del asesor'], activityId: 'activity-a' } } };
     } },
   },
@@ -64,44 +64,40 @@ const response = await handler(new Request('https://taxea.test/functions/generat
 }));
 const result = await response.json();
 assert.equal(response.status, 200);
-assert.equal(result.drafts, 1);
+assert.equal(result.drafts, 0);
+assert.equal(result.errors, 1);
 assert.equal(result.generated, 0);
-assert.equal(records.Invoice.length, 1);
-assert.equal(records.Invoice[0].fiscal_review_status, 'pendiente_revision');
-assert.equal(records.Invoice[0].accounting_migration_hold_reason, 'FISCAL_ADVISOR_REVIEW_PHASE1');
-assert.equal(records.Invoice[0].qr_url, undefined);
+assert.equal(records.Invoice.length, 0);
 assert.equal(records.InvoiceTaxLine.length, 0);
-assert.equal(records.RecurringInvoiceRun[0].status, 'draft_created');
-assert.equal(records.RecurringInvoiceRun[0].generatedInvoiceId, records.Invoice[0].id);
+assert.equal(records.RecurringInvoiceRun[0].status, 'error');
 assert.equal(counts.posting, 0);
 const repeated = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
   method: 'POST', body: JSON.stringify({ action: 'generate', templateId: 'template-a' }),
 }));
 assert.equal((await repeated.json()).drafts, 0);
-assert.equal(records.Invoice.length, 1);
+assert.equal(records.Invoice.length, 0);
 canIssue = true;
-records.User[0].role='admin'; // A real grant changes the stored user, not only the session claim.
 records.RecurringInvoiceTemplate[0].nextRunDate = today;
 records.RecurringInvoiceTemplate[0].id = 'template-approved';
 const issued = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved',confirm_fiscal_review:true}),
+  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved'}),
 }));
 const issuedResult = await issued.json();
 assert.equal(issued.status, 200);
 assert.equal(issuedResult.generated, 1);
-assert.equal(records.Invoice.length, 2);
-assert.match(records.Invoice[1].qr_integrity_hash, /^[A-F0-9]{64}$/);
-assert.equal(records.Invoice[1].qr_integrity_version, 'taxea-qr-identity-v1');
-const stableHash = records.Invoice[1].qr_integrity_hash;
+assert.equal(records.Invoice.length, 1);
+assert.match(records.Invoice[0].qr_integrity_hash, /^[A-F0-9]{64}$/);
+assert.equal(records.Invoice[0].qr_integrity_version, 'taxea-qr-identity-v1');
+const stableHash = records.Invoice[0].qr_integrity_hash;
 records.RecurringInvoiceTemplate[0].nextRunDate = today;
 const issuedAgain = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved',confirm_fiscal_review:true}),
+  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved'}),
 }));
 assert.equal((await issuedAgain.json()).skipped, 1);
-assert.equal(records.Invoice.length, 2);
-assert.equal(records.Invoice[1].qr_integrity_hash, stableHash);
+assert.equal(records.Invoice.length, 1);
+assert.equal(records.Invoice[0].qr_integrity_hash, stableHash);
 assert.equal(counts.posting, 1);
 console.log(JSON.stringify({ ok: true, assertions: {
-  recurringProposalSavedOnce: true, noQrBeforeReview: true, noTaxLineOrJournalBeforeReview: true,
-  runTraceLinksInvoice: true, idempotentPeriod: true, approvedQrHashStableOnRetry: true,
+  invalidDataCreatesNoInvoice: true, normalIssuerWithoutAdvisorFlag: true, proposalWarningNotApprovalGate: true,
+  runTraceLinksInvoice: true, idempotentPeriod: true, issuedQrHashStableOnRetry: true,
 } }, null, 2));

@@ -240,7 +240,7 @@ export default function Facturas() {
                                <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>Ver documento definitivo</DropdownMenuItem>
                                <DropdownMenuItem onClick={() => handleSend(inv)}>Enviar por email</DropdownMenuItem>
                                <DropdownMenuItem onClick={() => handleOpenWorkspace(inv)}>{inv.tipo === 'recibida' ? 'Registrar pago' : 'Registrar cobro'}</DropdownMenuItem>
-                               {isAdmin && (
+                               {isAdmin && inv.tipo === 'recibida' && (
                                  <>
                                    <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
                                  </>

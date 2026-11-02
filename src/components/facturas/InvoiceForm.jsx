@@ -22,7 +22,7 @@ const FORMAS_PAGO = [
   'Domiciliación bancaria', 'PayPal', 'Stripe', 'Otro',
 ];
 const COLETILLAS = [
-  'Operación exenta de IGIC por franquicia fiscal (art. 10.Uno.28º Ley 20/1991).',
+  'Exención franquicia fiscal — REPEP (art. 90 TR IGIC, DLeg 1/2025).',
   'Operación exenta de IVA.',
   'Operación no sujeta a IVA por reglas de localización.',
   'Inversión del sujeto pasivo.',

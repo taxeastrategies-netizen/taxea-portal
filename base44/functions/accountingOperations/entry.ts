@@ -2770,6 +2770,16 @@ Deno.serve(async (req) => {
           schemaVersion: SCHEMA_VERSION,
         });
       }
+      // Las emitidas se confirman por su emisor. Reanudar el mismo documento
+      // conserva QR, número, importes, subcuenta y la idempotencia del asiento.
+      if (invoice.tipo === 'emitida' && (invoice.fiscal_review_status !== 'validado'
+        || ['FISCAL_ADVISOR_REVIEW_PHASE1','FISCAL_POSTING_ERROR','SOURCE_CHECK_PENDING'].includes(invoice.accounting_migration_hold_reason))) {
+        if (Array.isArray(body.lines) && body.lines.length) return Response.json({error:'Completa la emisión antes de proponer un ajuste de sus líneas contables.'},{status:409});
+        const confirmation=await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',company_id:companyId,invoice_id:invoice.id});
+        const result=confirmation?.data || confirmation;
+        if(!result?.ok || !result?.journalEntryId) return Response.json({error:result?.error || 'No se pudo completar la emisión. Revisa los datos de la factura.'},{status:422});
+        return Response.json({success:true,alreadyPosted:Boolean(result.duplicate),entryId:result.journalEntryId,entry:result.journal_entry,invoice:result.invoice,schemaVersion:SCHEMA_VERSION});
+      }
       if (invoice.fiscal_review_status === 'pendiente_revision' || ['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR'].includes(invoice.accounting_migration_hold_reason)) {
         return Response.json({ error: 'La factura espera revisión fiscal del asesor. No puede contabilizarse directamente.' }, { status: 409 });
       }

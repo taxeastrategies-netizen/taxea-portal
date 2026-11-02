@@ -645,7 +645,7 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'get_accounting_entry') {
-      if (!invoice.linked_journal_entry_id) return Response.json({ ok: true, entry: null, lines: [], reason: 'Pendiente de confirmación contable por el asesor.' });
+      if (!invoice.linked_journal_entry_id) return Response.json({ ok: true, entry: null, lines: [], reason: invoice.tipo === 'emitida' ? 'Emisión pendiente de completar: revisa los datos de la factura y reintenta.' : 'Pendiente de confirmación contable por el asesor.' });
       const svc = queuedAccountingClient(base44.asServiceRole);
       const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
       if (!entry || entry.companyId !== companyId) throw Object.assign(new Error('El asiento vinculado no pertenece a la empresa o no está disponible.'), { status: 409 });
@@ -657,6 +657,7 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, entry: { id: entry.id, number: entry.entryNumber, date: entry.date, status: entry.status, reversed: !!entry.reversalEntryId, totalDebit: debit, totalCredit: credit, balanced: lines.length >= 2 && Math.abs(debit-credit) <= MONEY_EPSILON }, lines, source: 'JournalEntry + JournalEntryLine' });
     }
     if (action === 'mark_accounting_review') {
+      if(invoice.tipo==='emitida') return Response.json({error:'La emisión la confirma el emisor. Las emitidas no se envían a revisión del asesor.'},{status:409});
       if (!['admin', 'super_admin'].includes(roleOf(user))) {
         return Response.json({ error: 'Solo administración puede cambiar el estado de revisión contable.' }, { status: 403 });
       }
