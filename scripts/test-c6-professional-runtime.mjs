@@ -31,9 +31,11 @@ await test('actual accounting endpoint denies forged membership, disabled and an
  const bundle=await esbuild.build({entryPoints:['base44/functions/accountingOperations/entry.ts'],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'sdk-stub',setup(builder){builder.onResolve({filter:/^npm:@base44\/sdk/},()=>({path:'sdk',namespace:'stub'}));builder.onLoad({filter:/.*/,namespace:'stub'},()=>({loader:'js',contents:'export const createClientFromRequest=()=>globalThis.__client;'}));}}]});
  const context=vm.createContext({Buffer,Response,Request,crypto:webcrypto,TextEncoder,TextDecoder,atob,btoa,Date,console,setTimeout,clearTimeout,__client:sdk,Deno:{serve:fn=>handler=fn,env:{get:()=>undefined}}});
  vm.runInContext(bundle.outputFiles[0].text,context);
- const call=async()=>handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({action:'professional_export_context',companyId:'qa-c6'})}));
+ const call=async(body={action:'professional_export_context'})=>handler(new Request('https://test.invalid',{method:'POST',body:JSON.stringify({...body,companyId:'qa-c6'})}));
  e.ctx.user={id:'alien',email:'alien@test.invalid',role:'user',data:{company_id:'qa-c6'}};assert.equal((await call()).status,403);
  e.ctx.user={id:'owner',email:e.f.company.owner_email,role:'user'};assert.equal((await call()).status,200);
+ for(const action of ['closing_execute','reopen_fiscal_year','set_period_lock'])assert.equal((await call({action,apply:true,year:2026})).status,403);
+ assert.equal((await call({action:'save_accounting_configuration',frameworkReviewStatus:'validado_asesor'})).status,403);
  e.ctx.user.accountAccessStatus='disabled';assert.equal((await call()).status,403);
  e.ctx.user=null;assert.equal((await call()).status,401);
  assert.equal(e.writes(),0);

@@ -1468,6 +1468,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
+    const reviewerRole=['admin','super_admin','advisor','asesor'].includes(String(user.role||'').toLowerCase());
+    if(!reviewerRole&&(['closing_execute','reopen_fiscal_year','set_period_lock'].includes(action)||(action==='save_accounting_configuration'&&body.frameworkReviewStatus==='validado_asesor')))return Response.json({error:'Solo el asesor o administrador puede validar el marco, cerrar, reabrir o bloquear ejercicios.'},{status:403});
     if(String(action||'').startsWith('professional_export_')&&!professionalExportUserEnabled(user))return Response.json({error:'Cuenta no habilitada.'},{status:403});
     const companyId = body.companyId || user.data?.company_id || user.company_id;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';

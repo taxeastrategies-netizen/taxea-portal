@@ -1,3 +1,4 @@
+import {useAuth} from '@/lib/AuthContext';
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Settings2, Plus, Trash2, Save, Info, Database } from 'lucide-react';
@@ -38,6 +39,7 @@ const DEFAULT_MAPPINGS = [
 ];
 
 export default function ConfigContable({ companyId }) {
+  const {user}=useAuth();const canReview=['admin','super_admin','advisor','asesor'].includes(user?.role);
   const [mappings, setMappings] = useState(DEFAULT_MAPPINGS);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -114,7 +116,7 @@ export default function ConfigContable({ companyId }) {
         annualAccountsModel,
         microenterpriseCriteria,
         frameworkEffectiveFrom: Number(frameworkEffectiveFrom),
-        frameworkReviewStatus,
+        frameworkReviewStatus:canReview?frameworkReviewStatus:'pendiente_asesor',
         frameworkReviewReason,
         eligibilityEvidenceJson: JSON.stringify({ source: 'configuracion_contable', reviewedAt: new Date().toISOString() }),
         baseCurrency: 'EUR',
@@ -164,7 +166,7 @@ export default function ConfigContable({ companyId }) {
             <Database className="h-3.5 w-3.5" /> {initializing ? 'Completando…' : 'Completar PGC'}
           </Button>
           <Button size="sm" className="gap-1.5 h-8" onClick={save} disabled={saving}>
-            <Save className="w-3.5 h-3.5" /> {saving ? 'Guardando...' : saved ? 'Guardado' : 'Guardar cambios'}
+            <Save className="w-3.5 h-3.5" /> {saving ? 'Guardando...' : saved ? 'Guardado' : canReview?'Guardar cambios':'Guardar propuesta'}
           </Button>
         </div>
       </div>
@@ -209,7 +211,7 @@ export default function ConfigContable({ companyId }) {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium">Revisión</label>
-            <Select value={frameworkReviewStatus} onValueChange={value => { setFrameworkReviewStatus(value); setSaved(false); }}>
+            <Select disabled={!canReview} value={frameworkReviewStatus} onValueChange={value => { setFrameworkReviewStatus(value); setSaved(false); }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="pendiente_asesor">Pendiente de asesor</SelectItem><SelectItem value="validado_asesor">Validado por asesor</SelectItem></SelectContent>
             </Select>

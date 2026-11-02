@@ -80,6 +80,7 @@ const repeated = await handler(new Request('https://taxea.test/functions/generat
 assert.equal((await repeated.json()).drafts, 0);
 assert.equal(records.Invoice.length, 1);
 canIssue = true;
+records.User[0].role='admin'; // A real grant changes the stored user, not only the session claim.
 records.RecurringInvoiceTemplate[0].nextRunDate = today;
 records.RecurringInvoiceTemplate[0].id = 'template-approved';
 const issued = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {

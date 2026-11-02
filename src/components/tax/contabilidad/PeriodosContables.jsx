@@ -1,3 +1,4 @@
+import {useAuth} from '@/lib/AuthContext';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -33,6 +34,7 @@ const CLOSING_CHECKS = [
 ];
 
 export default function PeriodosContables({ companyId, onNavigate }) {
+  const {user}=useAuth();const canReview=['admin','super_admin','advisor','asesor'].includes(user?.role);
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [lockDate, setLockDate] = useState(`${currentYear}-12-31`);
@@ -140,8 +142,8 @@ export default function PeriodosContables({ companyId, onNavigate }) {
           <div className="rounded-xl border border-border bg-card p-5 space-y-4">
             <div className="flex items-center justify-between"><h4 className="font-medium">Bloqueo de períodos</h4><Badge variant="outline">{selected.lockedThroughDate ? `Hasta ${selected.lockedThroughDate}` : 'Sin bloqueo'}</Badge></div>
             <p className="text-xs text-muted-foreground">Las facturas, cobros, bancos y asientos manuales no podrán contabilizarse en fechas bloqueadas.</p>
-            <div className="flex gap-2"><Input type="date" value={lockDate} onChange={(event) => setLockDate(event.target.value)} /><Button onClick={async () => { await mutation.mutateAsync({ action: 'set_period_lock', year, lockedThroughDate: lockDate }); toast.success('Período bloqueado.'); }} disabled={mutation.isPending || selected.status === 'cerrado'}><LockKeyhole className="mr-2 h-4 w-4" />Bloquear</Button></div>
-            {selected.lockedThroughDate && selected.status !== 'cerrado' && <div className="space-y-2"><Input placeholder="Motivo obligatorio del desbloqueo" value={unlockReason} onChange={(event) => setUnlockReason(event.target.value)} /><Button variant="outline" onClick={async () => { await mutation.mutateAsync({ action: 'set_period_lock', year, lockedThroughDate: '', reason: unlockReason }); toast.success('Período desbloqueado con trazabilidad.'); setUnlockReason(''); }} disabled={mutation.isPending || !unlockReason.trim()}><UnlockKeyhole className="mr-2 h-4 w-4" />Desbloquear</Button></div>}
+            <div className="flex gap-2"><Input type="date" value={lockDate} onChange={(event) => setLockDate(event.target.value)} /><Button onClick={async () => { await mutation.mutateAsync({ action: 'set_period_lock', year, lockedThroughDate: lockDate }); toast.success('Período bloqueado.'); }} disabled={!canReview || mutation.isPending || selected.status === 'cerrado'}><LockKeyhole className="mr-2 h-4 w-4" />Bloquear</Button></div>
+            {selected.lockedThroughDate && selected.status !== 'cerrado' && <div className="space-y-2"><Input placeholder="Motivo obligatorio del desbloqueo" value={unlockReason} onChange={(event) => setUnlockReason(event.target.value)} /><Button variant="outline" onClick={async () => { await mutation.mutateAsync({ action: 'set_period_lock', year, lockedThroughDate: '', reason: unlockReason }); toast.success('Período desbloqueado con trazabilidad.'); setUnlockReason(''); }} disabled={!canReview || mutation.isPending || !unlockReason.trim()}><UnlockKeyhole className="mr-2 h-4 w-4" />Desbloquear</Button></div>}
           </div>
 
           <div className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -162,13 +164,13 @@ export default function PeriodosContables({ companyId, onNavigate }) {
               </div>
               {(preview.blockers || []).length > 0 && <details className="mt-3"><summary className="cursor-pointer font-medium">Ver motivos exactos del motor ({preview.blockers.length})</summary>{preview.blockers.map(item => <p className="mt-1" key={item}>• {item}</p>)}</details>}
             </div>}
-            {preview?.canClose && <div className="space-y-2"><Input placeholder={`Escribe CERRAR ${year}`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><Button variant="destructive" onClick={closeYear} disabled={mutation.isPending || confirmation.trim().toUpperCase() !== `CERRAR ${year}`}>Cerrar ejercicio</Button></div>}
+            {canReview && preview?.canClose && <div className="space-y-2"><Input placeholder={`Escribe CERRAR ${year}`} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /><Button variant="destructive" onClick={closeYear} disabled={mutation.isPending || confirmation.trim().toUpperCase() !== `CERRAR ${year}`}>Cerrar ejercicio</Button></div>}
             {selected.status === 'cerrado' && <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
               <p className="text-xs font-semibold text-amber-900">Reapertura auditada</p>
               <p className="text-[11px] text-amber-800">No borra ni reescribe asientos confirmados. Revierte apertura, cierre y regularización con nuevos contraasientos. Se bloqueará si el ejercicio siguiente ya tiene actividad.</p>
               <Input placeholder="Motivo documentado obligatorio" value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} />
               <Input placeholder={`Escribe REABRIR ${year}`} value={reopenConfirmation} onChange={(event) => setReopenConfirmation(event.target.value)} />
-              <Button variant="outline" onClick={reopenYear} disabled={mutation.isPending || !reopenReason.trim() || reopenConfirmation.trim().toUpperCase() !== `REABRIR ${year}`}><UnlockKeyhole className="mr-2 h-4 w-4" />Reabrir con contraasientos</Button>
+              <Button variant="outline" onClick={reopenYear} disabled={!canReview || mutation.isPending || !reopenReason.trim() || reopenConfirmation.trim().toUpperCase() !== `REABRIR ${year}`}><UnlockKeyhole className="mr-2 h-4 w-4" />Reabrir con contraasientos</Button>
             </div>}
           </div>
         </div>

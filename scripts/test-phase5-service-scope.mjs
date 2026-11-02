@@ -37,7 +37,7 @@ const client = {
   auth: { async me() { return user; } },
   asServiceRole: {
     entities: {
-      User: { async get(id) { return { id, data: user.data }; } },
+      User: { async get(id) { if(id===internal.id)throw {status:404};return { id, role:user.role,email:user.email,data: user.data }; } },
       Company: {
         async get(id) { return companyFor(id); },
         async filter(query) { return [companyFor(query.id)]; },
@@ -62,6 +62,8 @@ assert.equal((await invoke(recurring, { action: 'preview' })).status, 403, 'forg
 user = owner;
 assert.equal((await invoke(recurring, { action: 'list_templates', companyId: 'other' })).status, 403, 'owner cannot list another company');
 assert.equal((await invoke(recurring, { action: 'list_templates', companyId: 'own' })).status, 200, 'owner can list own templates');
+user = {...hostile,email:internal.email};
+assert.equal((await invoke(recurring,{action:'preview'})).status,403,'stored client with forged platform email still cannot scan all companies');
 user = internal;
 assert.equal((await invoke(recurring, { action: 'preview' })).status, 200, 'internal service can preview global scan');
 assert.equal(globalTemplateQueries, 1);

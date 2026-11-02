@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';
+import {recurringCallerIdentity} from '../base44/functions/generateRecurringInvoices/recurringCallerIdentity.mjs';
+const service={id:'virtual-qa',is_service:true,email:'service+0123456789abcdef@no-reply.base44.com',role:'admin'};
+const missing=async()=>{throw {status:404};};
+assert.equal((await recurringCallerIdentity(service,missing)).isService,true);
+const persisted=await recurringCallerIdentity(service,async()=>({...service,id:'stored-client',role:'user'}));assert(persisted.allowed);assert.equal(persisted.isService,false);assert.equal(persisted.isAdminUser,false);
+const demoted=await recurringCallerIdentity({id:'qa',email:'qa@test.invalid',role:'admin'},async()=>({id:'qa',role:'user'}));assert.equal(demoted.isAdminUser,false);
+assert.equal((await recurringCallerIdentity({id:'qa',email:'qa@test.invalid',is_service:true},missing)).allowed,false);
+assert.equal((await recurringCallerIdentity(service,async()=>({id:'qa',role:'admin',status:'suspendido'}))).allowed,false);
+await assert.rejects(()=>recurringCallerIdentity(service,async()=>{throw {status:503};}));
+const user=JSON.parse(fs.readFileSync('base44/entities/User.jsonc','utf8'));assert.equal(user.properties.is_service.rls.write,false);
+console.log(JSON.stringify({ok:true,storedClientCannotBecomeScheduler:true,staleAdminRoleRejected:true,virtualPlatformIdentityPreserved:true,providerFailureClosed:true,liveSchedulerRun:false,financialWrites:0,externalCalls:0}));

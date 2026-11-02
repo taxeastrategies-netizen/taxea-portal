@@ -1,3 +1,4 @@
+import {recurringCallerIdentity} from './recurringCallerIdentity.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
@@ -132,16 +133,14 @@ Deno.serve(async (req) => {
     if (!user) {
       return Response.json({ error: 'No autenticado' }, { status: 401 });
     }
-    // La marca is_service sola no autoriza procesar facturas de todas las empresas.
-    const isService = user.is_service === true
-      && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(String(user.email || ''));
-    const isAdminUser = user.role === 'admin' || user.role === 'super_admin';
+    const identity=await recurringCallerIdentity(user,id=>base44.asServiceRole.entities.User.get(id));
+    if(!identity.allowed)return Response.json({error:'Identidad no habilitada.'},{status:403});
+    const {isService,isAdminUser,freshUser}=identity;
 
     // La sesión puede traer permisos caducados: resolver la empresa desde la base de datos.
     let activeCompanyId = '';
     if (!isService) {
-      const freshUser = await base44.asServiceRole.entities.User.get(user.id).catch(() => null);
-      activeCompanyId = freshUser?.data?.company_id || user.data?.company_id || '';
+      activeCompanyId = freshUser?.company_id || freshUser?.data?.company_id || '';
       if (!isAdminUser && activeCompanyId) {
         const company = await base44.asServiceRole.entities.Company.get(activeCompanyId).catch(() => null);
         const email = String(user.email || '').trim().toLowerCase();
@@ -608,7 +607,7 @@ Deno.serve(async (req) => {
 
     return Response.json(results);
   } catch (error) {
-    console.error('[generateRecurringInvoices]', error);
-    return Response.json({ error: error.message, status: 'error' }, { status: 500 });
+    console.error('[generateRecurringInvoices]',{code:'RECURRING_UNAVAILABLE',status:Number(error?.response?.status||error?.status||500)});
+    return Response.json({error:'No se pudo completar la operación de facturación recurrente. Reintenta o contacta con Taxea.',code:'RECURRING_UNAVAILABLE',status:'error'},{status:500});
   }
 });
