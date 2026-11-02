@@ -30,6 +30,12 @@
     "createdAt": {
       "type": "string",
       "format": "date-time"
+    },
+    "storageMode": {
+      "type": "string"
+    },
+    "chunkCount": {
+      "type": "number"
     }
   },
   "required": [
