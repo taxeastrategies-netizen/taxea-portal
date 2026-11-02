@@ -219,5 +219,14 @@ const zeroRecords=records.FiscalDeductionAdjustment.length;await call('accountin
 const zeroData={...modelData(2025,'4T',[zeroExpense.id,zeroSale.id,zeroExempt.id]),fiscalAdjustments:records.FiscalDeductionAdjustment.filter(row=>row.scopeKey==='activity:'+zero.id)};
 const zeroModel=calculate(zeroData,bounds(2025,'4T'),'iva',false,{previousCompensationBalance:0});assert.equal(zeroModel.operations.prorataAdjustment,-3.57);assert.equal(zeroModel.operations.deductibleQuota,10.5);
 
+
+const companyLock=records.Company[0];companyLock.fiscal_adjustment_lock_token='QA-C5-LOCK';companyLock.fiscal_adjustment_lock_started_at=new Date().toISOString();
+user={...user,role:'user'};assert.equal((await call('accountingOperations',{action:'c5_deduction_context',companyId:'qa',year:2025})).lock,undefined);
+await call('accountingOperations',{action:'c5_deduction_recover_lock',companyId:'qa',expectedToken:'QA-C5-LOCK',processStopped:true,reason:'Ensayo'},403);
+user={...user,role:'admin'};await call('accountingOperations',{action:'c5_deduction_recover_lock',companyId:'qa',expectedToken:'QA-C5-LOCK',processStopped:true,reason:'Ensayo'},422);
+companyLock.fiscal_adjustment_lock_started_at=new Date(Date.now()-660000).toISOString();const lockContext=await call('accountingOperations',{action:'c5_deduction_context',companyId:'qa',year:2025});assert.equal(lockContext.lock.recoverable,true);
+await call('accountingOperations',{action:'c5_deduction_recover_lock',companyId:'qa',expectedToken:'stale-token',processStopped:true,reason:'Ensayo'},422);
+const beforeRecover=records.JournalEntry.length;const recovered=await call('accountingOperations',{action:'c5_deduction_recover_lock',companyId:'qa',expectedToken:lockContext.lock.token,processStopped:true,reason:'Proceso ficticio detenido comprobado'});assert.equal(recovered.success,true);assert.equal(companyLock.fiscal_adjustment_lock_token,'');assert.equal(records.JournalEntry.length,beforeRecover);
+
 console.log(JSON.stringify({ok:true,sourceToLedgerAndModels:true,REPEP:true,retail:true,exemptions:true,implicitIgic:true,dua:true,prorata:true,annualAdjustmentIdempotent:true,originalInvoicesAndTaxLinesUnchanged:true,normalUserCannotPost:true,foreignTenantDenied:true,official303And390Boxes:true,entries:records.JournalEntry.length,externalCalls:0,realWrites:0,calls}));
 

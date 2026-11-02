@@ -117,7 +117,14 @@ async function buildC5AdjustmentPreview(svc,companyId,body){
 export async function c5AdjustmentPreview(svc,companyId,body){try{return await buildC5AdjustmentPreview(svc,companyId,body);}catch(error){if(error instanceof C5ValidationError)throw problem(error.message);throw error;}}
 export async function c5AdjustmentOperation({svc,companyId,user,createJournalEntry,ensureAccount},body){
  if([user,user?.data].filter(Boolean).some(state=>state.is_deleted===true || ['eliminado','bloqueado','suspendido'].includes(text(state.status).toLowerCase()) || ['suspended','blocked','disabled','deleted'].includes(text(state.accountAccessStatus).toLowerCase())))throw problem('Acceso suspendido.',403);
- if(['c5_deduction_preview','c5_deduction_context'].includes(body.action))return c5AdjustmentPreview(svc,companyId,body);
+ if(['c5_deduction_preview','c5_deduction_context'].includes(body.action)){
+  const result=await c5AdjustmentPreview(svc,companyId,body);
+  if(body.action==='c5_deduction_context'&&['admin','super_admin','asesor','advisor'].includes(text(user.role).toLowerCase())){
+   const company=await svc.entities.Company.get(companyId);
+   if(company?.fiscal_adjustment_lock_token)result.lock={token:company.fiscal_adjustment_lock_token,startedAt:company.fiscal_adjustment_lock_started_at,recoverable:Number.isFinite(Date.parse(company.fiscal_adjustment_lock_started_at))&&Date.now()-Date.parse(company.fiscal_adjustment_lock_started_at)>=600000};
+  }
+  return result;
+ }
  if(!['admin','super_admin','asesor','advisor'].includes(text(user.role).toLowerCase()))throw problem('Solo el asesor o administrador confirma una regularización.',403);
  if(body.action==='c5_deduction_recover_lock'){
   const company=await svc.entities.Company.get(companyId),started=Date.parse(company.fiscal_adjustment_lock_started_at);

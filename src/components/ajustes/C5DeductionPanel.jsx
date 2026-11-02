@@ -10,7 +10,7 @@ const euro=value=>Number(value||0).toLocaleString('es-ES',{style:'currency',curr
 export default function C5DeductionPanel({companyId,activities=[]}){
  const {user}=useAuth(),canConfirm=['admin','super_admin','asesor','advisor'].includes(String(user?.role||'').toLowerCase());
  const [form,setForm]=useState({year:new Date().getFullYear(),useConfirmedPercent:false,confirmedPercent:'',activityId:'',kind:'prorata',assetId:'',realEstate:false,definitivePercent:0,initialPercent:'',reason:'',sourceOverrides:{},investmentQualificationConfirmed:false});
- const [preview,setPreview]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [preview,setPreview]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[processStopped,setProcessStopped]=useState(false);
  const [visibleRows,setVisibleRows]=useState(100);
  const context=useQuery({queryKey:['c5-deduction-context',companyId,form.year],enabled:!!companyId,queryFn:async()=>{const r=await base44.functions.invoke('accountingOperations',{action:'c5_deduction_context',companyId,year:form.year});return r?.data||r;},staleTime:30000});
  const set=(key,value)=>{setForm(current=>({...current,[key]:value}));setPreview(null);};
@@ -18,10 +18,11 @@ export default function C5DeductionPanel({companyId,activities=[]}){
  const run=async(action)=>{
   setBusy(true);setError('');
   try{
-   const payload={...form,companyId,action,confirmReviewed:action==='c5_deduction_post',expectedFingerprint:preview?.fingerprint};
+   const payload={...form,companyId,action,processStopped,expectedToken:context.data?.lock?.token,confirmReviewed:action==='c5_deduction_post',expectedFingerprint:preview?.fingerprint};
    if(payload.initialPercent==='')delete payload.initialPercent;
    const response=await base44.functions.invoke('accountingOperations',payload),data=response?.data||response;
    if(data.error||data.success===false)throw Error(data.error||'No se pudo completar la regularización.');
+   if(action==='c5_deduction_recover_lock'){setProcessStopped(false);setPreview(null);await context.refetch();toast.success('Bloqueo recuperado. Analiza de nuevo antes de confirmar.');return;}
    setPreview(data);setVisibleRows(100);
    if(action==='c5_deduction_post')toast.success(data.noJournalRequired?'Porcentaje y regularización fiscal confirmados sin nuevo asiento.':data.noChanges||data.alreadyPosted?'El ajuste ya está registrado. No se duplica.':'Regularización confirmada con asiento separado.');
   }catch(failure){setError(failure?.response?.data?.error||failure.message||'No se pudo calcular.');}
@@ -35,6 +36,7 @@ export default function C5DeductionPanel({companyId,activities=[]}){
    <label className="text-xs space-y-1"><span>Tipo de regularización</span><NativeSelect aria-label="Tipo de regularización" value={form.kind} onChange={e=>set('kind',e.target.value)} className="w-full min-h-9 rounded border bg-background px-2"><option value="prorata">Prorrata anual</option><option value="investment">Bien de inversión</option></NativeSelect></label>
    <label className="text-xs space-y-1"><span>Motivo / evidencia revisada</span><Input aria-label="Motivo regularización" value={form.reason} onChange={e=>setForm(current=>({...current,reason:e.target.value}))} placeholder="Cierre anual, censo, hechos comprobados…"/></label>
   </div>
+  {canConfirm&&context.data?.lock&&<div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2"><p>Hay una regularización en curso desde {context.data.lock.startedAt}. No se libera automáticamente para evitar asientos simultáneos.</p><label className="flex gap-2"><input type="checkbox" checked={processStopped} onChange={e=>setProcessStopped(e.target.checked)}/>He comprobado que el proceso anterior ha terminado o se ha detenido.</label><p>Indica el motivo de recuperación en «Motivo / evidencia revisada». Deben haber pasado al menos diez minutos.</p><Button variant="outline" disabled={busy||!context.data.lock.recoverable||!processStopped||!form.reason.trim()} onClick={()=>run('c5_deduction_recover_lock')}>Recuperar bloqueo verificado</Button></div>}
   {form.kind==='prorata'&&<div className="flex flex-wrap items-center gap-3 text-xs"><label className="flex gap-2"><input type="checkbox" checked={form.useConfirmedPercent} onChange={e=>set('useConfirmedPercent',e.target.checked)}/>Usar porcentaje definitivo confirmado por el asesor en un supuesto específico.</label>{form.useConfirmedPercent&&<Input aria-label="Prorrata definitiva confirmada" type="number" min="0" max="100" value={form.confirmedPercent} onChange={e=>set('confirmedPercent',e.target.value)} className="max-w-32"/>}</div>}
   {form.kind==='investment'&&<div className="grid gap-3 sm:grid-cols-2">
    <label className="text-xs space-y-1"><span>Activo contable con factura de origen</span><NativeSelect aria-label="Activo regularización" value={form.assetId} onChange={e=>set('assetId',e.target.value)} className="w-full min-h-9 rounded border bg-background px-2"><option value="">Selecciona activo</option>{(context.data?.assets||[]).filter(a=>a.sourceInvoiceId).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</NativeSelect></label>
