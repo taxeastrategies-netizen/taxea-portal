@@ -3931,7 +3931,8 @@ Deno.serve(async (req) => {
     }
     const companyId=clean(body.companyId); const model=clean(body.modeloCodigo); const year=Number(body.ejercicio); const period=normalizedPeriod(body.periodo||'Anual');
     if(!companyId) return Response.json({error:'companyId es obligatorio.'},{status:400});
-    const svc=['export','download_official_file','export_review','export_handoff','export_296_annexes'].includes(action)?taxStorageClient(queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3})):base44.asServiceRole; const company=await svc.entities.Company.get(companyId);
+    const requestService=queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3});
+    const svc=['export','download_official_file','export_review','export_handoff','export_296_annexes'].includes(action)?taxStorageClient(requestService):requestService; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
 

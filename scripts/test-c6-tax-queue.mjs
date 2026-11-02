@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';
+import {queuedAccountingClient} from '../base44/functions/taxModelOperations/privateRequestQueue.mjs';
+let clock=0,retries=0,writes=0;const starts=[],waits=[];
+const names=['FiscalProfile','FiscalActivity','Invoice','InvoiceTaxLine','InvoicePayment','PayrollExtraction','Employee','JournalEntry','JournalEntryLine','TaxDeclarableRecord','TaxFiling','AccountingPostingOperation','FiscalDeductionAdjustment'];
+const raw={entities:Object.fromEntries(names.map(name=>[name,{filter:async()=>{starts.push(clock);if(name==='Invoice'&&++retries===1)throw {response:{status:429,headers:{'retry-after':'2'}}};return [{id:'QA-'+name}];},create:async()=>{writes++;throw {status:429};}}]))};
+const svc=queuedAccountingClient(raw,{intervalMs:150,readRetries:3,now:()=>clock,sleep:async ms=>{waits.push(ms);clock+=ms;}});
+const results=await Promise.all(names.map(name=>svc.entities[name].filter({companyId:'QA-C6'})));
+assert.equal(results.length,13);assert.equal(retries,2);assert(starts.slice(1).every((v,i)=>v-starts[i]>=150));assert(waits.includes(2250));
+await assert.rejects(()=>svc.entities.Invoice.create({companyId:'QA-C6'}));assert.equal(writes,1);
+const source=fs.readFileSync('base44/functions/taxModelOperations/entry.ts','utf8');
+assert(source.includes('const requestService=queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3})'));
+assert(source.includes('?taxStorageClient(requestService):requestService'));
+console.log(JSON.stringify({ok:true,thirteenSourceReadsQueued:true,readBackoffVerified:true,writesNeverRetried:true,financialWrites:0,externalCalls:0}));

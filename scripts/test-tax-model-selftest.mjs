@@ -35,7 +35,7 @@ const fixtureCapture = `
         '425-guided':exportAtcHandoff('425',qaCompany,2025,'Anual',standard,{blockers:[],warnings:[]},'qa-fixture'),
       };
       `;
-let source = originalSource;
+let source = originalSource.replaceAll('intervalMs:150,readRetries:3','intervalMs:0,readRetries:3');
 if (process.env.TAXEA_FIXTURE_MATRIX_DIR) {
   if (!source.includes(fixtureCaptureNeedle)) throw new Error('No se encontró el punto de captura de las muestras fiscales.');
   source = source.replace(fixtureCaptureNeedle, `${fixtureCapture}${fixtureCaptureNeedle}`);

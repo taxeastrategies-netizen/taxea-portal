@@ -166,7 +166,7 @@ export default function LibroRegistros() {
   if (!company && !loadingCompany) return <NoCompanyState pageName="el Libro de Registros" />;
 
   return (
-    <div>
+    <div className="min-w-0 w-full max-w-full">
       <PageHeader title="Libros de Registro" subtitle="Consulta y exportación informativa · Excel multipestaña">
         <div className="flex items-center gap-2 flex-wrap">
           <Select value={filterAnio} onValueChange={setFilterAnio}>
@@ -215,7 +215,7 @@ export default function LibroRegistros() {
       {(exportError || financialError) && <p role="alert" className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{exportError || financialError}</p>}
       {exportNotice && <p role="status" className="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Excel descargado. {exportNotice}</p>}
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-secondary rounded-lg w-fit mb-5 overflow-x-auto">
+      <div className="flex gap-1 p-1 bg-secondary rounded-lg w-full max-w-full min-w-0 sm:w-fit mb-5 overflow-x-auto">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === t.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>

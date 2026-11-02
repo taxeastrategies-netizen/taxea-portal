@@ -1,6 +1,6 @@
 import {hydrateTaxFile} from './taxFileStorage.mjs';
 import {EXPORT_CAPABILITIES_VERSION} from './exportCapabilities.mjs';
-export const ARTIFACT_PROTOCOL=EXPORT_CAPABILITIES_VERSION+'-6c0456c79676e8cc';
+export const ARTIFACT_PROTOCOL=EXPORT_CAPABILITIES_VERSION+'-7f3f76fd3cd423e1';
 const clean=value=>String(value??'').trim();
 async function bytesHash(value){const bytes=Uint8Array.from(atob(value),n=>n.charCodeAt(0));return [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');}
 export async function acquireArtifactLease(svc,companyId){const token=crypto.randomUUID(),filter={id:companyId,$or:[{tax_artifact_lock_token:''},{tax_artifact_lock_token:null},{tax_artifact_lock_token:{$exists:false}}]};const result=await svc.entities.Company.updateMany(filter,{$set:{tax_artifact_lock_token:token,tax_artifact_lock_started_at:new Date().toISOString()}});if(Number(result?.updated)!==1)throw Object.assign(new Error('Ya se está preparando un fichero fiscal de esta empresa. Vuelve a consultar el resultado antes de repetir.'),{status:409,taxModelPublic:true});return async()=>{await svc.entities.Company.updateMany({id:companyId,tax_artifact_lock_token:token},{$set:{tax_artifact_lock_token:'',tax_artifact_lock_started_at:''}});};}
