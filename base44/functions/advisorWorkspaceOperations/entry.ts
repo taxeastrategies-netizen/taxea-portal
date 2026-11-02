@@ -1,3 +1,4 @@
+import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 const clean = (value: unknown) => String(value ?? '').trim();
@@ -269,7 +270,7 @@ Deno.serve(async (req) => {
       const company = await svc.entities.Company.get(companyId).catch(() => null);
       if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
       const role = roleOf(user);
-      const ownCompany = clean(user?.data?.company_id || user?.company_id) === companyId;
+      const ownCompany = await verifiedCompanyAssignment(svc,user,companyId);
       const owner = companyOwner(company) === lower(user.email);
       const authorized = Array.isArray(company.usuarios_autorizados) && company.usuarios_autorizados.map(lower).includes(lower(user.email));
       const reviewerAssigned = ['advisor', 'asesor'].includes(role) && (owner || authorized);

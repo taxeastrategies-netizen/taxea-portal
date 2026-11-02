@@ -1,3 +1,4 @@
+import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 // Las propiedades ampliadas pueden llegar en la raíz o en data según la versión del SDK.
@@ -21,7 +22,7 @@ async function authorizeCompany(svc, user, companyId) {
     ? company.usuarios_autorizados.map(value => clean(value).toLowerCase())
     : [];
   const allowed = ['admin', 'super_admin'].includes(roleOf(user))
-    || clean(user?.data?.company_id || user?.company_id) === companyId
+    || await verifiedCompanyAssignment(svc,user,companyId)
     || (email && clean(company.owner_email).toLowerCase() === email)
     || (email && authorized.includes(email));
   if (!allowed) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });

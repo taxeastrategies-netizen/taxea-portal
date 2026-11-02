@@ -1,0 +1,13 @@
+import assert from'node:assert/strict';import fs from'node:fs';
+import{verifiedCompanyAssignment as verify}from'../base44/functions/fiscalOperations/verifiedCompanyAssignment.mjs';
+const source=fs.readFileSync('base44/functions/fiscalOperations/verifiedCompanyAssignment.mjs','utf8');
+for(const name of ['getCompanyFinancials','fiscalCalendarOperations','getAccountingCrosswalk','advisorWorkspaceOperations'])assert.equal(fs.readFileSync('base44/functions/'+name+'/verifiedCompanyAssignment.mjs','utf8'),source);
+let stored={id:'qa',email:'qa@test.invalid',company_id:'own'},gets=0;const svc={entities:{User:{get:async id=>{gets++;assert.equal(id,'qa');return stored;}}}};
+const user={id:'qa',email:'qa@test.invalid',data:{company_id:'foreign'}};
+assert.equal(await verify(svc,user,'foreign'),false);assert.equal(await verify(svc,user,'own'),true);
+stored={...stored,email:'other@test.invalid'};assert.equal(await verify(svc,user,'own'),false);
+stored={id:'qa',email:user.email,data:{company_id:'own'},status:'suspendido'};assert.equal(await verify(svc,user,'own'),false);
+stored={id:'qa',email:user.email,data:{company_id:'own'},accountAccessStatus:'blocked'};assert.equal(await verify(svc,user,'own'),false);
+stored=null;assert.equal(await verify(svc,user,'foreign'),false);assert.equal(await verify({},user,'foreign'),false);
+const schema=JSON.parse(fs.readFileSync('base44/entities/User.jsonc'));assert.deepEqual(schema.properties.company_id.rls.write,{user_condition:{role:'admin'}});
+assert.ok(gets>=6);console.log(JSON.stringify({ok:true,forgedSessionDenied:true,persistedAdminAssignmentPreserved:true,identityAndDisabledGuards:true,fiveCopiesMatch:true,networkCalls:0,realWrites:0}));

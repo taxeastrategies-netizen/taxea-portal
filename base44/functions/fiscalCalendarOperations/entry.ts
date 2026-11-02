@@ -1,3 +1,4 @@
+import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 const RULESET = 'taxea-fiscal-calendar-es-2026.09.09-v1';
@@ -48,7 +49,7 @@ const MODEL_META: Record<string, any> = {
   '425': ['Resumen anual IGIC', 'ATC', 'igic'],
 };
 
-function authorize(user: any, companyId: string, company: any) {
+async function authorize(svc: any, user: any, companyId: string, company: any) {
   const role = roleOf(user);
   if (['admin', 'super_admin'].includes(role)) return;
   const email = clean(user?.email).toLowerCase();
@@ -60,7 +61,7 @@ function authorize(user: any, companyId: string, company: any) {
     if (email && (owner === email || authorized.includes(email))) return;
     throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
   }
-  if (clean(user?.data?.company_id || user?.company_id) === companyId || (email && (owner === email || authorized.includes(email)))) return;
+  if (await verifiedCompanyAssignment(svc,user,companyId) || (email && (owner === email || authorized.includes(email)))) return;
   throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
 }
 
@@ -236,7 +237,7 @@ Deno.serve(async (req) => {
     const svc = base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
-    authorize(user, companyId, company);
+    await authorize(svc,user, companyId, company);
     const action = clean(body.action || 'bundle');
     const fiscalYear = Number(body.fiscalYear || new Date().getUTCFullYear());
     if (fiscalYear < 2000 || fiscalYear > 2100) throw new Error('Ejercicio fiscal no valido.');

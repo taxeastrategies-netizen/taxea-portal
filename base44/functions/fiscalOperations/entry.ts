@@ -1,3 +1,4 @@
+import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
@@ -131,9 +132,9 @@ const MODEL_CATALOG = [
   ['424', 'IGIC comerciantes minoristas', 'ATC', 'segun_modelo'], ['425', 'Resumen anual IGIC', 'ATC', 'anual'],
 ];
 
-function authorize(user: any, companyId: string, company: any) {
+async function authorize(svc: any, user: any, companyId: string, company: any) {
   const role = clean(user?.role).toLowerCase();
-  const own = clean(user?.data?.company_id || user?.company_id);
+  const own = await verifiedCompanyAssignment(svc,user,companyId);
   if (['admin', 'super_admin'].includes(role)) return;
   const email = clean(user?.email).toLowerCase();
   const owner = clean(company?.owner_email).toLowerCase();
@@ -144,7 +145,7 @@ function authorize(user: any, companyId: string, company: any) {
     if ((email && owner === email) || (email && authorized.includes(email))) return;
     throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
   }
-  if (own === companyId || (email && owner === email) || (email && authorized.includes(email))) return;
+  if (own || (email && owner === email) || (email && authorized.includes(email))) return;
   throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
 
@@ -210,7 +211,8 @@ function recommendedObligations(profile: any, activities: any[]) {
     const existing = result.get(code);
     result.set(code, { code, name: model[1], authority: model[2], frequency: model[3], certainty: existing?.certainty === 'recommended' ? 'recommended' : certainty, reasons: [...new Set([...(existing?.reasons || []), reason])] });
   };
-  const active = (activities || []).filter(item => item.active !== false);
+  const today=new Date().toISOString().slice(0,10);
+  const active = (activities || []).filter(item => item.active !== false && (!item.startDate||item.startDate<=today) && (!item.endDate||item.endDate>=today));
   const iva = active.filter(item => item.indirectTax === 'iva');
   const igic = active.filter(item => item.indirectTax === 'igic');
   const regimes = new Set(active.map(item => item.indirectTaxRegime));
@@ -722,7 +724,7 @@ Deno.serve(async (req) => {
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
-    if (!internalServiceEvaluation) authorize(user, companyId, company);
+    if (!internalServiceEvaluation) await authorize(svc,user, companyId, company);
     if ((['save_invoice_tax_line','recover_recc_advance_lock','review_context'].includes(action) || action.includes('review_batch')) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
     if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock','recc_book'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 

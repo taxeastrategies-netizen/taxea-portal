@@ -1,3 +1,4 @@
+import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 const clean = value => String(value ?? '').trim();
@@ -17,7 +18,7 @@ Deno.serve(async req => {
     const authorized = Array.isArray(company.usuarios_autorizados)
       ? company.usuarios_autorizados.map(value => clean(value).toLowerCase()) : [];
     const allowed = ['admin', 'super_admin'].includes(roleOf(user))
-      || clean(user?.data?.company_id || user?.company_id) === company_id
+      || await verifiedCompanyAssignment(svc,user,company_id)
       || (email && clean(company.owner_email).toLowerCase() === email)
       || (email && authorized.includes(email));
     if (!allowed) return Response.json({ error: 'No tienes permiso para consultar esta empresa.' }, { status: 403 });
