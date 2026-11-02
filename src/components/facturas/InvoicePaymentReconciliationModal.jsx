@@ -34,6 +34,22 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [idempotencyKey, setIdempotencyKey] = useState('');
+  const [exchangeRate,setExchangeRate]=useState('');
+  const [advisor,setAdvisor]=useState(false);
+  const [taxRate,setTaxRate]=useState('');
+  const [taxSource,setTaxSource]=useState('');
+  const [paymentLock,setPaymentLock]=useState(null);
+  const [recoveryReason,setRecoveryReason]=useState('');
+  const [processStopped,setProcessStopped]=useState(false);
+  const currency=invoice?.moneda||'EUR';
+  let reccMetadata={};try{reccMetadata=JSON.parse(invoice?.recc_metadata||'{}');}catch{/* La validación de servidor informa la incidencia. */}
+  const statutory=String(Number(String(invoice?.fecha_operacion||invoice?.fecha_emision||'').slice(0,4))+1)+'-12-31';
+  const forcedDate=reccMetadata.insolvencyDate&&reccMetadata.insolvencyDate<statutory?reccMetadata.insolvencyDate:statutory;
+  useEffect(()=>{if(open)base44.auth.me().then(u=>setAdvisor(['admin','super_admin','advisor','asesor'].includes(String(u?.role||'').toLowerCase()))).catch(()=>setAdvisor(false));},[open]);
+  const confirmQuote=async()=>{
+    setError('');setSaving(true);
+    try{const response=await base44.functions.invoke('fiscalOperations',{action:'confirm_recc_fx_quote',companyId:company?.id,invoiceId:invoice.id,quote:{date:paymentDate,rate:Number(taxRate),source:taxSource}});const data=response?.data||response;if(!data.success)throw new Error(data.error);setSuccess('Cambio fiscal confirmado para esta fecha.');}catch(e){setError(e?.response?.data?.error||e.message);}finally{setSaving(false);}
+  };
 
   const isReconciliation = mode === 'reconcile';
   const isCreditNote = Number(invoice?.total_factura) < 0;
@@ -68,6 +84,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
     setReference('');
     setNotes('');
     setIdempotencyKey(crypto.randomUUID());
+    setExchangeRate('');setTaxRate('');setTaxSource('');setPaymentLock(null);setRecoveryReason('');setProcessStopped(false);
     if (mode === 'reconcile' && invoice?.anulada) {
       setError('Esta factura está anulada y no puede conciliarse.');
       return;
@@ -92,6 +109,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setOutstanding(Number(data.outstanding) || 0);
       setPaid(Number(data.paid) || 0);
       setPayments(data.payments || []);
+      setPaymentLock(data.payment_lock||null);
       setCandidates(data.candidates || []);
       const bankLedgers = data.accounting_bank_accounts || [];
       setBankAccountingAccounts(bankLedgers);
@@ -111,6 +129,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         action: 'add_payment',
         amount: Number(String(amount).replace(',', '.')),
         payment_date: paymentDate,
+        exchange_rate:Number(exchangeRate),
         method,
         reference,
         notes,
@@ -153,7 +172,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
       setError('El movimiento seleccionado tiene el sentido contrario al de esta factura.');
       return;
     }
-    if (selected && Math.abs(Number(selected.importe)) > outstanding + 0.01) {
+    if (selected && (selected.moneda||'EUR')===currency && Math.abs(Number(selected.importe)) > outstanding + 0.01) {
       setError('El movimiento supera el importe pendiente. Debe dividirse antes desde Tesorería.');
       return;
     }
@@ -163,6 +182,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         action: 'reconcile',
         bank_transaction_id: selectedTransaction,
         bank_accounting_account_id: selectedBankLedgerId,
+        invoice_amount:Number(amount),
       });
       if (!data?.ok) throw new Error(data?.error || 'No se pudo conciliar el movimiento.');
       setOutstanding(Number(data.outstanding) || 0);
@@ -195,11 +215,11 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
         <div className="grid grid-cols-2 gap-3 px-5 py-3 bg-secondary/30 border-b border-border">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Registrado</p>
-            <p className="text-lg font-bold text-emerald-600">{fmt(paid)}</p>
+            <p className="text-lg font-bold text-emerald-600">{fmt(paid,currency)}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Pendiente</p>
-            <p className="text-lg font-bold text-foreground">{fmt(outstanding)}</p>
+            <p className="text-lg font-bold text-foreground">{fmt(outstanding,currency)}</p>
           </div>
         </div>
 
@@ -249,6 +269,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                     onClick={() => {
                       setError('');
                       setSelectedTransaction(candidate.id);
+                      if((candidate.moneda||'EUR')!==currency&&currency!=='EUR')setAmount('');
                       if (candidate.bank_accounting_account_id) setSelectedBankLedgerId(candidate.bank_accounting_account_id);
                     }}
                     className={`w-full text-left border rounded-xl p-3 transition-colors ${active ? 'border-primary bg-primary/5 ring-2 ring-primary/10' : compatible ? 'border-border hover:bg-secondary/40' : 'border-border bg-slate-50 opacity-55 cursor-not-allowed'}`}>
@@ -271,7 +292,8 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                   </button>
                 );
               })}
-              {selected && Math.abs(Number(selected.importe)) > outstanding + 0.01 && (
+              {selected&&(selected.moneda||'EUR')!==currency&&currency!=='EUR'&&<label className="block text-xs">Importe del movimiento expresado en {currency}<Input value={amount} onChange={e=>setAmount(e.target.value)} inputMode="decimal"/><span>El servidor calcula el cambio efectivo desde el importe real del banco. El asesor confirma aparte el cambio fiscal.</span></label>}
+              {selected && (selected.moneda||'EUR')===currency && Math.abs(Number(selected.importe)) > outstanding + 0.01 && (
                 <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
                   <p className="text-xs text-amber-800">Este movimiento supera el importe pendiente. Por seguridad no se conciliará hasta poder dividir movimientos desde Finanzas.</p>
@@ -280,6 +302,11 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
             </div>
           ) : (
             <div className="space-y-4">
+              {currency!=='EUR'&&<div className="rounded-xl border p-3 space-y-3 text-xs">
+                <p>Importes del documento en {currency}. El diario se registra en euros. El cambio del banco y el cambio fiscal pueden diferir.</p>
+                <label className="block">Cambio efectivo · EUR por 1 {currency}<Input type="number" step="0.000001" min="0.000001" value={exchangeRate} onChange={e=>setExchangeRate(e.target.value)}/></label>
+                {advisor?<details><summary>Confirmar cambio fiscal oficial para la fecha del pago</summary><div className="mt-2 space-y-2"><label className="block">Cambio fiscal · EUR por unidad<Input type="number" step="0.000001" value={taxRate} onChange={e=>setTaxRate(e.target.value)}/></label><label className="block">Fuente oficial y referencia<Input value={taxSource} onChange={e=>setTaxSource(e.target.value)}/></label><Button type="button" size="sm" onClick={confirmQuote} disabled={saving||!taxRate||!taxSource}>Confirmar cambio fiscal</Button></div></details>:<p>El asesor debe confirmar previamente el cambio fiscal de esta fecha. Un reintento conserva el cambio del pago original.</p>}
+              </div>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1">Importe *</label>
@@ -308,6 +335,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                 <label className="block text-xs font-semibold text-muted-foreground mb-1">Notas</label>
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none" />
               </div>
+              {advisor&&currency!=='EUR'&&invoice?.fiscal_regime==='criterio_caja'&&forcedDate<=today()&&<div className="rounded border p-3 text-xs space-y-2"><p>Devengo legal: {forcedDate}. Confirma previamente el cambio fiscal de esa fecha. El ajuste conserva el asiento original y no registra un cobro.</p><Button type="button" size="sm" disabled={saving} onClick={async()=>{setSaving(true);try{const result=await invoke({action:'confirm_recc_forced_fx'});if(!result.ok)throw new Error(result.error);setSuccess(result.no_adjustment_needed?'No hace falta ajuste de cambio.':'Ajuste del devengo legal contabilizado sin repetir cuota en el cobro posterior.');}catch(e){setError(e?.response?.data?.error||e.message);}finally{setSaving(false);}}}>Contabilizar ajuste de devengo legal</Button></div>}
               {payments.length > 0 && (
                 <div className="pt-3 border-t border-border">
                   <p className="text-xs font-semibold text-muted-foreground mb-2">Pagos registrados</p>
@@ -315,7 +343,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
                     {payments.slice(0, 5).map(payment => (
                       <div key={payment.id} className="flex justify-between text-xs bg-secondary/40 rounded-lg px-3 py-2">
                         <span>{payment.payment_date} · {payment.method}</span>
-                        <span className="font-semibold">{fmt(payment.amount)}</span>
+                        <span className="font-semibold">{fmt(payment.amount,payment.currency||currency)}</span>
                       </div>
                     ))}
                   </div>
@@ -324,6 +352,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
             </div>
           )}
 
+          {advisor&&paymentLock&&<details className="mt-4 rounded border p-3 text-xs"><summary>Revisar bloqueo de pago interrumpido</summary><p>Inicio: {paymentLock.startedAt}. Revisa antes los pagos y asientos; liberar el bloqueo no repite ni borra la operación.</p><label className="block"><input type="checkbox" checked={processStopped} onChange={e=>setProcessStopped(e.target.checked)}/> Confirmo que el proceso ha terminado</label><Input aria-label="Motivo de recuperación del pago" value={recoveryReason} onChange={e=>setRecoveryReason(e.target.value)}/><Button type="button" size="sm" disabled={saving||!processStopped||recoveryReason.trim().length<12} onClick={async()=>{setSaving(true);try{await invoke({action:'recover_payment_lock',processStopped,reason:recoveryReason,expectedStartedAt:paymentLock.startedAt,expectedKey:paymentLock.key});await loadData();setSuccess('Bloqueo liberado con trazabilidad. Revisa la operación original antes de reintentar.');}catch(e){setError(e?.response?.data?.error||e.message);}finally{setSaving(false);}}}>Recuperar bloqueo</Button></details>}
           {success && <div className="mt-4 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 text-xs"><CheckCircle2 className="w-4 h-4" /> {success}</div>}
           {error && <div aria-live="polite" className="mt-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs"><AlertTriangle className="w-4 h-4 mt-0.5" /> {error}</div>}
         </div>
@@ -335,7 +364,7 @@ export default function InvoicePaymentReconciliationModal({ open, mode, invoice,
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Conciliar movimiento
             </Button>
           ) : (
-            <Button onClick={handleAddPayment} disabled={saving || !amount || !paymentDate || outstanding <= 0.01}>
+            <Button onClick={handleAddPayment} disabled={saving || !amount || !paymentDate || outstanding <= 0.01 || (currency!=='EUR'&&!(Number(exchangeRate)>0))}>
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Registrar
             </Button>
           )}

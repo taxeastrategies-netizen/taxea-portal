@@ -257,7 +257,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
           titulo: `${result.review_required ? 'Factura pendiente de revisión' : 'Nueva factura'}: ${payload.numero_factura}`,
-          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || ''} · ${fmt(total)} €`,
+          descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || ''} · ${fmt(total)} {form.moneda||'EUR'}`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
 
@@ -453,23 +453,24 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             <Textarea value={form.concepto} onChange={set('concepto')} placeholder="Descripción detallada del servicio..." rows={3} />
           </div>
 
+          <div className="grid grid-cols-2 gap-4"><label className="space-y-1.5 text-sm">Divisa<NativeSelect aria-label="Divisa de la factura" className="w-full rounded border p-2" value={form.moneda||'EUR'} onChange={set('moneda')}><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option><option>JPY</option></NativeSelect></label>{form.moneda!=='EUR'&&<label className="space-y-1.5 text-sm">Cambio contable · EUR por unidad<Input aria-label="Cambio contable EUR" type="number" min="0.000001" step="0.000001" value={form.exchange_rate||''} onChange={set('exchange_rate')}/></label>}</div>
           {/* Importes */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Importes</p>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.es_rectificativa)} onChange={event => setForm(current => ({ ...current, es_rectificativa: event.target.checked }))} />Factura rectificativa (requiere revisión del asesor)</label>
             {form.es_rectificativa && <Input value={form.factura_rectificada} onChange={set('factura_rectificada')} placeholder="Número de la factura original" aria-label="Factura original rectificada" />}
-            {taxType === 'IVA' && <div className="rounded-xl border p-3 space-y-2">
+            {['IVA','IGIC'].includes(taxType) && <div className="rounded-xl border p-3 space-y-2">
               <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva) || 21 }])}>{quotaRows.length ? 'Volver a un tipo único' : 'Desglosar varios tipos de IVA'}</button>
               {quotaRows.map((row, index) => <div key={index} className="flex items-center gap-2">
                 <Input aria-label={`Base IVA línea ${index + 1}`} type="number" step="0.01" value={row.base} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, base: event.target.value } : item))} />
-                <NativeSelect aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{[4,10,21].map(rate => <option key={rate} value={rate}>{rate}%</option>)}</NativeSelect>
+                <NativeSelect aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{(taxType==='IGIC'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).map(rate => <option key={rate} value={rate}>{rate}%</option>)}</NativeSelect>
                 <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
               </div>)}
               {quotaRows.length > 0 && quotaRows.length < 3 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: [21,10,4].find(rate => !quotaRows.some(row => Number(row.rate) === rate)) }])}>Añadir tipo de IVA</button>}
             </div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Base imponible (€) *</Label>
+                <Label>Base imponible ({form.moneda||'EUR'}) *</Label>
                 <Input type="number" step="0.01" min={form.es_rectificativa ? undefined : 0} disabled={quotaRows.length > 0} value={form.base_imponible}
                   onChange={set('base_imponible')} placeholder="0,00"
                   className={errors.base_imponible ? 'border-destructive' : ''} />
@@ -487,7 +488,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <div className="space-y-1.5">
                 <Label>Cuota {taxType}</Label>
                 <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium">
-                  {fmt(cuota)} €
+                  {fmt(cuota)} {form.moneda||'EUR'}
                 </div>
               </div>
               {taxType === 'IVA' && <div className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2"><div className="flex items-center gap-3"><Switch checked={Boolean(form.aplica_recargo)} onCheckedChange={value => setForm(current => ({ ...current, aplica_recargo: value, tipo_recargo: value ? (Number(current.tipo_iva) === 21 ? 5.2 : Number(current.tipo_iva) === 10 ? 1.4 : Number(current.tipo_iva) === 4 ? 0.5 : 0) : 0 }))} /><span className="text-sm font-medium text-amber-900">Factura con recargo de equivalencia</span></div>{form.aplica_recargo && <><label className="block text-xs text-amber-900">Tipo de recargo (%)<Input type="number" min="0" max="100" step="0.01" value={form.tipo_recargo ?? ''} onChange={set('tipo_recargo')} className="mt-1 bg-white" /></label><p className="text-[11px] text-amber-800">La cuota se consigna por separado. El documento quedará pendiente de validación fiscal y contable del asesor; no se emitirá ni contabilizará automáticamente.</p><ErrMsg msg={errors.tipo_recargo} /></>}</div>}
@@ -524,7 +525,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <div className="space-y-1.5">
                     <Label>Importe retención</Label>
                     <div className="h-9 flex items-center px-3 bg-secondary/60 rounded-md border border-border text-sm font-medium text-destructive">
-                      -{fmt(retencionImporte)} €
+                      {fmt(-retencionImporte)} {form.moneda||'EUR'}
                     </div>
                   </div>
                 </>
@@ -537,22 +538,22 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Base imponible</span>
-                  <span className="font-medium">{fmt(Number(form.base_imponible) || 0)} €</span>
+                  <span className="font-medium">{fmt(Number(form.base_imponible) || 0)} {form.moneda||'EUR'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">{quotaRows.length ? `IVA (${quotaRows.map(row => `${row.rate} %`).join(' · ')})` : `${taxType} ${form.tipo_iva} %`}</span>
-                  <span className="font-medium">+ {fmt(cuota)} €</span>
+                  <span className="font-medium">+ {fmt(cuota)} {form.moneda||'EUR'}</span>
                 </div>
-                {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} €</span></div>}
+                {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} {form.moneda||'EUR'}</span></div>}
                 {form.aplica_retencion && (
                   <div className="flex justify-between text-destructive">
                     <span>Retención IRPF {form.retencion_irpf} %</span>
-                    <span className="font-medium">- {fmt(retencionImporte)} €</span>
+                    <span className="font-medium">- {fmt(retencionImporte)} {form.moneda||'EUR'}</span>
                   </div>
                 )}
                 <div className="flex justify-between pt-2 border-t border-border text-base font-bold">
                   <span>Total factura</span>
-                  <span className="text-teal">{fmt(total)} €</span>
+                  <span className="text-teal">{fmt(total)} {form.moneda||'EUR'}</span>
                 </div>
               </div>
             </div>

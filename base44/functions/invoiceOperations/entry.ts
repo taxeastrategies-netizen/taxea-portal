@@ -1,3 +1,6 @@
+import {acquirePaymentLease,recoverPaymentLease} from './paymentLease.mjs';
+import {reccSchedule,reccCorrections,reccMetadata} from './reccRules.mjs';
+import {accountingFx,invoiceCurrency,reccPaymentFx,forcedFxDate,forcedTaxFxParts,taxFx} from './reccCurrency.mjs';
 import{requirePortalCompany}from'./portalAccess.generated.mjs';
 import {resolveStoredDocumentReference,assetIdFromReference,authorizedAsset} from './storageRuntime.generated.mjs';
 import { reviewFilter } from './advisorReview.mjs';
@@ -232,14 +235,21 @@ async function visiblePayments(base44, companyId, payments) {
 async function refreshInvoicePaymentState(base44, invoice, companyId) {
   const allPayments = await listPayments(base44, companyId, invoice.id);
   const { visible: payments, pending } = await visiblePayments(base44, companyId, allPayments);
-  const total = asMoney(Math.abs(Number(invoice.total_factura) || 0));
+  const metadata=invoice.fiscal_regime==='criterio_caja'?reccMetadata(invoice):{};
+  const total = asMoney(invoice.es_rectificativa&&metadata.documentKind==='advance'?Number(metadata.refundCashAmount??Math.abs(Number(invoice.total_factura))):Math.abs(Number(invoice.total_factura)||0));
+  let creditOffset=0;
+  if(!invoice.es_rectificativa&&metadata.documentKind==='advance'){
+    const credits=await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,fiscal_regime:'criterio_caja',es_rectificativa:true},'-created_date',5001);
+    if(credits.length>5000)throw Object.assign(new Error('Revisa el histórico completo de abonos antes de calcular el saldo del anticipo.'),{status:422});
+    creditOffset=asMoney(credits.filter(row=>!row.anulada&&row.fiscal_review_status==='validado'&&row.linked_journal_entry_id&&reccMetadata(row).originalInvoiceId===invoice.id).reduce((sum,row)=>sum+Math.max(0,Math.abs(Number(row.total_factura))-Number(reccMetadata(row).refundCashAmount??Math.abs(Number(row.total_factura)))),0));
+  }
   // Conserva facturas históricas marcadas como cobradas/pagadas antes de existir
   // el nuevo registro detallado de pagos. No se reabre ninguna factura legado.
   const legacySettled = (allPayments || []).length === 0 && invoice.estado_cobro === 'cobrada';
   const paid = legacySettled
     ? total
     : asMoney((payments || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
-  const outstanding = asMoney(Math.max(0, total - paid));
+  const outstanding = asMoney(Math.max(0, total - paid-creditOffset));
   const estado = outstanding <= MONEY_EPSILON
     ? 'cobrada'
     : paid > MONEY_EPSILON
@@ -263,7 +273,7 @@ async function refreshInvoicePaymentState(base44, invoice, companyId) {
     }
   }
   const pendingAmount = asMoney((pending || []).reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0));
-  return { payments, paid, outstanding, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount, ...(summaryWarning ? { summary_warning: summaryWarning } : {}) };
+  return { payments, paid, outstanding, credit_offset:creditOffset, estado_cobro: estado, pending_accounting_operations: pending.length, pending_accounting_amount: pendingAmount, ...(summaryWarning ? { summary_warning: summaryWarning } : {}) };
 }
 
 async function stateAfterCommittedPayment(base44, invoice, companyId, current, payment) {
@@ -272,7 +282,7 @@ async function stateAfterCommittedPayment(base44, invoice, companyId, current, p
     // La unidad de pago ya está confirmada. No devolver un falso fallo ni repetir escrituras.
     const payments = [...current.payments.filter(item => item.id !== payment.id), payment];
     const paid = asMoney(payments.reduce((sum, item) => sum + Math.abs(Number(item.amount) || 0), 0));
-    const outstanding = asMoney(Math.max(0, Math.abs(Number(invoice.total_factura) || 0) - paid));
+    const outstanding=asMoney(Math.max(0,current.outstanding-(current.payments.some(item=>item.id===payment.id)?0:Math.abs(Number(payment.amount)||0))));
     console.warn('[invoiceOperations] confirmed payment summary pending:', error?.message || 'read failed');
     return { ...current, payments, paid, outstanding, estado_cobro: outstanding <= MONEY_EPSILON ? 'cobrada' : 'parcial',
       summary_warning: 'Pago confirmado y contabilizado; el resumen de la factura requiere actualizarse. No vuelvas a registrar este pago.' };
@@ -295,7 +305,8 @@ async function postedInvoiceCounterparty(svc, companyId, invoice, entry) {
   const thirdLines = (originalLines || []).filter(row => row.sourceLineType === 'tercero' || /^(430|400|410)/.test(String(row.accountCode || '')));
   const codes = [...new Set(thirdLines.map(row => String(row.accountCode || '')))];
   const postedDue = asMoney(thirdLines.reduce((sum, row) => sum + Number(row.debit || 0) - Number(row.credit || 0), 0));
-  const expectedDue = asMoney(Number(invoice.total_factura) * (invoice.tipo === 'emitida' ? 1 : -1));
+  const creditBook=invoice.es_rectificativa?JSON.parse(invoice.recc_metadata||'{}').advanceCreditBook:null;
+  const expectedDue = asMoney((creditBook?-creditBook.totalEur:Number(invoice.total_factura)*accountingFx(invoice))*(invoice.tipo==='emitida'?1:-1));
   if (originalLines?.length >= 5001 || codes.length !== 1 || Math.abs(postedDue - expectedDue) > 0.02)
     throw Object.assign(new Error('Revisa la cuenta de tercero del asiento original antes de registrar el cobro/pago. No se cambia su subcuenta.'), { status: 409 });
   const counterpartyMatches = await svc.entities.AccountingAccount.filter({ companyId, code: codes[0] }, '-created_date', 2);
@@ -304,10 +315,39 @@ async function postedInvoiceCounterparty(svc, companyId, invoice, entry) {
   return counterpartyMatches[0];
 }
 
-async function prepareInvoiceBankAccounting(base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user) {
+async function prepareInvoiceBankAccounting(base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user, payment={}) {
   const svc = queuedAccountingClient(base44.asServiceRole);
   const posting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
   const counterpartyAccount = await postedInvoiceCounterparty(svc, companyId, invoice, posting.entry);
+  let fxLines;
+  if(invoiceCurrency(invoice)!=='EUR'){
+    const incoming=transaction.tipo==='entrada',description='Conciliación RECC en divisa '+invoice.numero_factura;
+    const line=(a,debit,credit,type)=>({accountId:a.id,accountCode:a.code,accountName:a.name,description,debit,credit,sourceLineType:type,bankTransactionId:transaction.id,isReconciled:true});
+    fxLines=incoming?[line(bankLedger,payment.amount_eur,0,'banco'),line(counterpartyAccount,0,payment.carrying_amount_eur,'tercero')]:[line(counterpartyAccount,payment.carrying_amount_eur,0,'tercero'),line(bankLedger,0,payment.amount_eur,'banco')];
+    const parts=JSON.parse(payment.fx_plan||'null');if(parts?.version!=='recc-fx-v1')throw Object.assign(new Error('Falta valoración EUR trazada del pago.'),{status:422});
+    const adjustment=await fxAdjustmentLines(svc,companyId,invoice,parts,description);fxLines.push(...adjustment.lines);await balanceFxLines(svc,companyId,fxLines,description);
+  }
+  if(invoice.fiscal_regime==='criterio_caja'){
+    const existing=await svc.entities.JournalEntry.filter({companyId,postingKey:'bank:'+transaction.id+':'+SCHEMA_VERSION},'-created_date',2);
+    if(existing.length>1)throw Object.assign(new Error('Hay más de un asiento del movimiento bancario. Revisa la incidencia antes de conciliar.'),{status:409});
+    const original=existing[0];
+    if(original&&original.documentId!==invoice.id){
+      const previous=await svc.entities.JournalEntryLine.filter({companyId,journalEntryId:original.id},'lineNumber',101);
+      const bank=previous.filter(row=>row.accountId===bankLedger.id),clearing=previous.filter(row=>/^555\d{5}$/.test(row.accountCode||''));
+      const cash=asMoney(Math.abs(Number(transaction.importe))*((transaction.moneda||'EUR')==='EUR'?1:Number(transaction.exchange_rate||transaction.tipo_cambio)));
+      if(original.status!=='confirmado'||original.reversalEntryId||previous.length!==2||bank.length!==1||clearing.length!==1||Math.abs(Math.abs(Number(bank[0].debit)-Number(bank[0].credit))-cash)>0.01||Math.abs(previous.reduce((s,l)=>s+Number(l.debit||0)-Number(l.credit||0),0))>0.01)
+        throw Object.assign(new Error('El asiento bancario previo no es una partida 555 confirmada e inequívoca. No se añade otro banco.'),{status:409});
+      const clearingAccount=await svc.entities.AccountingAccount.get(clearing[0].accountId);
+      if(!clearingAccount||clearingAccount.companyId!==companyId||clearingAccount.status==='inactiva')throw Object.assign(new Error('La cuenta 555 original no está disponible.'),{status:409});
+      const incoming=transaction.tipo==='entrada',description='Aplicación 555 de movimiento '+transaction.id+' a factura '+invoice.numero_factura;
+      const line=(account,debit,credit,type)=>({accountId:account.id,accountCode:account.code,accountName:account.name,description,debit,credit,sourceLineType:type,bankTransactionId:transaction.id});
+      const settlementLines=fxLines?fxLines.map(row=>row.accountId===bankLedger.id?{...row,accountId:clearingAccount.id,accountCode:clearingAccount.code,accountName:clearingAccount.name,sourceLineType:'ajuste',description}:row)
+        :incoming?[line(clearingAccount,cash,0,'ajuste'),line(counterpartyAccount,0,cash,'tercero')]:[line(counterpartyAccount,cash,0,'tercero'),line(clearingAccount,0,cash,'ajuste')];
+      const settlement=await createJournalEntry(svc,companyId,{date:transaction.fecha_operacion,description,type:incoming?'cobro':'pago',source:'conciliacion',documentId:invoice.id,postingKey:'bank-settlement:'+transaction.id+':'+invoice.id+':'+SCHEMA_VERSION,operationType:'bank_reconciliation',status:'confirmado',deferCommit:true,lines:settlementLines},user.email);
+      if(settlement.operation)settlement.operation=await updatePostingOperation(svc,settlement.operation,{bankTransactionId:transaction.id,documentId:invoice.id,stage:'journal_staged'});
+      return {posting,bankPosting:{...settlement,originalBankEntryId:original.id},counterpartyAccount};
+    }
+  }
   const bankPosting = await postBankReconciliation(
     svc,
     companyId,
@@ -319,6 +359,7 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
       documentId: invoice.id,
       description: `${invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'} factura ${invoice.numero_factura}`,
       counterpartyLineType: 'tercero',
+      ...(fxLines?{lines:fxLines}:{}),
       status: 'confirmado',
       deferCommit: true,
     },
@@ -331,35 +372,80 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
   return { posting, bankPosting, counterpartyAccount };
 }
 
-async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user) {
+async function prepareReccFxTerms(base44,companyId,invoice,payment,before){
+ const lines=await base44.asServiceRole.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',101);
+ if(!lines.length||lines.length>100||lines.some(line=>line.reviewStatus!=='validado'))throw Object.assign(new Error('Falta el desglose fiscal validado para convertir el pago.'),{status:422});
+ return reccPaymentFx(invoice,payment,before,lines);
+}
+async function fxAdjustmentLines(svc,companyId,invoice,parts,description){
+  const lines=[];
+  const signed=async(code,name,net,type)=>{net=asMoney(net);if(!net)return;const account=await ensureAccount(svc,companyId,code,name,/^[67]/.test(code)?(/^6/.test(code)?'gasto':'ingreso'):/^438/.test(code)?'pasivo':/^407/.test(code)?'activo':'impuesto');lines.push({accountId:account.id,accountCode:account.code,accountName:account.name,description,debit:net>0?net:0,credit:net<0?-net:0,sourceLineType:type});};
+  const issued=invoice.tipo==='emitida',igic=invoice.indirect_tax_kind==='igic',sign=issued?-1:1;
+  await signed(igic?(issued?'47770000':'47270000'):(issued?'47700000':'47200000'),igic?(issued?'IGIC repercutido':'IGIC soportado'):(issued?'IVA repercutido':'IVA soportado'),sign*(issued?parts.quota:parts.deductible),'impuesto');
+  if(!issued&&parts.nonDeductible){
+    const code=invoice.revenue_expense_account_code;
+    if(!/^6\d{7}$/.test(code||'')&&!/^(438|407)\d{5}$/.test(code||''))throw Object.assign(new Error('Revisa la cuenta de gasto original para la cuota no deducible en divisa.'),{status:409});
+    await signed(code,'Gasto original · diferencia fiscal',parts.nonDeductible,/^(438|407)/.test(code)?'ajuste':'gasto');
+  }
+  await signed(issued?'47710000':'47210000',issued?'Recargo repercutido':'Recargo soportado',sign*(parts.surcharge||0),'impuesto');
+  await signed(issued?'47300000':'47510000',issued?'Hacienda Pública, retenciones y pagos a cuenta':'Hacienda Pública, acreedora por retenciones practicadas',(issued?1:-1)*(parts.retention||0),'retencion');
+  await signed(issued?'43800000':'40700000',issued?'Anticipos de clientes':'Anticipos a proveedores',sign*(parts.advance||0),'ajuste');
+  return {lines,signed};
+}
+async function balanceFxLines(svc,companyId,lines,description){
+ const balance=asMoney(lines.reduce((s,l)=>s+Number(l.debit||0)-Number(l.credit||0),0));
+ if(balance){const code=balance>0?'76800000':'66800000',account=await ensureAccount(svc,companyId,code,balance>0?'Diferencias positivas de cambio':'Diferencias negativas de cambio',balance>0?'ingreso':'gasto');lines.push({accountId:account.id,accountCode:account.code,accountName:account.name,description,debit:balance<0?-balance:0,credit:balance>0?balance:0,sourceLineType:'ajuste'});}
+ return lines;
+}
+async function ensureForcedFxAccounting(base44,companyId,invoice,payments,user){
+ if(invoiceCurrency(invoice)==='EUR'||Number(invoice.total_factura)<0)return null;
+ const svcRead=base44.asServiceRole;
+ const [taxLines,corrections]=await Promise.all([svcRead.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',101),svcRead.entities.Invoice.filter({company_id:companyId,fiscal_regime:'criterio_caja',es_rectificativa:true},'-created_date',5001)]);
+ if(taxLines.length>100||corrections.length>5000)throw Object.assign(new Error('El devengo en divisa requiere revisar el histórico completo sin truncar.'),{status:422});
+ const correctionLines=[];
+ for(const credit of corrections.filter(row=>reccMetadata(row).originalInvoiceId===invoice.id))correctionLines.push(...await svcRead.entities.InvoiceTaxLine.filter({companyId,invoiceId:credit.id},'lineNumber',101));
+ const parts={date:forcedFxDate(invoice),quota:0,deductible:0,nonDeductible:0,surcharge:0,remaining:0},cancelled={quota:0,deductible:0,nonDeductible:0,surcharge:0};
+ for(const line of taxLines){
+   const schedule=reccSchedule({invoiceId:invoice.id,invoiceNet:Math.abs(Number(invoice.total_factura)),operationDate:invoice.fecha_operacion||invoice.fecha_emision,...reccMetadata(invoice),payments:payments.map(p=>({id:p.id,date:p.payment_date,amount:p.amount,status:p.operation_status})),corrections:reccCorrections(invoice,corrections,line,[...taxLines,...correctionLines])});
+   const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));if(!forced)continue;
+   const rate=taxFx(invoice,forced.date),initial=accountingFx(invoice);
+   for(const [field,key]of [['quota','quota'],['deductible','deductibleQuota'],['nonDeductible','nonDeductibleQuota'],['surcharge','surchargeQuota']]){
+     const recognized=field==='nonDeductible'?asMoney(asMoney(Number(line.quota||0)*forced.factor*rate)-asMoney(Number(line.deductibleQuota||0)*forced.factor*rate)):asMoney(Number(line[key]||0)*forced.factor*rate);
+     parts[field]=asMoney(parts[field]+recognized);cancelled[field]+=Number(line[key]||0)*schedule.cancelledFactor;
+   }
+   parts.remaining=Math.max(parts.remaining,forced.amount);
+ }
+ if(!parts.remaining)return null;
+ for(const [field,key]of [['quota','cuota_iva'],['deductible','deductible_tax_amount'],['nonDeductible','non_deductible_tax_amount'],['surcharge','cuota_recargo']]){
+   const allocated=payments.filter(p=>p.operation_status==='committed'&&p.payment_date<=parts.date).reduce((sum,p)=>{const plan=JSON.parse(p.fx_plan||'null');if(plan?.bookTax?.[field]==null)throw Object.assign(new Error('El pago previo no conserva el reparto fiscal EUR original.'),{status:422});return sum+Number(plan.bookTax[field]);},0);
+   const initialRemaining=asMoney(asMoney(Number(invoice[key]||0)*accountingFx(invoice))-allocated-asMoney(cancelled[field]*accountingFx(invoice)));
+   parts[field]=asMoney(parts[field]-initialRemaining);
+ }
+ const svc=queuedAccountingClient(base44.asServiceRole),description=`Devengo RECC por límite/concurso · ${invoice.numero_factura}`;
+ const {lines}=await fxAdjustmentLines(svc,companyId,invoice,parts,description);
+ if(!lines.length)return null;
+ await balanceFxLines(svc,companyId,lines,description);
+ return createJournalEntry(svc,companyId,{date:parts.date,description,type:'regularizacion',source:'sistema',documentId:invoice.id,postingKey:`recc-fx-forced:${invoice.id}:${parts.date}:${SCHEMA_VERSION}`,status:'confirmado',operationType:'recc_forced_fx',lines},user.email);
+}
+async function prepareManualPaymentAccounting(base44, companyId, invoice, amount, paymentDate, method, idempotencyKey, user, payment={}, ledgerOverride=null) {
   const svc = queuedAccountingClient(base44.asServiceRole);
   const invoicePosting = await postInvoice(svc, companyId, invoice, user.email, { status: 'confirmado' });
   const counterparty = await postedInvoiceCounterparty(svc, companyId, invoice, invoicePosting.entry);
   const ledgerCode = method === 'efectivo' ? '57000000' : '57200000';
-  const ledgerMatches = await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 2);
-  if (ledgerMatches.length > 1 || ledgerMatches[0]?.status === 'inactiva')
-    throw Object.assign(new Error('Revisa la cuenta de tesorería antes de registrar el cobro/pago.'), { status: 409 });
+  const ledgerMatches = ledgerOverride?[ledgerOverride]:await svc.entities.AccountingAccount.filter({ companyId, code: ledgerCode }, '-created_date', 2);
+  if (ledgerMatches.length > 1 || ledgerMatches[0]?.status === 'inactiva')throw Object.assign(new Error('Revisa la cuenta de tesorería antes de registrar el cobro/pago.'), { status: 409 });
   const ledger = ledgerMatches[0] || await ensureAccount(svc, companyId, ledgerCode, method === 'efectivo' ? 'Caja, euros' : 'Bancos', 'banco');
   const postingKey = `payment:${invoice.id}:${idempotencyKey}:${SCHEMA_VERSION}`;
   const isCreditNote = Number(invoice.total_factura) < 0;
   const incoming = (invoice.tipo === 'emitida' && !isCreditNote) || (invoice.tipo === 'recibida' && isCreditNote);
   const description = `${incoming ? 'Cobro' : 'Pago'} factura ${invoice.numero_factura || ''}`.trim();
   const line = (account, debit, credit, sourceLineType) => ({ accountId: account.id, accountCode: account.code, accountName: account.name, description, debit, credit, sourceLineType });
-  const paymentPosting = await createJournalEntry(svc, companyId, {
-    date: paymentDate,
-    description,
-    type: incoming ? 'cobro' : 'pago',
-    source: 'manual',
-    documentId: invoice.id,
-    postingKey,
-    status: 'confirmado',
-    deferCommit: true,
-    operationType: 'invoice_payment',
-    lines: incoming
-      ? [line(ledger, amount, 0, 'banco'), line(counterparty, 0, amount, 'tercero')]
-      : [line(counterparty, amount, 0, 'tercero'), line(ledger, 0, amount, 'banco')],
-  }, user.email);
-  return { invoicePosting, paymentPosting };
+  const foreign=invoiceCurrency(invoice)!=='EUR',cash=foreign?Number(payment.amount_eur):amount,carry=foreign?Number(payment.carrying_amount_eur):amount;
+  if(!Number.isFinite(cash)||!Number.isFinite(carry)||cash<=0||carry<=0)throw Object.assign(new Error('El pago no tiene conversión EUR confirmada.'),{status:422});
+  const lines=incoming?[line(ledger,cash,0,'banco'),line(counterparty,0,carry,'tercero')]:[line(counterparty,carry,0,'tercero'),line(ledger,0,cash,'banco')];
+  if(foreign){const parts=JSON.parse(payment.fx_plan||'null');if(parts?.version!=='recc-fx-v1')throw Object.assign(new Error('El pago en divisa no tiene plan de conversión trazado.'),{status:422});const adjustment=await fxAdjustmentLines(svc,companyId,invoice,parts,description);lines.push(...adjustment.lines);await balanceFxLines(svc,companyId,lines,description);}
+  const paymentPosting = await createJournalEntry(svc, companyId, {date:paymentDate,description,type:incoming?'cobro':'pago',source:ledgerOverride?'banco':'manual',documentId:invoice.id,postingKey,status:'confirmado',deferCommit:true,operationType:'invoice_payment',currency:invoiceCurrency(invoice),fxRate:foreign?payment.exchange_rate:1,originalAmount:foreign?amount:null,lines}, user.email);
+  return { invoicePosting, paymentPosting, counterpartyAccount:counterparty };
 }
 
 async function reserveInvoicePayment(base44, companyId, invoice, payload) {
@@ -456,7 +542,7 @@ async function commitPaymentPostingUnit(base44, companyId, payment, paymentPosti
 
 Deno.serve(async (req) => {
   let currentAction = '';
-  let userAuthenticated=false;
+  let userAuthenticated=false,releasePaymentLease=null;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
@@ -540,6 +626,11 @@ Deno.serve(async (req) => {
 
     const owned = await getOwnedInvoice(base44, user, body.invoice_id, body.company_id);
     const companyId = owned.companyId;
+    if(['add_payment','reconcile','confirm_recc_forced_fx'].includes(action))releasePaymentLease=await acquirePaymentLease(base44.asServiceRole,companyId,owned.invoice.id,body.idempotency_key||'bank:'+String(body.bank_transaction_id||''));
+    if(action==='recover_payment_lock'){
+      if(!['admin','super_admin','advisor','asesor'].includes(String(user.role||'').toLowerCase()))return Response.json({error:'Solo asesor o administrador recupera una operación interrumpida.'},{status:403});
+      return Response.json(await recoverPaymentLease(base44.asServiceRole,companyId,owned.invoice.id,body,user.email));
+    }
     const invoice = await ensureInvoiceQrHash(base44.asServiceRole.entities.Invoice, owned.invoice);
     if (['FISCAL_ADVISOR_REVIEW_PHASE1', 'FISCAL_POSTING_ERROR', 'SOURCE_CHECK_PENDING'].includes(invoice.accounting_migration_hold_reason)
       && ['add_payment', 'reconcile', 'set_qr_pdf'].includes(action)) {
@@ -850,9 +941,17 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true });
     }
 
+    if(action==='confirm_recc_forced_fx'){
+      if(!['admin','super_admin','advisor','asesor'].includes(String(user.role||'').toLowerCase()))return Response.json({error:'Solo asesor o administrador confirma el ajuste de divisa del devengo legal.'},{status:403});
+      if(invoice.fiscal_regime!=='criterio_caja'||invoice.fiscal_review_status!=='validado'||invoiceCurrency(invoice)==='EUR')return Response.json({error:'Selecciona una factura RECC en divisa validada.'},{status:422});
+      if(forcedFxDate(invoice)>new Date().toISOString().slice(0,10))return Response.json({error:'El límite o concurso todavía no se ha producido.'},{status:422});
+      const current=await refreshInvoicePaymentState(base44,invoice,companyId);
+      const adjustment=await ensureForcedFxAccounting(base44,companyId,invoice,current.payments,user);
+      return Response.json({ok:true,journal_entry:adjustment?.entry||null,no_adjustment_needed:!adjustment});
+    }
     if (action === 'list_payments') {
       const state = await refreshInvoicePaymentState(base44, invoice, companyId);
-      return Response.json({ ok: true, ...state });
+      return Response.json({ ok: true, ...state,...(['admin','super_admin','advisor','asesor'].includes(String(user.role||'').toLowerCase())?{payment_lock:owned.invoice.payment_lock_token?{startedAt:owned.invoice.payment_lock_started_at,key:owned.invoice.payment_lock_key}:null}:{}) });
     }
 
     if (action === 'add_payment') {
@@ -885,7 +984,11 @@ Deno.serve(async (req) => {
           outstanding: current.outstanding,
         }, { status: 409 });
       }
+      const fxTerms=invoiceCurrency(invoice)==='EUR'?{}:existingPayment||await prepareReccFxTerms(base44,companyId,invoice,{amount:effectiveAmount,payment_date:effectiveDate,exchange_rate:body.exchange_rate},current.paid);
+      if(invoiceCurrency(invoice)!=='EUR'&&invoice.fiscal_regime!=='criterio_caja')throw Object.assign(new Error('La liquidación en divisa requiere el circuito RECC revisado.'),{status:422});
+      if(invoiceCurrency(invoice)!=='EUR'&&effectiveDate>forcedFxDate(invoice))await ensureForcedFxAccounting(base44,companyId,invoice,current.payments,user);
       const reservation = existingPayment ? { payment: existingPayment, alreadyExisted: true } : await reserveInvoicePayment(base44, companyId, invoice, {
+        ...fxTerms,
         company_id: companyId,
         invoice_id: invoice.id,
         amount: effectiveAmount,
@@ -899,7 +1002,7 @@ Deno.serve(async (req) => {
         created_at: new Date().toISOString(),
         created_by: user.full_name || user.email || 'Usuario',
       });
-      const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, effectiveAmount, effectiveDate, effectiveMethod, idempotencyKey, user);
+      const accounting = await prepareManualPaymentAccounting(base44, companyId, invoice, effectiveAmount, effectiveDate, effectiveMethod, idempotencyKey, user, reservation.payment);
       const stagedPayment = await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, {
         accounting_operation_id: accounting.paymentPosting.operation?.id || '',
         operation_status: 'preparing',
@@ -1010,7 +1113,12 @@ Deno.serve(async (req) => {
       const existingPayment = previousPayment?.[0] || null;
       const current = await refreshInvoicePaymentState(base44, invoice, companyId);
       const wasAlreadyVisible = existingPayment ? current.payments.some(payment => payment.id === existingPayment.id) : false;
-      const amount = existingPayment ? asMoney(Math.abs(Number(existingPayment.amount) || 0)) : asMoney(Math.abs(Number(transaction.importe) || 0));
+      const transactionCurrency=String(transaction.moneda||'EUR').toUpperCase(),documentCurrency=invoiceCurrency(invoice);
+      const bankFx=transactionCurrency==='EUR'?1:Number(transaction.exchange_rate||transaction.tipo_cambio);
+      if(!Number.isFinite(bankFx)||bankFx<=0)return businessError('Confirma primero el cambio a EUR del movimiento bancario.',422);
+      const cashEur=asMoney(Math.abs(Number(transaction.importe))*bankFx);
+      const amount=existingPayment?asMoney(Math.abs(Number(existingPayment.amount))):documentCurrency===transactionCurrency?asMoney(Math.abs(Number(transaction.importe))):documentCurrency==='EUR'?cashEur:asMoney(Number(body.invoice_amount));
+      if(!Number.isFinite(amount)||amount<=0)return businessError('Indica el importe del movimiento en la divisa de la factura.',422);
       if (amount <= 0) return businessError('El movimiento no tiene un importe válido.', 409);
       if (!existingPayment && amount - current.outstanding > MONEY_EPSILON) {
         return businessError(
@@ -1018,12 +1126,16 @@ Deno.serve(async (req) => {
           409,
         );
       }
+      const fxTerms=documentCurrency==='EUR'?{}:existingPayment||await prepareReccFxTerms(base44,companyId,invoice,{amount,payment_date:transaction.fecha_operacion,exchange_rate:cashEur/amount},current.paid);
+      if(documentCurrency!=='EUR'&&invoice.fiscal_regime!=='criterio_caja')return businessError('La conciliación en divisa requiere circuito RECC revisado.',422);
+      if(documentCurrency!=='EUR'&&transaction.fecha_operacion>forcedFxDate(invoice))await ensureForcedFxAccounting(base44,companyId,invoice,current.payments,user);
       const now = new Date().toISOString();
       const reservation = existingPayment ? { payment: existingPayment, alreadyExisted: true } : await reserveInvoicePayment(base44, companyId, invoice, {
+        ...fxTerms,
         company_id: companyId,
         invoice_id: invoice.id,
         amount,
-        currency: transaction.moneda || invoice.moneda || 'EUR',
+        currency: documentCurrency,
         payment_date: transaction.fecha_operacion,
         method: 'transferencia',
         reference: cleanText(transaction.referencia || transaction.concepto, 160),
@@ -1035,7 +1147,7 @@ Deno.serve(async (req) => {
         created_by: user.full_name || user.email || 'Usuario',
       });
       const { posting, bankPosting, counterpartyAccount } = await prepareInvoiceBankAccounting(
-        base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user,
+        base44, companyId, invoice, transaction, bankLedger, sourceBankAccount, user, reservation.payment,
       );
       const stagedPayment = await base44.asServiceRole.entities.InvoicePayment.update(reservation.payment.id, {
         accounting_operation_id: bankPosting.operation?.id || '',
@@ -1047,7 +1159,7 @@ Deno.serve(async (req) => {
         confianza_conciliacion: 'alta',
         entidad_tipo: 'invoice',
         entidad_id: invoice.id,
-        journal_entry_id: bankPosting.entry.id,
+        journal_entry_id: bankPosting.originalBankEntryId||bankPosting.entry.id,
         accounting_account_id: counterpartyAccount.id,
         accounting_account_code: counterpartyAccount.code,
         reconciled_at: now,
@@ -1082,5 +1194,5 @@ Deno.serve(async (req) => {
       return businessError(error?.message || 'No se pudo completar la conciliación.', status);
     }
     return Response.json({ error: error?.message || 'Error interno.' }, { status });
-  }
+  }finally{if(releasePaymentLease)try{await releasePaymentLease();}catch(error){console.error('[payment lease]',{status:409});}}
 });

@@ -1,3 +1,4 @@
+import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { useState, useEffect, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
@@ -79,16 +80,16 @@ export default function LibroRegistros() {
   const gastosF = useMemo(() => activeExpenses.filter(e => e.tipo === 'gasto' && inPeriod(e)), [activeExpenses, filterTrimestre]);
 
   // KPIs libro ventas
-  const totalBaseV = emitidas.reduce((s, i) => s + (i.base_imponible || 0), 0);
-  const totalCuotaV = emitidas.reduce((s, i) => s + (i.cuota_iva || 0), 0);
-  const totalRetV = emitidas.reduce((s, i) => s + (i.base_imponible || 0) * (i.retencion_irpf || 0) / 100, 0);
-  const totalTotalV = emitidas.reduce((s, i) => s + (i.total_factura || 0), 0);
+  const totalBaseV = emitidas.reduce((s, i) => s + invoiceEuroAmount(i,'base_imponible'), 0);
+  const totalCuotaV = emitidas.reduce((s, i) => s + invoiceEuroAmount(i,'cuota_iva'), 0);
+  const totalRetV = emitidas.reduce((s, i) => s + invoiceEuroAmount(i,'base_imponible') * (i.retencion_irpf || 0) / 100, 0);
+  const totalTotalV = emitidas.reduce((s, i) => s + invoiceEuroAmount(i,'total_factura'), 0);
 
   // KPIs libro compras
-  const totalBaseC = [...recibidas, ...gastosF].reduce((s, i) => s + (i.base_imponible || 0), 0);
-  const totalCuotaC = [...recibidas].reduce((s, i) => s + (i.cuota_iva || 0), 0)
+  const totalBaseC = [...recibidas, ...gastosF].reduce((s, i) => s + invoiceEuroAmount(i,'base_imponible'), 0);
+  const totalCuotaC = [...recibidas].reduce((s, i) => s + invoiceEuroAmount(i,'cuota_iva'), 0)
     + gastosF.reduce((s, e) => s + (e.cuota_impuesto || 0), 0);
-  const totalTotalC = [...recibidas].reduce((s, i) => s + (i.total_factura || 0), 0)
+  const totalTotalC = [...recibidas].reduce((s, i) => s + invoiceEuroAmount(i,'total_factura'), 0)
     + gastosF.reduce((s, e) => s + (e.total || 0), 0);
 
   const handleExport = async (onlyInvoiceBooks = false) => {
@@ -330,11 +331,11 @@ function LibroTable({ data, tipo, loading }) {
                 <td className="px-3 py-2.5 text-foreground">{item.cliente_nombre || item.proveedor_cliente || '—'}</td>
                 {!esGasto && <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell text-xs">{item.cliente_nif || '—'}</td>}
                 <td className="px-3 py-2.5 text-muted-foreground hidden md:table-cell max-w-[180px] truncate text-xs">{item.concepto || '—'}</td>
-                <td className="px-3 py-2.5 text-right text-xs">{(item.base_imponible || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                <td className="px-3 py-2.5 text-right text-xs">{formatInvoiceMoney(item.base_imponible,item)}</td>
                 <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{invoiceTaxRateLabel(item)}</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{(item.cuota_iva || item.cuota_impuesto || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{formatInvoiceMoney(item.cuota_iva??item.cuota_impuesto,item)}</td>
                 {!esGasto && <td className="px-3 py-2.5 text-right text-muted-foreground hidden lg:table-cell text-xs">{item.retencion_irpf ?? 0}%</td>}
-                <td className="px-3 py-2.5 text-right font-semibold text-xs">{(item.total_factura || item.total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                <td className="px-3 py-2.5 text-right font-semibold text-xs">{formatInvoiceMoney(item.total_factura??item.total,item)}</td>
                 <td className="px-3 py-2.5">
                   <span className="text-xs font-medium text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">{item.trimestre}</span>
                 </td>
@@ -345,15 +346,15 @@ function LibroTable({ data, tipo, loading }) {
           {/* Totales */}
           <tfoot>
             <tr className="border-t-2 border-border bg-secondary/40 font-semibold text-xs">
-              <td colSpan={!esGasto ? 5 : 3} className="px-3 py-2.5 text-muted-foreground">TOTAL ({data.length} registros)</td>
-              <td className="px-3 py-2.5 text-right">{data.reduce((s, i) => s + (i.base_imponible || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+              <td colSpan={!esGasto ? 5 : 3} className="px-3 py-2.5 text-muted-foreground">TOTAL EUR ({data.length} registros)</td>
+              <td className="px-3 py-2.5 text-right">{data.reduce((s, i) => s + invoiceEuroAmount(i,'base_imponible'), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
               <td className="hidden lg:table-cell"></td>
               <td className="px-3 py-2.5 text-right hidden lg:table-cell text-teal">
-                {data.reduce((s, i) => s + (i.cuota_iva || i.cuota_impuesto || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                {data.reduce((s, i) => s + invoiceEuroAmount(i,i.cuota_iva!=null?'cuota_iva':'cuota_impuesto'), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
               </td>
               {!esGasto && <td className="hidden lg:table-cell"></td>}
               <td className="px-3 py-2.5 text-right font-bold">
-                {data.reduce((s, i) => s + (i.total_factura || i.total || 0), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                {data.reduce((s, i) => s + invoiceEuroAmount(i,i.total_factura!=null?'total_factura':'total'), 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
               </td>
               <td colSpan={2}></td>
             </tr>

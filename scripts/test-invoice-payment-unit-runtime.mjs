@@ -58,7 +58,7 @@ const records = {
   BankTransaction: [{ id: 'bank-tx-1', company_id: 'company-a', bank_account_id: 'bank-account-1', fecha_operacion: '2026-09-10', concepto: 'Cobro F-2', referencia: 'F-2', importe: 50, moneda: 'EUR', tipo: 'entrada', estado_conciliacion: 'sin_conciliar', estado_proveedor: 'booked', es_demo: false }],
 };
 const counters = {};
-const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => row?.[key] === value);
+const matches = (row, query) => Object.entries(query || {}).every(([key,value]) => value&&typeof value==='object'&&'$in' in value?value.$in.includes(row?.[key])||(row?.[key]===undefined&&value.$in.includes(null)):row?.[key]===value);
 let failNextCommit = false;
 let failNextBankLink = false;
 let failNextSummary = false;
@@ -94,6 +94,7 @@ const entity = name => ({
     records[name][index] = { ...records[name][index], ...payload };
     return records[name][index];
   },
+  async updateMany(query,ops){const rows=(records[name]||[]).filter(row=>matches(row,query));for(const row of rows)Object.assign(row,ops.$set||{});return {success:true,updated:rows.length};},
   async delete(id) {
     const index = (records[name] || []).findIndex(item => item.id === id);
     if (index >= 0) records[name].splice(index, 1);

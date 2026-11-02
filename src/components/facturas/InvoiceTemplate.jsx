@@ -28,6 +28,7 @@ export default function InvoiceTemplate({ invoice, company }) {
   const retencionImporte = invoice?.importe_retencion != null ? Number(invoice.importe_retencion) : base * retencionPct / 100;
   const total = invoice?.total_factura != null ? Number(invoice.total_factura) : base + cuota - retencionImporte;
   const qrUrl = getInvoiceQrUrl(invoice);
+  const currency=invoice?.moneda||'EUR',symbol=currency==='EUR'?'€':currency;
 
   /** @type {Record<string, import('react').CSSProperties>} */
   const s = {
@@ -216,7 +217,7 @@ export default function InvoiceTemplate({ invoice, company }) {
         {/* Total destacado */}
         <div style={s.totalHighlight}>
           <div style={s.totalLabel}>{hasRetention ? 'Total a pagar' : 'Total factura'}</div>
-          <div style={s.totalAmount}>{fmt(total)} €</div>
+          <div style={s.totalAmount}>{fmt(total)} {symbol}</div>
           {invoice?.fecha_vencimiento && (
             <div style={{ fontSize: 10.5, marginTop: 8, opacity: 0.8 }}>
               Vence: {invoice.fecha_vencimiento}
@@ -248,10 +249,10 @@ export default function InvoiceTemplate({ invoice, company }) {
                 <div style={s.conceptoTitle}>{l.titulo || l.concepto || 'Servicio'}</div>
                 {l.descripcion && <div style={s.conceptoDesc}>{l.descripcion}</div>}
               </td>
-              <td style={s.tdRight}>{fmt(l.precio ?? l.precio_unitario)} €</td>
+              <td style={s.tdRight}>{fmt(l.precio ?? l.precio_unitario)} {symbol}</td>
               <td style={s.tdRight}>{l.unidades ?? 1}</td>
-              <td style={s.tdRight}>{fmt(l.subtotal ?? l.precio)} €</td>
-              <td style={{ ...s.tdRight, fontWeight: 700, color: '#111' }}>{fmt(l.total ?? l.subtotal ?? l.precio)} €</td>
+              <td style={s.tdRight}>{fmt(l.subtotal ?? l.precio)} {symbol}</td>
+              <td style={{ ...s.tdRight, fontWeight: 700, color: '#111' }}>{fmt(l.total ?? l.subtotal ?? l.precio)} {symbol}</td>
             </tr>
           ))}
         </tbody>
@@ -262,29 +263,29 @@ export default function InvoiceTemplate({ invoice, company }) {
         <div style={s.totalesBox}>
           <div style={s.totalesRow}>
             <span style={s.totalesLabel}>Base imponible</span>
-            <span style={s.totalesValue}>{fmt(base)} €</span>
+            <span style={s.totalesValue}>{fmt(base)} {symbol}</span>
           </div>
           <div style={s.totalesRow}>
             <span style={s.totalesLabel}>{taxType} {invoiceTaxRateLabel(invoice)}</span>
-            <span style={s.totalesValue}>{fmt(cuota)} €</span>
+            <span style={s.totalesValue}>{fmt(cuota)} {symbol}</span>
           </div>
-          {taxParts.map(part => <div key={part.rate} style={s.totalesRow}><span style={s.totalesLabel}>Base {fmt(part.base)} € · {taxType} {part.rate}%</span><span style={s.totalesValue}>{fmt(part.quota)} €</span></div>)}
-          {surcharge !== 0 && <div style={s.totalesRow}><span style={s.totalesLabel}>Recargo {invoice.tipo_recargo}%</span><span style={s.totalesValue}>{fmt(surcharge)} €</span></div>}
-          {hasRetention && qrUrl && (
+          {taxParts.map(part => <div key={part.rate} style={s.totalesRow}><span style={s.totalesLabel}>Base {fmt(part.base)} {symbol} · {taxType} {part.rate}%</span><span style={s.totalesValue}>{fmt(part.quota)} {symbol}</span></div>)}
+          {surcharge !== 0 && <div style={s.totalesRow}><span style={s.totalesLabel}>Recargo {invoice.tipo_recargo}%</span><span style={s.totalesValue}>{fmt(surcharge)} {symbol}</span></div>}
+          {qrUrl&&(hasRetention||currency!=='EUR')&&(
             <div style={s.totalesRow}>
               <span style={s.totalesLabel}>Importe fiscal del QR</span>
-              <span style={s.totalesValue}>{fmt(base + cuota + surcharge)} €</span>
+              <span style={s.totalesValue}>{fmt(Number(new URL(qrUrl).searchParams.get('importe')))} €</span>
             </div>
           )}
           {hasRetention && (
             <div style={s.totalesRow}>
               <span style={s.totalesLabel}>Retención IRPF {retencionPct} %</span>
-              <span style={s.totalesRetValue}>-{fmt(retencionImporte)} €</span>
+              <span style={s.totalesRetValue}>{fmt(-retencionImporte)} {symbol}</span>
             </div>
           )}
           <div style={s.totalesRowTotal}>
             <span>{hasRetention ? 'TOTAL A PAGAR' : 'TOTAL'}</span>
-            <span style={s.totalesTotalValue}>{fmt(total)} €</span>
+            <span style={s.totalesTotalValue}>{fmt(total)} {symbol}</span>
           </div>
         </div>
       </div>

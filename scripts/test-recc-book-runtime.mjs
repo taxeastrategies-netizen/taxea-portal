@@ -38,7 +38,7 @@ const records = {
 let writes = 0;
 const entities = new Proxy({}, { get: (_target, name) => ({
   async filter(query, _sort, limit = 50, skip = 0) {
-    return (records[name] || []).filter(row => Object.entries(query || {}).every(([key, value]) => row[key] === value)).slice(skip, skip + limit);
+    return (records[name] || []).filter(row => Object.entries(query||{}).every(([key,value])=>value&&typeof value==='object'&&'$in' in value?value.$in.includes(row[key]):row[key]===value)).slice(skip, skip + limit);
   },
   async get(id) { return (records[name] || []).find(row => row.id === id) || null; },
   async create() { writes++; throw new Error('Unexpected write'); },
@@ -48,7 +48,7 @@ let user = { email: 'owner@test.invalid', role: 'user', data: { company_id: 'com
 const client = { auth: { me: async () => user }, asServiceRole: { entities } };
 let handler;
 vm.runInContext(compiled.outputFiles[0].text, vm.createContext({ Response, Request, URL, TextEncoder,
-  TextDecoder, crypto: webcrypto, Date, console, __client: client, Deno: { serve: fn => { handler = fn; } } }));
+  TextDecoder, crypto: webcrypto, Date, console, setTimeout:fn=>{fn();return 0;},clearTimeout(){}, __client: client, Deno: { serve: fn => { handler = fn; } } }));
 async function call(companyId = 'company-a') {
   const response = await handler(new Request('https://test.invalid', { method: 'POST',
     body: JSON.stringify({ action: 'recc_book', companyId, year: 2026 }) }));

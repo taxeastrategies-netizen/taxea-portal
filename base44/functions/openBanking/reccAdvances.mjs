@@ -1,3 +1,4 @@
+import {accountingFx,invoiceCurrency,fxMoney} from './reccCurrency.mjs';
 // Anticipos RECC: se factura solo el saldo nuevo; la aplicación no crea otra cuota de IVA.
 const clean = value => String(value ?? '').trim();
 const cents = value => Math.round(Number(value) * 100);
@@ -39,8 +40,8 @@ async function confirmedCashCents(svc, companyId, invoice, throughDate) {
   for (const payment of payments) {
     if (payment.operation_status !== 'committed' || !payment.journal_entry_id)
       throw new Error('Hay un cobro/devolución pendiente de confirmación contable del anticipo.');
-    if (clean(payment.currency || 'EUR').toUpperCase() !== 'EUR' || !/^\d{4}-\d{2}-\d{2}$/.test(clean(payment.payment_date))
-      || clean(payment.payment_date) > throughDate || !Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0)
+    if (clean(payment.currency || 'EUR').toUpperCase() !== invoiceCurrency(invoice) || !/^\d{4}-\d{2}-\d{2}$/.test(clean(payment.payment_date))
+      || !Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0)
       throw new Error('Fecha, moneda o importe del cobro/devolución incompatible con la aplicación del anticipo.');
     const journal = await svc.entities.JournalEntry.get(payment.journal_entry_id);
     if (!journal || journal.companyId !== companyId || journal.status !== 'confirmado' || journal.reversalEntryId)
@@ -50,10 +51,26 @@ async function confirmedCashCents(svc, companyId, invoice, throughDate) {
       if (!operation || operation.companyId !== companyId || operation.status !== 'committed')
         throw new Error('La unidad del cobro/devolución del anticipo no está confirmada.');
     }
-    paid += cents(payment.amount);
+    if(clean(payment.payment_date)<=throughDate)paid += cents(payment.amount);
   }
   if (paid > Math.abs(cents(invoice.total_factura)) + 1) throw new Error('El cobro/devolución excede el documento del anticipo.');
   return paid;
+}
+async function advanceFundingEur(svc,companyId,invoice,throughDate){
+ const payments=await all(svc.entities.InvoicePayment,{company_id:companyId,invoice_id:invoice.id},'payment_date');
+ const face=Math.abs(Number(invoice.total_factura)),result={base:0,costEur:0,taxEur:0,retentionEur:0};
+ for(const p of payments){if(p.payment_date>throughDate||p.operation_status!=='committed')continue;
+  const factor=Math.abs(Number(p.amount))/face,base=Number(invoice.base_imponible)*factor;
+  const plan=JSON.parse(p.fx_plan||'null');
+  if(invoiceCurrency(invoice)!=='EUR'&&plan?.version!=='recc-fx-v1')throw new Error('El anticipo en divisa no tiene financiación EUR trazada.');
+  result.base=fxMoney(result.base+base);
+  result.costEur=fxMoney(result.costEur+(invoiceCurrency(invoice)==='EUR'?base+Number(invoice.non_deductible_tax_amount||0)*factor:Number(plan.advance_cost_eur)));
+  const taxRate=invoiceCurrency(invoice)==='EUR'?1:Number(p.tax_exchange_rate);
+  if(!Number.isFinite(taxRate)||taxRate<=0)throw new Error('El cobro del anticipo no tiene cambio fiscal confirmado.');
+  result.taxEur=fxMoney(result.taxEur+Number(invoice.cuota_iva)*factor*taxRate);
+  result.retentionEur=fxMoney(result.retentionEur+Number(invoice.importe_retencion||0)*factor*taxRate);
+ }
+ return result;
 }
 function advanceCorrections(rows, originalId, exceptId = '') {
   return rows.filter(row => row.id !== exceptId && !row.anulada && row.es_rectificativa === true
@@ -62,7 +79,7 @@ function advanceCorrections(rows, originalId, exceptId = '') {
 async function validateAdvanceCorrection(svc, companyId, invoice, input, result) {
   const original = await svc.entities.Invoice.get(clean(input.originalInvoiceId));
   if (!original || original.company_id !== companyId || original.tipo !== invoice.tipo || original.anulada
-    || !taxId(invoice) || clean(invoice.moneda || 'EUR') !== 'EUR' || clean(original.moneda || 'EUR') !== 'EUR'
+    || !taxId(invoice) || invoiceCurrency(invoice)!==invoiceCurrency(original)
     || original.fiscal_review_status !== 'validado' || original.fiscal_regime !== 'criterio_caja'
     || original.es_rectificativa || reccAdvanceMetadata(metadata(original)).documentKind !== 'advance'
     || taxId(original) !== taxId(invoice) || !original.linked_journal_entry_id)
@@ -83,9 +100,36 @@ async function validateAdvanceCorrection(svc, companyId, invoice, input, result)
   if (cents(original.base_imponible) + cents(invoice.base_imponible) + corrections.reduce((sum,row)=>sum+cents(row.base_imponible),0) < 0
     || cents(original.total_factura) + cents(invoice.total_factura) + corrections.reduce((sum,row)=>sum+cents(row.total_factura),0) < 0)
     throw new Error('Las devoluciones superan el anticipo original.');
-  if (await confirmedCashCents(svc, companyId, original, clean(input.adjustmentDate)) < cents(original.total_factura))
-    throw new Error('Este circuito de devolución exige anticipo íntegramente cobrado/pagado; el anticipo parcial requiere revisión contable específica.');
-  return { ...result, applications: [], originalAdvanceId: original.id, originalJournalEntryId: journal.id };
+  const cash=await confirmedCashCents(svc,companyId,original,clean(input.adjustmentDate));
+  const credit=Math.abs(cents(invoice.total_factura));
+  const refund=input.refundCashAmount==null||input.refundCashAmount===''?credit:cents(input.refundCashAmount);
+  if(!Number.isSafeInteger(refund)||refund<0||refund>credit||(input.refundCashAmount!=null&&input.refundCashAmount!==''&&Math.abs(Number(input.refundCashAmount)*100-refund)>0.00001))
+    throw new Error('Indica el importe a devolver, entre cero y el total del abono, con dos decimales.');
+  const priorRefunds=corrections.reduce((sum,row)=>sum+(metadata(row).refundCashAmount==null?Math.abs(cents(row.total_factura)):cents(metadata(row).refundCashAmount)),0);
+  const priorCredits=corrections.reduce((sum,row)=>sum+Math.abs(cents(row.total_factura)),0);
+  if(refund+priorRefunds>cash+1)throw new Error('La devolución supera el cobro/pago confirmado disponible del anticipo.');
+  if(credit-refund+priorCredits-priorRefunds>cents(original.total_factura)-cash+1)
+    throw new Error('La cancelación supera la parte no cobrada/pagada del anticipo. Revisa el importe a devolver.');
+  let creditBookValues;
+  if(invoiceCurrency(invoice)!=='EUR'){
+    const funding=await advanceFundingEur(svc,companyId,original,clean(input.adjustmentDate));
+    const previous=corrections.map(row=>metadata(row).advanceCreditBook);
+    if(previous.some(row=>!row))throw new Error('El histórico de abonos en divisa no tiene valoración trazada.');
+    const availableBase=fxMoney(funding.base-previous.reduce((s,row)=>s+row.paidBase,0));
+    const availableCost=fxMoney(funding.costEur-previous.reduce((s,row)=>s+row.paidCostEur,0));
+    const availableTax=fxMoney(funding.taxEur-previous.reduce((s,row)=>s+row.paidTaxEur,0));
+    const availableRetention=fxMoney(funding.retentionEur-previous.reduce((s,row)=>s+row.paidRetentionEur,0));
+    const fraction=refund/credit,paidBase=fxMoney(Math.abs(Number(invoice.base_imponible))*fraction);
+    if(paidBase>availableBase+0.01)throw new Error('El abono supera la base financiada disponible en divisa.');
+    const share=availableBase?Math.min(1,paidBase/availableBase):0;
+    const paidCostEur=fxMoney(availableCost*share),paidTaxEur=fxMoney(availableTax*share),paidRetentionEur=fxMoney(availableRetention*share);
+    const initial=accountingFx(original),unpaid=1-fraction,creditCost=Math.abs(Number(invoice.base_imponible))+(invoice.tipo==='recibida'?Math.abs(Number(invoice.non_deductible_tax_amount||0)):0);
+    const originalDeduct=Math.abs(Number(original.cuota_iva))?Math.abs(Number(original.deductible_tax_amount||0)/Number(original.cuota_iva)):0;
+    const costEur=fxMoney(paidCostEur+creditCost*unpaid*initial),taxEur=fxMoney(paidTaxEur+Math.abs(Number(invoice.cuota_iva))*unpaid*initial),retentionEur=fxMoney(paidRetentionEur+Math.abs(Number(invoice.importe_retencion||0))*unpaid*initial);
+    const deducted=invoice.tipo==='emitida'?taxEur:fxMoney(taxEur*originalDeduct);
+    creditBookValues={paidBase,paidCostEur,paidTaxEur,paidRetentionEur,paidTotalEur:fxMoney(paidCostEur+(invoice.tipo==='emitida'?paidTaxEur:fxMoney(paidTaxEur*originalDeduct))-paidRetentionEur),costEur,taxEur,deductibleEur:deducted,retentionEur,totalEur:fxMoney(costEur+deducted-retentionEur),taxFiscalRate:paidBase&&Number(original.cuota_iva)?paidTaxEur/(paidBase*Math.abs(Number(original.cuota_iva)/Number(original.base_imponible))):initial};
+  }
+  return { ...result, applications: [], originalAdvanceId: original.id, originalJournalEntryId: journal.id,creditBookValues };
 }
 export async function assertReccAdvanceCanReverse(svc, companyId, invoice) {
   if (clean(invoice.fiscal_regime) !== 'criterio_caja' || reccAdvanceMetadata(metadata(invoice)).documentKind !== 'advance') return;
@@ -178,8 +222,8 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
   }
   if (invoice.es_rectificativa && result.documentKind === 'advance')
     return validateAdvanceCorrection(svc, companyId, invoice, input, result);
-  if (invoice.es_rectificativa || (Number(invoice.base_imponible) <= 0 && !isZeroResidualReccFinal(invoice, result)) || clean(invoice.moneda || 'EUR') !== 'EUR')
-    throw new Error('El circuito de anticipos requiere factura positiva en EUR. Las devoluciones deben revisar su rectificativa y ajuste contable.');
+  if (invoice.es_rectificativa || (Number(invoice.base_imponible) <= 0 && !isZeroResidualReccFinal(invoice, result)) )
+    throw new Error('El circuito de anticipos requiere factura positiva y cambio a EUR revisado. Las devoluciones deben revisar su rectificativa y ajuste contable.');
   if (!taxId(invoice)) throw new Error('Identifica fiscalmente al cliente/proveedor del anticipo.');
   if (result.documentKind === 'advance') return { ...result, applications: [] };
   if (cents(result.finalOperationBase) !== cents(invoice.base_imponible) + result.advanceAllocations.reduce((sum, row) => sum + cents(row.base), 0))
@@ -191,7 +235,7 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
     const advance = await svc.entities.Invoice.get(allocation.invoiceId);
     if (!advance || advance.company_id !== companyId || advance.tipo !== invoice.tipo || advance.anulada
       || advance.fiscal_review_status !== 'validado' || advance.fiscal_regime !== 'criterio_caja'
-      || advance.es_rectificativa || taxId(advance) !== taxId(invoice)
+      || advance.es_rectificativa || taxId(advance) !== taxId(invoice) || invoiceCurrency(advance)!==invoiceCurrency(invoice)
       || reccAdvanceMetadata(metadata(advance)).documentKind !== 'advance'
       || Number(advance.base_imponible) <= 0 || !advance.linked_journal_entry_id)
       throw new Error('El anticipo debe estar validado y contabilizado, sin anular, en esta empresa y con la misma contraparte.');
@@ -205,7 +249,7 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
     const lines = await all(svc.entities.JournalEntryLine, { companyId, journalEntryId: journal.id }, 'lineNumber');
     const accountLine = lines.find(row => row.accountCode === advanceCode);
     const originalCost = Number(advance.base_imponible) + (invoice.tipo === 'recibida' ? Number(advance.non_deductible_tax_amount || 0) : 0);
-    if (!accountLine || Math.abs(cents(invoice.tipo === 'emitida' ? accountLine.credit : accountLine.debit) - cents(originalCost)) > 1)
+    if (!accountLine || Math.abs(cents(invoice.tipo === 'emitida' ? accountLine.credit : accountLine.debit) - cents(originalCost*accountingFx(advance))) > 1)
       throw new Error('El anticipo no tiene una contrapartida 438/407 coherente. No se modifica su asiento histórico.');
     const payments = await all(svc.entities.InvoicePayment, { company_id: companyId, invoice_id: advance.id }, 'payment_date');
     let paidCents = 0;
@@ -233,7 +277,8 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
       if (!correctionEntry || correctionEntry.companyId !== companyId || correctionEntry.status !== 'confirmado' || correctionEntry.reversalEntryId)
         throw new Error('El abono del anticipo no tiene un asiento confirmado.');
       const refunded = await confirmedCashCents(svc, companyId, correction, finalDate);
-      if (refunded !== Math.abs(cents(correction.total_factura)))
+      const refundExpected=metadata(correction).refundCashAmount==null?Math.abs(cents(correction.total_factura)):cents(metadata(correction).refundCashAmount);
+      if (refunded !== refundExpected)
         throw new Error('Completa la devolución confirmada del abono antes de aplicar el saldo del anticipo.');
       paidCents -= refunded;
       invoiceCents += cents(correction.total_factura);
@@ -243,17 +288,29 @@ export async function validateReccAdvanceLinks(svc, companyId, invoice, input = 
     if (invoiceCents <= 0 || baseCents <= 0 || paidCents < 0 || paidCents > invoiceCents + 1 || correctedCost <= 0)
       throw new Error('El anticipo está devuelto o su saldo corregido requiere revisión; no puede volver a aplicarse.');
     const availableCents = paidCents >= invoiceCents ? baseCents : Math.floor(baseCents * paidCents / invoiceCents);
-    let reservedCents = 0;
+    let reservedCents = 0,reservedEur=0;
     for (const consumer of consumers) {
       if (consumer.id === invoice.id || consumer.anulada || consumer.fiscal_review_status !== 'validado') continue;
       const links = reccAdvanceMetadata(metadata(consumer));
-      reservedCents += links.advanceAllocations.filter(row => row.invoiceId === advance.id).reduce((sum, row) => sum + cents(row.base), 0);
+      const used=links.advanceAllocations.filter(row=>row.invoiceId===advance.id);
+      reservedCents+=used.reduce((sum,row)=>sum+cents(row.base),0);
+      if(invoiceCurrency(invoice)!=='EUR'&&used.length){const saved=(metadata(consumer).advanceBookAllocations||[]).find(row=>row.invoiceId===advance.id);if(!saved||!Number.isFinite(Number(saved.amountEur)))throw new Error('La aplicación anterior en divisa no tiene valoración histórica trazada.');reservedEur+=cents(saved.amountEur);}
     }
     if (reservedCents + cents(allocation.base) > availableCents)
       throw new Error('El anticipo ya se ha aplicado o reservado, o la base supera el cobro/pago confirmado disponible.');
     const costCents = Math.round(correctedCost * (reservedCents + cents(allocation.base)) / baseCents)
       - Math.round(correctedCost * reservedCents / baseCents);
-    applications.push({ ...allocation, accountingAmount: costCents / 100, advanceCode, advanceNumber: advance.numero_factura || advance.id });
+    let accountingAmountEur=costCents/100;
+    if(invoiceCurrency(invoice)!=='EUR'){
+      const funding=await advanceFundingEur(svc,companyId,advance,finalDate);
+      const credits=advanceCorrections(consumers,advance.id).map(row=>metadata(row).advanceCreditBook);
+      if(credits.some(row=>!row))throw new Error('Falta valoración histórica EUR del abono de anticipo.');
+      const fundedEur=cents(funding.costEur-credits.reduce((s,row)=>s+row.paidCostEur,0));
+      const availableUnreserved=availableCents-reservedCents;
+      if(availableUnreserved<=0||fundedEur<reservedEur)throw new Error('Saldo financiado EUR incoherente.');
+      accountingAmountEur=Math.round((fundedEur-reservedEur)*cents(allocation.base)/availableUnreserved)/100;
+    }
+    applications.push({ ...allocation, accountingAmount: costCents / 100, accountingAmountEur, advanceCode, advanceNumber: advance.numero_factura || advance.id });
   }
   return { ...result, applications };
 }

@@ -1,6 +1,7 @@
+import {formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import StatusBadge from '@/components/ui/StatusBadge';
 
-const money = value => (value || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
 // Presentation only: the desktop list and these cards share selection and actions.
 export default function MobileInvoiceList({ invoices, selectedIds, allSelected, onSelectAll, onSelect, onOpen, renderActions }) {
@@ -25,8 +26,8 @@ export default function MobileInvoiceList({ invoices, selectedIds, allSelected, 
             </div>
             <dl className="mt-3 grid min-w-0 grid-cols-2 gap-3 text-sm">
               <div><dt className="text-xs text-muted-foreground">Fecha</dt><dd className="mt-1 break-words text-foreground">{invoice.fecha_emision || '—'}</dd></div>
-              <div className="text-right"><dt className="text-xs text-muted-foreground">Total</dt><dd className="mt-1 break-words font-semibold tabular-nums text-foreground">{money(invoice.total_factura)} €</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Base</dt><dd className="mt-1 break-words tabular-nums text-foreground">{money(invoice.base_imponible)} €</dd></div>
+              <div className="text-right"><dt className="text-xs text-muted-foreground">Total</dt><dd className="mt-1 break-words font-semibold tabular-nums text-foreground">{formatInvoiceMoney(invoice.total_factura,invoice)}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Base</dt><dd className="mt-1 break-words tabular-nums text-foreground">{formatInvoiceMoney(invoice.base_imponible,invoice)}</dd></div>
               <div className="min-w-0 text-right"><dt className="text-xs text-muted-foreground">{invoice.tipo === 'recibida' ? 'Pago' : 'Cobro'}</dt><dd className="mt-1"><StatusBadge status={invoice.estado_cobro} /></dd></div>
             </dl>
             {invoice.concepto && <p className="mt-3 break-words text-sm text-muted-foreground">{invoice.concepto}</p>}

@@ -65,8 +65,35 @@
     },
     "operation_status": {
       "type": "string",
-      "enum": ["preparing", "committed", "recovery_required"],
+      "enum": [
+        "preparing",
+        "committed",
+        "recovery_required"
+      ],
       "default": "committed"
+    },
+    "exchange_rate": {
+      "type": "number",
+      "description": "EUR por unidad de divisa del cobro/pago; fijado al reservar la unidad."
+    },
+    "amount_eur": {
+      "type": "number"
+    },
+    "carrying_amount_eur": {
+      "type": "number"
+    },
+    "tax_exchange_rate": {
+      "type": "number"
+    },
+    "tax_exchange_rate_source": {
+      "type": "string"
+    },
+    "fx_before_paid": {
+      "type": "number"
+    },
+    "fx_plan": {
+      "type": "string",
+      "description": "Plan de conversión generado exclusivamente en servidor y congelado para reintentos."
     }
   },
   "required": [
@@ -77,11 +104,23 @@
     "origin"
   ],
   "rls": {
-    "create": { "user_condition": { "role": "admin" } },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
     "read": {
       "data.company_id": "{{user.data.company_id}}"
     },
-    "update": { "user_condition": { "role": "admin" } },
-    "delete": { "user_condition": { "role": "admin" } }
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
   }
 }

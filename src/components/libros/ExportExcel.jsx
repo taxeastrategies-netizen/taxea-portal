@@ -10,6 +10,29 @@ function escapeXml(str) {
 const n = v => parseFloat(v) || 0;
 const pct = (base, tipo) => n(base) * n(tipo) / 100;
 
+function currencyExportInvoices(source){
+ const rows=[['Conversión documental a EUR. Las cuotas RECC efectivamente devengadas se detallan en el auxiliar; la liquidación corresponde al modelo revisado. No cambia facturas ni asientos.'],['Factura','Divisa original','Base original','Cuota original','Retención original','Total original','Cambio EUR','Valoración','Base EUR','Cuota EUR','Total EUR']],warnings=[];
+ const money=value=>Math.round((Number(value)+Number.EPSILON)*100)/100;
+ const items=source.map(invoice=>{
+   const currency=String(invoice.moneda||'EUR').toUpperCase();if(currency==='EUR')return invoice;
+   const rate=Number(invoice.exchange_rate),copy={...invoice};let valuation='Cambio contable de la factura';
+   const fields=['base_imponible','cuota_iva','deductible_tax_amount','non_deductible_tax_amount','importe_retencion','cuota_recargo','total_factura'];
+   if(!Number.isFinite(rate)||rate<=0){warnings.push('Factura '+invoice.numero_factura+': falta cambio EUR; importes EUR vacíos, no se ha supuesto paridad.');for(const field of fields)copy[field]=null;valuation='Pendiente de revisión';}
+   else{
+     for(const field of fields)copy[field]=money(Number(invoice[field]||0)*rate);
+     let metadata={};try{metadata=JSON.parse(invoice.recc_metadata||'{}');}catch{/* Se añade incidencia fiscal en su libro. */}
+     const credit=metadata.advanceCreditBook;
+     if(invoice.es_rectificativa&&credit){
+       const nonDeduct=invoice.tipo==='recibida'?money(credit.taxEur-credit.deductibleEur):0;
+       copy.base_imponible=-money(credit.costEur-nonDeduct);copy.cuota_iva=-credit.taxEur;copy.deductible_tax_amount=invoice.tipo==='recibida'?-credit.deductibleEur:0;copy.non_deductible_tax_amount=-nonDeduct;copy.importe_retencion=-credit.retentionEur;copy.total_factura=-credit.totalEur;valuation='Abono de anticipo a valoración histórica confirmada';
+     }
+   }
+   rows.push([invoice.numero_factura||invoice.id,currency,invoice.base_imponible,invoice.cuota_iva,invoice.importe_retencion||0,invoice.total_factura,Number.isFinite(rate)?rate:'',valuation,copy.base_imponible??'',copy.cuota_iva??'',copy.total_factura??'']);
+   return copy;
+ });
+ return {items,rows:rows.length>2?rows:null,warnings};
+}
+
 function quarter(fecha) {
   const m = new Date(fecha || '').getMonth();
   if (isNaN(m)) return '';
@@ -300,7 +323,7 @@ function buildLibroMayor(accounts) {
 function buildResumenIVA(invoices, expenses) {
   const header = ['Trimestre','Periodo','Base Imponible Ventas (€)','IVA/IGIC Repercutido (€)','Base Imponible Compras (€)','IVA/IGIC Deducible clasificado (€)','Diferencia orientativa (€)'];
   /** @type {(string | number)[][]} */
-  const rows = [['Resumen orientativo por fecha de operación. No sustituye el 303/420; las facturas RECC se excluyen y se detallan en la hoja RECC IVA.'], header];
+  const rows = [['Resumen orientativo por fecha de operación. No sustituye el 303/420; las facturas RECC se excluyen y se detallan en la hoja RECC IVA-IGIC.'], header];
   const ordinaryInvoices = invoices.filter(i => i.fiscal_regime !== 'criterio_caja');
   const periodos = { T1: 'Ene-Mar', T2: 'Abr-Jun', T3: 'Jul-Sep', T4: 'Oct-Dic' };
   let totRep = 0, totSop = 0, totBaseV = 0, totBaseC = 0;
@@ -320,8 +343,8 @@ function buildResumenIVA(invoices, expenses) {
 // ─── Libro auxiliar RECC: operación original y cada cobro/pago confirmado ──
 function buildLibroRecc(recc, year) {
   const rows = [
-    [`RECC IVA ${year} · Libro auxiliar de fechas e importes. La liquidación corresponde al cálculo validado del modelo 303, no a sumar esta hoja.`],
-    ['Tipo','Factura','Fecha operación','Fecha factura','Fecha recepción','Tercero','NIF','Base original (€)','Cuota original (€)','Total factura (€)','Fecha cobro/pago','Importe cobro/pago (€)','Medio','Referencia','Cuenta bancaria','Fecha límite legal','Estado'],
+    [`RECC IVA-IGIC ${year} · Libro auxiliar de fechas e importes. La liquidación corresponde al cálculo validado del modelo 303 o 420, no a sumar esta hoja.`],
+    ['Tipo','Factura','Fecha operación','Fecha factura','Fecha recepción','Tercero','NIF','Base en divisa','Cuota en divisa','Total en divisa','Fecha cobro/pago','Importe cobro/pago (€)','Medio','Referencia','Cuenta bancaria','Fecha límite legal','Estado','Divisa','Importe EUR / referencia fiscal','Cambio efectivo','Cambio fiscal'],
   ];
   const byInvoice = new Map((recc.payments || []).filter(payment => payment.confirmed).map(payment => [payment.invoiceId, []]));
   for (const payment of (recc.payments || []).filter(payment => payment.confirmed)) byInvoice.get(payment.invoiceId).push(payment);
@@ -332,16 +355,16 @@ function buildLibroRecc(recc, year) {
     if (!relevant) continue;
     const common = [invoice.type, invoice.number, invoice.operationDate, invoice.issueDate, invoice.receiptDate,
       invoice.counterpartyName, invoice.counterpartyNif, invoice.base, invoice.quota, invoice.total];
-    if (!payments.length) rows.push([...common, '', '', '', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus]);
+    if (!payments.length) rows.push([...common, '', '', '', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus,invoice.currency||'EUR','','','']);
     for (const payment of payments) rows.push([...common, payment.date, payment.amount, payment.method, payment.reference,
-      payment.bankAccount, invoice.forcedRecognitionDate, invoice.reviewStatus]);
+      payment.bankAccount, invoice.forcedRecognitionDate, invoice.reviewStatus,invoice.currency||'EUR',payment.amountEur??payment.amount,payment.exchangeRate||1,payment.taxExchangeRate||1]);
     if (String(invoice.forcedRecognitionDate).slice(0, 4) === String(year)) {
       const paidBeforeLimit = (byInvoice.get(invoice.id) || [])
         .filter(payment => String(payment.date) <= String(invoice.forcedRecognitionDate))
         .reduce((sum, payment) => sum + n(payment.amount), 0);
-      const forcedRemainder = Math.round(Math.max(0, n(invoice.total) - paidBeforeLimit) * 100) / 100;
+      const forcedRemainder = Object.prototype.hasOwnProperty.call(invoice,'forcedAmount')?n(invoice.forcedAmount):Math.round(Math.max(0,n(invoice.total)-paidBeforeLimit)*100)/100;
       if (forcedRemainder > 0) rows.push([...common, invoice.forcedRecognitionDate, forcedRemainder,
-        'DEVENGO LEGAL (sin cobro/pago)', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus]);
+        'DEVENGO LEGAL (sin cobro/pago)', '', '', invoice.forcedRecognitionDate, invoice.reviewStatus,invoice.currency||'EUR',invoice.forcedAmountEur??forcedRemainder,'','']);
     }
   }
   return rows;
@@ -426,26 +449,31 @@ async function loadRealAccounting(companyId, year) {
 // ─── FUNCIÓN PRINCIPAL ───────────────────────────────────────────────────────
 export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpenses, companyId, year, companyName = 'Empresa', newInvoiceIds, newExpenseIds, lastExportDate, onlyNew = false, onlyInvoiceBooks = false }) {
   // Filtrar facturas y gastos anulados — única fuente de datos activos
-  const invoices = (rawInvoices || []).filter(i => !i.anulada);
+  const currencyExport=currencyExportInvoices((rawInvoices||[]).filter(i=>!i.anulada));
+  const invoices=currencyExport.items;
   const expenses = (rawExpenses || []).filter(e => !e.anulada);
   const newInvIds = newInvoiceIds || new Set();
   const newExpIds = newExpenseIds || new Set();
   let a3Rows = null;
-  let a3Warning = '';
+  let a3Warning = currencyExport.warnings.join(' ');
   try {
     a3Rows = await loadA3Crosswalk(companyId, year, invoices);
   } catch (error) {
-    a3Warning = 'No se pudo consultar la equivalencia A3; las cuentas Taxea siguen disponibles. ' + (error?.message || '');
+    a3Warning += ' No se pudo consultar la equivalencia A3; las cuentas Taxea siguen disponibles. ' + (error?.message || '');
   }
   if (onlyInvoiceBooks) {
+    const invoiceRecc=invoices.some(row=>row.fiscal_regime==='criterio_caja')?await loadReccBook(companyId,year).catch(error=>({invoices:[],payments:[],issues:[{reason:'No se pudo consultar el auxiliar RECC: '+error.message}]})):null;
     const emitidas = invoices.filter(i => i.tipo === 'emitida');
     const recibidas = invoices.filter(i => i.tipo === 'recibida');
     const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);
     downloadSpreadsheetML([
+      ...(invoiceRecc?[{name:'RECC IVA-IGIC',rows:buildLibroRecc(invoiceRecc,year),colWidths:[12,18,16,16,16,28,16,18,18,18,18,20,14,25,28,18,18,14,20,18,18],newRowIndices:[]}]:[]),
+      ...(invoiceRecc?.issues?.length?[{name:'Alertas RECC',rows:[['Incidencia para revisión del asesor'],...invoiceRecc.issues.map(issue=>[issue.reason])],colWidths:[110],newRowIndices:[]}]:[]),
       { name: 'Facturas Emitidas', rows: buildFacturasEmitidas(invoices), colWidths: [14, 14, 14, 14, 24, 16, 28, 12, 10, 12, 10, 12, 14, 14, 16, 10, 8, 14, 14], newRowIndices: emitidas.map((row,i) => newInvIds.has(row.id) ? i : -1).filter(i => i >= 0) },
       { name: 'Facturas Recibidas', rows: buildFacturasRecibidas(invoices), colWidths: [14, 14, 14, 24, 16, 28, 20, 14, 10, 12, 10, 12, 14, 16, 10, 8, 14, 16], newRowIndices: recibidas.map((row,i) => newInvIds.has(row.id) ? i : -1).filter(i => i >= 0) },
       { name: 'Libro Ventas', rows: buildLibroVentas(invoices), colWidths: [14, 14, 8, 24, 16, 28, 16, 10, 14, 10, 14, 14, 10, 8, 10, 18, 18, 36], newRowIndices: [] },
       { name: 'Libro Compras', rows: buildLibroCompras(invoices, expenses), colWidths: [14, 14, 24, 16, 28, 20, 16, 12, 14, 14, 14, 10, 14, 14, 12, 18, 18, 10, 8, 16], newRowIndices: [] },
+      ...(currencyExport.rows?[{name:'Divisas de referencia',rows:currencyExport.rows,colWidths:[24,18,18,18,18,18,18,70,18,18,18],newRowIndices:[]}]:[]),
       ...(a3Rows ? [{ name: 'Equivalencias A3', rows: a3Rows, colWidths: [12, 18, 14, 28, 18, 16, 16, 58, 20], newRowIndices: [] }] : []),
     ], `Taxea_Libros_Facturas_${safeName}_${year}.xls`);
     return { warning: 'Se han descargado solo los libros de facturas. No incluye Diario, Mayor ni Caja/Bancos.' + (a3Warning ? ' ' + a3Warning : '') };
@@ -481,7 +509,7 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
         { name: '9. Resumen IVA-IGIC', rows: buildResumenIVA(invoices, expenses), colWidths: [12, 14, 22, 22, 22, 22, 22], newRowIndices: [] },
         { name: '10. Resumen IRPF', rows: buildResumenIRPF(invoices), colWidths: [12, 14, 22, 16, 20, 20, 24], newRowIndices: [] },
         ...(includeAccounting ? [{ name: '11. Caja y Bancos', rows: buildCajaBancos(accounting.entries), colWidths: [14, 42, 16, 10, 14, 16, 16, 10], newRowIndices: [] }] : []),
-        { name: '12. RECC IVA', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
+        { name: '12. RECC IVA-IGIC', rows: buildLibroRecc(reccBook, year), colWidths: [12, 18, 16, 16, 16, 28, 16, 18, 18, 18, 18, 20, 14, 25, 28, 18, 18], newRowIndices: [] },
         ...(accounting.warning ? [{ name: '13. Incidencias contables', rows: [
           ['Exportación parcial de libros · requiere revisión contable'],
           [accounting.warning],
@@ -492,7 +520,8 @@ export async function exportarLibros({ invoices: rawInvoices, expenses: rawExpen
           ['Factura ID', 'Pago ID', 'Incidencia'],
           ...reccBook.issues.map(issue => [issue.invoiceId || '', issue.paymentId || '', issue.reason || '']),
         ], colWidths: [28, 28, 90], newRowIndices: [] }] : []),
-        ...(a3Rows ? [{ name: 'Equivalencias A3', rows: a3Rows, colWidths: [12, 18, 14, 28, 18, 16, 16, 58, 20], newRowIndices: [] }] : []),
+        ...(currencyExport.rows?[{name:'Divisas de referencia',rows:currencyExport.rows,colWidths:[24,18,18,18,18,18,18,70,18,18,18],newRowIndices:[]}]:[]),
+      ...(a3Rows ? [{ name: 'Equivalencias A3', rows: a3Rows, colWidths: [12, 18, 14, 28, 18, 16, 16, 58, 20], newRowIndices: [] }] : []),
       ];
 
       const safeName = companyName.replace(/[^a-zA-Z0-9_\-áéíóúÁÉÍÓÚñÑ]/g, '_').substring(0, 30);

@@ -1,3 +1,4 @@
+import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx } from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
@@ -8,11 +9,16 @@ import { fiscalReviewBatch } from './fiscalReviewBatch.mjs';
 import { advisorDecision, selfAssessment, reviewFilter, commonReviewCriteria } from './advisorReview.mjs';
 import { sourceDecision, assertSourceAmounts } from './sourceCheck.mjs';
 
-const RULESET = 'taxea-fiscal-es-2026.10.04-v3';
+const RULESET = 'taxea-fiscal-es-2026.11.01-c4';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
 const SPECIAL_POSTING_PENDING = new Set(['mixto', 'simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
 
+async function fiscalRowsByIds(entity:any,ids:any[],scope:any,field='id'){
+ const keys=[...new Set(ids.map(id=>String(id||'').trim()).filter(Boolean))],rows=[];
+ for(let at=0;at<keys.length;at+=100)rows.push(...await listFiscalRows(entity,{...scope,[field]:{$in:keys.slice(at,at+100)}}));
+ return rows;
+}
 async function listFiscalRows(entity: any, filter: any, sort = '-created_date') {
   const rows: any[] = [];
   const pageSize = 500;
@@ -392,6 +398,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       const activeForSource = activities.filter(item => item.active !== false);
       const selectedActivity = activeForSource.find(item => item.id === (body.activityId || invoice.fiscal_activity_id))
         || (context.sourceCheck && !body.activityId && !invoice.fiscal_activity_id && activeForSource.length === 1 ? activeForSource[0] : null);
+      if(invoiceCurrency(invoice)!=='EUR'&&!canProfessionallyValidate(user)&&body.recc?.fxQuotes?.length)return Response.json({error:'El asesor debe confirmar los cambios fiscales de divisa.'},{status:403});
       if (context.sourceCheck) {
         if (invoice.estado_contable === 'contabilizada' || invoice.linked_journal_entry_id) return Response.json({ error: 'La factura ya está contabilizada; no se reclasifica desde el OCR.' }, { status: 409 });
         const previousLines=await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',101);
@@ -485,8 +492,8 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.modelImpact = [];
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'Venta minorista ordinaria: el IVA repercutido forma parte del ingreso contable; no se usa 477 ni se liquida en 303. Confirmación del asesor obligatoria.'];
-      } else if (proposedEvaluation.regime === 'criterio_caja' && proposedEvaluation.taxKind === 'iva'
-        && proposedEvaluation.operationType === 'subject_taxed') {
+      } else if (proposedEvaluation.regime === 'criterio_caja' && ['iva','igic'].includes(proposedEvaluation.taxKind)
+        && ['subject_taxed','subject_zero'].includes(proposedEvaluation.operationType)) {
         const base = Number(invoice.base_imponible || 0);
         const rate = Number(invoice.tipo_iva || 0);
         const quota = Number(invoice.cuota_iva || 0);
@@ -494,13 +501,13 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         let advanceFields;
         try { advanceFields = reccAdvanceMetadata({ ...previousMetadata, ...body.recc }); }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
-        const metadata = { ...advanceFields, version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
+        const metadata = { ...advanceFields, version: 'recc-v4-c4', advanceConfirmed: body.recc?.advanceConfirmed ?? previousMetadata.advanceConfirmed ?? false,
           insolvencyDate: clean(body.recc?.insolvencyDate ?? previousMetadata.insolvencyDate),
           originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousMetadata.originalInvoiceId),
           adjustmentDate: clean(body.recc?.adjustmentDate ?? previousMetadata.adjustmentDate),
           adjustmentMode: clean(body.recc?.adjustmentMode ?? previousMetadata.adjustmentMode),
           adjustmentCause: clean(body.recc?.adjustmentCause ?? previousMetadata.adjustmentCause ?? 'other'),
-          reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
+          fxQuotes: reviewedFxQuotes(previousMetadata.fxQuotes, body.recc?.fxQuotes, user.email, new Date().toISOString()), refundCashAmount: body.recc?.refundCashAmount ?? previousMetadata.refundCashAmount, reason: clean(body.recc?.reason ?? previousMetadata.reason), eligibility: body.recc?.eligibility ?? previousMetadata.eligibility };
         // El abono hereda el circuito del anticipo desde su original, nunca desde una cuenta sugerida por IA.
         if (invoice.es_rectificativa && metadata.originalInvoiceId) {
           const originalForKind = await svc.entities.Invoice.get(metadata.originalInvoiceId);
@@ -510,11 +517,11 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         if (invoice.linked_journal_entry_id && JSON.stringify(reccAdvanceMetadata(previousMetadata)) !== JSON.stringify(reccAdvanceMetadata(metadata)))
           return Response.json({ error: 'No se cambia el tipo de anticipo ni sus aplicaciones después de contabilizar. Se requiere contraasiento y documento nuevo; el historial queda intacto.' }, { status: 409 });
         releaseAdvanceLocks = await acquireReccAdvanceLocks(svc, companyId, metadata, invoice.id);
-        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; }
+        try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; proposedEvaluation.advanceCreditBook=links.creditBookValues; }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
         const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
-          && breakdown.every((row: any) => [21,10,4].includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
+          && breakdown.every((row: any) => (proposedEvaluation.taxKind==='igic'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
           && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
           && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
           && Math.abs(money(breakdown.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - base) <= 0.01
@@ -529,10 +536,10 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         const validRecc = (invoice.tipo === 'recibida' || selectedActivity?.indirectTaxRegime === 'criterio_caja')
           && (invoice.tipo === 'emitida' || selectedActivity?.indirectTaxRegime === 'criterio_caja'
             || (proposedEvaluation.manualOverride && !!proposedEvaluation.manualOverrideReason))
-          && selectedActivity?.indirectTax === 'iva' && validBreakdown && (Math.abs(base) > 0 || zeroResidualFinal)
+          && selectedActivity?.indirectTax === proposedEvaluation.taxKind && validBreakdown && (Math.abs(base) > 0 || zeroResidualFinal)
           && Math.abs(Number(invoice.total_factura || 0) - money(base + quota + reccSurcharge - Number(invoice.importe_retencion || 0))) <= 0.02
           && validReccSurcharge
-          && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
+          && Number.isFinite(accountingFx(invoice))
           && Math.abs(proposedEvaluation.base - base) <= 0.02
           && Math.abs(proposedEvaluation.taxAmount - quota) <= 0.02
           && Math.abs(proposedEvaluation.deductibleTax) <= Math.abs(quota)
@@ -576,7 +583,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
           proposedEvaluation.specialPreviewError = '';
         }
         proposedEvaluation.postingBlocked = false;
-        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: factura al devengo contable y cuota del 303 por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El desglose de 472/477 en subcuentas es opcional según el ICAC.'];
+        proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: devengo contable de la factura y liquidación del IVA/IGIC por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El IRPF mantiene su criterio propio.'];
       } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
         proposedEvaluation.postingBlocked = true;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
@@ -651,13 +658,15 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       const previousRecc = reccMetadata(invoice);
       const confirmedRecc = evaluation.regime === 'criterio_caja' ? {
         ...reccAdvanceMetadata({ ...previousRecc, ...body.recc, ...(proposedEvaluation.reccAdvanceCorrection ? {documentKind:'advance'} : {}) }),
-        version: 'recc-v3-advances', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
+        version: 'recc-v4-c4', advanceConfirmed: body.recc?.advanceConfirmed ?? previousRecc.advanceConfirmed ?? false,
         insolvencyDate: clean(body.recc?.insolvencyDate ?? previousRecc.insolvencyDate),
         originalInvoiceId: clean(body.recc?.originalInvoiceId ?? previousRecc.originalInvoiceId),
         adjustmentDate: clean(body.recc?.adjustmentDate ?? previousRecc.adjustmentDate),
         adjustmentMode: clean(body.recc?.adjustmentMode ?? previousRecc.adjustmentMode),
         adjustmentCause: clean(body.recc?.adjustmentCause ?? previousRecc.adjustmentCause ?? 'other'),
-        reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
+        fxQuotes: reviewedFxQuotes(previousRecc.fxQuotes, body.recc?.fxQuotes, user.email, new Date().toISOString()), refundCashAmount: body.recc?.refundCashAmount ?? previousRecc.refundCashAmount, reason: clean(body.recc?.reason ?? previousRecc.reason), eligibility: body.recc?.eligibility ?? previousRecc.eligibility,
+        advanceCreditBook: proposedEvaluation.advanceCreditBook,
+        advanceBookAllocations:(evaluation.advanceApplications||[]).map(row=>({invoiceId:row.invoiceId,base:row.base,amountEur:row.accountingAmountEur})),
         advanceReferences: (evaluation.advanceApplications || []).map((row: any) => ({ number: row.advanceNumber, base: row.base })),
         reviewedBy: user.email, reviewedAt: new Date().toISOString(),
       } : null;
@@ -666,11 +675,11 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         : confirmedRecc?.documentKind === 'final' ? `Factura final por saldo nuevo. Anticipos ya facturados y descontados: ${(confirmedRecc.advanceReferences || []).map((row: any) => `${row.number} (base ${money(row.base).toFixed(2)} EUR)`).join('; ')}. Su aplicación no genera otra cuota de IVA.` : '';
       const previousLegend = String(invoice.coletilla_fiscal || '').trim();
       const existingLegend = advanceLegend && !previousLegend.includes(advanceLegend) ? [previousLegend, advanceLegend].filter(Boolean).join(' · ') : previousLegend;
-      const issuedReccLegend = invoice.tipo === 'emitida' && payload.taxKind === 'iva' && payload.regime === 'criterio_caja'
+      const issuedReccLegend = invoice.tipo === 'emitida' && ['iva','igic'].includes(payload.taxKind) && payload.regime === 'criterio_caja'
         ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
           ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
         : {};
-      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
   } finally {
     if (releaseAdvanceLocks) await releaseAdvanceLocks();
@@ -696,8 +705,18 @@ Deno.serve(async (req) => {
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
     if (!internalServiceEvaluation) authorize(user, companyId, company);
     if ((['save_invoice_tax_line','recover_recc_advance_lock','review_context'].includes(action) || action.includes('review_batch')) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
-    if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
+    if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock','recc_book'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 
+    if(action==='confirm_recc_fx_quote'){
+      if(!canProfessionallyValidate(user))return Response.json({error:'Solo el asesor o administrador confirma cambios fiscales.'},{status:403});
+      const invoice=await svc.entities.Invoice.get(clean(body.invoiceId));
+      if(!invoice||invoice.company_id!==companyId)return Response.json({error:'Factura no accesible.'},{status:403});
+      if(invoice.fiscal_regime!=='criterio_caja'||invoice.fiscal_review_status!=='validado'||invoiceCurrency(invoice)==='EUR')return Response.json({error:'Selecciona una factura RECC en divisa validada.'},{status:422});
+      const previous=reccMetadata(invoice),quotes=reviewedFxQuotes(previous.fxQuotes,[body.quote],user.email,new Date().toISOString());
+      const result=await svc.entities.Invoice.updateMany({id:invoice.id,company_id:companyId,recc_metadata:invoice.recc_metadata},{$set:{recc_metadata:JSON.stringify({...previous,fxQuotes:quotes})}});
+      if(Number(result?.updated)!==1)return Response.json({error:'La factura cambió durante la revisión. Actualiza antes de confirmar.'},{status:409});
+      return Response.json({success:true,quotes});
+    }
     if (action === 'recover_recc_advance_lock') return Response.json(await recoverReccAdvanceLock(svc,companyId,clean(body.invoiceId),body,user.email));
 
     if (action === 'catalog') return Response.json({ success: true, ruleSetVersion: RULESET, regimes: REGIMES, postingSupport: Object.fromEntries(Object.values(REGIMES).flat().map(([code]) => [code, code === 'criterio_caja' ? 'revision_asesor_recc_v2' : SPECIAL_POSTING_PENDING.has(code) || code === 'mixto' ? 'pendiente_circuito_especial' : 'revision_asesor'])), operations: OPERATIONS, exemptionKeys: EXEMPTION_KEYS, models: MODEL_CATALOG.map(([code, name, authority, frequency]) => ({ code, name, authority, frequency })), sources: SOURCES });
@@ -759,17 +778,17 @@ Deno.serve(async (req) => {
       if (!Number.isInteger(year) || year < 2014 || year > 2100) return Response.json({ error: 'Ejercicio no válido.' }, { status: 400 });
       const allInvoices = await listFiscalRows(svc.entities.Invoice, { company_id: companyId, fiscal_regime: 'criterio_caja' });
       const invoices = allInvoices.filter((invoice: any) => !invoice.anulada
-        && ['iva', ''].includes(clean(invoice.indirect_tax_kind))
+        && ['iva','igic',''].includes(clean(invoice.indirect_tax_kind))
         && Number(clean(invoice.fecha_operacion || invoice.fecha_emision).slice(0, 4)) <= year);
       // Cobros posteriores al límite legal también deben permanecer trazables en el libro del año del cobro.
       if (!invoices.length) return Response.json({ success: true, year, invoices: [], payments: [], issues: [], source: 'Invoice + InvoiceTaxLine + InvoicePayment', generatedAt: new Date().toISOString() });
       const ids = new Set(invoices.map((invoice: any) => invoice.id));
       const [allLines, allPayments] = await Promise.all([
-        listFiscalRows(svc.entities.InvoiceTaxLine, { companyId }),
-        listFiscalRows(svc.entities.InvoicePayment, { company_id: companyId }, 'payment_date'),
+        fiscalRowsByIds(svc.entities.InvoiceTaxLine,[...ids],{companyId},'invoiceId'),
+        fiscalRowsByIds(svc.entities.InvoicePayment,[...ids],{company_id:companyId},'invoice_id'),
       ]);
       const lines = allLines.filter((line: any) => ids.has(line.invoiceId));
-      const payments = allPayments.filter((payment: any) => ids.has(payment.invoice_id));
+      const payments = allPayments.filter((payment: any) => ids.has(payment.invoice_id)).sort((a,b)=>String(a.payment_date).localeCompare(String(b.payment_date))||String(a.id).localeCompare(String(b.id)));
       const linesByInvoice = new Map<string, any[]>();
       const paymentsByInvoice = new Map<string, any[]>();
       for (const line of lines) {
@@ -788,13 +807,13 @@ Deno.serve(async (req) => {
       const relevantIds = new Set(relevantInvoices.map((invoice: any) => invoice.id));
       const relevantPayments = payments.filter((payment: any) => relevantIds.has(payment.invoice_id));
       const operationIds = [...new Set(relevantPayments.map((payment: any) => clean(payment.accounting_operation_id)).filter(Boolean))];
-      const operations = await Promise.all(operationIds.map((id: string) => svc.entities.AccountingPostingOperation.get(id).catch(() => null)));
+      const operations=await fiscalRowsByIds(svc.entities.AccountingPostingOperation,operationIds,{companyId});
       const operationById = new Map(operations.filter((operation: any) => operation?.companyId === companyId).map((operation: any) => [operation.id, operation]));
       const transactionIds = [...new Set(relevantPayments.map((payment: any) => clean(payment.bank_transaction_id)).filter(Boolean))];
-      const transactions = await Promise.all(transactionIds.map((id: string) => svc.entities.BankTransaction.get(id).catch(() => null)));
+      const transactions=await fiscalRowsByIds(svc.entities.BankTransaction,transactionIds,{company_id:companyId});
       const transactionById = new Map(transactions.filter((transaction: any) => transaction?.company_id === companyId).map((transaction: any) => [transaction.id, transaction]));
       const bankIds = [...new Set([...transactionById.values()].map((transaction: any) => clean(transaction.bank_account_id)).filter(Boolean))];
-      const banks = await Promise.all(bankIds.map((id: string) => svc.entities.BankAccount.get(id).catch(() => null)));
+      const banks=await fiscalRowsByIds(svc.entities.BankAccount,bankIds,{company_id:companyId});
       const bankById = new Map(banks.filter((bank: any) => bank?.company_id === companyId).map((bank: any) => [bank.id, bank]));
       const issues: any[] = [];
       const bookInvoices = relevantInvoices.map((invoice: any) => {
@@ -807,10 +826,10 @@ Deno.serve(async (req) => {
         const uniqueLineNumbers = new Set(taxBreakdown.map((item: any) => item.lineNumber)).size === taxBreakdown.length;
         const valid = clean(invoice.fiscal_review_status) === 'validado' && invoiceLines.length > 0 && uniqueLineNumbers
           && invoiceLines.every((line: any) => clean(line.reviewStatus) === 'validado'
-            && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === 'iva')
+            && clean(line.regime) === 'criterio_caja' && clean(line.taxKind) === clean(invoice.indirect_tax_kind || 'iva'))
           && (invoiceLines.length === 1 || (lineTotalsMatch
             && invoiceLines.every((line: any) => clean(line.operationType) === 'subject_taxed')));
-        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin desglose IVA completo, coherente y validado por asesor.' });
+        if (!valid) issues.push({ invoiceId: invoice.id, reason: 'Factura RECC sin desglose de impuesto completo, coherente y validado por asesor.' });
         if (invoice.tipo === 'emitida' && !clean(invoice.coletilla_fiscal).toLocaleLowerCase('es-ES').includes('régimen especial del criterio de caja')) {
           issues.push({ invoiceId: invoice.id, reason: 'Factura emitida RECC sin la mención obligatoria en el documento guardado; revisar el PDF existente sin sobrescribirlo.' });
         }
@@ -820,7 +839,14 @@ Deno.serve(async (req) => {
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
         if (totalPaid > Math.abs(money(invoice.total_factura)) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
         if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro)) && !isZeroResidualReccFinal(invoice)) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
-        return { id: invoice.id, type: invoice.tipo, number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
+        let forcedAmount=0,forcedAmountEur=0;
+        if(!invoice.es_rectificativa&&!isZeroResidualReccFinal(invoice))try{
+          if(invoicePayments.some(p=>p.operation_status&&p.operation_status!=='committed'))throw new Error('Pagos pendientes: no se estima el devengo legal.');
+          const schedule=reccSchedule({invoiceId:invoice.id,invoiceNet:Math.abs(Number(invoice.total_factura)),operationDate:invoice.fecha_operacion||invoice.fecha_emision,...reccMetadata(invoice),payments:invoicePayments.map(p=>({id:p.id,date:p.payment_date,amount:p.amount,status:p.operation_status})),corrections:reccCorrections(invoice,allInvoices,invoiceLines[0],allLines)});
+          const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));forcedAmount=money(forced?.amount||0);
+          if(forced&&Number(forced.date.slice(0,4))<=year)forcedAmountEur=money(forcedAmount*taxFx(invoice,forced.date));
+        }catch(error){forcedAmount=null;forcedAmountEur=null;issues.push({invoiceId:invoice.id,reason:error.message});}
+        return { id: invoice.id, type: invoice.tipo,forcedAmount,forcedAmountEur, taxKind:invoice.indirect_tax_kind||'iva', currency:invoice.moneda||'EUR', number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),
           counterpartyNif: invoice.tipo === 'emitida' ? invoice.cliente_nif : (invoice.proveedor_nif || invoice.cliente_nif),
           base: money(invoice.base_imponible), quota: money(invoice.cuota_iva), surchargeQuota: money(invoice.cuota_recargo), deductibleQuota: money(invoice.deductible_tax_amount), total: money(invoice.total_factura), taxBreakdown,
@@ -837,7 +863,8 @@ Deno.serve(async (req) => {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || Number.isNaN(Date.parse(paymentDate))
           || new Date(paymentDate).toISOString().slice(0, 10) !== paymentDate || (paymentDate < operationDate && reccMetadata(invoice).advanceConfirmed !== true)
           || !Number.isFinite(Number(payment.amount)) || Number(payment.amount) <= 0
-          || (clean(payment.currency) && clean(payment.currency).toUpperCase() !== 'EUR')) {
+          || clean(payment.currency||'EUR').toUpperCase() !== invoiceCurrency(invoice)
+          || (invoiceCurrency(invoice)!=='EUR'&&(!Number.isFinite(Number(payment.amount_eur))||Number(payment.amount_eur)<=0))) {
           issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Fecha, importe o moneda del pago incompatible con RECC.' });
         }
         const operationId = clean(payment.accounting_operation_id);
@@ -848,7 +875,7 @@ Deno.serve(async (req) => {
         if (!confirmed) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Pago o asiento asociado no confirmado.' });
         if (payment.bank_transaction_id && !transaction) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Movimiento bancario de origen no localizado.' });
         if (!clean(payment.method)) issues.push({ invoiceId: payment.invoice_id, paymentId: payment.id, reason: 'Falta el medio de cobro o pago.' });
-        return { id: payment.id, invoiceId: payment.invoice_id, date: payment.payment_date, amount: money(payment.amount), method: payment.method || '',
+        return { id: payment.id, invoiceId: payment.invoice_id, date: payment.payment_date, amount: money(payment.amount), currency:payment.currency||'EUR', amountEur:invoiceCurrency(invoice)==='EUR'?money(payment.amount):money(payment.amount_eur), exchangeRate:payment.exchange_rate||1, taxExchangeRate:payment.tax_exchange_rate||1, method: payment.method || '',
           reference: payment.reference || '', origin: payment.origin || '', bankTransactionId: payment.bank_transaction_id || '',
           bankAccount: bank?.iban || '', confirmed };
       });

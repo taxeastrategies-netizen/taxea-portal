@@ -40,8 +40,12 @@ assert.equal(getInvoiceQrUrl({ ...invoice, tipo: 'recibida', qr_url: url }), '')
 assert.equal(getInvoiceQrUrl({ ...invoice, qr_url: 'https://evil.example/qr' }), '');
 assert.throws(() => buildAeatQrUrl({ nif_cif: '' }, invoice), /NIF\/CIF/);
 assert.throws(() => buildAeatQrUrl(company, { ...invoice, fecha_emision: '2026-02-30' }), /fecha/);
-assert.throws(() => buildAeatQrUrl(company, { ...invoice, moneda: 'USD' }), /euros/);
+assert.throws(() => buildAeatQrUrl(company, { ...invoice, moneda: 'USD' }), /EUR|euros/);
 assert.throws(() => buildAeatQrUrl(company, { ...invoice, total_factura: 99 }), /no cuadran/);
+const foreign={...invoice,moneda:'USD',fiscal_regime:'criterio_caja',fiscal_review_status:'validado',recc_metadata:JSON.stringify({fxQuotes:[{date:invoice.fecha_emision,rate:0.9,source:'Banco de España · prueba sintética',reviewedBy:'qa@test.invalid',reviewedAt:'2026-10-02T10:00:00Z'}]})};
+const foreignUrl=buildAeatQrUrl(company,foreign);assert.equal(new URL(foreignUrl).searchParams.get('importe'),'108.90');assert.equal(getInvoiceQrUrl({...foreign,qr_url:foreignUrl}),foreignUrl);
+assert.throws(()=>buildAeatQrUrl(company,{...foreign,recc_metadata:JSON.stringify({fxQuotes:[{date:invoice.fecha_emision,rate:0.9,source:'Sin confirmar'}]})}),/asesor/);
+
 const png = await invoiceQrPng({ ...invoice, qr_url: url });
 assert.match(png, /^data:image\/png;base64,/);
 const decodePng = Buffer.from(png.slice(png.indexOf(',') + 1), 'base64');

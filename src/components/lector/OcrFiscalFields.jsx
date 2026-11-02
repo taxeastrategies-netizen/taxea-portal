@@ -42,6 +42,13 @@ export default function OcrFiscalFields({value={},onChange,context={},direction,
     </div>
     {regime==='criterio_caja' && <details className="rounded-lg border bg-background p-3 text-xs">
       <summary className="cursor-pointer font-medium">Datos RECC · anticipos, rectificativas y requisitos</summary>
+        <div className="space-y-2 rounded border p-3"><p>Cambios fiscales de divisa · EUR por unidad, fecha y fuente oficial. Los confirma el asesor y no se sobrescriben.</p>
+        {(value.recc?.fxQuotes||[]).map((quote,index)=><div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <input aria-label="Fecha cambio fiscal" type="date" className="rounded border p-2" value={quote.date||''} onChange={e=>update('recc',{...value.recc,fxQuotes:value.recc.fxQuotes.map((q,i)=>i===index?{...q,date:e.target.value}:q)})}/>
+          <input aria-label="Cambio fiscal EUR" type="number" step="0.000001" className="rounded border p-2" value={quote.rate||''} onChange={e=>update('recc',{...value.recc,fxQuotes:value.recc.fxQuotes.map((q,i)=>i===index?{...q,rate:e.target.value}:q)})}/>
+          <input aria-label="Fuente del cambio" className="rounded border p-2" value={quote.source||''} onChange={e=>update('recc',{...value.recc,fxQuotes:value.recc.fxQuotes.map((q,i)=>i===index?{...q,source:e.target.value}:q)})}/>
+        </div>)}
+        <button type="button" className="underline" onClick={()=>update('recc',{...value.recc,fxQuotes:[...(value.recc?.fxQuotes||[]),{date:value.operationDate||'',rate:'',source:''}]})}>Añadir cambio fiscal</button></div>
       <div className="mt-3 space-y-3">
         <label className="block">Fecha de realización de la operación<Input type="date" value={value.operationDate || ''} onChange={e=>update('operationDate',e.target.value)} /></label>
         <label className="block">Tipo de documento<NativeSelect className="w-full rounded border p-2" value={value.recc?.documentKind || 'ordinary'}
@@ -59,6 +66,7 @@ export default function OcrFiscalFields({value={},onChange,context={},direction,
         <label className="flex gap-2"><input type="checkbox" checked={Boolean(value.recc?.advanceConfirmed)} onChange={e=>update('recc',{...value.recc,advanceConfirmed:e.target.checked})}/>Anticipos trazados, sin duplicar importes ya facturados</label>
         <label className="block">ID de factura original (solo rectificativas)<Input value={value.recc?.originalInvoiceId || ''} onChange={e=>update('recc',{...value.recc,originalInvoiceId:e.target.value})}/></label>
         <label className="block">Tratamiento de rectificación<NativeSelect className="w-full rounded border p-2" value={value.recc?.adjustmentMode || ''} onChange={e=>update('recc',{...value.recc,adjustmentMode:e.target.value})}><option value="">No aplica / elegir</option><option value="price_change">Variación de precio</option><option value="tax_adjustment">Ajuste de cuotas (arts. 89 y 114)</option></NativeSelect></label>
+        <label className="block">Importe a devolver del anticipo (moneda del documento)<Input type="number" min="0" step="0.01" value={value.recc?.refundCashAmount ?? ''} onChange={e=>update('recc',{...value.recc,refundCashAmount:e.target.value})}/><span className="text-xs">Vacío: total del abono. Cero: solo cancela deuda no pagada. El resto reduce la deuda pendiente; no crea otro cobro.</span></label>
         <label className="block">Fecha fiscal de la rectificación<Input type="date" value={value.recc?.adjustmentDate || ''} onChange={e=>update('recc',{...value.recc,adjustmentDate:e.target.value})}/></label>
         <label className="block">Fecha de auto de concurso<Input type="date" value={value.recc?.insolvencyDate || ''} onChange={e=>update('recc',{...value.recc,insolvencyDate:e.target.value})}/></label>
         <label className="block">Motivo de la rectificación<Input value={value.recc?.reason || ''} onChange={e=>update('recc',{...value.recc,reason:e.target.value})}/></label>

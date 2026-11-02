@@ -1,3 +1,4 @@
+import { accountingFx, invoiceCurrency } from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
 
@@ -384,14 +385,16 @@ function isValidatedRecargoRetailSale(invoice) {
 
 function isValidatedSimpleReccInvoice(invoice) {
   const base = money(invoice.base_imponible), quota = money(invoice.cuota_iva), rate = Number(invoice.tipo_iva || 0);
+  let breakdown=[];try{breakdown=JSON.parse(invoice.tax_breakdown||'[]');}catch{return false;}
+  const multiple=Array.isArray(breakdown)&&breakdown.length>1&&breakdown.length<=3;
   return clean(invoice.fiscal_regime) === 'criterio_caja'
-    && clean(invoice.fiscal_treatment) === 'subject_taxed' && clean(invoice.indirect_tax_kind) === 'iva'
+    && ['subject_taxed','subject_zero'].includes(clean(invoice.fiscal_treatment)) && ['iva','igic'].includes(clean(invoice.indirect_tax_kind))
     && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)
     && ['emitida', 'recibida'].includes(clean(invoice.tipo))
     && (invoice.es_rectificativa !== true || !!clean(invoice.recc_metadata))
-    && clean(invoice.moneda || 'EUR').toUpperCase() === 'EUR'
-    && [0,21,10,4].includes(rate) && ((Math.abs(base) > 0 && Math.abs(quota) > 0) || isZeroResidualReccFinal(invoice))
-    && (rate === 0 || Math.abs(money(base * rate / 100) - quota) <= 0.01)
+    && Number.isFinite(accountingFx(invoice))
+    && (invoice.indirect_tax_kind==='igic'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).includes(rate) && ((Math.abs(base)>0 && (rate===0||Math.abs(quota)>0)) || isZeroResidualReccFinal(invoice))
+    && (multiple || rate === 0 || Math.abs(money(base * rate / 100) - quota) <= 0.01)
     && Math.abs(money(invoice.total_factura) - money(base + quota + money(invoice.cuota_recargo) - money(invoice.importe_retencion))) <= 0.02
     && (Math.abs(money(invoice.cuota_recargo)) <= 0.001 || (invoice.tipo === 'emitida'
       && Number(invoice.tipo_recargo) === ({21:5.2,10:1.4,4:0.5})[rate]
@@ -425,7 +428,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     const rows = await svc.entities.JournalEntryLine.filter({companyId,journalEntryId:advance.originalJournalEntryId},'lineNumber',5001);
     const third = rows.filter(row=>row.sourceLineType==='tercero' || /^(430|400|410)/.test(clean(row.accountCode)));
     const codes = [...new Set(third.map(row=>clean(row.accountCode)))];
-    const expected = money(Number(original.total_factura)*(invoice.tipo==='emitida'?1:-1));
+    const expected = money(Number(original.total_factura)*accountingFx(original)*(invoice.tipo==='emitida'?1:-1));
     const balance = money(third.reduce((sum,row)=>sum+Number(row.debit||0)-Number(row.credit||0),0));
     if (rows.length>=5001 || codes.length!==1 || Math.abs(balance-expected)>0.01)
       throw new Error('La devolución necesita una subcuenta original inequívoca; no crea ni cambia la cuenta histórica.');
@@ -531,7 +534,11 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     const released = invoice.tipo === 'emitida'
       ? [line(account, amount, 0, 'ajuste'), line(resultAccount, 0, amount, 'ingreso')]
       : [line(resultAccount, amount, 0, 'gasto'), line(account, 0, amount, 'ajuste')];
-    lines.push(...released.map(row => ({ ...row, description })));
+    lines.push(...released.map(row => ({ ...row, description, ...(invoiceCurrency(invoice)!=='EUR'?{eurAmountOverride:application.accountingAmountEur}:{}) })));
+  }
+  if(advance.creditBookValues){
+    const values=advance.creditBookValues;
+    lines=lines.map(row=>({...row,eurAmountOverride:row.sourceLineType==='tercero'?values.totalEur:row.sourceLineType==='retencion'?values.retentionEur:row.sourceLineType==='impuesto'?values.deductibleEur:values.costEur}));
   }
   return { lines: lines.filter(row => row.debit > 0 || row.credit > 0), counterparty, resultAccount, taxKind, base, tax, withholding, total, advance };
 }
@@ -918,8 +925,8 @@ async function requireHealthyPosting(svc, companyId, entry, context) {
 export async function postBankReconciliation(svc, companyId, transaction, bankAccount, counterpartyAccount, userEmail, options = {}) {
   const originalAmount = money(Math.abs(Number(transaction.importe) || 0));
   const currency = clean(options.currency || transaction.moneda || bankAccount.currency || bankAccount.moneda || 'EUR').toUpperCase();
-  const fxRate = Number(options.fxRate || transaction.exchange_rate || transaction.tipo_cambio || 1);
-  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate === 1)) {
+  const fxRate = currency==='EUR'?1:Number(options.fxRate??transaction.exchange_rate??transaction.tipo_cambio);
+  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0)) {
     throw new Error(`El movimiento esta en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarlo.`);
   }
   const amount = currency === 'EUR' ? originalAmount : money(originalAmount * fxRate);
@@ -961,6 +968,12 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     reconciledAt: now,
     sourceLineType,
   });
+  const customLines=options.lines;
+  if(customLines){
+    const bankLines=customLines.filter(row=>row.accountId===bankAccount.id),third=customLines.filter(row=>row.accountId===counterpartyAccount.id);
+    const bankNet=money(bankLines.reduce((sum,row)=>sum+Number(row.debit||0)-Number(row.credit||0),0));
+    if(bankLines.length!==1||third.length!==1||Math.abs(bankNet-(incoming?amount:-amount))>0.01)throw new Error('El asiento RECC en divisa no coincide con el movimiento bancario.');
+  }
   const result = await createJournalEntry(svc, companyId, {
     date: transaction.fecha_operacion,
     description,
@@ -974,9 +987,9 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
     currency,
     fxRate,
     originalAmount: currency === 'EUR' ? null : originalAmount,
-    lines: incoming
+    lines: customLines || (incoming
       ? [line(bankAccount, amount, 0, 'banco'), line(counterpartyAccount, 0, amount, options.counterpartyLineType || 'ajuste')]
-      : [line(counterpartyAccount, amount, 0, options.counterpartyLineType || 'ajuste'), line(bankAccount, 0, amount, 'banco')],
+      : [line(counterpartyAccount, amount, 0, options.counterpartyLineType || 'ajuste'), line(bankAccount, 0, amount, 'banco')]),
   }, userEmail);
   if (result.operation) {
     result.operation = await updatePostingOperation(svc, result.operation, {
@@ -1048,14 +1061,14 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       && Math.abs(money(line.quota) - money(invoice.cuota_iva)) <= 0.01
       && Math.abs(money(line.surchargeQuota) - money(invoice.cuota_recargo)) <= 0.01;
     const validReccActivity = validatedRecc && activity && activity.company_id === companyId && activity.active !== false
-      && clean(activity.indirectTax) === 'iva'
+      && clean(activity.indirectTax) === clean(invoice.indirect_tax_kind)
       && (invoice.tipo === 'recibida' || clean(activity.indirectTaxRegime) === 'criterio_caja');
     const validReccLine = validatedRecc && taxLines?.length > 0
       && new Set(taxLines.map((row: any) => Number(row.lineNumber))).size === taxLines.length
-      && taxLines.every((row: any) => clean(row.regime) === 'criterio_caja' && clean(row.taxKind) === 'iva'
-        && clean(row.operationType) === 'subject_taxed' && clean(row.reviewStatus) === 'validado'
+      && taxLines.every((row: any) => clean(row.regime) === 'criterio_caja' && clean(row.taxKind) === clean(invoice.indirect_tax_kind)
+        && ['subject_taxed','subject_zero'].includes(clean(row.operationType)) && clean(row.reviewStatus) === 'validado'
         && clean(row.reviewedBy) === clean(invoice.fiscal_reviewed_by) && clean(row.activityId) === activityId
-        && [21,10,4].includes(Number(row.rate))
+        && (invoice.indirect_tax_kind==='igic'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).includes(Number(row.rate))
         && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - money(row.quota)) <= 0.01)
       && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.base), 0)) - money(invoice.base_imponible)) <= 0.01
       && Math.abs(money(taxLines.reduce((sum: number, row: any) => sum + Number(row.quota), 0)) - money(invoice.cuota_iva)) <= 0.01
@@ -1091,8 +1104,8 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);
   const currency = clean(invoice.moneda || 'EUR').toUpperCase();
-  const fxRate = Number(options.fxRate || invoice.exchange_rate || invoice.tipo_cambio || 1);
-  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate === 1)) {
+  const fxRate = currency === 'EUR' ? 1 : accountingFx(invoice);
+  if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0)) {
     throw new Error(`La factura está en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarla.`);
   }
   if (generatedProposal.advance?.documentKind !== 'ordinary' && options.lines?.length)
@@ -1104,12 +1117,18 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       ...line,
       originalDebit: money(line.debit),
       originalCredit: money(line.credit),
-      debit: money(line.debit * fxRate),
-      credit: money(line.credit * fxRate),
+      debit: line.debit?money(line.eurAmountOverride??line.debit*fxRate):0,
+      credit: line.credit?money(line.eurAmountOverride??line.credit*fxRate):0,
       currency,
       fxRate,
     }),
   };
+  if(currency!=='EUR'){
+    const delta=money(proposal.lines.reduce((s,l)=>s+Number(l.debit||0)-Number(l.credit||0),0));
+    const cost=proposal.lines.find(l=>['ingreso','gasto','ajuste'].includes(l.sourceLineType)&&!String(l.description||'').startsWith('Aplicación anticipo'));
+    if(Math.abs(delta)>0.03||!cost)throw new Error('Revisa el redondeo del asiento en divisa.');
+    if(delta){if(cost.debit)cost.debit=money(cost.debit-delta);else cost.credit=money(cost.credit+delta);}
+  }
   const created = await createJournalEntry(svc, companyId, {
     date: options.date || (validatedRecc ? invoice.fecha_operacion : '') || invoice.fecha_emision,
     description: options.description || invoice.concepto || `Factura ${invoice.numero_factura}`,

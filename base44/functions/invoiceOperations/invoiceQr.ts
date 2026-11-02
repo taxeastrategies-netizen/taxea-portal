@@ -21,14 +21,19 @@ export function buildAeatQrUrl(company, invoice) {
   if (!Number.isFinite(payable) || !Number.isFinite(retention) || Math.abs(amount - retention - payable) > 0.03) {
     throw new Error('La base, el impuesto, el recargo, la retención y el total a pagar no cuadran; revisa la factura antes de emitirla.');
   }
-  if (String(invoice?.moneda || 'EUR').toUpperCase() !== 'EUR') {
-    throw new Error('El QR tributario requiere el importe en euros; revisa la conversión de la factura.');
+  let fiscalAmount=amount;
+  if(String(invoice?.moneda||'EUR').toUpperCase()!=='EUR'){
+    let metadata;try{metadata=JSON.parse(invoice.recc_metadata||'{}');}catch{throw new Error('Metadatos de conversión inválidos.');}
+    const quote=(metadata.fxQuotes||[]).find(row=>row.date===String(invoice.fecha_operacion||invoice.fecha_emision).slice(0,10));
+    if(invoice.fiscal_regime!=='criterio_caja'||invoice.fiscal_review_status!=='validado'||!quote?.reviewedBy||!quote?.source||!(Number(quote.rate)>0))throw new Error('El QR en divisa requiere un cambio oficial a EUR confirmado por asesor.');
+    fiscalAmount=Math.round(amount*Number(quote.rate)*100)/100;
+    if(!Number.isFinite(fiscalAmount)||Math.abs(fiscalAmount)>=1e12)throw new Error('Importe EUR fuera del rango del QR tributario.');
   }
   const params = new URLSearchParams({
     nif,
     numserie,
     fecha: `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`,
-    importe: amount.toFixed(2),
+    importe: fiscalAmount.toFixed(2),
   });
   return `https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?${params.toString()}`;
 }

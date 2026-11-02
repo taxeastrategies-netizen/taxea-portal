@@ -1,10 +1,11 @@
+import {accountingFx,invoiceCurrency,taxFx} from './reccCurrency.mjs';
 import{taxModelUserEnabled,taxModelCompanyAllowed,taxModelValidation,taxModelPublicError}from'./taxModelAccess.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { isZeroResidualReccFinal } from './reccAdvances.mjs';
 import { MODEL200_LAYOUT } from './model200Layout.ts';
 import { reccSchedule, reccMetadata, reccCorrections, reccDate } from './reccRules.mjs';
 
-const ENGINE_VERSION = 'taxea-modelos-2026.10.06-v29-recc-advance-refund';
+const ENGINE_VERSION = 'taxea-modelos-2026.11.01-v30-recc-c4';
 const TARGET_MODELS = ['111', '115', '123', '130', '131', '180', '190', '193', '200', '202', '216', '232', '296', '303', '347', '349', '390', '415', '417', '420', '421', '425'];
 
 const DEFINITIONS: Record<string, any> = {
@@ -982,9 +983,9 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   const payable = invoicePayable(invoice);
   const siblingLines = (data.taxLines || []).filter((candidate: any) => candidate.invoice?.id === invoice.id || candidate.invoiceId === invoice.id);
   const invoiceLines = siblingLines.length ? siblingLines : [line];
-  if (invoiceLines.length > 1 && (invoiceLines.some((candidate: any) => clean(candidate.taxKind) !== 'iva'
+  if (invoiceLines.length > 1 && (invoiceLines.some((candidate: any) => clean(candidate.taxKind) !== clean(line.taxKind)
     || clean(candidate.regime || candidate.invoice?.fiscal_regime) !== 'criterio_caja'
-    || clean(candidate.operationType) !== 'subject_taxed')
+    || !['subject_taxed','subject_zero'].includes(clean(candidate.operationType)))
     || !invoiceLines.some((candidate: any) => candidate.sourceId === line.sourceId))) {
     return review(`La factura ${invoiceLabel} combina líneas fiscales no homogéneas o incompletas; requiere revisión antes de repartir los pagos del criterio de caja.`);
   }
@@ -1037,7 +1038,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
       schedule = reccSchedule({ invoiceId: invoice.id, invoiceNet: payable, operationDate,
         advanceConfirmed: metadata.advanceConfirmed, insolvencyDate: metadata.insolvencyDate,
         payments: payments.map((payment: any) => {
-          if (clean(payment.currency) && clean(payment.currency) !== 'EUR') throw taxModelValidation('Pago RECC en moneda sin convertir.');
+          if (clean(payment.currency||'EUR').toUpperCase()!==invoiceCurrency(invoice)) throw taxModelValidation('La divisa del pago no coincide con la factura.');
           return { id: payment.id, date: payment.payment_date, amount: payment.amount, status: payment.operation_status };
         }), corrections: reccCorrections(invoice, data.invoices, line, data.taxLines) });
       events = schedule.events.map((event: any) => ({ ...event, type: event.kind }));
@@ -1056,7 +1057,12 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
     }
     return { ...event, amounts };
   });
-  const selectedEvents = allocatedEvents.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end);
+  let selectedEvents;
+  try{selectedEvents=allocatedEvents.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end).map((event:any)=>{
+    const rate=Number(reccMetadata(invoice).advanceCreditBook?.taxFiscalRate)||taxFx(invoice,event.date),amounts=Object.fromEntries(Object.entries(event.amounts).map(([key,value])=>[key,money(Number(value)*rate)]));
+    if(invoice.tipo==='recibida')amounts.nonDeductibleQuota=money(Number(amounts.quota)-Number(amounts.deductibleQuota));
+    return {...event,originalAmounts:event.amounts,amounts,currency:invoiceCurrency(invoice),taxExchangeRate:rate};
+  });}catch(error){return review(error.message);}
   const factor = selectedEvents.reduce((sum: number, event: any) => sum + event.factor, 0);
   if (factor <= 0) return { line: null, deferred: { sourceId: line.sourceId, invoiceId: invoice.id, operationDate, forcedRecognitionDate } };
   const selectedAmount = (key: string) => money(selectedEvents.reduce((sum: number, event: any) => sum + money(event.amounts[key]), 0));
@@ -1075,6 +1081,10 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   };
 }
 
+function retainedFxAmount(invoice:any,selected:any[],amount:number,data:any){
+ if(invoiceCurrency(invoice)==='EUR')return money(amount*selected.reduce((sum,event)=>sum+event.factor,0));
+ return money(selected.reduce((sum,event)=>sum+money(amount*event.factor*taxFx(invoice,event.date)),0));
+}
 function retainedPaymentEvents(data: any, periodBounds: any) {
   const paymentsByInvoice = new Map<string, any[]>();
   for (const payment of data.invoicePayments || []) {
@@ -1094,7 +1104,7 @@ function retainedPaymentEvents(data: any, periodBounds: any) {
     } else if (!payments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro)) && !invoice.ultimo_pago_at) {
       missingPaymentTrace += 1;
     }
-    if (factor > 0) events.push({ invoice, factor, sourceIds, base: money(money(invoice.base_imponible) * factor), withholding: money(retentionAmount(invoice) * factor) });
+    if(factor>0){try{events.push({invoice,factor,sourceIds,base:retainedFxAmount(invoice,allocated,money(invoice.base_imponible),data),withholding:retainedFxAmount(invoice,allocated,retentionAmount(invoice),data)});}catch(error){data.blockers.push(error.message);}}
   }
   if (missingPaymentTrace) data.blockers.push(`${missingPaymentTrace} factura(s) con retención constan pagadas total o parcialmente, pero no tienen fecha de pago trazada; no se han incluido automáticamente.`);
   return events;
@@ -1119,7 +1129,7 @@ function supportedWithholdingEvents(data: any, periodBounds: any) {
       events.push({
         invoice,
         factor,
-        withholding: money(retentionAmount(invoice) * factor),
+        withholding: retainedFxAmount(invoice,selected,retentionAmount(invoice),data),
         sourceIds: unique([`Invoice:${invoice.id}`, ...selected.flatMap((event: any) => event.sourceIds || [])]),
         paymentDates: selected.map((event: any) => event.date),
       });
@@ -1444,20 +1454,20 @@ function calculate303Simplified(data: any, adjustments: any, fields: any[]) {
   return { active: true, details, agriculture, other, result: values['58'], fields: values, sourceIds, previousQuarterAdvances };
 }
 
-function reccGeneralAccrualInformation(data: any, b: any) {
+function reccGeneralAccrualInformation(data: any, b: any, kind: 'iva'|'igic'='iva') {
   const issued: any[] = [], received: any[] = [], pending: any[] = [];
   for (const line of data.taxLines || []) {
     const invoice = line.invoice;
     const regime = clean(line.regime || invoice?.fiscal_regime);
-    if (clean(line.taxKind) !== 'iva' || regime !== 'criterio_caja' || !invoice?.id
+    if (clean(line.taxKind) !== kind || regime !== 'criterio_caja' || !invoice?.id
       || !['emitida', 'recibida'].includes(clean(invoice.tipo))) continue;
     const operationDate = clean(line.date || dateOf(invoice)).slice(0, 10);
     if (operationDate < b.start || operationDate > b.end) continue;
-    if (clean(line.reviewStatus) !== 'validado' || clean(line.operationType) !== 'subject_taxed') {
+    if (clean(line.reviewStatus) !== 'validado' || !['subject_taxed','subject_zero'].includes(clean(line.operationType))) {
       pending.push(line.sourceId || `InvoiceTaxLine:${line.id}`);
       continue;
     }
-    (invoice.tipo === 'emitida' ? issued : received).push(line);
+    try{const rate=taxFx(invoice,operationDate);(invoice.tipo==='emitida'?issued:received).push({...line,base:money(Number(line.base)*rate),quota:money(Number(line.quota)*rate)});}catch(error){pending.push(line.sourceId||'Invoice:'+invoice.id);}
   }
   const totals = (lines: any[]) => ({
     base: money(lines.reduce((sum, line) => sum + money(line.base), 0)),
@@ -1500,13 +1510,13 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   };
   let deductibleBase = 0, deductibleQuota = 0, nonDeductibleBase = 0, reverseBase = 0, reverseQuota = 0, intraBase = 0, intraQuota = 0;
   let exports = 0, intraSupplies = 0, exemptLimited = 0, nonSubject = 0;
-  const reccInformation = kind === 'iva' ? reccGeneralAccrualInformation(data, b) : null;
+  const reccInformation = reccGeneralAccrualInformation(data,b,kind);
   const criterionCash = reccInformation?.issued.base || 0;
   const criterionCashQuota = reccInformation?.issued.quota || 0;
   const criterionCashReceived = reccInformation?.received.base || 0;
   const criterionCashReceivedQuota = reccInformation?.received.quota || 0;
-  const criterionCashTaxpayer = kind === 'iva' && (data.activities || []).some((activity: any) => activity.active !== false && clean(activity.indirectTaxRegime) === 'criterio_caja' && clean(activity.indirectTax || 'iva') === 'iva');
-  const criterionCashRecipient = kind === 'iva' && (criterionCashReceived !== 0 || lines.some((line: any) => line.invoice?.tipo === 'recibida' && clean(line.regime) === 'criterio_caja'));
+  const criterionCashTaxpayer = (data.activities || []).some((activity: any) => activity.active !== false && clean(activity.indirectTaxRegime) === 'criterio_caja' && clean(activity.indirectTax || 'iva') === kind);
+  const criterionCashRecipient = (criterionCashReceived !== 0 || lines.some((line: any) => line.invoice?.tipo === 'recibida' && clean(line.regime) === 'criterio_caja'));
   if (reccInformation?.pending.length) data.blockers.push(`${reccInformation.pending.length} línea(s) RECC del período necesitan validación para las casillas informativas; no se han sumado sin revisión.`);
   let annualClassificationPending = 0;
   let pendingReviewLines = 0;
@@ -1573,6 +1583,11 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
   const newCompensation = result < 0 && resultDisposition === 'a_compensar' ? Math.abs(result) : 0;
   const nextBalance = money(previousPending + newCompensation);
   const balanceSourceIds = annual ? [] : manualBalanceProvided ? ['ManualAdjustment:previousCompensationBalance'] : historicalBalance.filing ? [`TaxFiling:${historicalBalance.filing.id}`] : [];
+  if(kind==='igic'){
+    const boxes=annual?['138','139','140','141']:['48','49','50','51'];
+    for(const [index,value]of [criterionCash,criterionCashQuota,criterionCashReceived,criterionCashReceivedQuota].entries())
+      addField(fields,boxes[index],index<2?'RECC emitidas como regla general de devengo':'RECC recibidas como regla general de devengo',value,index<2?reccInformation.issued.sourceIds:reccInformation.received.sourceIds,'Información RECC · no sumar a liquidación');
+  }
   addField(fields, 'DEVENGADO', 'Total cuota devengada', outputQuota, lines.filter((l: any) => l.invoice.tipo === 'emitida' || ['reverse_charge','intra_eu_acquisition'].includes(l.operationType)).flatMap(sourceIdsOf), 'Liquidación');
   addField(fields, 'DEDUCIBLE_BASE', 'Base de cuotas deducibles', deductibleBase, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
   addField(fields, 'DEDUCIBLE', 'Total cuota deducible', deductibleQuota, lines.filter((l: any) => l.invoice.tipo === 'recibida').flatMap(sourceIdsOf), 'Deducciones');
@@ -1643,6 +1658,7 @@ function thirdPartyOperationDate(invoice: any, model: '347'|'415') {
   return clean(invoice.fecha_emision || invoice.fecha_operacion || dateOf(invoice)).slice(0, 10);
 }
 
+function reccGeneralGrossEur(invoice:any){const gross=money(money(invoice.total_factura)+retentionAmount(invoice));return invoiceCurrency(invoice)==='EUR'?gross:money(gross*taxFx(invoice,clean(invoice.fecha_operacion||invoice.fecha_emision).slice(0,10)));}
 function calculateThirdParties(data: any, b: any, model: '347' | '415') {
   const groups = new Map<string, any>();
   const thresholdTotals = new Map<string, number>();
@@ -1669,7 +1685,7 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
     const originYear = thirdPartyOperationDate(invoice, model).slice(0, 4);
     if (!originYear) continue;
     const thresholdKey = `${normalizedTaxId}|${operationKey}|${originYear}`;
-    thresholdTotals.set(thresholdKey, money((thresholdTotals.get(thresholdKey) || 0) + money(invoice.total_factura) + retentionAmount(invoice)));
+    try{thresholdTotals.set(thresholdKey,money((thresholdTotals.get(thresholdKey)||0)+(cashInvoiceIds.has(invoice.id)?reccGeneralGrossEur(invoice):money(invoice.total_factura)+retentionAmount(invoice))));}catch(error){data.blockers.push(error.message);}
   }
   let excluded347 = 0;
   for (const invoice of data.invoices.filter((f: any) => !f.anulada)) {
@@ -1698,7 +1714,7 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
     const generalInYear = operationDate >= b.start && operationDate <= b.end;
     if (cashAccounting ? !generalInYear && cashRecognizedGross === 0 : !generalInYear) continue;
     const cp = invoiceCounterparty(invoice);
-    const grossAmount = money(money(invoice.total_factura) + retentionAmount(invoice));
+    let grossAmount;try{grossAmount=cashAccounting?reccGeneralGrossEur(invoice):money(money(invoice.total_factura)+retentionAmount(invoice));}catch(error){data.blockers.push(error.message);continue;}
     const generalAmount = money(generalInYear ? grossAmount : 0);
     const cashAccountingAmount = money(cashRecognizedGross);
     const amount = cashAccounting ? generalAmount : grossAmount;
@@ -1743,7 +1759,7 @@ function calculateThirdParties(data: any, b: any, model: '347' | '415') {
       const cashPayments = (paymentsByInvoice.get(invoice.id) || []).filter((payment: any) => payment.method === 'efectivo');
       if (cashPayments.length) {
         const cash = cashByTaxId.get(normalizedTaxId) || { amount: 0, originYears: new Set<string>(), sourceIds: [] };
-        cash.amount += cashPayments.reduce((sum: number, payment: any) => sum + Math.abs(money(payment.amount)), 0);
+        cash.amount += cashPayments.reduce((sum: number, payment: any) => sum + Math.abs(money(payment.amount_eur??payment.amount)), 0);
         cash.originYears.add(dateOf(invoice).slice(0, 4));
         cash.sourceIds.push(...cashPayments.map((payment: any) => `InvoicePayment:${payment.id}`));
         cashByTaxId.set(normalizedTaxId, cash);

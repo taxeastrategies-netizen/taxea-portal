@@ -1,3 +1,28 @@
+export function invoiceEuroAmount(invoice,field='total_factura'){
+ const currency=String(invoice?.moneda||invoice?.currency||'EUR').toUpperCase();
+ if(field==='importe_pendiente'){
+   let metadata={};try{metadata=JSON.parse(invoice?.recc_metadata||'{}');}catch{/* La incidencia fiscal se revisa por separado. */}
+   const credit=invoice?.es_rectificativa?metadata.advanceCreditBook:null;
+   const face=invoice?.es_rectificativa&&metadata.documentKind==='advance'?Number(metadata.refundCashAmount??Math.abs(Number(invoice.total_factura))):Math.abs(Number(invoice?.total_factura)||0);
+   const pending=Math.max(0,Number(invoice?.importe_pendiente??(face-Math.abs(Number(invoice?.importe_pagado)||0))));
+   const total=credit?Number(credit.paidTotalEur):currency==='EUR'&&invoice?.es_rectificativa&&metadata.documentKind==='advance'?face:Math.abs(invoiceEuroAmount(invoice,'total_factura'));
+   return face>0?money(total-money(total*Math.max(0,Math.min(1,(face-pending)/face)))):0;
+ }
+ const raw=field==='importe_retencion'&&invoice?.importe_retencion==null?Number(invoice?.base_imponible||0)*Number(invoice?.retencion_irpf||0)/100:invoice?.[field];
+ if(currency==='EUR')return money(raw);
+ const rate=Number(invoice?.exchange_rate);if(!Number.isFinite(rate)||rate<=0)return 0;
+ let metadata={};try{metadata=JSON.parse(invoice?.recc_metadata||'{}');}catch{/* Se conserva la referencia documental sin inventar un ajuste histórico. */}
+ const credit=invoice?.es_rectificativa?metadata.advanceCreditBook:null;
+ if(credit){const nondeduct=invoice.tipo==='recibida'?money(credit.taxEur-credit.deductibleEur):0;
+  const values={base_imponible:-money(credit.costEur-nondeduct),cuota_iva:-credit.taxEur,deductible_tax_amount:invoice.tipo==='recibida'?-credit.deductibleEur:0,non_deductible_tax_amount:-nondeduct,importe_retencion:-credit.retentionEur,total_factura:-credit.totalEur};if(field in values)return money(values[field]);
+ }
+ return money(Number(raw||0)*rate);
+}
+/** @param {any} value @param {any} invoice */
+export function formatInvoiceMoney(value,invoice={}){
+ const currency=String(invoice.moneda||invoice.currency||'EUR').toUpperCase();
+ return Number(value||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+(currency==='EUR'?' €':' '+currency);
+}
 const money = value => Math.round((Number(value) || 0) * 100) / 100;
 const text = value => String(value ?? '').trim();
 const normalizedText = value => text(value)
@@ -42,7 +67,7 @@ export function financialDocumentFingerprint(row, source = 'invoice') {
   const taxId = invoice ? invoiceTaxId(row) : expenseTaxId(row);
   const party = invoice ? invoiceParty(row) : expenseParty(row);
   const number = invoice ? invoiceNumber(row) : expenseNumber(row);
-  return [direction, date, amount.toFixed(2), number || taxId || party].join('|');
+  const currency=String(row.moneda||row.currency||'EUR').toUpperCase(); return [direction,date,currency==='EUR'?amount.toFixed(2):currency+':'+amount.toFixed(2),number||taxId||party].join('|');
 }
 
 export function compareLegacyExpenseToInvoice(expense, invoice) {
@@ -57,6 +82,7 @@ export function compareLegacyExpenseToInvoice(expense, invoice) {
       : null;
   }
 
+  if(String(expense.moneda||expense.currency||'EUR').toUpperCase()!==String(invoice.moneda||invoice.currency||'EUR').toUpperCase())return null;
   const amountMatches = Math.abs(expenseAmount(expense) - invoiceAmount(invoice)) <= 0.01;
   if (!amountMatches) return null;
   const dateDistance = daysBetween(expenseDate(expense), invoiceDate(invoice));
@@ -131,36 +157,32 @@ export function buildFinancialSummary(invoices = [], expenses = []) {
   const received = activeInvoices.filter(invoice => invoice.tipo === 'recibida');
   const manualIncome = activeExpenses.filter(expense => expense.tipo === 'ingreso');
   const manualExpense = activeExpenses.filter(expense => expense.tipo !== 'ingreso');
-  const outstanding = invoice => {
-    const total = Math.abs(money(invoice.total_factura));
-    if (invoice.importe_pendiente !== null && invoice.importe_pendiente !== undefined) {
-      return Math.max(0, money(invoice.importe_pendiente));
-    }
-    return Math.max(0, money(total - Math.abs(money(invoice.importe_pagado))));
-  };
+  const outstanding=invoice=>invoiceEuroAmount(invoice,'importe_pendiente');
   const open = invoice => !['cobrada', 'pagada', 'anulada', 'cancelada'].includes(text(invoice.estado_cobro).toLowerCase())
     && outstanding(invoice) > 0.01;
-  const totalIncome = money(issued.reduce((sum, row) => sum + Number(row.total_factura || 0), 0)
-    + manualIncome.reduce((sum, row) => sum + Number(row.total || 0), 0));
-  const totalExpenses = money(received.reduce((sum, row) => sum + Number(row.total_factura || 0), 0)
-    + manualExpense.reduce((sum, row) => sum + Number(row.total || 0), 0));
+  const totalIncome = money(issued.reduce((sum, row) => sum + invoiceEuroAmount(row,'total_factura'), 0)
+    + manualIncome.reduce((sum, row) => sum + invoiceEuroAmount(row,'total'), 0));
+  const totalExpenses = money(received.reduce((sum, row) => sum + invoiceEuroAmount(row,'total_factura'), 0)
+    + manualExpense.reduce((sum, row) => sum + invoiceEuroAmount(row,'total'), 0));
   return {
     total_ingresos: totalIncome,
     total_gastos: totalExpenses,
     resultado: money(totalIncome - totalExpenses),
-    base_ingresos: money(issued.reduce((sum, row) => sum + Number(row.base_imponible || 0), 0)
-      + manualIncome.reduce((sum, row) => sum + Number(row.base_imponible || 0), 0)),
-    base_gastos: money(received.reduce((sum, row) => sum + Number(row.base_imponible || 0), 0)
-      + manualExpense.reduce((sum, row) => sum + Number(row.base_imponible || 0), 0)),
-    iva_repercutido: money(issued.reduce((sum, row) => sum + Number(row.cuota_iva || 0), 0)
-      + manualIncome.reduce((sum, row) => sum + Number(row.cuota_impuesto || 0), 0)),
-    iva_soportado: money(received.reduce((sum, row) => sum + Number(row.cuota_iva || 0), 0)
-      + manualExpense.reduce((sum, row) => sum + Number(row.cuota_impuesto || 0), 0)),
+    base_ingresos: money(issued.reduce((sum, row) => sum + invoiceEuroAmount(row,'base_imponible'), 0)
+      + manualIncome.reduce((sum, row) => sum + invoiceEuroAmount(row,'base_imponible'), 0)),
+    base_gastos: money(received.reduce((sum, row) => sum + invoiceEuroAmount(row,'base_imponible'), 0)
+      + manualExpense.reduce((sum, row) => sum + invoiceEuroAmount(row,'base_imponible'), 0)),
+    iva_repercutido: money(issued.reduce((sum, row) => sum + invoiceEuroAmount(row,'cuota_iva'), 0)
+      + manualIncome.reduce((sum, row) => sum + invoiceEuroAmount(row,'cuota_impuesto'), 0)),
+    iva_soportado: money(received.reduce((sum, row) => sum + invoiceEuroAmount(row,'cuota_iva'), 0)
+      + manualExpense.reduce((sum, row) => sum + invoiceEuroAmount(row,'cuota_impuesto'), 0)),
     cobros_pendientes: money(issued.filter(open).reduce((sum, row) => sum + outstanding(row), 0)),
     pagos_pendientes: money(received.filter(open).reduce((sum, row) => sum + outstanding(row), 0)),
     facturas_emitidas: issued.length,
     facturas_recibidas: received.length,
     registros_manuales: activeExpenses.length,
+    ...([...activeInvoices,...activeExpenses].some(row=>String(row.moneda||row.currency||'EUR').toUpperCase()!=='EUR')?{currency:'EUR',
+    currencyIssueCount:[...activeInvoices,...activeExpenses].filter(row=>String(row.moneda||row.currency||'EUR').toUpperCase()!=='EUR'&&!(Number(row.exchange_rate)>0)).length}:{}),
     ...reconciled.sourceTruth,
   };
 }

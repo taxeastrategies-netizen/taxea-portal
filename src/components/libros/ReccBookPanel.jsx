@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 
-const eur = value => Number(value || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+const eur = (value,currency='EUR') => Number(value || 0).toLocaleString('es-ES', { style: 'currency', currency });
 const date = value => value ? String(value).slice(0, 10) : '—';
 
 export default function ReccBookPanel({ companyId, year }) {
@@ -45,13 +45,13 @@ export default function ReccBookPanel({ companyId, year }) {
       || row.payments.length > 0);
   }, [book, year]);
 
-  return <section className="space-y-4" aria-label="Libro auxiliar del criterio de caja">
+  return <section data-taxea-recc-version="c4-recc-20261101" className="space-y-4" aria-label="Libro auxiliar del criterio de caja">
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card p-4">
       <div>
         <h2 className="font-jakarta font-semibold text-foreground">Criterio de caja · {year}</h2>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           Facturas y cobros o pagos trazados, incluido el límite legal del 31 de diciembre del año siguiente.
-          Este libro es auxiliar: la liquidación se revisa en el modelo 303.
+          Este libro es auxiliar: IVA se revisa en 303/390 e IGIC en 420/425, según el perfil.
         </p>
       </div>
       <Button variant="outline" size="sm" onClick={() => setReloadKey(value => value + 1)} disabled={loading || !companyId}>
@@ -76,15 +76,15 @@ export default function ReccBookPanel({ companyId, year }) {
             <tbody className="divide-y divide-border">
               {visible.map(({ invoice, payments, issues }) => <tr key={invoice.id} className="align-top">
                 <td className="px-3 py-3"><span className="font-medium">{invoice.number || 'Sin número'}</span><br/><span className="text-xs text-muted-foreground">{invoice.counterpartyName || 'Sin tercero'}</span></td>
-                <td className="px-3 py-3">{invoice.type === 'emitida' ? 'Emitida' : 'Recibida'}</td>
+                <td className="px-3 py-3">{invoice.type === 'emitida' ? 'Emitida' : 'Recibida'} · {(invoice.taxKind||'iva').toUpperCase()}</td>
                 <td className="px-3 py-3">{date(invoice.operationDate)}</td>
-                <td className="px-3 py-3 text-right">{eur(invoice.base)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.base)}</div>)}</div>}</td>
-                <td className="px-3 py-3 text-right">{eur(invoice.quota)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.quota)}</div>)}</div>}</td>
-                <td className="px-3 py-3 text-right font-medium">{eur(invoice.total)}</td>
+                <td className="px-3 py-3 text-right">{eur(invoice.base,invoice.currency)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.base,invoice.currency)}</div>)}</div>}</td>
+                <td className="px-3 py-3 text-right">{eur(invoice.quota,invoice.currency)}{invoice.taxBreakdown?.length > 1 && <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">{invoice.taxBreakdown.map(line => <div key={line.lineNumber}>{line.rate}% · {eur(line.quota,invoice.currency)}</div>)}</div>}</td>
+                <td className="px-3 py-3 text-right font-medium">{eur(invoice.total,invoice.currency)}</td>
                 <td className="px-3 py-3">{payments.length ? payments.map(payment =>
-                  <div key={payment.id} className="mb-1 text-xs">{date(payment.date)} · {eur(payment.amount)} · {payment.method || 'Medio sin indicar'}{!payment.confirmed ? ' · pendiente de confirmar' : ''}</div>
+                  <div key={payment.id} className="mb-1 text-xs">{date(payment.date)} · {eur(payment.amount,payment.currency)} · {payment.currency!=='EUR'?`${eur(payment.amountEur)} · cambio fiscal ${payment.taxExchangeRate} · `:''}{payment.method || 'Medio sin indicar'}{!payment.confirmed ? ' · pendiente de confirmar' : ''}</div>
                 ) : <span className="text-xs text-muted-foreground">Sin cobro/pago registrado en {year}</span>}</td>
-                <td className="px-3 py-3">{date(invoice.forcedRecognitionDate)}</td>
+                <td className="px-3 py-3">{date(invoice.forcedRecognitionDate)}{invoice.forcedAmount>0&&<p className="mt-1 text-xs text-muted-foreground">Pendiente al límite: {eur(invoice.forcedAmount,invoice.currency)}{invoice.currency!=='EUR'&&invoice.forcedAmountEur!=null?` · referencia ${eur(invoice.forcedAmountEur)}`:''}</p>}</td>
                 <td className="px-3 py-3 text-xs">{issues.length ? <span className="text-amber-800">Revisar ({issues.length})</span> : invoice.reviewStatus === 'validado' ? 'Validado' : 'Pendiente'}</td>
               </tr>)}
             </tbody>

@@ -44,11 +44,11 @@
     },
     "recc_metadata": {
       "type": "string",
-      "description": "Datos RECC confirmados por asesor: anticipo, concurso y v\u00ednculo de rectificaci\u00f3n. JSON versionado."
+      "description": "Datos RECC confirmados por asesor: anticipo, concurso y vínculo de rectificación. JSON versionado."
     },
     "tax_breakdown": {
       "type": "string",
-      "description": "Desglose de bases y cuotas propuesto en el documento; exige confirmaci\u00f3n fiscal."
+      "description": "Desglose de bases y cuotas propuesto en el documento; exige confirmación fiscal."
     },
     "company_id": {
       "type": "string"
@@ -71,7 +71,7 @@
     "fecha_recepcion": {
       "type": "string",
       "format": "date",
-      "description": "Fecha real de recepci\u00f3n de la factura recibida. Determina desde qu\u00e9 per\u00edodo puede ejercerse la deducci\u00f3n del IVA/IGIC, sin alterar el devengo contable."
+      "description": "Fecha real de recepción de la factura recibida. Determina desde qué período puede ejercerse la deducción del IVA/IGIC, sin alterar el devengo contable."
     },
     "cliente_nombre": {
       "type": "string"
@@ -159,7 +159,7 @@
     },
     "tipo_recargo": {
       "type": "number",
-      "description": "Tipo del recargo de equivalencia consignado separadamente por el proveedor; pendiente de revisi\u00f3n fiscal."
+      "description": "Tipo del recargo de equivalencia consignado separadamente por el proveedor; pendiente de revisión fiscal."
     },
     "cuota_recargo": {
       "type": "number",
@@ -178,7 +178,7 @@
     },
     "fiscal_regime": {
       "type": "string",
-      "description": "R\u00e9gimen fiscal aplicado a esta factura; no modifica las subcuentas hist\u00f3ricas de terceros."
+      "description": "Régimen fiscal aplicado a esta factura; no modifica las subcuentas históricas de terceros."
     },
     "fiscal_activity_id": {
       "type": "string"
@@ -348,11 +348,11 @@
     },
     "creation_idempotency_key": {
       "type": "string",
-      "description": "Clave estable de creaci\u00f3n para impedir facturas duplicadas por reintentos de red o doble clic."
+      "description": "Clave estable de creación para impedir facturas duplicadas por reintentos de red o doble clic."
     },
     "canonical_document_key": {
       "type": "string",
-      "description": "Huella normalizada por empresa, tipo, n\u00famero, fecha e importe usada por el n\u00facleo financiero."
+      "description": "Huella normalizada por empresa, tipo, número, fecha e importe usada por el núcleo financiero."
     },
     "source_system": {
       "type": "string",
@@ -366,7 +366,7 @@
     },
     "qr_url": {
       "type": "string",
-      "description": "URL tributaria AEAT fijada al emitir la factura; no acredita remisi\u00f3n VERI*FACTU."
+      "description": "URL tributaria AEAT fijada al emitir la factura; no acredita remisión VERI*FACTU."
     },
     "qr_integrity_hash": {
       "type": "string",
@@ -374,7 +374,7 @@
     },
     "qr_integrity_version": {
       "type": "string",
-      "description": "Versi\u00f3n del algoritmo interno para verificar la huella conservada."
+      "description": "Versión del algoritmo interno para verificar la huella conservada."
     },
     "qr_integrity_algorithm": {
       "type": "string"
@@ -382,7 +382,7 @@
     "qr_integrity_created_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Fecha real de asignaci\u00f3n; en hist\u00f3ricos no se retrofecha a la emisi\u00f3n."
+      "description": "Fecha real de asignación; en históricos no se retrofecha a la emisión."
     },
     "qr_mode": {
       "type": "string",
@@ -390,7 +390,7 @@
         "no_verifactu",
         "verifactu"
       ],
-      "description": "S\u00f3lo usar verifactu tras env\u00edo y aceptaci\u00f3n efectiva del registro."
+      "description": "Sólo usar verifactu tras envío y aceptación efectiva del registro."
     },
     "qr_spec_version": {
       "type": "string"
@@ -480,7 +480,8 @@
         "pendiente_revision",
         "validada_contabilizada",
         "requiere_correccion",
-        "asiento_anulado"
+        "asiento_anulado",
+        "unidad_en_preparacion"
       ],
       "default": "pendiente_revision"
     },
@@ -502,6 +503,15 @@
       "type": "string"
     },
     "fiscal_review_batch_id": {
+      "type": "string"
+    },
+    "payment_lock_token": {
+      "type": "string"
+    },
+    "payment_lock_started_at": {
+      "type": "string"
+    },
+    "payment_lock_key": {
       "type": "string"
     }
   },

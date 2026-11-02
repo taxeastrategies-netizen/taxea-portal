@@ -42,6 +42,15 @@ const fmtDate = (d) => {
 
 export async function exportInvoiceToPdf(invoice, company) {
   const doc = new jsPDF('p', 'mm', 'a4');
+  const currency=invoice.moneda||'EUR',suffix=currency==='EUR'?'€':currency;
+  let fiscalRate=1;
+  if(currency!=='EUR'){
+    let metadata;try{metadata=JSON.parse(invoice.recc_metadata||'{}');}catch{throw new Error('Falta conversión fiscal revisada.');}
+    const quote=(metadata.fxQuotes||[]).find(row=>row.date===String(invoice.fecha_operacion||invoice.fecha_emision).slice(0,10));
+    if(!quote?.reviewedBy||!quote?.source||!(Number(quote.rate)>0))throw new Error('El PDF en divisa necesita el cambio fiscal revisado por asesor.');
+    fiscalRate=Number(quote.rate);
+  }
+  const fiscalTotal=Math.round((Number(invoice.base_imponible)+Number(invoice.cuota_iva)+Number(invoice.cuota_recargo||0))*fiscalRate*100)/100;
   const W = 210;
   const M = 18;
   const qrPng = await invoiceQrPng(invoice);
@@ -144,8 +153,8 @@ export async function exportInvoiceToPdf(invoice, company) {
     doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(51, 65, 85);
     doc.text(String(l.desc).slice(0, 60), M + 3, y + 5.5);
     doc.text(String(l.cant), 140, y + 5.5, { align: 'center' });
-    doc.text(`${fmtEUR(l.precio)} €`, 165, y + 5.5, { align: 'right' });
-    doc.text(`${fmtEUR(l.importe)} €`, W - M - 3, y + 5.5, { align: 'right' });
+    doc.text(`${fmtEUR(l.precio)} ${suffix}`, 165, y + 5.5, { align: 'right' });
+    doc.text(`${fmtEUR(l.importe)} ${suffix}`, W - M - 3, y + 5.5, { align: 'right' });
     y += 8;
   });
 
@@ -154,12 +163,13 @@ export async function exportInvoiceToPdf(invoice, company) {
   let taxBreakdown = [];
   try { taxBreakdown = JSON.parse(invoice.tax_breakdown || '[]'); } catch { /* Legacy invoice: total quota remains authoritative. */ }
   const totalRows = [
-    ['Base imponible', `${fmtEUR(invoice.base_imponible)} €`],
-    ...(taxBreakdown.length > 1 ? taxBreakdown.map(row => [`${taxLabel} ${row.rate}% · base ${fmtEUR(Number(row.base))} €`, `${fmtEUR(Number(row.quota))} €`]) : [[`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} €`]]),
+    ['Base imponible', `${fmtEUR(invoice.base_imponible)} ${suffix}`],
+    ...(taxBreakdown.length > 1 ? taxBreakdown.map(row => [`${taxLabel} ${row.rate}% · base ${fmtEUR(Number(row.base))} ${suffix}`, `${fmtEUR(Number(row.quota))} ${suffix}`]) : [[`${taxLabel} (${invoice.tipo_iva ?? 0}%)`, `${fmtEUR(invoice.cuota_iva)} ${suffix}`]]),
   ];
-  if (getWithholdingAmount(invoice) > 0) {
-    if (qrPng) totalRows.push(['Importe fiscal del QR', `${fmtEUR(Number(invoice.base_imponible) + Number(invoice.cuota_iva))} €`]);
-    totalRows.push(['Retención IRPF', `-${fmtEUR(getWithholdingAmount(invoice))} €`]);
+  if(Number(invoice.cuota_recargo))totalRows.push(['Recargo de equivalencia',`${fmtEUR(Number(invoice.cuota_recargo))} ${suffix}`]);
+  if(qrPng&&(getWithholdingAmount(invoice)>0||currency!=='EUR'))totalRows.push(['Importe fiscal del QR (EUR)',`${fmtEUR(fiscalTotal)} €`]);
+  if (Math.abs(getWithholdingAmount(invoice)) > 0) {
+    totalRows.push(['Retención IRPF', `${fmtEUR(-getWithholdingAmount(invoice))} ${suffix}`]);
   }
   totalRows.forEach(([label, val]) => {
     doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(100, 116, 139);
@@ -170,9 +180,9 @@ export async function exportInvoiceToPdf(invoice, company) {
   doc.setFillColor(254, 242, 242);
   doc.rect(128, y, W - M - 128, 10, 'F');
   doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(30, 41, 59);
-  doc.text(getWithholdingAmount(invoice) > 0 ? 'A pagar' : 'Total', 131, y + 6.5);
+  doc.text(Math.abs(getWithholdingAmount(invoice)) > 0 ? 'A pagar' : 'Total', 131, y + 6.5);
   doc.setFontSize(12).setTextColor(...BRAND);
-  doc.text(`${fmtEUR(invoice.total_factura)} €`, W - M - 3, y + 6.8, { align: 'right' });
+  doc.text(`${fmtEUR(invoice.total_factura)} ${suffix}`, W - M - 3, y + 6.8, { align: 'right' });
 
   // ── Instrucciones de pago ──────────────────────────────────────────────────
   y += 20;
@@ -188,7 +198,7 @@ export async function exportInvoiceToPdf(invoice, company) {
 
   // ── Coletilla fiscal ──────────────────────────────────────────────────────
   y += 18;
-  const fiscalLegend = invoiceFiscalLegend(invoice);
+  const fiscalLegend = [invoiceFiscalLegend(invoice),currency!=='EUR'?`Divisa del documento: ${currency}. Referencia de emisión: 1 ${currency} = ${fiscalRate} EUR; cuota ${taxLabel} de referencia: ${fmtEUR(Math.round(Number(invoice.cuota_iva)*fiscalRate*100)/100)} EUR. El devengo y la liquidación RECC siguen los cobros/pagos o el límite legal con sus cambios fiscales confirmados.`:''].filter(Boolean).join(' · ');
   if (fiscalLegend) {
     doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(71, 85, 105);
     const coletillaLines = doc.splitTextToSize(fiscalLegend, W - M * 2);
@@ -211,4 +221,5 @@ export async function exportInvoiceToPdf(invoice, company) {
   doc.text('Documento generado con Taxea Strategies · Portal de gestión financiera y fiscal', W / 2, 291, { align: 'center' });
 
   doc.save(`Factura_${invoice.numero_factura || invoice.id}.pdf`);
+  return doc;
 }

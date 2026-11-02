@@ -180,10 +180,10 @@ for (const type of ['emitida', 'recibida']) {
 const invalidZero = await invoice('emitida','INVALID-ZERO',0,{documentKind:'ordinary'});
 await assert.rejects(()=>postInvoice(svc,'company-a',invalidZero,'advisor@test'),/sin circuito|positiva/);
 // Devolución parcial del anticipo pagado: 438/407, subcuenta histórica y saldo neto aplicable.
-for (const type of ['emitida', 'recibida']) {
-  const prepaid = await invoice(type, 'REFUND-ADV-'+type,100,{documentKind:'advance'},type==='recibida'?10.5:0);
+for (const type of ['emitida', 'recibida']) for(const cash of [121,60.5]) {
+  const prepaid = await invoice(type, 'REFUND-ADV-'+type+'-'+cash,100,{documentKind:'advance'},type==='recibida'?10.5:0);
   await postInvoice(svc,'company-a',prepaid,'advisor@test');
-  await paidAdvance(prepaid,121);
+  await paidAdvance(prepaid,cash);
   const beforeProfiles = JSON.stringify(records.CounterpartyFiscalProfile);
   const originalAccount = records.Invoice.find(row=>row.id===prepaid.id).counterparty_account_code;
   const meta = {documentKind:'advance',originalInvoiceId:prepaid.id,adjustmentMode:'price_change',adjustmentDate:'2024-08-01',reason:'Anulación parcial ficticia del anticipo'};
@@ -197,12 +197,13 @@ for (const type of ['emitida', 'recibida']) {
   assert.equal(correctionRows.find(row=>row.sourceLineType==='tercero').accountCode,originalAccount);
   assert.equal(correctionRows.find(row=>row.accountCode===(type==='emitida'?'43800000':'40700000'))[type==='emitida'?'debit':'credit'],type==='emitida'?20:22.1);
   assert.equal(JSON.stringify(records.CounterpartyFiscalProfile),beforeProfiles);
-  const remaining = await invoice(type,'REFUND-FINAL-'+type,0,{documentKind:'final',finalOperationBase:80,advanceAllocations:[{invoiceId:prepaid.id,base:80}]});
+  const remainingBase=cash===121?80:30;
+  const remaining = await invoice(type,'REFUND-FINAL-'+type+'-'+cash,0,{documentKind:'final',finalOperationBase:remainingBase,advanceAllocations:[{invoiceId:prepaid.id,base:remainingBase}]});
   await assert.rejects(()=>postInvoice(svc,'company-a',remaining,'advisor@test'),/devolución confirmada/);
   await paidAdvance(corrected,24.2);
   const finalPosted = await postInvoice(svc,'company-a',remaining,'advisor@test');
   const application = records.JournalEntryLine.find(row=>row.journalEntryId===finalPosted.entry.id && row.accountCode===(type==='emitida'?'43800000':'40700000'));
-  assert.equal(application[type==='emitida'?'debit':'credit'],type==='emitida'?80:88.4);
+  assert.equal(application[type==='emitida'?'debit':'credit'],type==='emitida'?remainingBase:Math.round(remainingBase*1.105*100)/100);
   assert.equal((await postInvoice(svc,'company-a',records.Invoice.find(row=>row.id===credit.id),'advisor@test')).alreadyPosted,true);
   await assert.rejects(()=>assertReccAdvanceCanReverse(svc,'company-a',records.Invoice.find(row=>row.id===prepaid.id)),/devoluciones activas/);
   const excess = {...corrected,id:'excess-'+type,base_imponible:-81,cuota_iva:-17.01,total_factura:-98.01,linked_journal_entry_id:null};

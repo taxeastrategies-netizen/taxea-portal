@@ -1,3 +1,4 @@
+import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useState, useEffect, useMemo } from 'react';
 import usePageRefresh from '@/hooks/usePageRefresh';
@@ -187,12 +188,12 @@ export default function Facturas() {
     const vencidas = tipo.filter(i => i.estado_cobro === 'vencida');
     return {
       total: tipo.length,
-      totalValor: tipo.reduce((s, i) => s + (i.total_factura || 0), 0),
+      totalValor: tipo.reduce((s, i) => s + invoiceEuroAmount(i,'total_factura'), 0),
       anios: new Set(tipo.map(i => i.anio || new Date(i.fecha_emision || i.created_date).getFullYear()).filter(Boolean)).size,
       esteT: esteT.length,
-      esteTValor: esteT.reduce((s, i) => s + (i.total_factura || 0), 0),
+      esteTValor: esteT.reduce((s, i) => s + invoiceEuroAmount(i,'total_factura'), 0),
       pendientes: pendientes.length,
-      pendientesValor: pendientes.reduce((s, i) => s + (i.total_factura || 0), 0),
+      pendientesValor: pendientes.reduce((s, i) => s + invoiceEuroAmount(i,'importe_pendiente'), 0),
       vencidas: vencidas.length,
     };
   }, [activas, filterTipo]);
@@ -507,8 +508,8 @@ export default function Facturas() {
                       <td className="px-4 py-3 text-muted-foreground">{inv.fecha_emision}</td>
                       <td className="px-4 py-3 text-foreground">{inv.tipo === 'recibida' ? (inv.proveedor_nombre || inv.cliente_nombre || '—') : (inv.cliente_nombre || '—')}</td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell max-w-xs truncate">{inv.concepto || '—'}</td>
-                      <td className="px-4 py-3 text-right font-medium">{(inv.base_imponible || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
-                      <td className="px-4 py-3 text-right font-semibold text-foreground">{(inv.total_factura || 0).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatInvoiceMoney(inv.base_imponible,inv)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground">{formatInvoiceMoney(inv.total_factura,inv)}</td>
                       <td className="px-4 py-3 hidden lg:table-cell"><StatusBadge status={inv.estado_cobro} /></td>
                       <td className="px-4 py-3"><StatusBadge status={inv.estado_contable} /></td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>

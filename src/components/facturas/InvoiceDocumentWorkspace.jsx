@@ -55,7 +55,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
   const hasPdf = !!documentPdfUrl;
 
   const fmt = (n) => typeof n === 'number'
-    ? n.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €'
+    ? n.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda)
     : '—';
 
   const fmtDate = (d) => {
@@ -157,9 +157,9 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
                   ['Fecha emisión', invoice.fecha_emision ? new Date(invoice.fecha_emision).toLocaleDateString('es-ES') : null],
                   ['Fecha vencimiento', invoice.fecha_vencimiento ? new Date(invoice.fecha_vencimiento).toLocaleDateString('es-ES') : null],
                   ['Concepto', invoice.concepto],
-                  ['Base imponible', invoice.base_imponible != null ? invoice.base_imponible.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
-                  [invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
-                  ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' €' : null],
+                  ['Base imponible', invoice.base_imponible != null ? invoice.base_imponible.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
+                  [invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
+                  ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label} className="flex justify-between py-2.5 border-b border-border last:border-0 text-sm">
                     <span className="text-muted-foreground">{label}</span>
@@ -304,20 +304,20 @@ function InvoiceVisualRender({ invoice, company, fmt, fmtDate }) {
             <span className="font-medium">{fmt(invoice.cuota_iva)}</span>
           </div>
           {invoiceTaxBreakdown(invoice).map((row,index) => <div key={index} className="flex justify-between py-1.5 text-xs border-b border-slate-100"><span className="text-slate-500">IVA {row.rate}% · base {fmt(row.base)}</span><span>{fmt(row.quota)}</span></div>)}
-          {qrUrl && getWithholdingAmount(invoice) > 0 && (
+          {qrUrl && (getWithholdingAmount(invoice)>0||(invoice.moneda||'EUR')!=='EUR') && (
             <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
               <span className="text-slate-500">Importe fiscal del QR</span>
-              <span className="font-medium">{fmt(Number(invoice.base_imponible) + Number(invoice.cuota_iva) + Number(invoice.cuota_recargo || 0))}</span>
+              <span className="font-medium">{Number(new URL(qrUrl).searchParams.get('importe')).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})} €</span>
             </div>
           )}
-          {getWithholdingAmount(invoice) > 0 && (
+          {Math.abs(getWithholdingAmount(invoice)) > 0 && (
             <div className="flex justify-between py-1.5 text-sm border-b border-slate-100">
               <span className="text-slate-500">Retención IRPF</span>
-              <span className="font-medium text-red-600">−{fmt(getWithholdingAmount(invoice))}</span>
+              <span className="font-medium text-red-600">{fmt(-getWithholdingAmount(invoice))}</span>
             </div>
           )}
           <div className="flex justify-between py-2 mt-1 rounded-lg px-2" style={{ backgroundColor: `${brandColor}10` }}>
-            <span className="font-bold text-slate-800">{getWithholdingAmount(invoice) > 0 ? 'Total a pagar' : 'Total'}</span>
+            <span className="font-bold text-slate-800">{Math.abs(getWithholdingAmount(invoice)) > 0 ? 'Total a pagar' : 'Total'}</span>
             <span className="font-bold text-lg" style={{ color: brandColor }}>{fmt(invoice.total_factura)}</span>
           </div>
         </div>
