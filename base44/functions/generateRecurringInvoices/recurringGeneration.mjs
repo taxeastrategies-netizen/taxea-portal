@@ -8,11 +8,12 @@ async function claimTemplate(svc,id){const token=crypto.randomUUID();let result=
 }
 async function saveRun(svc,template,key,payload){const previous=await svc.entities.RecurringInvoiceRun.filter({ownerAccountId:template.ownerAccountId,recurringInvoiceTemplateId:template.id,periodKey:key},'id',100);const successful=previous.find(r=>r.status==='generated');if(successful&&payload.status!=='generated')return successful;const row=successful||previous.find(r=>r.status==='draft_created')||previous.find(r=>r.status==='error')||previous[0];return row?await svc.entities.RecurringInvoiceRun.update(row.id,payload):await svc.entities.RecurringInvoiceRun.create({ownerAccountId:template.ownerAccountId,recurringInvoiceTemplateId:template.id,periodKey:key,...payload});}
 export async function generateRecurringBatch({base44,user,identity,activeCompanyId,body}){
- const svc=base44.asServiceRole,preview=body.action==='preview',globalScan=identity.isService||(identity.isAdminUser&&!activeCompanyId);
- if(!globalScan&&!activeCompanyId)throw error('Selecciona una empresa antes de generar.',403);
+ const svc=base44.asServiceRole,preview=body.action==='preview',requestedCompany=String(body.companyId||body.company_id||'').trim(),targetCompany=requestedCompany||activeCompanyId,globalScan=identity.isService||(identity.isAdminUser&&!targetCompany);
+ if(!identity.isService&&!identity.isAdminUser&&requestedCompany&&requestedCompany!==activeCompanyId)throw error('La empresa solicitada no pertenece a tu sesión.',403);
+ if(!globalScan&&!targetCompany)throw error('Selecciona una empresa antes de generar.',403);
  let templates;
- if(body.templateId){const t=await svc.entities.RecurringInvoiceTemplate.get(body.templateId);if(!t)throw error('Plantilla no encontrada.',404);if(!globalScan&&t.ownerAccountId!==activeCompanyId)throw error('La plantilla no pertenece a la empresa activa.',403);templates=[t];}
- else templates=await rows(svc.entities.RecurringInvoiceTemplate,{status:'active',...(!globalScan?{ownerAccountId:activeCompanyId}:{})});
+ if(body.templateId){const t=await svc.entities.RecurringInvoiceTemplate.get(body.templateId);if(!t)throw error('Plantilla no encontrada.',404);if(!globalScan&&t.ownerAccountId!==targetCompany&&(!identity.isAdminUser||requestedCompany))throw error('La plantilla no pertenece a la empresa seleccionada.',403);templates=[t];}
+ else templates=await rows(svc.entities.RecurringInvoiceTemplate,{status:'active',...(!globalScan?{ownerAccountId:targetCompany}:{})});
  const today=recurringToday(),result={status:'ok',preview:[],generated:0,recovered:0,skipped:0,errors:0,drafts:0,busy:0,remaining:false,issues:[],generatedInvoiceNumber:null,issuance_version:RECURRING_ISSUANCE_VERSION};
  for(const initial of templates){let lease=null;
   try{

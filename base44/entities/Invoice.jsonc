@@ -517,6 +517,13 @@
     "fiscal_c5_data": {
       "type": "string",
       "description": "Criterio de deducción C5 y datos contrastados; conserva importes originales del proveedor."
+    },
+    "recurring_issuance_snapshot": {
+      "type": "object",
+      "description": "Criterio y versión fijados al reservar la emisión recurrente, para recuperar el mismo documento tras un fallo.",
+      "rls": {
+        "write": false
+      }
     }
   },
   "required": [

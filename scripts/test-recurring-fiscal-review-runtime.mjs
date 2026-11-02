@@ -20,3 +20,6 @@ assert.equal((await recurringCallerIdentity(actor,async()=>null)).isService,true
 const helper=fs.readFileSync('base44/functions/generateRecurringInvoices/recurringIssuance.mjs','utf8');
 for(const folder of ['invoiceOperations','fiscalOperations'])assert.equal(fs.readFileSync('base44/functions/'+folder+'/recurringIssuance.mjs','utf8'),helper);
 console.log(JSON.stringify({ok:true,checks:['UTC dates and leap years','clamped monthly dates recover day 31','invalid schedules rejected','RECC final links cannot repeat','fresh stored roles override stale service flags','disabled identities denied','three helper copies identical'],realDataWrites:0,externalCalls:0}));
+const invoiceSchema=JSON.parse(fs.readFileSync('base44/entities/Invoice.jsonc','utf8')),templateSchema=JSON.parse(fs.readFileSync('base44/entities/RecurringInvoiceTemplate.jsonc','utf8'));
+assert.equal(invoiceSchema.properties.recurring_issuance_snapshot.type,'object');assert.equal(invoiceSchema.properties.recurring_issuance_snapshot.rls.write,false);
+assert.equal(templateSchema.properties.fiscalCriteria.type,'object');assert.equal(templateSchema.properties.fiscalCriteria.rls.write,false);

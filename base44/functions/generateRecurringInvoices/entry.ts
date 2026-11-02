@@ -40,12 +40,14 @@ Deno.serve(async (req) => {
 
       if (action === 'create_template') {
         const t = body.template || {};
-        if (!t.ownerAccountId || t.ownerAccountId !== activeCompanyId) {
+        if (!t.ownerAccountId || (!isAdminUser && t.ownerAccountId !== activeCompanyId)) {
           return Response.json({ error: 'La plantilla debe pertenecer a la empresa activa.' }, { status: 403 });
         }
         if (!t.frequency || !t.startDate || !t.nextRunDate || !t.concept || !(Number(t.baseAmount) > 0)) {
           return Response.json({ error: 'Faltan datos obligatorios de la plantilla (concepto, base imponible o fechas).' }, { status: 400 });
         }
+        const targetCompany=await base44.asServiceRole.entities.Company.get(t.ownerAccountId);
+        if(!targetCompany||targetCompany.activa===false)return Response.json({error:'Empresa no habilitada.'},{status:403});
         const created = await base44.asServiceRole.entities.RecurringInvoiceTemplate.create({
           ownerAccountId: t.ownerAccountId,
           createdByUserId: user.id,

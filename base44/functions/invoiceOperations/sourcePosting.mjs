@@ -46,8 +46,20 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   }
   invoice = await ensureInvoiceQrHash(svc.entities.Invoice,invoice);
   try {
-    const posting = await postInvoice(svc,companyId,{...invoice,accounting_migration_hold:false},user.email,
-      {status:'confirmado',source:invoice.ocr_document_id?'OCR':invoice.isRecurringGenerated?'recurring_invoice':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})});
+    const postOptions = 
+      {status:'confirmado',source:invoice.ocr_document_id?'OCR':invoice.isRecurringGenerated?'recurring_invoice':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})};
+    let posting;
+    try {posting=await postInvoice(svc,companyId,{...invoice,accounting_migration_hold:false},user.email,postOptions);}
+    catch(error){
+      // Solo una lectura incompleta conocida: repetir la confirmación del mismo
+      // asiento enlazado. Nunca volver a crear líneas ni relajar su validación.
+      if(error?.message!=='El asiento previo no tiene todas sus líneas persistidas; se mantiene pendiente para revisión sin duplicarlo.')throw error;
+      await new Promise(resolve=>setTimeout(resolve,1000));
+      const saved=await svc.entities.Invoice.get(invoice.id);
+      if(saved?.company_id!==companyId||!saved.linked_journal_entry_id)throw error;
+      posting=await postInvoice(svc,companyId,{...saved,accounting_migration_hold:false},user.email,postOptions);
+      if(posting.entry.id!==saved.linked_journal_entry_id)throw new Error('La recuperación debe conservar el mismo asiento.');
+    }
     const saved = await svc.entities.Invoice.update(invoice.id,{accounting_migration_hold:false,accounting_migration_hold_reason:'',source_last_error:''});
     if (saved.ocr_document_id) {
       const doc = await svc.entities.OcrInvoiceDocument.get(saved.ocr_document_id);

@@ -569,6 +569,7 @@ export default function Facturas() {
       />
 
       <GenerateRecurringModal
+        companyId={company?.id}
         open={showGenerateRecurring}
         onOpenChange={setShowGenerateRecurring}
         onDone={loadInvoices}

@@ -51,6 +51,7 @@ export default function RecurringSection({ company, user, isAdmin }) {
       const res = await base44.functions.invoke('generateRecurringInvoices', {
         action: 'generate_one',
         templateId: tmpl.id,
+        companyId: company.id,
         runType: 'manual',
       });
       const d = res?.data || res;

@@ -8,7 +8,7 @@ import { formatFrequency } from '@/lib/recurringUtils';
 const fmt = n => (n || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = d => d ? d.split('-').reverse().join('/') : '—';
 
-export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
+export default function GenerateRecurringModal({ open, onOpenChange, onDone, companyId }) {
   const [phase, setPhase] = useState('loading'); // loading → preview → generating → done
   const [preview, setPreview] = useState([]);
   const [result, setResult] = useState(null);
@@ -25,7 +25,7 @@ export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
 
   const loadPreview = async () => {
     try {
-      const res = await base44.functions.invoke('generateRecurringInvoices', { action: 'preview' });
+      const res = await base44.functions.invoke('generateRecurringInvoices', { action: 'preview', companyId });
       const data = res?.data || res;
       setPreview(data?.preview || []);
       setPhase('preview');
@@ -38,7 +38,7 @@ export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
   const handleGenerate = async () => {
     setPhase('generating');
     try {
-      const res = await base44.functions.invoke('generateRecurringInvoices', { action: 'generate', runType: 'manual' });
+      const res = await base44.functions.invoke('generateRecurringInvoices', { action: 'generate', runType: 'manual', companyId });
       const data = res?.data || res;
       setResult(data);
       setPhase('done');
