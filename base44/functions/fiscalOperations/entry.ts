@@ -520,7 +520,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         try { const links = await validateReccAdvanceLinks(svc, companyId, { ...invoice, fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision }, metadata); proposedEvaluation.advanceApplications = links.applications; proposedEvaluation.reccAdvanceCorrection = links.originalAdvanceId; proposedEvaluation.advanceCreditBook=links.creditBookValues; }
         catch (error) { return Response.json({ error: error.message }, { status: 422 }); }
         const breakdown = Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : [{ base, rate, quota }];
-        const validBreakdown = breakdown.length <= 3 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
+        const validBreakdown = breakdown.length <= 8 && new Set(breakdown.map((row: any) => Number(row.rate))).size === breakdown.length
           && breakdown.every((row: any) => (proposedEvaluation.taxKind==='igic'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).includes(Number(row.rate)) && Math.sign(Number(row.base)) === Math.sign(base)
           && Number.isFinite(Number(row.base)) && Number.isFinite(Number(row.quota))
           && Math.abs(money(Number(row.base) * Number(row.rate) / 100) - Number(row.quota)) <= 0.01)
@@ -839,12 +839,12 @@ Deno.serve(async (req) => {
           .reduce((sum: number, payment: any) => sum + Math.abs(Number(payment.amount) || 0), 0));
         if (totalPaid > Math.abs(money(invoice.total_factura)) + 0.01) issues.push({ invoiceId: invoice.id, reason: 'Los pagos superan el total de la factura.' });
         if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro)) && !isZeroResidualReccFinal(invoice)) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
-        let forcedAmount=0,forcedAmountEur=0;
+        let forcedAmount=0,forcedAmountEur=invoiceCurrency(invoice)==='EUR'?0:null;
         if(!invoice.es_rectificativa&&!isZeroResidualReccFinal(invoice))try{
           if(invoicePayments.some(p=>p.operation_status&&p.operation_status!=='committed'))throw new Error('Pagos pendientes: no se estima el devengo legal.');
           const schedule=reccSchedule({invoiceId:invoice.id,invoiceNet:Math.abs(Number(invoice.total_factura)),operationDate:invoice.fecha_operacion||invoice.fecha_emision,...reccMetadata(invoice),payments:invoicePayments.map(p=>({id:p.id,date:p.payment_date,amount:p.amount,status:p.operation_status})),corrections:reccCorrections(invoice,allInvoices,invoiceLines[0],allLines)});
           const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));forcedAmount=money(forced?.amount||0);
-          if(forced&&Number(forced.date.slice(0,4))<=year)forcedAmountEur=money(forcedAmount*taxFx(invoice,forced.date));
+          if(forced&&(invoiceCurrency(invoice)==='EUR'||Number(forced.date.slice(0,4))<=year))forcedAmountEur=money(forcedAmount*taxFx(invoice,forced.date));
         }catch(error){forcedAmount=null;forcedAmountEur=null;issues.push({invoiceId:invoice.id,reason:error.message});}
         return { id: invoice.id, type: invoice.tipo,forcedAmount,forcedAmountEur, taxKind:invoice.indirect_tax_kind||'iva', currency:invoice.moneda||'EUR', number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),

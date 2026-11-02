@@ -26,7 +26,15 @@ export function queuedAccountingClient(service, { intervalMs = 350, readRetries 
             const status = Number(error?.response?.status || error?.status);
             const limited = status === 429 || /rate limit exceeded/i.test(String(error?.message || ''));
             if (!canRetry || !limited || attempt >= readRetries) throw error;
-            await sleep(2000 * (attempt + 1));
+            // Respect Base44's explicit backoff. Only reads can reach this branch.
+            const headers=error?.response?.headers;
+            const raw=typeof headers?.get==='function'?headers.get('retry-after'):headers?.['retry-after'];
+            const message=String(error?.response?.data?.error || error?.message || '');
+            const seconds=Number(raw) || Number(message.match(/retry after\s+(\d+(?:\.\d+)?)\s*s/i)?.[1]);
+            const dateDelay=raw && !Number.isFinite(Number(raw))?Date.parse(raw)-now():0;
+            const delay=Math.max(2000*(attempt+1),seconds>0?seconds*1000+250:0,Number.isFinite(dateDelay)?dateDelay+250:0);
+            if(delay>60000)throw error; // Leave the idempotent operation recoverable, never poll indefinitely.
+            await sleep(delay);
           }
         }
       };

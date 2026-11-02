@@ -386,7 +386,7 @@ function isValidatedRecargoRetailSale(invoice) {
 function isValidatedSimpleReccInvoice(invoice) {
   const base = money(invoice.base_imponible), quota = money(invoice.cuota_iva), rate = Number(invoice.tipo_iva || 0);
   let breakdown=[];try{breakdown=JSON.parse(invoice.tax_breakdown||'[]');}catch{return false;}
-  const multiple=Array.isArray(breakdown)&&breakdown.length>1&&breakdown.length<=3;
+  const multiple=Array.isArray(breakdown)&&breakdown.length>1&&breakdown.length<=8;
   return clean(invoice.fiscal_regime) === 'criterio_caja'
     && ['subject_taxed','subject_zero'].includes(clean(invoice.fiscal_treatment)) && ['iva','igic'].includes(clean(invoice.indirect_tax_kind))
     && invoice.fiscal_review_status === 'validado' && !!clean(invoice.fiscal_reviewed_by)

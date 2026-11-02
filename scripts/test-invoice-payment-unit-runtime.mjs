@@ -226,7 +226,10 @@ assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pag
 assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summary').length,1);
 failNextOperationRead = true;
 const temporaryRead = await invoke({action:'list_payments',company_id:'company-a',invoice_id:'invoice-summary'});
-assert.equal(temporaryRead.response.status,429);
+assert.equal(temporaryRead.response.status,200,'Una lectura transitoria se recupera sin repetir escrituras');
+assert.equal(temporaryRead.payload.paid,121);
+assert.equal(records.InvoicePayment.filter(item=>item.invoice_id==='invoice-summary').length,1);
+assert.equal(records.JournalEntry.filter(item=>item.postingKey?.startsWith('payment:invoice-summary')).length,1);
 assert.equal(records.Invoice.find(item=>item.id==='invoice-summary').importe_pagado,121,'Un 429 no borra el estado de un cobro confirmado');
 
 await entities.JournalEntry.create({id:'invoice-entry-1',companyId:'company-a',entryNumber:'QA-1',date:'2026-09-01',status:'confirmado'});

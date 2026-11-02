@@ -545,11 +545,15 @@ Deno.serve(async (req) => {
   let userAuthenticated=false,releasePaymentLease=null;
   try {
     if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me().catch(() => null);
+    const sdk = createClientFromRequest(req);
+    const user = await sdk.auth.me().catch(() => null);
     if (!user?.id) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     userAuthenticated=true;
     if (isTaxeaAccountDisabled(user)) return Response.json({ error: 'Acceso al portal suspendido.', code: 'ACCOUNT_DISABLED' }, { status: 403 });
+
+    // Authentication and disabled-account checks must precede service-role construction.
+    const requestService=queuedAccountingClient(sdk.asServiceRole,{intervalMs:0});
+    const base44=new Proxy(sdk,{get(target,key){return key==='asServiceRole'?requestService:Reflect.get(target,key,target);}});
 
     const body = await req.json().catch(() => ({}));
     const action = cleanText(body.action, 80);

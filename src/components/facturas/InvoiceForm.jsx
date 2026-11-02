@@ -56,6 +56,7 @@ function ErrMsg({ msg }) {
 export default function InvoiceForm({ open, onOpenChange, editing, company, user, onSaved }) {
   const taxType = company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA';
   const taxRates = taxType === 'IGIC' ? IGIC_RATES : IVA_RATES;
+  const splitRates=taxType==='IGIC'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21];
 
   const getEmpty = () => ({
     tipo: 'emitida',
@@ -198,7 +199,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     if (form.base_imponible === '' || isNaN(Number(form.base_imponible))) e.base_imponible = 'Introduce un importe válido';
     else if (Number(form.base_imponible) < 0 && !form.es_rectificativa) e.base_imponible = 'Una base negativa requiere factura rectificativa';
     if (form.es_rectificativa && !form.factura_rectificada?.trim()) e.base_imponible = 'Indica la factura original que rectificas';
-    if (quotaRows.length > 3 || new Set(quotaRows.map(row => Number(row.rate))).size !== quotaRows.length || quotaRows.some(row => row.base === '' || !Number.isFinite(Number(row.base)) || ![4,10,21].includes(Number(row.rate)) || (Number(row.base) !== 0 && Math.sign(Number(row.base)) !== Math.sign(Number(form.base_imponible))))) e.base_imponible = 'Revisa el desglose: un máximo de tres tipos distintos y bases del mismo signo';
+    if (quotaRows.length > splitRates.length || new Set(quotaRows.map(row => Number(row.rate))).size !== quotaRows.length || quotaRows.some(row => row.base === '' || !Number.isFinite(Number(row.base)) || !splitRates.includes(Number(row.rate)) || (Number(row.base) !== 0 && Math.sign(Number(row.base)) !== Math.sign(Number(form.base_imponible))))) e.base_imponible = 'Revisa el desglose: tipos válidos y distintos, con bases del mismo signo';
     if (quotaRows.length > 1 && form.aplica_recargo) e.tipo_recargo = 'El recargo necesita un documento con un único tipo de IVA revisado por asesor.';
     if (form.aplica_recargo && (taxType !== 'IVA' || !Number.isFinite(Number(form.tipo_recargo)) || Number(form.tipo_recargo) <= 0 || Number(form.tipo_recargo) > 100)) e.tipo_recargo = 'Indica un tipo de recargo IVA válido';
     if (form.aplica_recargo && recurring.enabled) e.tipo_recargo = 'El recargo necesita revisión individual: desactiva la recurrencia.';
@@ -460,13 +461,13 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.es_rectificativa)} onChange={event => setForm(current => ({ ...current, es_rectificativa: event.target.checked }))} />Factura rectificativa (requiere revisión del asesor)</label>
             {form.es_rectificativa && <Input value={form.factura_rectificada} onChange={set('factura_rectificada')} placeholder="Número de la factura original" aria-label="Factura original rectificada" />}
             {['IVA','IGIC'].includes(taxType) && <div className="rounded-xl border p-3 space-y-2">
-              <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva) || 21 }])}>{quotaRows.length ? 'Volver a un tipo único' : 'Desglosar varios tipos de IVA'}</button>
+              <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva ?? (taxType==='IGIC'?7:21)) }])}>{quotaRows.length ? 'Volver a un tipo único' : `Desglosar varios tipos de ${taxType}`}</button>
               {quotaRows.map((row, index) => <div key={index} className="flex items-center gap-2">
-                <Input aria-label={`Base IVA línea ${index + 1}`} type="number" step="0.01" value={row.base} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, base: event.target.value } : item))} />
-                <NativeSelect aria-label={`Tipo IVA línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{(taxType==='IGIC'?[0,3,5,7,9.5,15,20,35]:[0,2,4,5,7.5,10,21]).map(rate => <option key={rate} value={rate}>{rate}%</option>)}</NativeSelect>
-                <button type="button" aria-label={`Eliminar línea IVA ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
+                <Input aria-label={`Base ${taxType} línea ${index + 1}`} type="number" step="0.01" value={row.base} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, base: event.target.value } : item))} />
+                <NativeSelect aria-label={`Tipo ${taxType} línea ${index + 1}`} className="rounded-lg border p-2" value={row.rate} onChange={event => updateQuotaRows(quotaRows.map((item, i) => i === index ? { ...item, rate: Number(event.target.value) } : item))}>{splitRates.map(rate => <option key={rate} value={rate}>{rate}%</option>)}</NativeSelect>
+                <button type="button" aria-label={`Eliminar línea ${taxType} ${index + 1}`} onClick={() => updateQuotaRows(quotaRows.filter((_, i) => i !== index))}>×</button>
               </div>)}
-              {quotaRows.length > 0 && quotaRows.length < 3 && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: [21,10,4].find(rate => !quotaRows.some(row => Number(row.rate) === rate)) }])}>Añadir tipo de IVA</button>}
+              {quotaRows.length > 0 && quotaRows.length < splitRates.length && <button type="button" className="text-xs text-primary" onClick={() => updateQuotaRows([...quotaRows, { base: '', rate: [...splitRates].reverse().find(rate => !quotaRows.some(row => Number(row.rate) === rate)) }])}>Añadir tipo de {taxType}</button>}
             </div>}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -477,7 +478,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 <ErrMsg msg={errors.base_imponible} />
               </div>
               <div className="space-y-1.5">
-                <Label>{quotaRows.length ? 'Tipos IVA por línea' : `% ${taxType}`}</Label>
+                <Label>{quotaRows.length ? `Tipos ${taxType} por línea` : `% ${taxType}`}</Label>
                 {quotaRows.length ? <div className="flex h-9 items-center rounded-md border border-border bg-secondary/60 px-3 text-sm">{quotaRows.map(row => `${row.rate} %`).join(' · ')}</div> : <Select value={String(form.tipo_iva)} onValueChange={v => set('tipo_iva')(Number(v))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -541,7 +542,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <span className="font-medium">{fmt(Number(form.base_imponible) || 0)} {form.moneda||'EUR'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">{quotaRows.length ? `IVA (${quotaRows.map(row => `${row.rate} %`).join(' · ')})` : `${taxType} ${form.tipo_iva} %`}</span>
+                  <span className="text-muted-foreground">{quotaRows.length ? `${taxType} (${quotaRows.map(row => `${row.rate} %`).join(' · ')})` : `${taxType} ${form.tipo_iva} %`}</span>
                   <span className="font-medium">+ {fmt(cuota)} {form.moneda||'EUR'}</span>
                 </div>
                 {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} {form.moneda||'EUR'}</span></div>}

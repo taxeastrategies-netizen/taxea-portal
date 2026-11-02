@@ -22,4 +22,14 @@ let permanentReads=0;
 const forbidden=queuedAccountingClient({entities:{Invoice:{get:async()=>{permanentReads++;throw Object.assign(new Error('Forbidden'),{status:403});}}}},{sleep:async()=>{}});
 await assert.rejects(()=>forbidden.entities.Invoice.get('other'),/Forbidden/);
 assert.equal(permanentReads,1);
+let retryCalls=0,writeCalls=0;const delays=[];
+const explicit=queuedAccountingClient({entities:{Invoice:{
+ async get(){if(++retryCalls===1)throw Object.assign(new Error('entity_list. Retry after 9s.'),{status:429});return {id:'QA'};},
+ async update(){writeCalls++;throw Object.assign(new Error('Retry after 9s.'),{status:429});}
+}}},{intervalMs:0,sleep:async ms=>delays.push(ms)});
+await explicit.entities.Invoice.get('QA');assert.equal(retryCalls,2);assert.deepEqual(delays,[9250]);
+await assert.rejects(()=>explicit.entities.Invoice.update('QA',{}),/Retry/);assert.equal(writeCalls,1);
+let headerCalls=0;const headerDelays=[];
+const header=queuedAccountingClient({entities:{Invoice:{async get(){if(++headerCalls===1)throw {response:{status:429,headers:{'retry-after':'12'}}};return {};}}}},{intervalMs:0,sleep:async ms=>headerDelays.push(ms)});
+await header.entities.Invoice.get('QA');assert.deepEqual(headerDelays,[12250]);
 console.log(JSON.stringify({ok:true,readRetriesBounded:true,writesNeverReplayed:true,requestsSerialized:true,permanentErrorsNotRetried:true,realWrites:0}));

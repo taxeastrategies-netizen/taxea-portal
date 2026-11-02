@@ -88,5 +88,14 @@ function data(){return {invoices:records.Invoice,taxLines:records.InvoiceTaxLine
 const q1=calc(data(),bounds(2026,'1T'),'iva',false,{});assert.equal(q1.operations.outputQuota,99.75);assert.equal(q1.operations.deductibleQuota,99.75);assert.equal(q1.operations.criterionCash,900);
 const q2=calc(data(),bounds(2026,'2T'),'iva',false,{});assert.equal(q2.operations.outputQuota,110.25);assert.equal(q2.operations.deductibleQuota,110.25);
 const book=await call('fiscalOperations',{action:'recc_book',companyId:'qa',year:2026});assert.equal(book.issues.length,0,JSON.stringify(book.issues));assert.ok(book.payments.every(p=>p.currency==='USD'&&p.amountEur>0));
+// A future legal deadline has no official FX quote yet; do not display a fabricated zero EUR.
+const third=made[0];records.InvoicePayment=records.InvoicePayment.filter(p=>p.invoice_id!==third.id||p.payment_date==='2026-03-31');
+const partialBook=await call('fiscalOperations',{action:'recc_book',companyId:'qa',year:2026});
+const future=partialBook.invoices.find(i=>i.id===third.id);assert.equal(future.forcedAmount,605);assert.equal(future.forcedAmountEur,null);
+user={...user,role:'admin'};
+const fourRates=[0,4,10,21].map(rate=>({base:100,rate,quota:rate}));
+const four=await call('invoiceOperations',{action:'create_invoice',company_id:'qa',idempotency_key:'c4-four-rates',invoice:{tipo:'emitida',numero_factura:'C4-FOUR-RATES',fecha_emision:'2026-01-15',fecha_operacion:'2026-01-15',cliente_nombre:'QA FOUR NO ENVIAR',cliente_nif:'B12345674',base_imponible:400,tipo_iva:21,cuota_iva:35,total_factura:435,moneda:'USD',exchange_rate:0.9,fiscal_activity_id:'fa'},fiscal_criteria:{taxKind:'iva',regime:'criterio_caja',activityId:'fa',operationType:'subject_taxed',deductiblePercent:100,taxBreakdown:fourRates,recc:{eligibility,fxQuotes:quotes}}});
+assert.equal(records.InvoiceTaxLine.filter(l=>l.invoiceId===four.invoice.id).length,4);
+assert.equal(records.JournalEntry.find(j=>j.id===four.journalEntryId).totalDebit,391.5);
 assert.ok(records.JournalEntry.every(j=>Math.abs(j.totalDebit-j.totalCredit)<0.001));
 console.log(JSON.stringify({ok:true,foreignIssuedAndReceived:true,bookCurrency:true,fiscalVsBankFx:true,immutableRetry:true,thirdPartiesSettled:true,taxModelEUR:true,externalCalls:0,realWrites:0,calls}));
