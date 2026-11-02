@@ -159,6 +159,7 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
                   ['Concepto', invoice.concepto],
                   ['Base imponible', invoice.base_imponible != null ? invoice.base_imponible.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
                   [invoice.indirect_tax_kind === 'igic' || company?.tipo_impuesto === 'igic' ? 'IGIC' : 'IVA', invoice.cuota_iva != null ? invoice.cuota_iva.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
+                  ['Retención IRPF', getWithholdingAmount(invoice) ? (-getWithholdingAmount(invoice)).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
                   ['Total', invoice.total_factura != null ? invoice.total_factura.toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ((invoice.moneda||'EUR')==='EUR'?' €':' '+invoice.moneda) : null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label} className="flex justify-between py-2.5 border-b border-border last:border-0 text-sm">
@@ -427,9 +428,9 @@ export default function InvoiceDocumentWorkspace({
               <span className="text-sm font-semibold text-foreground truncate block">
                 {isRecibida ? 'Factura recibida' : 'Factura'} — {invoice.numero_factura}
               </span>
-              {invoice.cliente_nombre && (
+              {(isRecibida ? (invoice.proveedor_nombre || invoice.cliente_nombre) : invoice.cliente_nombre) && (
                 <span className="text-xs text-muted-foreground truncate block">
-                  {isRecibida ? 'Proveedor: ' : ''}{invoice.cliente_nombre}
+                  {isRecibida ? 'Proveedor: ' : ''}{isRecibida ? (invoice.proveedor_nombre || invoice.cliente_nombre) : invoice.cliente_nombre}
                 </span>
               )}
             </div>
