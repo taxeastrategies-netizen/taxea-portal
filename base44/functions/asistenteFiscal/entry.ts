@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {trustedKnowledge} from './knowledgePolicy.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
@@ -442,6 +443,6 @@ FIN_DATOS_NO_CONFIABLES_JSON`;
       consulta_id: consulta.id,
     });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'asistenteFiscal');
   }
 });

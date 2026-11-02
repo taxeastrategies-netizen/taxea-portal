@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
@@ -29,7 +30,7 @@ async function listFiscalRows(entity: any, filter: any, sort = '-created_date') 
     rows.push(...(page || []));
     if (!page || page.length < pageSize) return rows;
   }
-  throw Object.assign(new Error('El libro fiscal supera el límite seguro de consulta. Filtra o solicita una exportación segmentada.'), { status: 422 });
+  throw Object.assign(new PublicDomainError('El libro fiscal supera el límite seguro de consulta. Filtra o solicita una exportación segmentada.'), { status: 422 });
 }
 const clean = (value: unknown) => String(value ?? '').trim();
 const clamp = (value: unknown, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
@@ -143,10 +144,10 @@ async function authorize(svc: any, user: any, companyId: string, company: any) {
     : [];
   if (['advisor', 'asesor'].includes(role)) {
     if ((email && owner === email) || (email && authorized.includes(email))) return;
-    throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
+    throw Object.assign(new PublicDomainError('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
   }
   if (own || (email && owner === email) || (email && authorized.includes(email))) return;
-  throw Object.assign(new Error('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
+  throw Object.assign(new PublicDomainError('No tienes permiso para operar en la empresa seleccionada.'), { status: 403 });
 }
 
 // Mirror schema defaults only for a stable content fingerprint; never overwrite profile fields.
@@ -363,7 +364,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     if (!body.counterpartyIsWithholdingAgent) { withholdingRate = 0; alerts.push('La retencion profesional solo se propone cuando el destinatario esta obligado a retener.'); }
   } else if (body.withholdingRate != null) withholdingRate = Number(body.withholdingRate);
   const withholdingAmount = money(base * withholdingRate / 100);
-  if (manualOverride && !clean(body.manualOverrideReason)) throw new Error('Indica el motivo de la modificacion manual.');
+  if (manualOverride && !clean(body.manualOverrideReason)) throw new PublicDomainError('Indica el motivo de la modificacion manual.');
   const bookImpact = operationType === 'outside_scope' ? [] : [direction === 'ingreso' ? 'facturas_emitidas' : 'facturas_recibidas'];
   const modelImpact: string[] = [];
   if (taxKind === 'iva') {
@@ -408,7 +409,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       if (!context.sourceCheck && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
       if ((profiles || []).length !== 1) return Response.json({ error: 'Debe existir un único perfil fiscal activo y validado por asesor antes de confirmar la factura.' }, { status: 422 });
       const invoice = await svc.entities.Invoice.get(body.invoiceId).catch(() => null);
-      if (!invoice || invoice.company_id !== companyId) throw new Error('Factura no encontrada en esta empresa.');
+      if (!invoice || invoice.company_id !== companyId) throw new PublicDomainError('Factura no encontrada en esta empresa.');
       const activeForSource = activities.filter(item => item.active !== false);
       const selectedActivity = activeForSource.find(item => item.id === (body.activityId || invoice.fiscal_activity_id))
         || (context.sourceCheck && !body.activityId && !invoice.fiscal_activity_id && activeForSource.length === 1 ? activeForSource[0] : null);
@@ -862,7 +863,7 @@ Deno.serve(async (req) => {
         if (!invoicePayments.length && ['cobrada', 'parcial'].includes(clean(invoice.estado_cobro)) && !isZeroResidualReccFinal(invoice)) issues.push({ invoiceId: invoice.id, reason: 'La factura figura cobrada/pagada sin detalle de movimientos trazables.' });
         let forcedAmount=0,forcedAmountEur=invoiceCurrency(invoice)==='EUR'?0:null;
         if(!invoice.es_rectificativa&&!isZeroResidualReccFinal(invoice))try{
-          if(invoicePayments.some(p=>p.operation_status&&p.operation_status!=='committed'))throw new Error('Pagos pendientes: no se estima el devengo legal.');
+          if(invoicePayments.some(p=>p.operation_status&&p.operation_status!=='committed'))throw new PublicDomainError('Pagos pendientes: no se estima el devengo legal.');
           const schedule=reccSchedule({invoiceId:invoice.id,invoiceNet:Math.abs(Number(invoice.total_factura)),operationDate:invoice.fecha_operacion||invoice.fecha_emision,...reccMetadata(invoice),payments:invoicePayments.map(p=>({id:p.id,date:p.payment_date,amount:p.amount,status:p.operation_status})),corrections:reccCorrections(invoice,allInvoices,invoiceLines[0],allLines)});
           const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));forcedAmount=money(forced?.amount||0);
           if(forced&&(invoiceCurrency(invoice)==='EUR'||Number(forced.date.slice(0,4))<=year))forcedAmountEur=fxMoney(forcedAmount,taxFx(invoice,forced.date));
@@ -926,10 +927,10 @@ Deno.serve(async (req) => {
     if (action === 'save_profile') {
       const data = body.profile || {};
       const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxGroupId','taxGroupRole','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','verifactuObligation','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','repepCensusConfirmed','repepPreviousTurnover','repepOptionFiledOn','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
-      if (data.taxGroupRole && !['sin_grupo','dominante','dependiente'].includes(data.taxGroupRole)) throw new Error('Rol del grupo fiscal no admitido.');
-      if (['dominante','dependiente'].includes(data.taxGroupRole ?? profile?.taxGroupRole) && !clean(data.taxGroupId ?? profile?.taxGroupId)) throw new Error('Indica el identificador del grupo fiscal antes de confirmar el rol.');
-      if (data.verifactuObligation !== undefined && !['pendiente_confirmar','obligado','voluntario','excluido'].includes(data.verifactuObligation)) throw new Error('Clasificación VERI*FACTU no admitida.');
-      if ((data.usesVeriFactu ?? profile?.usesVeriFactu) === true && (data.verifactuObligation ?? profile?.verifactuObligation) === 'excluido') throw new Error('No puede solicitarse VERI*FACTU para un perfil clasificado como excluido.');
+      if (data.taxGroupRole && !['sin_grupo','dominante','dependiente'].includes(data.taxGroupRole)) throw new PublicDomainError('Rol del grupo fiscal no admitido.');
+      if (['dominante','dependiente'].includes(data.taxGroupRole ?? profile?.taxGroupRole) && !clean(data.taxGroupId ?? profile?.taxGroupId)) throw new PublicDomainError('Indica el identificador del grupo fiscal antes de confirmar el rol.');
+      if (data.verifactuObligation !== undefined && !['pendiente_confirmar','obligado','voluntario','excluido'].includes(data.verifactuObligation)) throw new PublicDomainError('Clasificación VERI*FACTU no admitida.');
+      if ((data.usesVeriFactu ?? profile?.usesVeriFactu) === true && (data.verifactuObligation ?? profile?.verifactuObligation) === 'excluido') throw new PublicDomainError('No puede solicitarse VERI*FACTU para un perfil clasificado como excluido.');
       const now = new Date().toISOString();
       const effectiveFrom = clean(data.effectiveFrom || profile?.effectiveFrom || now.slice(0, 10));
       const changeSummary = clean(data.lastChangeReason || body.changeSummary || 'Actualización del perfil fiscal').slice(0, 1000);
@@ -940,7 +941,7 @@ Deno.serve(async (req) => {
         payload.reviewedBy = '';
         payload.reviewedAt = undefined;
       }
-      if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
+      if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new PublicDomainError('Nombre fiscal y territorio son obligatorios.');
       if(payload.profileStatus==='validado_asesor') validateRepepProfile({...profile,...payload});
       const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key] !== undefined ? profile[key] : PROFILE_SNAPSHOT_DEFAULTS[key]]));
       snapshot.ruleSetVersion = RULESET;
@@ -973,14 +974,14 @@ Deno.serve(async (req) => {
       const allowed = ['fiscalProfileId','name','iaeCode','iaeActivityCode','cnaeCode','startDate','endDate','sectorId','territory','activityType','indirectTax','indirectTaxRegime','incomeDefaultTreatment','expenseDefaultTreatment','deductionRight','proRataPercent','defaultTaxRate','defaultWithholdingRate','exemptionKey','exemptionLegalBasis','newProfessionalRateConfirmed','retentionIncomePercent','model130Treatment','hasIntraCommunityOperations','accountingDefaults','expectedModels','automationLevel','active','notes'];
       const payload: any = { company_id: companyId, fiscalProfileId: profile?.id || data.fiscalProfileId || '', active: data.active !== false, ruleSetVersion: RULESET, reviewedAt: new Date().toISOString(), reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
-      if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new Error('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
+      if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new PublicDomainError('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
       const selectedTax = clean(payload.indirectTax || existing?.indirectTax);
       const selectedRegime = clean(payload.indirectTaxRegime || existing?.indirectTaxRegime || 'general');
-      if (!REGIMES[selectedTax]?.some(([code]) => code === selectedRegime)) throw Object.assign(new Error('El régimen especial no corresponde al impuesto indirecto de la actividad.'), { status: 422 });
-      if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw Object.assign(new Error('La actividad mixta debe clasificarse por operación antes de contabilizar.'), { status: 422 });
+      if (!REGIMES[selectedTax]?.some(([code]) => code === selectedRegime)) throw Object.assign(new PublicDomainError('El régimen especial no corresponde al impuesto indirecto de la actividad.'), { status: 422 });
+      if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw Object.assign(new PublicDomainError('La actividad mixta debe clasificarse por operación antes de contabilizar.'), { status: 422 });
       const proRata = payload.proRataPercent ?? existing?.proRataPercent;
-      if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw Object.assign(new Error('La prorrata debe estar entre 0 y 100 %.'), { status: 422 });
-      if(payload.endDate && payload.startDate && payload.endDate < payload.startDate) throw new Error('La fecha final de la actividad no puede preceder a su inicio.');
+      if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw Object.assign(new PublicDomainError('La prorrata debe estar entre 0 y 100 %.'), { status: 422 });
+      if(payload.endDate && payload.startDate && payload.endDate < payload.startDate) throw new PublicDomainError('La fecha final de la actividad no puede preceder a su inicio.');
       if(['prorrata_general','prorrata_especial','sector_diferenciado'].includes(payload.deductionRight || existing?.deductionRight) && proRata != null) payload.proRataPercent=Math.ceil(Number(proRata));
       const saved = existing ? await svc.entities.FiscalActivity.update(existing.id, payload) : await svc.entities.FiscalActivity.create(payload);
       if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal modificada; requiere nueva validación del asesor.' });
@@ -990,7 +991,7 @@ Deno.serve(async (req) => {
 
     if (action === 'deactivate_activity') {
       const existing = activities.find(item => item.id === body.activityId);
-      if (!existing) throw new Error('Actividad no encontrada.');
+      if (!existing) throw new PublicDomainError('Actividad no encontrada.');
       const saved = await svc.entities.FiscalActivity.update(existing.id, { active: false, reviewedAt: new Date().toISOString(), reviewedBy: user.email, notes: `${existing.notes ? `${existing.notes}\n` : ''}Desactivada sin borrar historico.`.slice(0, 4000) });
       if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal desactivada; requiere nueva validación del asesor.' });
       return Response.json({ success: true, activity: saved });
@@ -1017,7 +1018,7 @@ Deno.serve(async (req) => {
       if (!clean(body.reason)) return Response.json({ error: 'La confirmación o desactivación exige motivo trazable.' }, { status: 422 });
       const code = clean(body.code);
       const model = MODEL_CATALOG.find(item => item[0] === code);
-      if (!model) throw new Error('Modelo fiscal no incluido en el catalogo oficial configurado.');
+      if (!model) throw new PublicDomainError('Modelo fiscal no incluido en el catalogo oficial configurado.');
       const current = (models || []).find(item => clean(item.codigo) === code);
       const tax = ['303','309','322','353','368','369','390'].includes(code) ? 'IVA' : ['400','412','414','415','416','417','418','419','420','421','422','424','425'].includes(code) ? 'IGIC' : ['130','131','210','216','296'].includes(code) ? 'IRPF' : ['111','115','123','180','190','193'].includes(code) ? 'Retenciones' : 'Otro';
       const payload = { nombre: model[1], impuesto: tax, administracion: model[2], periodicidad: model[3], activo: body.active !== false, fuenteValidacion: 'criterio_asesor', estadoImplementacion: 'configuracion', observaciones: `Seleccion manual trazada ${RULESET}: ${clean(body.reason) || 'obligacion confirmada por usuario o asesor'}` };
@@ -1029,8 +1030,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ error: 'Accion fiscal no soportada.' }, { status: 400 });
   } catch (error) {
-    console.error('[fiscalOperations]', error?.message || error);
-    return Response.json({ error: error?.message || 'Error fiscal interno.' }, { status: error?.status || 500 });
+    return publicServiceFailure(error,'fiscalOperations');
   } finally {
     if (releaseAdvanceLocks) try { await releaseAdvanceLocks(); } catch (error) { console.error('[RECC lock release]', error.message); }
   }

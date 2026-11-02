@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Returns the current quarter key for Atlantic/Canary timezone
@@ -114,7 +115,6 @@ Deno.serve(async (req) => {
       blocked: ocrAccessStatus === 'blocked' || (!period?.isUnlimited && available === 0 && period !== null),
     });
   } catch (error) {
-    console.error('Error en getOcrUsageSummary:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'getOcrUsageSummary');
   }
 });

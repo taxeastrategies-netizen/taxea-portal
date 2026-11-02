@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.38';
 
 Deno.serve(async (req) => {
@@ -165,7 +166,6 @@ Devuelve JSON con: cliente_nombre (string), cliente_nif (string, el NIF/CIF del 
       fiscalProfileFixed: !!profile,
     });
   } catch (error) {
-    console.error('[fixOcrIncomeDocs] Error:', error.message, error.stack);
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'fixOcrIncomeDocs');
   }
 });

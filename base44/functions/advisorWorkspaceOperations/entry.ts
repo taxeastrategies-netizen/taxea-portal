@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
@@ -54,7 +55,7 @@ function explicitlyAssigned(user: any, company: any) {
 }
 
 async function accessContext(svc: any, user: any) {
-  if (!isAdminUser(user)) throw Object.assign(new Error('La bandeja multiempresa está reservada exclusivamente a administración.'), { status: 403 });
+  if (!isAdminUser(user)) throw Object.assign(new PublicDomainError('La bandeja multiempresa está reservada exclusivamente a administración.'), { status: 403 });
   const [companies, clients] = await Promise.all([
     listAll(svc.entities.Company, null, '-updated_date', 5000),
     listAll(svc.entities.ClientAccount, null, '-updated_date', 5000),
@@ -195,10 +196,10 @@ async function buildTrace(svc: any, companyId: string, entityType: string, entit
     Invoice: svc.entities.Invoice, InvoiceTaxLine: svc.entities.InvoiceTaxLine, JournalEntry: svc.entities.JournalEntry,
     JournalEntryLine: svc.entities.JournalEntryLine, InvoicePayment: svc.entities.InvoicePayment, BankTransaction: svc.entities.BankTransaction,
   };
-  if (!entities[entityType]) throw Object.assign(new Error('Tipo de entidad no trazable.'), { status: 400 });
+  if (!entities[entityType]) throw Object.assign(new PublicDomainError('Tipo de entidad no trazable.'), { status: 400 });
   const root = await entities[entityType].get(entityId).catch(() => null);
   const rootCompany = root?.company_id || root?.companyId;
-  if (!root || rootCompany !== companyId) throw Object.assign(new Error('Registro no encontrado en esta empresa.'), { status: 404 });
+  if (!root || rootCompany !== companyId) throw Object.assign(new PublicDomainError('Registro no encontrado en esta empresa.'), { status: 404 });
 
   let invoiceId = entityType === 'Invoice' ? root.id : clean(root.invoice_id || root.invoiceId || (root.entidad_tipo === 'Invoice' ? root.entidad_id : ''));
   let entryId = entityType === 'JournalEntry' ? root.id : clean(root.journal_entry_id || root.journalEntryId);
@@ -356,7 +357,6 @@ Deno.serve(async (req) => {
       scope: GLOBAL_ROLES.has(roleOf(user)) ? 'global_admin' : 'assigned_portfolio',
     });
   } catch (error) {
-    console.error('[advisorWorkspaceOperations]', error?.message || error);
-    return Response.json({ error: error?.message || 'Error en la bandeja de asesoría.' }, { status: error?.status || 500 });
+    return publicServiceFailure(error,'advisorWorkspaceOperations');
   }
 });

@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
 Deno.serve(async (req) => {
@@ -30,7 +31,6 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true, user: result });
   } catch (error) {
-    console.error('inviteUser error:', error.message, error.stack);
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'inviteUser');
   }
 });

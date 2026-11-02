@@ -218,7 +218,7 @@ export default function LibroRegistros() {
       <div className="flex gap-1 p-1 bg-secondary rounded-lg w-full max-w-full min-w-0 sm:w-fit mb-5 overflow-x-auto">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === t.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+            className={`shrink-0 px-4 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === t.key ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
             {t.label}
           </button>
         ))}

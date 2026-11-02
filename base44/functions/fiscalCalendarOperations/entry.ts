@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
@@ -59,10 +60,10 @@ async function authorize(svc: any, user: any, companyId: string, company: any) {
     : [];
   if (['advisor', 'asesor'].includes(role)) {
     if (email && (owner === email || authorized.includes(email))) return;
-    throw Object.assign(new Error('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
+    throw Object.assign(new PublicDomainError('El asesor no está asignado explícitamente a esta empresa.'), { status: 403 });
   }
   if (await verifiedCompanyAssignment(svc,user,companyId) || (email && (owner === email || authorized.includes(email)))) return;
-  throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
+  throw Object.assign(new PublicDomainError('No tienes permiso para consultar esta empresa.'), { status: 403 });
 }
 
 function atUtc(year: number, month: number, day: number) { return new Date(Date.UTC(year, month - 1, day, 12)); }
@@ -240,7 +241,7 @@ Deno.serve(async (req) => {
     await authorize(svc,user, companyId, company);
     const action = clean(body.action || 'bundle');
     const fiscalYear = Number(body.fiscalYear || new Date().getUTCFullYear());
-    if (fiscalYear < 2000 || fiscalYear > 2100) throw new Error('Ejercicio fiscal no valido.');
+    if (fiscalYear < 2000 || fiscalYear > 2100) throw new PublicDomainError('Ejercicio fiscal no valido.');
     const data = await loadBundle(svc, companyId);
     const calendar = buildCalendar(data, fiscalYear);
 
@@ -279,9 +280,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'save_obligation') {
-      if (!privileged(user)) throw Object.assign(new Error('Solo el asesor o administrador puede confirmar una obligacion fiscal.'), { status: 403 });
+      if (!privileged(user)) throw Object.assign(new PublicDomainError('Solo el asesor o administrador puede confirmar una obligacion fiscal.'), { status: 403 });
       const current = data.obligations.find((row: any) => row.id === body.obligationId);
-      if (!current) throw new Error('Obligacion no encontrada.');
+      if (!current) throw new PublicDomainError('Obligacion no encontrada.');
       const allowed = ['estado', 'resultado', 'importe', 'comentarios_asesor', 'fecha_inicio_presentacion', 'fecha_limite_domiciliacion', 'fecha_limite_presentacion', 'fecha_limite_interna', 'deadline_status'];
       const payload: any = { last_synced_at: new Date().toISOString(), last_synced_by: user.email };
       for (const key of allowed) if (body[key] !== undefined) payload[key] = body[key];
@@ -291,13 +292,13 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'create_obligation') {
-      if (!privileged(user)) throw Object.assign(new Error('Solo el asesor o administrador puede crear una obligación fiscal.'), { status: 403 });
+      if (!privileged(user)) throw Object.assign(new PublicDomainError('Solo el asesor o administrador puede crear una obligación fiscal.'), { status: 403 });
       const code = normalizeCode(body.modelCode);
       const period = normalizePeriod(body.period);
       const year = Number(body.fiscalYear || fiscalYear);
-      if (!code || !MODEL_META[code] || !period || !body.fecha_limite_presentacion) throw new Error('Modelo, ejercicio, período y fecha máxima de presentación son obligatorios.');
+      if (!code || !MODEL_META[code] || !period || !body.fecha_limite_presentacion) throw new PublicDomainError('Modelo, ejercicio, período y fecha máxima de presentación son obligatorios.');
       const duplicate = data.obligations.find((row: any) => normalizeCode(row.modelo_codigo || row.modelo) === code && Number(row.anio || row.fiscal_year) === year && normalizePeriod(row.periodo || row.trimestre) === period);
-      if (duplicate) throw new Error('Ya existe esta obligación. Ábrela desde el calendario para actualizarla.');
+      if (duplicate) throw new PublicDomainError('Ya existe esta obligación. Ábrela desde el calendario para actualizarla.');
       const meta = MODEL_META[code];
       let taxModel = data.models.find((row: any) => normalizeCode(row.codigo) === code);
       if (!taxModel) {
@@ -330,11 +331,11 @@ Deno.serve(async (req) => {
 
     if (action === 'link_document') {
       const doc = data.documents.find((row: any) => row.id === body.documentId);
-      if (!doc) throw new Error('Documento no encontrado en esta empresa.');
+      if (!doc) throw new PublicDomainError('Documento no encontrado en esta empresa.');
       const code = normalizeCode(body.modelCode || doc.fiscal_model_code);
       const period = normalizePeriod(body.period || doc.fiscal_period || doc.trimestre) || 'ANUAL';
       const year = Number(body.year || doc.fiscal_year || doc.anio || fiscalYear);
-      if (!code || !MODEL_META[code]) throw new Error('Selecciona un modelo fiscal valido para vincular el documento.');
+      if (!code || !MODEL_META[code]) throw new PublicDomainError('Selecciona un modelo fiscal valido para vincular el documento.');
       const kind = clean(body.documentKind || doc.fiscal_document_kind || 'otro');
       const documentPayload = { fiscal_model_code: code, fiscal_period: period, fiscal_year: year, fiscal_document_kind: kind, administracion: MODEL_META[code][1], fiscal_link_status: 'vinculado', fiscal_linked_at: new Date().toISOString(), fiscal_linked_by: user.email };
       const savedDoc = await svc.entities.Document.update(doc.id, documentPayload);
@@ -369,8 +370,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ error: 'Accion de calendario fiscal no soportada.' }, { status: 400 });
   } catch (error) {
-    console.error('[fiscalCalendarOperations]', error?.message || error);
-    return Response.json({ error: error?.message || 'Error interno del calendario fiscal.' }, { status: error?.status || 500 });
+    return publicServiceFailure(error,'fiscalCalendarOperations');
   }
 });
 

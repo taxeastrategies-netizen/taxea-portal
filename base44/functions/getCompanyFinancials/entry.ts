@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
@@ -16,7 +17,7 @@ const roleOf = user => clean(user?.role || user?.data?.role).toLowerCase();
 
 async function authorizeCompany(svc, user, companyId) {
   const company = await svc.entities.Company.get(companyId).catch(() => null);
-  if (!company) throw Object.assign(new Error('Empresa no encontrada.'), { status: 404 });
+  if (!company) throw Object.assign(new PublicDomainError('Empresa no encontrada.'), { status: 404 });
   const email = clean(user?.email).toLowerCase();
   const authorized = Array.isArray(company.usuarios_autorizados)
     ? company.usuarios_autorizados.map(value => clean(value).toLowerCase())
@@ -25,7 +26,7 @@ async function authorizeCompany(svc, user, companyId) {
     || await verifiedCompanyAssignment(svc,user,companyId)
     || (email && clean(company.owner_email).toLowerCase() === email)
     || (email && authorized.includes(email));
-  if (!allowed) throw Object.assign(new Error('No tienes permiso para consultar esta empresa.'), { status: 403 });
+  if (!allowed) throw Object.assign(new PublicDomainError('No tienes permiso para consultar esta empresa.'), { status: 403 });
   return company;
 }
 
@@ -40,7 +41,7 @@ async function fetchAll(entity, query = {}, sort = '-created_date', max = 100000
     offset += page.length;
     if (page.length < pageSize) break;
   }
-  if (rows.length >= max) throw new Error(`El volumen supera el limite de seguridad de ${max} registros. Acota el ejercicio.`);
+  if (rows.length >= max) throw new PublicDomainError(`El volumen supera el limite de seguridad de ${max} registros. Acota el ejercicio.`);
   return rows;
 }
 
@@ -135,7 +136,6 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('[getCompanyFinancials] Error:', error.message);
-    return Response.json({ error: error.message }, { status: error?.status || 500 });
+    return publicServiceFailure(error,'getCompanyFinancials');
   }
 });

@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { SCHEMA_VERSION, canonical8, createJournalEntry, commitJournalEntry, assertAccountingDateOpen } from './accountingEngine.ts';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
@@ -31,7 +32,7 @@ async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, d
     return recovered.entry;
   }
   const lines = await resolveLines(svc, companyId, entry);
-  if (lines.length < 2) throw new Error(`El asiento ${entry.entryNumber || entry.id} no tiene líneas suficientes para revertirse.`);
+  if (lines.length < 2) throw new PublicDomainError(`El asiento ${entry.entryNumber || entry.id} no tiene líneas suficientes para revertirse.`);
   const reversed = await createJournalEntry(svc, companyId, {
     date,
     description: `Reversión ${entry.entryNumber || ''}: ${reason}`.trim(),
@@ -100,7 +101,7 @@ Deno.serve(async (req) => {
       let reversalEntryId = '';
       if (invoice.linked_journal_entry_id) {
         const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
-        if (!entry || entry.companyId !== effectiveCompanyId) throw new Error('No se puede anular: el asiento original no existe o no pertenece a esta empresa.');
+        if (!entry || entry.companyId !== effectiveCompanyId) throw new PublicDomainError('No se puede anular: el asiento original no existe o no pertenece a esta empresa.');
         if (entry.companyId === effectiveCompanyId) {
           if (entry.status === 'confirmado') {
             const reversal = await reverseConfirmedEntry(svc, effectiveCompanyId, entry, reason, user.email, accountingDate);
@@ -126,7 +127,6 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true, annulled: results.length, annulledIds: results.map(item => item.invoiceId), results, timestamp: now });
   } catch (error) {
-    console.error('anularFacturas error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'anularFacturas');
   }
 });

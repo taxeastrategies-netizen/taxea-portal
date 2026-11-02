@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import {
   SCHEMA_VERSION,
@@ -283,7 +284,6 @@ Deno.serve(async (req) => {
       logId: log?.id || '',
     });
   } catch (error) {
-    console.error('[migrateAccountingToPgc8]', error);
-    return Response.json({ error: error.message || 'Error interno durante la migración.' }, { status: 500 });
+    return publicServiceFailure(error,'migrateAccountingToPgc8');
   }
 });

@@ -1,3 +1,4 @@
+import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
@@ -95,7 +96,6 @@ Deno.serve(async (req) => {
       return Response.json({ status: 'released' });
     }
   } catch (error) {
-    console.error('Error en finalizeOcrCredits:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return publicServiceFailure(error,'finalizeOcrCredits');
   }
 });
