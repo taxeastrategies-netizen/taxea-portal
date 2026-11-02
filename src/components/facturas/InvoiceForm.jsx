@@ -330,7 +330,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Nueva factura · revisión fiscal previa</DialogTitle>
+          <DialogTitle>{form.tipo==='emitida'?'Nueva factura emitida':'Registrar factura recibida'}</DialogTitle>
         </DialogHeader>
         {form.tipo === 'emitida' && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -459,7 +459,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           {/* Importes */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Importes</p>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.es_rectificativa)} onChange={event => setForm(current => ({ ...current, es_rectificativa: event.target.checked }))} />Factura rectificativa (requiere revisión del asesor)</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.es_rectificativa)} onChange={event => setForm(current => ({ ...current, es_rectificativa: event.target.checked }))} />{form.tipo==='emitida'?'Factura rectificativa':'Factura rectificativa (requiere revisión del asesor)'}</label>
             {form.es_rectificativa && <Input value={form.factura_rectificada} onChange={set('factura_rectificada')} placeholder="Número de la factura original" aria-label="Factura original rectificada" />}
             {['IVA','IGIC'].includes(taxType) && <div className="rounded-xl border p-3 space-y-2">
               <button type="button" className="text-xs font-semibold text-primary" onClick={() => updateQuotaRows(quotaRows.length ? [] : [{ base: form.base_imponible || '', rate: Number(form.tipo_iva ?? (taxType==='IGIC'?7:21)) }])}>{quotaRows.length ? 'Volver a un tipo único' : `Desglosar varios tipos de ${taxType}`}</button>
@@ -585,7 +585,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
             </div>
             <div className="space-y-1.5">
               <Label>Estado contable</Label>
-              <Select value={form.estado_contable} onValueChange={set('estado_contable')}>
+              {form.tipo==='emitida' ? <p className="rounded-md border border-teal/25 bg-teal/5 px-3 py-2 text-sm">Confirmada y contabilizada al emitir</p> : <Select value={form.estado_contable} onValueChange={set('estado_contable')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pendiente">Pendiente</SelectItem>
@@ -593,7 +593,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <SelectItem value="revisada">Revisada</SelectItem>
                   <SelectItem value="contabilizada">Contabilizada</SelectItem>
                 </SelectContent>
-              </Select>
+              </Select>}
             </div>
           </div>
 
@@ -659,7 +659,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         <div className="flex justify-end gap-3 mt-5">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving} className="bg-teal hover:bg-teal-dark">
-            {saving ? 'Guardando...' : form.tipo === 'emitida' ? 'Guardar para revisión fiscal' : 'Guardar recibida para revisión'}
+            {saving ? (form.tipo==='emitida'?'Emitiendo...':'Guardando...') : form.tipo === 'emitida' ? 'Emitir y contabilizar' : 'Guardar recibida para revisión'}
           </Button>
         </div>
       </DialogContent>
