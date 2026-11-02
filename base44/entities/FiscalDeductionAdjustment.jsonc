@@ -66,6 +66,9 @@
     "version": {
       "type": "string"
     },
+    "basisHash": {
+      "type": "string"
+    },
     "fiscalDelta": {
       "type": "number"
     },

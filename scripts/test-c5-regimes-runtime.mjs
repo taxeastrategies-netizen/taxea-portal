@@ -189,5 +189,35 @@ assert.ok(concurrent.some(row=>row.status==='fulfilled'));assert.equal(records.J
 user={...user,status:'suspendido'};await call('accountingOperations',{...assetBody,action:'c5_deduction_preview'},403);delete user.status;
 assert.ok(records.JournalEntry.every(j=>j.isBalanced&&Math.abs(j.totalDebit-j.totalCredit)<.01));
 
+
+const beforeContext=calls;await call('accountingOperations',{action:'c5_deduction_context',companyId:'qa',year:2025});assert.ok(calls-beforeContext<=6,'The asset picker must not load all invoices and journal history');
+const origin=records.JournalEntry.find(row=>row.id===pExpense.linked_journal_entry_id),originStatus=origin.status;origin.status='borrador';
+await call('accountingOperations',{...pBody,action:'c5_deduction_preview'},422);origin.status=originStatus;
+const investmentOrigin=records.JournalEntry.find(row=>row.id===assetInvoice.linked_journal_entry_id),originValidation=investmentOrigin.validationStatus;investmentOrigin.validationStatus='PENDIENTE';
+await call('accountingOperations',{...assetBody,action:'c5_deduction_preview'},422);investmentOrigin.validationStatus=originValidation;
+
+
+// A zero annual adjustment must still persist the definitive percentage for next year's RECC deductions.
+const zero=activity('zero-annual','iva','general','prorrata_general',{proRataPercent:50,startDate:'2024-01-01'});
+await make('emitida',zero,2000,21,420,{}, {fecha_emision:'2024-06-01'});
+await make('emitida',zero,1000,0,0,{operationType:'exempt_limited',exemptionKey:'IVA_ART_20_SANITARIA',legalBasis:'Art.20.Uno.3 LIVA'}, {fecha_emision:'2024-06-02'});
+zero.indirectTaxRegime='criterio_caja';
+const zeroExpense=await make('recibida',zero,100,21,21,{deductionUse:'shared',recc:{eligibility:{confirmed:true,censusOptionConfirmed:true,newActivity:true,year:2024,effectiveFrom:'2024-01-01'}}},{fecha_emision:'2024-06-03'});
+const zeroBody={companyId:'qa',year:2024,activityId:zero.id,kind:'prorata'};
+const zeroPreview=await call('accountingOperations',{...zeroBody,action:'c5_deduction_preview'});assert.equal(zeroPreview.delta,0);assert.equal(zeroPreview.calculation.percent,67);assert.equal(zeroPreview.needsPercentageConfirmation,true);
+const journalsBeforeZero=records.JournalEntry.length;
+const zeroPost=await call('accountingOperations',{...zeroBody,action:'c5_deduction_post',expectedFingerprint:zeroPreview.fingerprint,confirmReviewed:true,reason:'Confirmación anual sin cuotas reconocidas'});assert.equal(zeroPost.noJournalRequired,true);assert.equal(records.JournalEntry.length,journalsBeforeZero);
+assert.equal((await call('accountingOperations',{...zeroBody,action:'c5_deduction_preview'})).needsPercentageConfirmation,false);
+zero.indirectTaxRegime='general';
+const zeroSale=await make('emitida',zero,1000,21,210,{}, {fecha_emision:'2025-06-01'});
+const zeroExempt=await make('emitida',zero,1000,0,0,{operationType:'exempt_limited',exemptionKey:'IVA_ART_20_SANITARIA',legalBasis:'Art.20.Uno.3 LIVA'}, {fecha_emision:'2025-06-02'});
+const nextZero=await call('accountingOperations',{...zeroBody,year:2025,action:'c5_deduction_preview'});assert.equal(nextZero.delta,0);assert.equal(nextZero.fiscalDelta,-3.57);assert.equal(nextZero.calculation.fiscalCurrent,14.07);
+const noExtraJournal=records.JournalEntry.length;
+const nextZeroBody={...zeroBody,year:2025,action:'c5_deduction_post',expectedFingerprint:nextZero.fingerprint,confirmReviewed:true,reason:'Ajuste fiscal RECC sin cambio del saldo contable'};
+const zeroFiscal=await call('accountingOperations',nextZeroBody);assert.equal(zeroFiscal.noJournalRequired,true);assert.equal(records.JournalEntry.length,noExtraJournal);
+const zeroRecords=records.FiscalDeductionAdjustment.length;await call('accountingOperations',nextZeroBody);assert.equal(records.FiscalDeductionAdjustment.length,zeroRecords);
+const zeroData={...modelData(2025,'4T',[zeroExpense.id,zeroSale.id,zeroExempt.id]),fiscalAdjustments:records.FiscalDeductionAdjustment.filter(row=>row.scopeKey==='activity:'+zero.id)};
+const zeroModel=calculate(zeroData,bounds(2025,'4T'),'iva',false,{previousCompensationBalance:0});assert.equal(zeroModel.operations.prorataAdjustment,-3.57);assert.equal(zeroModel.operations.deductibleQuota,10.5);
+
 console.log(JSON.stringify({ok:true,sourceToLedgerAndModels:true,REPEP:true,retail:true,exemptions:true,implicitIgic:true,dua:true,prorata:true,annualAdjustmentIdempotent:true,originalInvoicesAndTaxLinesUnchanged:true,normalUserCannotPost:true,foreignTenantDenied:true,official303And390Boxes:true,entries:records.JournalEntry.length,externalCalls:0,realWrites:0,calls}));
 
