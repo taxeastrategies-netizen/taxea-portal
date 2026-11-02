@@ -28,7 +28,7 @@ export function useCompanyContext(user) {
 
     const imp = isAdminRole(user.role) ? getImpersonation() : null;
     // Cache key incluye el estado de impersonación para evitar devolver caché sin impersonar
-    const assignedCompanyId = user.data?.company_id || '';
+    const assignedCompanyId = user.data?.company_id || user.company_id || '';
     const cacheKey = imp?.companyId || imp?.clientEmail
       ? `${user.email}::${user.role}::imp:${imp.companyId || imp.clientEmail}`
       : `${user.email}::${user.role}::company:${assignedCompanyId || 'unassigned'}`;
@@ -47,14 +47,14 @@ export function useCompanyContext(user) {
             ? await base44.entities.Company.get(imp.companyId).catch(() => null)
             : (await base44.entities.Company.filter({ owner_email: imp.clientEmail }, '-created_date', 1))?.[0] || null;
           // Sincronizar company_id en el servidor para que la RLS permita acceso a entidades del cliente
-          if (c && user.data?.company_id !== c.id) {
+          if (c && assignedCompanyId !== c.id) {
             try { await syncCompanyId(c.id); } catch {}
           }
           companyCache.set(cacheKey, c);
           setCompany(c);
         } else {
           // Admin sin impersonación: limpiar company_id y sin empresa asignada
-          if (user.data?.company_id) {
+          if (assignedCompanyId) {
             try { await syncCompanyId(null); } catch {}
           }
           companyCache.set(cacheKey, null);
@@ -79,7 +79,7 @@ export function useCompanyContext(user) {
         if (own?.length > 0) {
           const c = own[0];
           // Sincronizar company_id en el usuario si no coincide (invalida caché servidor)
-          if (user.data?.company_id !== c.id) {
+          if (assignedCompanyId !== c.id) {
             try { await syncCompanyId(c.id); } catch {}
           }
           companyCache.set(cacheKey, c);
@@ -90,7 +90,7 @@ export function useCompanyContext(user) {
         // Fallback: empresa donde está como autorizado (solo si no encontró la propia)
         const all = await base44.entities.Company.list('-created_date', 50);
         const found = all?.find(c => c.usuarios_autorizados?.includes(user.email)) || null;
-        if (found && user.data?.company_id !== found.id) {
+        if (found && assignedCompanyId !== found.id) {
           try { await syncCompanyId(found.id); } catch {}
         }
         companyCache.set(cacheKey, found);
@@ -100,7 +100,7 @@ export function useCompanyContext(user) {
     } catch {
       setLoading(false);
     }
-  }, [user?.email, user?.role, user?.data?.company_id]);
+  }, [user?.email, user?.role, user?.data?.company_id, user?.company_id]);
 
   useEffect(() => {
     loadCompany();
