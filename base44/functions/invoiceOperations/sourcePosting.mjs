@@ -4,7 +4,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   const svc = base44.asServiceRole;
   if (invoice.company_id !== companyId || invoice.anulada) throw Object.assign(new Error('Factura ajena a la empresa o anulada.'), {status:409});
   const knownHolds = ['FISCAL_ADVISOR_REVIEW_PHASE1','FISCAL_POSTING_ERROR','SOURCE_CHECK_PENDING',
-    'Falló el registro fiscal OCR.','No se pudo guardar la clasificación fiscal de la factura nueva.'];
+    'Falló el registro fiscal OCR.','No se pudo guardar la clasificación fiscal de la factura nueva.','Falló la línea fiscal de la emisión recurrente.'];
   if (invoice.accounting_migration_hold && !knownHolds.includes(invoice.accounting_migration_hold_reason))
     throw Object.assign(new Error('Esta factura tiene una incidencia contable independiente. No se levantará su retención automáticamente.'), {status:409});
   const token=crypto.randomUUID();
@@ -34,7 +34,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   // Una factura ya contabilizada se reutiliza, nunca se reclasifica al repetir el check.
   if (invoice.estado_contable !== 'contabilizada' && !invoice.linked_journal_entry_id) {
     const response = await base44.functions.invoke('fiscalOperations', { ...criteria,
-      action:'confirm_invoice_source', companyId, invoiceId:invoice.id, confirmReviewed:true });
+      ...(dependencies.fiscalExtra || {}), action:dependencies.fiscalAction || 'confirm_invoice_source', companyId, invoiceId:invoice.id, confirmReviewed:true });
     const result = response?.data ?? response;
     if (!result?.success || result.mode !== 'saved') throw Object.assign(new Error(result?.error || result?.warning || 'Revisa los datos fiscales en este mismo documento.'), {status:422});
     invoice = await svc.entities.Invoice.get(invoice.id);
@@ -47,7 +47,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   invoice = await ensureInvoiceQrHash(svc.entities.Invoice,invoice);
   try {
     const posting = await postInvoice(svc,companyId,{...invoice,accounting_migration_hold:false},user.email,
-      {status:'confirmado',source:invoice.ocr_document_id?'OCR':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})});
+      {status:'confirmado',source:invoice.ocr_document_id?'OCR':invoice.isRecurringGenerated?'recurring_invoice':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})});
     const saved = await svc.entities.Invoice.update(invoice.id,{accounting_migration_hold:false,accounting_migration_hold_reason:'',source_last_error:''});
     if (saved.ocr_document_id) {
       const doc = await svc.entities.OcrInvoiceDocument.get(saved.ocr_document_id);
@@ -60,7 +60,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
         auditTrail:[...(Array.isArray(doc.auditTrail)?doc.auditTrail:[]),JSON.stringify({
           action:'source_single_check',invoiceId:saved.id,journalEntryId:posting.entry.id,actor:user.email,at:now})]});
     }
-    return {ok:true,success:true,review_required:false,invoice:saved,invoiceId:saved.id,
+    return {ok:true,success:true,review_required:false,invoice:{...saved,source_confirmation_lock_token:'',source_confirmation_lock_started_at:''},invoiceId:saved.id,
       journalEntryId:posting.entry.id,journal_entry:posting.entry,duplicate:Boolean(posting.alreadyPosted)};
   } catch(error) {
     if (invoice.estado_contable !== 'contabilizada' && !invoice.linked_journal_entry_id) await svc.entities.Invoice.update(invoice.id,

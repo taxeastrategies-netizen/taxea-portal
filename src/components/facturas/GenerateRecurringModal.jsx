@@ -129,17 +129,17 @@ export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
                     <p className="text-2xl font-bold text-blue-700">{result.drafts || 0}</p>
-                    <p className="text-xs text-blue-700">Borradores</p>
+                    <p className="text-xs text-blue-700">Pendientes del emisor</p>
                   </div>
                   <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                     <p className="text-2xl font-bold text-red-700">{result.errors || 0}</p>
                     <p className="text-xs text-red-700">Con error</p>
                   </div>
                 </div>
-                {(result.generated > 0 || result.drafts > 0) && (
+                {result.generated > 0 && (
                   <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4" />
-                    Se han generado {result.generated + (result.drafts || 0)} factura(s) recurrentes. {result.skipped > 0 && `${result.skipped} ya existían y no se han duplicado.`}
+                    Se han generado {result.generated} factura(s) recurrentes confirmadas, con QR y asiento. {result.skipped > 0 && `${result.skipped} ya existían y no se han duplicado.`}
                   </p>
                 )}
                 {result.generated === 0 && result.drafts === 0 && result.skipped > 0 && (
@@ -148,9 +148,11 @@ export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
                     Las facturas ya fueron generadas para este periodo. No se ha duplicado.
                   </p>
                 )}
+                {result.remaining && <p className="text-sm text-amber-700">Quedan períodos antiguos pendientes. Pulsa Continuar para procesar el siguiente bloque sin duplicar los anteriores.</p>}
+                {result.busy > 0 && <p className="text-sm text-amber-700">Hay otra emisión en curso. Espera y actualiza antes de reintentar.</p>}
                 {result.errors > 0 && (
                   <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
-                    {result.errors} recurrencia(s) no se pudieron generar por datos incompletos. Revísalas antes de continuar.
+                    {result.errorDetail || result.issues?.[0]?.error || 'No se pudieron completar algunas recurrencias. Reintenta para recuperar las mismas facturas.'}
                   </p>
                 )}
               </>
@@ -158,6 +160,7 @@ export default function GenerateRecurringModal({ open, onOpenChange, onDone }) {
               <p className="text-sm text-destructive">{error || 'Error al generar las facturas recurrentes.'}</p>
             )}
             <div className="flex justify-end">
+              {result?.remaining && <Button onClick={handleGenerate}>Continuar con pendientes</Button>}
               <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
             </div>
           </div>

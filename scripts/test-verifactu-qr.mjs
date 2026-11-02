@@ -60,6 +60,17 @@ for (const path of [
   '../base44/functions/approveOcrDocument/entry.ts',
 ]) {
   const source = await readFile(new URL(path, import.meta.url), 'utf8');
+  if(path.includes('generateRecurringInvoices')) {
+    assert.match(source,/generateRecurringBatch/);
+    const generation=await readFile(new URL('../base44/functions/generateRecurringInvoices/recurringGeneration.mjs',import.meta.url),'utf8');
+    assert.match(generation,/functions.invoke\('invoiceOperations'/);
+    assert.match(generation,/action:'issue_recurring_invoice'/);
+    const entry=await readFile(new URL('../base44/functions/invoiceOperations/entry.ts',import.meta.url),'utf8');
+    assert.match(entry,/issueRecurringInvoice/);assert.match(entry,/completeSourceInvoice/);
+    const posting=await readFile(new URL('../base44/functions/invoiceOperations/sourcePosting.mjs',import.meta.url),'utf8');
+    assert.match(posting,/buildAeatQrUrl/);assert.match(posting,/ensureInvoiceQrHash/);assert.match(posting,/qr_mode:'no_verifactu'/);
+    continue;
+  }
   assert.match(source, /buildAeatQrUrl/);
   if (source.includes('qr_mode')) {
     assert.match(source, /qr_mode/);

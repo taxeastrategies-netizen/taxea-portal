@@ -151,6 +151,27 @@
     "totalGenerated": {
       "type": "number",
       "default": 0
+    },
+    "fiscalCriteria": {
+      "type": "object",
+      "description": "Criterio propio guardado por el emisor para sus períodos futuros; no modifica el perfil censal.",
+      "rls": {
+        "write": false
+      }
+    },
+    "generation_lock_token": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
+    },
+    "generation_lock_started_at": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": false
+      }
     }
   },
   "required": [

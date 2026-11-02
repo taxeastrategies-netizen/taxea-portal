@@ -1,3 +1,4 @@
+import {recurringScope,assertRecurringInvoice,RecurringDomainError} from './recurringIssuance.mjs';
 import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import {verifiedCompanyAssignment} from './verifiedCompanyAssignment.mjs';
 import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
@@ -703,7 +704,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         : {};
       const requiredLegend=invoice.tipo==='emitida'?(evaluation.regime==='pequeno_empresario_igic' && evaluation.exemptionKey==='IGIC_REPEP'?'exención franquicia fiscal':evaluation.regime==='comerciante_minorista_igic'?'comerciante minorista':''):'';
       const c5Legend=requiredLegend && !String(invoice.coletilla_fiscal||'').toLowerCase().includes(requiredLegend)?{coletilla_fiscal:[invoice.coletilla_fiscal,requiredLegend].filter(Boolean).join(' · ')}:{};
-      await svc.entities.Invoice.update(invoice.id, { ...c5Legend, fiscal_c5_data:JSON.stringify(c5Snapshot), ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',approvalOrigin:context.sourceCheck && invoice.tipo==='emitida'?'issuer':'document_review',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      await svc.entities.Invoice.update(invoice.id, { ...c5Legend, fiscal_c5_data:JSON.stringify(c5Snapshot), ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',approvalOrigin:context.sourceKind==='recurring'?'issuer_template':context.sourceCheck && invoice.tipo==='emitida'?'issuer':'document_review',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
   } finally {
     if (releaseAdvanceLocks) await releaseAdvanceLocks();
@@ -725,9 +726,16 @@ Deno.serve(async (req) => {
     let svc = base44.asServiceRole;
     const company = await svc.entities.Company.get(companyId).catch(() => null);
     if (!company) return Response.json({ error: 'Empresa no encontrada.' }, { status: 404 });
+    let recurringSourceScope=null;
+    if(action==='confirm_recurring_invoice_source'){
+      try{recurringSourceScope=await recurringScope(svc,user,clean(body.template_id),companyId,authorize);
+        if(!body.generation_token||recurringSourceScope.template.generation_lock_token!==body.generation_token)throw new RecurringDomainError('La reserva de emisión cambió. Reintenta desde la plantilla.');
+        assertRecurringInvoice(await svc.entities.Invoice.get(clean(body.invoiceId)),recurringSourceScope);
+      }catch(error){if(error instanceof RecurringDomainError)throw new PublicDomainError(error.message,error.status);throw error;}
+    }
     const internalServiceEvaluation = action === 'evaluate' && user.is_service === true
       && /^service\+[a-f0-9-]+@no-reply\.base44\.com$/i.test(clean(user.email));
-    if (!internalServiceEvaluation) await authorize(svc,user, companyId, company);
+    if (!internalServiceEvaluation && !recurringSourceScope) await authorize(svc,user, companyId, company);
     if ((['save_invoice_tax_line','recover_recc_advance_lock','review_context'].includes(action) || action.includes('review_batch')) && !canProfessionallyValidate(user)) return Response.json({ error: 'Solo el asesor o administrador puede confirmar la clasificación fiscal de una factura.' }, { status: 403 });
     if (['bundle', 'save_invoice_tax_line', 'recc_advance_candidates','recover_recc_advance_lock','recc_book'].includes(action)) svc = queuedAccountingClient(base44.asServiceRole);
 
@@ -762,7 +770,7 @@ Deno.serve(async (req) => {
     const [profiles, activities, models, profileVersions] = await Promise.all([
       svc.entities.FiscalProfile.filter({ company_id: companyId, active: true }, '-reviewedAt', 20),
       svc.entities.FiscalActivity.filter({ company_id: companyId }, 'name', 5000),
-      (!['save_invoice_tax_line','review_context','source_context','confirm_invoice_source','evaluate'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
+      (!['save_invoice_tax_line','review_context','source_context','confirm_invoice_source','confirm_recurring_invoice_source','evaluate'].includes(action) && !action.includes('review_batch')) ? svc.entities.TaxModel.filter({ companyId }, 'codigo', 5000) : Promise.resolve([]),
       ['bundle', 'save_profile'].includes(action) ? svc.entities.FiscalProfileVersion.filter({ company_id: companyId }, '-version', 100) : Promise.resolve([]),
     ]);
     const profile = profiles?.[0] || null;
@@ -770,6 +778,7 @@ Deno.serve(async (req) => {
     if (action.includes('review_batch')) return Response.json(await fiscalReviewBatch({svc:base44.asServiceRole,base44,companyId,user,
       save:(input: any,batchId: string)=>saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,lockHeld:true,batchId},input)},body));
     if (action === 'confirm_invoice_source') return await saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,sourceCheck:true},body);
+    if(action==='confirm_recurring_invoice_source')return await saveInvoiceTaxLine({svc,profile,profiles,activities,companyId,user,sourceCheck:true,sourceKind:'recurring'},body);
     if (action === 'review_context' || action === 'source_context') {
       const invoiceTaxLines = body.invoiceId ? await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:body.invoiceId},'lineNumber',100) : [];
       const invoicePayments = body.includePayments && body.invoiceId ? await svc.entities.InvoicePayment.filter({company_id:companyId,invoice_id:body.invoiceId},'payment_date',501) : [];

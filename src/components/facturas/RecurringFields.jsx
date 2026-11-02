@@ -150,7 +150,7 @@ export default function RecurringFields({ recurring, setRecurring }) {
               <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto_issue">Emitir automáticamente</SelectItem>
-                <SelectItem value="draft_review">Crear borrador para revisar</SelectItem>
+                <SelectItem value="draft_review">Preparar para que yo la emita</SelectItem>
               </SelectContent>
             </Select>
           </div>

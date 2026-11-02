@@ -1,3 +1,4 @@
+import {issueRecurringInvoice,RecurringDomainError} from './recurringIssuance.mjs';
 import { c5Metadata, c5SpecialPurchase } from './c5Rules.mjs';
 import {acquirePaymentLease,recoverPaymentLease} from './paymentLease.mjs';
 import {reccSchedule,reccCorrections,reccMetadata} from './reccRules.mjs';
@@ -562,6 +563,19 @@ Deno.serve(async (req) => {
     const action = cleanText(body.action, 80);
     currentAction = action;
 
+    if(action==='issue_recurring_invoice') {
+      try {return Response.json(await issueRecurringInvoice({base44,user,body,
+        authorize:(service,actor,id)=>requirePortalCompany(service,actor,id),
+        acquireLease:acquireApprovalLease,buildPayload:invoiceCreationPayload,
+        complete:(invoice,criteria)=>completeSourceInvoice(base44,user,invoice.company_id,invoice,criteria,
+          {...sourceDependencies,fiscalAction:'confirm_recurring_invoice_source',fiscalExtra:{template_id:invoice.recurringInvoiceTemplateId,generation_token:body.generation_token}})
+      }));}catch(error){
+        const status=Number(error?.response?.status||error?.status)||503;
+        const safe=[400,403,404,409,422].includes(status);
+        return businessError(safe?String(error instanceof RecurringDomainError?error.message:error?.response?.data?.error||error?.message||'Revisa los datos de la plantilla.').slice(0,600):'No se pudo completar la emisión. Reintenta: se conservará la misma factura.',safe?status:503,{invoice_id:error?.invoiceId||null});
+      }
+    }
+
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
       const payload = invoiceCreationPayload(body.invoice || {}, companyId, user, body.fiscal_criteria || {});
@@ -576,8 +590,8 @@ Deno.serve(async (req) => {
         if (invoice && invoice.source_hash !== sourceHash) return businessError('La misma operación ya se guardó con otros importes. Recupera la factura existente.',409,{invoice_id:invoice.id});
         if (!invoice) {
           const sameNumber = await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,tipo:payload.tipo,numero_factura:payload.numero_factura},'-created_date',100);
-          const duplicate = sameNumber.find(row=>!row.anulada && (payload.tipo==='emitida'
-            || normalizeKeyPart(row.proveedor_nif || row.proveedor_nombre)===normalizeKeyPart(payload.proveedor_nif || payload.proveedor_nombre)));
+          const duplicate = sameNumber.find(row=>payload.tipo==='emitida' || (!row.anulada
+            && normalizeKeyPart(row.proveedor_nif || row.proveedor_nombre)===normalizeKeyPart(payload.proveedor_nif || payload.proveedor_nombre)));
           if (duplicate) return businessError('Ya existe una factura activa de este tercero con ese número.',409,{invoice_id:duplicate.id});
           invoice = await base44.asServiceRole.entities.Invoice.create({...payload,creation_idempotency_key:idempotencyKey,source_hash:sourceHash,
             fiscal_review_status:'pendiente_revision',accounting_migration_hold:true,accounting_migration_hold_reason:'SOURCE_CHECK_PENDING'});

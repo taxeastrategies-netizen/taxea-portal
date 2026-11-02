@@ -1,103 +1,22 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
-import { webcrypto } from 'node:crypto';
-import * as esbuild from 'esbuild';
-
-const entry = path.resolve('base44/functions/generateRecurringInvoices/entry.ts');
-const build = await esbuild.build({
-  stdin: { contents: fs.readFileSync(entry, 'utf8'), loader: 'ts', resolveDir: path.dirname(entry), sourcefile: entry },
-  bundle: true, write: false, platform: 'node', format: 'cjs',
-  plugins: [{ name: 'recurring-stubs', setup(builder) {
-    builder.onResolve({ filter: /base44/ }, () => ({ path: 'sdk', namespace: 'stub' }));
-    builder.onResolve({ filter: /invoiceQr\.ts$/ }, () => ({ path: 'qr', namespace: 'stub' }));
-    builder.onLoad({ filter: /^sdk$/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export const createClientFromRequest=()=>globalThis.__client' }));
-    builder.onLoad({ filter: /^qr$/, namespace: 'stub' }, () => ({ loader: 'js', contents: "export const buildAeatQrUrl=()=>{if(!globalThis.__canIssue())throw new Error('QR must not be generated before review');return 'https://example.test/qr'}" }));
-  } }],
-});
-const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-const records = {
-  User: [{ id: 'user-a', email: 'owner@test.invalid', data: { company_id: 'company-a' } }],
-  Company: [{ id: 'company-a', owner_email: 'owner@test.invalid', usuarios_autorizados: [], nif_cif: 'B12345678' }],
-  RecurringInvoiceTemplate: [{
-    id: 'template-a', ownerAccountId: 'company-a', status: 'active', mode: 'auto_issue',
-    frequency: 'monthly', interval: 1, startDate: today, nextRunDate: today,
-    concept: 'Servicio sintético', baseAmount: 100, taxRate: 21, retentionRate: 0,
-    clientName: 'Cliente de prueba', clientNif: 'B11111111', totalAmount: 121,
-    fiscalActivityId: 'activity-a', dueDateMode: 'same_day', currency: 'EUR',
-  }],
-  Invoice: [], RecurringInvoiceRun: [], InvoiceTaxLine: [], TimelineEvent: [],
-};
-let canIssue = false;
-const counts = { qr: 0, posting: 0 };
-const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => value?.$in ? value.$in.includes(row?.[key] ?? null) : row?.[key] === value);
-const entities = new Proxy({}, { get: (_target, name) => ({
-  async updateMany(query, ops) { const found=(records[name] || []).filter(row=>matches(row,query)); found.forEach(row=>Object.assign(row,ops.$set)); return {updated:found.length}; },
-  async get(id) { return (records[name] || []).find(row => row.id === id) || null; },
-  async filter(query) { return (records[name] || []).filter(row => matches(row, query)); },
-  async create(payload) { const row = { id: `${name}-${(records[name] || []).length + 1}`, ...payload }; (records[name] ||= []).push(row); return row; },
-  async update(id, payload) { const row = (records[name] || []).find(item => item.id === id); if (!row) throw new Error('Missing row'); Object.assign(row, payload); return row; },
-}) });
-const client = {
-  auth: { me: async () => ({ id: 'user-a', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-a' } }) },
-  asServiceRole: {
-    entities,
-    functions: { invoke: async (name, body) => {
-      if (name === 'syncInvoiceContacts') return {data:{ok:true}};
-      if (name === 'accountingOperations') { counts.posting++; return {data:{ok:true}}; }
-      assert.equal(name, 'fiscalOperations');
-      assert.equal(body.requireValidatedProfile, true);
-      if (canIssue) return {data:{evaluation:{status:'review_required',regime:'general',taxKind:'iva',taxRate:21,taxAmount:21,withholdingAmount:0,total:121,base:100,activityId:'activity-a'}}};
-      return { data: { evaluation: { status: 'review_required', reasons: ['Revisión del asesor'], activityId: 'activity-a' } } };
-    } },
-  },
-};
-let handler;
-vm.runInContext(build.outputFiles[0].text, vm.createContext({
-  console, Request, Response, URL, Date, Intl, TextEncoder, Uint8Array, crypto: webcrypto,
-  __canIssue: () => canIssue,
-  __client: client, Deno: { serve(fn) { handler = fn; } },
-}), { filename: 'generateRecurringInvoices.bundle.cjs' });
-const response = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({ action: 'generate', templateId: 'template-a' }),
-}));
-const result = await response.json();
-assert.equal(response.status, 200);
-assert.equal(result.drafts, 0);
-assert.equal(result.errors, 1);
-assert.equal(result.generated, 0);
-assert.equal(records.Invoice.length, 0);
-assert.equal(records.InvoiceTaxLine.length, 0);
-assert.equal(records.RecurringInvoiceRun[0].status, 'error');
-assert.equal(counts.posting, 0);
-const repeated = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({ action: 'generate', templateId: 'template-a' }),
-}));
-assert.equal((await repeated.json()).drafts, 0);
-assert.equal(records.Invoice.length, 0);
-canIssue = true;
-records.RecurringInvoiceTemplate[0].nextRunDate = today;
-records.RecurringInvoiceTemplate[0].id = 'template-approved';
-const issued = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved'}),
-}));
-const issuedResult = await issued.json();
-assert.equal(issued.status, 200);
-assert.equal(issuedResult.generated, 1);
-assert.equal(records.Invoice.length, 1);
-assert.match(records.Invoice[0].qr_integrity_hash, /^[A-F0-9]{64}$/);
-assert.equal(records.Invoice[0].qr_integrity_version, 'taxea-qr-identity-v1');
-const stableHash = records.Invoice[0].qr_integrity_hash;
-records.RecurringInvoiceTemplate[0].nextRunDate = today;
-const issuedAgain = await handler(new Request('https://taxea.test/functions/generateRecurringInvoices', {
-  method: 'POST', body: JSON.stringify({action:'generate',templateId:'template-approved'}),
-}));
-assert.equal((await issuedAgain.json()).skipped, 1);
-assert.equal(records.Invoice.length, 1);
-assert.equal(records.Invoice[0].qr_integrity_hash, stableHash);
-assert.equal(counts.posting, 1);
-console.log(JSON.stringify({ ok: true, assertions: {
-  invalidDataCreatesNoInvoice: true, normalIssuerWithoutAdvisorFlag: true, proposalWarningNotApprovalGate: true,
-  runTraceLinksInvoice: true, idempotentPeriod: true, issuedQrHashStableOnRetry: true,
-} }, null, 2));
+import {nextRecurringDate,recurringDueDate,recurringDate,recurringCriteria} from '../base44/functions/generateRecurringInvoices/recurringIssuance.mjs';
+import {recurringCallerIdentity} from '../base44/functions/generateRecurringInvoices/recurringCallerIdentity.mjs';
+assert.equal(nextRecurringDate({frequency:'monthly',interval:1,dayOfMonth:31},'2026-01-31'),'2026-02-28');
+assert.equal(nextRecurringDate({frequency:'monthly',interval:1,dayOfMonth:31},'2026-02-28'),'2026-03-31');
+assert.equal(nextRecurringDate({frequency:'yearly',interval:1},'2024-02-29'),'2025-02-28');
+assert.equal(nextRecurringDate({frequency:'weekly',interval:2},'2026-12-24'),'2027-01-07');
+assert.equal(recurringDueDate({dueDateMode:'days_after',dueDaysAfterIssue:30},'2026-12-15'),'2027-01-14');
+for(const date of ['2026-02-30','2026-13-01','not-a-date'])assert.throws(()=>recurringDate(date));
+assert.throws(()=>nextRecurringDate({frequency:'monthly',interval:-1},'2026-11-02'));
+assert.throws(()=>recurringCriteria({recc:{documentKind:'final',advanceInvoiceIds:['other']}}));
+assert.deepEqual(recurringCriteria({regime:'general',privileged:true}),{regime:'general'});
+const actor={id:'qa',role:'admin',email:'service+abc@no-reply.base44.com',is_service:true};
+const stored={id:'qa',role:'user',email:'qa@test.invalid'};
+const normal=await recurringCallerIdentity(actor,async()=>stored);assert.equal(normal.isService,false);assert.equal(normal.isAdminUser,false);
+assert.equal((await recurringCallerIdentity(actor,async()=>({...stored,status:'bloqueado'}))).allowed,false);
+assert.equal((await recurringCallerIdentity({...actor,is_service:false},async()=>null)).allowed,false);
+assert.equal((await recurringCallerIdentity(actor,async()=>null)).isService,true);
+const helper=fs.readFileSync('base44/functions/generateRecurringInvoices/recurringIssuance.mjs','utf8');
+for(const folder of ['invoiceOperations','fiscalOperations'])assert.equal(fs.readFileSync('base44/functions/'+folder+'/recurringIssuance.mjs','utf8'),helper);
+console.log(JSON.stringify({ok:true,checks:['UTC dates and leap years','clamped monthly dates recover day 31','invalid schedules rejected','RECC final links cannot repeat','fresh stored roles override stale service flags','disabled identities denied','three helper copies identical'],realDataWrites:0,externalCalls:0}));

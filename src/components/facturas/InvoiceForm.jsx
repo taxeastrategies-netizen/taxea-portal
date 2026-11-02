@@ -296,6 +296,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                 taxRate: Number(payload.tipo_iva) || 0,
                 taxType: taxType.toLowerCase(),
                 fiscalActivityId: payload.fiscal_activity_id || createdInvoice.fiscal_activity_id,
+                fiscalCriteria: {...form.fiscal_criteria,accountCode:createdInvoice.revenue_expense_account_code || undefined,taxBreakdown:createdInvoice.tax_breakdown ? JSON.parse(createdInvoice.tax_breakdown) : undefined,activityId:createdInvoice.fiscal_activity_id,taxKind:createdInvoice.indirect_tax_kind,regime:createdInvoice.fiscal_regime,operationType:createdInvoice.fiscal_treatment,exemptionKey:createdInvoice.fiscal_exemption_key,legalBasis:createdInvoice.fiscal_legal_basis},
                 retentionRate: payload.retencion_irpf || 0,
                 totalAmount: total,
                 currency: payload.moneda || 'EUR',
@@ -340,7 +341,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
 
         <div className="space-y-5 mt-2">
           {fiscalContext.loading ? <p className="text-xs text-muted-foreground">Comprobando perfil fiscal…</p> : !fiscalContext.profile || fiscalContext.profile.profileStatus !== 'validado_asesor' ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">El asesor debe validar el encuadramiento de la empresa en Configuración fiscal. Después, guardar registrará directamente la factura y el asiento. No modifica facturas ni subcuentas anteriores.</div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{form.tipo==='emitida'?'Revisa el tratamiento fiscal antes de emitir. La confirmación es responsabilidad del emisor y no requiere una segunda aprobación del asesor.':'El asesor debe validar el encuadramiento de la empresa en Configuración fiscal. Guardar registrará la factura y su asiento según el criterio confirmado.'}</div>
           ) : null}
           {fiscalContext.activities.length > 0 && (
             <div className="space-y-1.5">
