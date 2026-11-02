@@ -1,3 +1,30 @@
+// Decimal arithmetic at the currency boundary: never round a binary FX product.
+function decimalFraction(value){
+ const n=Number(value);if(!Number.isFinite(n))return null;
+ const [mantissa,exponent='0']=String(n).toLowerCase().split('e');
+ const negative=mantissa.startsWith('-'),parts=mantissa.replace(/^[-+]/,'').split('.');
+ let coefficient=BigInt((parts[0]||'0')+(parts[1]||'')),scale=(parts[1]||'').length-Number(exponent);
+ if(scale<0){coefficient*=10n**BigInt(-scale);scale=0;}
+ return {coefficient:negative?-coefficient:coefficient,denominator:10n**BigInt(scale)};
+}
+function roundedDecimalEuro(numerator,denominator){
+ if(denominator===0n)return NaN;
+ if(denominator<0n){numerator=-numerator;denominator=-denominator;}
+ const sign=numerator<0n?-1:1,absolute=numerator<0n?-numerator:numerator,scaled=absolute*100n;
+ const cents=scaled/denominator+(scaled%denominator*2n>=denominator?1n:0n);
+ return sign*Number(cents)/100;
+}
+export function fxMoney(value,...multipliers){
+ let numerator=1n,denominator=1n;
+ for(const valuePart of [value,...multipliers]){const part=decimalFraction(valuePart);if(!part)return NaN;numerator*=part.coefficient;denominator*=part.denominator;}
+ return roundedDecimalEuro(numerator,denominator);
+}
+export function fxRatioMoney(value,numerator,denominator){
+ const a=decimalFraction(value),b=decimalFraction(numerator),c=decimalFraction(denominator);
+ if(!a||!b||!c||c.coefficient===0n)return NaN;
+ return roundedDecimalEuro(a.coefficient*b.coefficient*c.denominator,a.denominator*b.denominator*c.coefficient);
+}
+
 export function invoiceEuroAmount(invoice,field='total_factura'){
  const currency=String(invoice?.moneda||invoice?.currency||'EUR').toUpperCase();
  if(field==='importe_pendiente'){
@@ -6,7 +33,7 @@ export function invoiceEuroAmount(invoice,field='total_factura'){
    const face=invoice?.es_rectificativa&&metadata.documentKind==='advance'?Number(metadata.refundCashAmount??Math.abs(Number(invoice.total_factura))):Math.abs(Number(invoice?.total_factura)||0);
    const pending=Math.max(0,Number(invoice?.importe_pendiente??(face-Math.abs(Number(invoice?.importe_pagado)||0))));
    const total=credit?Number(credit.paidTotalEur):currency==='EUR'&&invoice?.es_rectificativa&&metadata.documentKind==='advance'?face:Math.abs(invoiceEuroAmount(invoice,'total_factura'));
-   return face>0?money(total-money(total*Math.max(0,Math.min(1,(face-pending)/face)))):0;
+   return face>0?money(total-fxRatioMoney(total,Math.max(0,Math.min(face,face-pending)),face)):0;
  }
  const raw=field==='importe_retencion'&&invoice?.importe_retencion==null?Number(invoice?.base_imponible||0)*Number(invoice?.retencion_irpf||0)/100:invoice?.[field];
  if(currency==='EUR')return money(raw);
@@ -16,7 +43,7 @@ export function invoiceEuroAmount(invoice,field='total_factura'){
  if(credit){const nondeduct=invoice.tipo==='recibida'?money(credit.taxEur-credit.deductibleEur):0;
   const values={base_imponible:-money(credit.costEur-nondeduct),cuota_iva:-credit.taxEur,deductible_tax_amount:invoice.tipo==='recibida'?-credit.deductibleEur:0,non_deductible_tax_amount:-nondeduct,importe_retencion:-credit.retentionEur,total_factura:-credit.totalEur};if(field in values)return money(values[field]);
  }
- return money(Number(raw||0)*rate);
+ return fxMoney(Number(raw||0),rate);
 }
 /** @param {any} value @param {any} invoice */
 export function formatInvoiceMoney(value,invoice={}){

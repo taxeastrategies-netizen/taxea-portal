@@ -1,6 +1,6 @@
 import {acquirePaymentLease,recoverPaymentLease} from './paymentLease.mjs';
 import {reccSchedule,reccCorrections,reccMetadata} from './reccRules.mjs';
-import {accountingFx,invoiceCurrency,reccPaymentFx,forcedFxDate,forcedTaxFxParts,taxFx} from './reccCurrency.mjs';
+import {accountingFx,invoiceCurrency,reccPaymentFx,forcedFxDate,forcedTaxFxParts,taxFx,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import{requirePortalCompany}from'./portalAccess.generated.mjs';
 import {resolveStoredDocumentReference,assetIdFromReference,authorizedAsset} from './storageRuntime.generated.mjs';
 import { reviewFilter } from './advisorReview.mjs';
@@ -306,7 +306,7 @@ async function postedInvoiceCounterparty(svc, companyId, invoice, entry) {
   const codes = [...new Set(thirdLines.map(row => String(row.accountCode || '')))];
   const postedDue = asMoney(thirdLines.reduce((sum, row) => sum + Number(row.debit || 0) - Number(row.credit || 0), 0));
   const creditBook=invoice.es_rectificativa?JSON.parse(invoice.recc_metadata||'{}').advanceCreditBook:null;
-  const expectedDue = asMoney((creditBook?-creditBook.totalEur:Number(invoice.total_factura)*accountingFx(invoice))*(invoice.tipo==='emitida'?1:-1));
+  const expectedDue = fxMoney(creditBook?-creditBook.totalEur:fxMoney(Number(invoice.total_factura),accountingFx(invoice)),invoice.tipo==='emitida'?1:-1);
   if (originalLines?.length >= 5001 || codes.length !== 1 || Math.abs(postedDue - expectedDue) > 0.02)
     throw Object.assign(new Error('Revisa la cuenta de tercero del asiento original antes de registrar el cobro/pago. No se cambia su subcuenta.'), { status: 409 });
   const counterpartyMatches = await svc.entities.AccountingAccount.filter({ companyId, code: codes[0] }, '-created_date', 2);
@@ -334,7 +334,7 @@ async function prepareInvoiceBankAccounting(base44, companyId, invoice, transact
     if(original&&original.documentId!==invoice.id){
       const previous=await svc.entities.JournalEntryLine.filter({companyId,journalEntryId:original.id},'lineNumber',101);
       const bank=previous.filter(row=>row.accountId===bankLedger.id),clearing=previous.filter(row=>/^555\d{5}$/.test(row.accountCode||''));
-      const cash=asMoney(Math.abs(Number(transaction.importe))*((transaction.moneda||'EUR')==='EUR'?1:Number(transaction.exchange_rate||transaction.tipo_cambio)));
+      const cash=fxMoney(Math.abs(Number(transaction.importe)),(transaction.moneda||'EUR')==='EUR'?1:Number(transaction.exchange_rate||transaction.tipo_cambio));
       if(original.status!=='confirmado'||original.reversalEntryId||previous.length!==2||bank.length!==1||clearing.length!==1||Math.abs(Math.abs(Number(bank[0].debit)-Number(bank[0].credit))-cash)>0.01||Math.abs(previous.reduce((s,l)=>s+Number(l.debit||0)-Number(l.credit||0),0))>0.01)
         throw Object.assign(new Error('El asiento bancario previo no es una partida 555 confirmada e inequívoca. No se añade otro banco.'),{status:409});
       const clearingAccount=await svc.entities.AccountingAccount.get(clearing[0].accountId);
@@ -410,7 +410,7 @@ async function ensureForcedFxAccounting(base44,companyId,invoice,payments,user){
    const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));if(!forced)continue;
    const rate=taxFx(invoice,forced.date),initial=accountingFx(invoice);
    for(const [field,key]of [['quota','quota'],['deductible','deductibleQuota'],['nonDeductible','nonDeductibleQuota'],['surcharge','surchargeQuota']]){
-     const recognized=field==='nonDeductible'?asMoney(asMoney(Number(line.quota||0)*forced.factor*rate)-asMoney(Number(line.deductibleQuota||0)*forced.factor*rate)):asMoney(Number(line[key]||0)*forced.factor*rate);
+     const recognized=field==='nonDeductible'?asMoney(fxMoney(Number(line.quota||0),forced.factor,rate)-fxMoney(Number(line.deductibleQuota||0),forced.factor,rate)):fxMoney(Number(line[key]||0),forced.factor,rate);
      parts[field]=asMoney(parts[field]+recognized);cancelled[field]+=Number(line[key]||0)*schedule.cancelledFactor;
    }
    parts.remaining=Math.max(parts.remaining,forced.amount);
@@ -418,7 +418,7 @@ async function ensureForcedFxAccounting(base44,companyId,invoice,payments,user){
  if(!parts.remaining)return null;
  for(const [field,key]of [['quota','cuota_iva'],['deductible','deductible_tax_amount'],['nonDeductible','non_deductible_tax_amount'],['surcharge','cuota_recargo']]){
    const allocated=payments.filter(p=>p.operation_status==='committed'&&p.payment_date<=parts.date).reduce((sum,p)=>{const plan=JSON.parse(p.fx_plan||'null');if(plan?.bookTax?.[field]==null)throw Object.assign(new Error('El pago previo no conserva el reparto fiscal EUR original.'),{status:422});return sum+Number(plan.bookTax[field]);},0);
-   const initialRemaining=asMoney(asMoney(Number(invoice[key]||0)*accountingFx(invoice))-allocated-asMoney(cancelled[field]*accountingFx(invoice)));
+   const initialRemaining=asMoney(fxMoney(Number(invoice[key]||0),accountingFx(invoice))-allocated-fxMoney(cancelled[field],accountingFx(invoice)));
    parts[field]=asMoney(parts[field]-initialRemaining);
  }
  const svc=queuedAccountingClient(base44.asServiceRole),description=`Devengo RECC por límite/concurso · ${invoice.numero_factura}`;

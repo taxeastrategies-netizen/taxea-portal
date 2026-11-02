@@ -1,3 +1,4 @@
+import {fxMoney} from '../src/lib/financialSourceTruth.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -46,10 +47,11 @@ const document={
 };
 const source=readFileSync('src/components/libros/ExportExcel.jsx','utf8')
   .replace("import { base44 } from '@/api/base44Client';",'')
+  .replace("import {fxMoney} from '@/lib/financialSourceTruth';",'')
   .replaceAll('base44.functions','globalThis.__fakeBase44.functions')
   .replace('export async function exportarLibros','async function exportarLibros')
   .replaceAll("const { base44 } = await import('@/api/base44Client');",'const base44 = globalThis.__fakeBase44;');
-const context=vm.createContext({Blob:TestBlob,URL:{createObjectURL(value){blob=value;return 'blob:test';},revokeObjectURL(){}},document,Date,console});
+const context=vm.createContext({fxMoney,Blob:TestBlob,URL:{createObjectURL(value){blob=value;return 'blob:test';},revokeObjectURL(){}},document,Date,console});
 vm.runInContext(source+'\n globalThis.exportarLibros=exportarLibros;',context);
 const invoices=[
   {id:'issued',tipo:'emitida',numero_factura:'QA-1',fecha_emision:'2026-09-30',cliente_nombre:'Cliente QA',base_imponible:100,tipo_iva:0,cuota_iva:0,total_factura:100},

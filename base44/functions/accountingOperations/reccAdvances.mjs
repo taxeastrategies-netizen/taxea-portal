@@ -1,4 +1,4 @@
-import {accountingFx,invoiceCurrency,fxMoney} from './reccCurrency.mjs';
+import {accountingFx,invoiceCurrency,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 // Anticipos RECC: se factura solo el saldo nuevo; la aplicación no crea otra cuota de IVA.
 const clean = value => String(value ?? '').trim();
 const cents = value => Math.round(Number(value) * 100);
@@ -67,8 +67,8 @@ async function advanceFundingEur(svc,companyId,invoice,throughDate){
   result.costEur=fxMoney(result.costEur+(invoiceCurrency(invoice)==='EUR'?base+Number(invoice.non_deductible_tax_amount||0)*factor:Number(plan.advance_cost_eur)));
   const taxRate=invoiceCurrency(invoice)==='EUR'?1:Number(p.tax_exchange_rate);
   if(!Number.isFinite(taxRate)||taxRate<=0)throw new Error('El cobro del anticipo no tiene cambio fiscal confirmado.');
-  result.taxEur=fxMoney(result.taxEur+Number(invoice.cuota_iva)*factor*taxRate);
-  result.retentionEur=fxMoney(result.retentionEur+Number(invoice.importe_retencion||0)*factor*taxRate);
+  result.taxEur=fxMoney(result.taxEur+fxMoney(invoice.cuota_iva,factor,taxRate));
+  result.retentionEur=fxMoney(result.retentionEur+fxMoney(Number(invoice.importe_retencion||0),factor,taxRate));
  }
  return result;
 }
@@ -119,13 +119,13 @@ async function validateAdvanceCorrection(svc, companyId, invoice, input, result)
     const availableCost=fxMoney(funding.costEur-previous.reduce((s,row)=>s+row.paidCostEur,0));
     const availableTax=fxMoney(funding.taxEur-previous.reduce((s,row)=>s+row.paidTaxEur,0));
     const availableRetention=fxMoney(funding.retentionEur-previous.reduce((s,row)=>s+row.paidRetentionEur,0));
-    const fraction=refund/credit,paidBase=fxMoney(Math.abs(Number(invoice.base_imponible))*fraction);
+    const fraction=refund/credit,paidBase=fxRatioMoney(Math.abs(Number(invoice.base_imponible)),refund,credit);
     if(paidBase>availableBase+0.01)throw new Error('El abono supera la base financiada disponible en divisa.');
     const share=availableBase?Math.min(1,paidBase/availableBase):0;
-    const paidCostEur=fxMoney(availableCost*share),paidTaxEur=fxMoney(availableTax*share),paidRetentionEur=fxMoney(availableRetention*share);
+    const paidCostEur=fxMoney(availableCost,share),paidTaxEur=fxMoney(availableTax,share),paidRetentionEur=fxMoney(availableRetention,share);
     const initial=accountingFx(original),unpaid=1-fraction,creditCost=Math.abs(Number(invoice.base_imponible))+(invoice.tipo==='recibida'?Math.abs(Number(invoice.non_deductible_tax_amount||0)):0);
     const originalDeduct=Math.abs(Number(original.cuota_iva))?Math.abs(Number(original.deductible_tax_amount||0)/Number(original.cuota_iva)):0;
-    const costEur=fxMoney(paidCostEur+creditCost*unpaid*initial),taxEur=fxMoney(paidTaxEur+Math.abs(Number(invoice.cuota_iva))*unpaid*initial),retentionEur=fxMoney(paidRetentionEur+Math.abs(Number(invoice.importe_retencion||0))*unpaid*initial);
+    const costEur=fxMoney(paidCostEur+fxMoney(creditCost,unpaid,initial)),taxEur=fxMoney(paidTaxEur+fxMoney(Math.abs(Number(invoice.cuota_iva)),unpaid,initial)),retentionEur=fxMoney(paidRetentionEur+fxMoney(Math.abs(Number(invoice.importe_retencion||0)),unpaid,initial));
     const deducted=invoice.tipo==='emitida'?taxEur:fxMoney(taxEur*originalDeduct);
     creditBookValues={paidBase,paidCostEur,paidTaxEur,paidRetentionEur,paidTotalEur:fxMoney(paidCostEur+(invoice.tipo==='emitida'?paidTaxEur:fxMoney(paidTaxEur*originalDeduct))-paidRetentionEur),costEur,taxEur,deductibleEur:deducted,retentionEur,totalEur:fxMoney(costEur+deducted-retentionEur),taxFiscalRate:paidBase&&Number(original.cuota_iva)?paidTaxEur/(paidBase*Math.abs(Number(original.cuota_iva)/Number(original.base_imponible))):initial};
   }

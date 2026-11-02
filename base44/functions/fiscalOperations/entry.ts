@@ -1,4 +1,4 @@
-import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx } from './reccCurrency.mjs';
+import { accountingFx, invoiceCurrency, reviewedFxQuotes, taxFx ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.53';
 import { guardIssuedQrInvoiceTaxChange } from './issuedInvoiceQrGuard.ts';
 import { reccDate, reccMetadata, reccSchedule, reccCorrections, checkReccEligibility } from './reccRules.mjs';
@@ -844,7 +844,7 @@ Deno.serve(async (req) => {
           if(invoicePayments.some(p=>p.operation_status&&p.operation_status!=='committed'))throw new Error('Pagos pendientes: no se estima el devengo legal.');
           const schedule=reccSchedule({invoiceId:invoice.id,invoiceNet:Math.abs(Number(invoice.total_factura)),operationDate:invoice.fecha_operacion||invoice.fecha_emision,...reccMetadata(invoice),payments:invoicePayments.map(p=>({id:p.id,date:p.payment_date,amount:p.amount,status:p.operation_status})),corrections:reccCorrections(invoice,allInvoices,invoiceLines[0],allLines)});
           const forced=schedule.events.find(event=>['forced_deadline','insolvency'].includes(event.kind));forcedAmount=money(forced?.amount||0);
-          if(forced&&(invoiceCurrency(invoice)==='EUR'||Number(forced.date.slice(0,4))<=year))forcedAmountEur=money(forcedAmount*taxFx(invoice,forced.date));
+          if(forced&&(invoiceCurrency(invoice)==='EUR'||Number(forced.date.slice(0,4))<=year))forcedAmountEur=fxMoney(forcedAmount,taxFx(invoice,forced.date));
         }catch(error){forcedAmount=null;forcedAmountEur=null;issues.push({invoiceId:invoice.id,reason:error.message});}
         return { id: invoice.id, type: invoice.tipo,forcedAmount,forcedAmountEur, taxKind:invoice.indirect_tax_kind||'iva', currency:invoice.moneda||'EUR', number: invoice.numero_factura, operationDate: invoice.fecha_operacion || invoice.fecha_emision,
           issueDate: invoice.fecha_emision, receiptDate: invoice.fecha_recepcion || '', counterpartyName: invoice.tipo === 'emitida' ? invoice.cliente_nombre : (invoice.proveedor_nombre || invoice.cliente_nombre),

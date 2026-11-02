@@ -1,4 +1,4 @@
-import { accountingFx, invoiceCurrency } from './reccCurrency.mjs';
+import { accountingFx, invoiceCurrency ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
 
@@ -428,7 +428,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     const rows = await svc.entities.JournalEntryLine.filter({companyId,journalEntryId:advance.originalJournalEntryId},'lineNumber',5001);
     const third = rows.filter(row=>row.sourceLineType==='tercero' || /^(430|400|410)/.test(clean(row.accountCode)));
     const codes = [...new Set(third.map(row=>clean(row.accountCode)))];
-    const expected = money(Number(original.total_factura)*accountingFx(original)*(invoice.tipo==='emitida'?1:-1));
+    const expected = fxMoney(Number(original.total_factura),accountingFx(original),invoice.tipo==='emitida'?1:-1);
     const balance = money(third.reduce((sum,row)=>sum+Number(row.debit||0)-Number(row.credit||0),0));
     if (rows.length>=5001 || codes.length!==1 || Math.abs(balance-expected)>0.01)
       throw new Error('La devolución necesita una subcuenta original inequívoca; no crea ni cambia la cuenta histórica.');
@@ -929,7 +929,7 @@ export async function postBankReconciliation(svc, companyId, transaction, bankAc
   if (currency !== 'EUR' && (!Number.isFinite(fxRate) || fxRate <= 0)) {
     throw new Error(`El movimiento esta en ${currency}. Indica el tipo de cambio a EUR antes de contabilizarlo.`);
   }
-  const amount = currency === 'EUR' ? originalAmount : money(originalAmount * fxRate);
+  const amount = currency === 'EUR' ? originalAmount : fxMoney(originalAmount,fxRate);
   if (amount <= 0) throw new Error('El movimiento bancario no tiene un importe válido.');
   if (!bankAccount?.id || bankAccount.companyId !== companyId || bankAccount.status === 'inactiva') {
     throw new Error('La cuenta contable bancaria no pertenece a la empresa o está inactiva.');
@@ -1117,8 +1117,8 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       ...line,
       originalDebit: money(line.debit),
       originalCredit: money(line.credit),
-      debit: line.debit?money(line.eurAmountOverride??line.debit*fxRate):0,
-      credit: line.credit?money(line.eurAmountOverride??line.credit*fxRate):0,
+      debit: line.debit?line.eurAmountOverride!=null?money(line.eurAmountOverride):fxMoney(line.debit,fxRate):0,
+      credit: line.credit?line.eurAmountOverride!=null?money(line.eurAmountOverride):fxMoney(line.credit,fxRate):0,
       currency,
       fxRate,
     }),

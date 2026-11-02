@@ -1,3 +1,4 @@
+import {fxMoney} from '@/lib/financialSourceTruth';
 import { base44 } from '@/api/base44Client';
 
 // Excel export using SpreadsheetML (XML) for cell style support (green highlighting)
@@ -19,7 +20,7 @@ function currencyExportInvoices(source){
    const fields=['base_imponible','cuota_iva','deductible_tax_amount','non_deductible_tax_amount','importe_retencion','cuota_recargo','total_factura'];
    if(!Number.isFinite(rate)||rate<=0){warnings.push('Factura '+invoice.numero_factura+': falta cambio EUR; importes EUR vacíos, no se ha supuesto paridad.');for(const field of fields)copy[field]=null;valuation='Pendiente de revisión';}
    else{
-     for(const field of fields)copy[field]=money(Number(invoice[field]||0)*rate);
+     for(const field of fields)copy[field]=fxMoney(Number(invoice[field]||0),rate);
      let metadata={};try{metadata=JSON.parse(invoice.recc_metadata||'{}');}catch{/* Se añade incidencia fiscal en su libro. */}
      const credit=metadata.advanceCreditBook;
      if(invoice.es_rectificativa&&credit){

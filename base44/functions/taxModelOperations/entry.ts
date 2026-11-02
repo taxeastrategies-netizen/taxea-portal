@@ -1,4 +1,4 @@
-import {accountingFx,invoiceCurrency,taxFx} from './reccCurrency.mjs';
+import {accountingFx,invoiceCurrency,taxFx,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import{taxModelUserEnabled,taxModelCompanyAllowed,taxModelValidation,taxModelPublicError}from'./taxModelAccess.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { isZeroResidualReccFinal } from './reccAdvances.mjs';
@@ -1059,7 +1059,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
   });
   let selectedEvents;
   try{selectedEvents=allocatedEvents.filter((event: any) => event.date >= selectedBounds.start && event.date <= selectedBounds.end).map((event:any)=>{
-    const rate=Number(reccMetadata(invoice).advanceCreditBook?.taxFiscalRate)||taxFx(invoice,event.date),amounts=Object.fromEntries(Object.entries(event.amounts).map(([key,value])=>[key,money(Number(value)*rate)]));
+    const rate=Number(reccMetadata(invoice).advanceCreditBook?.taxFiscalRate)||taxFx(invoice,event.date),amounts=Object.fromEntries(Object.entries(event.amounts).map(([key,value])=>[key,fxMoney(Number(value),rate)]));
     if(invoice.tipo==='recibida')amounts.nonDeductibleQuota=money(Number(amounts.quota)-Number(amounts.deductibleQuota));
     return {...event,originalAmounts:event.amounts,amounts,currency:invoiceCurrency(invoice),taxExchangeRate:rate};
   });}catch(error){return review(error.message);}
@@ -1083,7 +1083,7 @@ function cashTaxLineForPeriod(line: any, data: any, selectedBounds: any) {
 
 function retainedFxAmount(invoice:any,selected:any[],amount:number,data:any){
  if(invoiceCurrency(invoice)==='EUR')return money(amount*selected.reduce((sum,event)=>sum+event.factor,0));
- return money(selected.reduce((sum,event)=>sum+money(amount*event.factor*taxFx(invoice,event.date)),0));
+ return money(selected.reduce((sum,event)=>sum+fxMoney(amount,event.factor,taxFx(invoice,event.date)),0));
 }
 function retainedPaymentEvents(data: any, periodBounds: any) {
   const paymentsByInvoice = new Map<string, any[]>();
@@ -1467,7 +1467,7 @@ function reccGeneralAccrualInformation(data: any, b: any, kind: 'iva'|'igic'='iv
       pending.push(line.sourceId || `InvoiceTaxLine:${line.id}`);
       continue;
     }
-    try{const rate=taxFx(invoice,operationDate);(invoice.tipo==='emitida'?issued:received).push({...line,base:money(Number(line.base)*rate),quota:money(Number(line.quota)*rate)});}catch(error){pending.push(line.sourceId||'Invoice:'+invoice.id);}
+    try{const rate=taxFx(invoice,operationDate);(invoice.tipo==='emitida'?issued:received).push({...line,base:fxMoney(Number(line.base),rate),quota:fxMoney(Number(line.quota),rate)});}catch(error){pending.push(line.sourceId||'Invoice:'+invoice.id);}
   }
   const totals = (lines: any[]) => ({
     base: money(lines.reduce((sum, line) => sum + money(line.base), 0)),
@@ -1658,7 +1658,7 @@ function thirdPartyOperationDate(invoice: any, model: '347'|'415') {
   return clean(invoice.fecha_emision || invoice.fecha_operacion || dateOf(invoice)).slice(0, 10);
 }
 
-function reccGeneralGrossEur(invoice:any){const gross=money(money(invoice.total_factura)+retentionAmount(invoice));return invoiceCurrency(invoice)==='EUR'?gross:money(gross*taxFx(invoice,clean(invoice.fecha_operacion||invoice.fecha_emision).slice(0,10)));}
+function reccGeneralGrossEur(invoice:any){const gross=money(money(invoice.total_factura)+retentionAmount(invoice));return invoiceCurrency(invoice)==='EUR'?gross:fxMoney(gross,taxFx(invoice,clean(invoice.fecha_operacion||invoice.fecha_emision).slice(0,10)));}
 function calculateThirdParties(data: any, b: any, model: '347' | '415') {
   const groups = new Map<string, any>();
   const thresholdTotals = new Map<string, number>();

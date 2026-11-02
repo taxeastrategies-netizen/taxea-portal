@@ -1,3 +1,4 @@
+import {fxMoney} from '@/lib/financialSourceTruth';
 /**
  * invoicePdfExport — Genera y descarga el PDF de una factura emitida
  * replicando la plantilla visual Taxea (cabecera, emisor/receptor,
@@ -50,7 +51,7 @@ export async function exportInvoiceToPdf(invoice, company) {
     if(!quote?.reviewedBy||!quote?.source||!(Number(quote.rate)>0))throw new Error('El PDF en divisa necesita el cambio fiscal revisado por asesor.');
     fiscalRate=Number(quote.rate);
   }
-  const fiscalTotal=Math.round((Number(invoice.base_imponible)+Number(invoice.cuota_iva)+Number(invoice.cuota_recargo||0))*fiscalRate*100)/100;
+  const fiscalTotal=fxMoney(Number(invoice.base_imponible)+Number(invoice.cuota_iva)+Number(invoice.cuota_recargo||0),fiscalRate);
   const W = 210;
   const M = 18;
   const qrPng = await invoiceQrPng(invoice);
@@ -198,7 +199,7 @@ export async function exportInvoiceToPdf(invoice, company) {
 
   // ── Coletilla fiscal ──────────────────────────────────────────────────────
   y += 18;
-  const fiscalLegend = [invoiceFiscalLegend(invoice),currency!=='EUR'?`Divisa del documento: ${currency}. Referencia de emisión: 1 ${currency} = ${fiscalRate} EUR; cuota ${taxLabel} de referencia: ${fmtEUR(Math.round(Number(invoice.cuota_iva)*fiscalRate*100)/100)} EUR. El devengo y la liquidación RECC siguen los cobros/pagos o el límite legal con sus cambios fiscales confirmados.`:''].filter(Boolean).join(' · ');
+  const fiscalLegend = [invoiceFiscalLegend(invoice),currency!=='EUR'?`Divisa del documento: ${currency}. Referencia de emisión: 1 ${currency} = ${fiscalRate} EUR; cuota ${taxLabel} de referencia: ${fmtEUR(fxMoney(Number(invoice.cuota_iva),fiscalRate))} EUR. El devengo y la liquidación RECC siguen los cobros/pagos o el límite legal con sus cambios fiscales confirmados.`:''].filter(Boolean).join(' · ');
   if (fiscalLegend) {
     doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(71, 85, 105);
     const coletillaLines = doc.splitTextToSize(fiscalLegend, W - M * 2);
