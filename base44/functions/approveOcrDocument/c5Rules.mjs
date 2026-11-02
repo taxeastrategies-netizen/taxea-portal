@@ -69,7 +69,7 @@ export function c5InvoiceRules(profile, activity, input, direction) {
   const patch = { ...input, regime, taxKind };
   if(taxKind==='igic' && repepAt(profile,date) && !['pequeno_empresario_igic','comerciante_minorista_igic'].includes(regime))throw new C5ValidationError('El perfil REPEP está vigente en esta fecha. Selecciona su actividad/régimen REPEP o el sector minorista, o revisa el censo con el asesor.');
   if(input.c5?.volumeClass && !['with_right','without_right','exclude'].includes(input.c5.volumeClass))throw new C5ValidationError('Clasificación del volumen no admitida.');
-  if(input.c5?.repepBox && !['142','143','144','145','146'].includes(String(input.c5.repepBox)))throw new C5ValidationError('Selecciona una casilla de volumen REPEP válida.');
+  if(input.c5?.repepBox && !['142','143','144','145'].includes(String(input.c5.repepBox)))throw new C5ValidationError('Selecciona una casilla de volumen REPEP válida. La casilla 146 es volumen del transmitente: se informa en el modelo anual, no como una factura propia.');
   if(input.c5?.eligiblePercent!=null)c5Percent(input.c5.eligiblePercent);
   if (direction === 'gasto') patch.deductiblePercent = c5Deduction(activity, input, regime);
   if (regime === 'pequeno_empresario_igic') {
@@ -149,7 +149,7 @@ export function c5CashProvisional(line,data,bounds){
   const eligible=c5Percent(metadata.eligiblePercent??100),deductible=fxMoney(Number(line.quota),percent,.01,eligible,.01);
   return {...line,deductibleQuota:deductible,nonDeductibleQuota:amount(Number(line.quota)-deductible),c5Provisional:{year,percent,sourceId:'FiscalDeductionAdjustment:'+previous.id},fiscalSourceIds:[...new Set([...(line.fiscalSourceIds||[line.sourceId]),'FiscalDeductionAdjustment:'+previous.id])]};
 }
-export function c5RepepVolume(data, bounds) {
+export function c5RepepVolume(data, bounds, adjustments={}) {
   const fields=Object.fromEntries(['142','143','144','145','146'].map(code=>[code,{amount:0,sourceIds:[]}])),pending=[];
   let wholeYearTurnover=0,active=false;
   for(const line of data.taxLines || []){
@@ -169,6 +169,13 @@ export function c5RepepVolume(data, bounds) {
       else pending.push({sourceId:id,base,reason:'Confirma la casilla REPEP para esta operación exenta por otra causa o realizada desde otro establecimiento.'});
     }
     if(code){fields[code].amount=amount(fields[code].amount+base);fields[code].sourceIds.push(id);}
+  }
+  const inherited=Number(adjustments.repepInheritedTurnover||0);
+  if(!Number.isFinite(inherited)||inherited<0)throw new C5ValidationError('El volumen del transmitente debe ser un importe no negativo.');
+  if(inherited){
+    if(adjustments.repepInheritedConfirmed!==true||!text(adjustments.repepInheritedEvidence))throw new C5ValidationError('Casilla 146: confirma el volumen del transmitente correspondiente al patrimonio adquirido e indica la evidencia revisada. No es una factura de compra ni de venta.');
+    fields['146']={amount:amount(inherited),sourceIds:['ManualAdjustment:repepInheritedTurnover']};
+    wholeYearTurnover=amount(wholeYearTurnover+inherited);active=true;
   }
   const total=amount(Object.values(fields).reduce((sum,row)=>sum+row.amount,0)+pending.reduce((sum,row)=>sum+row.base,0));
   return {fields,total,pending,active,wholeYearTurnover,exceedsNextYearLimit:wholeYearTurnover>50000};

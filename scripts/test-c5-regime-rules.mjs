@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {validateRepepProfile,repepAt,c5InvoiceRules,c5Deduction,c5SpecialPurchase,c5ProrataPercent,c5ProrataComparison,c5InvestmentAdjustment} from '../base44/functions/fiscalOperations/c5Rules.mjs';
+import {validateRepepProfile,repepAt,c5InvoiceRules,c5Deduction,c5SpecialPurchase,c5ProrataPercent,c5ProrataComparison,c5InvestmentAdjustment,c5RepepVolume} from '../base44/functions/fiscalOperations/c5Rules.mjs';
 const profile={entityType:'autonomo',mainTerritory:'canarias',repepStatus:'transitorio_2026',repepEffectiveFrom:'2026-07-01',repepOptionFiledOn:'2026-07-31',repepPreviousTurnover:50000,repepCensusConfirmed:true};
 assert.equal(validateRepepProfile(profile).limit,50000);
 assert.equal(repepAt(profile,'2026-06-30'),false);assert.equal(repepAt(profile,'2026-07-01'),true);
@@ -38,6 +38,7 @@ assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePerc
 assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePercent:60,inServiceDate:'2024-01-01',year:2025}).delta,0);
 assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:100,definitivePercent:0,inServiceDate:'2024-01-01',year:2025,realEstate:true}).delta,-420);
 assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePercent:67,inServiceDate:'2025-01-01',year:2025}).delta,0);
+const inherited=c5RepepVolume({taxLines:[]},{start:'2026-01-01',end:'2026-12-31'},{repepInheritedTurnover:1234.56,repepInheritedConfirmed:true,repepInheritedEvidence:'Contrato y volumen ficticios'});assert.equal(inherited.total,1234.56);assert.equal(inherited.fields['146'].amount,1234.56);assert.equal(inherited.wholeYearTurnover,1234.56);assert.throws(()=>c5RepepVolume({taxLines:[]},{start:'2026-01-01',end:'2026-12-31'},{repepInheritedTurnover:100}),/confirma/);
 let oracleCases=0;
 for(let total=1;total<=300;total++)for(let taxable=0;taxable<=total;taxable++){
  const expected=Number((BigInt(taxable)*100n+BigInt(total)-1n)/BigInt(total));

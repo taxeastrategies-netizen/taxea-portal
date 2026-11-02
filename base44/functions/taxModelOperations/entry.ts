@@ -1498,8 +1498,8 @@ function calculateIndirectTax(data: any, b: any, kind: 'iva' | 'igic', annual = 
     addField(fields,annual?'91':'37','Regularización de bienes de inversión',investmentAdjustment,c5AdjustmentIds('investment'),'Regularizaciones');
     if(annual){
       const sales=(data.taxLines || []).filter((line:any)=>line.taxKind==='igic' && line.invoice?.tipo==='emitida' && !line.invoice.anulada && inRange(line,b.start,b.end));
-      const repepVolume=c5RepepVolume(data,b);
-      const firstSemester=data.profile?.repepStatus==='transitorio_2026'?sales.filter((line:any)=>clean(line.date).slice(0,10)<='2026-06-30'):[];
+      const repepVolume=c5RepepVolume(data,b,adjustments);
+      const firstSemester=data.profile?.repepStatus==='transitorio_2026'?sales.filter((line:any)=>clean(line.date).slice(0,10)<='2026-06-30' && line.operationType!=='outside_scope' && c5Metadata(line.invoice).volumeClass!=='exclude'):[];
       for(const [code,row] of Object.entries(repepVolume.fields) as any[])addField(fields,code,'Volumen REPEP · casilla '+code,row.amount,row.sourceIds,'Información anual REPEP');
       addField(fields,'147','Total volumen REPEP del periodo de inclusión',repepVolume.total,[...Object.values(repepVolume.fields).flatMap((row:any)=>row.sourceIds),...repepVolume.pending.map((row:any)=>row.sourceId)],'Información anual REPEP');
       if(repepVolume.pending.length)data.warnings.push('Hay operaciones REPEP cuyo volumen se conserva en el total y necesita desglose confirmado por el asesor.');
