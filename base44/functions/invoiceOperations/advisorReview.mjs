@@ -1,3 +1,4 @@
+import {fxRatioMoney} from './reccCurrency.mjs';
 // Confirmación profesional explícita; nunca cambia el perfil ni el documento origen.
 export const REVIEW_REASONS = ['FISCAL_ADVISOR_REVIEW_PHASE1','FISCAL_POSTING_ERROR'];
 export function advisorDecision(invoice, input, activity, actor) {
@@ -27,8 +28,8 @@ export function selfAssessment(invoice, decision, evaluation) {
   const rate = Number(decision.taxRate ?? invoice.self_assessed_tax_rate ?? 0);
   if (!Number.isFinite(rate) || rate <= 0 || rate > 100)
     throw new Error('Indica el tipo de IVA/IGIC de la autorrepercusión, no el 0 % de la factura extranjera.');
-  const quota = Math.round(Number(evaluation.base) * rate) / 100;
-  const deductible = Math.round(quota * Number(evaluation.deductiblePercent)) / 100;
+  const quota = fxRatioMoney(Number(evaluation.base),rate,100);
+  const deductible = fxRatioMoney(quota,Number(evaluation.deductiblePercent),100);
   Object.assign(evaluation, { taxRate: rate, taxAmount: quota, deductibleTax: deductible,
     nonDeductibleTax: Math.round((quota - deductible) * 100) / 100,
     total: Math.round((Number(evaluation.base) - Number(evaluation.withholdingAmount)) * 100) / 100 });
@@ -47,7 +48,7 @@ export function reviewFilter(companyId, filters = {}) {
 }
 export function commonReviewCriteria(input = {}) {
   const allowed = ['activityId','taxKind','regime','operationType','deductiblePercent',
-    'deductionCategory','deductionUse','exemptionKey','legalBasis','manualOverrideReason'];
+    'deductionCategory','deductionUse','c5','exemptionKey','legalBasis','manualOverrideReason'];
   if (input.applyTaxRate === true) allowed.push('taxRate');
   if (input.applyWithholding === true) allowed.push('withholdingRate','counterpartyIsWithholdingAgent');
   return Object.fromEntries(allowed.filter(key => input[key] !== undefined).map(key => [key,input[key]]));

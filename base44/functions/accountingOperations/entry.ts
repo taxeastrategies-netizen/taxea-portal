@@ -1,3 +1,4 @@
+import { c5AdjustmentOperation } from './c5Operations.mjs';
 import {PublicAccountingError,publicAccountingFailure} from './publicAccountingError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { queuedAccountingClient } from './accountingRequestQueue.mjs';
@@ -1491,6 +1492,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
 
+    if (['c5_deduction_context','c5_deduction_preview','c5_deduction_post','c5_deduction_recover_lock'].includes(action)) return Response.json(await c5AdjustmentOperation({svc,companyId,user,createJournalEntry,ensureAccount},body));
     if (action === 'ensure_accounting_ready') {
       const result = await ensureAccountingReady(svc, companyId, user.email);
       return Response.json({ success: true, schemaVersion: SCHEMA_VERSION, result });

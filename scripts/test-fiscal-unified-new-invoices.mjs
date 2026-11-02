@@ -75,6 +75,7 @@ records.FiscalActivity[0].automationLevel = 'automatico';
 
 records.FiscalActivity[0].indirectTax = 'igic';
 records.FiscalActivity[0].indirectTaxRegime = 'pequeno_empresario_igic';
+Object.assign(records.FiscalProfile[0],{entityType:'autonomo',mainTerritory:'canarias',repepStatus:'incluido',repepEffectiveFrom:'2026-01-01',repepPreviousTurnover:30000,repepCensusConfirmed:true});
 const repepExpense = await evaluate({ direction: 'gasto', taxRate: 7, taxAmount: 7 });
 assert.equal(repepExpense.taxAmount, 7);
 assert.equal(repepExpense.deductibleTax, 0);

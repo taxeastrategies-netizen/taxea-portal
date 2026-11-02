@@ -1,3 +1,4 @@
+import { c5Metadata, c5SpecialPurchase } from './c5Rules.mjs';
 import { accountingFx, invoiceCurrency ,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { validateReccAdvanceLinks, isZeroResidualReccFinal } from './reccAdvances.mjs';
@@ -406,7 +407,7 @@ function isValidatedMinoristaIgicPurchase(invoice) {
   const base=money(invoice.base_imponible),quota=money(invoice.cuota_iva);
   const received=clean(invoice.tipo)==='recibida';
   const sourceValid = received
-    ? ['subject_taxed','subject_zero','exempt_limited','non_subject_article','non_subject_location'].includes(clean(invoice.fiscal_treatment))
+    ? ['subject_taxed','subject_zero','exempt_limited','non_subject_article','non_subject_location','import'].includes(clean(invoice.fiscal_treatment))
       && money(invoice.deductible_tax_amount)===0
       && Math.abs(money(invoice.non_deductible_tax_amount)-quota)<=0.01
     : clean(invoice.tipo)==='emitida' && clean(invoice.fiscal_treatment)==='exempt_limited'
@@ -414,8 +415,8 @@ function isValidatedMinoristaIgicPurchase(invoice) {
   return clean(invoice.fiscal_regime)==='comerciante_minorista_igic'
     && clean(invoice.indirect_tax_kind)==='igic' && sourceValid
     && invoice.fiscal_review_status==='validado' && !!clean(invoice.fiscal_reviewed_by)
-    && money(invoice.cuota_recargo)===0 && Math.abs(money(invoice.total_factura))>0
-    && Math.abs(money(invoice.total_factura)-money(base+quota-money(invoice.importe_retencion)))<=0.02
+    && (money(invoice.cuota_recargo)===0 || c5Metadata(invoice).kind==='minorista_import') && Math.abs(money(invoice.total_factura))>0
+    && Math.abs(money(invoice.total_factura)-money(base+quota+money(invoice.cuota_recargo)-money(invoice.importe_retencion)))<=0.02
     && clean(invoice.moneda || 'EUR').toUpperCase()==='EUR';
 }
 
@@ -448,7 +449,9 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
     ? money(invoice.non_deductible_tax_amount != null ? invoice.non_deductible_tax_amount : tax - deductibleTax)
     : 0;
   const withholding = money(invoice.importe_retencion != null ? invoice.importe_retencion : (base * Number(invoice.retencion_irpf || 0) / 100));
-  const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) ? money(invoice.cuota_recargo) : 0;
+  const c5=c5Metadata(invoice);
+  const implicitDeductible=c5.kind==='implicit_igic'?money(c5.deductible):0;
+  const surcharge = isValidatedRecargoPurchase(invoice) || isValidatedSimpleReccInvoice(invoice) || c5.kind==='minorista_import' ? money(invoice.cuota_recargo) : 0;
   const total = money(invoice.total_factura || base + (selfAssessed ? 0 : tax) + surcharge - withholding);
   if (!invoice.es_rectificativa && base <= 0 && !(advance.documentKind === 'final' && isZeroResidualReccFinal(invoice))) throw new Error('La base imponible debe ser positiva salvo factura rectificativa.');
   const sign = base < 0 ? -1 : 1;
@@ -458,7 +461,7 @@ export async function buildInvoicePosting(svc, companyId, invoice) {
   const absNonDeductibleTax = Math.abs(nonDeductibleTax);
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
   const taxPostingAmount = invoice.tipo === 'recibida' ? absDeductibleTax : validatedRecargoRetailSale ? 0 : absTax + Math.abs(surcharge);
-  const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax + Math.abs(surcharge) : absBase + (validatedRecargoRetailSale ? absTax : 0);
+  const resultPostingAmount = invoice.tipo === 'recibida' ? absBase + absNonDeductibleTax + Math.abs(surcharge) - Math.abs(implicitDeductible) : absBase + (validatedRecargoRetailSale ? absTax : 0);
   const absWithholding = Math.abs(withholding);
   const absTotal = Math.abs(total);
   const category = invoice.categoria_gasto || (invoice.tipo === 'emitida' ? 'ventas_servicios' : 'otros');
@@ -1039,6 +1042,15 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
   const validatedRecargoRetailSale = isValidatedRecargoRetailSale(invoice);
   const validatedRecc = isValidatedSimpleReccInvoice(invoice);
   const validatedMinoristaIgicPurchase = isValidatedMinoristaIgicPurchase(invoice);
+  const c5=c5Metadata(invoice);
+  if(['implicit_igic','minorista_import'].includes(c5.kind)) {
+    const rows=await svc.entities.InvoiceTaxLine.filter({companyId,invoiceId:invoice.id},'lineNumber',2),line=rows[0];
+    const checked=c5SpecialPurchase(invoice,{c5,deductiblePercent:c5.provisionalPercent},{taxKind:invoice.indirect_tax_kind,regime:invoice.fiscal_regime,operationType:invoice.fiscal_treatment,exemptionKey:invoice.fiscal_exemption_key,deductiblePercent:c5.provisionalPercent});
+    if(rows.length!==1 || line.reviewStatus!=='validado' || line.reviewedBy!==invoice.fiscal_reviewed_by || checked.kind!==c5.kind
+      || Math.abs(money(line.deductibleQuota)-money(invoice.deductible_tax_amount))>0.01
+      || (c5.kind==='implicit_igic' && (money(checked.deductible)!==money(c5.deductible)||money(invoice.non_deductible_tax_amount)!==0)))
+      throw new Error('El documento C5 necesita una línea fiscal confirmada coherente antes del asiento.');
+  }
   if (unsupportedFiscalRegimes.has(clean(invoice.fiscal_regime || invoice.indirect_tax_regime)) && !validatedRecargoPurchase && !validatedRecargoRetailSale && !validatedRecc && !validatedMinoristaIgicPurchase) {
     throw new Error('Régimen especial sin circuito contable completo: no se permite un asiento general automático.');
   }
@@ -1099,7 +1111,7 @@ export async function postInvoice(svc, companyId, invoice, userEmail, options = 
       || (!incoming && Math.abs(Number(line.quota)) > 0.01))
       throw new Error('La inversión/autorrepercusión requiere una línea fiscal confirmada coherente; no se cambia el importe del proveedor.');
   }
-  if (['special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase && !(validatedRecc && invoice.tipo === 'emitida'))) {
+  if (['special_margin'].includes(clean(invoice.fiscal_treatment)) || (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !validatedRecargoPurchase && !(validatedMinoristaIgicPurchase && c5.kind==='minorista_import') && !(validatedRecc && invoice.tipo === 'emitida'))) {
     throw new Error('La inversión de sujeto pasivo, el margen o el recargo requieren asientos fiscales específicos.');
   }
   const generatedProposal = await buildInvoicePosting(svc, companyId, invoice);

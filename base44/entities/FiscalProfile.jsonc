@@ -37,7 +37,7 @@
     },
     "taxGroupId": {
       "type": "string",
-      "description": "Identificador interno del grupo IVA/IGIC validado por el asesor; no es un NIF ni activa declaraciones por s\u00ed solo."
+      "description": "Identificador interno del grupo IVA/IGIC validado por el asesor; no es un NIF ni activa declaraciones por sí solo."
     },
     "taxGroupRole": {
       "type": "string",
@@ -90,7 +90,7 @@
     "usesVeriFactu": {
       "type": "boolean",
       "default": false,
-      "description": "Intenci\u00f3n de utilizar VERI*FACTU; nunca equivale a modalidad activa ni a remisi\u00f3n AEAT."
+      "description": "Intención de utilizar VERI*FACTU; nunca equivale a modalidad activa ni a remisión AEAT."
     },
     "verifactuObligation": {
       "type": "string",
@@ -101,7 +101,7 @@
         "excluido"
       ],
       "default": "pendiente_confirmar",
-      "description": "Aplicaci\u00f3n del RRSIF indicada por cliente o asesor; la obligaci\u00f3n de SIF no equivale a obligaci\u00f3n de optar por VERI*FACTU."
+      "description": "Aplicación del RRSIF indicada por cliente o asesor; la obligación de SIF no equivale a obligación de optar por VERI*FACTU."
     },
     "indirectTaxDefault": {
       "type": "string",
@@ -279,6 +279,17 @@
     },
     "notes": {
       "type": "string"
+    },
+    "repepCensusConfirmed": {
+      "type": "boolean",
+      "default": false
+    },
+    "repepPreviousTurnover": {
+      "type": "number"
+    },
+    "repepOptionFiledOn": {
+      "type": "string",
+      "format": "date"
     }
   },
   "required": [

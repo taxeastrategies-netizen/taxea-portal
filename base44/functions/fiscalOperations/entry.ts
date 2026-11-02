@@ -8,8 +8,9 @@ import { calculateSpecialRegimePreview } from './specialRegimePreview.mjs';
 import { fiscalReviewBatch } from './fiscalReviewBatch.mjs';
 import { advisorDecision, selfAssessment, reviewFilter, commonReviewCriteria } from './advisorReview.mjs';
 import { sourceDecision, assertSourceAmounts } from './sourceCheck.mjs';
+import { C5_VERSION, c5InvoiceRules, c5SpecialPurchase, c5Metadata, validateRepepProfile, c5Deduction, repepAt } from './c5Rules.mjs';
 
-const RULESET = 'taxea-fiscal-es-2026.11.01-c4';
+const RULESET = 'taxea-fiscal-es-2026.11.02-c5';
 // Los regímenes especiales necesitan cálculo, libro y modelo específicos antes del asiento.
 const SPECIAL_POSTING_PENDING = new Set(['mixto', 'simplificado', 'agricola_ganadera', 'agricultura_ganaderia_pesca', 'recargo_equivalencia', 'criterio_caja', 'rebu', 'agencias_viajes', 'oro_inversion', 'oss_exterior_union', 'oss_union', 'ioss_importacion', 'grupo_entidades', 'comerciante_minorista_igic']);
 const money = (value: unknown) => Math.round((Number(value) || 0) * 100) / 100;
@@ -149,6 +150,7 @@ function authorize(user: any, companyId: string, company: any) {
 
 // Mirror schema defaults only for a stable content fingerprint; never overwrite profile fields.
 const PROFILE_SNAPSHOT_DEFAULTS = {
+  repepCensusConfirmed: false,
   "entityType": "autonomo",
   "mainTerritory": "peninsula_baleares",
   "taxAuthority": "aeat",
@@ -231,11 +233,13 @@ function recommendedObligations(profile: any, activities: any[]) {
       if (profile?.taxGroupId && profile?.taxGroupRole === 'dominante') add('419', 'Entidad dominante: agregado mensual del grupo IGIC después de los modelos 418 individuales', 'review');
     } else {
       if (igicRegimes.has('simplificado')) add('421', 'Actividad en régimen simplificado IGIC');
-      if (igic.some(item => !['simplificado', 'pequeno_empresario_igic', 'agricultura_ganaderia_pesca', 'comerciante_minorista_igic'].includes(item.indirectTaxRegime))) add(profile?.usesSII ? '417' : '420', profile?.usesSII ? 'IGIC con SII' : 'Actividad IGIC liquidable fuera de los regímenes especiales separados');
+      if (igic.some(item => !['simplificado', 'pequeno_empresario_igic', 'agricultura_ganaderia_pesca', 'comerciante_minorista_igic','exenta_limitada','exenta_plena','no_sujeta'].includes(item.indirectTaxRegime))) add(profile?.usesSII ? '417' : '420', profile?.usesSII ? 'IGIC con SII' : 'Actividad IGIC liquidable fuera de los regímenes especiales separados');
     }
     if (igicRegimes.has('agricultura_ganaderia_pesca')) add('422', 'Reintegro de compensaciones cuando proceda', 'review');
-    if (igicRegimes.has('comerciante_minorista_igic')) add('424', 'Operaciones/importaciones de comerciante minorista cuando proceda', 'review');
-    add('425', igicRegimes.has('pequeno_empresario_igic') ? 'REPEP: declaración anual de volumen de operaciones, sin 420 por esa actividad' : 'Resumen anual IGIC');
+    if (igicRegimes.has('comerciante_minorista_igic')) add('424', 'Solo inclusión/exclusión del régimen minorista: existencias y cuotas de transición; no es una autoliquidación de cada importación', 'review');
+    if(igicRegimes.has('pequeno_empresario_igic') || ['incluido','transitorio_2026'].includes(profile?.repepStatus))add('425','REPEP: resumen anual del volumen de todas las actividades; revisar el primer semestre de 2026 cuando proceda');
+    else if(igic.some(item=>!['comerciante_minorista_igic','exenta_limitada','exenta_plena','no_sujeta'].includes(item.indirectTaxRegime)))add('425','Resumen anual IGIC: comprobar exoneración por SII y demás supuestos','review');
+    if(profile?.repepStatus==='transitorio_2026')add('420','Revisar exclusivamente el último periodo de 2026: prorrata/regularización del primer semestre o devolución; no activar trimestres del segundo semestre por defecto','review');
     if (igicRegimes.has('pequeno_empresario_igic')) add('412', 'Solo si existe devengo ocasional, por ejemplo inversión del sujeto pasivo', 'review');
   }
   if (active.some(item => ['intra_eu_supply', 'intra_eu_acquisition'].includes(item.incomeDefaultTreatment) || item.hasIntraCommunityOperations)) add('349', 'Operaciones intracomunitarias');
@@ -265,12 +269,17 @@ function evaluate(profile: any, activities: any[], body: any) {
   if (!body.manualOverride && body.requireValidatedProfile === true && profile.profileStatus !== 'validado_asesor') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El perfil fiscal debe estar validado por el asesor antes de automatizar una factura nueva.'], ruleSetVersion: RULESET };
   const operationDate = clean(body.operationDate);
   if (!body.manualOverride && body.requireValidatedProfile === true && operationDate && ((profile.effectiveFrom && operationDate < profile.effectiveFrom) || (activity.startDate && operationDate < activity.startDate))) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La operación es anterior a la vigencia del perfil o actividad seleccionada; requiere revisión histórica del asesor.'], ruleSetVersion: RULESET };
+  if(body.requireValidatedProfile===true && operationDate && activity.endDate && operationDate>activity.endDate)return {status:'blocked',reviewRequired:true,reasons:['La fecha supera el fin de vigencia de la actividad.'],ruleSetVersion:RULESET};
   const direction = body.direction === 'gasto' ? 'gasto' : 'ingreso';
   const taxKind = body.taxKind || activity.indirectTax || profile.indirectTaxDefault || 'iva';
   const regime = body.regime || activity.indirectTaxRegime || 'general';
   if (taxKind === 'mixto') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['La actividad mixta exige elegir IVA, IGIC o no aplica para esta operación.'], ruleSetVersion: RULESET };
   if (taxKind !== 'no_aplica' && !REGIMES[taxKind]?.some(([code]) => code === regime)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El régimen elegido no corresponde al impuesto de esta operación.'], ruleSetVersion: RULESET };
   if (taxKind === 'no_aplica' && regime !== 'no_sujeta') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Sin impuesto indirecto solo se admite una operación no sujeta, con fundamento legal.'], ruleSetVersion: RULESET };
+  if (body.requireValidatedProfile === true && ((taxKind==='igic' && repepAt(profile,body.operationDate)) || ['pequeno_empresario_igic','comerciante_minorista_igic','exenta_limitada','exenta_plena','no_sujeta'].includes(regime) || ['prorrata_general','prorrata_especial','sector_diferenciado'].includes(activity.deductionRight))) {
+    try { body = c5InvoiceRules(profile, activity, { ...body, operationType: body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed' }, direction); }
+    catch(error) { return { status:'blocked',reviewRequired:true,confidence:0,reasons:[error.message],ruleSetVersion:RULESET }; }
+  }
   let operationType = body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed';
   const manualOverride = body.manualOverride === true;
   const reasons: string[] = [];
@@ -291,7 +300,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   let legalBasis = clean(body.legalBasis || activity.exemptionLegalBasis);
 
   if (regime === 'pequeno_empresario_igic') {
-    if (direction === 'ingreso' && !['reverse_charge', 'import'].includes(operationType)) { operationType = 'exempt_limited'; exemptionKey = exemptionKey || 'IGIC_REPEP'; taxRate = 0; taxAmount = 0; deductiblePercent = 0; }
+    if (direction === 'ingreso' && ['subject_taxed','subject_zero','exempt_limited'].includes(operationType)) { operationType = 'exempt_limited'; exemptionKey = exemptionKey || 'IGIC_REPEP'; taxRate = 0; taxAmount = 0; deductiblePercent = 0; }
     if (direction === 'gasto' && !(manualOverride && body.deductiblePercent != null)) deductiblePercent = 0;
     reasons.push('REPEP: operaciones propias exentas y cuotas soportadas sin derecho a deduccion.');
     if (operationType === 'reverse_charge' || operationType === 'import') alerts.push('Puede existir autoliquidacion ocasional IGIC modelo 412.');
@@ -310,7 +319,7 @@ function evaluate(profile: any, activities: any[], body: any) {
   }
   if (operationType === 'exempt_limited') { taxRate = 0; taxAmount = 0; deductiblePercent = direction === 'gasto' ? 0 : deductiblePercent; if (!exemptionKey || !legalBasis) { reviewRequired = true; reasons.push('La exencion exige clave y fundamento legal revisado.'); } }
   if (operationType === 'exempt_full' || operationType === 'export' || operationType === 'intra_eu_supply') { taxRate = 0; taxAmount = 0; }
-  if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(operationType)) { taxRate = 0; taxAmount = 0; deductiblePercent = 0; if (!legalBasis) { reviewRequired = true; reasons.push('La no sujecion exige motivo y fundamento legal.'); } }
+  if (['non_subject_article', 'non_subject_location', 'outside_scope'].includes(operationType)) { taxRate = 0; taxAmount = 0; if (!legalBasis) { reviewRequired = true; reasons.push('La no sujecion exige motivo y fundamento legal.'); } }
   if (operationType === 'subject_zero') { taxRate = 0; taxAmount = 0; }
   if (direction === 'ingreso' && operationType === 'reverse_charge') { taxRate = 0; taxAmount = 0; }
   if (['reverse_charge', 'intra_eu_acquisition'].includes(operationType)) { reviewRequired = true; alerts.push(`Autorrepercusion de ${taxKind.toUpperCase()}: registrar cuota devengada y deducible solo en la proporcion permitida.`); }
@@ -319,7 +328,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     reviewRequired = true;
     reasons.push('Regimen especial: la regla general no basta para validar esta operacion.');
   }
-  if (taxKind === 'mixto' || activity.deductionRight === 'sector_diferenciado') { reviewRequired = true; reasons.push('Actividad mixta o sector diferenciado: seleccionar impuesto y sector en la operacion.'); }
+  if (taxKind === 'mixto' || (activity.deductionRight === 'sector_diferenciado' && !activity.sectorId)) { reviewRequired = true; reasons.push('Actividad mixta o sector diferenciado: seleccionar impuesto y sector en la operacion.'); }
   if (direction === 'gasto' && activity.deductionRight === 'prorrata_especial' && !(manualOverride && body.deductiblePercent != null && !body.deductionUse)) {
     const use = clean(body.deductionUse);
     if (!['exclusive_right', 'exclusive_no_right', 'shared'].includes(use)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Prorrata especial: clasifica el destino del gasto como exclusivo con derecho, exclusivo sin derecho o común.'], ruleSetVersion: RULESET };
@@ -339,9 +348,10 @@ function evaluate(profile: any, activities: any[], body: any) {
       alerts.push(specialPreviewError);
     }
   }
-  const deductibleTax = direction === 'gasto' ? money(taxAmount * deductiblePercent / 100) : 0;
+  const deductibleTax = direction === 'gasto' ? fxRatioMoney(taxAmount,deductiblePercent,100) : 0;
   const nonDeductibleTax = direction === 'gasto' ? money(taxAmount - deductibleTax) : 0;
 
+  if(body.legacyCensusReviewRequired) alerts.push('Se conserva el criterio REPEP ya validado por el asesor. Completa en configuración su vigencia, volumen y confirmación censal, sin modificar el histórico.');
   let withholdingRate = 0;
   if (direction === 'ingreso' && profile.subjectToIRPF && activity.activityType === 'profesional') {
     const startYear = Number(String(activity.startDate || profile.professionalActivityStartDate || '').slice(0, 4));
@@ -366,17 +376,19 @@ function evaluate(profile: any, activities: any[], body: any) {
     if (regime === 'pequeno_empresario_igic') modelImpact.push('425');
     else if (regime === 'simplificado') modelImpact.push('421', '425');
     else if (regime === 'grupo_entidades') modelImpact.push('418', '425');
-    else if (regime === 'comerciante_minorista_igic') modelImpact.push('424', '425');
+    else if (regime === 'comerciante_minorista_igic') { if(repepAt(profile,body.operationDate))modelImpact.push('425'); if(operationType==='reverse_charge')modelImpact.push('412'); }
+    else if(['exenta_limitada','exenta_plena','no_sujeta'].includes(regime)){if(repepAt(profile,body.operationDate))modelImpact.push('425');if(operationType==='reverse_charge')modelImpact.push('412');}
     else modelImpact.push(profile.usesSII ? '417' : '420', '425');
-    if (regime === 'pequeno_empresario_igic' && ['reverse_charge', 'import'].includes(operationType)) modelImpact.push('412');
+    if (regime === 'pequeno_empresario_igic' && operationType==='reverse_charge') modelImpact.push('412');
   }
   return {
-    status: reviewRequired ? 'review_required' : 'ready', reviewRequired, postingBlocked: SPECIAL_POSTING_PENDING.has(regime) || (direction === 'gasto' && activity.deductionRight === 'sector_diferenciado'), confidence: Math.max(0, confidence),
+    status: reviewRequired ? 'review_required' : 'ready', reviewRequired, postingBlocked: SPECIAL_POSTING_PENDING.has(regime) || (direction === 'gasto' && activity.deductionRight === 'sector_diferenciado' && (!activity.sectorId || !body.deductionUse)), confidence: Math.max(0, confidence),
     ruleSetVersion: RULESET, activityId: activity.id, taxKind, regime, operationType, exemptionKey, legalBasis,
     deductionCategory: clean(body.deductionCategory), deductionUse: clean(body.deductionUse),
     base, taxRate, taxAmount, deductiblePercent, deductibleTax, nonDeductibleTax,
     withholdingRate, withholdingAmount, total: money(base + taxAmount - withholdingAmount),
     manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, specialPreview, specialPreviewError, bookImpact, modelImpact: [...new Set(modelImpact)],
+    legacyCensusReviewRequired:body.legacyCensusReviewRequired===true,
     accounting: {
       inputTaxAccount: taxKind === 'igic' ? '47270000' : '47200000', outputTaxAccount: taxKind === 'igic' ? '47770000' : '47700000',
       nonDeductibleTaxToExpense: nonDeductibleTax,
@@ -438,6 +450,10 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         taxAmount: body.taxAmount ?? invoice.cuota_iva,
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
       });
+      const c5Details = c5SpecialPurchase(invoice, body, proposedEvaluation);
+      if(c5Details?.kind==='implicit_igic') Object.assign(proposedEvaluation,{deductibleTax:c5Details.deductible,nonDeductibleTax:0,deductiblePercent:Number(body.deductiblePercent ?? 100)});
+      const c5ImportPurchase = c5Details?.kind === 'minorista_import';
+      const c5Snapshot = {version:C5_VERSION,deductionRight:selectedActivity.deductionRight || 'pleno',deductionUse:body.deductionUse || '',provisionalPercent:proposedEvaluation.deductiblePercent,sectorId:selectedActivity.sectorId || '',repepActive:proposedEvaluation.regime==='pequeno_empresario_igic' || repepAt(profile,body.operationDate || invoice.fecha_operacion || invoice.fecha_emision),repepBox:body.c5?.repepBox || '',repepEstablishment:body.c5?.repepEstablishment || '',volumeClass:body.c5?.volumeClass || '',eligiblePercent:Number(body.c5?.eligiblePercent ?? 100),effectiveAt:body.operationDate || invoice.fecha_operacion || invoice.fecha_emision,...(c5Details || {})};
       const selfAssessed = selfAssessment(invoice, body, proposedEvaluation);
       if (context.sourceCheck) assertSourceAmounts(invoice, proposedEvaluation, selfAssessed);
       if (proposedEvaluation.regime === 'comerciante_minorista_igic' && proposedEvaluation.taxKind === 'igic'
@@ -448,6 +464,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.alerts = (proposedEvaluation.alerts || []).filter(message => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.');
       }
+      if (c5ImportPurchase) { proposedEvaluation.postingBlocked=false; proposedEvaluation.alerts=(proposedEvaluation.alerts || []).filter(message=>message!=='Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'); }
       if (body.advisorDefaultDifference) proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []),
         'El criterio confirmado para esta factura prevalece sobre el predeterminado de la actividad.'];
       if (proposedEvaluation.status === 'blocked') return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Tratamiento fiscal bloqueado.', evaluation: proposedEvaluation }, { status: 422 });
@@ -584,7 +601,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         }
         proposedEvaluation.postingBlocked = false;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []).filter((message: string) => message !== 'Régimen especial pendiente de circuito específico de cálculo, libro y modelo.'), 'RECC: devengo contable de la factura y liquidación del IVA/IGIC por cobros o pagos trazados, con límite del 31 de diciembre del año siguiente. El IRPF mantiene su criterio propio.'];
-      } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001) {
+      } else if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !c5ImportPurchase) {
         proposedEvaluation.postingBlocked = true;
         proposedEvaluation.alerts = [...(proposedEvaluation.alerts || []), 'La factura con recargo no reúne el circuito validado de compra minorista; queda pendiente de asiento, libro y liquidación específicos.'];
       }
@@ -637,7 +654,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       }
       const existing = await svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1) }, '-created_date', 20);
       if (existing.length > 1) return Response.json({error:'Hay varias líneas fiscales para este número de línea. Revisa la incidencia antes de sustituir o duplicar datos.'},{status:409});
-      const payload = { companyId, invoiceId: invoice.id, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
+      const payload = { companyId, invoiceId: invoice.id, c5Data:c5Snapshot, implicitTaxQuota:c5Details?.implicitQuota || 0, lineNumber: Number(body.lineNumber || 1), operationDate: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision, receiptDate: invoice.tipo === 'recibida' ? (body.receiptDate || invoice.fecha_recepcion || invoice.created_date?.slice(0, 10)) : undefined, taxKind: evaluation.taxKind === 'mixto' ? 'no_aplica' : evaluation.taxKind, rate: evaluation.taxRate, base: evaluation.base, quota: evaluation.taxAmount, deductibleQuota: evaluation.deductibleTax, deductionCategory: clean(body.deductionCategory)||undefined, deductionUse: clean(body.deductionUse)||undefined, nonDeductibleQuota: evaluation.nonDeductibleTax, surchargeRate: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.tipo_recargo || 0) : 0, surchargeQuota: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? Number(invoice.cuota_recargo || 0) : 0, regime: evaluation.regime, operationType: evaluation.operationType, exemptionKey: evaluation.exemptionKey, legalBasis: evaluation.legalBasis, deductible: invoice.tipo === 'recibida' && Math.abs(evaluation.nonDeductibleTax) <= 0.01, deductiblePercent: evaluation.deductiblePercent, activityId: evaluation.activityId, manualOverride: evaluation.manualOverride, manualOverrideReason: evaluation.manualOverrideReason, source: evaluation.manualOverride ? 'manual' : 'sistema', reviewStatus: 'validado', reviewedAt: new Date().toISOString(), reviewedBy: user.email, ruleSetVersion: RULESET, schemaVersion: 'pgc8-v1' };
       const proposedBreakdown = evaluation.regime === 'criterio_caja' && Array.isArray(body.taxBreakdown) && body.taxBreakdown.length ? body.taxBreakdown : null;
       let taxLine;
       if (proposedBreakdown) {
@@ -679,7 +696,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         ? { coletilla_fiscal: existingLegend.toLocaleLowerCase('es-ES').includes(reccLegend.toLocaleLowerCase('es-ES'))
           ? existingLegend : [reccLegend, existingLegend].filter(Boolean).join(' · ') }
         : {};
-      await svc.entities.Invoice.update(invoice.id, { ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      const requiredLegend=invoice.tipo==='emitida'?(evaluation.regime==='pequeno_empresario_igic' && evaluation.exemptionKey==='IGIC_REPEP'?'exención franquicia fiscal':evaluation.regime==='comerciante_minorista_igic'?'comerciante minorista':''):'';
+      const c5Legend=requiredLegend && !String(invoice.coletilla_fiscal||'').toLowerCase().includes(requiredLegend)?{coletilla_fiscal:[invoice.coletilla_fiscal,requiredLegend].filter(Boolean).join(' · ')}:{};
+      await svc.entities.Invoice.update(invoice.id, { ...c5Legend, fiscal_c5_data:JSON.stringify(c5Snapshot), ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
   } finally {
     if (releaseAdvanceLocks) await releaseAdvanceLocks();
@@ -904,7 +923,7 @@ Deno.serve(async (req) => {
 
     if (action === 'save_profile') {
       const data = body.profile || {};
-      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxGroupId','taxGroupRole','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','verifactuObligation','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
+      const allowed = ['fiscalName','taxId','entityType','mainTerritory','taxGroupId','taxGroupRole','taxAuthority','filingFrequency','fiscalYear','active','isLargeCompany','isREDEME','usesSII','usesVeriFactu','verifactuObligation','indirectTaxDefault','defaultVatRate','defaultIgicRate','subjectToIRPF','irpfEstimation','irpfImputationMethod','irpfImputationMethodConfirmed','irpfCashMethodEffectiveFrom','irpfCashMethodMinimumUntil','defaultWithholdingRate','professionalActivityStartDate','isProfessionalWithRetention','isPropertyLessor','retainedIncomePercent','model130ExemptionConfirmed','model130TerritorialRelief','model130TerritorialReliefConfirmed','repepStatus','repepEffectiveFrom','repepEffectiveUntil','repepCensusConfirmed','repepPreviousTurnover','repepOptionFiledOn','paysEmploymentOrProfessionalIncome','paysUrbanRent','paysCapitalIncome','hasNonResidentOperations','hasThirdPartyReporting','profileStatus','censusValidationSource','notes','effectiveFrom','lastChangeReason'];
       if (data.taxGroupRole && !['sin_grupo','dominante','dependiente'].includes(data.taxGroupRole)) throw new Error('Rol del grupo fiscal no admitido.');
       if (['dominante','dependiente'].includes(data.taxGroupRole ?? profile?.taxGroupRole) && !clean(data.taxGroupId ?? profile?.taxGroupId)) throw new Error('Indica el identificador del grupo fiscal antes de confirmar el rol.');
       if (data.verifactuObligation !== undefined && !['pendiente_confirmar','obligado','voluntario','excluido'].includes(data.verifactuObligation)) throw new Error('Clasificación VERI*FACTU no admitida.');
@@ -920,6 +939,7 @@ Deno.serve(async (req) => {
         payload.reviewedAt = undefined;
       }
       if (!clean(payload.fiscalName || profile?.fiscalName) || !clean(payload.mainTerritory || profile?.mainTerritory)) throw new Error('Nombre fiscal y territorio son obligatorios.');
+      if(payload.profileStatus==='validado_asesor') validateRepepProfile({...profile,...payload});
       const snapshot = Object.fromEntries(allowed.filter(key => key !== 'lastChangeReason').map(key => [key, payload[key] !== undefined ? payload[key] : profile?.[key] !== undefined ? profile[key] : PROFILE_SNAPSHOT_DEFAULTS[key]]));
       snapshot.ruleSetVersion = RULESET;
       const contentHash = await sha256(snapshot);
@@ -948,7 +968,7 @@ Deno.serve(async (req) => {
     if (action === 'save_activity') {
       const data = body.activity || {};
       const existing = data.id ? activities.find(item => item.id === data.id) : null;
-      const allowed = ['fiscalProfileId','name','iaeCode','iaeActivityCode','cnaeCode','startDate','territory','activityType','indirectTax','indirectTaxRegime','incomeDefaultTreatment','expenseDefaultTreatment','deductionRight','proRataPercent','defaultTaxRate','defaultWithholdingRate','exemptionKey','exemptionLegalBasis','newProfessionalRateConfirmed','retentionIncomePercent','model130Treatment','hasIntraCommunityOperations','accountingDefaults','expectedModels','automationLevel','active','notes'];
+      const allowed = ['fiscalProfileId','name','iaeCode','iaeActivityCode','cnaeCode','startDate','endDate','sectorId','territory','activityType','indirectTax','indirectTaxRegime','incomeDefaultTreatment','expenseDefaultTreatment','deductionRight','proRataPercent','defaultTaxRate','defaultWithholdingRate','exemptionKey','exemptionLegalBasis','newProfessionalRateConfirmed','retentionIncomePercent','model130Treatment','hasIntraCommunityOperations','accountingDefaults','expectedModels','automationLevel','active','notes'];
       const payload: any = { company_id: companyId, fiscalProfileId: profile?.id || data.fiscalProfileId || '', active: data.active !== false, ruleSetVersion: RULESET, reviewedAt: new Date().toISOString(), reviewedBy: user.email };
       for (const key of allowed) if (data[key] !== undefined) payload[key] = data[key];
       if (!clean(payload.name || existing?.name) || !clean(payload.activityType || existing?.activityType) || !clean(payload.indirectTax || existing?.indirectTax)) throw new Error('Nombre, tipo de actividad e impuesto indirecto son obligatorios.');
@@ -958,6 +978,8 @@ Deno.serve(async (req) => {
       if (selectedTax === 'mixto' && selectedRegime !== 'mixto') throw Object.assign(new Error('La actividad mixta debe clasificarse por operación antes de contabilizar.'), { status: 422 });
       const proRata = payload.proRataPercent ?? existing?.proRataPercent;
       if (proRata != null && (!Number.isFinite(Number(proRata)) || Number(proRata) < 0 || Number(proRata) > 100)) throw Object.assign(new Error('La prorrata debe estar entre 0 y 100 %.'), { status: 422 });
+      if(payload.endDate && payload.startDate && payload.endDate < payload.startDate) throw new Error('La fecha final de la actividad no puede preceder a su inicio.');
+      if(['prorrata_general','prorrata_especial','sector_diferenciado'].includes(payload.deductionRight || existing?.deductionRight) && proRata != null) payload.proRataPercent=Math.ceil(Number(proRata));
       const saved = existing ? await svc.entities.FiscalActivity.update(existing.id, payload) : await svc.entities.FiscalActivity.create(payload);
       if (profile?.profileStatus === 'validado_asesor') await svc.entities.FiscalProfile.update(profile.id, { profileStatus: 'pendiente_revision', lastChangeReason: 'Actividad fiscal modificada; requiere nueva validación del asesor.' });
       const next = existing ? activities.map(item => item.id === saved.id ? saved : item) : [...activities, saved];

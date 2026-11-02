@@ -1,3 +1,4 @@
+import { c5Metadata, c5SpecialPurchase } from './c5Rules.mjs';
 import {acquirePaymentLease,recoverPaymentLease} from './paymentLease.mjs';
 import {reccSchedule,reccCorrections,reccMetadata} from './reccRules.mjs';
 import {accountingFx,invoiceCurrency,reccPaymentFx,forcedFxDate,forcedTaxFxParts,taxFx,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
@@ -90,7 +91,7 @@ async function authorizeCompany(base44,user,requestedCompanyId){
  const company=await requirePortalCompany(base44.asServiceRole,user,companyId);return{company,companyId};
 }
 
-function invoiceCreationPayload(input, companyId, user) {
+function invoiceCreationPayload(input, companyId, user, criteria = {}) {
   const type = input?.tipo === 'recibida' ? 'recibida' : 'emitida';
   const number = cleanText(input?.numero_factura, 120);
   const issueDate = cleanText(input?.fecha_emision, 10);
@@ -112,10 +113,12 @@ function invoiceCreationPayload(input, companyId, user) {
   const taxAmount = input?.cuota_iva === null || input?.cuota_iva === undefined
     ? asMoney(base * taxRate / 100)
     : asMoney(input.cuota_iva);
+  const retailImport = type==='recibida' && criteria?.c5?.kind==='minorista_import';
+  const surchargeBase=retailImport?asMoney(Number(criteria.c5.importTaxBase ?? base)+Number(criteria.c5.aiem || 0)):base;
   const surchargeAmount = input?.cuota_recargo === null || input?.cuota_recargo === undefined
-    ? asMoney(base * surchargeRate / 100)
+    ? asMoney(surchargeBase * surchargeRate / 100)
     : asMoney(input.cuota_recargo);
-  if (!Number.isFinite(surchargeAmount) || Math.abs(surchargeAmount - asMoney(base * surchargeRate / 100)) > 0.02) {
+  if (!Number.isFinite(surchargeAmount) || Math.abs(surchargeAmount - asMoney(surchargeBase * surchargeRate / 100)) > 0.02) {
     throw Object.assign(new Error('La cuota de recargo no coincide con base y tipo de recargo.'), { status: 400 });
   }
   const withholdingAmount = input?.importe_retencion === null || input?.importe_retencion === undefined
@@ -561,7 +564,7 @@ Deno.serve(async (req) => {
 
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
-      const payload = invoiceCreationPayload(body.invoice || {}, companyId, user);
+      const payload = invoiceCreationPayload(body.invoice || {}, companyId, user, body.fiscal_criteria || {});
       // Guardar manualmente ya constituye el único check: no se crea una cola fiscal posterior.
       const idempotencyKey = cleanText(body.idempotency_key,160) || `invoice-create:${payload.canonical_document_key}`;
       const sourceHash = await sha256(JSON.stringify(payload));
@@ -677,6 +680,9 @@ Deno.serve(async (req) => {
       const finalizerSvc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 350 });
       const taxLines = await finalizerSvc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 100);
       const line = (taxLines || []).find(row => Number(row.lineNumber) === 1 && row.reviewStatus === 'validado');
+      const c5=c5Metadata(invoice),c5Import=c5.kind==='minorista_import' && invoice.fiscal_regime==='comerciante_minorista_igic' && line?.regime==='comerciante_minorista_igic';
+      if(c5Import)c5SpecialPurchase(invoice,{c5},{taxKind:invoice.indirect_tax_kind,regime:invoice.fiscal_regime,operationType:invoice.fiscal_treatment});
+      const c5Minorista=invoice.fiscal_regime==='comerciante_minorista_igic' && line?.regime==='comerciante_minorista_igic' && line?.taxKind==='igic' && line?.reviewStatus==='validado' && Number(line.deductibleQuota||0)===0;
       const recargoPurchase = invoice.tipo === 'recibida' && line?.regime === 'recargo_equivalencia'
         && invoice.fiscal_regime === 'recargo_equivalencia' && line?.taxKind === 'iva'
         && line?.operationType === 'subject_taxed' && Number(invoice.cuota_recargo || 0) > 0
@@ -696,7 +702,7 @@ Deno.serve(async (req) => {
         && taxLines.length === 1 && Number(invoice.tipo_recargo) === ({21:5.2,10:1.4,4:0.5})[Number(invoice.tipo_iva)]
         && Math.abs(asMoney(Number(invoice.base_imponible) * Number(invoice.tipo_recargo) / 100) - Number(invoice.cuota_recargo || 0)) <= 0.01
         && Math.abs(Number(line.surchargeQuota || 0) - Number(invoice.cuota_recargo || 0)) <= 0.01;
-      if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !recargoPurchase && !reccSurcharge) return Response.json({ error: 'Factura con recargo fuera del circuito validado de compra minorista; no se puede contabilizar como asiento general.' }, { status: 422 });
+      if (Math.abs(Number(invoice.cuota_recargo || 0)) > 0.001 && !recargoPurchase && !c5Import && !reccSurcharge) return Response.json({ error: 'Factura con recargo fuera del circuito validado de compra minorista; no se puede contabilizar como asiento general.' }, { status: 422 });
       const selfAssessed = invoice.tipo === 'recibida' && invoice.self_assessed_tax_confirmed === true
         && ['reverse_charge','intra_eu_acquisition'].includes(line?.operationType);
       const multiRecc = invoice.fiscal_regime === 'criterio_caja' && taxLines.length > 1
@@ -707,10 +713,10 @@ Deno.serve(async (req) => {
         && Math.abs(asMoney(taxLines.reduce((sum, row) => sum + Number(row.quota), 0)) - Number(invoice.cuota_iva)) <= 0.01;
       if (!line || (!multiRecc && (taxLines.length !== 1 || Math.abs(Number(line.base || 0) - Number(invoice.base_imponible || 0)) > 0.02
         || Math.abs(Number(line.quota || 0) - Number(selfAssessed ? invoice.self_assessed_tax_amount : invoice.cuota_iva || 0)) > 0.02))
-        || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + (recargoPurchase || reccSurcharge ? Number(invoice.cuota_recargo || 0) : 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
+        || Math.abs(Number(invoice.total_factura || 0) - asMoney(Number(invoice.base_imponible || 0) + Number(invoice.cuota_iva || 0) + (recargoPurchase || c5Import || reccSurcharge ? Number(invoice.cuota_recargo || 0) : 0) - Number(invoice.importe_retencion || 0))) > 0.02) {
         return Response.json({ error: 'La línea fiscal o el total no cuadran con la factura. Revisa antes de contabilizar.' }, { status: 422 });
       }
-      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic', 'criterio_caja', 'intracomunitaria', 'inversion_sujeto_pasivo', 'no_sujeta'].includes(line.regime) || recargoPurchase || recargoRetailSale)
+      if (!(['general', 'exenta_limitada', 'exenta_plena', 'pequeno_empresario_igic', 'criterio_caja', 'intracomunitaria', 'inversion_sujeto_pasivo', 'no_sujeta'].includes(line.regime) || recargoPurchase || c5Minorista || recargoRetailSale)
         || !['iva', 'igic', 'no_aplica'].includes(line.taxKind)) {
         return Response.json({ error: 'Este tratamiento especial aún no permite asiento automático; requiere revisión contable específica.' }, { status: 422 });
       }

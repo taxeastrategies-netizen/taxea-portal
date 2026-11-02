@@ -232,6 +232,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     };
   }
 
+  if(invoiceData.tipo==='recibida' && form.fiscal_criteria?.c5?.kind==='minorista_import'){invoiceData.tipo_recargo=Number(form.fiscal_criteria.c5.surchargeRate);invoiceData.cuota_recargo=Number(form.fiscal_criteria.c5.surcharge);}
   invoiceData.ocr_document_id = doc.id;
   invoiceData.fiscal_activity_id = form.fiscal_activity_id || '';
   invoiceData.indirect_tax_kind = form.fiscal_criteria?.taxKind || undefined;

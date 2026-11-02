@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import {validateRepepProfile,repepAt,c5InvoiceRules,c5Deduction,c5SpecialPurchase,c5ProrataPercent,c5ProrataComparison,c5InvestmentAdjustment} from '../base44/functions/fiscalOperations/c5Rules.mjs';
+const profile={entityType:'autonomo',mainTerritory:'canarias',repepStatus:'transitorio_2026',repepEffectiveFrom:'2026-07-01',repepOptionFiledOn:'2026-07-31',repepPreviousTurnover:50000,repepCensusConfirmed:true};
+assert.equal(validateRepepProfile(profile).limit,50000);
+assert.equal(repepAt(profile,'2026-06-30'),false);assert.equal(repepAt(profile,'2026-07-01'),true);
+assert.throws(()=>validateRepepProfile({...profile,repepOptionFiledOn:'2026-08-01'}),/julio/);
+assert.throws(()=>validateRepepProfile({...profile,entityType:'sociedad'}),/personas físicas/);
+assert.throws(()=>validateRepepProfile({...profile,mainTerritory:'peninsula_baleares'}),/Canarias/);
+assert.throws(()=>validateRepepProfile({...profile,repepPreviousTurnover:50000.01}),/supera/);
+assert.throws(()=>validateRepepProfile({...profile,repepCensusConfirmed:false}),/censo|censal/);
+assert.throws(()=>validateRepepProfile({...profile,repepStatus:'incluido',repepEffectiveFrom:'2026-01-01',repepPreviousTurnover:30000.01}),/30/);
+assert.equal(validateRepepProfile({...profile,repepStatus:'incluido',repepEffectiveFrom:'2027-01-01'}).limit,50000);
+const re={indirectTax:'igic',indirectTaxRegime:'pequeno_empresario_igic',deductionRight:'sin_derecho',startDate:'2026-07-01'};
+const issued=c5InvoiceRules(profile,re,{operationDate:'2026-07-01',operationType:'subject_taxed',taxRate:7,taxAmount:7},'ingreso');
+assert.equal(issued.operationType,'exempt_limited');assert.equal(issued.taxAmount,0);assert.equal(issued.exemptionKey,'IGIC_REPEP');
+assert.throws(()=>c5InvoiceRules(profile,re,{operationDate:'2026-06-30'},'ingreso'),/vigencia/);
+assert.throws(()=>c5InvoiceRules(profile,re,{operationDate:'2026-07-01',deductiblePercent:100},'gasto'),/no son deducibles/);
+assert.equal(c5InvoiceRules(profile,re,{operationDate:'2026-07-01',operationType:'non_subject_location'},'ingreso').operationType,'non_subject_location');
+const special={deductionRight:'prorrata_especial',proRataPercent:66.01};
+assert.equal(c5Deduction(special,{deductionUse:'shared'},'general'),67);
+assert.equal(c5Deduction(special,{deductionUse:'exclusive_right'},'general'),100);
+assert.equal(c5Deduction(special,{deductionUse:'exclusive_no_right'},'general'),0);
+assert.throws(()=>c5Deduction(special,{},'general'),/destino/);
+assert.throws(()=>c5Deduction({...special,deductionRight:'sector_diferenciado'},{deductionUse:'shared'},'general'),/sector/);
+assert.equal(c5ProrataPercent(1,3),34);assert.equal(c5ProrataPercent(100,100),100);assert.equal(c5ProrataPercent(0,100),0);
+assert.throws(()=>c5ProrataPercent(0,0),/positivo/);
+const comparison=c5ProrataComparison([{quota:100,deductibleQuota:50,deductionUse:'shared'},{quota:10,deductibleQuota:5,deductionUse:'exclusive_no_right'}],50);
+assert.equal(comparison.general,55);assert.equal(comparison.special,50);assert.equal(comparison.mandatorySpecial,true);
+assert.equal(c5ProrataComparison([{quota:100,deductibleQuota:50,deductionUse:'shared'},{quota:9.99,deductibleQuota:5,deductionUse:'exclusive_no_right'}],50).mandatorySpecial,true); // rounded final amounts meet the statutory threshold
+assert.equal(c5ProrataComparison([{quota:100,deductibleQuota:50,deductionUse:'shared'},{quota:9.98,deductibleQuota:4.99,deductionUse:'exclusive_no_right'}],50).mandatorySpecial,false);
+const implicit=c5SpecialPurchase({tipo:'recibida',base_imponible:100,cuota_iva:0,cuota_recargo:0},{c5:{kind:'implicit_igic',underlyingRate:7,supplierRetailLegendConfirmed:true},deductiblePercent:100},{taxKind:'igic',regime:'general',operationType:'exempt_limited',exemptionKey:'IGIC_COMERCIANTE_MINORISTA'});
+assert.equal(implicit.implicitQuota,4.9);assert.equal(implicit.deductible,4.9);
+assert.equal(c5SpecialPurchase({tipo:'recibida',base_imponible:100,cuota_iva:0},{c5:{kind:'implicit_igic',underlyingRate:7,supplierRetailLegendConfirmed:true},deductiblePercent:100},{taxKind:'igic',regime:'pequeno_empresario_igic',operationType:'exempt_limited',exemptionKey:'IGIC_COMERCIANTE_MINORISTA'}).deductible,0);
+assert.throws(()=>c5SpecialPurchase({tipo:'recibida',base_imponible:100,cuota_iva:0},{c5:{kind:'implicit_igic',underlyingRate:7}},{taxKind:'igic',regime:'general',operationType:'exempt_limited',exemptionKey:'IGIC_COMERCIANTE_MINORISTA'}),/mención/);
+const dua=c5SpecialPurchase({tipo:'recibida',base_imponible:100,cuota_iva:7,cuota_recargo:0.74,tipo_recargo:0.7,tipo_iva:7},{c5:{kind:'minorista_import',aiem:5,forResale:true,customsDocumentConfirmed:true,customsReference:'DUA-QA'}},{taxKind:'igic',regime:'comerciante_minorista_igic',operationType:'import'});
+assert.equal(dua.surcharge,.74);assert.equal(dua.surchargeRate,.7);
+assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePercent:67,inServiceDate:'2024-01-01',year:2025}).delta,142.8);
+assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePercent:60,inServiceDate:'2024-01-01',year:2025}).delta,0);
+assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:100,definitivePercent:0,inServiceDate:'2024-01-01',year:2025,realEstate:true}).delta,-420);
+assert.equal(c5InvestmentAdjustment({quota:4200,initialPercent:50,definitivePercent:67,inServiceDate:'2025-01-01',year:2025}).delta,0);
+let oracleCases=0;
+for(let total=1;total<=300;total++)for(let taxable=0;taxable<=total;taxable++){
+ const expected=Number((BigInt(taxable)*100n+BigInt(total)-1n)/BigInt(total));
+ assert.equal(c5ProrataPercent(taxable/100,total/100),expected);oracleCases++;
+}
+console.log(JSON.stringify({ok:true,oracleCases,REPEP2026And2027:true,ivaIgicSeparated:true,implicitIgic:true,duaRetailSurcharge:true,specialProrataThreshold:true,investmentRegularization:true,networkCalls:0,realWrites:0}));

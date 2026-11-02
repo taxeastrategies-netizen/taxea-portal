@@ -1,0 +1,108 @@
+{
+  "name": "FiscalDeductionAdjustment",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "year": {
+      "type": "integer"
+    },
+    "taxKind": {
+      "type": "string",
+      "enum": [
+        "iva",
+        "igic"
+      ]
+    },
+    "targetModel": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "prorata",
+        "investment"
+      ]
+    },
+    "scopeKey": {
+      "type": "string"
+    },
+    "activityId": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "delta": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "confirmed"
+      ]
+    },
+    "sourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "details": {
+      "type": "object"
+    },
+    "journalEntryId": {
+      "type": "string"
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "version": {
+      "type": "string"
+    },
+    "fiscalDelta": {
+      "type": "number"
+    },
+    "noJournalRequired": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "companyId",
+    "year",
+    "taxKind",
+    "kind",
+    "scopeKey",
+    "fingerprint",
+    "delta",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

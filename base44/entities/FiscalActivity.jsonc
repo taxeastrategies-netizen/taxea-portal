@@ -183,6 +183,14 @@
     "active": {
       "type": "boolean",
       "default": true
+    },
+    "endDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "sectorId": {
+      "type": "string",
+      "description": "Sector diferenciado confirmado por asesor, nunca inferido solo por IAE."
     }
   },
   "required": [

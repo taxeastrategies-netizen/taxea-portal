@@ -113,6 +113,39 @@
         "read": false,
         "write": false
       }
+    },
+    "fiscal_adjustment_lock_token": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "fiscal_adjustment_lock_started_at": {
+      "type": "string",
+      "rls": {
+        "read": false,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
+    },
+    "fiscal_adjustment_lock_recovery": {
+      "type": "object",
+      "rls": {
+        "read": false,
+        "write": {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      }
     }
   },
   "required": [

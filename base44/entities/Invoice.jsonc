@@ -513,6 +513,10 @@
     },
     "payment_lock_key": {
       "type": "string"
+    },
+    "fiscal_c5_data": {
+      "type": "string",
+      "description": "Criterio de deducción C5 y datos contrastados; conserva importes originales del proveedor."
     }
   },
   "required": [

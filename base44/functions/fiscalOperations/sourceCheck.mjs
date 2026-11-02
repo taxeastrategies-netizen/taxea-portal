@@ -1,3 +1,4 @@
+import { c5Deduction, c5Metadata } from './c5Rules.mjs';
 // El único check es el del documento origen. Nunca altera importes ni el perfil.
 const money = n => Math.round(Number(n || 0) * 100) / 100;
 export function sourceDecision(invoice, input, activity, profile, professional) {
@@ -6,7 +7,7 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   if (!activity || activity.active === false) throw new Error('Selecciona la actividad fiscal de esta factura.');
   let recc={},breakdown=[];
   try{recc=JSON.parse(invoice.recc_metadata || '{}');breakdown=JSON.parse(invoice.tax_breakdown || '[]');}catch{/* Datos especiales incompletos se validan en su circuito. */}
-  input={...input,recc:input.recc || recc,...(input.taxBreakdown || breakdown.length?{taxBreakdown:input.taxBreakdown || breakdown}:{})};
+  input={...input,c5:input.c5 || c5Metadata(invoice),recc:input.recc || recc,...(input.taxBreakdown || breakdown.length?{taxBreakdown:input.taxBreakdown || breakdown}:{})};
   const direction = invoice.tipo === 'recibida' ? 'gasto' : 'ingreso';
   const body = { ...input, activityId: activity.id,
     base: Number(invoice.base_imponible), operationDate: input.operationDate || invoice.fecha_operacion || invoice.fecha_emision,
@@ -21,11 +22,7 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
     throw new Error('El cambio de impuesto o régimen respecto de la actividad validada debe confirmarlo el asesor en este mismo OCR.');
   const noDeduction = activity.deductionRight === 'sin_derecho'
     || ['exenta_limitada','pequeno_empresario_igic','comerciante_minorista_igic','recargo_equivalencia','agricultura_ganaderia_pesca'].includes(body.regime);
-  body.deductiblePercent = input.deductiblePercent ?? (noDeduction ? 0 : activity.proRataPercent ?? 100);
-  if(direction==='gasto' && activity.deductionRight==='prorrata_especial' && input.deductiblePercent==null) {
-    if(!['exclusive_right','exclusive_no_right','shared'].includes(input.deductionUse)) throw new Error('Prorrata especial: indica el destino del gasto en este mismo OCR.');
-    body.deductiblePercent=input.deductionUse==='exclusive_right'?100:input.deductionUse==='exclusive_no_right'?0:activity.proRataPercent || 0;
-  }
+  body.deductiblePercent = c5Deduction(activity,input,body.regime);
   if (!professional && noDeduction && Number(body.deductiblePercent) !== 0)
     throw new Error('Esta actividad no tiene derecho a deducir. Solo el asesor puede confirmar una excepción motivada.');
   body.operationType = input.operationType || (direction === 'gasto'

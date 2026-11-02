@@ -156,7 +156,8 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   const updateQuotaRows = rows => setForm(current => ({ ...current, tax_breakdown_rows: rows,
     base_imponible: rows.length ? String(Math.round(rows.reduce((sum, row) => sum + Number(row.base || 0), 0) * 100) / 100) : current.base_imponible,
     tipo_iva: rows.length > 1 ? 0 : rows[0]?.rate ?? current.tipo_iva }));
-  const recargoImporte = form.aplica_recargo ? Math.round((Number(form.base_imponible || 0) * Number(form.tipo_recargo || 0) / 100 + Number.EPSILON) * 100) / 100 : 0;
+  const c5Import=form.tipo==='recibida' && form.fiscal_criteria?.c5?.kind==='minorista_import';
+  const recargoImporte = c5Import ? Number(form.fiscal_criteria.c5.surcharge || 0) : form.aplica_recargo ? Math.round((Number(form.base_imponible || 0) * Number(form.tipo_recargo || 0) / 100 + Number.EPSILON) * 100) / 100 : 0;
   const total = ordinaryTotal + recargoImporte;
 
   useEffect(() => {
@@ -225,7 +226,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       tipo_iva: Number(form.tipo_iva) || 0,
       cuota_iva: cuota,
       tax_breakdown: quotaRows.length ? JSON.stringify(quotaRows.map(row => ({ base: Number(row.base), rate: Number(row.rate), quota: Math.round(Number(row.base) * Number(row.rate) + Number.EPSILON) / 100 }))) : '',
-      tipo_recargo: form.aplica_recargo ? Number(form.tipo_recargo) : 0,
+      tipo_recargo: c5Import ? Number(form.fiscal_criteria.c5.surchargeRate || 0) : form.aplica_recargo ? Number(form.tipo_recargo) : 0,
       cuota_recargo: recargoImporte,
       retencion_irpf: form.aplica_retencion ? (Number(form.retencion_irpf) || 0) : 0,
       importe_retencion: form.aplica_retencion ? retencionImporte : 0,
@@ -545,7 +546,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
                   <span className="text-muted-foreground">{quotaRows.length ? `${taxType} (${quotaRows.map(row => `${row.rate} %`).join(' · ')})` : `${taxType} ${form.tipo_iva} %`}</span>
                   <span className="font-medium">+ {fmt(cuota)} {form.moneda||'EUR'}</span>
                 </div>
-                {form.aplica_recargo && <div className="flex justify-between"><span className="text-muted-foreground">Recargo de equivalencia {form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} {form.moneda||'EUR'}</span></div>}
+                {(form.aplica_recargo || c5Import) && <div className="flex justify-between"><span className="text-muted-foreground">{c5Import?'Recargo minorista IGIC':'Recargo de equivalencia'} {c5Import?form.fiscal_criteria.c5.surchargeRate:form.tipo_recargo} %</span><span className="font-medium">+ {fmt(recargoImporte)} {form.moneda||'EUR'}</span></div>}
                 {form.aplica_retencion && (
                   <div className="flex justify-between text-destructive">
                     <span>Retención IRPF {form.retencion_irpf} %</span>

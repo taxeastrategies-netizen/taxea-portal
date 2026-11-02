@@ -1,3 +1,5 @@
+const c5ExtraCost=i=>n(i.non_deductible_tax_amount)+(c5BookData(i).kind==='minorista_import'?n(i.cuota_recargo):0)-(c5BookData(i).kind==='implicit_igic'?n(c5BookData(i).deductible):0);
+const c5BookData=invoice=>{try{return JSON.parse(invoice.fiscal_c5_data || '{}');}catch{return {};}};
 import {fxMoney} from '@/lib/financialSourceTruth';
 import { base44 } from '@/api/base44Client';
 
@@ -89,7 +91,7 @@ function buildResumenFiscal(invoices, expenses, year, companyName, lastExportDat
   const totalRetIRPF = emitidas.reduce((s, i) => s + pct(i.base_imponible, i.retencion_irpf), 0);
   const totalIngresos = emitidas.reduce((s, i) => s + n(i.total_factura), 0);
 
-  const totalBaseGastos = recibidas.reduce((s, i) => s + n(i.base_imponible) + n(i.non_deductible_tax_amount), 0)
+  const totalBaseGastos = recibidas.reduce((s, i) => s + n(i.base_imponible) + c5ExtraCost(i), 0)
     + gastos.reduce((s, e) => s + n(e.base_imponible), 0);
   const totalIvaSop = recibidas.reduce((s, i) => s + n(i.deductible_tax_amount), 0);
   const totalGastos = recibidas.reduce((s, i) => s + n(i.total_factura), 0) + gastos.reduce((s, e) => s + n(e.total), 0);
@@ -152,7 +154,7 @@ function buildPnL(invoices, expenses, year) {
   let totIng = 0, totGas = 0, totIvaR = 0, totIvaS = 0;
   for (let m = 0; m < 12; m++) {
     const ing = emitidas.filter(i => new Date(i.fecha_emision || '').getMonth() === m).reduce((s, i) => s + n(i.base_imponible), 0);
-    const gas = [...gastos, ...recibidas].filter(e => new Date(e.fecha || e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.base_imponible) + n(e.non_deductible_tax_amount), 0);
+    const gas = [...gastos, ...recibidas].filter(e => new Date(e.fecha || e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.base_imponible) + c5ExtraCost(e), 0);
     const ivaR = emitidas.filter(i => new Date(i.fecha_emision || '').getMonth() === m).reduce((s, i) => s + n(i.cuota_iva), 0);
     const ivaS = recibidas.filter(e => new Date(e.fecha_emision || '').getMonth() === m).reduce((s, e) => s + n(e.deductible_tax_amount), 0);
     const ben = ing - gas;
@@ -270,7 +272,7 @@ function buildLibroVentas(invoices) {
 
 // ─── Hoja 6: Libro Compras y Gastos (AEAT 303) ──────────────────────────────
 function buildLibroCompras(invoices, expenses) {
-  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota Soportada (€)','Cuota Deducible (€)','Cuota No Deducible (€)','Retención IRPF %','Importe Retención (€)','Total (€)','Deducible','Régimen','Tratamiento','Trimestre','Año','Cuenta Contable'];
+  const header = ['Fecha','Nº Factura','Proveedor','NIF/CIF','Concepto','Categoría','Base Imponible (€)','Tipo IVA/IGIC %','Cuota Soportada (€)','Cuota Deducible (€)','Cuota No Deducible (€)','Retención IRPF %','Importe Retención (€)','Total (€)','Deducible','Régimen','Tratamiento','Trimestre','Año','Cuenta Contable','Destino deducción','Sector','Carga IGIC implícita (€)','Recargo importación minorista (€)','Fundamento C5'];
   const rows = [header];
   invoices.filter(i => i.tipo === 'recibida').forEach(i => {
     rows.push([
@@ -283,7 +285,7 @@ function buildLibroCompras(invoices, expenses) {
       n(i.total_factura),
       i.deductible_tax_amount == null ? 'Sin validar' : n(i.deductible_tax_amount) === 0 ? 'No' : 'Sí',
       i.fiscal_regime || '', i.fiscal_treatment || '',
-      i.trimestre || quarter(i.fecha_emision), i.anio || '', ctaGasto(i),
+      i.trimestre || quarter(i.fecha_emision), i.anio || '', ctaGasto(i), c5BookData(i).deductionUse || '',c5BookData(i).sectorId || '',n(c5BookData(i).implicitQuota),n(c5BookData(i).surcharge),c5BookData(i).legalBasis || i.fiscal_legal_basis || '',
     ]);
   });
   expenses.filter(e => e.tipo === 'gasto').forEach(e => {
