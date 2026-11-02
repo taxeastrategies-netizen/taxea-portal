@@ -1,3 +1,5 @@
+import {exportCapability} from '@/lib/exportCapabilities.mjs';
+import TaxImporterProofPanel from './TaxImporterProofPanel';
 import { uploadCompanyDocument } from '@/lib/privateDocuments';
 
 import NativeSelect from "@/components/ui/NativeSelect";
@@ -845,7 +847,8 @@ export default function TaxModelWorkbench({ initialSelection }) {
 
   const profile = fiscalContext?.profile;
   const models = catalogResponse?.models || [];
-  const definition = models.find(item => item.code === modelCode) || models[0];
+  const baseDefinition = models.find(item => item.code === modelCode) || models[0];
+  const definition = useMemo(()=>baseDefinition?{...baseDefinition,officialExport:exportCapability(modelCode,year).canExportOfficial,exportCapability:exportCapability(modelCode,year)}:undefined,[baseDefinition,modelCode,year]);
   const periodOptions = useMemo(() => definition ? periodsFor(definition, profile) : PERIODS.trimestral, [definition, profile]);
 
   const fieldTrace = useQuery({
@@ -924,7 +927,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
       }
       if (['export', 'export_review', 'export_handoff', 'export_296_annexes'].includes(variables.action)) {
         downloadBase64(data.file);
-        setLastExportInfo({ filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff', isAnnex296: variables.action === 'export_296_annexes' });
+        setLastExportInfo({ fileId:data.file?.id,fileHash:data.file?.hash,regimeCodes:data.file?.regimeCodes||[],filename: data.file?.filename, nextStep: data.file?.nextStep, recommendationCount: data.validation?.recommendations?.length || 0, isReview: variables.action === 'export_review', isHandoff: variables.action === 'export_handoff', isAnnex296: variables.action === 'export_296_annexes' });
       }
     },
     onError: error => {
@@ -1040,6 +1043,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
         </div>
 
         <div className="space-y-5 p-5">
+          {definition?.exportCapability && <p role="status" className="rounded-xl border bg-card p-3 text-sm text-muted-foreground">{definition.exportCapability.message}</p>}
           {definition?.designWarning && (
             <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1172,6 +1176,7 @@ export default function TaxModelWorkbench({ initialSelection }) {
                 <details className="rounded-2xl border border-slate-200 bg-white p-4"><summary className="cursor-pointer text-sm font-semibold text-slate-800">Ver detalle de declarados y documentos ({result.calculation.details.length})</summary><div className="mt-3 max-h-72 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-300"><pre className="whitespace-pre-wrap">{JSON.stringify(result.calculation.details, null, 2)}</pre></div></details>
               )}
 
+              <TaxImporterProofPanel companyId={companyId} year={year} modelCode={modelCode} canReview={canReviewAnnual} fileId={!lastExportInfo?.isReview&&!lastExportInfo?.isHandoff?lastExportInfo?.fileId:undefined} fileHash={lastExportInfo?.fileHash} regimeCodes={lastExportInfo?.regimeCodes||[]} />
               <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-4">
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'save_draft' })} disabled={invoke.isPending}><Save className="h-4 w-4" />Guardar nueva versión si cambió</Button>
                 <Button variant="outline" className="gap-2" onClick={() => invoke.mutate({ action: 'export_review', draftId: result.draft?.id })} disabled={invoke.isPending}><FileJson className="h-4 w-4" />Descargar revisión</Button>

@@ -1,3 +1,5 @@
+import {ARTIFACT_PROTOCOL,acquireArtifactLease,existingArtifact,artifactScope,recoverArtifactLease} from './exportArtifactGuard.mjs';
+import {exportCapability,EXPORT_CAPABILITIES_VERSION} from './exportCapabilities.mjs';
 import {createCashTaxLineForPeriod} from './reccTaxLines.ts';
 import { repepAt, c5Metadata, c5RepepVolume, c5CashProvisional } from './c5Rules.mjs';
 import {accountingFx,invoiceCurrency,taxFx,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
@@ -38,7 +40,7 @@ const DEFINITIONS: Record<string, any> = {
 // El diseño anual 390 publicado para 2025 no acredita importación para 2026.
 // Los borradores y cálculos siguen disponibles, pero no se presentan como fichero oficial.
 const officialExportAvailable = (model: string, year: number) =>
-  !!DEFINITIONS[model]?.officialExport && !(model === '390' && year > 2025);
+  !!DEFINITIONS[model]?.officialExport && exportCapability(model,year).canExportOfficial;
 
 // Extracted from AEAT's official DR390e2025 v1.02 workbook. Positions are
 // one-based. Numeric tuples contain [position, length, decimalPlaces] and box
@@ -3638,7 +3640,7 @@ Deno.serve(async (req) => {
     userAuthenticated=true;
     if(!taxModelUserEnabled(user))return Response.json({error:'Acceso al portal suspendido.'},{status:403});
     const body=await req.json().catch(()=>({})); const action=clean(body.action||'catalog');
-    if(action==='catalog') { const developer=developerTaxIdStatus(); return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code]})),readiness:{developerTaxIdConfigured:developer.configured,developerTaxIdValid:developer.valid},recommendedExtensions:[],sources:SOURCES}); }
+    if(action==='catalog') { const developer=developerTaxIdStatus(); return Response.json({ok:true,engineVersion:ENGINE_VERSION,models:TARGET_MODELS.map(code=>({code,...DEFINITIONS[code],exportYears:exportCapability(code,new Date().getUTCFullYear()).verifiedYears})),exportCapabilitiesVersion:EXPORT_CAPABILITIES_VERSION,readiness:{developerTaxIdConfigured:developer.configured,developerTaxIdValid:developer.valid},recommendedExtensions:[],sources:SOURCES}); }
     if(action==='self_test') {
       if(!['admin','super_admin'].includes(String(user.role||'')))return Response.json({error:'Solo administración.'},{status:403});
       const company={nif_cif:'B12345678',razon_social:'TAXEA PRUEBA',telefono:'922000000'}; const profile={isREDEME:false,usesSII:false};
@@ -3931,6 +3933,8 @@ Deno.serve(async (req) => {
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
     authorize(user,companyId,company);
 
+    if(action==='export_lock_context'){const reviewer=['admin','super_admin','advisor','asesor'].includes(clean(user.role).toLowerCase());return Response.json({ok:true,lock:reviewer&&company.tax_artifact_lock_token?{token:company.tax_artifact_lock_token,startedAt:company.tax_artifact_lock_started_at,recoverable:Date.now()-Date.parse(company.tax_artifact_lock_started_at)>=600000}:null});}
+    if(action==='recover_export_lock')return Response.json(await recoverArtifactLease(svc,companyId,user,body));
     if(action==='ensure_period') {
       if(!TARGET_MODELS.includes(model)||!year) return Response.json({error:'modeloCodigo y ejercicio son obligatorios.'},{status:400});
       const periodError=periodValidationError(model,period); if(periodError) return Response.json({error:periodError},{status:400});
@@ -4005,7 +4009,7 @@ Deno.serve(async (req) => {
       const savedAdjustments=Object.fromEntries((Array.isArray(draft.ajustesManuales)?draft.ajustesManuales:[]).map((item:any)=>[item.field,item.value]));
       return Response.json({
         ok:true,engineVersion:draft.engineVersion||ENGINE_VERSION,frozen:true,
-        definition:{...savedDefinition,officialExport:officialExportAvailable(draftModel,draftYear)},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},
+        definition:{...savedDefinition,officialExport:officialExportAvailable(draftModel,draftYear),exportCapability:exportCapability(draftModel,draftYear)},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},
         period:{year:draftYear,period:draftPeriod,...bounds(draftYear,draftPeriod),policy:periodPolicy(draftModel,draftYear,draftPeriod)},calculation:savedCalculation,history:draft.resumen?.history||null,
         validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:officialExportAvailable(draftModel,draftYear)||DEFINITIONS[draftModel]?.handoffExport,canExportOfficial:officialExportAvailable(draftModel,draftYear),requiresReview:recommendations.length>0},
         source:savedSource,sources:SOURCES,adjustments:savedAdjustments,
@@ -4333,7 +4337,7 @@ Deno.serve(async (req) => {
     const recommendations=unique(frozenDraft?[...savedRecommendations,...warnings]:[...blockers,...warnings]);
     const sourceStart=model==='130'?b.cumulativeStart:b.start;
     const sourceSnapshot=frozenDraft?.resumen?.source||{hash:sourceHash,count:sourceIds.length,ids:sourceIds,stats:{invoices:invoices.filter((f:any)=>!f.anulada&&inRange(f,sourceStart,b.end)).length,taxLines:taxLines.filter((l:any)=>inRange(l,sourceStart,b.end)).length,invoicePayments:invoicePayments.filter((p:any)=>inRange(p,sourceStart,b.end)).length,payrolls:payrolls.filter((p:any)=>inRange(p,sourceStart,b.end)).length,journalEntries:entries.filter((e:any)=>inRange(e,sourceStart,b.end)).length,filings:filings.length}};
-    const result={ok:true,engineVersion:frozenDraft?.engineVersion||ENGINE_VERSION,frozen:!!frozenDraft,definition:{...(frozenDraft?.resumen?.definition||{code:model,...DEFINITIONS[model]}),officialExport:officialExportAvailable(model,year)},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b,policy:periodPolicy(model,year,period)},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:officialExportAvailable(model,year)||DEFINITIONS[model].handoffExport,canExportOfficial:officialExportAvailable(model,year),requiresReview:recommendations.length>0},source:sourceSnapshot,sources:SOURCES,...(frozenDraft?{draft:{id:frozenDraft.id,version:Number(frozenDraft.version||1),estado:frozenDraft.estado||'borrador',snapshotHash:frozenDraft.snapshotHash||'',sourceHash,frozenAt:frozenDraft.frozenAt||frozenDraft.created_date||''}}:{})};
+    const result={ok:true,engineVersion:frozenDraft?.engineVersion||ENGINE_VERSION,frozen:!!frozenDraft,definition:{...(frozenDraft?.resumen?.definition||{code:model,...DEFINITIONS[model]}),officialExport:officialExportAvailable(model,year),exportCapability:exportCapability(model,year)},company:{id:company.id,name:company.razon_social||company.nombre_comercial,taxId:company.nif_cif},period:{year,period,...b,policy:periodPolicy(model,year,period)},calculation:{...calculation,result:money(calculation.result)},history,validation:{blockers:[],warnings:recommendations,recommendations,technicalErrors:[],canSaveDraft:true,canExport:officialExportAvailable(model,year)||DEFINITIONS[model].handoffExport,canExportOfficial:officialExportAvailable(model,year),requiresReview:recommendations.length>0},source:sourceSnapshot,sources:SOURCES,...(frozenDraft?{draft:{id:frozenDraft.id,version:Number(frozenDraft.version||1),estado:frozenDraft.estado||'borrador',snapshotHash:frozenDraft.snapshotHash||'',sourceHash,frozenAt:frozenDraft.frozenAt||frozenDraft.created_date||''}}:{})};
     if(action==='calculate') return Response.json(result);
     if(action==='export_handoff') {
       if(!DEFINITIONS[model]?.handoffExport) return Response.json({error:'El traspaso guiado no está disponible para este modelo.'},{status:400});
@@ -4364,7 +4368,12 @@ Deno.serve(async (req) => {
       return Response.json({...result,draft,alreadySaved:false});
     }
     if(action==='export') {
-      if(!officialExportAvailable(model,year)) return Response.json({ok:false,error:model==='390'&&year>2025?'La AEAT aún no ha publicado el diseño oficial del modelo 390 para este ejercicio. El borrador interno sigue disponible, pero no se puede generar un fichero presentable con el diseño de 2025.':'El diseño no está habilitado para exportación oficial segura.',blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
+      if(!officialExportAvailable(model,year)) return Response.json({ok:false,error:exportCapability(model,year).message,blockers:[DEFINITIONS[model].designWarning||'Falta validar el diseño y todos los datos de detalle exigidos por la Administración.']},{status:422});
+      const exportKey=await sha256(JSON.stringify({protocol:ARTIFACT_PROTOCOL,companyId,model,year,period,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),developer:developerTaxIdStatus().value}));
+      const releaseArtifact=await acquireArtifactLease(svc,companyId);
+      try{
+      const existing=await existingArtifact(svc,companyId,exportKey,{model,year,period,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),design:DEFINITIONS[model].design});
+      if(existing){const layoutErrors=transferLayoutErrors(model,new TextDecoder().decode(Uint8Array.from(atob(existing.contentBase64),c=>c.charCodeAt(0))));if(layoutErrors.length)throw taxModelValidation('El archivo conservado ya no supera la comprobación estructural; se mantiene sin sobrescribir.',409);return Response.json({...result,artifactReused:true,file:{id:existing.id,regimeCodes:existing.regimeCodes||[],filename:existing.nombreFichero,extension:existing.extension,format:existing.formato,design:existing.versionDiseno,hash:existing.hash,contentBase64:existing.contentBase64,nextStep:'Se ha recuperado el archivo exacto. La descarga no implica aceptación ni presentación ante la Administración.'}});}
       let content=''; let filename=''; let extension=''; let format=''; let administration=DEFINITIONS[model].authority;
       if(model==='180') {
         content=export180(company,year,calculation,sequentialDeclarationNumber('180'));
@@ -4405,11 +4414,12 @@ Deno.serve(async (req) => {
       if(layoutErrors.length) return Response.json({ok:false,error:'El fichero generado no supera la validación estructural interna.',blockers:layoutErrors},{status:500});
       const hash=await sha256(content);
       const contentBase64=encodeBase64(content);
-      const record=await svc.entities.TaxOfficialFile.create({companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),taxDraftId:frozenDraft?.id||'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:recommendations,resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined,recommendations})});
+      const record=await svc.entities.TaxOfficialFile.create({exportKey,exportProtocolVersion:ARTIFACT_PROTOCOL,...artifactScope(taxLines,sourceIds),companyId,modeloCodigo:model,ejercicio:year,periodo:period,administracion:administration,nombreFichero:filename,extension,formato:format,versionDiseno:DEFINITIONS[model].design,hash,contentBase64,contentEncoding:'base64',contentSize:new TextEncoder().encode(content).length,immutable:true,sourceHash,snapshotHash:clean(frozenDraft?.snapshotHash),taxDraftId:frozenDraft?.id||'',generadoPor:user.email,fechaGeneracion:new Date().toISOString(),estado:'generado',errores:[],avisos:recommendations,resumenLegible:JSON.stringify({engineVersion:ENGINE_VERSION,sourceHash,result:calculation.result,workflow:model==='415'?'Importar en el programa ATC, validar y generar .dec':undefined,recommendations})});
       const nextStep = model === '415'
         ? 'Importa este fichero en Herramientas > Importar ficheros declarados del programa oficial 415. Revisa sus avisos y genera allí el .dec.'
         : `Importa el fichero en la presentación del modelo ${model} de la sede AEAT. La validación definitiva corresponde a la AEAT; sus avisos no invalidan la descarga generada por Taxea.`;
-      return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64,nextStep}});
+      return Response.json({...result,file:{id:record.id,filename,extension,format,design:DEFINITIONS[model].design,hash,contentBase64,nextStep,...artifactScope(taxLines,sourceIds)}});
+      }finally{await releaseArtifact();}
     }
     if(action==='export_review') {
       const content=JSON.stringify({...result,exportNotice:'Borrador técnico de revisión. No presentable ante AEAT/ATC.'},null,2); const filename=`${model}_${year}_${period}_revision_taxea.json`; const hash=await sha256(content); const contentBase64=encodeBase64(content);

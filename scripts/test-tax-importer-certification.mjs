@@ -28,7 +28,7 @@ const records = {
 };
 let handler;
 let writes = 0;
-let user = { email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-qa' } };
+let user = { id:'qa-user', email: 'owner@test.invalid', role: 'user', data: { company_id: 'company-qa' } };
 let serial = 0;
 const entity = name => ({
   get: async id => records[name].find(row => row.id === id) || null,
@@ -48,7 +48,7 @@ const suite = await call({ action: 'self_test' });
 checks.push(suite.data.ok && Object.values(suite.data.checks).every(Boolean));
 const denied = await call({ action: 'record', companyId: 'other-company', fileId: 'file-qa' });
 checks.push(denied.status === 404 || denied.status === 403);
-const base = { action: 'record', companyId: 'company-qa', fileId: 'file-qa', resultado: 'aceptado', fechaPrueba: '2025-02-02T12:00:00Z', respuestaImportador: 'Fichero aceptado por importador sintético', evidenceUrl: 'https://test.invalid/proof.pdf', confirmation: true };
+const base = { regimeCodes:['general'],action: 'record', companyId: 'company-qa', fileId: 'file-qa', resultado: 'aceptado', fechaPrueba: '2025-02-02T12:00:00Z', respuestaImportador: 'Fichero aceptado por importador sintético', evidenceUrl: 'https://test.invalid/proof.pdf', confirmation: true };
 checks.push((await call({ ...base, evidenceUrl: '' })).status === 400);
 checks.push((await call({ ...base, fileId: 'guided-qa' })).status === 409);
 checks.push((await call({ ...base, fileId: 'bad-qa' })).status === 409);
@@ -60,7 +60,7 @@ checks.push(accepted.status === 200 && accepted.data.record.fileHashSha256 === s
 const duplicate = await call(base);
 checks.push(duplicate.data.alreadyExisted === true && writes === 1);
 checks.push((await call({ action: 'review', companyId: 'company-qa', recordId: accepted.data.record.id, confirmation: true })).status === 403);
-user = { email: 'advisor@test.invalid', role: 'asesor', data: {} };
+user = { id:'qa-user', email: 'advisor@test.invalid', role: 'asesor', data: {} };
 const originalContent = records.TaxOfficialFile[0].contentBase64;
 records.TaxOfficialFile[0].contentBase64 = Buffer.from('alterado').toString('base64');
 checks.push((await call({ action: 'review', companyId: 'company-qa', recordId: accepted.data.record.id, confirmation: true })).status === 409 && writes === 1);
@@ -69,5 +69,6 @@ const reviewed = await call({ action: 'review', companyId: 'company-qa', recordI
 checks.push(reviewed.status === 200 && reviewed.data.record.revisionAsesor === 'revisada' && writes === 2);
 const list = await call({ action: 'list', companyId: 'company-qa', ejercicio: 2025 });
 checks.push(list.data.rows.length === 1 && list.data.rows[0].resultado === 'aceptado' && list.data.rows[0].revisionAsesor === 'revisada');
+const readiness=await call({action:'readiness',companyId:'company-qa',ejercicio:2025});checks.push(readiness.data.models.find(m=>m.model==='296').acceptedFiles.length===1);records.TaxOfficialFile[0].contentBase64=Buffer.from('corrupt').toString('base64');const corrupted=await call({action:'readiness',companyId:'company-qa',ejercicio:2025});checks.push(corrupted.data.models.find(m=>m.model==='296').acceptedFiles.length===0);records.TaxOfficialFile[0].contentBase64=originalContent;const rejected=await call({...base,resultado:'rechazado',fechaPrueba:'2026-11-02T12:00:00Z',respuestaImportador:'Rejected in synthetic retest'});checks.push(rejected.status===200);await call({action:'review',companyId:'company-qa',recordId:rejected.data.record.id,confirmation:true});const noLongerAccepted=await call({action:'readiness',companyId:'company-qa',ejercicio:2025});checks.push(noLongerAccepted.data.models.find(m=>m.model==='296').acceptedFiles.length===0);
 console.log(JSON.stringify({ ok: checks.every(Boolean), checks, writes, records: records.TaxImporterEvidence.length }, null, 2));
 if (!checks.every(Boolean)) process.exitCode = 1;

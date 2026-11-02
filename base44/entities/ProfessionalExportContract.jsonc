@@ -1,0 +1,65 @@
+{
+  "name": "ProfessionalExportContract",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "confirmed"
+      ]
+    },
+    "contractHash": {
+      "type": "string"
+    },
+    "contractJson": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "confirmedBy": {
+      "type": "string"
+    },
+    "confirmedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "companyId",
+    "contractHash",
+    "contractJson"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -67,6 +67,27 @@
     "fechaRevision": {
       "type": "string",
       "format": "date-time"
+    },
+    "scopeVersion": {
+      "type": "string"
+    },
+    "regimeCodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "caseCodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewedRegimeCodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [

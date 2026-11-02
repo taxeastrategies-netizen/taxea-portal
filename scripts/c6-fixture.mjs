@@ -1,0 +1,14 @@
+import {validateContract,taxMapKey,exportRange} from '../base44/functions/accountingOperations/a3Importia.mjs';
+export function fixture(){
+ const company={id:'qa-c6',nif_cif:'00000000T',razon_social:'QA C6 FICTICIA — NO ENVIAR',activa:true,owner_email:'qa-c6@test.invalid'};
+ const accounts=['43000001','41000001','62900000','70500000','47200000','47700000','57200001'].map(code=>({id:'acct-'+code,code,name:'Cuenta QA '+code}));
+ const invoices=[{id:'sale',tipo:'emitida',numero_factura:'QA-C6-SALE',fecha_emision:'2026-02-01',fecha_operacion:'2026-02-01',base_imponible:100,cuota_iva:21,tipo_iva:21,total_factura:121,retencion_irpf:0,importe_retencion:0,cliente_nombre:'CLIENTE FICTICIO',cliente_nif:'00000001R',fiscal_review_status:'validado',estado_contable:'contabilizada',fiscal_regime:'general',fiscal_operation_type:'subject_taxed',indirect_tax_kind:'iva',counterparty_account_code:'43000001',linked_journal_entry_id:'js'},
+ {id:'buy',tipo:'recibida',numero_factura:'QA-C6-BUY',fecha_emision:'2026-02-02',fecha_operacion:'2026-02-02',fecha_recepcion:'2026-02-02',base_imponible:100,cuota_iva:21,tipo_iva:21,total_factura:121,deductible_tax_amount:10.5,non_deductible_tax_amount:10.5,retencion_irpf:0,importe_retencion:0,proveedor_nombre:'PROVEEDOR FICTICIO',proveedor_nif:'00000002W',fiscal_review_status:'validado',estado_contable:'contabilizada',fiscal_regime:'general',fiscal_operation_type:'subject_taxed',indirect_tax_kind:'iva',counterparty_account_code:'41000001',linked_journal_entry_id:'jb'}];
+ const entries=[{id:'js',date:'2026-02-01',entryNumber:'QA-S1',status:'confirmado',documentId:'sale'},{id:'jb',date:'2026-02-02',entryNumber:'QA-B1',status:'confirmado',documentId:'buy'}];
+ const line=(id,accountCode,debit,credit)=>({id,accountCode,debit,credit});
+ const linesByEntry=new Map([['js',[line('s1','43000001',121,0),line('s2','70500000',0,100),line('s3','47700000',0,21)]],['jb',[line('b1','62900000',110.5,0),line('b2','47200000',10.5,0),line('b3','41000001',0,121)]]]);
+ const taxLines=invoices.map(i=>({id:'tax-'+i.id,invoiceId:i.id,lineNumber:1,base:100,quota:21,deductibleQuota:i.tipo==='recibida'?10.5:0,nonDeductibleQuota:i.tipo==='recibida'?10.5:0,rate:21,regime:'general',operationType:'subject_taxed',reviewStatus:'validado',taxKind:'iva'}));
+ const contract=validateContract({target:'a3innuva_importia_json',accountLength:8,regimeSettingsReviewed:true,includeChart:true,taxMappings:taxLines.map((l,n)=>({key:taxMapKey(l,invoices[n]),taxCode:'General',transaction:'OP_INT'}))},company);
+ return {company,range:exportRange({year:2026,startMonth:1,endMonth:3}),contract,data:{accounts,invoices,entries,payments:[],linesByEntry,operationById:new Map()},taxLines,profiles:[]};
+}
+export const records=(value,kind)=>value.files.filter(f=>f.kind===kind).flatMap(f=>JSON.parse(f.content).Entities.$values);

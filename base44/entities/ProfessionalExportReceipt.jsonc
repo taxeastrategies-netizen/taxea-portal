@@ -1,0 +1,85 @@
+{
+  "name": "ProfessionalExportReceipt",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "receiptKey": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "rejected",
+        "undone"
+      ]
+    },
+    "response": {
+      "type": "string"
+    },
+    "product": {
+      "type": "string"
+    },
+    "testedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "counts": {
+      "type": "object"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "fileFingerprint": {
+      "type": "string"
+    },
+    "regimes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reviewedBy": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "companyId",
+    "batchId",
+    "receiptKey",
+    "outcome",
+    "fileFingerprint",
+    "response"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

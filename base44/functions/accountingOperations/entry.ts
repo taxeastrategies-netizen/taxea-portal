@@ -1,3 +1,5 @@
+import {professionalExportOperation} from './professionalExport.mjs';
+import {ExportError,professionalExportUserEnabled} from './a3Importia.mjs';
 import { c5AdjustmentOperation } from './c5Operations.mjs';
 import {PublicAccountingError,publicAccountingFailure} from './publicAccountingError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
@@ -1466,6 +1468,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const action = body.action;
+    if(String(action||'').startsWith('professional_export_')&&!professionalExportUserEnabled(user))return Response.json({error:'Cuenta no habilitada.'},{status:403});
     const companyId = body.companyId || user.data?.company_id || user.company_id;
     const isAdmin = user.role === 'admin' || user.role === 'super_admin';
     if (!companyId) {
@@ -1492,6 +1495,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No tienes permiso para operar en la empresa seleccionada.' }, { status: 403 });
     }
 
+    if(String(action||'').startsWith('professional_export_')){try{return Response.json(await professionalExportOperation({svc,companyId,company,user,fetchAll,accountingData},body));}catch(error){if(error instanceof ExportError)return Response.json({success:false,error:error.message,details:error.details||[]},{status:error.status,headers:{'Cache-Control':'no-store'}});throw error;}}
     if (['c5_deduction_context','c5_deduction_preview','c5_deduction_post','c5_deduction_recover_lock'].includes(action)) return Response.json(await c5AdjustmentOperation({svc,companyId,user,createJournalEntry,ensureAccount},body));
     if (action === 'ensure_accounting_ready') {
       const result = await ensureAccountingReady(svc, companyId, user.email);

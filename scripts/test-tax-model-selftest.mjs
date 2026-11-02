@@ -78,7 +78,7 @@ const records = {
   TaxModel: [{ id: 'model-303', companyId: 'company-test', codigo: '303', nombre: 'Autoliquidación IVA', activo: true, periodicidad: 'trimestral', administracion: 'AEAT' }],
   TaxSubmission: [{ id: 'legacy-111', companyId: 'company-test', modeloCodigo: '111', ejercicio: 2026, periodo: '1T', estado: 'presentado', fechaEnvio: '2026-04-19T09:00:00Z' }],
 };
-const matches = (item, query = {}) => Object.entries(query).every(([key, value]) => item?.[key] === value);
+const matches = (item, query = {}) => Object.entries(query).every(([key, value]) => key==='$or'?value.some(clause=>matches(item,clause)):value&&typeof value==='object'&&'$exists'in value?(item?.[key]!==undefined)===value.$exists:item?.[key]===value);
 const entity = name => ({
   async get(id) { return records[name].find(item => item.id === id) || null; },
   async filter(query = {}, sort = '-created_date', limit = 500, skip = 0) {
@@ -100,6 +100,7 @@ const entity = name => ({
     records[name][index] = { ...records[name][index], ...payload, updated_date: new Date().toISOString() };
     return records[name][index];
   },
+  async updateMany(query,patch){let updated=0;for(const row of records[name])if(matches(row,query)){Object.assign(row,patch.$set);updated++;}return {updated};},
   async delete(id) {
     const index = records[name].findIndex(item => item.id === id);
     if (index < 0) throw new Error(`${name} ${id} no existe`);

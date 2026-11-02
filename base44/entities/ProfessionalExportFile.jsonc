@@ -1,0 +1,64 @@
+{
+  "name": "ProfessionalExportFile",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "size": {
+      "type": "number"
+    },
+    "contentBase64": {
+      "type": "string"
+    },
+    "immutable": {
+      "type": "boolean",
+      "default": true
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "companyId",
+    "batchId",
+    "name",
+    "hash",
+    "contentBase64"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

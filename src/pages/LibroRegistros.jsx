@@ -1,6 +1,7 @@
 import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
 import { useState, useEffect, useMemo } from 'react';
+import ProfessionalExportPanel from '@/components/libros/ProfessionalExportPanel';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import { base44 } from '@/api/base44Client';
@@ -25,6 +26,7 @@ const TABS = [
   { key: 'gastos', label: 'Gastos' },
   { key: 'recc', label: 'Criterio de caja' },
   { key: 'pnl', label: 'P&L' },
+  { key: 'asesoria', label: 'Salida a la asesoría' },
 ];
 
 export default function LibroRegistros() {
@@ -222,6 +224,7 @@ export default function LibroRegistros() {
         ))}
       </div>
 
+      {activeTab === 'asesoria' && <ProfessionalExportPanel companyId={company.id} year={Number(filterAnio)} />}
       {activeTab === 'recc' && <ReccBookPanel companyId={company?.id} year={filterAnio} />}
 
       {/* P&L */}

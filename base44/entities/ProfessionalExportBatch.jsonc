@@ -1,0 +1,116 @@
+{
+  "name": "ProfessionalExportBatch",
+  "type": "object",
+  "properties": {
+    "companyId": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "contractId": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "sourceHash": {
+      "type": "string"
+    },
+    "year": {
+      "type": "number"
+    },
+    "startMonth": {
+      "type": "number"
+    },
+    "endMonth": {
+      "type": "number"
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "building",
+        "ready",
+        "failed"
+      ]
+    },
+    "counts": {
+      "type": "object"
+    },
+    "totals": {
+      "type": "object"
+    },
+    "regimes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdBy": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "manifestHash": {
+      "type": "string"
+    },
+    "fileCount": {
+      "type": "number"
+    },
+    "failure": {
+      "type": "string"
+    },
+    "lastOutcome": {
+      "type": "string",
+      "enum": [
+        "not_tested",
+        "accepted",
+        "rejected",
+        "undone"
+      ]
+    },
+    "lastReceiptId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "companyId",
+    "fingerprint",
+    "year",
+    "state"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
