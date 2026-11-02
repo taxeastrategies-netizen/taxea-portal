@@ -53,8 +53,8 @@ export default function Ajustes() {
         })}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="min-w-0 lg:col-span-2">
           {activeTab === 'empresa'        && <TabEmpresa company={company} user={user} refreshCompany={refreshCompany} />}
           {activeTab === 'fiscal'         && <TabFiscal />}
           {activeTab === 'seguridad'      && <TabSeguridad user={user} />}

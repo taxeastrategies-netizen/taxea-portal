@@ -27,7 +27,7 @@ export default function C5DeductionPanel({companyId,activities=[]}){
   }catch(failure){setError(failure?.response?.data?.error||failure.message||'No se pudo calcular.');}
   finally{setBusy(false);}
  };
- return <section className="rounded-xl border bg-card p-4 space-y-4" aria-label="Regularización de deducciones">
+ return <section className="min-w-0 w-full max-w-full rounded-xl border bg-card p-4 space-y-4" aria-label="Regularización de deducciones">
   <div><h4 className="font-semibold">Regularización de deducciones · IVA e IGIC</h4><p className="mt-1 text-xs text-muted-foreground">Analiza la prorrata general/especial o un bien de inversión. El asesor confirma el ajuste; se conserva cada factura, subcuenta y asiento original. Un sector agrupa sus actividades; sin sector se analiza la actividad elegida.</p></div>
   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
    <label className="text-xs space-y-1"><span>Ejercicio</span><Input aria-label="Ejercicio regularización" type="number" min="2000" max="2100" value={form.year} onChange={e=>set('year',Number(e.target.value))}/></label>
@@ -43,7 +43,7 @@ export default function C5DeductionPanel({companyId,activities=[]}){
    <label className="text-xs space-y-1"><span>Clase de bien</span><NativeSelect aria-label="Clase inversión" value={form.realEstate?'property':'movable'} onChange={e=>set('realEstate',e.target.value==='property')} className="w-full min-h-9 rounded border bg-background px-2"><option value="movable">Mueble · periodo de 5 años</option><option value="property">Terreno / edificación · 10 años</option></NativeSelect></label>
    <label className="flex gap-2 text-xs"><input type="checkbox" checked={form.investmentQualificationConfirmed} onChange={e=>set('investmentQualificationConfirmed',e.target.checked)}/>He verificado que cumple la definición fiscal de bien de inversión.</label>
   </div>}
-  <div className="flex gap-2"><Button variant="outline" disabled={busy||!form.activityId} onClick={()=>run('c5_deduction_preview')}>{busy?'Procesando…':'Analizar regularización'}</Button><Button disabled={busy||!canConfirm||!preview||!form.reason.trim()||(!preview.delta&&!preview.fiscalDelta)||preview.requiresReview||!preview.fingerprint} onClick={()=>run('c5_deduction_post')}>Confirmar ajuste del asesor</Button></div>
+  <div className="flex flex-col gap-2 sm:flex-row"><Button variant="outline" disabled={busy||!form.activityId} onClick={()=>run('c5_deduction_preview')}>{busy?'Procesando…':'Analizar regularización'}</Button><Button disabled={busy||!canConfirm||!preview||!form.reason.trim()||(!preview.delta&&!preview.fiscalDelta)||preview.requiresReview||!preview.fingerprint} onClick={()=>run('c5_deduction_post')}>Confirmar ajuste del asesor</Button></div>
   {!canConfirm&&<p className="text-xs text-muted-foreground">Puedes consultar y simular; la confirmación contable corresponde al asesor o administrador.</p>}
   {error&&<p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">{error}</p>}
   {preview?.reviewMessage&&<p role="status" className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{preview.reviewMessage}</p>}

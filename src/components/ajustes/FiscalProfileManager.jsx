@@ -90,7 +90,7 @@ export default function FiscalProfileManager({ company, onChanged = undefined })
     toast.success('Actividad fiscal guardada.');
   };
 
-  return <div className="space-y-5">
+  return <div className="min-w-0 w-full max-w-full space-y-5">
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
       <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 text-primary" /><div><h3 className="font-semibold">Perfil fiscal maestro</h3><p className="mt-1 text-xs text-muted-foreground">El cliente o su asesor debe confirmar territorio, actividades, regimenes y obligaciones. Las reglas automaticas son propuestas versionadas; cada factura permite correccion manual motivada.</p><div className="mt-2 flex flex-wrap gap-2"><Badge variant="outline">{bundle.data?.ruleSetVersion}</Badge><Badge variant={profile.profileStatus === 'validado_asesor' ? 'default' : 'secondary'}>{profile.profileStatus === 'validado_asesor' ? 'Validado por asesor' : 'Pendiente de validacion'}</Badge></div></div></div>
     </div>
