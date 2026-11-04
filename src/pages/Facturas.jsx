@@ -1,3 +1,6 @@
+import { annulInvoices } from '@/lib/annulInvoices';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useState, useEffect, useMemo } from 'react';
@@ -49,6 +52,10 @@ export default function Facturas() {
   const [showAnuladas, setShowAnuladas] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [anulando, setAnulando] = useState(false);
+  const [annulIds, setAnnulIds] = useState([]);
+  const [annulReason, setAnnulReason] = useState('');
+  const [annulNotice, setAnnulNotice] = useState('');
+
   const [showRecurringView, setShowRecurringView] = useState(false);
   const [showGenerateRecurring, setShowGenerateRecurring] = useState(false);
   const [showDuplicateCheck, setShowDuplicateCheck] = useState(false);
@@ -60,7 +67,8 @@ export default function Facturas() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterEstado, filterTrimestre, filterAnio, filterTipo, showAnuladas, showRecurringView]);
+    setSelectedIds([]);
+  }, [company?.id, search, filterEstado, filterTrimestre, filterAnio, filterTipo, showAnuladas, showRecurringView]);
 
   const fetchInvoices = async () => {
     const res = await base44.functions.invoke('getCompanyFinancials', { company_id: company.id });
@@ -86,41 +94,33 @@ export default function Facturas() {
 
   usePageRefresh(loadInvoices,['/facturas','/tax-accounting/facturas']);
 
-  const handleAnular = async (inv) => {
-    setAnulando(true);
+  const openAnnulment = ids => {
+    if (!ids.length || anulando) return;
     setAnularError('');
-    try {
-      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: [inv.id], companyId: company?.id });
-      const data = res?.data || res;
-      const now = data?.timestamp || new Date().toISOString();
-      setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación directa' } : i));
-      triggerFinancialRefresh();
-    } catch (e) {
-      const msg = e?.response?.data?.error || e?.message || 'No se pudo anular la factura.';
-      console.error('Error anulando:', e);
-      setAnularError(msg);
-    }
-    setAnulando(false);
+    setAnnulNotice('');
+    setAnnulReason('');
+    setAnnulIds(ids);
   };
 
-  const handleAnularBulk = async () => {
-    if (selectedIds.length === 0) return;
+  const handleAnnulment = async () => {
+    if (!annulReason.trim() || !annulIds.length || anulando) return;
     setAnulando(true);
-    setAnularError('');
     try {
-      const res = await base44.functions.invoke('anularFacturas', { invoiceIds: selectedIds, companyId: company?.id });
-      const data = res?.data || res;
-      const now = data?.timestamp || new Date().toISOString();
-      const annulledIds = new Set(data?.annulledIds || selectedIds);
-      setInvoices(prev => prev.map(i => annulledIds.has(i.id) ? { ...i, anulada: true, fecha_anulacion: now, motivo_anulacion: 'Anulación múltiple' } : i));
-      setSelectedIds([]);
-      triggerFinancialRefresh();
-    } catch (e) {
-      const msg = e?.response?.data?.error || e?.message || 'No se pudieron anular las facturas.';
-      console.error('Error anulación múltiple:', e);
-      setAnularError(msg);
+      const { confirmed, failures } = await annulInvoices(company.id, annulIds, annulReason.trim());
+      await loadInvoices();
+      setInvoices(previous => previous.map(invoice => confirmed.has(invoice.id) ? { ...invoice, anulada: true } : invoice));
+      setSelectedIds(previous => previous.filter(id => !confirmed.has(id)));
+      if (confirmed.size) {
+        setAnnulNotice(confirmed.size === 1 ? 'Anulación confirmada para 1 factura.' : 'Anulación confirmada para ' + confirmed.size + ' facturas.');
+        triggerFinancialRefresh();
+      }
+      if (failures.size) {
+        setAnularError([...failures].map(([id, reason]) => (invoices.find(invoice => invoice.id === id)?.numero_factura || 'Factura seleccionada') + ' · ' + reason).join('\n'));
+      }
+      setAnnulIds([]);
+    } finally {
+      setAnulando(false);
     }
-    setAnulando(false);
   };
 
   const openNew = () => setShowForm(true);
@@ -258,7 +258,7 @@ export default function Facturas() {
                                  </DropdownMenuItem>
                                )}
                                {!inv.anulada && (
-                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleAnular(inv)}>
+                                 <DropdownMenuItem className="text-red-600 focus:text-red-600" disabled={anulando} onClick={() => openAnnulment([inv.id])}>
                                    <Ban className="w-3.5 h-3.5 mr-1.5" /> Anular factura
                                  </DropdownMenuItem>
                                )}
@@ -426,10 +426,11 @@ export default function Facturas() {
         </div>
         )}
 
+        {annulNotice && <p role="status" className="mb-4 rounded-lg border border-border p-3 text-sm">{annulNotice}</p>}
         {anularError && (
           <div className="flex items-center gap-2 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/40 dark:border-red-800">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-            <span className="text-sm text-red-700 dark:text-red-300">{anularError}</span>
+            <span role="alert" className="whitespace-pre-line text-sm text-red-700 dark:text-red-300">{anularError}</span>
             <button className="ml-auto text-xs text-red-600 hover:underline" onClick={() => setAnularError('')}>Cerrar</button>
           </div>
         )}
@@ -439,7 +440,7 @@ export default function Facturas() {
           <div className="flex flex-wrap items-center gap-3 mb-4 px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg dark:bg-red-950/40 dark:border-red-800">
             <span className="text-sm font-medium text-red-700 dark:text-red-300">{selectedIds.length} factura(s) seleccionada(s)</span>
             <div className="flex-1" />
-            <Button variant="destructive" size="sm" disabled={anulando} onClick={handleAnularBulk} className="gap-1.5">
+            <Button variant="destructive" size="sm" disabled={anulando} onClick={() => openAnnulment(selectedIds)} className="gap-1.5">
               {anulando ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Anulando...</> : <><Ban className="w-3.5 h-3.5" /> Anular seleccionadas</>}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>Limpiar</Button>
@@ -471,7 +472,7 @@ export default function Facturas() {
             </div>
           ) : (
             <>
-            {mobile ? <MobileInvoiceList invoices={visibleInvoices} selectedIds={selectedIds}
+            {mobile ? <MobileInvoiceList invoices={visibleInvoices} selectedIds={selectedIds} selectionDisabled={showAnuladas || anulando}
               allSelected={filtered.length > 0 && filtered.every(invoice => selectedIds.includes(invoice.id))}
               onSelectAll={checked => setSelectedIds(checked ? filtered.map(invoice => invoice.id) : [])}
               onSelect={(id, checked) => setSelectedIds(previous => checked ? [...new Set([...previous, id])] : previous.filter(selected => selected !== id))}
@@ -480,7 +481,7 @@ export default function Facturas() {
                 <thead>
                   <tr className="border-b border-border bg-secondary/50">
                     <th className="w-10 px-4 py-3">
-                      <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar todas las facturas visibles</span><input type="checkbox" className="rounded border-border" checked={filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id))} onChange={e => { if (e.target.checked) setSelectedIds(filtered.map(i => i.id)); else setSelectedIds([]); }} /></label>
+                      <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar todas las facturas filtradas</span><input type="checkbox" disabled={showAnuladas || anulando} className="rounded border-border" checked={filtered.length > 0 && filtered.every(i => selectedIds.includes(i.id))} onChange={e => { if (e.target.checked) setSelectedIds(filtered.map(i => i.id)); else setSelectedIds([]); }} /></label>
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nº Factura</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
@@ -499,7 +500,7 @@ export default function Facturas() {
                       onClick={() => handleOpenWorkspace(inv)}
                       className={`hover:bg-secondary/30 transition-colors cursor-pointer ${selectedIds.includes(inv.id) ? 'bg-accent/50' : ''}`}>
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                        <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar factura {inv.numero_factura || inv.id}</span><input type="checkbox" className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} /></label>
+                        <label className="taxea-checkbox-target"><span className="sr-only">Seleccionar factura {inv.numero_factura || inv.id}</span><input type="checkbox" disabled={inv.anulada || anulando} className="rounded border-border" checked={selectedIds.includes(inv.id)} onChange={e => { if (e.target.checked) setSelectedIds(prev => [...prev, inv.id]); else setSelectedIds(prev => prev.filter(id => id !== inv.id)); }} /></label>
                       </td>
                       <td className="px-4 py-3 font-medium text-foreground">
                          {inv.numero_factura}
@@ -543,6 +544,23 @@ export default function Facturas() {
       )}
 
       {/* ── Modales ───────────────────────────────────────────────────────── */}
+      <Dialog open={annulIds.length > 0} onOpenChange={open => { if (!open && !anulando) setAnnulIds([]); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{annulIds.length === 1 ? 'Anular factura' : 'Anular ' + annulIds.length + ' facturas'}</DialogTitle>
+            <DialogDescription>Se conservará cada factura y se registrará su contraasiento si está contabilizada.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-3" onSubmit={event => { event.preventDefault(); handleAnnulment(); }}>
+            <label className="block text-sm font-medium" htmlFor="annul-reason">Motivo de anulación</label>
+            <Textarea id="annul-reason" value={annulReason} onChange={event => setAnnulReason(event.target.value)} maxLength={500} required disabled={anulando} />
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" disabled={anulando} onClick={() => setAnnulIds([])}>Cancelar</Button>
+              <Button type="submit" variant="destructive" disabled={anulando || !annulReason.trim()}>{anulando ? 'Anulando…' : 'Confirmar anulación'}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <InvoiceForm
         open={showForm}
         onOpenChange={setShowForm}

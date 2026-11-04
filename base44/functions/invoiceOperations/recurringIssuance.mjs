@@ -32,8 +32,7 @@ export async function recurringScope(svc,user,templateId,companyId,authorize){
  return {template,company,companyId:template.ownerAccountId,identity};
 }
 export function assertRecurringInvoice(invoice,scope){const t=scope.template;if(!invoice||invoice.company_id!==scope.companyId||invoice.tipo!=='emitida'||!invoice.isRecurringGenerated||invoice.recurringInvoiceTemplateId!==t.id||!invoice.recurringPeriodStart||!invoice.recurringPeriodEnd||invoice.recurringPeriodKey!==`${t.id}_${invoice.recurringPeriodStart}_${invoice.recurringPeriodEnd}`)throw problem('La factura no corresponde a esta plantilla y empresa.',403);if(invoice.anulada)throw problem('La factura de este período está anulada; no se reutiliza su número ni se emite otra automáticamente.');return invoice;}
-async function nextNumber(svc,companyId,year){let max=0;const pattern=new RegExp('^F-'+year+'-(\\d+)$');for(let skip=0;skip<100000;skip+=500){const page=await svc.entities.Invoice.filter({company_id:companyId,tipo:'emitida'},'id',500,skip);for(const row of page){const m=pattern.exec(text(row.numero_factura));if(m){const n=Number(m[1]);if(!Number.isSafeInteger(n))throw problem('La numeración supera el rango admitido.',422);max=Math.max(max,n);}}if(page.length<500)return `F-${year}-${max+1}`;}throw problem('La numeración requiere una consulta segmentada; no se emitirá con una lista truncada.',422);}
-export async function issueRecurringInvoice({base44,user,body,authorize,acquireLease,buildPayload,complete}){
+export async function issueRecurringInvoice({base44,user,body,authorize,acquireLease,buildPayload,nextNumber,complete}){
  const svc=base44.asServiceRole,scope=await recurringScope(svc,user,body.template_id,body.company_id,authorize),template=scope.template;
  if(!body.generation_token||template.generation_lock_token!==body.generation_token)throw problem('La generación no tiene una reserva activa. Reintenta desde la plantilla.');
  const start=recurringDate(body.period_start),end=nextRecurringDate(template,start);if(body.period_end!==end)throw problem('El período no coincide con la frecuencia guardada.',422);
@@ -61,7 +60,7 @@ export async function issueRecurringInvoice({base44,user,body,authorize,acquireL
     criteria.taxBreakdown=rows;quota=money(rows.reduce((sum,row)=>sum+row.quota,0));
    }
    const withheld=money(base*retention/100),total=money(base+quota-withheld);
-   const number=await nextNumber(svc,scope.companyId,Number(start.slice(0,4)));
+   const number=await nextNumber(svc, scope.companyId, start);
    const payload=buildPayload({tipo:'emitida',numero_factura:number,fecha_emision:start,fecha_operacion:start,fecha_vencimiento:recurringDueDate(template,start),cliente_nombre:template.clientName,cliente_nif:template.clientNif,cliente_email:template.clientEmail||'',cliente_direccion:template.clientAddress||'',concepto:template.concept,base_imponible:base,tipo_iva:rate,cuota_iva:quota,retencion_irpf:retention,importe_retencion:withheld,total_factura:total,moneda:template.currency||'EUR',fiscal_activity_id:criteria.activityId,...(criteria.taxBreakdown?{tax_breakdown:JSON.stringify(criteria.taxBreakdown)}:{}),forma_pago:template.formaPago||'Transferencia bancaria',coletilla_fiscal:template.coletillaFiscal||'',origin:'recurring_invoice'},scope.companyId,user,criteria);
    const hashBytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([payload,criteria])));
    const sourceHash=Array.from(new Uint8Array(hashBytes)).map(x=>x.toString(16).padStart(2,'0')).join('');

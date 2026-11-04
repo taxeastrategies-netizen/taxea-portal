@@ -1,3 +1,4 @@
+import useInvoiceNumberSuggestion from '@/hooks/useInvoiceNumberSuggestion';
 /**
  * DocumentWorkspace — Vista completa para Presupuestos y Proformas
  * Layout: Cabecera · Visor visual izquierda · Panel operativo derecha
@@ -40,9 +41,10 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
   const [converting, setConverting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
-  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState(null);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
   const [convertError, setConvertError] = useState('');
+  const suggestedNumber = useInvoiceNumberSuggestion(company?.id, invoiceDate, showConvertDialog && invoiceNumber === null);
 
   const isQuote = docType === 'quote';
   const entityName = isQuote ? 'Quote' : 'Proforma';
@@ -51,8 +53,8 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
   const isConverted = statusKey === 'convertido_factura' || statusKey === 'convertida_factura';
 
   const convertToInvoice = async () => {
-    const cleanNumber = invoiceNumber.trim();
-    if (!cleanNumber || !invoiceDate) {
+    const cleanNumber = invoiceNumber?.trim() || '';
+    if ((invoiceNumber !== null && !cleanNumber) || !invoiceDate) {
       setConvertError('Indica el número definitivo y la fecha de emisión.');
       return;
     }
@@ -73,6 +75,7 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
         action: 'create_invoice',
         company_id: company.id,
         idempotency_key: `source:${sourceType}:${doc.id}`,
+        automatic_number: invoiceNumber === null,
         invoice: {
           numero_factura: cleanNumber,
           fecha_emision: invoiceDate,
@@ -238,7 +241,8 @@ function SidePanel({ doc, docType, company, user, onEdit, onRefresh, onSend, onC
           <div className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Número de factura *</Label>
-              <Input value={invoiceNumber} onChange={event => setInvoiceNumber(event.target.value)} placeholder="F-2026-001" />
+              <Input value={invoiceNumber ?? suggestedNumber} onChange={event => setInvoiceNumber(event.target.value)} maxLength={120} placeholder="Correlativo al guardar" />
+              {invoiceNumber !== null && <button type="button" className="text-xs text-primary underline" onClick={() => setInvoiceNumber(null)}>Usar correlativo</button>}
             </div>
             <div className="space-y-1.5">
               <Label>Fecha de emisión *</Label>

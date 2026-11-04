@@ -1,3 +1,4 @@
+import { enabledPortalUser, portalAdmin, requirePortalCompany } from './portalAccess.generated.mjs';
 import {PublicDomainError,publicServiceFailure} from './publicServiceError.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.41';
 import { SCHEMA_VERSION, canonical8, createJournalEntry, commitJournalEntry, assertAccountingDateOpen } from './accountingEngine.ts';
@@ -17,7 +18,7 @@ async function resolveLines(svc, companyId, entry) {
 async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, date) {
   if (entry.reversalEntryId) {
     const existing = await svc.entities.JournalEntry.get(entry.reversalEntryId).catch(() => null);
-    if (existing) {
+    if (existing?.companyId === companyId && existing.id !== entry.id && existing.status !== 'anulado') {
       await assertAccountingDateOpen(svc, companyId, existing.date);
       return (await commitJournalEntry(svc, companyId, existing, userEmail)).entry;
     }
@@ -40,6 +41,7 @@ async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, d
     source: 'sistema',
     documentId: entry.documentId || '',
     postingKey,
+    reversalOfEntryId: entry.id,
     status: 'confirmado',
     lines: lines.map(line => ({
       accountCode: canonical8(line.accountCode || line.subcuenta),
@@ -64,69 +66,169 @@ async function reverseConfirmedEntry(svc, companyId, entry, reason, userEmail, d
   return committedReversal.entry;
 }
 
-Deno.serve(async (req) => {
+const batchLimit = 4;
+const emptyLock = { $in: [null, ''] };
+
+async function acquireAnnulmentLease(svc, companyId, invoiceId, now) {
+  const token = crypto.randomUUID();
+  const claim = await svc.entities.Invoice.updateMany({
+    id: invoiceId,
+    company_id: companyId,
+    anulada: { $ne: true },
+    source_confirmation_lock_token: emptyLock,
+    payment_lock_token: emptyLock,
+    recc_application_lock_token: emptyLock,
+  }, { $set: {
+    source_confirmation_lock_token: token,
+    source_confirmation_lock_started_at: now,
+    payment_lock_token: token,
+    payment_lock_started_at: now,
+    payment_lock_key: 'annul:' + invoiceId,
+    recc_application_lock_token: token,
+    recc_application_lock_started_at: now,
+    recc_application_lock_document_id: invoiceId,
+  } });
+  if (Number(claim?.updated) !== 1) {
+    throw new PublicDomainError('La factura tiene otra operación en curso. Actualiza antes de reintentar.', 409);
+  }
+  return async () => {
+    await svc.entities.Invoice.updateMany({
+      id: invoiceId, company_id: companyId,
+      source_confirmation_lock_token: token, payment_lock_token: token, recc_application_lock_token: token,
+    }, { $set: {
+      source_confirmation_lock_token: '', source_confirmation_lock_started_at: '',
+      payment_lock_token: '', payment_lock_started_at: '', payment_lock_key: '',
+      recc_application_lock_token: '', recc_application_lock_started_at: '', recc_application_lock_document_id: '',
+    } });
+  };
+}
+
+async function findOriginalEntry(svc, companyId, invoice) {
+  if (invoice.linked_journal_entry_id) {
+    const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
+    if (!entry || entry.companyId !== companyId || (entry.documentId && entry.documentId !== invoice.id)) {
+      throw new PublicDomainError('El asiento original no está disponible para esta factura.', 409);
+    }
+    return entry;
+  }
+  const rows = await svc.entities.JournalEntry.filter({
+    companyId, postingKey: 'invoice:' + invoice.id + ':' + SCHEMA_VERSION,
+  }, 'id', 2);
+  if (rows.length > 1 || (!rows.length && invoice.estado_contable === 'contabilizada')) {
+    throw new PublicDomainError('No se pudo identificar un único asiento original. Revisa la factura antes de anularla.', 409);
+  }
+  return rows[0] || null;
+}
+
+async function annulInvoice(svc, companyId, invoice, reason, email, now, accountingDate) {
+  if (invoice.anulada) return { invoiceId: invoice.id, status: 'already_annulled', timestamp: invoice.fecha_anulacion };
+  const release = await acquireAnnulmentLease(svc, companyId, invoice.id, now);
   try {
-    const base44 = createClientFromRequest(req);
-    let user;
-    try { user = await base44.auth.me().catch(() => null); } catch { return Response.json({ error: 'Unauthorized' }, { status: 401 }); }
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const body = await req.json();
-    const { invoiceIds, motivo, companyId } = body || {};
-    const userCompanyId = user.data?.company_id || user.company_id;
-    const isPlatformAdmin = ['admin', 'super_admin'].includes(user.role);
-    // Los administradores de plataforma gestionan varias empresas: pueden operar con la empresa indicada.
-    const effectiveCompanyId = isPlatformAdmin ? (companyId || userCompanyId) : userCompanyId;
-    if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
-    if (companyId && companyId !== userCompanyId && !isPlatformAdmin) return Response.json({ error: 'La empresa indicada no coincide con la empresa activa.' }, { status: 403 });
-    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) return Response.json({ error: 'invoiceIds required' }, { status: 400 });
-
-    const reason = String(motivo || '').trim();
-    if (!reason) return Response.json({ error: 'El motivo de anulación es obligatorio.' }, { status: 400 });
-    const svc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 750 });
-    const company = await svc.entities.Company.get(effectiveCompanyId);
-    const email = String(user.email || '').trim().toLowerCase();
-    const authorizedEmails = (Array.isArray(company?.usuarios_autorizados) ? company.usuarios_autorizados : []).map(value => String(value).trim().toLowerCase());
-    if (!company || (!isPlatformAdmin && (!email || (String(company.owner_email || '').trim().toLowerCase() !== email && !authorizedEmails.includes(email))))) return Response.json({ error: 'No tienes permiso para operar en esta empresa.' }, { status: 403 });
-    const now = new Date().toISOString();
-    const accountingDate = String(body.accountingDate || now.slice(0, 10));
-    if (!effectiveCompanyId) return Response.json({ error: 'Selecciona una empresa antes de anular facturas.' }, { status: 403 });
-    const allInvoices = await svc.entities.Invoice.filter({ company_id: effectiveCompanyId }, 'created_date', 5000);
-    const targets = (allInvoices || []).filter(invoice => invoiceIds.includes(invoice.id) && !invoice.anulada);
-    if (!targets.length) return Response.json({ success: true, annulled: 0, message: 'No invoices to annul' });
-
-    for (const invoice of targets) await assertReccAdvanceCanReverse(svc, effectiveCompanyId, invoice);
-    const results = [];
-    for (const invoice of targets) {
-      let reversalEntryId = '';
-      if (invoice.linked_journal_entry_id) {
-        const entry = await svc.entities.JournalEntry.get(invoice.linked_journal_entry_id);
-        if (!entry || entry.companyId !== effectiveCompanyId) throw new PublicDomainError('No se puede anular: el asiento original no existe o no pertenece a esta empresa.');
-        if (entry.companyId === effectiveCompanyId) {
-          if (entry.status === 'confirmado') {
-            const reversal = await reverseConfirmedEntry(svc, effectiveCompanyId, entry, reason, user.email, accountingDate);
-            reversalEntryId = reversal.id;
-          } else if (entry.status !== 'anulado') {
-            const lines = await resolveLines(svc, effectiveCompanyId, entry);
-            await svc.entities.JournalEntry.update(entry.id, {
-              status: 'anulado', annulledAt: now, annulledBy: user.email,
-              annulmentReason: reason, validationStatus: 'ANULADO',
-            });
-            for (const line of lines) await svc.entities.JournalEntryLine.update(line.id, { entryStatus: 'anulado', validationStatus: 'ANULADO' });
-          }
-        }
+    const current = await svc.entities.Invoice.get(invoice.id);
+    if (current?.company_id !== companyId) throw new PublicDomainError('Factura no disponible en esta empresa.', 404);
+    const payments = await svc.entities.InvoicePayment.filter({
+      company_id: companyId, invoice_id: current.id,
+    }, 'id', 1);
+    if (payments.length || Number(current.importe_pagado) > 0) {
+      throw new PublicDomainError('La factura tiene cobros o pagos registrados. Revísalos antes de anularla.', 409);
+    }
+    if (current.qr_mode === 'verifactu') {
+      throw new PublicDomainError('La factura tiene un registro VERI*FACTU aceptado. Tramita su corrección en el circuito fiscal correspondiente.', 409);
+    }
+    await assertReccAdvanceCanReverse(svc, companyId, current);
+    const entry = await findOriginalEntry(svc, companyId, current);
+    let reversalEntryId = '';
+    if (entry?.status === 'confirmado') {
+      const reversal = await reverseConfirmedEntry(svc, companyId, entry, reason, email, accountingDate);
+      reversalEntryId = reversal.id;
+    } else if (entry) {
+      const lines = await resolveLines(svc, companyId, entry);
+      const activeLines = lines.filter(line => line.entryStatus !== 'anulado');
+      if (activeLines.length) {
+        await svc.entities.JournalEntryLine.bulkUpdate(activeLines.map(line => ({
+          id: line.id, entryStatus: 'anulado', validationStatus: 'ANULADO',
+        })));
       }
-      await svc.entities.Invoice.update(invoice.id, {
-        anulada: true,
-        fecha_anulacion: now,
-        motivo_anulacion: reason,
-        accounting_review_status: 'asiento_anulado',
-      });
-      results.push({ invoiceId: invoice.id, reversalEntryId });
+      if (entry.status !== 'anulado') {
+        await svc.entities.JournalEntry.update(entry.id, {
+          status: 'anulado', annulledAt: now, annulledBy: email,
+          annulmentReason: reason, validationStatus: 'ANULADO',
+        });
+      }
+    }
+    await svc.entities.Invoice.update(current.id, {
+      anulada: true,
+      fecha_anulacion: now,
+      motivo_anulacion: reason,
+      accounting_review_status: 'asiento_anulado',
+    });
+    return { invoiceId: current.id, status: 'annulled', reversalEntryId, timestamp: now };
+  } finally {
+    await release().catch(() => console.error('[anularFacturas] No se pudo liberar la reserva'));
+  }
+}
+
+function itemFailure(error) {
+  if (error instanceof PublicDomainError) return error.message;
+  if (/^(El ejercicio \d{4} está cerrado\.|El período está bloqueado hasta \d{4}-\d{2}-\d{2}\.|La fecha queda fuera del ejercicio contable \d{4}\.|El anticipo tiene (aplicaciones|devoluciones) activas\.)/.test(error?.message || '')) {
+    return error.message;
+  }
+  console.error('[anularFacturas]', { status: Number(error?.response?.status || error?.status || 500) });
+  return 'No se pudo confirmar la anulación. Actualiza la lista y reintenta la misma factura.';
+}
+
+Deno.serve(async req => {
+  try {
+    if (req.method !== 'POST') throw new PublicDomainError('Método no permitido.', 400);
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch(() => null);
+    if (!user?.id) throw new PublicDomainError('Unauthorized', 401);
+    if (!enabledPortalUser(user)) throw new PublicDomainError('Acceso al portal suspendido.', 403);
+
+    const body = await req.json().catch(() => ({}));
+    const activeCompany = user.data?.company_id || user.company_id;
+    const companyId = body.companyId || activeCompany;
+    if (!companyId || (!portalAdmin(user) && companyId !== activeCompany)) {
+      throw new PublicDomainError('La empresa indicada no coincide con la empresa activa.', 403);
+    }
+    const reason = typeof body.motivo === 'string' ? body.motivo.trim() : '';
+    if (!reason || reason.length > 500) throw new PublicDomainError('Indica un motivo de anulación de hasta 500 caracteres.', 400);
+    if (!Array.isArray(body.invoiceIds) || !body.invoiceIds.length || body.invoiceIds.some(id => typeof id !== 'string' || !/^[\w-]{1,120}$/.test(id))) {
+      throw new PublicDomainError('Selecciona facturas válidas antes de anular.', 400);
+    }
+    const ids = [...new Set(body.invoiceIds)];
+    if (ids.length > batchLimit) throw new PublicDomainError('Envía un máximo de cuatro facturas por operación.', 413);
+
+    const svc = queuedAccountingClient(base44.asServiceRole, { intervalMs: 150 });
+    await requirePortalCompany(svc, user, companyId);
+    const now = new Date().toISOString();
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+    const accountingDate = body.accountingDate || today;
+    if (typeof accountingDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(accountingDate)
+      || Number.isNaN(Date.parse(accountingDate)) || new Date(accountingDate).toISOString().slice(0, 10) !== accountingDate) {
+      throw new PublicDomainError('La fecha contable no es válida.', 400);
+    }
+    const rows = await svc.entities.Invoice.filter({ company_id: companyId, id: { $in: ids } }, 'id', ids.length);
+    const targets = new Map(rows.filter(row => row.company_id === companyId).map(row => [row.id, row]));
+    const results = [];
+    for (const id of ids) {
+      try {
+        const invoice = targets.get(id);
+        if (!invoice) throw new PublicDomainError('Factura no disponible en esta empresa.', 404);
+        results.push(await annulInvoice(svc, companyId, invoice, reason, user.email, now, accountingDate));
+      } catch (error) {
+        results.push({ invoiceId: id, status: 'failed', error: itemFailure(error) });
+      }
     }
 
-    return Response.json({ success: true, annulled: results.length, annulledIds: results.map(item => item.invoiceId), results, timestamp: now });
+    const annulledIds = results.filter(item => item.status !== 'failed').map(item => item.invoiceId);
+    return Response.json({
+      success: annulledIds.length === ids.length,
+      annulled: results.filter(item => item.status === 'annulled').length,
+      annulledIds, results, timestamp: now,
+    });
   } catch (error) {
-    return publicServiceFailure(error,'anularFacturas');
+    if (error?.portalPublic === true) return publicServiceFailure(new PublicDomainError(error.message, 403), 'anularFacturas');
+    return publicServiceFailure(error, 'anularFacturas');
   }
 });

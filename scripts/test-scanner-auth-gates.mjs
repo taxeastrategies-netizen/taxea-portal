@@ -70,7 +70,7 @@ for (const name of protectedFunctions) {
       [{role:'admin',company_id:'ADMIN'},'QA',200],
     ]) {
       let reads=0;
-      context.__client={auth:{me:async()=>({...identity,email:'owner@qa.test'})},asServiceRole:{entities:{Company:{get:async()=>({id:'QA',owner_email:'owner@qa.test'})},Invoice:{filter:async query=>{
+      context.__client={auth:{me:async()=>({id:'qa-test-user',...identity,email:'owner@qa.test'})},asServiceRole:{entities:{Company:{get:async()=>({id:'QA',owner_email:'owner@qa.test'})},Invoice:{filter:async query=>{
         reads++;assert.equal(query.company_id,'QA');return [];
       }}}}};
       const response=await handler(new Request('https://taxea.test/functions/anularFacturas',{

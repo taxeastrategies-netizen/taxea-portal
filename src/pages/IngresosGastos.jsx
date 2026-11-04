@@ -1,3 +1,4 @@
+import { annulInvoices, annulOneInvoice } from '@/lib/annulInvoices';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -59,6 +60,8 @@ export default function IngresosGastos() {
   const [formError, setFormError] = useState('');
   const [selected, setSelected] = useState(new Set());
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState('');
   const [operationNotice, setOperationNotice] = useState('');
   const [page, setPage] = useState(1);
   const mutationKeyRef = useRef(newMutationKey());
@@ -153,11 +156,7 @@ export default function IngresosGastos() {
 
   const handleDelete = async (item) => {
     if (item._source === 'invoice') {
-      await base44.functions.invoke('anularFacturas', {
-        invoiceIds: [item.id],
-        motivo: 'Anulación desde Ingresos y Gastos',
-        companyId: company?.id,
-      });
+      await annulOneInvoice(company?.id, item.id, 'Anulación desde Ingresos y Gastos');
     } else {
       await base44.functions.invoke('accountingOperations', {
         action: 'void_manual_financial_record',
@@ -175,11 +174,10 @@ export default function IngresosGastos() {
     const invoiceIds = toDelete.filter(i => i._source === 'invoice').map(i => i.id);
     const expenseIds = toDelete.filter(i => i._source !== 'invoice').map(i => i.id);
     if (invoiceIds.length) {
-      await base44.functions.invoke('anularFacturas', {
-        invoiceIds,
-        motivo: 'Anulación múltiple desde Ingresos y Gastos',
-        companyId: company?.id,
-      });
+      const { confirmed, failures } = await annulInvoices(company?.id, invoiceIds, 'Anulación múltiple desde Ingresos y Gastos');
+      setSelected(previous => new Set([...previous].filter(id => !confirmed.has(id))));
+      if (confirmed.size) triggerFinancialRefresh();
+      if (failures.size) throw new Error([...new Set(failures.values())].join(' '));
     }
     await Promise.all(expenseIds.map(expenseId => base44.functions.invoke('accountingOperations', {
       action: 'void_manual_financial_record',
@@ -474,16 +472,24 @@ export default function IngresosGastos() {
       </div>
 
       {/* Confirm delete dialog */}
-      <Dialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
+      <Dialog open={!!confirmDelete} onOpenChange={v => { if (!v && !voiding) { setConfirmDelete(null); setVoidError(''); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>¿Procesar {confirmDelete === 'bulk' ? `${selected.size} registros` : 'este registro'}?</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Los registros conservarán su trazabilidad y quedarán anulados. No se eliminará ningún dato contable.</p>
+          {voidError && <p role="alert" className="text-sm text-destructive">{voidError}</p>}
           <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => {
-              if (confirmDelete === 'bulk') handleBulkDelete();
-              else { handleDelete(confirmDelete); setConfirmDelete(null); }
-            }}>Confirmar anulación</Button>
+            <Button variant="outline" disabled={voiding} onClick={() => { setConfirmDelete(null); setVoidError(''); }}>Cancelar</Button>
+            <Button variant="destructive" disabled={voiding} onClick={async () => {
+              setVoiding(true);
+              setVoidError('');
+              try {
+                if (confirmDelete === 'bulk') await handleBulkDelete();
+                else await handleDelete(confirmDelete);
+                setConfirmDelete(null);
+              } catch (error) {
+                setVoidError(error?.response?.data?.error || error?.message || 'No se pudo completar la anulación.');
+              } finally { setVoiding(false); }
+            }}>{voiding ? 'Anulando…' : 'Confirmar anulación'}</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,3 +1,4 @@
+import { nextIssuedInvoiceNumber } from './invoiceNumbering.mjs';
 import {issueRecurringInvoice,RecurringDomainError} from './recurringIssuance.mjs';
 import { c5Metadata, c5SpecialPurchase } from './c5Rules.mjs';
 import {acquirePaymentLease,recoverPaymentLease} from './paymentLease.mjs';
@@ -566,7 +567,7 @@ Deno.serve(async (req) => {
     if(action==='issue_recurring_invoice') {
       try {return Response.json(await issueRecurringInvoice({base44,user,body,
         authorize:(service,actor,id)=>requirePortalCompany(service,actor,id),
-        acquireLease:acquireApprovalLease,buildPayload:invoiceCreationPayload,
+        acquireLease:acquireApprovalLease,buildPayload:invoiceCreationPayload,nextNumber:nextIssuedInvoiceNumber,
         complete:(invoice,criteria)=>completeSourceInvoice(base44,user,invoice.company_id,invoice,criteria,
           {...sourceDependencies,fiscalAction:'confirm_recurring_invoice_source',fiscalExtra:{template_id:invoice.recurringInvoiceTemplateId,generation_token:body.generation_token}})
       }));}catch(error){
@@ -576,18 +577,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (action === 'next_invoice_number') {
+      const { companyId } = await authorizeCompany(base44, user, body.company_id);
+      const date = cleanText(body.issue_date, 10);
+      if (!isIsoDate(date)) return businessError('La fecha de emisión no es válida.', 400);
+      const number = await nextIssuedInvoiceNumber(base44.asServiceRole, companyId, date, body.rectifying === true);
+      return Response.json({ ok: true, number });
+    }
+
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
-      const payload = invoiceCreationPayload(body.invoice || {}, companyId, user, body.fiscal_criteria || {});
-      // Guardar manualmente ya constituye el único check: no se crea una cola fiscal posterior.
-      const idempotencyKey = cleanText(body.idempotency_key,160) || `invoice-create:${payload.canonical_document_key}`;
-      const sourceHash = await sha256(JSON.stringify(payload));
+      const input = body.invoice || {};
+      const criteria = body.fiscal_criteria || {};
+      const automatic = input.tipo !== 'recibida' && body.automatic_number === true;
+      const requestKey = cleanText(body.idempotency_key, 160);
+      if (automatic && !requestKey) return businessError('Falta la clave de la emisión.', 400);
+      let payload = automatic ? null : invoiceCreationPayload(input, companyId, user, criteria);
+      const idempotencyKey = requestKey || 'invoice-create:' + payload.canonical_document_key;
       const release = await acquireApprovalLease(base44.asServiceRole, companyId);
       try {
-        const previous = await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,creation_idempotency_key:idempotencyKey},'-created_date',2);
-        if (previous.length > 1) return businessError('La operación tiene más de una factura. Revisa la incidencia sin crear otra.',409);
+        const previous = await base44.asServiceRole.entities.Invoice.filter({ company_id: companyId, creation_idempotency_key: idempotencyKey }, '-created_date', 2);
+        if (previous.length > 1) return businessError('La operación tiene más de una factura. Revisa la incidencia sin crear otra.', 409);
         let invoice = previous[0] || null;
-        if (invoice && invoice.source_hash !== sourceHash) return businessError('La misma operación ya se guardó con otros importes. Recupera la factura existente.',409,{invoice_id:invoice.id});
+        if (automatic) {
+          const date = cleanText(input.fecha_emision, 10);
+          if (!isIsoDate(date)) return businessError('La fecha de emisión no es válida.', 400);
+          const number = invoice?.numero_factura || await nextIssuedInvoiceNumber(base44.asServiceRole, companyId, date, input.es_rectificativa === true);
+          payload = invoiceCreationPayload({ ...input, numero_factura: number }, companyId, user, criteria);
+        }
+        const sourceHash = await sha256(JSON.stringify(payload));
+        if (invoice && invoice.source_hash !== sourceHash) return businessError('La misma operación ya se guardó con otros importes o datos. Recupera la factura existente.', 409, { invoice_id: invoice.id });
         if (!invoice) {
           const sameNumber = await base44.asServiceRole.entities.Invoice.filter({company_id:companyId,tipo:payload.tipo,numero_factura:payload.numero_factura},'-created_date',100);
           const duplicate = sameNumber.find(row=>payload.tipo==='emitida' || (!row.anulada

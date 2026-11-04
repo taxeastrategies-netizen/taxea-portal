@@ -1,3 +1,4 @@
+import { annulOneInvoice } from '@/lib/annulInvoices';
 import ProtectedDocumentLink from '@/components/documentos/ProtectedDocumentLink';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -71,11 +72,7 @@ export default function FacturasPendientes() {
 
   const anularFactura = useMutation({
     mutationFn: async (/** @type {{id: string, motivo: string}} */ { id, motivo }) => {
-      return base44.functions.invoke('anularFacturas', {
-        invoiceIds: [id],
-        motivo,
-        companyId: company?.id,
-      });
+      return annulOneInvoice(company?.id, id, motivo);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices-contabilidad'] });

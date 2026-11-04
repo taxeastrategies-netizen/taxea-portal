@@ -4,11 +4,11 @@ import StatusBadge from '@/components/ui/StatusBadge';
 
 
 // Presentation only: the desktop list and these cards share selection and actions.
-export default function MobileInvoiceList({ invoices, selectedIds, allSelected, onSelectAll, onSelect, onOpen, renderActions }) {
+export default function MobileInvoiceList({ invoices, selectedIds, selectionDisabled, allSelected, onSelectAll, onSelect, onOpen, renderActions }) {
   return (
     <div className="min-w-0" data-mobile-invoice-list>
       <label className="flex min-h-11 items-center gap-3 border-b border-border px-4 py-2 text-sm text-muted-foreground">
-        <input type="checkbox" className="h-5 w-5 rounded border-border accent-primary" checked={allSelected} onChange={event => onSelectAll(event.target.checked)} />
+        <input type="checkbox" disabled={selectionDisabled} className="h-5 w-5 rounded border-border accent-primary" checked={allSelected} onChange={event => onSelectAll(event.target.checked)} />
         Seleccionar todas las facturas filtradas
       </label>
       <ul className="divide-y divide-border" aria-label="Facturas">
@@ -17,7 +17,7 @@ export default function MobileInvoiceList({ invoices, selectedIds, allSelected, 
             <div className="flex items-start gap-3">
               <label className="taxea-checkbox-target shrink-0">
                 <span className="sr-only">Seleccionar factura {invoice.numero_factura || invoice.id}</span>
-                <input type="checkbox" className="h-5 w-5 rounded border-border accent-primary" checked={selectedIds.includes(invoice.id)} onChange={event => onSelect(invoice.id, event.target.checked)} />
+                <input type="checkbox" disabled={selectionDisabled} className="h-5 w-5 rounded border-border accent-primary" checked={selectedIds.includes(invoice.id)} onChange={event => onSelect(invoice.id, event.target.checked)} />
               </label>
               <button type="button" onClick={() => onOpen(invoice)} className="min-h-11 min-w-0 flex-1 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Abrir factura ${invoice.numero_factura || invoice.id}`}>
                 <span className="block break-words text-sm font-semibold text-foreground">{invoice.numero_factura || 'Sin número'}</span>

@@ -49,7 +49,7 @@ const records = {
   InvoiceTimelineEvent: [],
 };
 const counters = { Invoice: 0, InvoiceTaxLine: 0, InvoiceTimelineEvent: 0, accountingEntries: 0 };
-const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => value?.$in ? value.$in.includes(row?.[key] ?? null) : row?.[key] === value);
+const matches = (row, query) => Object.entries(query || {}).every(([key, value]) => value && typeof value === 'object' && '$ne' in value ? row?.[key] !== value.$ne : value?.$in ? value.$in.includes(row?.[key] ?? null) : row?.[key] === value);
 const entity = name => ({
   async updateMany(query, ops) {
     const found = (records[name] || []).filter(row => matches(row, query));

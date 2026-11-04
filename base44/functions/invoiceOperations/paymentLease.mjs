@@ -1,7 +1,7 @@
 const fail=(message,status=409)=>Object.assign(new Error(message),{status});
 export async function acquirePaymentLease(svc,companyId,invoiceId,key){
  const token=crypto.randomUUID(),startedAt=new Date().toISOString();
- const claim=await svc.entities.Invoice.updateMany({id:invoiceId,company_id:companyId,payment_lock_token:{$in:[null,'']}},{$set:{payment_lock_token:token,payment_lock_started_at:startedAt,payment_lock_key:String(key||'')}});
+ const claim=await svc.entities.Invoice.updateMany({id:invoiceId,company_id:companyId,anulada:{$ne:true},payment_lock_token:{$in:[null,'']}},{$set:{payment_lock_token:token,payment_lock_started_at:startedAt,payment_lock_key:String(key||'')}});
  if(Number(claim?.updated)!==1)throw fail('Hay otro cobro/pago en curso para esta factura. Espera a que termine; no se ha registrado otra operación.');
  return async()=>{const result=await svc.entities.Invoice.updateMany({id:invoiceId,company_id:companyId,payment_lock_token:token},{$set:{payment_lock_token:'',payment_lock_started_at:'',payment_lock_key:''}});if(Number(result?.updated)!==1)throw fail('El pago puede estar confirmado, pero su bloqueo necesita revisión. Consulta los pagos antes de repetir.');};
 }

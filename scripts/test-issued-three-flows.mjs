@@ -98,4 +98,67 @@ await test('administrator creates selected company template without forged autho
 await test('interrupted recurring keeps persisted criteria even if template changes',async()=>{failEntity='InvoiceTaxLine';await generate();assert.equal(records.Invoice.length,1);const id=records.Invoice[0].id;assert.equal(records.Invoice[0].recurring_issuance_snapshot.source,'recurring_single_check');records.RecurringInvoiceTemplate[0].fiscalCriteria={regime:'criterio_caja'};const r=await(await generate()).json();assert.equal(r.generated,1,JSON.stringify(r));assert.equal(records.Invoice[0].id,id);assert.equal(records.Invoice[0].fiscal_regime,'general');assertComplete();});
 await test('delayed journal readback completes the same invoice without another user click',async()=>{visibilityMisses=6;const result=await manual('qa-delayed-lines');assert.equal(visibilityHidden,6);assert.equal(result.invoice.estado_contable,'contabilizada');assert.equal(records.Invoice.length,1);assert.equal(records.JournalEntry.length,1);assert.equal(records.JournalEntryLine.length,3);assertComplete();});
 
+
+const previewNumber = (date = '2026-11-02', rectifying = false) => call('invoiceOperations', {
+  action: 'next_invoice_number', company_id: 'qa', issue_date: date, rectifying,
+});
+const autoIssue = (key, invoice = {}) => call('invoiceOperations', {
+  action: 'create_invoice', company_id: 'qa', idempotency_key: key, automatic_number: true,
+  invoice: { ...invoiceData(''), ...invoice },
+});
+await test('suggestion follows the latest issued series and the highest reserved number', async () => {
+  records.Invoice.push(
+    { id: 'old', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-10-27', numero_factura: 'PRO/2026/0098', anulada: true },
+    { id: 'latest', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-11-01', numero_factura: 'PRO/2026/0005' },
+    { id: 'other', company_id: 'foreign', tipo: 'emitida', fecha_emision: '2026-11-02', numero_factura: 'PRO/2026/9000' },
+    { id: 'received', company_id: 'qa', tipo: 'recibida', fecha_emision: '2026-11-02', numero_factura: 'PRO/2026/9999' },
+  );
+  assert.equal((await previewNumber()).number, 'PRO/2026/0099');
+  assert.equal((await previewNumber('2027-01-01')).number, 'PRO/2027/0001');
+  assert.equal((await previewNumber('2026-11-02', true)).number, 'R-2026-001');
+});
+await test('automatic number remains reserved after fiscal interruption and retries with the same key', async () => {
+  const request = { action: 'create_invoice', company_id: 'qa', idempotency_key: 'auto-retry', automatic_number: true, invoice: invoiceData('') };
+  failEntity = 'InvoiceTaxLine';
+  assert.equal((await api('invoiceOperations', request)).ok, false);
+  const reserved = records.Invoice[0];
+  assert.equal(reserved.numero_factura, 'F-2026-001');
+  assert.equal((await previewNumber()).number, 'F-2026-002');
+  const retry = await autoIssue('auto-retry');
+  assert.equal(retry.invoice.id, reserved.id);
+  assert.equal(retry.invoice.numero_factura, reserved.numero_factura);
+  assert.equal(records.Invoice.length, 1);
+  assertComplete();
+});
+await test('stale suggestions and recurrent generation share the series and preserve manual overrides', async () => {
+  const before = await previewNumber();
+  assert.equal(before.number, 'F-2026-001');
+  const manualInvoice = await manual('CLI-2026-005');
+  assert.equal(manualInvoice.invoice.numero_factura, 'CLI-2026-005');
+  const generated = await (await generate()).json();
+  assert.equal(generated.generated, 1);
+  const auto = await autoIssue('stale-preview', { numero_factura: before.number });
+  assert.equal(auto.invoice.numero_factura, 'CLI-2026-007');
+  assertComplete();
+});
+await test('simultaneous automatic issuance never assigns the same number', async () => {
+  const request = key => ({ action: 'create_invoice', company_id: 'qa', idempotency_key: key, automatic_number: true, invoice: invoiceData('') });
+  const responses = await Promise.all([api('invoiceOperations', request('auto-a')), api('invoiceOperations', request('auto-b'))]);
+  for (const [index, response] of responses.entries()) {
+    if (response.status === 409) await autoIssue(index === 0 ? 'auto-a' : 'auto-b');
+    else assert.equal(response.status, 200);
+  }
+  assert.deepEqual(records.Invoice.map(row => row.numero_factura).sort(), ['F-2026-001', 'F-2026-002']);
+  assertComplete();
+});
+await test('suffix year and a four-digit sequence remain distinct', async () => {
+  records.Invoice.push(
+    { id: 'legacy-suffix-first', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-11-01', numero_factura: 'INV-0001/2026' },
+    { id: 'legacy-suffix', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-11-02', numero_factura: 'INV-2025/2026' },
+  );
+  assert.equal((await previewNumber()).number, 'INV-2026/2026');
+  assert.equal((await previewNumber('2027-01-01')).number, 'INV-0001/2027');
+  records.Invoice.push({ id: 'same-year-counter', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-11-03', numero_factura: 'INV-2026/2026' });
+  assert.equal((await previewNumber('2026-11-03')).number, 'INV-2027/2026');
+});
 console.log(JSON.stringify({ok:results.every(r=>r.passed),checks:results,realDataWrites:0,externalCalls:0},null,2));if(results.some(r=>!r.passed))process.exitCode=1;

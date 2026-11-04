@@ -58,7 +58,7 @@ const records = {
   BankTransaction: [{ id: 'bank-tx-1', company_id: 'company-a', bank_account_id: 'bank-account-1', fecha_operacion: '2026-09-10', concepto: 'Cobro F-2', referencia: 'F-2', importe: 50, moneda: 'EUR', tipo: 'entrada', estado_conciliacion: 'sin_conciliar', estado_proveedor: 'booked', es_demo: false }],
 };
 const counters = {};
-const matches = (row, query) => Object.entries(query || {}).every(([key,value]) => value&&typeof value==='object'&&'$in' in value?value.$in.includes(row?.[key])||(row?.[key]===undefined&&value.$in.includes(null)):row?.[key]===value);
+const matches = (row, query) => Object.entries(query || {}).every(([key,value]) => value && typeof value === 'object' && '$ne' in value ? row?.[key] !== value.$ne : value&&typeof value==='object'&&'$in' in value?value.$in.includes(row?.[key])||(row?.[key]===undefined&&value.$in.includes(null)):row?.[key]===value);
 let failNextCommit = false;
 let failNextBankLink = false;
 let failNextSummary = false;

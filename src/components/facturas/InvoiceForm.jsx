@@ -1,3 +1,4 @@
+import useInvoiceNumberSuggestion from '@/hooks/useInvoiceNumberSuggestion';
 
 import NativeSelect from "@/components/ui/NativeSelect";
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -97,6 +98,10 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
   });
 
   const [form, setForm] = useState(getEmpty());
+  const [manualNumber, setManualNumber] = useState(false);
+  const automaticNumber = form.tipo === 'emitida' && !manualNumber && !editing;
+  const suggestedNumber = useInvoiceNumberSuggestion(company?.id, form.fecha_emision, open && automaticNumber, form.es_rectificativa);
+
   const [errors, setErrors] = useState(/** @type {any} */ ({}));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -175,6 +180,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
       loadedRef.current = true;
       creationKeyRef.current = globalThis.crypto?.randomUUID?.() || `invoice-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       setForm(getEmpty());
+      setManualNumber(false);
       setRecurring(getDefaultRecurring());
     }
     setErrors({});
@@ -192,7 +198,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
 
   const validate = () => {
     const e = {};
-    if (!form.numero_factura?.trim()) e.numero_factura = 'Obligatorio';
+    if (!automaticNumber && !form.numero_factura?.trim()) e.numero_factura = 'Obligatorio';
     if (fiscalContext.activities.length > 1 && !form.fiscal_activity_id) e.fiscal_activity_id = 'Selecciona la actividad fiscal';
     if (!form.fecha_emision) e.fecha_emision = 'Obligatorio';
     if (form.tipo === 'recibida' && !form.fecha_recepcion) e.fecha_recepcion = 'Obligatorio para asignar la deducción al período correcto';
@@ -245,6 +251,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           action: 'create_invoice',
           company_id: company.id,
           idempotency_key: creationKeyRef.current,
+          automatic_number: automaticNumber,
           invoice: { ...payload, numero_factura: payload.numero_factura.trim() },
           fiscal_criteria:{...form.fiscal_criteria,activityId:form.fiscal_activity_id || undefined,
             ...(quotaRows.length?{taxBreakdown:quotaRows.map(row=>({base:Number(row.base),rate:Number(row.rate),quota:Math.round(Number(row.base)*Number(row.rate))/100}))}:{})},
@@ -258,7 +265,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
         }).catch(error => console.error('[InvoiceForm] Contact sync failed:', error));
         base44.entities.TimelineEvent.create({
           company_id: company.id, tipo: 'factura_clasificada',
-          titulo: `${result.review_required ? 'Factura pendiente de revisión' : 'Nueva factura'}: ${payload.numero_factura}`,
+          titulo: `${result.review_required ? 'Factura pendiente de revisión' : 'Nueva factura'}: ${createdInvoice.numero_factura}`,
           descripcion: `${payload.tipo === 'emitida' ? 'Emitida' : 'Recibida'} · ${result.review_required ? 'sin contabilizar · ' : ''}${payload.cliente_nombre || ''} · ${fmt(total)} {form.moneda||'EUR'}`,
           color: 'azul', usuario_email: user?.email, automatico: true, visibilidad: 'ambos',
         }).catch(() => {});
@@ -376,8 +383,14 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Nº Factura *</Label>
-              <Input value={form.numero_factura} onChange={set('numero_factura')} placeholder="F-2026-001" className={errors.numero_factura ? 'border-destructive' : ''} />
+              <Label htmlFor="invoice-number">Nº Factura *</Label>
+              <Input id="invoice-number" value={automaticNumber ? suggestedNumber : form.numero_factura} onChange={event => {
+                setManualNumber(true);
+                set('numero_factura')(event);
+              }} maxLength={120} placeholder={automaticNumber ? 'Correlativo al guardar' : 'Número de factura'} className={errors.numero_factura ? 'border-destructive' : ''} />
+              {form.tipo === 'emitida' && !editing && (manualNumber
+                ? <button type="button" className="text-xs text-primary underline" onClick={() => { setManualNumber(false); set('numero_factura')(''); }}>Usar correlativo</button>
+                : <p className="text-xs text-muted-foreground">El número definitivo se confirma al guardar.</p>)}
               <ErrMsg msg={errors.numero_factura} />
             </div>
             <div className="space-y-1.5">
