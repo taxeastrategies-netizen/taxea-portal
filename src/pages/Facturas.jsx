@@ -245,16 +245,15 @@ export default function Facturas() {
                                    <DropdownMenuItem onClick={() => updateEstado(inv.id, 'estado_contable', 'en_revision')}>Enviar a revisión contable</DropdownMenuItem>
                                  </>
                                )}
-                               {inv.archivo_url && (
+                               {inv.tipo === 'emitida' ? (
+                                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(inv, company)}>
+                                   <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
+                                 </DropdownMenuItem>
+                               ) : inv.archivo_url && (
                                  <DropdownMenuItem asChild>
                                    <ProtectedDocumentLink href={inv.archivo_url} target="_blank" rel="noreferrer" className="flex items-center gap-2" companyId={inv.company_id}>
                                      <Download className="w-3.5 h-3.5" /> Descargar archivo
                                    </ProtectedDocumentLink>
-                                 </DropdownMenuItem>
-                               )}
-                               {!inv.archivo_url && inv.tipo === 'emitida' && (
-                                 <DropdownMenuItem onClick={() => exportInvoiceToPdf(inv, company)}>
-                                   <Download className="w-3.5 h-3.5 mr-1.5" /> Descargar PDF
                                  </DropdownMenuItem>
                                )}
                                {!inv.anulada && (

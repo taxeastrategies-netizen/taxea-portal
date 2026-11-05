@@ -110,7 +110,14 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
             title="Imprimir">
             <Printer className="w-3.5 h-3.5" />
           </button>
-          {hasPdf ? (
+          {!isRecibida ? (
+            <button
+              onClick={() => exportInvoiceToPdf(invoice, company)}
+              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              title="Descargar PDF">
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          ) : hasPdf && (
             <ProtectedDocumentLink
               href={documentPdfUrl}
               download={`Factura_${invoice.numero_factura}.pdf`}
@@ -118,13 +125,6 @@ function InvoiceDocumentPreviewPane({ invoice, company }) {
               title="Descargar PDF" companyId={invoice.company_id}>
               <Download className="w-3.5 h-3.5" />
             </ProtectedDocumentLink>
-          ) : !isRecibida && (
-            <button
-              onClick={() => exportInvoiceToPdf(invoice, company)}
-              className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-              title="Descargar PDF">
-              <Download className="w-3.5 h-3.5" />
-            </button>
           )}
         </div>
       </div>
@@ -466,15 +466,15 @@ export default function InvoiceDocumentWorkspace({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-sm w-44">
-              {documentPdfUrl ? (
+              {!isRecibida ? (
+                <DropdownMenuItem onClick={() => exportInvoiceToPdf(invoice, company)}>
+                  <Download className="w-3.5 h-3.5 mr-2" /> Descargar PDF
+                </DropdownMenuItem>
+              ) : documentPdfUrl && (
                 <DropdownMenuItem asChild>
                   <ProtectedDocumentLink href={documentPdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2" companyId={invoice.company_id}>
                     <Download className="w-3.5 h-3.5" /> Descargar PDF
                   </ProtectedDocumentLink>
-                </DropdownMenuItem>
-              ) : !isRecibida && (
-                <DropdownMenuItem onClick={() => exportInvoiceToPdf(invoice, company)}>
-                  <Download className="w-3.5 h-3.5 mr-2" /> Descargar PDF
                 </DropdownMenuItem>
               )}
               {publicUrl && !isRecibida && (
