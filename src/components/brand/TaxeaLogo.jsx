@@ -1,3 +1,5 @@
+import taxeaWordmark from '@/assets/taxea-strategies.png';
+
 /**
  * TaxeaLogo — componente de marca reutilizable
  *
@@ -87,22 +89,13 @@ export function TaxeaLogoFull({ height = 56, onDark = false, className = '' }) {
 
 export function TaxeaSidebarLogo() {
   return (
-    <div className="flex items-center gap-2.5">
-      <TaxeaIsotipo size={32} />
-      <div className="flex flex-col leading-none">
-        <span
-          className="text-white font-jakarta font-bold tracking-wide"
-          style={{ fontSize: 14, letterSpacing: '0.06em' }}
-        >
-          TAXEA
-        </span>
-        <span
-          className="font-inter font-normal tracking-widest uppercase"
-          style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.18em' }}
-        >
-          Strategies
-        </span>
-      </div>
-    </div>
+    <img
+      src={taxeaWordmark}
+      alt="Taxea Strategies"
+      width={683}
+      height={312}
+      className="block h-auto w-28 max-w-full brightness-0 invert"
+      draggable={false}
+    />
   );
 }

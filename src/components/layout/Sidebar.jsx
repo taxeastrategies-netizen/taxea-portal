@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { TaxeaIsotipo } from '@/components/brand/TaxeaLogo';
+import { TaxeaSidebarLogo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
@@ -266,13 +266,9 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
         "lg:translate-x-0 lg:static lg:z-auto"
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
-          <Link to="/" onClick={onClose} className="flex items-center gap-2.5">
-            <TaxeaIsotipo size={30} />
-            <div className="flex flex-col leading-none">
-              <span className="text-slate-800 font-jakarta font-bold" style={{ fontSize: 13, letterSpacing: '0.07em' }}>TAXEA</span>
-              <span className="font-inter font-normal uppercase" style={{ fontSize: 8, color: 'rgba(0,0,0,0.3)', letterSpacing: '0.22em' }}>Business OS</span>
-            </div>
+        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+          <Link to="/" onClick={onClose} className="flex min-w-0 items-center">
+            <TaxeaSidebarLogo />
           </Link>
           <button
             type="button"
