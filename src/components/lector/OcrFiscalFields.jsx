@@ -6,14 +6,14 @@ const DEDUCTIONS=[['interior_current','Interior corriente'],['interior_investmen
   ['intra_goods_investment','Adquisición intracomunitaria · inversión'],['import_current','Importación corriente'],
   ['import_investment','Importación · inversión'],['agriculture_compensation','Compensación agraria'],
   ['deduction_adjustment','Rectificación de deducciones']];
-/** @param {{value?: Record<string, any>, onChange: Function, context?: any, direction: string, activityId?: string, sourceTaxRate?: number, disabled?: boolean}} props */
-export default function OcrFiscalFields({value={},onChange,context={},direction,activityId,sourceTaxRate=0,disabled=false}) {
+/** @param {{value?: Record<string, any>, onChange: Function, context?: any, direction: string, activityId?: string, sourceTaxRate?: number, sourceTaxAmount?: number, disabled?: boolean}} props */
+export default function OcrFiscalFields({value={},onChange,context={},direction,activityId,sourceTaxRate=0,sourceTaxAmount=0,disabled=false}) {
   const activity=(context.activities || []).find(row=>row.id===activityId)
     || ((context.activities || []).length===1?context.activities[0]:null);
   const taxKind=value.taxKind || activity?.indirectTax || context.profile?.indirectTaxDefault || 'iva';
   const regime=value.regime || activity?.indirectTaxRegime || 'general';
   const noDeduction=activity?.deductionRight==='sin_derecho' || ['comerciante_minorista_igic','pequeno_empresario_igic','exenta_limitada','recargo_equivalencia','agricultura_ganaderia_pesca'].includes(regime);
-  const operation=value.operationType || (direction==='gasto'?(Number(sourceTaxRate)===0?'subject_zero':'subject_taxed')
+  const operation=value.operationType || (direction==='gasto'?((Number(sourceTaxRate) || Number(sourceTaxAmount)) ? 'subject_taxed' : 'subject_zero')
     :regime==='comerciante_minorista_igic'?'exempt_limited':activity?.incomeDefaultTreatment || 'subject_taxed');
   const update=(key,val)=>onChange({...value,[key]:val,
     ...(key==='taxKind'?{regime:'',exemptionKey:''}:{}),

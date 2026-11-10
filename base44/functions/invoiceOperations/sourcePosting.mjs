@@ -1,5 +1,45 @@
+import { validateReceivedOcrAmounts } from './receivedOcrAmounts.mjs';
+
+async function updatePendingExpenseAmounts(svc, companyId, invoice, form) {
+  if (invoice.company_id !== companyId || invoice.tipo !== 'recibida' || invoice.anulada) {
+    throw Object.assign(new Error('Esta corrección solo está disponible para facturas recibidas de la empresa activa.'), { status: 409 });
+  }
+  const values = validateReceivedOcrAmounts(form, invoice.cuota_recargo);
+  if (Object.entries(values).every(([key,value]) => Number(invoice[key] ?? 0) === value)) return invoice;
+  if (invoice.estado_contable === 'contabilizada' || invoice.linked_journal_entry_id || !invoice.accounting_migration_hold
+    || Number(invoice.importe_pagado || 0) !== 0) {
+    throw Object.assign(new Error('La factura ya tiene asiento o pago, o ya salió de revisión. Corrige el documento desde Facturas.'), { status: 409 });
+  }
+  if (values.base_imponible < 0 && !invoice.es_rectificativa) {
+    throw Object.assign(new Error('Una base negativa requiere una factura rectificativa.'), { status: 422 });
+  }
+  const [entries, payments, taxLines] = await Promise.all([
+    svc.entities.JournalEntry.filter({ companyId, documentId: invoice.id }, 'id', 1),
+    svc.entities.InvoicePayment.filter({ company_id: companyId, invoice_id: invoice.id }, 'id', 1),
+    svc.entities.InvoiceTaxLine.filter({ companyId, invoiceId: invoice.id }, 'lineNumber', 2),
+  ]);
+  if (entries.length || payments.length || taxLines.length > 1) {
+    throw Object.assign(new Error('La factura ya tiene un asiento, un pago o un desglose fiscal. Revisa ese registro antes de cambiar los importes.'), { status: 409 });
+  }
+  const update = await svc.entities.Invoice.updateMany({
+    id: invoice.id, company_id: companyId, tipo: 'recibida', anulada: { $ne: true },
+    source_confirmation_lock_token: invoice.source_confirmation_lock_token,
+    linked_journal_entry_id: { $in: [null, ''] }, fiscal_review_lock_token: { $in: [null, ''] },
+    payment_lock_token: { $in: [null, ''] },
+    ...(invoice.updated_date ? { updated_date: invoice.updated_date } : {}),
+  }, { $set: {
+    ...values,
+    importe_pendiente: Math.abs(values.total_factura),
+    fiscal_review_status: 'pendiente_revision',
+  } });
+  if (Number(update?.updated) !== 1) {
+    throw Object.assign(new Error('La factura ha cambiado durante la revisión. Actualiza y vuelve a confirmar.'), { status: 409 });
+  }
+  return svc.entities.Invoice.get(invoice.id);
+}
+
 // Confirmar y contabilizar en un único paso del documento, con reintentos idempotentes.
-export async function completeSourceInvoice(base44, user, companyId, invoice, criteria, dependencies) {
+export async function completeSourceInvoice(base44, user, companyId, invoice, criteria, dependencies, sourceAmounts = null) {
   const {postInvoice, buildAeatQrUrl, ensureInvoiceQrHash} = dependencies;
   const svc = base44.asServiceRole;
   if (invoice.company_id !== companyId || invoice.anulada) throw Object.assign(new Error('Factura ajena a la empresa o anulada.'), {status:409});
@@ -23,6 +63,13 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   }
   if(Number(claimed?.updated)!==1) throw Object.assign(new Error('Este documento ya está siendo confirmado. Espera a que termine antes de reintentar.'),{status:409});
   try {
+  if (sourceAmounts) {
+    invoice = await svc.entities.Invoice.get(invoice.id);
+    if (invoice?.source_confirmation_lock_token !== token) throw Object.assign(new Error('La confirmación ya no tiene la reserva de esta factura.'), { status: 409 });
+    if (invoice.accounting_migration_hold && !knownHolds.includes(invoice.accounting_migration_hold_reason))
+      throw Object.assign(new Error('Esta factura tiene una incidencia contable independiente.'), { status: 409 });
+    invoice = await updatePendingExpenseAmounts(svc, companyId, invoice, sourceAmounts);
+  }
   if(criteria.accountCode && invoice.estado_contable!=='contabilizada' && !invoice.linked_journal_entry_id) {
     const raw=String(criteria.accountCode).trim(),group=invoice.tipo==='emitida'?'7':'6',type=invoice.tipo==='emitida'?'ingreso':'gasto';
     if(!/^\d{3,8}$/.test(raw) || !raw.startsWith(group)) throw Object.assign(new Error('La cuenta manual no corresponde al grupo de esta factura.'),{status:422});

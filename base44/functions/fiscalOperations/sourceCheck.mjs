@@ -30,7 +30,7 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   if (!professional && noDeduction && Number(body.deductiblePercent) !== 0)
     throw new SourceValidationError('Esta actividad no tiene derecho a deducir. Solo el asesor puede confirmar una excepción motivada.');
   body.operationType = input.operationType || (direction === 'gasto'
-    ? (money(invoice.cuota_iva) === 0 ? 'subject_zero' : 'subject_taxed')
+    ? (money(invoice.cuota_iva) === 0 && Number(invoice.tipo_iva || 0) === 0 ? 'subject_zero' : 'subject_taxed')
     : activity.incomeDefaultTreatment || 'subject_taxed');
   body.exemptionKey = input.exemptionKey || activity.exemptionKey || '';
   body.legalBasis = input.legalBasis || activity.exemptionLegalBasis || '';
@@ -62,6 +62,10 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
 export function assertSourceAmounts(invoice, evaluation, selfAssessed = null) {
   const reverse = invoice.tipo === 'recibida' && ['reverse_charge','intra_eu_acquisition'].includes(evaluation.operationType);
   if (reverse && !selfAssessed) throw new SourceValidationError('Falta el detalle separado de la autorrepercusión.');
+  if (invoice.tipo === 'recibida' && !reverse
+    && (Math.abs(Number(invoice.tipo_iva || 0) - evaluation.taxRate) > 0.0001 || Math.abs(Number(invoice.cuota_iva || 0) - evaluation.taxAmount) > 0.02)) {
+    throw new SourceValidationError('El tipo de operación elegido no coincide con el tipo o la cuota del proveedor. Revisa el criterio fiscal o corrige esos recuadros según el original.');
+  }
   if (Math.abs(Number(invoice.base_imponible) - evaluation.base) > 0.02
     || (!reverse && (Math.abs(Number(invoice.tipo_iva || 0) - evaluation.taxRate) > 0.0001 || Math.abs(Number(invoice.cuota_iva || 0) - evaluation.taxAmount) > 0.02))
     || Math.abs(Number(invoice.importe_retencion || 0) - evaluation.withholdingAmount) > 0.02

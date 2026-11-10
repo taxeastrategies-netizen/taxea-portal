@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import OcrFiscalFields from './OcrFiscalFields';
+import { readReceivedOcrAmounts } from '@/lib/receivedOcrAmounts.mjs';
 import { canReturnOcrToPending, canRejectOcrDocument } from '@/lib/ocrIntake.mjs';
 
 export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnToPending, onCancel, loading, companyId, fiscalActivities = [], fiscalContext = {}, bulkCount = 0, error = '', expanded = false }) {
@@ -20,6 +21,9 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnTo
   const accountPrefix = tipo === 'ingresos' ? '7' : '6';
   const invalidManualAccount = manualAccount && (!/^\d{3,8}$/.test(manualAccount) || !manualAccount.startsWith(accountPrefix));
   const missingFiscalActivity = fiscalActivities.length > 1 && !form.fiscal_activity_id;
+  const pendingInvoice = doc.invoiceSource;
+  const canEditPendingAmounts = tipo !== 'ingresos' && pendingInvoice?.accounting_migration_hold === true
+    && pendingInvoice.estado_contable !== 'contabilizada' && !pendingInvoice.linked_journal_entry_id;
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -166,15 +170,18 @@ export default function ReviewPanel({ doc, tipo, onApprove, onReject, onReturnTo
 
           <OcrFiscalFields value={form.fiscal_criteria || {}} onChange={value=>set('fiscal_criteria',value)}
             context={fiscalContext} direction={tipo==='ingresos'?'ingreso':'gasto'} activityId={form.fiscal_activity_id}
-            sourceTaxRate={tipo==='ingresos'?form.tipo_iva:form.tipo_impuesto} disabled={loading} />
+            sourceTaxRate={tipo==='ingresos'?form.tipo_iva:form.tipo_impuesto}
+            sourceTaxAmount={tipo==='ingresos'?form.cuota_iva:form.cuota_impuesto} disabled={loading} />
 
-          {doc.invoiceSource && <p className="text-xs text-muted-foreground">La factura ya está guardada. Aquí completas su criterio y cuenta de gasto/ingreso; sus importes originales quedan protegidos.</p>}
-          <fieldset disabled={loading || Boolean(doc.invoiceSource)}>
+          {pendingInvoice && <p className="text-xs text-muted-foreground">{canEditPendingAmounts
+            ? 'Puedes corregir los importes y confirmar esta misma factura pendiente.'
+            : 'La factura ya está guardada. Revisa el criterio y la cuenta contable.'}</p>}
+          <fieldset disabled={loading || (Boolean(pendingInvoice) && !canEditPendingAmounts)}>
           {/* Campos según tipo */}
           {bulkCount > 0 ? <p className="text-xs text-muted-foreground">El lote aplica únicamente actividad, criterio fiscal y cuenta manual indicada. Cada documento conserva sus datos originales.</p> : tipo === 'ingresos' ? (
             <IngresosFields form={form} set={set} />
           ) : (
-            <GastosFields form={form} set={set} />
+            <GastosFields form={form} set={set} lockDetails={Boolean(pendingInvoice)} />
           )}
           </fieldset>
         </div>
@@ -232,9 +239,13 @@ const CATEGORIAS = [
   { value: 'otros', label: 'Otros' },
 ];
 
-function GastosFields({ form, set }) {
+function GastosFields({ form, set, lockDetails }) {
+  let totals;
+  try { totals = readReceivedOcrAmounts({ ...form, total: form.total === '' ? 0 : form.total }, form.cuota_recargo); }
+  catch { /* Show field-specific errors when confirming. */ }
   return (
     <div className="grid grid-cols-2 gap-3">
+      <fieldset disabled={lockDetails} className="col-span-2 grid grid-cols-2 gap-3">
       <F label="Nº Factura"><Input value={form.numero_factura || ''} onChange={e=>set('numero_factura',e.target.value)} className="h-8 text-sm" /></F>
       <F label="Proveedor" col2><Input value={form.proveedor_cliente || ''} onChange={e => set('proveedor_cliente', e.target.value)} className="h-8 text-sm" /></F>
       <F label="NIF/CIF proveedor"><Input value={form.nif_proveedor || ''} onChange={e => set('nif_proveedor', e.target.value)} className="h-8 text-sm" /></F>
@@ -254,12 +265,19 @@ function GastosFields({ form, set }) {
         </Select>
       </F>
       <F label="Concepto" col2><Input value={form.concepto || ''} onChange={e => set('concepto', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Base imponible (€)"><Input type="number" step="0.01" value={form.base_imponible || ''} onChange={e => set('base_imponible', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Tipo IVA/IGIC %"><Input type="number" value={form.tipo_impuesto ?? 21} onChange={e => set('tipo_impuesto', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Cuota impuesto (€)"><Input type="number" step="0.01" value={form.cuota_impuesto || ''} onChange={e => set('cuota_impuesto', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Retención IRPF %"><Input type="number" step="0.01" value={form.retencion_irpf || 0} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Importe retención (€)"><Input type="number" step="0.01" value={form.importe_retencion || ''} onChange={e => set('importe_retencion', e.target.value)} className="h-8 text-sm" /></F>
-      <F label="Total (€)"><Input type="number" step="0.01" value={form.total || ''} onChange={e => set('total', e.target.value)} className="h-8 text-sm" /></F>
+      </fieldset>
+      <F label="Base imponible (€)"><Input aria-label="Base imponible (€)" type="number" step="0.01" value={form.base_imponible ?? ''} onChange={e => set('base_imponible', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Tipo IVA/IGIC %"><Input aria-label="Tipo IVA/IGIC %" type="number" step="0.0001" value={form.tipo_impuesto ?? ''} onChange={e => set('tipo_impuesto', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Cuota del proveedor (€)"><Input aria-label="Cuota del proveedor (€)" type="number" step="0.01" value={form.cuota_impuesto ?? ''} onChange={e => set('cuota_impuesto', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Retención IRPF %"><Input aria-label="Retención IRPF %" type="number" step="0.0001" value={form.retencion_irpf ?? ''} onChange={e => set('retencion_irpf', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Importe de retención (€)"><Input aria-label="Importe de retención (€)" type="number" step="0.01" value={form.importe_retencion ?? ''} onChange={e => set('importe_retencion', e.target.value)} className="h-8 text-sm" /></F>
+      <F label="Total del proveedor (€)"><Input aria-label="Total del proveedor (€)" type="number" step="0.01" value={form.total ?? ''} onChange={e => set('total', e.target.value)} className="h-8 text-sm" /></F>
+      {totals && totals.difference !== 0 && totals.fields.base_imponible !== 0 && totals.sameSign && (
+        <div className="col-span-2 flex flex-wrap items-center gap-2 rounded-md border bg-secondary/30 px-3 py-2 text-xs">
+          <span>El total según estos importes es {totals.expectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}.</span>
+          <Button type="button" size="sm" variant="outline" onClick={() => set('total', totals.expectedTotal)}>Usar este total</Button>
+        </div>
+      )}
 
     </div>
   );

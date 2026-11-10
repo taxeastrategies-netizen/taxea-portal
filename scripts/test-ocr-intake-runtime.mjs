@@ -217,6 +217,7 @@ for(const component of ['src/components/lector/ReviewPanel.jsx','src/components/
   const build=await esbuild.build({entryPoints:[component],bundle:true,write:false,platform:'node',format:'cjs',jsx:'automatic',plugins:[{
     name:'review-ui',setup(b){
       b.onResolve({filter:/ocrIntake\.mjs$/},()=>({path:process.cwd()+'/src/lib/ocrIntake.mjs'}));
+      b.onResolve({filter:/receivedOcrAmounts\.mjs$/},()=>({path:process.cwd()+'/src/lib/receivedOcrAmounts.mjs'}));
       b.onResolve({filter:/^(react($|\/jsx-runtime$)|lucide-react$|@\/)|OcrFiscalFields$/},args=>({path:args.path,namespace:'review-ui'}));
       b.onLoad({filter:/.*/,namespace:'review-ui'},args=>({loader:'js',contents:args.path==='react/jsx-runtime'
         ? 'export const jsx=(type,props)=>({type,props:props || {},children:[].concat(props?.children || [])});export const jsxs=jsx;export const Fragment="Fragment";'

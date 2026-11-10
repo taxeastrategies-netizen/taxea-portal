@@ -35,7 +35,7 @@ export async function acquireApprovalLease(svc, companyId) {
       { $set: { ocr_approval_lock_token: '', ocr_approval_lock_started_at: '' } });
   };
 }
-export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmReview, postInvoice, schemaVersion, confirmSource = null) {
+export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmReview, postInvoice, schemaVersion, confirmSource = null, reviewedExpenseAmounts = false) {
   const expected = doc.documentType === 'expense_invoice' ? 'recibida' : doc.documentType === 'income_invoice' ? 'emitida' : null;
   if (!expected || invoiceType !== expected) return { status: 422, json: { error: 'El tipo de factura no coincide con el documento OCR.' } };
   const found = await svc.entities.Invoice.filter({ company_id: doc.company_id, ocr_document_id: doc.id }, '-created_date', 10);
@@ -49,19 +49,34 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
   }
   invoice ||= found?.[0] || null;
   if (!invoice) return null;
-  if (invoice.company_id !== doc.company_id || invoice.tipo !== expected || invoice.anulada) {
+  if (invoice.company_id !== doc.company_id || invoice.tipo !== expected || invoice.anulada || (invoice.ocr_document_id && invoice.ocr_document_id !== doc.id)) {
     return { status: 409, json: { error: 'La factura enlazada no pertenece al documento, tiene otra dirección o está anulada.' } };
   }
   if (!doc.linkedInvoiceId) {
     await svc.entities.OcrInvoiceDocument.update(doc.id, { linkedInvoiceId: invoice.id });
     doc = { ...doc, linkedInvoiceId: invoice.id };
   }
-  if (!sourceTotalMatches(doc, invoice)) {
+  const alreadyConfirmedExpense = expected === 'recibida' && doc.status === 'accounted'
+    && doc.linkedJournalEntryId === invoice.linked_journal_entry_id
+    && (Array.isArray(doc.auditTrail) ? doc.auditTrail : []).some(record => {
+      try {
+        const entry = JSON.parse(record);
+        return entry.action === 'source_single_check' && entry.invoiceId === invoice.id && entry.journalEntryId === invoice.linked_journal_entry_id;
+      } catch { return false; }
+    });
+  const confirmingExpense = expected === 'recibida' && reviewedExpenseAmounts && confirmSource && confirmReview === true;
+  if (!alreadyConfirmedExpense && !confirmingExpense && !sourceTotalMatches(doc, invoice)) {
     const message = 'El total de la factura difiere del documento OCR. Revisar el original y el tratamiento de impuestos no deducibles antes de continuar.';
     await svc.entities.OcrInvoiceDocument.update(doc.id, { safeErrorMessage: message, duplicateWarning: 'SOURCE_TOTAL_MISMATCH', lastStatusChangedAt: new Date().toISOString() });
     return { status: 409, json: { error: message, invoiceId: invoice.id, alreadyProcessed: true, review_required: true } };
   }
-  if (invoice.estado_contable !== 'contabilizada' && confirmSource && confirmReview === true) invoice = await confirmSource(invoice);
+  if (confirmSource && confirmReview === true && (invoice.estado_contable !== 'contabilizada' || confirmingExpense)) {
+    invoice = await confirmSource(invoice);
+    if (invoice.estado_contable === 'contabilizada' && invoice.linked_journal_entry_id && invoice.ocr_document_id === doc.id) {
+      return { status: 200, json: { success: true, alreadyProcessed: true, recovered: true,
+        invoiceId: invoice.id, journalEntryId: invoice.linked_journal_entry_id } };
+    }
+  }
   if (invoice.estado_contable !== 'contabilizada' && (
     !privileged(user) || confirmReview !== true || invoice.fiscal_review_status !== 'validado'
     || invoice.accounting_migration_hold === true)) {

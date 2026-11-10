@@ -11,6 +11,7 @@ import BulkDropZone from '@/components/lector/BulkDropZone';
 import ReviewPanel from '@/components/lector/ReviewPanel';
 import OcrReviewWorkspace from '@/components/lector/OcrReviewWorkspace';
 import { reviewableDocuments, nextAfterConfirmation } from '@/lib/ocrReviewQueue.mjs';
+import { validateReceivedOcrAmounts } from '@/lib/receivedOcrAmounts.mjs';
 import OcrDocumentTable from '@/components/ocr/OcrDocumentTable';
 import DuplicateCheckModal from '@/components/shared/DuplicateCheckModal';
 import { detectDeviceType, classifyUploadError, validateFile } from '@/lib/ocrUploadUtils';
@@ -48,10 +49,11 @@ const mapForm = (r) => ({
   concepto: r?.concepto || '',
   fecha: r?.fecha || '',
   fecha_recepcion: r?.fecha_recepcion || new Date().toISOString().slice(0, 10),
-  base_imponible: r?.base_imponible || '',
-  tipo_impuesto: r?.tipo_impuesto ?? 21,
-  cuota_impuesto: r?.cuota_impuesto || '',
-  total: r?.total || '',
+  base_imponible: r?.base_imponible ?? '',
+  tipo_impuesto: r?.tipo_impuesto ?? '',
+  cuota_impuesto: r?.cuota_impuesto ?? '',
+  cuota_recargo: r?.cuota_recargo ?? 0,
+  total: r?.total ?? '',
   categoria: r?.categoria_sugerida || 'otros',
   cuenta_pgc: r?.cuenta_pgc || '',
   confianza_pgc: r?.confianza_pgc || 0,
@@ -358,14 +360,15 @@ export default function LectorGastos({ reviewPage = false }) {
       setTimeout(() => setToast(null), 6000);
       return;
     }
-    const baseValue = parseFloat(form.base_imponible);
-    const isRectificative = form.es_rectificativa === true || form.es_rectificativa === 'true';
-    if (!Number.isFinite(baseValue) || baseValue === 0 || (baseValue < 0 && !isRectificative)) {
-      setReviewError('La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.');
-      setToast({ type: 'error', message: 'La base imponible debe ser distinta de 0; los importes negativos requieren marcar factura rectificativa.' });
-      setTimeout(() => setToast(null), 6000);
+    try {
+      const amounts = validateReceivedOcrAmounts(form, form.cuota_recargo);
+      if (amounts.base_imponible < 0 && form.es_rectificativa !== true && form.es_rectificativa !== 'true')
+        throw new Error('Marca la factura como rectificativa si el documento tiene importes negativos.');
+    } catch (error) {
+      setReviewError(error.message);
       return;
     }
+    setReviewError('');
     setValidating(true);
     try {
       const doc=documents.find(row=>row.id===docId) || reviewing;

@@ -949,7 +949,7 @@ function traceField(field: any, data: any, pageInput: unknown, pageSizeInput: un
 }
 
 function retentionAmount(invoice: any) {
-  return money(invoice.importe_retencion || money(invoice.base_imponible) * Number(invoice.retencion_irpf || 0) / 100);
+  return money(invoice.importe_retencion ?? money(invoice.base_imponible) * Number(invoice.retencion_irpf || 0) / 100);
 }
 
 function invoicePayable(invoice: any) {

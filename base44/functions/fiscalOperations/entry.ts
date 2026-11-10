@@ -264,7 +264,7 @@ function recommendedObligations(profile: any, activities: any[]) {
   return [...result.values()].sort((a, b) => Number(a.code) - Number(b.code));
 }
 
-function evaluate(profile: any, activities: any[], body: any) {
+function evaluate(profile: any, activities: any[], body: any, confirmedWithholding?: number) {
   const activeActivities = (activities || []).filter(item => item.active !== false);
   const activity = body.activityId
     ? activeActivities.find(item => item.id === body.activityId)
@@ -366,7 +366,7 @@ function evaluate(profile: any, activities: any[], body: any) {
     withholdingRate = Number(body.withholdingRate ?? (Number(activity.defaultWithholdingRate) > 0 ? activity.defaultWithholdingRate : (newProfessional ? 7 : 15)));
     if (!body.counterpartyIsWithholdingAgent) { withholdingRate = 0; alerts.push('La retencion profesional solo se propone cuando el destinatario esta obligado a retener.'); }
   } else if (body.withholdingRate != null) withholdingRate = Number(body.withholdingRate);
-  const withholdingAmount = money(base * withholdingRate / 100);
+  const withholdingAmount = confirmedWithholding ?? money(base * withholdingRate / 100);
   if (manualOverride && !clean(body.manualOverrideReason)) throw new PublicDomainError('Indica el motivo de la modificacion manual.');
   const bookImpact = operationType === 'outside_scope' ? [] : [direction === 'ingreso' ? 'facturas_emitidas' : 'facturas_recibidas'];
   const modelImpact: string[] = [];
@@ -446,6 +446,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
       if (clean(body.regime || selectedActivity?.indirectTaxRegime) === 'recargo_equivalencia' && invoice.tipo === 'recibida') {
         specialInputs.surchargeRate = Number(invoice.tipo_recargo || 0);
       }
+      const receivedSource = context.sourceCheck && invoice.tipo === 'recibida';
       const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
@@ -455,7 +456,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
         taxAmount: body.taxAmount ?? invoice.cuota_iva,
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
-      });
+      }, receivedSource ? money(invoice.importe_retencion) : undefined);
+      if (receivedSource && proposedEvaluation.status === 'blocked')
+        return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Revisa el tratamiento fiscal del gasto.' }, { status: 422 });
       const c5Details = c5SpecialPurchase(invoice, body, proposedEvaluation);
       if(c5Details?.kind==='implicit_igic') Object.assign(proposedEvaluation,{deductibleTax:c5Details.deductible,nonDeductibleTax:0,deductiblePercent:Number(body.deductiblePercent ?? 100)});
       const c5ImportPurchase = c5Details?.kind === 'minorista_import';
@@ -704,7 +707,7 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         : {};
       const requiredLegend=invoice.tipo==='emitida'?(evaluation.regime==='pequeno_empresario_igic' && evaluation.exemptionKey==='IGIC_REPEP'?'exención franquicia fiscal':evaluation.regime==='comerciante_minorista_igic'?'comerciante minorista':''):'';
       const c5Legend=requiredLegend && !String(invoice.coletilla_fiscal||'').toLowerCase().includes(requiredLegend)?{coletilla_fiscal:[invoice.coletilla_fiscal,requiredLegend].filter(Boolean).join(' · ')}:{};
-      await svc.entities.Invoice.update(invoice.id, { ...c5Legend, fiscal_c5_data:JSON.stringify(c5Snapshot), ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',approvalOrigin:context.sourceKind==='recurring'?'issuer_template':context.sourceCheck && invoice.tipo==='emitida'?'issuer':'document_review',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending ? { total_factura: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
+      await svc.entities.Invoice.update(invoice.id, { ...c5Legend, fiscal_c5_data:JSON.stringify(c5Snapshot), ...issuedReccLegend, ...(proposedBreakdown?{tax_breakdown:JSON.stringify(proposedBreakdown)}:{}), ...(confirmedRecc ? { recc_metadata: JSON.stringify(confirmedRecc), fecha_operacion: body.operationDate || invoice.fecha_operacion || invoice.fecha_emision } : {}), fiscal_advisor_decision:{status:'confirmed',approvalOrigin:context.sourceKind==='recurring'?'issuer_template':context.sourceCheck && invoice.tipo==='emitida'?'issuer':'document_review',reviewedBy:user.email,reviewedAt:new Date().toISOString(),criteria:commonReviewCriteria({...body,applyTaxRate:true,applyWithholding:true})}, indirect_tax_kind: payload.taxKind, fiscal_treatment: payload.operationType, fiscal_regime: payload.regime, fiscal_exemption_key: payload.exemptionKey, fiscal_legal_basis: payload.legalBasis, deductible_tax_amount: evaluation.deductibleTax, non_deductible_tax_amount: evaluation.nonDeductibleTax, ...(selfAssessed ? { ...selfAssessed, tipo_iva: invoice.tipo_iva, cuota_iva: invoice.cuota_iva } : { self_assessed_tax_amount: 0, self_assessed_tax_rate: 0, self_assessed_tax_confirmed: false, tipo_iva: payload.rate, cuota_iva: payload.quota }), retencion_irpf: evaluation.withholdingRate, importe_retencion: evaluation.withholdingAmount, fiscal_activity_id: evaluation.activityId, fiscal_rule_set_version: RULESET, ...(context.batchId ? {fiscal_review_batch_id:context.batchId} : {}), fiscal_review_status: 'validado', fiscal_reviewed_at: new Date().toISOString(), fiscal_reviewed_by: user.email, fiscal_manual_override: evaluation.manualOverride, fiscal_manual_override_reason: evaluation.manualOverrideReason, ...(phaseOnePending && !receivedSource ? { total_factura: recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total, importe_pendiente: Math.abs(recargoPurchase || c5ImportPurchase || evaluation.regime === 'criterio_caja' ? money(evaluation.total + Number(invoice.cuota_recargo || 0)) : evaluation.total) } : {}) });
       return Response.json({ success: true, mode: 'saved', taxLine, evaluation });
   } finally {
     if (releaseAdvanceLocks) await releaseAdvanceLocks();

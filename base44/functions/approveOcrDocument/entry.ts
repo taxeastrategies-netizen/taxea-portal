@@ -3,13 +3,11 @@ import { postInvoice, SCHEMA_VERSION, canonical8 } from './accountingEngine.ts';
 import { buildAeatQrUrl } from './invoiceQr.ts';
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { acquireApprovalLease, resumeExistingOcr, findFinancialDuplicates } from './ocrRecovery.ts';
+import { validateReceivedOcrAmounts, OcrAmountError } from './receivedOcrAmounts.mjs';
 
 // Preserve document amounts. A non-deductible quota is a cost, not a removed tax.
 // Fiscal validation may reject this proposal; it must never rewrite the payable.
 function buildBulkCorrectedForm(ex) {
-  const base = Math.round((Number(ex?.base_imponible) || 0) * 100) / 100;
-  const ret = Number(ex?.retencion_irpf) || 0;
-  const importeRet = Number(ex?.importe_retencion ?? 0);
   return {
     proveedor_cliente: ex?.proveedor || '',
     nif_proveedor: ex?.nif_proveedor || '',
@@ -23,13 +21,13 @@ function buildBulkCorrectedForm(ex) {
     concepto: ex?.concepto || ex?.motivo_clasificacion || '',
     fecha: ex?.fecha || '',
     fecha_recepcion: ex?.fecha_recepcion || new Date().toISOString().slice(0, 10),
-    base_imponible: base,
-    tipo_impuesto: Number(ex?.tipo_impuesto ?? 0),
-    cuota_impuesto: Number(ex?.cuota_impuesto ?? 0),
-    retencion_irpf: ret,
+    base_imponible: ex?.base_imponible ?? '',
+    tipo_impuesto: ex?.tipo_impuesto ?? 0,
+    cuota_impuesto: ex?.cuota_impuesto ?? 0,
+    retencion_irpf: ex?.retencion_irpf ?? 0,
     retencion_tipo: ex?.retencion_tipo || 'ninguna',
-    importe_retencion: importeRet,
-    total: Number(ex?.total),
+    importe_retencion: ex?.importe_retencion ?? 0,
+    total: ex?.total ?? '',
     categoria: ex?.categoria_sugerida || 'otros',
     es_rectificativa: ex?.es_rectificativa === true,
   };
@@ -58,11 +56,15 @@ async function approveOne(base44, user, doc, form, invoiceType, extractedData, c
       !recoveryOnly ? async invoice => {
         const response = await base44.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',
           company_id:doc.company_id,invoice_id:invoice.id,criteria:{...(form.fiscal_criteria || {}),
-            activityId:form.fiscal_activity_id || undefined, accountCode:form.cuenta_contable_manual || undefined}});
+            activityId:form.fiscal_activity_id || undefined, accountCode:form.cuenta_contable_manual || undefined},
+          ...(invoiceType === 'recibida' ? { source_amounts: {
+            base_imponible: form.base_imponible, tipo_impuesto: form.tipo_impuesto, cuota_impuesto: form.cuota_impuesto,
+            retencion_irpf: form.retencion_irpf, importe_retencion: form.importe_retencion, total: form.total,
+          } } : {})});
         const result=response?.data??response;
         if(!result?.success) throw new Error(result?.error || 'No se pudo completar el documento.');
         return result.invoice;
-      } : null); }
+      } : null, !recoveryOnly && invoiceType === 'recibida'); }
     catch(error) {
       const detail=String(error?.response?.data?.error || error.message || 'No se pudo completar el OCR.').slice(0,500);
       const current=await svc.entities.OcrInvoiceDocument.get(doc.id);
@@ -136,7 +138,15 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
     return { status: 400, json: { error: 'La fecha real de recepción no puede ser anterior a la fecha de emisión.' } };
   }
 
-  const baseImponible = parseFloat(form.base_imponible) || 0;
+  let receivedAmounts;
+  if (invoiceType === 'recibida') {
+    try { receivedAmounts = validateReceivedOcrAmounts(form); }
+    catch (error) {
+      if (!(error instanceof OcrAmountError)) throw error;
+      return { status: 422, json: { error: error.message } };
+    }
+  }
+  const baseImponible = receivedAmounts?.base_imponible ?? (parseFloat(form.base_imponible) || 0);
   const esRectificativa = form.es_rectificativa === true || form.es_rectificativa === 'true' || extractedData?.es_rectificativa === true;
   if (baseImponible === 0) {
     return { status: 400, json: { error: 'La base imponible no puede ser 0' } };
@@ -149,8 +159,8 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
   const sourceQuota = Number(invoiceType === 'emitida' ? form.cuota_iva : form.cuota_impuesto);
   const rate = Number(invoiceType === 'emitida' ? form.tipo_iva : form.tipo_impuesto);
   const withholding = Number(form.importe_retencion ?? Math.round(baseImponible * Number(form.retencion_irpf || 0)) / 100);
-  if (![sourceTotal,sourceQuota,rate,withholding].every(Number.isFinite)
-    || Math.abs(sourceTotal - Math.round((baseImponible + sourceQuota - withholding)*100)/100) > 0.02)
+  if (invoiceType === 'emitida' && (![sourceTotal,sourceQuota,rate,withholding].every(Number.isFinite)
+    || Math.abs(sourceTotal - Math.round((baseImponible + sourceQuota - withholding)*100)/100) > 0.02))
     return {status:422,json:{error:'Base, cuota, retención y total no cuadran. Corrige los importes en este mismo OCR.'}};
 
   // 4. Build invoice data
@@ -211,13 +221,8 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       proveedor_provincia: form.provincia_proveedor || extractedData?.provincia_proveedor || extractedData?.proveedor_provincia || '',
       proveedor_pais: form.pais_proveedor || extractedData?.pais_proveedor || extractedData?.proveedor_pais || '',
       concepto: form.concepto || '',
-      base_imponible: parseFloat(form.base_imponible) || 0,
-      tipo_iva: Number(form.tipo_impuesto ?? 0),
-      cuota_iva: parseFloat(form.cuota_impuesto) || 0,
-      retencion_irpf: parseFloat(form.retencion_irpf) || 0,
+      ...receivedAmounts,
       retencion_tipo: form.retencion_tipo || 'ninguna',
-      importe_retencion: parseFloat(form.importe_retencion) || Math.round(((parseFloat(form.base_imponible) || 0) * (parseFloat(form.retencion_irpf) || 0) / 100) * 100) / 100,
-      total_factura: parseFloat(form.total) || 0,
       estado_cobro: 'pendiente',
       tipo: 'recibida',
       estado_contable: 'pendiente',
@@ -389,12 +394,9 @@ Deno.serve(async (req) => {
             if (!doc || doc.company_id !== companyId) return { outcome: 'skipped', reason: 'Documento no encontrado o de otra empresa', id };
             let ex = null;
             try { ex = JSON.parse(doc.extractedData || 'null'); } catch { ex = null; }
-            if (!ex || !(Number(ex.base_imponible) > 0)) return { outcome: 'skipped', reason: 'Sin datos extraídos o base 0; requiere reanálisis o rechazo manual', id, name: doc.originalFileName };
+            if (!ex || ex.base_imponible == null || ex.base_imponible === '') return { outcome: 'skipped', reason: 'Sin datos extraídos o base 0; requiere reanálisis o rechazo manual', id, name: doc.originalFileName };
             if (doc.documentType !== 'expense_invoice') return { outcome: 'skipped', reason: 'Solo facturas recibidas en la cola masiva', id, name: doc.originalFileName };
             const form = buildBulkCorrectedForm(ex);
-            if (!Number.isFinite(Number(ex.total)) || Math.abs(Math.round(form.total * 100) - Math.round(Number(ex.total) * 100)) > 2) {
-              return { outcome: 'skipped', reason: 'El tratamiento automático cambiaría el total original. Revisar impuestos no deducibles y retenciones sin borrar cuotas del gasto.', id, name: doc.originalFileName };
-            }
             form.fiscal_activity_id = activityId || undefined;
             const res = await approveOne(base44, user, doc, form, 'recibida', ex, true);
             if (res.status === 200 && res.json?.success && !res.json?.review_required) return { outcome: 'approved', invoiceId: res.json.invoiceId, name: doc.originalFileName };

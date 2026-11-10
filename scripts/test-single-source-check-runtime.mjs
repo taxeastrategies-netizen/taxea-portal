@@ -92,6 +92,46 @@ const credit=await approve(await makeDoc('credit',{base:-45.28,rate:7,quota:-3.1
 assert.equal((await entity('Invoice').get(credit.invoiceId)).non_deductible_tax_amount,-3.17);
 const zero=await approve(await makeDoc('zero',{base:128.23,rate:0,quota:0,total:128.23}));
 assert.equal((await entity('Invoice').get(zero.invoiceId)).estado_contable,'contabilizada');
+// Los importes leídos y confirmados prevalecen sobre un recálculo de porcentaje.
+const entered=await makeDoc('typed-retention');
+const enteredForm={...form(entered),base_imponible:'100,00',cuota_impuesto:'7,00',
+  retencion_irpf:'15',importe_retencion:'12,50',total:'94,50'};
+const enteredResult=await call('approveOcrDocument',{docId:entered.id,invoiceType:'recibida',form:enteredForm});
+const enteredInvoice=await entity('Invoice').get(enteredResult.invoiceId);
+assert.equal(enteredInvoice.total_factura,94.50);assert.equal(enteredInvoice.importe_retencion,12.50);
+assert.equal(enteredInvoice.retencion_irpf,15);
+assert.equal(records.InvoiceTaxLine.find(row=>row.invoiceId===enteredInvoice.id).quota,7);
+assert.equal(records.JournalEntryLine.find(row=>row.journalEntryId===enteredResult.journalEntryId&&row.accountCode==='47510000').credit,12.50);
+assert.equal(records.JournalEntryLine.find(row=>row.journalEntryId===enteredResult.journalEntryId&&row.sourceLineType==='tercero').credit,94.50);
+const repeatedEntered=await call('approveOcrDocument',{docId:entered.id,invoiceType:'recibida',form:enteredForm});
+assert.equal(repeatedEntered.invoiceId,enteredInvoice.id);assert.equal(repeatedEntered.journalEntryId,enteredResult.journalEntryId);
+await call('approveOcrDocument',{docId:entered.id,invoiceType:'recibida',form:{...enteredForm,importe_retencion:0,total:107}},409);
+assert.equal((await entity('Invoice').get(enteredInvoice.id)).importe_retencion,12.50);
+const explicitZero=await makeDoc('explicit-zero-retention');
+const explicitZeroResult=await call('approveOcrDocument',{docId:explicitZero.id,invoiceType:'recibida',form:{...form(explicitZero),retencion_irpf:15,importe_retencion:0}});
+assert.equal((await entity('Invoice').get(explicitZeroResult.invoiceId)).importe_retencion,0);
+const contradictory=await makeDoc('inconsistent-total');
+const invalidCount=records.Invoice.length;
+const invalid=await call('approveOcrDocument',{docId:contradictory.id,invoiceType:'recibida',form:{...form(contradictory),total:105}},422);
+assert.match(invalid.error,/107,00/);assert.equal(records.Invoice.length,invalidCount);
+
+// Corrige importes de una factura enlazada que se quedó pendiente. Nunca usa el total bruto del OCR.
+const editable=await makeDoc('linked-edit');
+const linkedExpense=await entity('Invoice').create({company_id:'qa',tipo:'recibida',numero_factura:'linked-edit',fecha_emision:'2026-07-12',fecha_recepcion:'2026-07-13',
+  base_imponible:100,tipo_iva:7,cuota_iva:7,total_factura:107,retencion_irpf:15,importe_retencion:15,
+  proveedor_nombre:'Proveedor QA',proveedor_nif:'B98765432',ocr_document_id:editable.id,fiscal_activity_id:'fa',
+  fiscal_review_status:'pendiente_revision',accounting_migration_hold:true,accounting_migration_hold_reason:'SOURCE_CHECK_PENDING'});
+await entity('OcrInvoiceDocument').update(editable.id,{linkedInvoiceId:linkedExpense.id});
+const linkedCount=records.Invoice.length;
+const correctedForm={...form(editable),base_imponible:200,cuota_impuesto:14,retencion_irpf:15,importe_retencion:25,total:189};
+const linkedResult=await call('approveOcrDocument',{docId:editable.id,invoiceType:'recibida',form:correctedForm});
+assert.equal(linkedResult.invoiceId,linkedExpense.id);assert.equal(records.Invoice.length,linkedCount);
+assert.equal((await entity('Invoice').get(linkedExpense.id)).total_factura,189);
+assert.equal((await entity('Invoice').get(linkedExpense.id)).importe_retencion,25);
+assert.equal(records.InvoiceTaxLine.find(row=>row.invoiceId===linkedExpense.id).base,200);
+assert.equal((await entity('OcrInvoiceDocument').get(editable.id)).status,'accounted');
+assert.equal((await call('approveOcrDocument',{docId:editable.id,invoiceType:'recibida',form:correctedForm})).journalEntryId,linkedResult.journalEntryId);
+
 // Venta minorista de prueba: exención propia y QR/hash al aprobar en OCR de emitidas.
 const issuedDoc=await makeDoc('minorista-sale',{base:200,rate:0,quota:0,total:200,type:'income_invoice'});
 const issuedForm={numero_factura:'minorista-sale',fecha_emision:'2026-07-12',cliente_nombre:'Cliente QA',

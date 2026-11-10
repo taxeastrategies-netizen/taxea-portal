@@ -12,6 +12,8 @@ function escapeXml(str) {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const n = v => parseFloat(v) || 0;
 const pct = (base, tipo) => n(base) * n(tipo) / 100;
+const receivedWithholding = invoice => invoice.importe_retencion == null || invoice.importe_retencion === ''
+  ? pct(invoice.base_imponible, invoice.retencion_irpf) : n(invoice.importe_retencion);
 
 function currencyExportInvoices(source){
  const rows=[['Conversión documental a EUR. Las cuotas RECC efectivamente devengadas se detallan en el auxiliar; la liquidación corresponde al modelo revisado. No cambia facturas ni asientos.'],['Factura','Divisa original','Base original','Cuota original','Retención original','Total original','Cambio EUR','Valoración','Base EUR','Cuota EUR','Total EUR']],warnings=[];
@@ -22,7 +24,11 @@ function currencyExportInvoices(source){
    const fields=['base_imponible','cuota_iva','deductible_tax_amount','non_deductible_tax_amount','importe_retencion','cuota_recargo','total_factura'];
    if(!Number.isFinite(rate)||rate<=0){warnings.push('Factura '+invoice.numero_factura+': falta cambio EUR; importes EUR vacíos, no se ha supuesto paridad.');for(const field of fields)copy[field]=null;valuation='Pendiente de revisión';}
    else{
-     for(const field of fields)copy[field]=fxMoney(Number(invoice[field]||0),rate);
+     for (const field of fields) {
+       const amount = field === 'importe_retencion' && invoice.tipo === 'recibida'
+         ? receivedWithholding(invoice) : Number(invoice[field] || 0);
+       copy[field] = fxMoney(amount, rate);
+     }
      let metadata={};try{metadata=JSON.parse(invoice.recc_metadata||'{}');}catch{/* Se añade incidencia fiscal en su libro. */}
      const credit=metadata.advanceCreditBook;
      if(invoice.es_rectificativa&&credit){
@@ -201,7 +207,7 @@ function buildFacturasRecibidas(invoices) {
       i.numero_factura || '', i.fecha_emision || '', i.fecha_operacion || i.fecha_emision || '',
       provNombre, provNif, i.concepto || '', i.categoria_gasto || '',
       n(i.base_imponible), n(i.tipo_iva), n(i.cuota_iva),
-      n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
+      n(i.retencion_irpf), receivedWithholding(i),
       n(i.total_factura),
       i.estado_contable || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || '',
@@ -281,7 +287,7 @@ function buildLibroCompras(invoices, expenses) {
       n(i.base_imponible), n(i.tipo_iva), n(i.cuota_iva),
       i.deductible_tax_amount == null ? '' : n(i.deductible_tax_amount),
       i.non_deductible_tax_amount == null ? '' : n(i.non_deductible_tax_amount),
-      n(i.retencion_irpf), pct(i.base_imponible, i.retencion_irpf || 0),
+      n(i.retencion_irpf), receivedWithholding(i),
       n(i.total_factura),
       i.deductible_tax_amount == null ? 'Sin validar' : n(i.deductible_tax_amount) === 0 ? 'No' : 'Sí',
       i.fiscal_regime || '', i.fiscal_treatment || '',

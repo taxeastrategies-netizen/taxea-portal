@@ -52,7 +52,14 @@ const source=readFileSync('src/components/libros/ExportExcel.jsx','utf8')
   .replace('export async function exportarLibros','async function exportarLibros')
   .replaceAll("const { base44 } = await import('@/api/base44Client');",'const base44 = globalThis.__fakeBase44;');
 const context=vm.createContext({fxMoney,Blob:TestBlob,URL:{createObjectURL(value){blob=value;return 'blob:test';},revokeObjectURL(){}},document,Date,console});
-vm.runInContext(source+'\n globalThis.exportarLibros=exportarLibros;',context);
+vm.runInContext(source+'\n globalThis.exportarLibros=exportarLibros;globalThis.buildFacturasRecibidas=buildFacturasRecibidas;globalThis.buildLibroCompras=buildLibroCompras;',context);
+const typed = { tipo:'recibida', base_imponible:100, cuota_iva:7, retencion_irpf:15, importe_retencion:12.50, total_factura:94.50 };
+const zero = { ...typed, importe_retencion:0, total_factura:107 };
+const legacy = { ...typed, importe_retencion:null, total_factura:92 };
+for (const [invoice,expected] of [[typed,12.50],[zero,0],[legacy,15]]) {
+  assert.equal(context.buildFacturasRecibidas([invoice])[1][11],expected);
+  assert.equal(context.buildLibroCompras([invoice],[])[1][12],expected);
+}
 const invoices=[
   {id:'issued',tipo:'emitida',numero_factura:'QA-1',fecha_emision:'2026-09-30',cliente_nombre:'Cliente QA',base_imponible:100,tipo_iva:0,cuota_iva:0,total_factura:100},
   {id:'received',tipo:'recibida',numero_factura:'QA-2',fecha_emision:'2026-09-29',proveedor_nombre:'Proveedor QA',base_imponible:50,tipo_iva:0,cuota_iva:0,total_factura:50},

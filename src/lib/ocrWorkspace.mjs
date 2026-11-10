@@ -7,6 +7,7 @@ export function invoiceSourceData(invoice) {
     cliente:invoice.cliente_nombre,cliente_nombre:invoice.cliente_nombre,nif_cliente:invoice.cliente_nif,cliente_nif:invoice.cliente_nif,
     concepto:invoice.concepto,base_imponible:invoice.base_imponible,tipo_impuesto:invoice.tipo_iva,cuota_impuesto:invoice.cuota_iva,
     tipo_iva:invoice.tipo_iva,cuota_iva:invoice.cuota_iva,total:invoice.total_factura,total_factura:invoice.total_factura,
+    cuota_recargo:invoice.cuota_recargo,
     retencion_irpf:invoice.retencion_irpf,importe_retencion:invoice.importe_retencion,retencion_tipo:invoice.retencion_tipo,
     categoria_sugerida:invoice.categoria_gasto,es_rectificativa:invoice.es_rectificativa,factura_rectificada:invoice.factura_rectificada,
     fiscal_activity_id:invoice.fiscal_activity_id,cuenta_contable_manual:invoice.revenue_expense_account_code,
@@ -50,7 +51,11 @@ export async function loadOcrWorkspace(client, companyId, documentType) {
 async function approveOnce(client, companyId, doc, form, invoiceType) {
   const response=doc?.invoiceOnly
     ? await client.functions.invoke('invoiceOperations',{action:'confirm_source_invoice',company_id:companyId,
-      invoice_id:doc.invoiceSource.id,criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined,accountCode:form.cuenta_contable_manual || undefined}})
+      invoice_id:doc.invoiceSource.id,criteria:{...(form.fiscal_criteria || {}),activityId:form.fiscal_activity_id || undefined,accountCode:form.cuenta_contable_manual || undefined},
+      ...(invoiceType==='recibida'?{source_amounts:{
+        base_imponible:form.base_imponible,tipo_impuesto:form.tipo_impuesto,cuota_impuesto:form.cuota_impuesto,
+        retencion_irpf:form.retencion_irpf,importe_retencion:form.importe_retencion,total:form.total,
+      }}:{})})
     : await client.functions.invoke('approveOcrDocument',{docId:doc.id,form,invoiceType,
       extractedData:typeof doc.extractedData==='string'?JSON.parse(doc.extractedData || '{}'):doc.extractedData,confirm_fiscal_review:true});
   const result=response?.data??response;

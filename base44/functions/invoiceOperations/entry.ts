@@ -639,7 +639,7 @@ Deno.serve(async (req) => {
     }
     if (action === 'confirm_source_invoice') {
       const {invoice,companyId}=await getOwnedInvoice(base44,user,body.invoice_id,body.company_id);
-      try { return Response.json(await completeSourceInvoice(base44,user,companyId,invoice,body.criteria || {},sourceDependencies)); }
+      try { return Response.json(await completeSourceInvoice(base44,user,companyId,invoice,body.criteria || {},sourceDependencies,body.source_amounts)); }
       catch(error) {
         const reason=String(error?.response?.data?.error || error.message || 'No se pudo confirmar el documento.').slice(0,500);
         if(!/ya está siendo confirmado/i.test(reason) && invoice.estado_contable!=='contabilizada')
