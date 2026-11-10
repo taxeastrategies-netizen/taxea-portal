@@ -372,12 +372,20 @@ export default function LectorGastos({ reviewPage = false }) {
     setValidating(true);
     try {
       const doc=documents.find(row=>row.id===docId) || reviewing;
-      await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
+      const result = await approveWorkspaceDocument(base44,company.id,doc,form,INVOICE_TIPO);
       const followingId = reviewPage ? nextAfterConfirmation(documents, docId) : null;
       setDocuments(rows => rows.map(row => row.id === docId ? { ...row, status: 'accounted', safeErrorMessage: '' } : row));
       setReviewing(null);
-      setReviewMessage('Factura contabilizada. Puedes continuar con la siguiente.');
-      setToast({type:'success',message:'Factura, libro y asiento confirmados desde el OCR, sin un segundo check.'});
+      let pendingRepep = result.pendingRepepCensus;
+      if (doc.invoiceOnly && result.invoice?.fiscal_c5_data) {
+        try { pendingRepep = JSON.parse(result.invoice.fiscal_c5_data).censusStatus === 'purchase_pending_census'; }
+        catch { /* El estado del asiento ya se comprobó al confirmar. */ }
+      }
+      const message = pendingRepep
+        ? 'Factura contabilizada sin deducir IGIC. Queda pendiente confirmar el régimen de esa fecha.'
+        : 'Factura contabilizada. Puedes continuar con la siguiente.';
+      setReviewMessage(message);
+      setToast({ type: 'success', message });
       window.dispatchEvent(new Event('financials:refresh'));
       setTimeout(() => setToast(null), 6000);
       if (reviewPage) navigate(followingId ? `${reviewPath}?doc=${encodeURIComponent(followingId)}` : `${reviewPath}?done=1`, { replace: true });

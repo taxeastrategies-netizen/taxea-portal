@@ -161,6 +161,38 @@ await call('approveOcrDocument',{docId:failed.id,invoiceType:'recibida',form:for
 const failedId=(await entity('OcrInvoiceDocument').get(failed.id)).linkedInvoiceId, count=records.Invoice.length;
 const retry=await approve(failed);assert.equal(retry.invoiceId,failedId);assert.equal(records.Invoice.length,count);
 assert.equal(records.InvoiceTaxLine.filter(row=>row.invoiceId===failedId).length,1);
+// La vigencia censal no impide contabilizar una compra ordinaria de OCR.
+const savedActivity = { ...records.FiscalActivity[0] };
+const savedProfile = { ...records.FiscalProfile[0] };
+Object.assign(records.FiscalActivity[0], { indirectTax: 'igic', indirectTaxRegime: 'pequeno_empresario_igic', deductionRight: 'sin_derecho' });
+Object.assign(records.FiscalProfile[0], { entityType: 'autonomo', mainTerritory: 'canarias', profileStatus: 'validado_asesor',
+  repepStatus: 'incluido', repepEffectiveFrom: '2026-08-01', repepPreviousTurnover: 10000, repepCensusConfirmed: true });
+const pendingCensusDoc = await makeDoc('qa-expense-before-repep');
+const pendingCensus = await approve(pendingCensusDoc);
+const pendingCensusInvoice = await entity('Invoice').get(pendingCensus.invoiceId);
+assert.equal(pendingCensusInvoice.estado_contable, 'contabilizada');
+assert.equal(pendingCensusInvoice.cuota_iva, 7);
+assert.equal(pendingCensusInvoice.total_factura, 107);
+assert.equal(pendingCensusInvoice.deductible_tax_amount, 0);
+assert.equal(pendingCensusInvoice.non_deductible_tax_amount, 7);
+assert.equal(JSON.parse(pendingCensusInvoice.fiscal_c5_data).censusStatus, 'purchase_pending_census');
+assert.equal(JSON.parse(pendingCensusInvoice.fiscal_c5_data).repepActive, false);
+assert.equal(pendingCensus.pendingRepepCensus, true);
+assert.equal(records.JournalEntryLine.find(row=>row.journalEntryId===pendingCensus.journalEntryId&&row.accountCode==='60000008').debit,107);
+assert.ok(!records.JournalEntryLine.some(row=>row.journalEntryId===pendingCensus.journalEntryId&&row.accountCode==='47270000'));
+const repeatedCensus = await approve(pendingCensusDoc);
+assert.equal(repeatedCensus.invoiceId, pendingCensus.invoiceId);
+assert.equal(repeatedCensus.journalEntryId, pendingCensus.journalEntryId);
+assert.equal(repeatedCensus.pendingRepepCensus, true);
+assert.equal(records.FiscalProfile[0].repepEffectiveFrom,'2026-08-01');
+Object.assign(records.FiscalProfile[0], { repepStatus: 'no_aplica', repepEffectiveFrom: '', repepCensusConfirmed: false });
+const incomplete = await approve(await makeDoc('qa-expense-incomplete-repep'));
+assert.equal(incomplete.pendingRepepCensus, true);
+Object.assign(records.FiscalProfile[0], { repepStatus: 'incluido', repepEffectiveFrom: '2026-01-01', repepCensusConfirmed: true });
+const confirmedCensus = await approve(await makeDoc('qa-expense-confirmed-repep'));
+assert.equal(confirmedCensus.pendingRepepCensus, false);
+records.FiscalActivity[0] = savedActivity;
+records.FiscalProfile[0] = savedProfile;
 // El límite entre empresas sigue siendo una prohibición real.
 const foreign=await makeDoc('foreign',{company:'foreign'});const guarded=records.Invoice.length;
 await call('approveOcrDocument',{docId:foreign.id,invoiceType:'recibida',form:form(foreign)},403);

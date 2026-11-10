@@ -131,6 +131,15 @@ const exported=export303({nif_cif:'B12345674',razon_social:'FICTICIA'},records.F
 assert.equal(Number(exported.slice(984,1001))/100,3.57);
 const annual=calculate(modelData(2025,'Anual',onlyProrata),bounds(2025,'Anual'),'iva',true,{});
 assert.equal(annual.fields.find(f=>f.code==='522').value,3.57);assert.equal(annual.operations.deductibleQuota,14.07);
+const originalPurchaseMetadata = rePurchase.fiscal_c5_data;
+const storedPurchase = records.Invoice.find(invoice => invoice.id === rePurchase.id);
+storedPurchase.fiscal_c5_data = JSON.stringify({ ...JSON.parse(originalPurchaseMetadata), censusStatus: 'purchase_pending_census', repepActive: false });
+const pendingPurchaseModel = modelData(2026,'Anual',[rePurchase.id]);
+const pendingRepepAnnual = calculate(pendingPurchaseModel,bounds(2026,'Anual'),'igic',true,{});
+assert.equal(pendingRepepAnnual.operations.deductibleQuota,0);
+assert.ok(pendingPurchaseModel.blockers.some(text => text.includes('requieren confirmar')));
+assert.ok(pendingRepepAnnual.fields.every(field => !field.sourceIds?.includes('InvoiceTaxLine:'+records.InvoiceTaxLine.find(line=>line.invoiceId===rePurchase.id).id)));
+storedPurchase.fiscal_c5_data = originalPurchaseMetadata;
 const repepAnnual=calculate(modelData(2026,'Anual',[reSale.id,rePurchase.id,retailSale.id,retailPurchase.id,dua.id]),bounds(2026,'Anual'),'igic',true,{});
 assert.equal(repepAnnual.fields.find(f=>f.code==='147').value,100);assert.equal(repepAnnual.operations.outputQuota,0);assert.equal(repepAnnual.operations.deductibleQuota,0);assert.equal(repepAnnual.carryforward.excludedSpecial.length,0);
 const implicitPeriod=calculate(modelData(2026,'3T',[implicit.id]),bounds(2026,'3T'),'igic',false,{previousCompensationBalance:0});assert.equal(implicitPeriod.operations.deductibleQuota,4.9);

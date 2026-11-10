@@ -4,6 +4,7 @@ import { buildAeatQrUrl } from './invoiceQr.ts';
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { acquireApprovalLease, resumeExistingOcr, findFinancialDuplicates } from './ocrRecovery.ts';
 import { validateReceivedOcrAmounts, OcrAmountError } from './receivedOcrAmounts.mjs';
+import { c5Metadata } from './c5Rules.mjs';
 
 // Preserve document amounts. A non-deductible quota is a cost, not a removed tax.
 // Fiscal validation may reject this proposal; it must never rewrite the payable.
@@ -324,6 +325,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       success: true,
       invoiceId: inv.id,
       journalEntryId: posting.entry.id,
+      pendingRepepCensus: c5Metadata(completed.invoice).censusStatus === 'purchase_pending_census',
       accountCode: posting.proposal?.counterparty?.account?.code || '',
       message: 'Factura creada, validada y contabilizada con asiento de 8 dígitos'
     },

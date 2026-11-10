@@ -557,6 +557,14 @@ function selectIndirectTaxLines(data: any, b: any, kind: 'iva'|'igic', annual: b
   const model: '303'|'420'|'417' = modelOverride || (kind === 'iva' ? '303' : '420');
   const lines: any[] = [], carry: any[] = [], review: any[] = [], deferred: any[] = [], excludedSpecial: any[] = [];
   for (const candidate of candidates) {
+    if (kind === 'igic' && c5Metadata(candidate.invoice).censusStatus === 'purchase_pending_census') {
+      const operationDate = clean(candidate.date || dateOf(candidate.invoice)).slice(0,10);
+      if (operationDate >= b.start && operationDate <= b.end) review.push({
+        sourceId: candidate.sourceId, invoiceId: candidate.invoice?.id, invoiceNumber: candidate.invoice?.numero_factura,
+        reason: 'Compra registrada sin deducir IGIC. Confirma el régimen vigente en la fecha del documento antes de incluirla en un modelo.',
+      });
+      continue;
+    }
     const lineRegime = clean(candidate.regime);
     const invoiceRegime = clean(candidate.invoice?.fiscal_regime);
     // Algunas líneas históricas guardaron el tipo de operación en regime. No se toma por un régimen validado.

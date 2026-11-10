@@ -264,7 +264,8 @@ function recommendedObligations(profile: any, activities: any[]) {
   return [...result.values()].sort((a, b) => Number(a.code) - Number(b.code));
 }
 
-function evaluate(profile: any, activities: any[], body: any, confirmedWithholding?: number) {
+function evaluate(profile: any, activities: any[], body: any, confirmedWithholding?: number, allowPendingPurchaseCensus = false) {
+  body = { ...body, purchaseCensusReviewRequired: false };
   const activeActivities = (activities || []).filter(item => item.active !== false);
   const activity = body.activityId
     ? activeActivities.find(item => item.id === body.activityId)
@@ -281,7 +282,7 @@ function evaluate(profile: any, activities: any[], body: any, confirmedWithholdi
   if (taxKind !== 'no_aplica' && !REGIMES[taxKind]?.some(([code]) => code === regime)) return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['El régimen elegido no corresponde al impuesto de esta operación.'], ruleSetVersion: RULESET };
   if (taxKind === 'no_aplica' && regime !== 'no_sujeta') return { status: 'blocked', reviewRequired: true, confidence: 0, reasons: ['Sin impuesto indirecto solo se admite una operación no sujeta, con fundamento legal.'], ruleSetVersion: RULESET };
   if (body.requireValidatedProfile === true && ((taxKind==='igic' && repepAt(profile,body.operationDate)) || ['pequeno_empresario_igic','comerciante_minorista_igic','exenta_limitada','exenta_plena','no_sujeta'].includes(regime) || ['prorrata_general','prorrata_especial','sector_diferenciado'].includes(activity.deductionRight))) {
-    try { body = c5InvoiceRules(profile, activity, { ...body, operationType: body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed' }, direction); }
+    try { body = c5InvoiceRules(profile, activity, { ...body, operationType: body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed' }, direction, { allowPendingPurchaseCensus }); }
     catch(error) { return { status:'blocked',reviewRequired:true,confidence:0,reasons:[error.message],ruleSetVersion:RULESET }; }
   }
   let operationType = body.operationType || activity[direction === 'ingreso' ? 'incomeDefaultTreatment' : 'expenseDefaultTreatment'] || 'subject_taxed';
@@ -355,6 +356,7 @@ function evaluate(profile: any, activities: any[], body: any, confirmedWithholdi
   const deductibleTax = direction === 'gasto' ? fxRatioMoney(taxAmount,deductiblePercent,100) : 0;
   const nonDeductibleTax = direction === 'gasto' ? money(taxAmount - deductibleTax) : 0;
 
+  if (body.purchaseCensusReviewRequired) alerts.push('Gasto registrado sin deducir IGIC. Falta revisar qué régimen correspondía en la fecha de la factura.');
   if(body.legacyCensusReviewRequired) alerts.push(body.issuerCensusReviewRequired
     ? 'El emisor confirma su actividad REPEP. El resumen censal queda pendiente de completar; no se presume volumen ni confirmación censal y no se modifica el perfil.'
     : 'Se conserva el criterio REPEP ya validado por el asesor. Completa en configuración su vigencia, volumen y confirmación censal, sin modificar el histórico.');
@@ -395,6 +397,7 @@ function evaluate(profile: any, activities: any[], body: any, confirmedWithholdi
     withholdingRate, withholdingAmount, total: money(base + taxAmount - withholdingAmount),
     manualOverride, manualOverrideReason: clean(body.manualOverrideReason), reasons, alerts, specialPreview, specialPreviewError, bookImpact, modelImpact: [...new Set(modelImpact)],
     legacyCensusReviewRequired:body.legacyCensusReviewRequired===true, issuerCensusReviewRequired:body.issuerCensusReviewRequired===true,
+    purchaseCensusReviewRequired: body.purchaseCensusReviewRequired === true && allowPendingPurchaseCensus,
     accounting: {
       inputTaxAccount: taxKind === 'igic' ? '47270000' : '47200000', outputTaxAccount: taxKind === 'igic' ? '47770000' : '47700000',
       nonDeductibleTaxToExpense: nonDeductibleTax,
@@ -447,6 +450,9 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         specialInputs.surchargeRate = Number(invoice.tipo_recargo || 0);
       }
       const receivedSource = context.sourceCheck && invoice.tipo === 'recibida';
+      const ordinaryOcrPurchase = receivedSource && Boolean(invoice.ocr_document_id || invoice.origin === 'ocr')
+        && Number(invoice.cuota_recargo || 0) === 0
+        && body.operationDate === (invoice.fecha_operacion || invoice.fecha_emision);
       const proposedEvaluation = evaluate(profile, activities, { ...body, specialInputs,
         requireValidatedProfile: true, requireExactActivity: true,
         activityId: body.activityId || invoice.fiscal_activity_id,
@@ -456,13 +462,13 @@ async function saveInvoiceTaxLine(context: any, input: any) {
         base: body.base ?? invoice.base_imponible, taxRate: body.taxRate ?? invoice.tipo_iva,
         taxAmount: body.taxAmount ?? invoice.cuota_iva,
         operationDate: body.operationDate ?? invoice.fecha_operacion ?? invoice.fecha_emision,
-      }, receivedSource ? money(invoice.importe_retencion) : undefined);
+      }, receivedSource ? money(invoice.importe_retencion) : undefined, ordinaryOcrPurchase);
       if (receivedSource && proposedEvaluation.status === 'blocked')
         return Response.json({ error: proposedEvaluation.reasons?.join(' ') || 'Revisa el tratamiento fiscal del gasto.' }, { status: 422 });
       const c5Details = c5SpecialPurchase(invoice, body, proposedEvaluation);
       if(c5Details?.kind==='implicit_igic') Object.assign(proposedEvaluation,{deductibleTax:c5Details.deductible,nonDeductibleTax:0,deductiblePercent:Number(body.deductiblePercent ?? 100)});
       const c5ImportPurchase = c5Details?.kind === 'minorista_import';
-      const c5Snapshot = {version:C5_VERSION,censusStatus:proposedEvaluation.issuerCensusReviewRequired?'issuer_choice_pending_census':'configured',deductionRight:selectedActivity.deductionRight || 'pleno',deductionUse:body.deductionUse || '',provisionalPercent:proposedEvaluation.deductiblePercent,sectorId:selectedActivity.sectorId || '',repepActive:proposedEvaluation.regime==='pequeno_empresario_igic' || repepAt(profile,body.operationDate || invoice.fecha_operacion || invoice.fecha_emision),repepBox:body.c5?.repepBox || '',repepEstablishment:body.c5?.repepEstablishment || '',volumeClass:body.c5?.volumeClass || '',eligiblePercent:Number(body.c5?.eligiblePercent ?? 100),effectiveAt:body.operationDate || invoice.fecha_operacion || invoice.fecha_emision,...(c5Details || {})};
+      const c5Snapshot = {version:C5_VERSION,censusStatus:proposedEvaluation.purchaseCensusReviewRequired?'purchase_pending_census':proposedEvaluation.issuerCensusReviewRequired?'issuer_choice_pending_census':'configured',deductionRight:selectedActivity.deductionRight || 'pleno',deductionUse:body.deductionUse || '',provisionalPercent:proposedEvaluation.deductiblePercent,sectorId:selectedActivity.sectorId || '',repepActive:!proposedEvaluation.purchaseCensusReviewRequired && (proposedEvaluation.regime==='pequeno_empresario_igic' || repepAt(profile,body.operationDate || invoice.fecha_operacion || invoice.fecha_emision)),repepBox:body.c5?.repepBox || '',repepEstablishment:body.c5?.repepEstablishment || '',volumeClass:body.c5?.volumeClass || '',eligiblePercent:Number(body.c5?.eligiblePercent ?? 100),effectiveAt:body.operationDate || invoice.fecha_operacion || invoice.fecha_emision,...(c5Details || {})};
       const selfAssessed = selfAssessment(invoice, body, proposedEvaluation);
       if (context.sourceCheck) assertSourceAmounts(invoice, proposedEvaluation, selfAssessed);
       if (proposedEvaluation.regime === 'comerciante_minorista_igic' && proposedEvaluation.taxKind === 'igic'

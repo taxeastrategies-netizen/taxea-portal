@@ -1,5 +1,6 @@
 import { ensureInvoiceQrHash } from './invoiceQrHash.ts';
 import { sameInvoiceIdentity } from './duplicateIdentity.mjs';
+import { c5Metadata } from './c5Rules.mjs';
 // Recovery never creates an Invoice, tax line, contact or manual journal.
 const privileged = user => ['admin', 'super_admin'].includes(user?.role);
 const cents = value => Math.round(Number(value) * 100);
@@ -74,7 +75,8 @@ export async function resumeExistingOcr(svc, user, doc, invoiceType, confirmRevi
     invoice = await confirmSource(invoice);
     if (invoice.estado_contable === 'contabilizada' && invoice.linked_journal_entry_id && invoice.ocr_document_id === doc.id) {
       return { status: 200, json: { success: true, alreadyProcessed: true, recovered: true,
-        invoiceId: invoice.id, journalEntryId: invoice.linked_journal_entry_id } };
+        invoiceId: invoice.id, journalEntryId: invoice.linked_journal_entry_id,
+        pendingRepepCensus: c5Metadata(invoice).censusStatus === 'purchase_pending_census' } };
     }
   }
   if (invoice.estado_contable !== 'contabilizada' && (

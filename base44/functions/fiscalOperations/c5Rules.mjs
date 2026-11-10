@@ -61,7 +61,7 @@ export function c5Deduction(activity, input, regime) {
   }
   return requested != null ? c5Percent(requested) : noRight ? 0 : ['prorrata_general','limitado'].includes(right) ? prorata : 100;
 }
-export function c5InvoiceRules(profile, activity, input, direction) {
+export function c5InvoiceRules(profile, activity, input, direction, { allowPendingPurchaseCensus = false } = {}) {
   const regime = input.regime || activity.indirectTaxRegime || 'general';
   const taxKind = input.taxKind || activity.indirectTax || profile.indirectTaxDefault;
   const date = c5Date(input.operationDate);
@@ -84,7 +84,21 @@ export function c5InvoiceRules(profile, activity, input, direction) {
       && activity.indirectTaxRegime===regime && activity.exemptionKey==='IGIC_REPEP'
       && profile.repepPreviousTurnover==null
       && ['','no_aplica','pendiente_confirmar'].includes(text(profile.repepStatus));
-    if(legacy || issuerChoice){
+    const ordinaryOcrPurchase = allowPendingPurchaseCensus && direction === 'gasto'
+      && profile.profileStatus === 'validado_asesor' && profile.entityType === 'autonomo' && profile.mainTerritory === 'canarias'
+      && activity.indirectTax === 'igic' && activity.indirectTaxRegime === regime
+      && ['subject_taxed','subject_zero'].includes(patch.operationType)
+      && !input.c5?.kind && Number(patch.deductiblePercent) === 0;
+    if (ordinaryOcrPurchase) {
+      try {
+        validateRepepProfile(profile);
+        if (!repepAt(profile,date) || !profile.repepEffectiveFrom)
+          throw new C5ValidationError('No se ha confirmado la inclusión REPEP para la fecha de la compra.');
+      } catch (error) {
+        if (!(error instanceof C5ValidationError)) throw error;
+        patch.purchaseCensusReviewRequired = true;
+      }
+    } else if(legacy || issuerChoice){
       if(profile.entityType!=='autonomo'||profile.mainTerritory!=='canarias')throw new C5ValidationError('La configuración REPEP anterior no identifica una persona física establecida en Canarias. Revisión del asesor.');
       if((profile.repepEffectiveFrom && date<profile.repepEffectiveFrom)||(profile.repepEffectiveUntil && date>profile.repepEffectiveUntil))throw new C5ValidationError('La operación queda fuera de la vigencia REPEP confirmada.');
       patch.legacyCensusReviewRequired=true;

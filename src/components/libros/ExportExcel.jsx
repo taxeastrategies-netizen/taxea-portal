@@ -290,7 +290,7 @@ function buildLibroCompras(invoices, expenses) {
       n(i.retencion_irpf), receivedWithholding(i),
       n(i.total_factura),
       i.deductible_tax_amount == null ? 'Sin validar' : n(i.deductible_tax_amount) === 0 ? 'No' : 'Sí',
-      i.fiscal_regime || '', i.fiscal_treatment || '',
+      c5BookData(i).censusStatus === 'purchase_pending_census' ? 'REPEP pendiente de confirmar' : i.fiscal_regime || '', i.fiscal_treatment || '',
       i.trimestre || quarter(i.fecha_emision), i.anio || '', ctaGasto(i), c5BookData(i).deductionUse || '',c5BookData(i).sectorId || '',n(c5BookData(i).implicitQuota),n(c5BookData(i).surcharge),c5BookData(i).legalBasis || i.fiscal_legal_basis || '',
     ]);
   });
