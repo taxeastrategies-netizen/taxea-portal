@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { TaxeaSidebarLogo } from '@/components/brand/TaxeaLogo';
 import { cn } from '@/lib/utils';
+import { canAccessTaxModule, hasPlatformAdminRole } from '@/lib/taxModuleAccess.mjs';
 import {
   LayoutDashboard, Calculator, Users, FolderOpen, Settings, X,
   Shield, Clock, AlertTriangle, BarChart2,
@@ -37,7 +38,7 @@ const TAX_MODULES = [
   { id: 'contabilidad', label: 'Contabilidad', icon: BookOpen, path: '/tax-accounting/contabilidad' },
   { id: 'registro-mercantil', label: 'Registro Mercantil', icon: Building2, path: '/tax-accounting/registro-mercantil' },
   { id: 'labor-ocr', label: 'OCR Laboral', icon: ScanLine, path: '/tax-accounting/labor-ocr' },
-  { id: 'asistente', label: 'Asistente fiscal IA', icon: Sparkles, path: '/tax-accounting/asistente' },
+  { id: 'asistente', label: 'Asistente fiscal IA', icon: Sparkles, path: '/tax-accounting/asistente', adminOnly: true },
 ];
 
 const DEPT_GROUPS = [
@@ -220,7 +221,7 @@ const ADMIN_ITEMS = [
 export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRole, isSubscriptionActive }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPlatformAdmin = ['admin', 'super_admin'].includes(userRole);
+  const isPlatformAdmin = hasPlatformAdminRole(userRole);
   const visibleGroups = DEPT_GROUPS
     .map(group => ({ ...group, depts: group.depts.filter(dept => !dept.hiddenForNonAdmin || isPlatformAdmin) }))
     .filter(group => group.depts.length > 0);
@@ -379,7 +380,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
                                 className="overflow-hidden"
                               >
                                 <div className="mt-0.5 ml-3 pl-3 border-l border-slate-100 space-y-0.5 py-1">
-                                  {dept.modules.filter(mod => (!mod.adminOnly || isPlatformAdmin) && (!mod.reviewerOnly || isAdmin)).map(mod => {
+                                  {dept.modules.filter(mod => (!mod.adminOnly || isPlatformAdmin) && (!mod.reviewerOnly || isAdmin) && (dept.id !== 'tax' || canAccessTaxModule(mod.id, userRole))).map(mod => {
                                    const ModIcon = mod.icon;
                                    const isActiveModule = location.pathname === mod.path;
                                    return (

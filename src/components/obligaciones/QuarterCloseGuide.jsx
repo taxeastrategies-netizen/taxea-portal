@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
+import { canAccessTaxModule } from '@/lib/taxModuleAccess.mjs';
 import { base44 } from '@/api/base44Client';
 import { AlertTriangle, CheckCircle2, ChevronRight, RefreshCw } from 'lucide-react';
 
@@ -8,6 +9,7 @@ const style = { ready: 'border-emerald-200 bg-emerald-50 text-emerald-800', revi
 const quarterOf = date => { const month = Number(String(date || '').slice(5, 7)); return month >= 1 && month <= 12 ? Math.ceil(month / 3) : null; };
 
 export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
+  const { user } = useOutletContext() || {};
   const [quarter, setQuarter] = useState(Math.ceil((new Date().getMonth() + 1) / 3));
   const [extra, setExtra] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -41,11 +43,11 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
   const unlinked = bundle?.unlinkedDocuments?.length || 0;
   const modelPending = modelItems.filter(row => !CLOSED.has(row.state));
   const checks = [
-    { name: 'Perfil y obligaciones', detail: profileValid ? 'Perfil fiscal validado por asesor' : 'Confirmar territorio, actividad y regímenes', status: profileValid ? 'ready' : 'review', to: '/tax-accounting/contabilidad' },
+    { name: 'Perfil y obligaciones', detail: profileValid ? 'Perfil fiscal validado por asesor' : 'Confirmar territorio, actividad y regímenes', status: profileValid ? 'ready' : 'review', to: '/tax-accounting/contabilidad', taxModule: 'contabilidad' },
     { name: 'Documentación', detail: unlinked ? unlinked + ' documento(s) fiscal(es) sin vincular' : 'Documentos fiscales vinculados o sin incidencias conocidas', status: unlinked ? 'review' : 'ready', to: '/tax-accounting/obligaciones' },
-    { name: 'Facturas y asientos', detail: !invoicesKnown ? 'No se pudieron consultar facturas' : accountingExceptions.length + ' de ' + invoices.length + ' factura(s) requieren revisión contable', status: !invoicesKnown ? 'unknown' : accountingExceptions.length ? 'review' : 'ready', to: '/tax-accounting/contabilidad' },
+    { name: 'Facturas y asientos', detail: !invoicesKnown ? 'No se pudieron consultar facturas' : accountingExceptions.length + ' de ' + invoices.length + ' factura(s) requieren revisión contable', status: !invoicesKnown ? 'unknown' : accountingExceptions.length ? 'review' : 'ready', to: '/tax-accounting/contabilidad', taxModule: 'contabilidad' },
     { name: 'Banco y conciliación', detail: !bankKnown ? 'Sin banco conectado y verificable' : bankExceptions.length + ' movimiento(s) pendientes en el trimestre', status: !bankKnown ? 'unknown' : bankExceptions.length ? 'review' : 'ready', to: '/finance/treasury' },
-    { name: 'Modelos del periodo', detail: modelItems.length ? modelPending.length + ' de ' + modelItems.length + ' modelo(s) sin estado final' : 'Ningún modelo trimestral detectado: comprobar perfil y calendario', status: modelItems.length && !modelPending.length ? 'ready' : 'review', to: '/tax-accounting/impuestos' },
+    { name: 'Modelos del periodo', detail: modelItems.length ? modelPending.length + ' de ' + modelItems.length + ' modelo(s) sin estado final' : 'Ningún modelo trimestral detectado: comprobar perfil y calendario', status: modelItems.length && !modelPending.length ? 'ready' : 'review', to: '/tax-accounting/impuestos', taxModule: 'impuestos' },
   ];
   const ready = checks.every(row => row.status === 'ready');
   return <section className="space-y-4">
@@ -54,7 +56,16 @@ export default function QuarterCloseGuide({ companyId, bundle, fiscalYear }) {
       <div className="mt-4 flex flex-wrap gap-2">{[1, 2, 3, 4].map(value => <button type="button" key={value} onClick={() => setQuarter(value)} className={'rounded-lg px-3 py-1.5 text-xs font-semibold ' + (value === quarter ? 'bg-taxea-red text-white' : 'bg-secondary text-muted-foreground')}>T{value} {fiscalYear}</button>)}</div>
     </div>
     <div className={'rounded-xl border p-4 text-sm ' + (ready ? style.ready : style.review)}>{ready ? <CheckCircle2 className="mr-2 inline h-4 w-4" /> : <AlertTriangle className="mr-2 inline h-4 w-4" />}{ready ? 'Sin incidencias detectadas en estas cinco comprobaciones. Falta siempre la revisión profesional y la presentación oficial.' : 'Hay comprobaciones pendientes o datos no verificables. No se considera cerrado el trimestre.'}</div>
-    <div className="grid gap-3 md:grid-cols-2">{checks.map(row => <Link to={row.to} key={row.name} className={'flex items-center gap-3 rounded-xl border p-4 hover:shadow-sm ' + style[row.status]}><div className="min-w-0 flex-1"><p className="text-sm font-bold">{row.name}</p><p className="mt-1 text-xs">{row.detail}</p></div><ChevronRight className="h-4 w-4 shrink-0" /></Link>)}</div>
+    <div className="grid gap-3 md:grid-cols-2">
+      {checks.map(row => {
+        const accessible = canAccessTaxModule(row.taxModule, user?.role);
+        const className = 'flex items-center gap-3 rounded-xl border p-4 ' + style[row.status];
+        const details = <div className="min-w-0 flex-1"><p className="text-sm font-bold">{row.name}</p><p className="mt-1 text-xs">{row.detail}</p></div>;
+        return accessible
+          ? <Link to={row.to} key={row.name} className={className + ' hover:shadow-sm'}>{details}<ChevronRight className="h-4 w-4 shrink-0" /></Link>
+          : <div key={row.name} className={className}>{details}</div>;
+      })}
+    </div>
     <div className="rounded-xl border border-border bg-card p-4"><p className="text-xs font-bold">Modelos de T{quarter} {fiscalYear}</p><div className="mt-2 divide-y divide-border">{modelItems.map(row => <div key={row.key} className="flex justify-between gap-3 py-2 text-xs"><span>Modelo {row.code} · {row.name}</span><span className="text-muted-foreground">{row.state || 'Pendiente'} · {row.filingDeadline || 'Plazo por confirmar'}</span></div>)}{!modelItems.length && <p className="py-2 text-xs text-muted-foreground">No se han detectado modelos para este trimestre. Confirma que el perfil fiscal está configurado.</p>}</div></div>
   </section>;
 }

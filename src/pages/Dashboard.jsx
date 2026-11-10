@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { computeBusinessHealth, fiscalCoverage } from '@/lib/businessHealthScore';
 import { classifyObligations } from '@/lib/reportingPeriods.mjs';
+import { canAccessTaxModule } from '@/lib/taxModuleAccess.mjs';
 
 const currentYear = new Date().getFullYear();
 const DEFAULT_YEARS = [currentYear, currentYear - 1, currentYear - 2];
@@ -28,7 +29,7 @@ const LIVE_ENTITIES = [
 ];
 
 const TAX_TOOLS = [
-  { label: 'Contabilidad', to: '/tax-accounting/contabilidad', icon: Calculator },
+  { label: 'Contabilidad', to: '/tax-accounting/contabilidad', icon: Calculator, taxModule: 'contabilidad' },
   { label: 'Obligaciones', to: '/tax-accounting/obligaciones', icon: Calendar },
   { label: 'Facturas', to: '/tax-accounting/facturas', icon: FileText },
   { label: 'Ingresos y gastos', to: '/tax-accounting/ingresos-gastos', icon: BarChart3 },
@@ -43,7 +44,7 @@ const HR_TOOLS = [
   { label: 'Empleados', to: '/people/employees', icon: Users },
   { label: 'Ausencias', to: '/people/absences', icon: Calendar },
   { label: 'Documentos', to: '/people/documents', icon: FileText },
-  { label: 'OCR laboral', to: '/tax-accounting/labor-ocr', icon: Euro },
+  { label: 'OCR laboral', to: '/tax-accounting/labor-ocr', icon: Euro, taxModule: 'labor-ocr' },
 ];
 
 const currency = (value) => Number(value || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -254,7 +255,7 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border"><div><h2 className="text-sm font-jakarta font-semibold">Ingresos y gastos contables · {selectedYear}</h2><p className="text-[10px] text-muted-foreground mt-0.5">Asientos confirmados, cuadrados y clasificados por cuentas 7/6</p></div><Link to="/tax-accounting/contabilidad" className="text-xs text-primary hover:underline flex items-center gap-1">Ver contabilidad <ArrowRight className="w-3 h-3" /></Link></div>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border"><div><h2 className="text-sm font-jakarta font-semibold">Ingresos y gastos contables · {selectedYear}</h2><p className="text-[10px] text-muted-foreground mt-0.5">Asientos confirmados, cuadrados y clasificados por cuentas 7/6</p></div>{canAccessTaxModule('contabilidad', user?.role) && <Link to="/tax-accounting/contabilidad" className="text-xs text-primary hover:underline flex items-center gap-1">Ver contabilidad <ArrowRight className="w-3 h-3" /></Link>}</div>
           <div className="px-4 py-4">
             {(accounting.monthly || []).some((row) => row.ingresos || row.gastos) ? <ResponsiveContainer width="100%" height={205}><BarChart data={accounting.monthly} barSize={10} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(value) => value >= 1000 ? `${Math.round(value / 1000)}k` : value} /><Tooltip formatter={(value) => currency(value)} contentStyle={{ fontSize: 12, borderRadius: 8 }} /><Bar dataKey="ingresos" fill="#16a34a" radius={[3, 3, 0, 0]} name="Ingresos" /><Bar dataKey="gastos" fill="#dc2626" radius={[3, 3, 0, 0]} name="Gastos" opacity={0.72} /></BarChart></ResponsiveContainer> : <div className="h-[205px] flex items-center justify-center text-center"><div><BarChart3 className="w-7 h-7 text-muted-foreground/40 mx-auto mb-2" /><p className="text-xs text-muted-foreground">No hay asientos confirmados con cuentas 6/7 en {selectedYear}</p></div></div>}
           </div>
@@ -281,7 +282,7 @@ export default function Dashboard() {
           { label: 'Facturas sin asiento válido', value: quality.pendingInvoicePostings || 0, alert: quality.pendingInvoicePostings > 0 },
           { label: 'Obligaciones abiertas', value: derived.openObligations.length, warn: derived.urgentObligations.length > 0 },
           { label: 'Incidencias contables/fiscales', value: sourceKnown('FiscalError') ? operations.openErrors || 0 : 'N/D', alert: operations.criticalErrors > 0 },
-        ]} tools={TAX_TOOLS} />
+        ]} tools={TAX_TOOLS.filter(tool => canAccessTaxModule(tool.taxModule, user?.role))} />
         <DeptCard icon={Wallet} color="text-emerald-700" bgLight="bg-emerald-50/60" border="border-emerald-100" title="Finanzas y tesorería" to="/finance/dashboard" kpis={[
           { label: 'Saldo disponible EUR', value: treasury.balanceKnown ? currency(treasury.cashEur) : '—', sub: `${treasury.connectedAccounts || 0} cuenta(s) conectada(s)` },
           { label: 'Sin conciliar', value: treasury.unreconciled || 0, warn: treasury.unreconciled > 0, sub: treasury.reconciliationRate === null ? 'Sin movimientos' : `${treasury.reconciliationRate}% conciliado` },
@@ -295,7 +296,7 @@ export default function Dashboard() {
           { label: 'Ausencias actuales', value: sourceKnown('HRAbsence') ? people.currentAbsences || 0 : 'N/D', sub: `${people.pendingAbsences || 0} pendientes` },
           { label: 'Docs pendientes de firma', value: sourceKnown('HRDocument') ? people.pendingSignature || 0 : 'N/D', warn: people.pendingSignature > 0, sub: `${people.expiredDocuments || 0} expirados` },
           { label: 'Extracciones a revisar', value: people.laborDocumentsReview || 0, warn: people.laborDocumentsReview > 0, sub: `${people.payrollWarnings || 0} advertencias` },
-        ]} tools={HR_TOOLS} />
+        ]} tools={HR_TOOLS.filter(tool => canAccessTaxModule(tool.taxModule, user?.role))} />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">

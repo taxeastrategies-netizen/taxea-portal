@@ -1,9 +1,12 @@
 import { motion } from 'framer-motion';
+import { useOutletContext } from 'react-router-dom';
+import { canAccessTaxModule } from '@/lib/taxModuleAccess.mjs';
 import { Sparkles, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { financeInsights } from '@/lib/financeSignals.mjs';
 
 export default function InsightsIA({ financials }) {
+  const { user } = useOutletContext() || {};
   const insights = financeInsights(financials).map(row => ({ ...row, icon: row.kind === 'down' ? TrendingDown : row.kind === 'up' ? TrendingUp : Sparkles, color: row.kind === 'down' ? 'text-amber-600' : row.kind === 'up' ? 'text-emerald-600' : 'text-blue-600', bg: row.kind === 'down' ? 'bg-amber-500/10' : row.kind === 'up' ? 'bg-emerald-500/10' : 'bg-blue-500/10' }));
 
   return (
@@ -41,10 +44,12 @@ export default function InsightsIA({ financials }) {
       <div className="mt-4 pt-3 border-t border-border">
         <div className="flex items-center justify-between">
           <p className="text-[10px] text-muted-foreground/50">Sin referencias sectoriales no documentadas</p>
-          <div className="flex items-center gap-1 text-xs text-primary">
-            <a href="/tax-accounting/contabilidad">Ver contabilidad</a>
-            <ArrowRight className="w-3 h-3" />
-          </div>
+          {canAccessTaxModule('contabilidad', user?.role) && (
+            <div className="flex items-center gap-1 text-xs text-primary">
+              <a href="/tax-accounting/contabilidad">Ver contabilidad</a>
+              <ArrowRight className="w-3 h-3" />
+            </div>
+          )}
         </div>
       </div>
     </div>

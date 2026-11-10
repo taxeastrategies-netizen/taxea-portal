@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
+import { canAccessTaxModule, hasPlatformAdminRole } from '@/lib/taxModuleAccess.mjs';
 
 const TaxDashboard = lazy(() => import('@/components/tax/TaxDashboard'));
 const Facturas = lazy(() => import('./Facturas'));
@@ -25,11 +26,15 @@ export default function TaxAccounting() {
   const { module } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isPlatformAdmin = ['admin', 'super_admin'].includes(String(user?.role || '').toLowerCase());
+  const isPlatformAdmin = hasPlatformAdminRole(user?.role);
 
   const handleNavigate = (moduleId) => {
     navigate(`/tax-accounting/${moduleId}`);
   };
+
+  if (!canAccessTaxModule(module, user?.role)) {
+    return <Navigate to="/tax-accounting/dashboard" replace />;
+  }
 
   switch (module) {
     case 'asesoria': return isPlatformAdmin ? <AdvisorWorkspace /> : <Navigate to="/tax-accounting/dashboard" replace />;
