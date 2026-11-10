@@ -267,7 +267,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
       )}>
         {/* Logo */}
         <div className="relative flex items-center justify-center px-4 py-2 border-b border-slate-100">
-          <Link to="/" onClick={onClose} className="flex min-w-0 items-center">
+          <Link to="/" onClick={onClose} className="flex min-w-0 translate-y-0.5 items-center">
             <TaxeaSidebarLogo />
           </Link>
           <button
