@@ -266,7 +266,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
         "lg:translate-x-0 lg:static lg:z-auto"
       )}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+        <div className="relative flex items-center justify-center px-4 py-2 border-b border-slate-100">
           <Link to="/" onClick={onClose} className="flex min-w-0 items-center">
             <TaxeaSidebarLogo />
           </Link>
@@ -274,7 +274,7 @@ export default function Sidebar({ isOpen, onClose, isAdmin, isSuperAdmin, userRo
             type="button"
             onClick={onClose}
             aria-label="Cerrar menú principal"
-            className="lg:hidden min-w-11 min-h-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 lg:hidden min-w-11 min-h-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
