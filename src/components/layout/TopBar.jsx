@@ -35,6 +35,7 @@ const BREADCRUMBS = {
   '/finance/reporting': ['Finanzas y tesorería', 'Centro de Informes'],
   '/finance/analysis': ['Finanzas y tesorería', 'Análisis Financiero'],
   '/ajustes': ['Ajustes'],
+  '/guia-taxea-portal': ['Guía Taxea Portal'],
   '/notificaciones': ['Notificaciones'],
   '/sugerencias': ['Mejoras'],
   '/suscripcion': ['Suscripción'],

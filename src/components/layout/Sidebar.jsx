@@ -202,6 +202,7 @@ const UTILS_ITEMS = [
   { to: '/sugerencias', label: 'Mejoras', icon: Lightbulb },
   { to: '/suscripcion', label: 'Suscripción', icon: CreditCard },
   { to: '/ajustes', label: 'Ajustes', icon: Settings },
+  { to: '/guia-taxea-portal', label: 'Guía Taxea Portal', icon: BookOpen },
 ];
 
 const ADMIN_ITEMS = [

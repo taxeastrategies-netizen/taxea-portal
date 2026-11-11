@@ -30,6 +30,7 @@ const LectorIngresos = lazy(() => import('./pages/LectorIngresos'));
 const ObligacionesFiscales = lazy(() => import('./pages/ObligacionesFiscales'));
 const Documentos = lazy(() => import('./pages/Documentos'));
 const Ajustes = lazy(() => import('./pages/Ajustes'));
+const GuiaTaxeaPortal = lazy(() => import('./pages/GuiaTaxeaPortal'));
 const AdminPanel = lazy(() => import('./pages/AdminPanel'));
 const Timeline = lazy(() => import('./pages/Timeline'));
 const DetectorErrores = lazy(() => import('./pages/DetectorErrores'));
@@ -110,6 +111,7 @@ function AppWithContext({ user }) {
           <Route path="/obligaciones" element={<ObligacionesFiscales />} />
           <Route path="/documentos" element={<Documentos />} />
           <Route path="/ajustes" element={<Ajustes />} />
+          <Route path="/guia-taxea-portal" element={<GuiaTaxeaPortal />} />
           <Route path="/admin" element={<AdminOnlyRoute isAdmin={isAdmin}><AdminPanel /></AdminOnlyRoute>} />
           <Route path="/errores" element={<DetectorErrores />} />
           <Route path="/notificaciones" element={<Notificaciones />} />
