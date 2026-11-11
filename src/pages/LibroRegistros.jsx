@@ -1,6 +1,6 @@
 import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import ProfessionalExportPanel from '@/components/libros/ProfessionalExportPanel';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -15,6 +15,9 @@ import ReccBookPanel from '@/components/libros/ReccBookPanel.jsx';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';
 import { exportarLibrosPDF } from '@/components/libros/ExportPDF.jsx';
 import { useFinancialData } from '@/hooks/useFinancialData';
+import { compareBookExport, readBookExportReference, saveBookExportReference } from '@/lib/bookExportReferences.mjs';
+
+const exportSnapshots = base44.entities.AccountingExportSnapshot;
 
 function fmt(n) {
   return (parseFloat(n) || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,7 +42,13 @@ export default function LibroRegistros() {
   const [exportingPDF, setExportingPDF] = useState(false);
   const [exportError, setExportError] = useState('');
   const [exportNotice, setExportNotice] = useState('');
-  const [lastSnapshot, setLastSnapshot] = useState(null);
+  const [referenceState, setReferenceState] = useState(null);
+  const referenceRequest = useRef(0);
+  const exportInProgress = useRef(false);
+  const userId = user?.id;
+  const companyId = company?.id;
+  const referenceKey = `${userId}:${companyId}:${filterAnio}`;
+  const lastSnapshot = referenceState?.key === referenceKey ? referenceState.reference : null;
 
   const currentYear = new Date().getFullYear();
   const years = [currentYear, currentYear - 1, currentYear - 2].map(String);
@@ -52,30 +61,21 @@ export default function LibroRegistros() {
   const activeInvoices = useMemo(() => invoices.filter(i => !i.anulada), [invoices]);
   const activeExpenses = useMemo(() => expenses.filter(e => !e.anulada), [expenses]);
 
-  // Load last export snapshot for this company + year
   useEffect(() => {
-    if (!company?.id) return;
-    (async () => {
-      try {
-        const snaps = await base44.entities.AccountingExportSnapshot.filter({
-          clientAccountId: company.id,
-          exportYear: Number(filterAnio),
-        }, '-exportedAt', 5);
-        setLastSnapshot(snaps?.[0] || null);
-      } catch {
-        setLastSnapshot(null);
-      }
-    })();
-  }, [company?.id, filterAnio]);
+    if (!companyId || !userId) return;
+    const request = ++referenceRequest.current;
+    readBookExportReference(exportSnapshots, userId, companyId, filterAnio)
+      .then(reference => {
+        if (request === referenceRequest.current) setReferenceState({ key: referenceKey, reference });
+      })
+      .catch(() => {
+        if (request === referenceRequest.current) setReferenceState({ key: referenceKey, reference: null });
+      });
+    return () => { referenceRequest.current += 1; };
+  }, [companyId, userId, filterAnio, referenceKey]);
 
-  // Compute new items since last export
-  const lastEmittedIds = new Set(lastSnapshot?.emittedInvoiceIds || []);
-  const lastReceivedIds = new Set(lastSnapshot?.receivedInvoiceIds || []);
-  const lastExpenseIds = new Set(lastSnapshot?.expenseIds || []);
-  const newEmittedCount = activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).length;
-  const newReceivedCount = activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).length;
-  const newExpenseCount = activeExpenses.filter(e => !lastExpenseIds.has(e.id)).length;
-  const totalNewCount = newEmittedCount + newReceivedCount + newExpenseCount;
+  const totalNewCount = useMemo(() => compareBookExport(activeInvoices, activeExpenses, lastSnapshot).count,
+    [activeInvoices, activeExpenses, lastSnapshot]);
 
   const emitidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'emitida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
   const recibidas = useMemo(() => activeInvoices.filter(i => i.tipo === 'recibida' && inPeriod(i)), [activeInvoices, filterTrimestre]);
@@ -95,51 +95,34 @@ export default function LibroRegistros() {
     + gastosF.reduce((s, e) => s + (e.total || 0), 0);
 
   const handleExport = async (onlyInvoiceBooks = false) => {
+    if (exportInProgress.current || !companyId || !userId) return;
+    exportInProgress.current = true;
+    referenceRequest.current += 1;
     setExporting(true);
     setExportError('');
     setExportNotice('');
     try {
-    if (financialError || loading) throw new Error(financialError || 'Espera a que terminen de cargar los datos antes de exportar.');
-    const hasBaseline = !!lastSnapshot;
-    const newInvoiceIds = hasBaseline ? new Set([
-      ...activeInvoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
-      ...activeInvoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
-    ]) : new Set();
-    const newExpenseIds = hasBaseline ? new Set(activeExpenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
-    const exportResult = await exportarLibros({
-      invoices: activeInvoices, expenses: activeExpenses, companyId: company?.id, year: filterAnio,
-      companyName: company?.razon_social || company?.nombre_comercial || 'Empresa',
-      newInvoiceIds, newExpenseIds,
-      lastExportDate: lastSnapshot?.exportedAt,
-      onlyInvoiceBooks,
-    });
-    if (exportResult?.warning) setExportNotice(exportResult.warning);
-    // Save snapshot
-    const exportedAt = new Date().toISOString();
-    const emittedIds = activeInvoices.filter(i => i.tipo === 'emitida').map(i => i.id);
-    const receivedIds = activeInvoices.filter(i => i.tipo === 'recibida').map(i => i.id);
-    const expIds = activeExpenses.map(e => e.id);
-    try {
-      await base44.entities.AccountingExportSnapshot.create({
-        clientAccountId: company.id,
-        clientName: company?.razon_social || company?.nombre_comercial || '',
-        exportYear: Number(filterAnio),
-        exportPeriod: 'all',
-        exportedAt,
-        exportedBy: user?.email || '',
-        emittedInvoiceIds: emittedIds,
-        receivedInvoiceIds: receivedIds,
-        expenseIds: expIds,
-        totalEmitted: emittedIds.length,
-        totalReceived: receivedIds.length,
-        newEmittedCount, newReceivedCount, newExpenseCount,
-        status: 'ok',
+      if (financialError || loading) throw new Error(financialError || 'Espera a que terminen de cargar los datos antes de exportar.');
+      const exportedAt = new Date().toISOString();
+      const reference = await readBookExportReference(exportSnapshots, userId, companyId, filterAnio);
+      const { newInvoiceIds, newExpenseIds, fields } = compareBookExport(activeInvoices, activeExpenses, reference);
+      const result = await exportarLibros({
+        invoices: activeInvoices, expenses: activeExpenses, companyId, year: filterAnio,
+        companyName: company.razon_social || company.nombre_comercial || 'Empresa',
+        newInvoiceIds, newExpenseIds, lastExportDate: reference?.exportedAt, onlyInvoiceBooks,
       });
-      setLastSnapshot({ exportedAt, emittedInvoiceIds: emittedIds, receivedInvoiceIds: receivedIds, expenseIds: expIds });
-    } catch (e) { /* silent */ }
+      const notices = [result?.warning];
+      try {
+        const saved = await saveBookExportReference(exportSnapshots, user, company, filterAnio, exportedAt, fields);
+        setReferenceState({ key: referenceKey, reference: saved });
+      } catch {
+        notices.push('Se generó el Excel, pero no se pudo guardar la referencia de tu perfil. La próxima descarga puede volver a resaltar estas filas.');
+      }
+      setExportNotice(notices.filter(Boolean).join(' '));
     } catch (error) {
       setExportError(error?.message || 'No se pudo exportar el Diario real. No se ha marcado una descarga correcta.');
     } finally {
+      exportInProgress.current = false;
       setExporting(false);
     }
   };
@@ -169,7 +152,7 @@ export default function LibroRegistros() {
     <div className="min-w-0 w-full max-w-full">
       <PageHeader title="Libros de Registro" subtitle="Consulta y exportación informativa · Excel multipestaña">
         <div className="flex items-center gap-2 flex-wrap">
-          <Select value={filterAnio} onValueChange={setFilterAnio}>
+          <Select value={filterAnio} onValueChange={setFilterAnio} disabled={exporting}>
             <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
             <SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
           </Select>
@@ -192,7 +175,7 @@ export default function LibroRegistros() {
           {lastSnapshot?.exportedAt && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground px-3 py-1.5 bg-secondary/50 rounded-lg">
               <Clock className="w-3.5 h-3.5" />
-              <span>Última descarga: {new Date(lastSnapshot.exportedAt).toLocaleDateString('es-ES')}</span>
+              <span>Tu última descarga · {new Date(lastSnapshot.exportedAt).toLocaleDateString('es-ES')}</span>
               {totalNewCount > 0 && (
                 <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
                   +{totalNewCount} nuevos

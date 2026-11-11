@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 import { exportarLibros } from '@/components/libros/ExportExcel.jsx';
 import AccountingExportHistoryModal from '@/components/admin/AccountingExportHistoryModal';
 
+import { compareBookExport, readBookExportReference, readBookExportReferences, saveBookExportReference } from '@/lib/bookExportReferences.mjs';
+
+const exportSnapshots = base44.entities.AccountingExportSnapshot;
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function LibrosExportTab({ user }) {
@@ -25,53 +28,53 @@ export default function LibrosExportTab({ user }) {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [exportAlert, setExportAlert] = useState(null);
 
+  const inProgress = useRef(new Set());
+  const loadRequest = useRef(0);
+  const userId = user?.id;
+
   const load = useCallback(async () => {
+    const request = ++loadRequest.current;
     setLoading(true);
     try {
-      const [cls, snaps] = await Promise.all([
-        base44.entities.Company.list('-created_date', 200).catch(err => { console.error('[LibrosExport] Company list error:', err); return []; }),
-        base44.entities.AccountingExportSnapshot.list('-exportedAt', 500).catch(err => { console.error('[LibrosExport] Snapshot list error:', err); return []; }),
+      const companies = await base44.entities.Company.list('-created_date', 200);
+      const clientIds = companies.map(company => company.id);
+      const [references, response] = await Promise.all([
+        readBookExportReferences(exportSnapshots, userId, clientIds, year),
+        clientIds.length ? base44.functions.invoke('getClientExportStatus', { clientIds, anio: year }).catch(() => null) : null,
       ]);
+      if (request !== loadRequest.current) return;
+      const data = response?.data?.clients || response?.clients || {};
       const latest = {};
-      (snaps || []).forEach(s => {
-        const k = `${s.clientAccountId}-${s.exportYear}`;
-        if (!latest[k] || new Date(s.exportedAt) > new Date(latest[k].exportedAt)) {
-          latest[k] = s;
-        }
-      });
-      setClients(cls || []);
-      setSnapshots(latest);
-
-      // Fetch live invoice/expense IDs for all clients to compute "new" counts
-      const clientIds = (cls || []).map(c => c.id);
-      if (clientIds.length > 0) {
-        try {
-          const res = await base44.functions.invoke('getClientExportStatus', { clientIds, anio: Number(year) });
-          const data = res?.data?.clients || res?.clients || {};
-          const status = {};
-          clientIds.forEach(cid => {
-            const snap = latest[`${cid}-${year}`];
-            const live = data[cid];
-            if (!snap || !live) return;
-            const lastE = new Set(snap.emittedInvoiceIds || []);
-            const lastR = new Set(snap.receivedInvoiceIds || []);
-            const lastX = new Set(snap.expenseIds || []);
-            const newE = (live.emittedInvoiceIds || []).filter(id => !lastE.has(id)).length;
-            const newR = (live.receivedInvoiceIds || []).filter(id => !lastR.has(id)).length;
-            const newX = (live.expenseIds || []).filter(id => !lastX.has(id)).length;
-            status[`${cid}-${year}`] = { newCount: newE + newR + newX, newEmitted: newE, newReceived: newR, newExpense: newX };
-          });
-          setLiveStatus(status);
-        } catch (err) {
-          console.error('[LibrosExport] Live status error:', err);
-        }
+      const status = {};
+      for (const [companyId, reference] of Object.entries(references)) {
+        const key = `${companyId}-${year}`;
+        latest[key] = reference;
+        const live = data[companyId];
+        if (!live) continue;
+        const unseen = (ids, previousIds) => {
+          const previous = new Set(previousIds);
+          return (ids || []).filter(id => !previous.has(id)).length;
+        };
+        status[key] = { newCount: unseen(live.emittedInvoiceIds, reference.emittedInvoiceIds)
+          + unseen(live.receivedInvoiceIds, reference.receivedInvoiceIds) + unseen(live.expenseIds, reference.expenseIds) };
       }
-    } catch {}
-    setLoading(false);
-    setRefreshing(false);
-  }, [year]);
+      setClients(companies);
+      setSnapshots(latest);
+      setLiveStatus(status);
+    } catch {
+      if (request === loadRequest.current) setExportAlert({ type: 'error', message: 'No se pudieron consultar las referencias de tu perfil. Pulsa Actualizar para volver a intentarlo.' });
+    } finally {
+      if (request === loadRequest.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }, [year, userId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => { loadRequest.current += 1; };
+  }, [load]);
 
   const fetchClientData = async (client) => {
     const res = await base44.functions.invoke('getCompanyFinancials', {
@@ -88,24 +91,22 @@ export default function LibrosExportTab({ user }) {
   const handleExport = async (client, opts = {}) => {
     const { onlyNew = false, onlyInvoiceBooks = false } = opts;
     const key = client.id;
+    if (!userId || inProgress.current.has(key)) return;
+    inProgress.current.add(key);
     setExporting(prev => ({ ...prev, [key]: true }));
     setOpenDropdown(null);
     setExportAlert(null);
 
     try {
-      const { invoices, expenses } = await fetchClientData(client);
-      const snap = snapshots[`${client.id}-${year}`];
-
-      const hasBaseline = !!snap;
-      const lastEmittedIds = new Set(snap?.emittedInvoiceIds || []);
-      const lastReceivedIds = new Set(snap?.receivedInvoiceIds || []);
-      const lastExpenseIds = new Set(snap?.expenseIds || []);
-
-      const newInvoiceIds = hasBaseline ? new Set([
-        ...invoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).map(i => i.id),
-        ...invoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).map(i => i.id),
-      ]) : new Set();
-      const newExpenseIds = hasBaseline ? new Set(expenses.filter(e => !lastExpenseIds.has(e.id)).map(e => e.id)) : new Set();
+      const exportedAt = new Date().toISOString();
+      const [{ invoices, expenses }, reference] = await Promise.all([
+        fetchClientData(client), readBookExportReference(exportSnapshots, userId, client.id, year),
+      ]);
+      const { newInvoiceIds, newExpenseIds, count, fields } = compareBookExport(invoices, expenses, reference);
+      if (onlyNew && (!reference || count === 0)) {
+        setExportAlert({ type: 'warning', message: reference ? 'No hay registros nuevos desde tu última descarga.' : 'Descarga primero el libro completo para crear la referencia de tu perfil.' });
+        return;
+      }
 
       const companyName = client.razon_social || client.nombre_comercial || 'Empresa';
       const exportResult = await exportarLibros({
@@ -118,52 +119,24 @@ export default function LibrosExportTab({ user }) {
         onlyInvoiceBooks,
         newInvoiceIds,
         newExpenseIds,
-        lastExportDate: snap?.exportedAt,
+        lastExportDate: reference?.exportedAt,
       });
-      if (exportResult?.warning) setExportAlert({type:'warning',message:`${companyName}: ${exportResult.warning}`});
-
-      // Save snapshot
-      const exportedAt = new Date().toISOString();
-      const emittedIds = invoices.filter(i => i.tipo === 'emitida').map(i => i.id);
-      const receivedIds = invoices.filter(i => i.tipo === 'recibida').map(i => i.id);
-      const expIds = expenses.map(e => e.id);
-      await base44.entities.AccountingExportSnapshot.create({
-        clientAccountId: client.id,
-        clientName: companyName,
-        exportYear: Number(year),
-        exportPeriod: 'all',
-        exportedAt,
-        exportedBy: user?.email || 'admin',
-        emittedInvoiceIds: emittedIds,
-        receivedInvoiceIds: receivedIds,
-        expenseIds: expIds,
-        totalEmitted: emittedIds.length,
-        totalReceived: receivedIds.length,
-        newEmittedCount: invoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).length,
-        newReceivedCount: invoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).length,
-        newExpenseCount: expenses.filter(e => !lastExpenseIds.has(e.id)).length,
-        status: 'ok',
-      }).catch(err => { console.error('[LibrosExport] Snapshot save error:', err); return null; });
-
-      setSnapshots(prev => ({
-        ...prev,
-        [`${client.id}-${year}`]: {
-          exportedAt,
-          emittedInvoiceIds: emittedIds,
-          receivedInvoiceIds: receivedIds,
-          expenseIds: expIds,
-          newEmittedCount: invoices.filter(i => i.tipo === 'emitida' && !lastEmittedIds.has(i.id)).length,
-          newReceivedCount: invoices.filter(i => i.tipo === 'recibida' && !lastReceivedIds.has(i.id)).length,
-          newExpenseCount: expenses.filter(e => !lastExpenseIds.has(e.id)).length,
-        },
-      }));
-      // Reset live "new" count for this client since we just exported
-      setLiveStatus(prev => ({ ...prev, [`${client.id}-${year}`]: { newCount: 0, newEmitted: 0, newReceived: 0, newExpense: 0 } }));
+      const notices = [exportResult?.warning];
+      try {
+        const saved = await saveBookExportReference(exportSnapshots, user, client, year, exportedAt, fields);
+        setSnapshots(prev => ({ ...prev, [`${client.id}-${year}`]: saved }));
+        setLiveStatus(prev => ({ ...prev, [`${client.id}-${year}`]: { newCount: 0 } }));
+      } catch {
+        notices.push('Se generó el Excel, pero no se pudo guardar la referencia de tu perfil. La próxima descarga puede volver a resaltar estas filas.');
+      }
+      if (notices.some(Boolean)) setExportAlert({ type: 'warning', message: notices.filter(Boolean).join(' ') });
     } catch (err) {
       console.error('[LibrosExport] Error:', err);
       setExportAlert({type:'error',message:err?.response?.data?.error || err?.message || 'No se pudo descargar el Excel.'});
+    } finally {
+      inProgress.current.delete(key);
+      setExporting(prev => ({ ...prev, [key]: false }));
     }
-    setExporting(prev => ({ ...prev, [key]: false }));
   };
 
   const filtered = clients.filter(c => {
@@ -180,10 +153,10 @@ export default function LibrosExportTab({ user }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-jakarta font-bold text-foreground">Libros Registro por Cliente</h2>
-          <p className="text-sm text-muted-foreground">Exporta libros completos · Las facturas nuevas se resaltan en verde</p>
+          <p className="text-sm text-muted-foreground">El Excel resalta en verde las facturas nuevas desde tu última descarga.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+          <Select value={String(year)} onValueChange={v => setYear(Number(v))} disabled={Object.values(exporting).some(Boolean)}>
             <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               {[CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2].map(y => (
@@ -191,7 +164,7 @@ export default function LibrosExportTab({ user }) {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={() => { setRefreshing(true); load(); }} disabled={refreshing} className="gap-1.5 h-8">
+          <Button size="sm" variant="outline" onClick={() => { setExportAlert(null); setRefreshing(true); load(); }} disabled={loading || refreshing || Object.values(exporting).some(Boolean)} className="gap-1.5 h-8">
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} /> Actualizar
           </Button>
         </div>
@@ -220,7 +193,7 @@ export default function LibrosExportTab({ user }) {
           <div className="divide-y divide-border">
             <div className="hidden lg:grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-5 py-2 bg-secondary/30">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Cliente</p>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-32 text-right">Última descarga</p>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-32 text-right">Tu última descarga</p>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-24 text-center">Nuevos</p>
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide w-48 text-right">Acciones</p>
             </div>
@@ -229,7 +202,7 @@ export default function LibrosExportTab({ user }) {
               const snap = snapshots[`${client.id}-${year}`];
               const isExporting = exporting[client.id];
               const live = liveStatus[`${client.id}-${year}`];
-              const newCount = live?.newCount ?? ((snap?.newEmittedCount || 0) + (snap?.newReceivedCount || 0) + (snap?.newExpenseCount || 0));
+              const newCount = live?.newCount;
               const hasExported = !!snap?.exportedAt;
 
               return (
@@ -252,7 +225,7 @@ export default function LibrosExportTab({ user }) {
                       <span className="bg-amber-100 text-amber-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-amber-300">
                         +{newCount} nuevos
                       </span>
-                    ) : hasExported ? (
+                    ) : hasExported && newCount === 0 ? (
                       <span className="text-[11px] text-emerald-600 font-medium">Al día</span>
                     ) : (
                       <span className="text-[11px] text-amber-600 font-medium">Sin exportar</span>

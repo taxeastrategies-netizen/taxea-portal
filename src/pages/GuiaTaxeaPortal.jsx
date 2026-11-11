@@ -2,9 +2,10 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, Calculator, ChevronRight,
-  CircleHelp, Compass, FileText, ScanLine, Search, Settings, Target, Users, Wallet, Wrench, X,
+  CircleHelp, Compass, Search, Settings, Target, Users, Wallet, Wrench, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import GuideScreen, { GuideScreenPreview } from '@/components/guia/GuideScreen.jsx';
 import {
   GUIDE_ARTICLES, GUIDE_EXAMPLES, GUIDE_FAQ, GUIDE_FEATURED, GUIDE_SECTIONS,
   guideHref, searchGuide,
@@ -14,7 +15,6 @@ const SECTION_ICONS = {
   inicio: Compass, fiscalidad: Calculator, finanzas: Wallet, oportunidades: Target,
   personas: Users, operativa: Wrench, cuenta: Settings,
 };
-const FEATURED_ICONS = { 'emitir-factura': FileText, 'ocr-gastos': ScanLine, conciliacion: Wallet, libros: BookOpen };
 const RELATED = {
   'emitir-factura': ['enviar-factura', 'recurrentes', 'anular-factura'],
   'ocr-gastos': ['revisar-gastos', 'documentos', 'libros'],
@@ -36,25 +36,6 @@ function GuideLink({ article, state }) {
     </div>
     <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-primary" />
   </Link>;
-}
-
-function Example({ example }) {
-  return <figure className="overflow-hidden rounded-2xl border border-border bg-card">
-    <figcaption className="border-b border-border bg-muted/45 px-4 py-4 sm:px-5">
-      <p className="text-xs font-semibold text-primary">Ejemplo con datos ficticios</p>
-      <h2 className="mt-1 font-jakarta text-lg font-semibold">{example.title}</h2>
-    </figcaption>
-    <ol className="divide-y divide-border">
-      {example.rows.map(([label, sample, note], index) => <li key={label} className="flex gap-3 px-4 py-3 sm:px-5">
-        <span aria-hidden="true" className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">{index + 1}</span>
-        <div className="min-w-0 break-words">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          <p className="font-semibold">{sample}</p>
-          <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{note}</p>
-        </div>
-      </li>)}
-    </ol>
-  </figure>;
 }
 
 function ArticleView({ article, headingRef, state }) {
@@ -79,7 +60,7 @@ function ArticleView({ article, headingRef, state }) {
           <Link to={article.path}>Abrir en Taxea <ArrowUpRight aria-hidden="true" className="ml-2 h-4 w-4" /></Link>
         </Button>
       </header>
-      {example && <Example example={example} />}
+      {example && <GuideScreen key={article.id} screen={example} />}
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="guide-steps">
         <h2 id="guide-steps" className="font-jakarta text-xl font-bold">Paso a paso</h2>
         <ol className="mt-4 list-decimal space-y-4 pl-6 text-sm leading-relaxed marker:font-bold marker:text-primary sm:text-base">
@@ -162,14 +143,14 @@ export default function GuiaTaxeaPortal() {
         : <div className="rounded-xl border border-border bg-card p-4 text-sm leading-relaxed">Prueba con otro término o busca el nombre de la herramienta, por ejemplo «OCR», «Gmail» o «Tesorería».</div>}
     </section> : <>
       <section aria-labelledby="guide-featured">
-        <h2 id="guide-featured" className="mb-3 font-jakarta text-lg font-bold sm:text-xl">Tareas frecuentes</h2>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {GUIDE_FEATURED.map(id => {
-            const Icon = FEATURED_ICONS[id];
-            return <Link to={guideHref(id)} key={id} className={`group flex min-h-14 items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-primary/5 ${focusStyle}`}>
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Icon aria-hidden="true" className="h-4 w-4" /></span><span className="min-w-0 flex-1 leading-snug">{byId[id].title}</span><ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" />
-            </Link>;
-          })}
+        <h2 id="guide-featured" className="mb-3 font-jakarta text-lg font-bold sm:text-xl">Guías visuales</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {GUIDE_FEATURED.map(id => <Link to={guideHref(id)} key={id} className={`group min-w-0 rounded-2xl border border-border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-primary/5 ${focusStyle}`}>
+            <GuideScreenPreview screen={GUIDE_EXAMPLES[id]} />
+            <span className="flex min-h-10 items-center justify-between gap-2 px-1 text-sm font-semibold leading-snug">
+              <span>{byId[id].title}</span><ArrowUpRight aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+            </span>
+          </Link>)}
         </div>
       </section>
       <section aria-labelledby="guide-chapters">

@@ -87,12 +87,12 @@ export const tax = { id: 'fiscalidad', title: 'Fiscalidad y Contabilidad', descr
     'Consulta P&L para el resultado o Criterio de caja si tu actividad lo utiliza. No compares periodos o criterios diferentes como si fueran el mismo informe.',
     'Usa Exportar Excel o Solo libros de facturas según lo que necesites. El Excel de Libros e informes corresponde al ejercicio seleccionado; el filtro trimestral ajusta la vista. Revisa Salida a la asesoría si necesitas sus formatos y avisos.'
   ], 'El archivo sirve para revisión e importación en la asesoría. La descarga no confirma una importación en A3 ni una presentación tributaria.', 'excel xlsx csv exportar a3 importia libro registro trimestre ventas compras pérdidas ganancias pyg'),
-  a('excel-novedades', 'Identificar las facturas nuevas en Excel', '/tax-accounting/libros', 'Usa el resaltado verde para ver qué se añadió desde la última exportación guardada.', [
-    'Selecciona el ejercicio en Libros e informes. Comprueba si el portal muestra la fecha de Última descarga para esa empresa y ejercicio.',
-    'La primera descarga guardada sirve como referencia. En la siguiente, abre Facturas Emitidas o Facturas Recibidas: las filas de facturas que no estaban en la referencia aparecen en verde.',
+  a('excel-novedades', 'Identificar las facturas nuevas en Excel', '/tax-accounting/libros', 'Usa el resaltado verde para ver qué se añadió desde tu última descarga.', [
+    'Selecciona el ejercicio en Libros e informes. Comprueba la fecha que aparece junto a Tu última descarga para esa empresa y ejercicio.',
+    'La primera descarga guardada de tu perfil establece tu referencia. En la siguiente, abre Facturas Emitidas o Facturas Recibidas: las filas de facturas que no estaban en la referencia aparecen en verde.',
     'En el Excel completo se resaltan también en Libro Ventas y Libro Compras. En Solo libros de facturas, busca el verde en las dos hojas Facturas Emitidas y Facturas Recibidas.',
     'Conserva el fichero que vas a revisar. Si vuelves a exportar sin añadir facturas, las que ya iban en la descarga anterior dejan de marcarse como nuevas.'
-  ], 'La comparación usa la última exportación guardada de esa empresa y ejercicio. El verde indica que la fila es nueva en el Excel, no que ya se haya importado o contabilizado en A3.', 'verde resaltar incremental excel ultima descarga exportacion nuevas filas cambio a3'),
+  ], 'Cada usuario tiene su propia referencia por empresa y ejercicio. Si un cliente descarga primero, su asesor seguirá viendo en verde las nuevas filas respecto a su propia descarga. Comprueba en A3 el estado de la importación y la contabilización.', 'verde resaltar incremental excel ultima descarga exportacion nuevas filas cambio a3'),
   a('ocr-gastos', 'Subir o escanear facturas recibidas', '/tax-accounting/lector-gastos', 'Entrega facturas de proveedor y comprueba que entraron en la cola correcta.', [
     'Entra en OCR facturas recibidas. Arrastra los archivos a la zona de subida o selecciónalos desde el dispositivo.',
     'En móvil, pulsa Sacar foto / Escanear y permite el acceso a la cámara. Coloca el documento entero dentro del encuadre azul, evita reflejos y comprueba las esquinas y los importes antes de aceptar.',

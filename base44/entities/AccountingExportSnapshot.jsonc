@@ -104,33 +104,39 @@
           "user_condition": {
             "role": "admin"
           }
+        },
+        {
+          "user_condition": {
+            "role": "super_admin"
+          }
         }
       ]
     },
     "read": {
-      "$or": [
+      "$and": [
         {
-          "data.clientAccountId": "{{user.data.company_id}}"
+          "created_by_id": "{{user.id}}"
         },
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "$or": [
+            {
+              "data.clientAccountId": "{{user.data.company_id}}"
+            },
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "user_condition": {
+                "role": "super_admin"
+              }
+            }
+          ]
         }
       ]
     },
-    "update": {
-      "$or": [
-        {
-          "data.clientAccountId": "{{user.data.company_id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
-    },
+    "update": false,
     "delete": {
       "user_condition": {
         "role": "admin"
