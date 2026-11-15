@@ -25,6 +25,12 @@ equal(annual.status,200,'annual reporting uses the authorized canonical reader')
 equal(annual.data.window.start,today.slice(0,4)+'-01-01','annual reporting does not include the previous fiscal year');
 equal(monthly.status,200,'monthly dashboard can request its actual accounting month');
 equal(monthly.data.window.start,today.slice(0,8)+'01','monthly source does not silently use rolling thirty days');
+const fixedMonth = await invoke({action:'finance_period', companyId:company.id, period:today.slice(0,7)});
+const fixedQuarter = await invoke({action:'finance_period', companyId:company.id, period:year+'-T'+Math.ceil(Number(today.slice(5,7))/3)});
+equal(fixedMonth.status, 200, 'the owner can load a specific calendar month');
+equal(fixedMonth.data.window.start, monthly.data.window.start, 'a specific calendar month matches the same month-to-date window');
+equal(fixedQuarter.status, 200, 'the owner can load a specific calendar quarter');
+equal(fixedQuarter.data.window.end, today, 'the current quarter excludes future dates');
 equal((await invoke({action:'finance_period',companyId:company.id,period:'unbounded'})).status,400,'invalid period rejected');
 user={id:'foreign',email:'other@qa.test',role:'user',data:{company_id:'another-company'}};
 equal((await invoke({action:'finance_period',companyId:company.id,role:'admin'})).status,403,'body role cannot grant cross-company read');

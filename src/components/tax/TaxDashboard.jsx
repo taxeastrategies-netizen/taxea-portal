@@ -10,25 +10,63 @@ import {
   Receipt, AlertCircle, Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import NativeSelect from '@/components/ui/NativeSelect';
 import CashflowChart from '@/components/finance/CashflowChart';
 import { useFinancePeriod, useFinanceObligations } from '@/hooks/useFinanceReporting';
-import { buildFinanceDashboardModel } from '@/lib/financeDashboardModel.mjs';
-import { classifyObligations, obligationOpen, daysBetween } from '@/lib/reportingPeriods.mjs';
+import { buildFinanceDashboardModel, confirmEmptyReportingPeriod } from '@/lib/financeDashboardModel.mjs';
+import { classifyObligations, obligationOpen, daysBetween, civilDay } from '@/lib/reportingPeriods.mjs';
 import NoCompanyState from '@/components/ui/NoCompanyState';
 import GastosPorCategoria from './GastosPorCategoria';
 import { calculateFinancialKPIs, getOutstandingAmount } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
 
-const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const formatPeriodDate = day => day.split('-').reverse().join('/');
+const fiscalInvoiceDate = invoice => invoice.fiscal_document_type === 'F2' && invoice.fecha_operacion
+  ? invoice.fecha_operacion
+  : invoice.fecha_emision;
 
 export default function TaxDashboard({ onNavigate }) {
-  const { company, isAdmin, loadingCompany } = useOutletContext() || {};
+  const { company, loadingCompany } = useOutletContext() || {};
+  const [selectedPeriod, setSelectedPeriod] = useState('mtd');
+  const timeZone = company?.timezone === 'Atlantic/Canary' ? 'Atlantic/Canary' : 'Europe/Madrid';
+  const today = civilDay(new Date(), timeZone);
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  const currentQuarter = Math.ceil(currentMonth / 3);
+  const monthOptions = MONTHS_ES.slice(0, currentMonth).map((month, index) => {
+    const monthNumber = index + 1;
+    return {
+      value: monthNumber === currentMonth ? 'mtd' : currentYear + '-' + String(monthNumber).padStart(2, '0'),
+      label: month + ' ' + currentYear + (monthNumber === currentMonth ? ' · en curso' : ''),
+    };
+  }).reverse();
+  const quarterOptions = Array.from({ length: currentQuarter }, (_, index) => {
+    const quarter = currentQuarter - index;
+    return {
+      value: currentYear + '-T' + quarter,
+      label: quarter + '.º trimestre ' + currentYear + (quarter === currentQuarter ? ' · en curso' : ''),
+    };
+  });
+  const period = selectedPeriod === 'ytd' || [...monthOptions, ...quarterOptions].some(option => option.value === selectedPeriod)
+    ? selectedPeriod
+    : 'mtd';
   const financialData = useFinancialData(company?.id);
   const { invoices, expenses, treasury, loading: finLoading } = financialData;
   const calendar = useFinanceObligations(company?.id);
-  const accounting = useFinancePeriod(company?.id, 'mtd');
+  const accounting = useFinancePeriod(company?.id, period);
   const obligations = calendar.data?.rows || [];
-  const financials = useMemo(() => buildFinanceDashboardModel({ ...financialData, obligations, accountingPeriod: accounting.data, period: 'mtd', financialError: financialData.error, accountingError: accounting.isError ? 'PyG mensual no disponible' : '' }), [financialData.invoices, financialData.expenses, financialData.bankAccounts, financialData.bankTransactions, financialData.error, financialData.treasuryError, accounting.data, accounting.isError, calendar.data]);
+  const financials = useMemo(() => {
+    const model = buildFinanceDashboardModel({
+      ...financialData, obligations, accountingPeriod: accounting.data, period, timeZone,
+      invoiceDate: fiscalInvoiceDate, financialError: financialData.error,
+      accountingError: accounting.isError ? 'PyG del periodo no disponible' : '',
+    });
+    const hasHistory = accounting.data?.monthly?.some(row => row.includedEntries > 0)
+      || accounting.data?.previous?.includedEntries > 0;
+    return confirmEmptyReportingPeriod(model, accounting.data?.current, hasHistory, accounting.isSuccess);
+  }, [financialData.invoices, financialData.expenses, financialData.bankAccounts, financialData.bankTransactions, financialData.error,
+    financialData.treasuryError, accounting.data, accounting.isError, accounting.isSuccess, calendar.data, period, timeZone, today]);
   const [quoteScope, setQuoteScope] = useState({companyId:null,rows:[]});
   const quotes = quoteScope.companyId === company?.id ? quoteScope.rows : [];
   const [loading, setLoading] = useState(true);
@@ -37,10 +75,6 @@ export default function TaxDashboard({ onNavigate }) {
   const [aiAlerts, setAiAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
 
-  const currentYear = Number(financials.window.end.slice(0,4));
-  const currentMonth = Number(financials.window.end.slice(5,7))-1;
-  const currentMonthLabel = MONTHS_ES[currentMonth];
-
   useEffect(() => {
     let active = true; setQuoteScope({companyId:company?.id || null,rows:[]}); setAiAlerts([]); setSupportError('');
     if (!company?.id) { setLoading(false); return; }
@@ -48,7 +82,7 @@ export default function TaxDashboard({ onNavigate }) {
     base44.entities.Quote.filter({company_id:company.id}).then(rows => { if(active)setQuoteScope({companyId:company.id,rows:rows || []}); }).catch(() => { if(active)setSupportError('No se pudieron leer los presupuestos.'); }).finally(() => { if(active)setLoading(false); });
     return () => { active = false; };
   }, [company?.id]);
-  useEffect(() => { setAiAlerts([]); }, [company?.id, financialData.lastSync, calendar.data]);
+  useEffect(() => { setAiAlerts([]); }, [company?.id, financialData.lastSync, calendar.data, period]);
 
   const generateAiAlerts = async () => {
     if (loadingAlerts || aiAlerts.length > 0) return;
@@ -78,35 +112,32 @@ export default function TaxDashboard({ onNavigate }) {
 
   // KPIs - Usa calculateFinancialKPIs para consistencia con todos los demas dashboards
   const kpis = useMemo(() => {
-    const monthInvs = financials.filteredInvoices;
-    const monthExps = financials.filteredExpenses;
-    const monthKPIs = calculateFinancialKPIs(monthInvs, monthExps);
+    const periodKPIs = calculateFinancialKPIs(financials.filteredInvoices, financials.filteredExpenses);
 
-    const factPendientes = monthKPIs.emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
+    const factPendientes = periodKPIs.emitidas.filter(i => ['pendiente', 'parcial', 'vencida'].includes(i.estado_cobro));
     const dates = classifyObligations(obligations);
     const oblPendientes = obligations.filter(row => obligationOpen(row) && Number(row.fiscalYear) === currentYear);
     const proxObl = dates.upcoming[0];
 
     const quotesPendientes = quotes.filter(q => ['pendiente','enviado','borrador'].includes(q.estado) || !q.estado);
     return {
-      ingresosMes: financials.totalIngresos,
-      gastosMes: financials.gastoTotal,
-      beneficioMes: financials.beneficio,
-      ivaMes: monthKPIs.ivaNeto,
-      irpfMes: monthKPIs.retencionIngresos,
-      ivaRepercutido: monthKPIs.ivaRepercutido,
-      ivaSoportado: monthKPIs.ivaSoportado,
-      irpfIngresos: monthKPIs.retencionIngresos,
-      irpfGastos: monthKPIs.retencionGastos,
+      ingresos: financials.totalIngresos,
+      gastos: financials.gastoTotal,
+      beneficio: financials.beneficio,
+      ivaNeto: periodKPIs.ivaNeto,
+      ivaRepercutido: periodKPIs.ivaRepercutido,
+      ivaSoportado: periodKPIs.ivaSoportado,
+      irpfIngresos: periodKPIs.retencionIngresos,
+      irpfGastos: periodKPIs.retencionGastos,
       factPendientes: factPendientes.length,
       factPendientesImporte: factPendientes.reduce((s, i) => s + getOutstandingAmount(i), 0),
-      factVencidas: monthKPIs.facturasVencidas,
+      factVencidas: periodKPIs.facturasVencidas,
       oblPendientes: oblPendientes.length,
       proxObl,
       quotesPendientes: quotesPendientes.length,
       quotesPendientesImporte: quotesPendientes.reduce((s, q) => s + (q.total || q.importe_total || 0), 0),
     };
-  }, [invoices, expenses, obligations, quotes, currentYear, currentMonth, financials]);
+  }, [obligations, quotes, currentYear, financials]);
 
   // Recent activity
   const recentActivity = useMemo(() => {
@@ -118,7 +149,7 @@ export default function TaxDashboard({ onNavigate }) {
     return items.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 8);
   }, [invoices, expenses, obligations]);
 
-  if (loadingCompany || loading || finLoading || calendar.isLoading || accounting.isLoading) return (
+  if (loadingCompany || loading || finLoading || calendar.isLoading) return (
     <div className="flex items-center justify-center h-48">
       <div className="w-6 h-6 border-2 border-taxea-red border-t-transparent rounded-full animate-spin" />
     </div>
@@ -137,7 +168,7 @@ export default function TaxDashboard({ onNavigate }) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-jakarta font-bold text-foreground">Fiscalidad y Contabilidad</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{company.razon_social} · {currentMonthLabel} {currentYear}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{company.razon_social}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => onNavigate('facturas')} className="hidden sm:flex gap-1.5">
@@ -149,8 +180,8 @@ export default function TaxDashboard({ onNavigate }) {
         </div>
       </div>
 
-      {(financialData.error || accounting.isError || calendar.isError || supportError) && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Lectura parcial: {financialData.error || ''} {accounting.isError ? 'PyG mensual no disponible.' : ''} {calendar.isError ? 'Calendario no disponible.' : ''} {supportError}</p>}
-      {financials.accountingProvisional && <p role="status" className="text-xs text-amber-700">PyG mensual provisional: hay cobertura o marco contable pendientes de revisión.</p>}
+      {(financialData.error || accounting.isError || calendar.isError || supportError) && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Lectura parcial: {financialData.error || ''} {accounting.isError ? 'PyG del periodo no disponible.' : ''} {calendar.isError ? 'Calendario no disponible.' : ''} {supportError}</p>}
+      {financials.accountingProvisional && <p role="status" className="text-xs text-amber-700">PyG del periodo provisional: hay cobertura o marco contable pendientes de revisión.</p>}
       {!fiscalSetupComplete && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
@@ -179,14 +210,41 @@ export default function TaxDashboard({ onNavigate }) {
         <span className="text-xs font-semibold text-blue-700">Abrir Tesorería</span>
       </Link>
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-foreground">Resumen del periodo</h2>
+          <p className="text-xs text-muted-foreground">
+            {formatPeriodDate(financials.window.start)} – {formatPeriodDate(financials.window.end)}
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-1 sm:w-auto">
+          <label htmlFor="tax-dashboard-period" className="text-xs font-medium text-muted-foreground">Periodo contable</label>
+          <NativeSelect
+            id="tax-dashboard-period"
+            aria-label="Periodo contable"
+            value={period}
+            onChange={event => setSelectedPeriod(event.currentTarget.value)}
+            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground sm:w-64"
+          >
+            <optgroup label="Mes">
+              {monthOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+            </optgroup>
+            <optgroup label="Trimestre">
+              {quarterOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+            </optgroup>
+            <option value="ytd">Acumulado del año {currentYear}</option>
+          </NativeSelect>
+        </div>
+      </div>
+      {accounting.isLoading && <p role="status" className="text-xs text-muted-foreground">Cargando datos contables del periodo…</p>}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-busy={accounting.isLoading}>
         <div onClick={() => onNavigate('ingresos-gastos')} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-taxea-red/30 hover:shadow-card-hover transition-all">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 mb-2">
             <TrendingUp className="w-4 h-4 text-emerald-500" />
           </div>
-          <p className="text-lg font-bold text-foreground">{fmt(kpis.ingresosMes)} &#8364;</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Ingresos contables del mes</p>
+          <p className="text-lg font-bold text-foreground">{fmt(kpis.ingresos)} &#8364;</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Ingresos contables</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
             <p className="text-xs text-muted-foreground">{taxLabel} repercutido: <span className="font-medium text-foreground">{fmt(kpis.ivaRepercutido)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de ingresos: <span className="font-medium text-foreground">{fmt(kpis.irpfIngresos)} &#8364;</span></p>
@@ -196,24 +254,24 @@ export default function TaxDashboard({ onNavigate }) {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-400/10 mb-2">
             <TrendingDown className="w-4 h-4 text-red-400" />
           </div>
-          <p className="text-lg font-bold text-foreground">{fmt(kpis.gastosMes)} &#8364;</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Gastos contables del mes</p>
+          <p className="text-lg font-bold text-foreground">{fmt(kpis.gastos)} &#8364;</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Gastos contables</p>
           <div className="mt-2 space-y-0.5 border-t border-border/50 pt-2">
             <p className="text-xs text-muted-foreground">{taxLabel} soportado: <span className="font-medium text-foreground">{fmt(kpis.ivaSoportado)} &#8364;</span></p>
             <p className="text-xs text-muted-foreground">IRPF de gastos: <span className="font-medium text-foreground">{fmt(kpis.irpfGastos)} &#8364;</span></p>
           </div>
         </div>
         <KPICard
-          label="Resultado contable del mes"
-          value={`${fmt(kpis.beneficioMes)} €`}
+          label="Resultado contable"
+          value={`${fmt(kpis.beneficio)} €`}
           icon={BarChart3}
-          color={kpis.beneficioMes >= 0 ? "text-emerald-500" : "text-red-500"}
-          bg={kpis.beneficioMes >= 0 ? "bg-emerald-500/10" : "bg-red-500/10"}
+          color={kpis.beneficio >= 0 ? "text-emerald-500" : "text-red-500"}
+          bg={kpis.beneficio >= 0 ? "bg-emerald-500/10" : "bg-red-500/10"}
           onClick={() => onNavigate('ingresos-gastos')}
         />
         <KPICard
-          label={`${taxLabel} estimado`}
-          value={`${fmt(kpis.ivaMes)} €`}
+          label={`${taxLabel} estimado del periodo`}
+          value={`${fmt(kpis.ivaNeto)} €`}
           icon={CircleDollarSign}
           color="text-blue-400"
           bg="bg-blue-400/10"
@@ -292,7 +350,7 @@ export default function TaxDashboard({ onNavigate }) {
               <div className="w-6 h-6 bg-taxea-red/10 rounded-md flex items-center justify-center">
                 <Brain className="w-3.5 h-3.5 text-taxea-red" />
               </div>
-              <h3 className="font-jakarta font-semibold text-foreground text-sm">Alertas del periodo</h3>
+              <h3 className="font-jakarta font-semibold text-foreground text-sm">Alertas fiscales</h3>
             </div>
             {aiAlerts.length === 0 && (
               <button

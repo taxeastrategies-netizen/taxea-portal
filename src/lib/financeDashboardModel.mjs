@@ -7,10 +7,10 @@ const money = value => Math.round((Number(value) || 0) * 100) / 100;
 const lower = value => String(value || '').trim().toLowerCase();
 const closedInvoice = row => row.anulada || ['anulada', 'cancelada', 'cancelado', 'borrador'].includes(lower(row.estado_cobro || row.estado));
 
-export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankAccounts = [], bankTransactions = [], obligations = [], accountingPeriod = null, accountingError = '', financialError = '', treasuryError = '', period = '30d', now = new Date() } = {}) {
-  const window = accountingPeriod?.window || reportingWindow(period, now);
+export function buildFinanceDashboardModel({ invoices = [], expenses = [], bankAccounts = [], bankTransactions = [], obligations = [], accountingPeriod = null, accountingError = '', financialError = '', treasuryError = '', period = '30d', now = new Date(), timeZone = 'Europe/Madrid', invoiceDate = row => row.fecha_emision } = {}) {
+  const window = accountingPeriod?.window || reportingWindow(period, now, timeZone);
   const active = invoices.filter(row => !closedInvoice(row));
-  const filteredInvoices = active.filter(row => withinWindow(row.fecha_emision, window, window.timeZone));
+  const filteredInvoices = active.filter(row => withinWindow(invoiceDate(row), window, window.timeZone));
   const filteredExpenses = expenses.filter(row => !row.anulada && withinWindow(row.fecha, window, window.timeZone));
   const document = calculateFinancialKPIs(filteredInvoices, filteredExpenses);
   const observation = bankObservation(bankAccounts, bankTransactions, { now, treasuryError, timeZone: window.timeZone });

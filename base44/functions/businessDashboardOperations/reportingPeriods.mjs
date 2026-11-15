@@ -23,10 +23,28 @@ export function withinWindow(value, window, timeZone = 'Europe/Madrid') {
   return Boolean(day && day >= window.start && day <= window.end);
 }
 export function reportingWindow(period = '30d', now = new Date(), timeZone = 'Europe/Madrid') {
-  const end = civilDay(now, timeZone);
-  const days = period === 'ytd' && end ? daysBetween(end.slice(0,4)+'-01-01',end)+1 : period === 'mtd' && end ? Number(end.slice(8, 10)) : ({ '7d': 7, '30d': 30, '90d': 90, '365d': 365 })[period];
-  if (!days || !end) throw new RangeError('Periodo financiero no válido.');
-  const start = shiftDay(end, 1 - days);
+  const today = civilDay(now, timeZone);
+  if (!today) throw new RangeError('Periodo financiero no válido.');
+
+  let end = today;
+  let start;
+  const fixed = /^(\d{4})-(0[1-9]|1[0-2]|T[1-4])$/.exec(period);
+  if (fixed) {
+    const [, year, slot] = fixed;
+    const isQuarter = slot.startsWith('T');
+    const month = isQuarter ? (Number(slot.slice(1)) - 1) * 3 + 1 : Number(slot);
+    start = year + '-' + String(month).padStart(2, '0') + '-01';
+    if (year !== today.slice(0, 4) || start > today) throw new RangeError('Periodo financiero no válido.');
+    const lastDay = new Date(Date.UTC(Number(year), month - 1 + (isQuarter ? 3 : 1), 0)).toISOString().slice(0, 10);
+    if (lastDay < end) end = lastDay;
+  } else if (period === 'ytd' || period === 'mtd') {
+    start = period === 'ytd' ? today.slice(0, 4) + '-01-01' : today.slice(0, 8) + '01';
+  } else {
+    const rollingDays = ({ '7d': 7, '30d': 30, '90d': 90, '365d': 365 })[period];
+    if (!Number.isInteger(rollingDays)) throw new RangeError('Periodo financiero no válido.');
+    start = shiftDay(end, 1 - rollingDays);
+  }
+  const days = daysBetween(start, end) + 1;
   return { period, days, start, end, previous: { start: shiftDay(start, -days), end: shiftDay(start, -1) }, timeZone };
 }
 export function obligationDay(row) {
