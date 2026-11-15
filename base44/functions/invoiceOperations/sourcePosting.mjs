@@ -94,7 +94,7 @@ export async function completeSourceInvoice(base44, user, companyId, invoice, cr
   invoice = await ensureInvoiceQrHash(svc.entities.Invoice,invoice);
   try {
     const postOptions = 
-      {status:'confirmado',source:invoice.ocr_document_id?'OCR':invoice.isRecurringGenerated?'recurring_invoice':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})};
+      {status:'confirmado',...(invoice.fiscal_document_type === 'F2' ? { date: invoice.fecha_operacion } : {}),source:invoice.ocr_document_id?'OCR':invoice.isRecurringGenerated?'recurring_invoice':'manual',...(invoice.ocr_document_id?{ocrDocumentId:invoice.ocr_document_id}:{})};
     let posting;
     try {posting=await postInvoice(svc,companyId,{...invoice,accounting_migration_hold:false},user.email,postOptions);}
     catch(error){

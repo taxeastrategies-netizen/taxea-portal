@@ -72,18 +72,22 @@ export async function exportInvoiceToPdf(invoice, company) {
     doc.addImage(logo.dataUrl, 'PNG', M, y - 13, logoW, logoH);
     titleX = M + logoW + 6;
   }
-  doc.setFont('helvetica', 'bold').setFontSize(24).setTextColor(...BRAND);
-  doc.text('FACTURA', titleX, y);
+  const simplified = invoice.fiscal_document_type === 'F2';
+  doc.setFont('helvetica', 'bold').setFontSize(simplified ? 14 : 24).setTextColor(...BRAND);
+  doc.text(simplified ? 'FACTURA SIMPLIFICADA' : 'FACTURA', simplified ? M : titleX, simplified ? y + 8 : y);
   doc.setFontSize(11).setTextColor(30, 41, 59);
-  doc.text(String(invoice.numero_factura || '—'), titleX, y + 7);
+  doc.text(String(invoice.numero_factura || '—'), simplified ? M : titleX, y + (simplified ? 14 : 7));
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(100, 116, 139);
   doc.text(`Fecha de emisión: ${fmtDate(invoice.fecha_emision)}`, W - M, y, { align: 'right' });
+  if (simplified && invoice.fecha_operacion !== invoice.fecha_emision) {
+    doc.text(`Operación: ${fmtDate(invoice.fecha_operacion)}`, W - M, y + 5, { align: 'right' });
+  }
   if (invoice.fecha_vencimiento) {
-    doc.text(`Vencimiento: ${fmtDate(invoice.fecha_vencimiento)}`, W - M, y + 5, { align: 'right' });
+    doc.text(`Vencimiento: ${fmtDate(invoice.fecha_vencimiento)}`, W - M, y + (simplified ? 10 : 5), { align: 'right' });
   }
 
   // ── Emisor / Receptor ─────────────────────────────────────────────────────
-  y += 18;
+  y += simplified ? 25 : 18;
   doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(148, 163, 184);
   doc.text('EMISOR', M, y);
   const emisor = [

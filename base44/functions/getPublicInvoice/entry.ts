@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       return new Response(privatePdf.bytes,{status:200,headers:{'Content-Type':'application/pdf','Content-Length':String(privatePdf.bytes.length),'Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(name),'Cache-Control':'private, no-store','Pragma':'no-cache','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Taxea-File-Sha256':privatePdf.asset.sha256,'X-Taxea-File-Size':String(privatePdf.bytes.length),'Access-Control-Expose-Headers':'X-Taxea-File-Sha256,X-Taxea-File-Size,Content-Type'}});
     }
     const publicInvoice = pick(invoice, [
-      'numero_factura', 'fecha_emision', 'fecha_vencimiento', 'tipo', 'cliente_nombre',
+      'numero_factura', 'fecha_emision', 'fecha_operacion', 'fecha_vencimiento', 'tipo', 'fiscal_document_type', 'cliente_nombre',
       'cliente_nif', 'cliente_direccion', 'proveedor_nombre', 'proveedor_nif', 'proveedor_direccion', 'concepto', 'base_imponible',
       'tipo_iva', 'cuota_iva', 'indirect_tax_kind', 'retencion_irpf', 'importe_retencion',
       'total_factura', 'moneda', 'estado_cobro', 'importe_pagado', 'importe_pendiente', 'forma_pago', 'coletilla_fiscal',

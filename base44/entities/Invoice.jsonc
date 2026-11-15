@@ -53,6 +53,12 @@
     "company_id": {
       "type": "string"
     },
+    "fiscal_document_type": {
+      "type": "string",
+      "enum": ["F2"],
+      "description": "Factura simplificada con serie específica. Se asigna únicamente al emitir en servidor.",
+      "rls": { "write": false }
+    },
     "numero_factura": {
       "type": "string"
     },

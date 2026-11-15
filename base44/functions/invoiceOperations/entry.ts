@@ -24,6 +24,8 @@ import { queuedAccountingClient } from './accountingRequestQueue.mjs';
 import { reconcileInvoiceGroup } from './groupReconciliation.ts';
 import { completeSourceInvoice } from './sourcePosting.mjs';
 import { acquireApprovalLease } from './sourceLease.ts';
+import { prepareSimplifiedIssue } from './simplifiedIssue.mjs';
+
 const sourceDependencies = {postInvoice, buildAeatQrUrl, ensureInvoiceQrHash};
 
 const MONEY_EPSILON = 0.01;
@@ -147,7 +149,7 @@ function invoiceCreationPayload(input, companyId, user, criteria = {}) {
     'categoria_gasto', 'fiscal_treatment', 'fiscal_activity_id', 'deductible_tax_amount',
     'non_deductible_tax_amount', 'moneda', 'exchange_rate', 'forma_pago', 'coletilla_fiscal', 'comentarios',
     'source_document_type', 'source_document_id', 'es_rectificativa', 'factura_rectificada', 'ocr_document_id', 'tax_breakdown',
-    'indirect_tax_kind', 'origin', 'source_system', 'source_record_id',
+    'indirect_tax_kind', 'origin', 'source_system', 'source_record_id', 'fiscal_document_type',
   ];
   const payload = {};
   for (const field of allowed) {
@@ -587,9 +589,15 @@ Deno.serve(async (req) => {
 
     if (action === 'create_invoice') {
       const { company, companyId } = await authorizeCompany(base44, user, body.company_id);
-      const input = body.invoice || {};
-      const criteria = body.fiscal_criteria || {};
-      const automatic = input.tipo !== 'recibida' && body.automatic_number === true;
+      const suppliedInvoice = body.invoice || {};
+      const simplified = suppliedInvoice.fiscal_document_type === 'F2';
+      if (suppliedInvoice.fiscal_document_type && !simplified) return businessError('Tipo de factura fiscal no admitido.', 400);
+      const issued = simplified ? prepareSimplifiedIssue(suppliedInvoice, user, company) : null;
+      const input = issued?.invoice || suppliedInvoice;
+      const criteria = issued?.criteria || body.fiscal_criteria || {};
+      const automatic = simplified || (input.tipo !== 'recibida' && body.automatic_number === true);
+      if (!automatic && input.tipo !== 'recibida' && /^FS-\d{4}-/i.test(cleanText(input.numero_factura, 120)))
+        return businessError('La serie FS está reservada para facturas simplificadas.', 400);
       const requestKey = cleanText(body.idempotency_key, 160);
       if (automatic && !requestKey) return businessError('Falta la clave de la emisión.', 400);
       let payload = automatic ? null : invoiceCreationPayload(input, companyId, user, criteria);
@@ -602,7 +610,7 @@ Deno.serve(async (req) => {
         if (automatic) {
           const date = cleanText(input.fecha_emision, 10);
           if (!isIsoDate(date)) return businessError('La fecha de emisión no es válida.', 400);
-          const number = invoice?.numero_factura || await nextIssuedInvoiceNumber(base44.asServiceRole, companyId, date, input.es_rectificativa === true);
+          const number = invoice?.numero_factura || await nextIssuedInvoiceNumber(base44.asServiceRole, companyId, date, input.es_rectificativa === true, simplified);
           payload = invoiceCreationPayload({ ...input, numero_factura: number }, companyId, user, criteria);
         }
         const sourceHash = await sha256(JSON.stringify(payload));
@@ -615,8 +623,10 @@ Deno.serve(async (req) => {
           invoice = await base44.asServiceRole.entities.Invoice.create({...payload,creation_idempotency_key:idempotencyKey,source_hash:sourceHash,
             fiscal_review_status:'pendiente_revision',accounting_migration_hold:true,accounting_migration_hold_reason:'SOURCE_CHECK_PENDING'});
         }
+        if (simplified && invoice.fiscal_document_type !== 'F2')
+          return businessError('Base44 no guardó la clave F2. Revisa esa reserva antes de emitir.', 409, { invoice_id: invoice.id });
         try {
-          const result = await completeSourceInvoice(base44,user,companyId,invoice,body.fiscal_criteria || {},sourceDependencies);
+          const result = await completeSourceInvoice(base44,user,companyId,invoice,criteria,sourceDependencies);
           await recordTimeline(base44,{invoice_id:invoice.id,company_id:companyId,event_type:'factura_creada',
             event_label:'Factura registrada desde su documento',event_detail:payload.numero_factura,created_at:new Date().toISOString(),created_by:user.email,origin:'manual'});
           return Response.json({...result,source_truth_version:'financial-source-truth-v1'});

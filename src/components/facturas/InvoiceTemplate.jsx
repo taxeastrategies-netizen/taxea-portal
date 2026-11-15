@@ -190,10 +190,11 @@ export default function InvoiceTemplate({ invoice, company }) {
 
         {/* Datos factura */}
         <div style={s.invoiceTitle}>
-          <div style={s.invoiceLabel}>Factura</div>
+          <div style={s.invoiceLabel}>{invoice?.fiscal_document_type === 'F2' ? 'Factura simplificada' : 'Factura'}</div>
           <div style={s.invoiceNumber}>#{invoice?.numero_factura}</div>
           <div style={s.invoiceMeta}>
-            <div>Fecha: <strong>{invoice?.fecha_emision}</strong></div>
+            <div>Fecha de expedición: <strong>{invoice?.fecha_emision}</strong></div>
+            {invoice?.fiscal_document_type === 'F2' && invoice.fecha_operacion !== invoice.fecha_emision && <div>Fecha de operación: <strong>{invoice.fecha_operacion}</strong></div>}
             {invoice?.fecha_vencimiento && <div>Vencimiento: <strong>{invoice.fecha_vencimiento}</strong></div>}
           </div>
         </div>

@@ -59,10 +59,11 @@ function InvoicePublicRender({ invoice, company }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold mb-1" style={{ color: brandColor }}>{isReceived ? 'FACTURA RECIBIDA' : 'FACTURA'}</div>
+          <div className="text-2xl font-bold mb-1" style={{ color: brandColor }}>{isReceived ? 'FACTURA RECIBIDA' : invoice.fiscal_document_type === 'F2' ? 'FACTURA SIMPLIFICADA' : 'FACTURA'}</div>
           <div className="text-lg font-semibold text-slate-700">{invoice.numero_factura}</div>
           <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
             <p>Fecha: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_emision)}</span></p>
+            {invoice.fiscal_document_type === 'F2' && invoice.fecha_operacion !== invoice.fecha_emision && <p>Fecha de operación: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_operacion)}</span></p>}
             {invoice.fecha_vencimiento && <p>Vencimiento: <span className="font-medium text-slate-700">{fmtDate(invoice.fecha_vencimiento)}</span></p>}
           </div>
         </div>

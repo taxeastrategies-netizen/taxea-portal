@@ -42,7 +42,7 @@ function replaceYear(value, previousYear, targetYear) {
   return value.replace(/\d+/g, digits => digits === previousYear ? targetYear : digits);
 }
 
-export async function nextIssuedInvoiceNumber(service, companyId, date, rectifying = false) {
+export async function nextIssuedInvoiceNumber(service, companyId, date, rectifying = false, simplified = false) {
   const targetYear = date.slice(0, 4);
   const issued = [];
   for (let offset = 0; offset < 100000; offset += 500) {
@@ -54,8 +54,19 @@ export async function nextIssuedInvoiceNumber(service, companyId, date, rectifyi
     if (offset === 99500) throw Object.assign(new Error('No se pudo leer la serie completa de facturación.'), { status: 422 });
   }
 
+  if (simplified) {
+    const series = { prefix: `FS-${targetYear}-`, suffix: '' };
+    let highest = 0n;
+    for (const invoice of issued) {
+      const counter = counterInSeries(invoice.numero_factura, series);
+      if (counter && BigInt(counter) > highest) highest = BigInt(counter);
+    }
+    return series.prefix + String(highest + 1n).padStart(4, '0');
+  }
+
   let latest = null;
   for (const invoice of issued) {
+    if (invoice.fiscal_document_type === 'F2' || /^FS-\d{4}-/i.test(String(invoice.numero_factura || ''))) continue;
     if ((invoice.es_rectificativa === true) !== rectifying) continue;
     const emitted = invoiceDate(invoice);
     const year = emitted.slice(0, 4);
