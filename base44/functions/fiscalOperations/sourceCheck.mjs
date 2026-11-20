@@ -32,8 +32,12 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   body.operationType = input.operationType || (direction === 'gasto'
     ? (money(invoice.cuota_iva) === 0 && Number(invoice.tipo_iva || 0) === 0 ? 'subject_zero' : 'subject_taxed')
     : activity.incomeDefaultTreatment || 'subject_taxed');
-  body.exemptionKey = input.exemptionKey || activity.exemptionKey || '';
-  body.legalBasis = input.legalBasis || activity.exemptionLegalBasis || '';
+  const firstText = (...values) => values.map(value => String(value || '').trim()).find(Boolean) || '';
+  const needsExemptionBasis = ['exempt_limited','exempt_full','non_subject_article','non_subject_location','outside_scope'].includes(body.operationType);
+  body.exemptionKey = firstText(input.exemptionKey, issued && invoice.fiscal_exemption_key, activity.exemptionKey);
+  body.legalBasis = issued
+    ? firstText(input.legalBasis, invoice.fiscal_legal_basis, needsExemptionBasis && invoice.coletilla_fiscal, activity.exemptionLegalBasis)
+    : firstText(input.legalBasis, activity.exemptionLegalBasis);
   if (body.regime === 'comerciante_minorista_igic' && direction === 'ingreso' && !input.operationType) {
     body.operationType = 'exempt_limited';
     body.exemptionKey ||= 'IGIC_COMERCIANTE_MINORISTA';
@@ -49,9 +53,13 @@ export function sourceDecision(invoice, input, activity, profile, professional) 
   // una exención ni se cambia el perfil: c5InvoiceRules valida su vigencia y alcance.
   if (issued && body.taxKind === 'igic' && ['pequeno_empresario_igic','comerciante_minorista_igic'].includes(body.regime))
     Object.assign(body, checkedRule(()=>c5InvoiceRules(profile, activity, body, direction)));
+  const recommendations = [];
   if (['exempt_limited','exempt_full','non_subject_article','non_subject_location','outside_scope'].includes(body.operationType)
-    && !body.legalBasis) throw new SourceValidationError('Indica el fundamento de la exención o no sujeción dentro de este mismo documento.');
-  if (['exempt_limited','exempt_full'].includes(body.operationType) && !body.exemptionKey) throw new SourceValidationError('Selecciona la clave de exención.');
+    && !body.legalBasis) recommendations.push('Completa el fundamento de la exención o no sujeción en el documento.');
+  if (['exempt_limited','exempt_full'].includes(body.operationType) && !body.exemptionKey)
+    recommendations.push('Completa la clave de exención para los libros fiscales.');
+  if (!issued && recommendations.length) throw new SourceValidationError(recommendations[0]);
+  if (issued) body.issuerFiscalRecommendations = recommendations;
   if (!Number.isFinite(Number(body.deductiblePercent)) || Number(body.deductiblePercent) < 0 || Number(body.deductiblePercent) > 100) throw new SourceValidationError('La deducción debe estar entre 0 y 100 %.');
   body.manualOverride = true;
   body.manualOverrideReason = input.manualOverrideReason || (issued

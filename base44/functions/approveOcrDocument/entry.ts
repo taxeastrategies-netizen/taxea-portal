@@ -187,6 +187,7 @@ async function approveNew(base44, user, doc, form, invoiceType, extractedData, c
       cliente_provincia: form.cliente_provincia || extractedData?.provincia_cliente || extractedData?.cliente_provincia || '',
       cliente_pais: form.cliente_pais || extractedData?.pais_cliente || extractedData?.cliente_pais || '',
       concepto: form.concepto || '',
+      coletilla_fiscal: form.coletilla_fiscal || extractedData?.coletilla_fiscal || '',
       base_imponible: parseFloat(form.base_imponible) || 0,
       tipo_iva: Number(form.tipo_iva ?? 0),
       cuota_iva: parseFloat(form.cuota_iva) || 0,

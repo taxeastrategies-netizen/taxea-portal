@@ -161,4 +161,59 @@ await test('suffix year and a four-digit sequence remain distinct', async () => 
   records.Invoice.push({ id: 'same-year-counter', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-11-03', numero_factura: 'INV-2026/2026' });
   assert.equal((await previewNumber('2026-11-03')).number, 'INV-2027/2026');
 });
+
+const education = () => {
+  Object.assign(records.FiscalProfile[0], {profileStatus:'pendiente_revision',subjectToIRPF:true});
+  Object.assign(records.FiscalActivity[0], {activityType:'profesional',incomeDefaultTreatment:'exempt_limited',
+    deductionRight:'sin_derecho',exemptionKey:'IVA_ART_20_EDUCACION',exemptionLegalBasis:'',automationLevel:'asistido'});
+};
+const educationInvoice = (number='QA-EXEMPT') => ({...invoiceData(number),base_imponible:300,tipo_iva:0,cuota_iva:0,
+  retencion_irpf:7,importe_retencion:21,total_factura:279,
+  coletilla_fiscal:'Operación exenta de IVA conforme al artículo 20 de la Ley 37/1992.'});
+await test('ordinary owner issues exempt education using document legend without adviser',async()=>{
+  education();const fiscalBefore=JSON.stringify([records.FiscalProfile,records.FiscalActivity]);
+  const request={action:'create_invoice',company_id:'qa',idempotency_key:'education-manual',invoice:educationInvoice()};
+  const first=await call('invoiceOperations',request);const second=await call('invoiceOperations',request);
+  assert.equal(first.invoice.id,second.invoice.id);assert.equal(records.Invoice.length,1);
+  assert.equal(first.invoice.fiscal_legal_basis,request.invoice.coletilla_fiscal);
+  assert.equal(first.invoice.fiscal_exemption_key,'IVA_ART_20_EDUCACION');
+  assert.equal(first.invoice.total_factura,279);assert.equal(first.invoice.importe_retencion,21);
+  assert.equal(new URL(first.invoice.qr_url).searchParams.get('importe'),'300.00');
+  assert.equal(first.invoice.fiscal_advisor_decision.approvalOrigin,'issuer');
+  assert.deepEqual(first.invoice.fiscal_advisor_decision.recommendations,[]);
+  assert.equal(JSON.stringify([records.FiscalProfile,records.FiscalActivity]),fiscalBefore);
+  assertComplete();
+});
+await test('missing legal detail is a recommendation on an issuer confirmed exemption',async()=>{
+  education();records.FiscalActivity[0].exemptionKey='';
+  const invoice={...educationInvoice('QA-EXEMPT-ADVICE'),coletilla_fiscal:''};
+  const first=await call('invoiceOperations',{action:'create_invoice',company_id:'qa',idempotency_key:'education-advice',invoice});
+  assert.equal(first.invoice.estado_contable,'contabilizada');assert.equal(first.invoice.fiscal_legal_basis,'');
+  assert.equal(first.invoice.fiscal_exemption_key,'');assert.equal(first.invoice.fiscal_advisor_decision.recommendations.length,2);
+  assertComplete();
+});
+await test('issued non subject operation keeps advice without adviser gate',async()=>{
+  const invoice={...educationInvoice('QA-NON-SUBJECT'),coletilla_fiscal:''};
+  const first=await call('invoiceOperations',{action:'create_invoice',company_id:'qa',idempotency_key:'non-subject',invoice,
+    fiscal_criteria:{operationType:'non_subject_location'}});
+  assert.equal(first.invoice.fiscal_treatment,'non_subject_location');
+  assert.equal(first.invoice.fiscal_advisor_decision.recommendations.length,1);assertComplete();
+});
+await test('issued OCR preserves exemption legend and confirms immediately',async()=>{
+  education();const doc=await ocr('QA-OCR-EXEMPT');Object.assign(doc.form,educationInvoice(doc.doc.id));
+  const first=await doc.approve();await doc.approve();
+  const invoice=records.Invoice.find(row=>row.id===first.invoiceId);
+  assert.equal(invoice.fiscal_legal_basis,doc.form.coletilla_fiscal);
+  assert.equal(invoice.coletilla_fiscal,doc.form.coletilla_fiscal);
+  assert.equal(invoice.total_factura,279);assert.equal(records.Invoice.length,1);assertComplete();
+});
+await test('recurring exempt template uses issuer document legend and keeps one invoice',async()=>{
+  education();Object.assign(records.RecurringInvoiceTemplate[0],{baseAmount:300,taxRate:0,retentionRate:7,totalAmount:279,
+    coletillaFiscal:educationInvoice().coletilla_fiscal});
+  const first=await(await generate()).json();assert.equal(first.generated,1,JSON.stringify(first));
+  await generate();const invoice=records.Invoice[0];assert.equal(records.Invoice.length,1);
+  assert.equal(invoice.fiscal_legal_basis,educationInvoice().coletilla_fiscal);
+  assert.equal(invoice.total_factura,279);assertComplete();
+});
+
 console.log(JSON.stringify({ok:results.every(r=>r.passed),checks:results,realDataWrites:0,externalCalls:0},null,2));if(results.some(r=>!r.passed))process.exitCode=1;

@@ -367,7 +367,7 @@ export default function InvoiceForm({ open, onOpenChange, editing, company, user
           )}
           <details className="rounded-xl border p-3">
             <summary className="cursor-pointer text-sm font-medium">Criterio fiscal de esta factura (opcional)</summary>
-            <div className="mt-3"><OcrFiscalFields value={form.fiscal_criteria || {}} onChange={value=>setForm(current=>({...current,fiscal_criteria:value}))}
+            <div className="mt-3"><OcrFiscalFields value={form.fiscal_criteria || {}} documentLegalBasis={form.coletilla_fiscal} onChange={value=>setForm(current=>({...current,fiscal_criteria:value}))}
               context={fiscalContext} direction={form.tipo==='recibida'?'gasto':'ingreso'} activityId={form.fiscal_activity_id} sourceTaxRate={form.tipo_iva} disabled={saving} /></div>
           </details>
           {/* Tipo + Nº */}
