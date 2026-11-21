@@ -40,7 +40,13 @@ export async function makeReportWorkbook(r){
   }
   return {wb,XLSX};
 }
-export async function downloadReportExcel(r){const {wb,XLSX}=await makeReportWorkbook(r);XLSX.writeFile(wb,fileName(r)+'.xlsx',{compression:true});}
+function offerDownload(blob,name){
+  const url=URL.createObjectURL(blob);
+  if(typeof document!=='undefined'){const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.rel='noopener';document.body.appendChild(anchor);anchor.click();anchor.remove();}
+  // Keep a visible fallback link in the report for WebViews that require a fresh tap.
+  return {url,name,size:blob.size};
+}
+export async function downloadReportExcel(r){const {wb,XLSX}=await makeReportWorkbook(r);const bytes=XLSX.write(wb,{type:'array',bookType:'xlsx',compression:true});return offerDownload(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fileName(r)+'.xlsx');}
 
 export async function makeReportPDF(r,{coverData}={}){
   const {jsPDF}=await import('jspdf');const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
@@ -121,4 +127,4 @@ export async function makeReportPDF(r,{coverData}={}){
   pdf.setProperties({title:'Multinational Report · '+r.companyName,author:'Taxea Strategies',subject:r.window.start+' / '+r.window.end,creator:'Taxea Portal'});
   return pdf;
 }
-export async function downloadReportPDF(r){const pdf=await makeReportPDF(r);pdf.save(fileName(r)+'.pdf');}
+export async function downloadReportPDF(r){const pdf=await makeReportPDF(r);return offerDownload(pdf.output('blob'),fileName(r)+'.pdf');}
