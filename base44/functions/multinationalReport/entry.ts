@@ -18,16 +18,20 @@ Deno.serve(async req=>{
     const segment=body.segment||'all';
     if(typeof segment!=='string'||segment.length>200)throw new PublicDomainError('Segmento no válido.',400);
     // Every service-role query is scoped only after verifying access to this company.
-    const [accounting,invoices,expenses,bankAccounts,bankTransactions]=await Promise.all([
+    const [accounting,invoices,expenses,bankAccounts,bankTransactions,fiscalProfiles,fiscalActivities,taxModels,taxPeriods]=await Promise.all([
       accountingData(svc,company.id,{year,includeBusinessData:false}),
       fetchAll(svc.entities.Invoice,{company_id:company.id},'created_date'),
       fetchAll(svc.entities.Expense,{company_id:company.id},'created_date'),
       fetchAll(svc.entities.BankAccount,{company_id:company.id},'created_date',10000),
       fetchAll(svc.entities.BankTransaction,{company_id:company.id},'created_date'),
+      fetchAll(svc.entities.FiscalProfile,{company_id:company.id},'-created_date',10000),
+      fetchAll(svc.entities.FiscalActivity,{company_id:company.id},'created_date',10000),
+      fetchAll(svc.entities.TaxModel,{companyId:company.id},'codigo',10000),
+      fetchAll(svc.entities.TaxPeriod,{companyId:company.id,ejercicio:year},'periodo',10000),
     ]);
     // Defensive tenant fence even if an upstream filter regresses.
-    if(accounting.entries.some(r=>r.companyId!==company.id)||accounting.lines.some(r=>r.companyId!==company.id)||[...invoices,...expenses,...bankAccounts,...bankTransactions].some(r=>r.company_id!==company.id))throw new Error('Tenant fence');
-    const report=buildMultinationalReport({company,accounting,invoices,expenses,bankAccounts,bankTransactions},{year,firstMonth,lastMonth,segment});
+    if([...accounting.entries,...accounting.lines,...accounting.accounts,...accounting.operations,...taxModels,...taxPeriods].some(r=>r.companyId!==company.id)||[...invoices,...expenses,...bankAccounts,...bankTransactions,...fiscalProfiles,...fiscalActivities].some(r=>r.company_id!==company.id))throw new Error('Tenant fence');
+    const report=buildMultinationalReport({company,accounting,invoices,expenses,bankAccounts,bankTransactions,fiscalProfiles,fiscalActivities,taxModels,taxPeriods},{year,firstMonth,lastMonth,segment});
     return Response.json(report,{headers});
   }catch(error){return publicServiceFailure(error,'multinationalReport');}
 });

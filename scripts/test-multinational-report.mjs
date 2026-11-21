@@ -64,8 +64,8 @@ assert.equal((await authorizeReport(svc,{id:'owner',email:'owner@example.invalid
 assert.equal((await authorizeReport(svc,{id:'admin',email:'admin@example.invalid',role:'admin'},company.id)).id,company.id);
 await assert.rejects(()=>authorizeReport(svc,{id:'admin',role:'admin'},{$ne:null}),/no válida/);
 assert.equal(safeCell('=HYPERLINK("bad")'),'\'=HYPERLINK("bad")');assert.equal(safeCell(-123),-123);assert.equal(safeCell('@SUM(A1)'),"'@SUM(A1)");
-const sheets=reportSheets(report);assert.equal(sheets.length,15);assert.equal(sheets.find(([name])=>name==='Origen documentos')[1].length,3);
-const {wb,XLSX}=await makeReportWorkbook(report);assert.equal(wb.SheetNames.length,15);const bytes=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});assert.ok(bytes.length>3000);const reloaded=XLSX.read(bytes,{type:'buffer'});assert.equal(reloaded.SheetNames.length,15);
+const sheets=reportSheets(report);assert.equal(sheets.length,16);assert.equal(sheets.find(([name])=>name==='Origen documentos')[1].length,3);
+const {wb,XLSX}=await makeReportWorkbook(report);assert.equal(wb.SheetNames.length,16);const bytes=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});assert.ok(bytes.length>3000);const reloaded=XLSX.read(bytes,{type:'buffer'});assert.equal(reloaded.SheetNames.length,16);
 const output=process.env.TAXEA_REPORT_QA_DIR||'.qa/multinational-report';await fs.mkdir(output,{recursive:true});
 await fs.writeFile(path.join(output,'report-synthetic.xlsx'),bytes);
 const pdf=await makeReportPDF(report);assert.ok(pdf.getNumberOfPages()>=8);await fs.writeFile(path.join(output,'report-synthetic.pdf'),Buffer.from(pdf.output('arraybuffer')));
