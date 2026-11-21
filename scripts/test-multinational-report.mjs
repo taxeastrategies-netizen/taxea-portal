@@ -42,6 +42,12 @@ assert.equal(report.cashflow.inflows,1210);assert.equal(report.cashflow.count,1)
 assert.equal(report.workingCapital.receivable,0);assert.equal(report.workingCapital.payable,363);
 assert.equal(before,JSON.stringify({entries,lines,invoices,expenses:raw.expenses}),'Pure report must never mutate source records');
 assert.equal(report.monthly.length,1);assert.equal(report.monthly[0].ebitda,700);
+const legacyAccounting=accounting();
+legacyAccounting.linesByEntry=new Map([...legacyAccounting.linesByEntry].map(([id,rows])=>[id,rows.map(l=>({...l,debit:0,credit:0,debeE:l.debit,haberE:l.credit}))]));
+const legacyReport=buildMultinationalReport({...raw,accounting:legacyAccounting},options);
+assert.equal(legacyReport.pnl.ebitda,700);assert.equal(legacyReport.pnl.netResult,540);assert.equal(legacyReport.balance.difference,0,'Legacy debit/credit aliases must match the core ledger engine');
+const centRounding=buildMultinationalReport({...raw,expenses:[{...raw.expenses[0],canonical_invoice_id:undefined,document_number:'P001',total:363.004}]},options);
+assert.equal(centRounding.quality.suppressedDuplicates,1,'Use canonical cent rounding in the document candidate index');
 const segmentReport=buildMultinationalReport(raw,{...options,segment:'centro:Consultoría'});assert.equal(segmentReport.pnl.ebitda,700);assert.equal(segmentReport.pnl.netResult,700);assert.equal(segmentReport.balance.totalAssets,report.balance.totalAssets);assert.equal(segmentReport.fiscal.taxCharged,report.fiscal.taxCharged);
 assert.equal(buildMultinationalReport(raw,{...options,firstMonth:2,lastMonth:2}).pnl.revenue,500);
 assert.throws(()=>reportWindow(2026,4,2));assert.throws(()=>reportWindow(2026,0,12));

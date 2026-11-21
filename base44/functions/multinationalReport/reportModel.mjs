@@ -25,8 +25,8 @@ function validUnits(data) {
   for (const e of data.entries) {
     if (e.status !== 'confirmado') continue;
     const rows = data.linesByEntry.get(e.id) || [];
-    const numeric = rows.every(l => finite(l.debit ?? l.debeE ?? 0) && finite(l.credit ?? l.haberE ?? 0) && String(l.accountCode || l.subcuenta || '').trim());
-    const debit = sum(rows, l => l.debit ?? l.debeE), credit = sum(rows, l => l.credit ?? l.haberE);
+    const numeric = rows.every(l => finite(l.debit || l.debeE || 0) && finite(l.credit || l.haberE || 0) && String(l.accountCode || l.subcuenta || '').trim());
+    const debit = sum(rows, l => l.debit || l.debeE), credit = sum(rows, l => l.credit || l.haberE);
     const committed = !e.accountingOperationId || data.operationById.get(e.accountingOperationId)?.status === 'committed';
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(day(e.date)) && Number(day(e.date).slice(0,4)) === Number(e.ejercicio || day(e.date).slice(0,4));
     if (rows.length < 2 || !numeric || !committed || !validDate || Math.abs(debit-credit) > 0.01) {
@@ -84,9 +84,9 @@ function canonicalDocuments(invoices, expenses) {
   // Bucket on face amount before the established deduplicator: bounded candidate set,
   // retain exact explicit invoice links across dates / amounts.
   const index=new Map(), byId=new Map(invoices.map(r=>[r.id,r]));
-  for(const r of invoices){const k=String(r.total_factura);if(!index.has(k))index.set(k,[]);index.get(k).push(r);}
+  for(const r of invoices){const k=String(money(r.total_factura));if(!index.has(k))index.set(k,[]);index.get(k).push(r);}
   const retained=[], duplicateLinks=[], reviewCandidates=[];
-  for(const e of expenses){const total=Number(e.total)||0; const candidates=[...new Map([...(index.get(String(total))||[]),...(index.get(String(money(total-.01)))||[]),...(index.get(String(money(total+.01)))||[]),...(byId.has(e.canonical_invoice_id)?[byId.get(e.canonical_invoice_id)]:[])].map(r=>[r.id,r])).values()];
+  for(const e of expenses){const total=Number(e.total)||0; const candidates=[...new Map([...(index.get(String(money(total)))||[]),...(index.get(String(money(total-.01)))||[]),...(index.get(String(money(total+.01)))||[]),...(byId.has(e.canonical_invoice_id)?[byId.get(e.canonical_invoice_id)]:[])].map(r=>[r.id,r])).values()];
     const result=reconcileFinancialSources(candidates,[e]); retained.push(...result.expenses);duplicateLinks.push(...result.duplicateLinks);reviewCandidates.push(...result.reviewCandidates);}
   return {documents:[...invoices.map(r=>({...r,source:'Invoice'})),...retained.map(r=>({...r,source:'Expense'}))],duplicateLinks,reviewCandidates};
 }
@@ -127,7 +127,7 @@ export function buildMultinationalReport(raw, options = {}) {
   const filtered=units=>segment==='all'?units:units.map(u=>({...u,rows:u.rows.filter(l=>segmentOf(u.entry,l)===segment)}));
   // Account totals may be segmented line by line; integrity always validated before slicing.
   const pnlFor=(units,y)=>{
-    const totals=new Map();for(const u of filtered(units))for(const l of u.rows){const code=String(l.accountCode||l.subcuenta);if(!totals.has(code))totals.set(code,{code,name:l.accountName||data.accountByCode.get(code)?.name||code,debit:0,credit:0});const a=totals.get(code);a.debit=money(a.debit+Number(l.debit??l.debeE??0));a.credit=money(a.credit+Number(l.credit??l.haberE??0));}
+    const totals=new Map();for(const u of filtered(units))for(const l of u.rows){const code=String(l.accountCode||l.subcuenta);if(!totals.has(code))totals.set(code,{code,name:l.accountName||data.accountByCode.get(code)?.name||code,debit:0,credit:0});const a=totals.get(code);a.debit=money(a.debit+Number(l.debit||l.debeE||0));a.credit=money(a.credit+Number(l.credit||l.haberE||0));}
     return {...pnlFromAccounts([...totals.values()]),count:units.length,year:y};
   };
   const periodUnits=(w)=>economic(yearUnits(w.year)).filter(u=>within(day(u.entry.date),w.start,w.end));
@@ -167,7 +167,7 @@ export function buildMultinationalReport(raw, options = {}) {
   });
   const segmentsMap=new Map();
   for(const u of currentUnits)for(const l of u.rows){if(!/^[67]/.test(l.accountCode||l.subcuenta||''))continue;const key=segmentOf(u.entry,l);if(!segmentsMap.has(key))segmentsMap.set(key,[]);segmentsMap.get(key).push({entry:u.entry,rows:[l]});}
-  const segments=[...segmentsMap].map(([key,units])=>{const totals=new Map();for(const u of units)for(const l of u.rows){const code=String(l.accountCode||l.subcuenta);const a=totals.get(code)||{code,debit:0,credit:0};a.debit+=Number(l.debit??l.debeE??0);a.credit+=Number(l.credit??l.haberE??0);totals.set(code,a);}return {key,label:segmentLabel(key),...pnlFromAccounts([...totals.values()])};});
+  const segments=[...segmentsMap].map(([key,units])=>{const totals=new Map();for(const u of units)for(const l of u.rows){const code=String(l.accountCode||l.subcuenta);const a=totals.get(code)||{code,debit:0,credit:0};a.debit+=Number(l.debit||l.debeE||0);a.credit+=Number(l.credit||l.haberE||0);totals.set(code,a);}return {key,label:segmentLabel(key),...pnlFromAccounts([...totals.values()])};});
   const fiscal={taxCharged:sum(selectedDocs.filter(isIncome),r=>amount(r,r.source==='Invoice'?'cuota_iva':'cuota_impuesto')),taxSupported:sum(selectedDocs.filter(r=>!isIncome(r)),r=>amount(r,r.source==='Invoice'?'cuota_iva':'cuota_impuesto')),deductibleConfirmed:sum(selectedDocs.filter(r=>!isIncome(r)&&r.deductible_tax_amount!=null),r=>amount(r,'deductible_tax_amount')),deductibilityMissing:selectedDocs.filter(r=>!isIncome(r)&&r.deductible_tax_amount==null).length,nonDeductible:sum(selectedDocs.filter(r=>!isIncome(r)),r=>amount(r,'non_deductible_tax_amount')),retainedByClients:sum(selectedDocs.filter(isIncome),r=>amount(r,'importe_retencion')),withheldToPay:sum(selectedDocs.filter(r=>!isIncome(r)),r=>amount(r,'importe_retencion')),taxBalance:balance.accounts};
   delete fiscal.taxBalance;
   const profile=(raw.fiscalProfiles||[]).find(p=>p.active!==false&&(!p.fiscalYear||Number(p.fiscalYear)===year));
@@ -177,8 +177,8 @@ export function buildMultinationalReport(raw, options = {}) {
   fiscal.periods=(raw.taxPeriods||[]).filter(p=>!p.fechaInicio||!p.fechaFin||!(p.fechaFin<window.start||p.fechaInicio>window.end)).map(p=>({code:p.modeloCodigo,period:p.periodo,status:p.estado,result:p.resultado,confirmed:['revisado','listo_presentar','presentado'].includes(p.estado)?p.importeConfirmado:null}));
   const currentRejected=rejected.filter(r=>within(r.date,`${year}-01-01`,window.end));
   const pending=data.entries.filter(e=>within(day(e.date),`${year}-01-01`,window.end)&&['pendiente_revision','borrador'].includes(e.status)).length;
-  const journalRows=currentUnits.flatMap(u=>u.rows.filter(l=>segment==='all'||segmentOf(u.entry,l)===segment).map(l=>({id:l.id,entryId:u.entry.id,number:u.entry.entryNumber,date:day(u.entry.date),description:l.description||u.entry.description,account:String(l.accountCode||l.subcuenta),accountName:l.accountName||'',debit:money(l.debit??l.debeE),credit:money(l.credit??l.haberE),documentId:l.documentId||u.entry.documentId||'',segment:segmentLabel(segmentOf(u.entry,l))})));
-  const balanceRows=balanceUnits.flatMap(u=>u.rows.map(l=>({entryId:u.entry.id,number:u.entry.entryNumber,date:day(u.entry.date),description:l.description||u.entry.description,account:String(l.accountCode||l.subcuenta),accountName:l.accountName||'',debit:money(l.debit??l.debeE),credit:money(l.credit??l.haberE)})));
+  const journalRows=currentUnits.flatMap(u=>u.rows.filter(l=>segment==='all'||segmentOf(u.entry,l)===segment).map(l=>({id:l.id,entryId:u.entry.id,number:u.entry.entryNumber,date:day(u.entry.date),description:l.description||u.entry.description,account:String(l.accountCode||l.subcuenta),accountName:l.accountName||'',debit:money(l.debit||l.debeE),credit:money(l.credit||l.haberE),documentId:l.documentId||u.entry.documentId||'',segment:segmentLabel(segmentOf(u.entry,l))})));
+  const balanceRows=balanceUnits.flatMap(u=>u.rows.map(l=>({entryId:u.entry.id,number:u.entry.entryNumber,date:day(u.entry.date),description:l.description||u.entry.description,account:String(l.accountCode||l.subcuenta),accountName:l.accountName||'',debit:money(l.debit||l.debeE),credit:money(l.credit||l.haberE)})));
   const currentDocs=selectedDocs.map(r=>({id:r.id,source:r.source,date:docDate(r),number:r.numero_factura||r.document_number||'',party:r.source==='Invoice'?(isIncome(r)?r.cliente_nombre:r.proveedor_nombre):r.proveedor_cliente,description:r.concepto||'',direction:isIncome(r)?'Ingreso':'Gasto',base:amount(r,'base_imponible'),tax:amount(r,r.source==='Invoice'?'cuota_iva':'cuota_impuesto'),retention:amount(r,'importe_retencion'),total:amount(r,r.source==='Invoice'?'total_factura':'total'),journalId:r.linked_journal_entry_id||null}));
   const currentAssets=sum(balance.assets.filter(a=>a.section.key!=='activo_no_corriente'),a=>a.amount), currentLiabilities=sum(balance.liabilities.filter(a=>a.section.key!=='pasivo_no_corriente'),a=>a.amount);
   const financialDebt=sum(balance.liabilities.filter(a=>/^(17|50|51|52|57)/.test(a.code)),a=>a.amount),bookCash=sum(balance.assets.filter(a=>a.code.startsWith('57')),a=>a.amount);
