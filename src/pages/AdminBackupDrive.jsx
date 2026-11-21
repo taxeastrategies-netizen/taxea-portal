@@ -289,7 +289,7 @@ export default function AdminBackupDrive() {
           <CardContent className="pt-5">
             <Clock className="w-5 h-5 text-purple-500 mb-1" />
             <p className="text-sm font-bold">{config?.scheduleEnabled ? config.scheduleTime : 'Desactivada'}</p>
-            <p className="text-xs text-muted-foreground">Hora configurada · ejecución automática pendiente de validar</p>
+            <p className="text-xs text-muted-foreground">Hora configurada · zona horaria de Canarias</p>
           </CardContent>
         </Card>
       </div>
