@@ -157,6 +157,7 @@ export function buildMultinationalReport(raw, options = {}) {
     return {id:r.id,date:r.day,description:r.concepto,amount:r.signedAmount,accountId:r.bank_account_id,classification:classes.size===1?[...classes][0]:'Sin clasificar',journalId:u?.entry.id||null};
   });
   const cashflow={...flows,known:bank.activityKnown&&bank.connected>0,rows:flowRows,groups:['Explotación','Inversión','Financiación','Sin clasificar'].map(label=>({label,inflows:sum(flowRows.filter(r=>r.classification===label&&r.amount>0),r=>r.amount),outflows:sum(flowRows.filter(r=>r.classification===label&&r.amount<0),r=>-r.amount),net:sum(flowRows.filter(r=>r.classification===label),r=>r.amount)}))};
+  if(!cashflow.known)for(const g of cashflow.groups){g.inflows=null;g.outflows=null;g.net=null;}
   const monthly=Array.from({length:lastMonth-firstMonth+1},(_,i)=>{
     const m=firstMonth+i,w=reportWindow(year,m,m),p=reportWindow(year-1,m,m);
     const pl=pnlFor(periodUnits(w),year),prev=pnlFor(periodUnits(p),year-1);
@@ -178,7 +179,7 @@ export function buildMultinationalReport(raw, options = {}) {
   const balanceRows=balanceUnits.flatMap(u=>u.rows.map(l=>({entryId:u.entry.id,number:u.entry.entryNumber,date:day(u.entry.date),description:l.description||u.entry.description,account:String(l.accountCode||l.subcuenta),accountName:l.accountName||'',debit:money(l.debit??l.debeE),credit:money(l.credit??l.haberE)})));
   const currentDocs=selectedDocs.map(r=>({id:r.id,source:r.source,date:docDate(r),number:r.numero_factura||r.document_number||'',party:r.source==='Invoice'?(isIncome(r)?r.cliente_nombre:r.proveedor_nombre):r.proveedor_cliente,description:r.concepto||'',direction:isIncome(r)?'Ingreso':'Gasto',base:amount(r,'base_imponible'),tax:amount(r,r.source==='Invoice'?'cuota_iva':'cuota_impuesto'),retention:amount(r,'importe_retencion'),total:amount(r,r.source==='Invoice'?'total_factura':'total'),journalId:r.linked_journal_entry_id||null}));
   const currentAssets=sum(balance.assets.filter(a=>a.section.key!=='activo_no_corriente'),a=>a.amount), currentLiabilities=sum(balance.liabilities.filter(a=>a.section.key!=='pasivo_no_corriente'),a=>a.amount);
-  const financialDebt=sum(balance.liabilities.filter(a=>/^(17|50|51|52)/.test(a.code)),a=>a.amount),bookCash=sum(balance.assets.filter(a=>a.code.startsWith('57')),a=>a.amount);
+  const financialDebt=sum(balance.liabilities.filter(a=>/^(17|50|51|52|57)/.test(a.code)),a=>a.amount),bookCash=sum(balance.assets.filter(a=>a.code.startsWith('57')),a=>a.amount);
   return {success:true,version:'multinational-report-v1',companyId:raw.company.id,companyName:raw.company.razon_social||raw.company.nombre_comercial||'Empresa',generatedAt:new Date(now).toISOString(),currency:'EUR',window,previousWindow,segment,
     pnl:{...pnl,available:currentUnits.length>0,previous:{...previous,available:previousUnits.length>0},revenueChange:delta(pnl.revenue,previous.revenue,previousUnits.length>0),ebitdaChange:delta(pnl.ebitda,previous.ebitda,previousUnits.length>0)},
     balance:{...balance,available:balanceUnits.length>0,asOf:window.end,hasOpening,openingNotice,scope:'company',rows:balanceRows},

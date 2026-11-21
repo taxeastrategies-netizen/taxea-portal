@@ -50,12 +50,12 @@ export async function makeReportPDF(r,{coverData}={}){
   const heading=(title,sub)=>{text('TAXEA STRATEGIES / MULTINATIONAL REPORT',margin,17,7,[151,43,61],'bold');text(title,margin,31,21,[37,44,62],'bold');if(sub)text(sub,margin,39,8,[103,112,130]);line(46);y=55;};
   const newPage=(title,sub)=>{pdf.addPage();heading(title,sub);};
   const fit=(height)=>{if(y+height>H-23){newPage('Continuación',r.companyName+' · '+r.window.start+' / '+r.window.end);}};
-  const paragraph=(body)=>{const lines=pdf.splitTextToSize(plain(body),width);for(const l of lines){fit(5);text(l,margin,y,8,[103,112,130]);y+=4.5;}y+=5;};
+  const paragraph=(body)=>{pdf.setFont('helvetica','normal');pdf.setFontSize(8);const lines=pdf.splitTextToSize(plain(body),width);for(const l of lines){fit(5);text(l,margin,y,8,[103,112,130]);y+=4.5;}y+=5;};
   const section=(title)=>{fit(18);text(title,margin,y,12,[37,44,62],'bold');y+=9;};
   const table=(headers,rows,widths)=>{
     const head=()=>{pdf.setFillColor(242,243,246);pdf.rect(margin,y-5,width,8,'F');let x=margin+2;headers.forEach((h,i)=>{text(h,x,y,7,[103,112,130],'bold');x+=widths[i];});y+=9;};
     fit(20);head();
-    for(const row of rows){const wrapped=row.map((v,i)=>pdf.splitTextToSize(plain(v),widths[i]-4));const height=Math.max(7,...wrapped.map(a=>a.length*4+3));if(y+height>H-24){newPage('Continuación',r.companyName);head();}
+    for(const row of rows){pdf.setFont('helvetica','normal');pdf.setFontSize(8);const wrapped=row.map((v,i)=>pdf.splitTextToSize(plain(v),widths[i]-4));const height=Math.max(7,...wrapped.map(a=>a.length*4+3));if(y+height>H-24){newPage('Continuación',r.companyName);head();}
       let x=margin+2;wrapped.forEach((a,i)=>{text(a,x,y,8,[37,44,62],'normal');x+=widths[i];});y+=height;line(y-3);
     }y+=6;
   };
@@ -67,7 +67,7 @@ export async function makeReportPDF(r,{coverData}={}){
   else{text('TAXEA',margin,30,28,[37,44,62],'bold');text('STRATEGIES',margin,41,12,[183,31,53]);}
   text('FINANCIAL INTELLIGENCE',margin,88,9,[183,31,53],'bold');
   text('Multinational',margin,111,35,[37,44,62],'bold');text('Report.',margin,126,35,[183,31,53],'bold');
-  const companyLines=pdf.splitTextToSize(plain(r.companyName),width);text(companyLines,margin,146,15,[37,44,62],'bold');
+  pdf.setFont('helvetica','bold');pdf.setFontSize(15);const companyLines=pdf.splitTextToSize(plain(r.companyName),width);text(companyLines,margin,146,15,[37,44,62],'bold');
   const periodY=150+companyLines.length*6;text(r.window.start+' / '+r.window.end,margin,periodY,10,[103,112,130]);
   line(periodY+10);
   metric('Cifra de negocios',r.pnl.available?r.pnl.revenue:null,margin,periodY+25);metric('EBITDA',r.pnl.available?r.pnl.ebitda:null,112,periodY+25);
@@ -82,6 +82,8 @@ export async function makeReportPDF(r,{coverData}={}){
   pdf.setDrawColor(220,224,230);pdf.line(margin,zero,W-margin,zero);
   for(let i=0;i<r.monthly.length;i++){const m=r.monthly[i],x=margin+i*step+2;for(const [j,val] of [m.revenue,m.ebitda].entries()){if(!m.count)continue;const h=val/max*chartHeight*.6;pdf.setFillColor(...(j===0?[183,31,53]:[55,70,94]));pdf.rect(x+j*step*.32,h>=0?zero-h:zero,step*.25,Math.abs(h),'F');}text(m.label,x,baseline+6,7,[103,112,130]);}
   y=baseline+18;paragraph('Rojo: cifra de negocios. Azul: EBITDA. Meses sin asientos: sin dato. EBITDA es un indicador de gestión; definición y conciliación en las páginas siguientes.');
+  newPage('Cuadro mensual','Evolución del período · importes EUR');
+  table(['Mes','Ventas netas','EBITDA','Resultado','Ventas año previo'],r.monthly.map(m=>[m.label,m.count?num(m.revenue):'Sin datos',m.count?num(m.ebitda):'Sin datos',m.count?num(m.netResult):'Sin datos',m.previousKnown?num(m.previousRevenue):'Sin datos']),[25,38,38,38,37]);
   newPage('Cuenta de resultados','Comparativo del mismo período · importes EUR');
   table(['Partida',String(r.window.year),String(r.window.year-1)],r.pnl.groups.map(g=>[g.label,r.pnl.available?num(g.amount):'Sin datos',r.pnl.previous.available?num(r.pnl.previous.groups.find(a=>a.key===g.key)?.amount):'Sin datos']),[100,38,38]);
   table(['Conciliación EBITDA','EUR'],[['Resultado neto',r.pnl.available?num(r.pnl.netResult):'Sin datos'],['+ Impuesto sobre beneficios',r.pnl.available?num(r.pnl.incomeTax):'Sin datos'],['- Resultado financiero',r.pnl.available?num(r.pnl.financeResult):'Sin datos'],['+ Amortización',r.pnl.available?num(r.pnl.depreciation):'Sin datos'],['= EBITDA',r.pnl.available?num(r.pnl.ebitda):'Sin datos']],[125,51]);
