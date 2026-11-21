@@ -57,8 +57,8 @@ export async function makeReportPDF(r,{coverData=null}={}){
   const heading=(title,sub)=>{text('TAXEA STRATEGIES / MULTINATIONAL REPORT',margin,17,7,[151,43,61],'bold');text(title,margin,31,21,[37,44,62],'bold');if(sub)text(sub,margin,39,8,[103,112,130]);line(46);y=55;};
   const newPage=(title,sub)=>{pdf.addPage();heading(title,sub);};
   const fit=(height)=>{if(y+height>H-23){newPage('Continuación',r.companyName+' · '+r.window.start+' / '+r.window.end);}};
-  const paragraph=(body)=>{pdf.setFont('helvetica','normal');pdf.setFontSize(8);const lines=pdf.splitTextToSize(plain(body),width);for(const l of lines){fit(5);text(l,margin,y,8,[103,112,130]);y+=4.5;}y+=5;};
-  const section=(title)=>{fit(18);text(title,margin,y,12,[37,44,62],'bold');y+=9;};
+  const paragraph=(body,after=5)=>{pdf.setFont('helvetica','normal');pdf.setFontSize(8);const lines=pdf.splitTextToSize(plain(body),width);for(const l of lines){fit(5);text(l,margin,y,8,[103,112,130]);y+=4.5;}y+=after;};
+  const section=(title,after=9)=>{fit(18);text(title,margin,y,12,[37,44,62],'bold');y+=after;};
   const table=(headers,rows,widths)=>{
     const head=()=>{pdf.setFillColor(242,243,246);pdf.rect(margin,y-5,width,8,'F');let x=margin+2;headers.forEach((h,i)=>{text(h,x,y,7,[103,112,130],'bold');x+=widths[i];});y+=9;};
     fit(20);head();
@@ -115,13 +115,13 @@ export async function makeReportPDF(r,{coverData=null}={}){
   table(['Control','Estado'],[['Documentos sin deducción informada',r.fiscal.deductibilityMissing],['Asientos pendientes del ejercicio',r.quality.pending],['Asientos excluidos',r.quality.excluded],['Documentos sin conversión EUR',r.quality.fxExcluded],['Duplicados de proyecciones omitidos',r.quality.suppressedDuplicates]],[132,44]);
   section('Encuadramiento fiscal informado');
   table(['Configuración','Dato registrado'],[['Territorio',r.fiscal.profile?.territory||'Sin informar'],['Impuesto indirecto',r.fiscal.profile?.indirectTax||'Sin informar'],['Estado de revisión',r.fiscal.profile?.status||'Sin informar']],[65,111]);
-  table(['Actividad','IAE','Impuesto','Régimen'],(r.fiscal.activities||[]).map(a=>[a.name,a.iae,a.tax,a.regime]),[68,22,22,64]);
-  section('Obligaciones registradas');
-  table(['Modelo','Administración','Frecuencia','Validación'],(r.fiscal.obligations||[]).map(m=>[m.code,m.authority,m.frequency,m.validation]),[25,40,45,66]);
-  table(['Modelo','Período','Estado','Confirmado EUR'],(r.fiscal.periods||[]).map(p=>[p.code,p.period,p.status,num(p.confirmed)]),[25,30,75,46]);
+  if(r.fiscal.activities?.length)table(['Actividad','IAE','Impuesto','Régimen'],r.fiscal.activities.map(a=>[a.name,a.iae,a.tax,a.regime]),[68,22,22,64]);else paragraph('No hay actividades registradas en el perfil.');
+  if(r.fiscal.obligations?.length||r.fiscal.periods?.length){section('Obligaciones registradas');
+  if(r.fiscal.obligations?.length)table(['Modelo','Administración','Frecuencia','Validación'],r.fiscal.obligations.map(m=>[m.code,m.authority,m.frequency,m.validation]),[25,40,45,66]);
+  if(r.fiscal.periods?.length)table(['Modelo','Período','Estado','Confirmado EUR'],r.fiscal.periods.map(p=>[p.code,p.period,p.status,num(p.confirmed)]),[25,30,75,46]);}else paragraph('No hay obligaciones ni períodos fiscales registrados.');
   paragraph('Estados e importes guardados. No se presentan modelos ni se comprueba la existencia del justificante administrativo.');
   newPage('Metodología y fuentes','Definiciones, alcance y trazabilidad');
-  for(const [key,value] of Object.entries(r.methodology)){if(typeof value!=='string')continue;section(({pnl:'Resultados',ebitda:'EBITDA',balance:'Balance',cashflow:'Cash flow',management:'Facturación',aging:'Vencimientos',segments:'Negocio',fiscal:'Fiscalidad',scope:'Alcance'})[key]||key);paragraph(value);}
+  for(const [key,value] of Object.entries(r.methodology)){if(typeof value!=='string')continue;section(({pnl:'Resultados',ebitda:'EBITDA',balance:'Balance',cashflow:'Cash flow',management:'Facturación',aging:'Vencimientos',segments:'Negocio',fiscal:'Fiscalidad',scope:'Alcance'})[key]||key,7);paragraph(value,3);}
   section('Referencias');for(const ref of r.methodology.references){paragraph(ref.label+' · '+ref.url);}
   const pages=pdf.getNumberOfPages();for(let i=1;i<=pages;i++){pdf.setPage(i);line(282);text('TAXEA STRATEGIES · Confidencial · Informe de gestión · EUR',margin,288,7,[103,112,130]);text(i+' / '+pages,W-margin,288,7,[103,112,130],'normal',{align:'right'});}
   pdf.setProperties({title:'Multinational Report · '+r.companyName,author:'Taxea Strategies',subject:r.window.start+' / '+r.window.end,creator:'Taxea Portal'});
