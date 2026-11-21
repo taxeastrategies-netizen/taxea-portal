@@ -7,7 +7,8 @@ export function reportSheets(r){
   const metadata=[['TAXEA STRATEGIES','MULTINATIONAL REPORT'],['Empresa',r.companyName],['Empresa ID',r.companyId],['Período',r.window.start+' / '+r.window.end],['Generado',r.generatedAt],['Moneda','EUR'],['Segmento P&L',r.segment],['Alcance',r.methodology.scope]];
   const rows=(items,keys)=>items.map(row=>keys.map(key=>row[key]??''));
   const notes=[...Object.entries(r.methodology).filter(([,v])=>typeof v==='string').map(([k,v])=>[k,v]),...r.methodology.references.map(ref=>[ref.label,ref.url])];
-  return [
+  /** @type {Array<[string, any[][]]>} */
+  const sheets=[
     ['Resumen',[...metadata,[],['Indicador','Importe EUR'],['Cifra de negocios',has?p.revenue:null],['EBITDA',has?p.ebitda:null],['EBIT',has?p.ebit:null],['Resultado',has?p.netResult:null],['Activo',r.balance.available?r.balance.totalAssets:null],['Pasivo',r.balance.available?r.balance.totalLiabilities:null],['Patrimonio neto',r.balance.available?r.balance.totalEquity:null],['Saldo bancario actual',r.bank.known?r.bank.cash:null],['Flujo bancario observado',r.cashflow.known?r.cashflow.net:null],['Pendiente cobro actual',r.workingCapital.receivable],['Pendiente pago actual',r.workingCapital.payable],[],['Asientos excluidos',r.quality.excluded],['Apertura',r.balance.openingNotice||'Registrada'],['Avisos banco',r.bank.reasons.join(' ')]]],
     ['PyG',[['Partida',String(r.window.year),String(r.window.year-1)],...p.groups.map(g=>[g.label,has?g.amount:null,p.previous.available?p.previous.groups.find(a=>a.key===g.key)?.amount:null]),['RESULTADO',has?p.netResult:null,p.previous.available?p.previous.netResult:null],[],['CONCILIACIÓN EBITDA','Importe EUR'],['Resultado neto',has?p.netResult:null],['+ Impuesto beneficios',has?p.incomeTax:null],['- Resultado financiero',has?p.financeResult:null],['+ Amortización',has?p.depreciation:null],['= EBITDA',has?p.ebitda:null]]],
     ['Balance',[['Bloque','Sección','Cuenta','Nombre','Debe','Haber','Saldo presentado'],...[['Activo',r.balance.assets],['Pasivo',r.balance.liabilities],['Patrimonio',r.balance.equity]].flatMap(([label,arr])=>arr.map(a=>[label,a.section.label,a.code,a.name,a.debit,a.credit,a.amount])),['Patrimonio','Resultado del ejercicio','','','','',r.balance.available?r.balance.result:null],[],['Diferencia de balance',r.balance.available?r.balance.difference:null],['Fecha',r.balance.asOf],['Cobertura',r.balance.openingNotice||'Apertura registrada']]],
@@ -25,7 +26,7 @@ export function reportSheets(r){
     ['Configuración fiscal',[['Territorio',r.fiscal.profile?.territory||'Sin informar'],['Estado',r.fiscal.profile?.status||'Sin informar'],[],['Actividad','IAE','Impuesto','Régimen','Deducción'],...rows(r.fiscal.activities||[],['name','iae','tax','regime','deduction']),[],['Modelo','Nombre','Administración','Frecuencia','Validación'],...rows(r.fiscal.obligations||[],['code','name','authority','frequency','validation']),[],['Modelo','Período','Estado','Resultado','Importe confirmado'],...rows(r.fiscal.periods||[],['code','period','status','result','confirmed'])]],
     ['Control',[['Métrica','Valor'],...Object.entries(r.quality).map(([k,v])=>[k,v]),[],['Fecha','Asiento','Motivo','ID'],...rows(r.sources.excluded,['date','number','reason','id'])]],
     ['Metodología',[['Apartado','Definición / referencia'],...notes]],
-  ].map(([name,data])=>[name,data.map(row=>row.map(safeCell))]);
+  ]; return sheets.map(([name,data])=>[name,data.map(row=>row.map(safeCell))]);
 }
 export async function makeReportWorkbook(r){
   const XLSX=await import('xlsx'),wb=XLSX.utils.book_new();
@@ -47,11 +48,11 @@ function offerDownload(blob,name){
 }
 export async function downloadReportExcel(r){const {wb,XLSX}=await makeReportWorkbook(r);const bytes=XLSX.write(wb,{type:'array',bookType:'xlsx',compression:true});return offerDownload(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fileName(r)+'.xlsx');}
 
-export async function makeReportPDF(r,{coverData}={}){
+export async function makeReportPDF(r,{coverData=null}={}){
   const {jsPDF}=await import('jspdf');const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
   const W=210,H=297,margin=17,width=W-2*margin;let y=0;
   const plain=value=>String(value??'—').replace(/[–—]/g,'-').replace(/×/g,'x').replace(/↗/g,'').replace(/\u202f/g,' ');
-  const text=(value,x,yy,size=9,color=[37,44,62],font='normal',options={})=>{pdf.setFont('helvetica',font);pdf.setFontSize(size);pdf.setTextColor(...color);pdf.text(plain(value),x,yy,options);};
+  const text=(value,x,yy,size=9,color=[37,44,62],font='normal',options={})=>{pdf.setFont('helvetica',font);pdf.setFontSize(size);pdf.setTextColor(color[0],color[1],color[2]);pdf.text(plain(value),x,yy,options);};
   const line=(yy)=>{pdf.setDrawColor(225,227,232);pdf.line(margin,yy,W-margin,yy);};
   const heading=(title,sub)=>{text('TAXEA STRATEGIES / MULTINATIONAL REPORT',margin,17,7,[151,43,61],'bold');text(title,margin,31,21,[37,44,62],'bold');if(sub)text(sub,margin,39,8,[103,112,130]);line(46);y=55;};
   const newPage=(title,sub)=>{pdf.addPage();heading(title,sub);};
@@ -86,7 +87,7 @@ export async function makeReportPDF(r,{coverData}={}){
   const max=Math.max(1,...r.monthly.flatMap(m=>[Math.abs(m.revenue),Math.abs(m.ebitda)]));
   const step=width/Math.max(1,r.monthly.length),zero=chartY+chartHeight*.65;
   pdf.setDrawColor(220,224,230);pdf.line(margin,zero,W-margin,zero);
-  for(let i=0;i<r.monthly.length;i++){const m=r.monthly[i],x=margin+i*step+2;for(const [j,val] of [m.revenue,m.ebitda].entries()){if(!m.count)continue;const h=val/max*chartHeight*.6;pdf.setFillColor(...(j===0?[183,31,53]:[55,70,94]));pdf.rect(x+j*step*.32,h>=0?zero-h:zero,step*.25,Math.abs(h),'F');}text(m.label,x,baseline+6,7,[103,112,130]);}
+  for(let i=0;i<r.monthly.length;i++){const m=r.monthly[i],x=margin+i*step+2;for(const [j,val] of [m.revenue,m.ebitda].entries()){if(!m.count)continue;const h=val/max*chartHeight*.6;const rgb=j===0?[183,31,53]:[55,70,94];pdf.setFillColor(rgb[0],rgb[1],rgb[2]);pdf.rect(x+j*step*.32,h>=0?zero-h:zero,step*.25,Math.abs(h),'F');}text(m.label,x,baseline+6,7,[103,112,130]);}
   y=baseline+18;paragraph('Rojo: cifra de negocios. Azul: EBITDA. Meses sin asientos: sin dato. EBITDA es un indicador de gestión; definición y conciliación en las páginas siguientes.');
   newPage('Cuadro mensual','Evolución del período · importes EUR');
   table(['Mes','Ventas netas','EBITDA','Resultado','Ventas año previo'],r.monthly.map(m=>[m.label,m.count?num(m.revenue):'Sin datos',m.count?num(m.ebitda):'Sin datos',m.count?num(m.netResult):'Sin datos',m.previousKnown?num(m.previousRevenue):'Sin datos']),[25,38,38,38,37]);
