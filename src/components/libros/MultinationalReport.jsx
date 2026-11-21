@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowDownRight, ArrowUpRight, ArrowRight, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, Globe2, Info, Loader2, RefreshCw, Search, ShieldCheck, X } from 'lucide-react';
@@ -48,6 +48,9 @@ export function ReportView({report:r,loading,refreshing,error,onRefresh,controls
   const [tab,setTab]=useState('overview'),[detail,setDetail]=useState(null),[exporting,setExporting]=useState(''),[exportError,setExportError]=useState('');
   const [basis,setBasis]=useState('accounting');
   const [download,setDownload]=useState(null);
+  const exportContextRef=useRef('');
+  exportContextRef.current=r?`${r.companyId}:${r.generatedAt}:${r.window.start}:${r.window.end}:${r.segment}`:'';
+  useEffect(()=>()=>{exportContextRef.current='';},[]);
   useEffect(()=>{setDownload(null);},[r?.generatedAt]);
   useEffect(()=>()=>{if(download?.url)URL.revokeObjectURL(download.url);},[download?.url]);
   useEffect(()=>{setDetail(null);setExportError('');},[r?.companyId,r?.window.year,r?.window.firstMonth,r?.window.lastMonth,r?.segment]);
@@ -59,7 +62,7 @@ export function ReportView({report:r,loading,refreshing,error,onRefresh,controls
   const docColumns=[['date','Fecha'],['number','Documento'],['party','Cliente / proveedor'],['direction','Tipo'],['base','Base','money'],['tax','Cuota','money'],['total','Total','money']];
   const drillAccount=(code,title)=>open(title,r.sources.journal.filter(row=>row.account.startsWith(code)),journalColumns);
   const showPnl=()=>open('Trazabilidad · resultados contables',r.sources.journal.filter(row=>/^[67]/.test(row.account)),journalColumns);
-  const exportReport=async kind=>{if(!r||refreshing||error)return;setExporting(kind);setExportError('');try{const mod=await import('./multinationalReportExport.mjs');const file=await (kind==='pdf'?mod.downloadReportPDF(r):mod.downloadReportExcel(r));setDownload(file);}catch{setExportError('No se pudo generar la descarga. Reintenta cuando termine la actualización.');}finally{setExporting('');}};
+  const exportReport=async kind=>{if(!r||refreshing||error)return;const context=exportContextRef.current;setExporting(kind);setExportError('');try{const mod=await import('./multinationalReportExport.mjs');const file=await (kind==='pdf'?mod.downloadReportPDF(r):mod.downloadReportExcel(r));if(exportContextRef.current!==context){URL.revokeObjectURL(file.url);return;}setDownload(file);const anchor=document.createElement('a');anchor.href=file.url;anchor.download=file.name;document.body.appendChild(anchor);anchor.click();anchor.remove();}catch{if(exportContextRef.current===context)setExportError('No se pudo generar la descarga. Reintenta cuando termine la actualización.');}finally{setExporting('');}};
   return <section className="mr-shell" aria-label="Multinational Report">
     <header className="mr-hero" style={{backgroundImage:`url(${BANNER})`}}><div className="mr-hero-copy"><span className="mr-eyebrow"><Globe2 size={13}/> TAXEA · FINANCIAL INTELLIGENCE</span><h2>Multinational<br className="sm:hidden"/> Report<span>.</span></h2><p>La visión completa de tu negocio.</p><div className="mr-hero-meta"><Building2 size={13}/>{r?.companyName||'Informe financiero de empresa'}<span>·</span>{r?String(r.window.year):'Datos propios'}</div></div></header>
     <div className="mr-toolbar"><div><p className="mr-eyebrow text-muted-foreground">MANAGEMENT REPORTING</p><div className="mr-period"><CalendarDays size={14}/>{r?periodLabel(r):'Preparando el período seleccionado'}</div></div><div className="mr-actions">{controls}<Button variant="outline" size="sm" aria-label="Actualizar informe" onClick={onRefresh} disabled={refreshing}><RefreshCw size={14} className={refreshing?'animate-spin':''}/></Button><Button variant="outline" size="sm" disabled={!r||!!exporting||refreshing||!!error} onClick={()=>exportReport('xlsx')}>{exporting==='xlsx'?<Loader2 size={14} className="animate-spin"/>:<Download size={14}/>} Excel</Button><Button size="sm" className="mr-pdf-button" disabled={!r||!!exporting||refreshing||!!error} onClick={()=>exportReport('pdf')}>{exporting==='pdf'?<Loader2 size={14} className="animate-spin"/>:<FileText size={14}/>} Informe PDF</Button></div></div>

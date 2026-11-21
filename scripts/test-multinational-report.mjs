@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {build} from 'esbuild';
-import {reportSheets,safeCell,makeReportWorkbook,makeReportPDF} from '../src/components/libros/multinationalReportExport.mjs';
+import {reportSheets,safeCell,makeReportWorkbook,makeReportPDF,downloadReportExcel,downloadReportPDF} from '../src/components/libros/multinationalReportExport.mjs';
 const tmp=await fs.mkdtemp(path.join(os.tmpdir(),'taxea-report-'));
 const bundle=path.join(tmp,'model.mjs');
 await build({entryPoints:['base44/functions/multinationalReport/reportModel.mjs'],outfile:bundle,bundle:true,platform:'node',format:'esm',logLevel:'silent'});
@@ -76,6 +76,8 @@ const {wb,XLSX}=await makeReportWorkbook(report);assert.equal(wb.SheetNames.leng
 const output=process.env.TAXEA_REPORT_QA_DIR||'/tmp/taxea-qa/multinational-report';await fs.mkdir(output,{recursive:true});
 await fs.writeFile(path.join(output,'report-synthetic.xlsx'),bytes);
 const pdf=await makeReportPDF(report);assert.ok(pdf.getNumberOfPages()>=8);await fs.writeFile(path.join(output,'report-synthetic.pdf'),Buffer.from(pdf.output('arraybuffer')));
+const excelDownload=await downloadReportExcel(report);assert.ok(excelDownload.name.endsWith('.xlsx'));assert.ok(excelDownload.size>1000);assert.equal(XLSX.read(await (await fetch(excelDownload.url)).arrayBuffer(),{type:'array'}).SheetNames.length,17);URL.revokeObjectURL(excelDownload.url);
+const pdfDownload=await downloadReportPDF(report);assert.ok(pdfDownload.name.endsWith('.pdf'));assert.ok(pdfDownload.size>1000);assert.ok((await (await fetch(pdfDownload.url)).text()).startsWith('%PDF-'));URL.revokeObjectURL(pdfDownload.url);
 await fs.writeFile(path.join(output,'report-synthetic.json'),JSON.stringify(report,null,2));
 const endpoint=await fs.readFile('base44/functions/multinationalReport/entry.ts','utf8');assert.ok(!/\.\s*(create|update|delete|bulkCreate)\s*\(/.test(endpoint),'Read-only endpoint');assert.ok(endpoint.indexOf('authorizeReport(svc,user,body.companyId)')<endpoint.indexOf('accountingData(svc,company.id'));
 const page=await fs.readFile('src/pages/LibroRegistros.jsx','utf8');assert.ok(page.indexOf("key: 'pnl'")<page.indexOf("key: 'multinational'"));assert.ok(page.indexOf("key: 'multinational'")<page.indexOf("key: 'asesoria'"));

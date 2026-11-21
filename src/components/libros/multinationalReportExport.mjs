@@ -42,7 +42,6 @@ export async function makeReportWorkbook(r){
 }
 function offerDownload(blob,name){
   const url=URL.createObjectURL(blob);
-  if(typeof document!=='undefined'){const anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.rel='noopener';document.body.appendChild(anchor);anchor.click();anchor.remove();}
   // Keep a visible fallback link in the report for WebViews that require a fresh tap.
   return {url,name,size:blob.size};
 }
