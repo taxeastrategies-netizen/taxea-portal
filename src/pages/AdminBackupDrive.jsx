@@ -1,5 +1,6 @@
 import LegacyProtectionPlanPreview from '@/components/backup/LegacyProtectionPlanPreview';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import usePageRefresh from '@/hooks/usePageRefresh';
 import { useOutletContext } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {requestBackupChunk,backupContinuationDelay} from '@/lib/backupClient.mjs';
@@ -49,22 +50,29 @@ export default function AdminBackupDrive() {
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState(null);
 
+  const loadSequence = useRef(0);
   const loadStatus = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setLoadError('');
     try {
       const res = await base44.functions.invoke('documentBackupToDrive', { action: 'status' });
-      setStatus(res.data);
-      setJobs(res.data?.recentJobs || []);
+      if (sequence === loadSequence.current) {
+        setStatus(res.data);
+        setJobs(res.data?.recentJobs || []);
+      }
+      return true;
     } catch (e) {
       console.warn('[Backup] status_unavailable');
-      setLoadError(e.response?.data?.error || e.message || 'No se pudo consultar el estado de las copias.');
+      if (sequence === loadSequence.current) setLoadError(e.response?.data?.error || e.message || 'No se pudo consultar el estado de las copias.');
+      return false;
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { loadStatus(); return () => { loadSequence.current += 1; }; }, [loadStatus]);
+  usePageRefresh(loadStatus, ['/admin/backup-drive']);
 
   const handleBackup = async () => {
     setShowModal(false);
