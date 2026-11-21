@@ -26,7 +26,7 @@ export function reportSheets(r){
     ['Configuración fiscal',[['Territorio',r.fiscal.profile?.territory||'Sin informar'],['Estado',r.fiscal.profile?.status||'Sin informar'],[],['Actividad','IAE','Impuesto','Régimen','Deducción'],...rows(r.fiscal.activities||[],['name','iae','tax','regime','deduction']),[],['Modelo','Nombre','Administración','Frecuencia','Validación'],...rows(r.fiscal.obligations||[],['code','name','authority','frequency','validation']),[],['Modelo','Período','Estado','Resultado','Importe confirmado'],...rows(r.fiscal.periods||[],['code','period','status','result','confirmed'])]],
     ['Control',[['Métrica','Valor'],...Object.entries(r.quality).map(([k,v])=>[k,v]),[],['Fecha','Asiento','Motivo','ID'],...rows(r.sources.excluded,['date','number','reason','id'])]],
     ['Metodología',[['Apartado','Definición / referencia'],...notes]],
-  ]; return sheets.map(([name,data])=>[name,data.map(row=>row.map(safeCell))]);
+  ]; return sheets.map(([name,data])=>/** @type {[string, any[][]]} */ ([name,data.map(row=>row.map(safeCell))]));
 }
 export async function makeReportWorkbook(r){
   const XLSX=await import('xlsx'),wb=XLSX.utils.book_new();
