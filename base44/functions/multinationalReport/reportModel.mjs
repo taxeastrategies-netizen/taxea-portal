@@ -135,6 +135,8 @@ export function buildMultinationalReport(raw, options = {}) {
   const pnl=pnlFor(currentUnits,year),previous=pnlFor(previousUnits,year-1);
   const balanceUnits=yearUnits(year).filter(u=>day(u.entry.date)<=window.end&&u.entry.type!=='cierre');
   const balance=reportForUnits(data,balanceUnits,year).balanceSheet;
+  const previousBalanceUnits=yearUnits(year-1).filter(u=>day(u.entry.date)<=previousWindow.end&&u.entry.type!=='cierre');
+  const previousBalance=reportForUnits(data,previousBalanceUnits,year-1).balanceSheet;
   const hasOpening=balanceUnits.some(u=>u.entry.type==='apertura');
   const hasPrior=accepted.some(u=>day(u.entry.date)<`${year}-01-01`);
   const openingNotice=hasPrior&&!hasOpening?'Falta asiento de apertura: el balance muestra solo los movimientos del ejercicio.':!hasOpening?'Sin apertura registrada: verificar si la actividad comienza en este ejercicio.':null;
@@ -182,7 +184,7 @@ export function buildMultinationalReport(raw, options = {}) {
   const financialDebt=sum(balance.liabilities.filter(a=>/^(17|50|51|52|57)/.test(a.code)),a=>a.amount),bookCash=sum(balance.assets.filter(a=>a.code.startsWith('57')),a=>a.amount);
   return {success:true,version:'multinational-report-v1',companyId:raw.company.id,companyName:raw.company.razon_social||raw.company.nombre_comercial||'Empresa',generatedAt:new Date(now).toISOString(),currency:'EUR',window,previousWindow,segment,
     pnl:{...pnl,available:currentUnits.length>0,previous:{...previous,available:previousUnits.length>0},revenueChange:delta(pnl.revenue,previous.revenue,previousUnits.length>0),ebitdaChange:delta(pnl.ebitda,previous.ebitda,previousUnits.length>0)},
-    balance:{...balance,available:balanceUnits.length>0,asOf:window.end,hasOpening,openingNotice,scope:'company',rows:balanceRows},
+    balance:{...balance,available:balanceUnits.length>0,asOf:window.end,hasOpening,openingNotice,scope:'company',rows:balanceRows,previous:{...previousBalance,available:previousBalanceUnits.length>0,asOf:previousWindow.end,hasOpening:previousBalanceUnits.some(u=>u.entry.type==='apertura')}},
     management:{...management,previous:managementPrevious},monthly,segments,
     cashflow,bank:{cash:bank.cash,known:bank.bankKnown,connected:bank.connected,nonEuroAccounts:bank.nonEuroAccounts,reasons:[...bank.reasons,...bank.activityReasons],duplicateAccounts:bank.duplicateAccounts,duplicateTransactions:bank.duplicateTransactions,asOf:today},
     workingCapital:{...aging(documents,today),currentAssets,currentLiabilities,netWorkingCapital:money(currentAssets-currentLiabilities),currentRatio:ratio(currentAssets,currentLiabilities),financialDebt,bookCash,netFinancialDebt:money(financialDebt-bookCash),debtToEquity:ratio(balance.totalLiabilities,balance.totalEquity)},
