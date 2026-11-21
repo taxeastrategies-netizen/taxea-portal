@@ -808,7 +808,65 @@
         "debit": 0,
         "credit": 1210
       }
-    ]
+    ],
+    "previous": {
+      "assets": [
+        {
+          "code": "43000001",
+          "name": "43000001",
+          "type": "",
+          "debit": 100,
+          "credit": 0,
+          "movements": 1,
+          "balance": 100,
+          "kind": "asset",
+          "presentationAdjustment": "",
+          "section": {
+            "key": "deudores_comerciales",
+            "label": "Deudores comerciales y otras cuentas a cobrar"
+          },
+          "amount": 100
+        }
+      ],
+      "liabilities": [],
+      "equity": [],
+      "assetSections": [
+        {
+          "key": "deudores_comerciales",
+          "label": "Deudores comerciales y otras cuentas a cobrar",
+          "accounts": [
+            {
+              "code": "43000001",
+              "name": "43000001",
+              "type": "",
+              "debit": 100,
+              "credit": 0,
+              "movements": 1,
+              "balance": 100,
+              "kind": "asset",
+              "presentationAdjustment": "",
+              "section": {
+                "key": "deudores_comerciales",
+                "label": "Deudores comerciales y otras cuentas a cobrar"
+              },
+              "amount": 100
+            }
+          ],
+          "amount": 100
+        }
+      ],
+      "liabilitySections": [],
+      "equitySections": [],
+      "totalAssets": 100,
+      "totalLiabilities": 0,
+      "totalEquityBeforeResult": 0,
+      "result": 100,
+      "totalEquity": 100,
+      "difference": 0,
+      "available": true,
+      "asOf": "2025-01-31",
+      "hasOpening": false
+    }
   },
   "management": {
     "revenue": 1000,
