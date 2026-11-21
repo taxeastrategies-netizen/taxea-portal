@@ -56,7 +56,7 @@
       },
       {
         "key": "financialIncome",
-        "label": "Ingresos financieros",
+        "label": "Ingresos financieros y reversiones financieras",
         "amount": 0,
         "accounts": []
       },
@@ -132,7 +132,7 @@
       },
       {
         "key": "financialExpense",
-        "label": "Gastos financieros",
+        "label": "Gastos financieros y deterioros financieros",
         "amount": 10,
         "accounts": [
           {
@@ -227,7 +227,7 @@
         },
         {
           "key": "financialIncome",
-          "label": "Ingresos financieros",
+          "label": "Ingresos financieros y reversiones financieras",
           "amount": 0,
           "accounts": []
         },
@@ -287,7 +287,7 @@
         },
         {
           "key": "financialExpense",
-          "label": "Gastos financieros",
+          "label": "Gastos financieros y deterioros financieros",
           "amount": 0,
           "accounts": []
         },
@@ -861,7 +861,7 @@
         },
         {
           "key": "financialIncome",
-          "label": "Ingresos financieros",
+          "label": "Ingresos financieros y reversiones financieras",
           "amount": 0,
           "accounts": []
         },
@@ -937,7 +937,7 @@
         },
         {
           "key": "financialExpense",
-          "label": "Gastos financieros",
+          "label": "Gastos financieros y deterioros financieros",
           "amount": 10,
           "accounts": [
             {
@@ -1051,7 +1051,7 @@
         },
         {
           "key": "financialIncome",
-          "label": "Ingresos financieros",
+          "label": "Ingresos financieros y reversiones financieras",
           "amount": 0,
           "accounts": []
         },
@@ -1118,7 +1118,7 @@
         },
         {
           "key": "financialExpense",
-          "label": "Gastos financieros",
+          "label": "Gastos financieros y deterioros financieros",
           "amount": 0,
           "accounts": []
         },
@@ -1189,7 +1189,7 @@
         },
         {
           "key": "financialIncome",
-          "label": "Ingresos financieros",
+          "label": "Ingresos financieros y reversiones financieras",
           "amount": 0,
           "accounts": []
         },
@@ -1256,7 +1256,7 @@
         },
         {
           "key": "financialExpense",
-          "label": "Gastos financieros",
+          "label": "Gastos financieros y deterioros financieros",
           "amount": 10,
           "accounts": [
             {
@@ -1459,7 +1459,11 @@
     "deductibilityMissing": 0,
     "nonDeductible": 0,
     "retainedByClients": 0,
-    "withheldToPay": 0
+    "withheldToPay": 0,
+    "profile": null,
+    "activities": [],
+    "obligations": [],
+    "periods": []
   },
   "sources": {
     "journal": [
@@ -1693,7 +1697,7 @@
     "frameworkReview": "pendiente_asesor"
   },
   "methodology": {
-    "ebitda": "Resultado neto + impuesto sobre beneficios (630) − resultado financiero (76 − 66) + amortización (68). Incluye deterioros y otros resultados; sin ajustes no registrados.",
+    "ebitda": "Resultado neto + impuesto sobre beneficios (630/633/638) − resultado financiero (76 y 796–799 − 66 y 696–699) + amortización (68). Incluye deterioros y otros resultados; sin ajustes no registrados.",
     "balance": "Saldos desde el inicio del ejercicio hasta el último día del período. Incluye apertura y regularización; excluye cierre. No arrastra saldos de años previos sin apertura.",
     "pnl": "Asientos confirmados, cuadrados y con operación completada. Excluye apertura, regularización y cierre. Período por fecha de asiento.",
     "cashflow": "Flujos bancarios EUR observados. Excluye pendientes y transferencias internas identificadas. Clasifica solo con contrapartida contable confirmada; no equivale al EFE legal ni acredita que el histórico esté completo.",
