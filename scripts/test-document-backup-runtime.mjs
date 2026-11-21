@@ -281,7 +281,7 @@ assert.match(rawSource, /SCHEDULED_JOB_MAX_AGE_MS = 36 \* 60 \* 60 \* 1000/);
 assert.match(rawSource, /driveEmail !== REQUIRED_EMAIL/);
 assert.match(rawSource, /const entries = manifest\?\.documents/);
 assert.match(rawSource, /manifestChecksum !== lastJob\.manifestChecksum/);
-assert.match(rawSource, /entries\.slice\(cursor, cursor \+ 25\)/);
+assert.match(rawSource, /entries\.slice\(cursor, cursor \+ 100\)/);
 assert.match(rawSource, /computeChecksum\(restoredBytes\)/);
 assert.match(rawSource, /verificationChecked: checked, documentsVerified: verified/);
 assert.match(rawSource, /remaining > 0 \? 'partial'/);
@@ -314,3 +314,9 @@ const recovered=await executeScenario({documentCount:1,existingCount:0,lostMetad
 
 const corruptedCopy=await executeScenario({documentCount:1,existingCount:1,corruptExisting:true});assert.equal(corruptedCopy.payload.status,'completed');assert.equal(corruptedCopy.payload.documentsCopied,1);assert.equal(corruptedCopy.payload.documentsSkipped,0);assert.equal(corruptedCopy.recordCreates,0);assert.equal(corruptedCopy.mediaDownloads,1,'corrupted cached copy must be replaced from the original, not reused');
 const publicDestination=await executeScenario({documentCount:1,existingCount:0,sharedDestination:true});assert.equal(publicDestination.payload.code,'BACKUP_DRIVE_SHARED_DESTINATION');assert.equal(publicDestination.mediaDownloads,0);assert.equal(publicDestination.uploadAttempts,0,'no source bytes or filenames uploaded to a shared destination');console.log(JSON.stringify({corruptedCachedCopyRebuilt:true,sharedDestinationDeniedBeforeSourceRead:true}));
+
+const repeatedContent = await executeScenario({documentCount:2,existingCount:0});
+assert.equal(repeatedContent.payload.documentsCopied,1,'Identical content for the same company creates one physical copy');
+assert.equal(repeatedContent.payload.documentsSkipped,1,'The second reference reuses that verified copy');
+assert.equal(repeatedContent.recordCreates,2,'Each source reference retains its own recovery metadata');
+console.log(JSON.stringify({concurrentIdenticalDocumentsUploadedOnce:true,sourceBindingsPreserved:true}));

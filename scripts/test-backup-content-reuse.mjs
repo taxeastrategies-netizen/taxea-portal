@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {memoizeCopyVerification,preloadBackupRecords,createBackupContentReuse} from '../base44/functions/documentBackupToDrive/backupReuse.mjs';
+
+let uploads=0,checks=0,lookups=0;
+const good={clientAccountId:'a',checksum:'hash',fileSize:3,driveFileId:'existing',backupStatus:'verified'};
+const request=(companyId,documentKey,checksum='hash')=>({companyId,documentKey,checksum,fileSize:3,upload:async()=>({driveFileId:'new-'+(++uploads)})});
+const own=createBackupContentReuse({findCandidates:async()=>{lookups++;return[]},verifyCopy:async()=>true});
+const first=await Promise.all([own(request('a','one')),own(request('a','two'))]);
+assert.equal(uploads,1);assert.equal(lookups,1);assert.equal(first[0].storage.driveFileId,first[1].storage.driveFileId);
+await own(request('b','three'));assert.equal(uploads,2);
+await own(request('a','four','different'));assert.equal(uploads,3);
+const reuse=createBackupContentReuse({findCandidates:async()=>[good],verifyCopy:async()=>{checks++;return true}});
+const retained=await reuse(request('a','five'));
+assert.equal(retained.storage.driveFileId,'existing');assert.equal(retained.copiedBy,null);assert.equal(uploads,3);
+const corrupt=createBackupContentReuse({findCandidates:async()=>[good],verifyCopy:async()=>false});
+await corrupt(request('a','six'));assert.equal(uploads,4);
+const foreign=createBackupContentReuse({findCandidates:async()=>[good],verifyCopy:async()=>true});
+await foreign(request('b','seven'));assert.equal(uploads,5);
+let attempts=0;
+const retry=createBackupContentReuse({findCandidates:async()=>[],verifyCopy:async()=>true});
+const unstable={...request('a','eight'),upload:async()=>{if(++attempts===1)throw Error('temporary');return{driveFileId:'recovered'}}};
+await assert.rejects(retry(unstable));assert.equal((await retry(unstable)).storage.driveFileId,'recovered');
+let downloaded=0;
+const cached=memoizeCopyVerification(async()=>{downloaded++;return true});
+await Promise.all([cached(good),cached({...good}),cached({...good})]);assert.equal(downloaded,1);
+await cached({...good,checksum:'changed'});assert.equal(downloaded,2);
+await cached({...good,clientAccountId:'b'});assert.equal(downloaded,3);
+let calls=0;const records={};
+const docs=['one','two'].map(id=>({source:{entity:'Document',companyField:'company_id'},record:{id,company_id:'a'}}));
+await preloadBackupRecords({filter:async query=>{calls++;assert.equal(query.clientAccountId,'a');assert.deepEqual(query.documentId.$in,['one','two']);return[{...good,documentEntity:'Document',documentId:'one'},{...good,documentEntity:'Document',documentId:'two',clientAccountId:'b'}]}},docs,records,rows=>Object.fromEntries(rows.map(row=>['Document:'+row.documentId,row])));
+assert.equal(calls,1);assert.equal(records['Document:one'].driveFileId,'existing');assert.equal(records['Document:two'],null);
+await preloadBackupRecords({filter:async()=>{throw Error('duplicate query')}},docs,records,()=>({}));
+console.log(JSON.stringify({ok:true,duplicateContentSingleUpload:true,companyIsolation:true,shaVerifiedReuse:true,corruptionRebuilt:true,retryRecovered:true,verificationMemoized:true,batchedMetadataRead:true,negativeCache:true}));
+

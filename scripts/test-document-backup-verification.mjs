@@ -11,7 +11,7 @@ const branch = source.slice(start, end);
 const hash = async bytes => Array.from(new Uint8Array(await webcrypto.subtle.digest('SHA-256', bytes))).map(n => n.toString(16).padStart(2, '0')).join('');
 
 async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt = false } = {}) {
-  const contents = Array.from({ length: 27 }, (_, index) => new Uint8Array([index]));
+  const contents = Array.from({ length: 102 }, (_, index) => new Uint8Array([index]));
   const entries = await Promise.all(contents.map(async (bytes, index) => ({
     driveFileId: 'file-' + index,
     checksum: await hash(bytes),
@@ -55,15 +55,15 @@ async function scenario({ missingIndex = -1, corruptIndex = -1, manifestCorrupt 
     assert.equal(job.verificationStatus, 'incidents');
     return;
   }
-  assert.equal(firstData.checked, 25);
+  assert.equal(firstData.checked, 100);
   assert.equal(firstData.remaining, 2);
   const second = await execute();
   const secondData = await second.json();
-  assert.equal(secondData.checked, 27);
+  assert.equal(secondData.checked, 102);
   assert.equal(secondData.remaining, 0);
   assert.equal(secondData.status, missingIndex >= 0 || corruptIndex >= 0 ? 'incidents' : 'ok');
   assert.equal(secondData.missing, missingIndex >= 0 || corruptIndex >= 0 ? 1 : 0);
-  if (missingIndex < 0 && corruptIndex < 0) assert.equal(secondData.checksumChecked, 27);
+  if (missingIndex < 0 && corruptIndex < 0) assert.equal(secondData.checksumChecked, 102);
   const beforeRepeat = calls;
   const cached = await execute();
   assert.equal((await cached.json()).status, secondData.status);

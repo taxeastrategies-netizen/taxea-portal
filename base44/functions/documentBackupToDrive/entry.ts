@@ -1,3 +1,4 @@
+import { memoizeCopyVerification, preloadBackupRecords, createBackupContentReuse } from './backupReuse.mjs';
 import{runLegacyRecoveryDrill}from'./legacyRecoveryDrill.mjs';
 import{withBackupWorkflow,assertVerifiedWorkflowJob}from'./backupWorkflow.mjs';
 import{runLegacyProtectionVerification,verifyLegacyProtectionGroup}from'./legacyProtectionVerification.mjs';
@@ -614,7 +615,7 @@ Deno.serve(withBackupWorkflow(async (req) => {
       const issuesBefore = restart ? [] : (lastJob.verificationIssues || []);
       const lastCopiedIndex = entries.findLastIndex(entry => entry.status === 'backed_up' && entry.driveFileId);
       const sampleIndices = new Set([0, Math.floor(entries.length / 2), entries.length - 1, lastCopiedIndex]);
-      const batch = entries.slice(cursor, cursor + 25);
+      const batch = entries.slice(cursor, cursor + 100);
       const results = [];
       for (let offset = 0; offset < batch.length; offset += 5) {
         if(results.length&&Date.now()>deadline-10000)break;
@@ -754,6 +755,24 @@ Deno.serve(withBackupWorkflow(async (req) => {
       const recordMap = latestBackupRecordMap(existingRecords);
 
       const companyCache = {};
+      const verifyCopy = memoizeCopyVerification(async record => {
+        try {
+          await assertPrivateDriveDestination(record.driveFileId, accessToken);
+          const copy = await driveGet(DRIVE_API+'/files/'+encodeURIComponent(record.driveFileId)+'?alt=media', accessToken);
+          if (!copy.ok) return false;
+          const bytes = new Uint8Array(await boundedBackupBody(copy, MAX_BACKUP_FILE_BYTES));
+          return (record.fileSize == null || bytes.length === Number(record.fileSize)) && await computeChecksum(bytes) === record.checksum;
+        } catch (error) {
+          if (isBackupTransientError(error)) throw error;
+          return false;
+        }
+      });
+      const reuseContent = createBackupContentReuse({
+        findCandidates: (companyId, checksum) => base44.asServiceRole.entities.DocumentBackupRecord.filter({
+          clientAccountId: companyId, checksum, backupStatus: { $in: ['backed_up','verified'] },
+        }, '-lastBackedUpAt', 30),
+        verifyCopy,
+      });
       const isFullCopy = config.backupMode === 'full_daily_copy';
       let copied = Number(job.documentsCopied || 0);
       let skipped = Number(job.documentsSkipped || 0);
@@ -799,7 +818,7 @@ Deno.serve(withBackupWorkflow(async (req) => {
         const fileUrl = record[source.urlField];
         const docId = record.id;
         const key = `${source.entity}:${docId}`;
-        if(resumableManifest&&!recordMap[key]){
+        if(resumableManifest&&!Object.hasOwn(recordMap,key)){
           const query={documentEntity:source.entity,documentId:docId,clientAccountId:record[source.companyField]};
           const usable=await base44.asServiceRole.entities.DocumentBackupRecord.filter({...query,backupStatus:{$in:['backed_up','verified']}},'-lastBackedUpAt',1);
           const matches=usable.length?usable:await base44.asServiceRole.entities.DocumentBackupRecord.filter(query,'-updated_date',1);
@@ -815,12 +834,7 @@ Deno.serve(withBackupWorkflow(async (req) => {
         const safeFileName = sanitizeName(displayName) || sanitizeName(fileUrl.split('/').pop() || 'documento');
         const mimeType = guessMimeType(displayName, source.mimeField ? record[source.mimeField] : null);
 
-        let existingCopyVerified=null;
-        const verifyExistingCopy=async()=>{
-          if(existingCopyVerified!==null)return existingCopyVerified;
-          try{await assertPrivateDriveDestination(existing.driveFileId,accessToken);const copy=await driveGet(DRIVE_API+'/files/'+encodeURIComponent(existing.driveFileId)+'?alt=media',accessToken);existingCopyVerified=copy.ok&&await computeChecksum(new Uint8Array(await copy.arrayBuffer()))===existing.checksum;}catch{existingCopyVerified=false;}
-          return existingCopyVerified;
-        };
+        const verifyExistingCopy = () => verifyCopy(existing);
         if(skipExisting)skipExisting=await verifyExistingCopy();
         if (skipExisting) {
           return { type: 'skipped', manifest: {
@@ -874,17 +888,24 @@ Deno.serve(withBackupWorkflow(async (req) => {
 
         // Folder creation and upload are one recoverable operation. Drive throttling is retried by driveFetch.
         try {
-          const cFolderName = clientFolderName(record[source.companyField], companyName, config.folderNamingMode);
-          const clientFolder = await findOrCreateFolderCached(cFolderName, dayFolder.id, accessToken);
-          const subFolder = await findOrCreateFolderCached(subfolder, clientFolder.id, accessToken);
-          const drivePath = `${now.full}/${cFolderName}/${subfolder}/${safeFileName}`;
-          const uploaded = await uploadFileToDrive(safeFileName, subFolder.id, contentBytes, mimeType, accessToken);
+          const upload = async () => {
+            const cFolderName = clientFolderName(record[source.companyField], companyName, config.folderNamingMode);
+            const clientFolder = await findOrCreateFolderCached(cFolderName, dayFolder.id, accessToken);
+            const subFolder = await findOrCreateFolderCached(subfolder, clientFolder.id, accessToken);
+            const drivePath = `${now.full}/${cFolderName}/${subfolder}/${safeFileName}`;
+            const uploaded = await uploadFileToDrive(safeFileName, subFolder.id, contentBytes, mimeType, accessToken);
+            return { driveFileId: uploaded.id, driveFolderId: subFolder.id, drivePath };
+          };
+          const stored = isFullCopy ? { storage: await upload(), copiedBy: key }
+            : await reuseContent({ companyId: record[source.companyField], checksum, fileSize, documentKey: key, upload });
+          const { driveFileId, driveFolderId, drivePath } = stored.storage;
+          const reused = stored.copiedBy !== key;
           const nowIso = new Date().toISOString();
           let persisted;
           if (existing) {
             persisted = await base44.asServiceRole.entities.DocumentBackupRecord.update(existing.id, {
               backupStatus: 'backed_up', originalFileName: displayName, fileStorageUrl: fileUrl,
-              driveFileId: uploaded.id, driveFolderId: subFolder.id,
+              driveFileId, driveFolderId,
               drivePath, checksum, fileSize, mimeType, lastBackedUpAt: nowIso,
               version: (existing.version || 1) + 1, safeErrorMessage: '',
             });
@@ -895,22 +916,22 @@ Deno.serve(withBackupWorkflow(async (req) => {
               documentType: source.entity, sourceModule: subfolder,
               originalFileName: displayName, fileStorageUrl: fileUrl,
               fileSize, mimeType, checksum,
-              driveFileId: uploaded.id, driveFolderId: subFolder.id, drivePath,
+              driveFileId, driveFolderId, drivePath,
               backupStatus: 'backed_up', lastBackedUpAt: nowIso, version: 1,
             });
           }
           recordMap[key] = persisted;
-          await base44.asServiceRole.entities.BackupJobItem.create({
+          if (!reused) await base44.asServiceRole.entities.BackupJobItem.create({
             backupJobId: job.id, documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
-            status: 'copied', action: 'copy', driveFileId: uploaded.id, drivePath, checksum, fileSize,
+            status: 'copied', action: 'copy', driveFileId, drivePath, checksum, fileSize,
           });
-          return { type: 'copied', fileSize, manifest: {
+          return { type: reused ? 'skipped' : 'copied', fileSize, manifest: {
             documentId: docId, documentEntity: source.entity,
             clientAccountId: record[source.companyField], clientName: companyName,
             type: source.entity, originalFileName: displayName, size: fileSize,
-            mimeType, checksum, driveFileId: uploaded.id, drivePath,
-            status: 'copied', lastVerifiedAt: nowIso,
+            mimeType, checksum, driveFileId, drivePath,
+            status: reused ? 'skipped_unchanged' : 'copied', lastVerifiedAt: nowIso,
           }};
         } catch (e) {
           if(isBackupTransientError(e))throw e;
@@ -939,6 +960,9 @@ Deno.serve(withBackupWorkflow(async (req) => {
 
       for (let i = startCursor; i < documents.length; i += BACKUP_BATCH_SIZE) {
         if (Date.now() - invocationStartedAt >= timeBudgetMs) break;
+        if (resumableManifest) await preloadBackupRecords(
+          base44.asServiceRole.entities.DocumentBackupRecord, documents.slice(i, i + 30), recordMap, latestBackupRecordMap
+        );
         const batch = documents.slice(i, i + BACKUP_BATCH_SIZE);
         const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
         const transient=results.find(result=>result.status==='rejected'&&isBackupTransientError(result.reason));
