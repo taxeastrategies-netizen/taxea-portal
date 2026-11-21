@@ -55,3 +55,16 @@ export function createBackupContentReuse({ findCandidates, verifyCopy }) {
   };
 }
 
+export async function processBackupBatch(documents, processDocument, concurrency = 3) {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) throw new Error('BACKUP_CONCURRENCY_INVALID');
+  const results = new Array(documents.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, documents.length) }, async () => {
+    while (cursor < documents.length) {
+      const index = cursor++;
+      try { results[index] = { status: 'fulfilled', value: await processDocument(documents[index]) }; }
+      catch (reason) { results[index] = { status: 'rejected', reason }; }
+    }
+  }));
+  return results;
+}

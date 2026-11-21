@@ -1,4 +1,4 @@
-import { memoizeCopyVerification, preloadBackupRecords, createBackupContentReuse } from './backupReuse.mjs';
+import { memoizeCopyVerification, preloadBackupRecords, createBackupContentReuse, processBackupBatch } from './backupReuse.mjs';
 import{runLegacyRecoveryDrill}from'./legacyRecoveryDrill.mjs';
 import{withBackupWorkflow,assertVerifiedWorkflowJob}from'./backupWorkflow.mjs';
 import{runLegacyProtectionVerification,verifyLegacyProtectionGroup}from'./legacyProtectionVerification.mjs';
@@ -41,7 +41,7 @@ const BACKUP_DOWNLOAD_TIMEOUT_MS = 20_000;
 const DRIVE_RETRY_ATTEMPTS = 4;
 const MANUAL_TIME_BUDGET_MS = 40_000;
 const SCHEDULED_TIME_BUDGET_MS = 210_000;
-const BACKUP_BATCH_SIZE = 3;
+const BACKUP_BATCH_SIZE = 12; // Checkpoint every twelve references; file concurrency remains three.
 const MANUAL_JOB_MAX_AGE_MS = 30 * 60 * 1000;
 const SCHEDULED_JOB_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 const FAILED_BACKUP_CLEANUP_CONFIRMATION = 'REBUILD_FROM_LAST_SUCCESS_2026_08_09';
@@ -964,7 +964,7 @@ Deno.serve(withBackupWorkflow(async (req) => {
           base44.asServiceRole.entities.DocumentBackupRecord, documents.slice(i, i + 30), recordMap, latestBackupRecordMap
         );
         const batch = documents.slice(i, i + BACKUP_BATCH_SIZE);
-        const results = await Promise.allSettled(batch.map(doc => processDoc(doc)));
+        const results = await processBackupBatch(batch, processDoc, 3);
         const transient=results.find(result=>result.status==='rejected'&&isBackupTransientError(result.reason));
         if(transient?.status==='rejected')throw transient.reason;
         if(results.some(result=>result.status==='rejected'&&result.reason?.message==='BACKUP_CHUNK_DEADLINE'))break;

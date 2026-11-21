@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {memoizeCopyVerification,preloadBackupRecords,createBackupContentReuse} from '../base44/functions/documentBackupToDrive/backupReuse.mjs';
+import {memoizeCopyVerification,preloadBackupRecords,createBackupContentReuse,processBackupBatch} from '../base44/functions/documentBackupToDrive/backupReuse.mjs';
 
 let uploads=0,checks=0,lookups=0;
 const good={clientAccountId:'a',checksum:'hash',fileSize:3,driveFileId:'existing',backupStatus:'verified'};
@@ -32,3 +32,21 @@ assert.equal(calls,1);assert.equal(records['Document:one'].driveFileId,'existing
 await preloadBackupRecords({filter:async()=>{throw Error('duplicate query')}},docs,records,()=>({}));
 console.log(JSON.stringify({ok:true,duplicateContentSingleUpload:true,companyIsolation:true,shaVerifiedReuse:true,corruptionRebuilt:true,retryRecovered:true,verificationMemoized:true,batchedMetadataRead:true,negativeCache:true}));
 
+
+let active = 0, maximum = 0;
+const queued = Array.from({length: 12}, (_, index) => index);
+const ordered = await processBackupBatch(queued, async index => {
+  active++; maximum = Math.max(maximum, active);
+  await new Promise(resolve => setTimeout(resolve, (12 - index) % 3));
+  active--;
+  if(index === 4) throw Error('temporary');
+  return index * 2;
+});
+assert.equal(maximum, 3, 'Checkpoint grouping must not increase concurrent file reads');
+assert.equal(ordered.length, 12);
+assert.equal(ordered[4].status, 'rejected');
+assert.equal(ordered[4].reason.message, 'temporary');
+assert.equal(ordered[11].value, 22, 'A failure must not lose the remaining results');
+assert.deepEqual(await processBackupBatch([], () => assert.fail('empty batch')), []);
+await assert.rejects(processBackupBatch([1], () => 1, 0), /CONCURRENCY/);
+console.log(JSON.stringify({largerCheckpointsBoundedConcurrency:true,allResultsRetainedInSourceOrder:true}));

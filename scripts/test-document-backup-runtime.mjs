@@ -220,7 +220,7 @@ assert.equal(paginated.payload.documentsCopied, 0);
 assert.equal(paginated.payload.documentsSkipped, 600);
 assert.equal(paginated.mediaDownloads, 0, 'existing records beyond page 500 must not be downloaded again');
 assert.equal(paginated.recordCreates, 0, 'existing records beyond page 500 must not create duplicate metadata');
-assert.equal(paginated.uploadAttempts,211,'Two inventory pages, source index, 200 copy-manifest parts, five compacted pages and three final manifests; no duplicate document upload');
+assert.equal(paginated.uploadAttempts,58,'Two inventory pages, source index, 50 copy-manifest parts, two compacted pages and three final manifests; no duplicate document upload');
 
 const augustBaseline = await executeScenario({
   documentCount: 600,
@@ -320,3 +320,12 @@ assert.equal(repeatedContent.payload.documentsCopied,1,'Identical content for th
 assert.equal(repeatedContent.payload.documentsSkipped,1,'The second reference reuses that verified copy');
 assert.equal(repeatedContent.recordCreates,2,'Each source reference retains its own recovery metadata');
 console.log(JSON.stringify({concurrentIdenticalDocumentsUploadedOnce:true,sourceBindingsPreserved:true}));
+
+const widerResume = await executeScenario({documentCount:25,existingCount:25,interruptAndInsert:true});
+assert.equal(widerResume.payload.status,'completed');
+assert.equal(widerResume.payload.documentsScanned,25);
+assert.equal(widerResume.payload.documentsSkipped,25);
+assert.equal(widerResume.payload.documentsCopied,0);
+assert.equal(widerResume.recordCreates,0);
+assert.equal(widerResume.sourceScans,1,'Resume across multiple wider checkpoints retains the frozen inventory');
+console.log(JSON.stringify({largerCheckpointResumeVerified:true}));
