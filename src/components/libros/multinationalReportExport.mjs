@@ -93,6 +93,9 @@ export async function makeReportPDF(r,{coverData}={}){
   if(r.balance.openingNotice)paragraph(r.balance.openingNotice);
   for(const [title,groups] of [['Activo',r.balance.assetSections],['Patrimonio neto',r.balance.equitySections],['Pasivo',r.balance.liabilitySections]]){section(title);table(['Sección / cuenta','EUR'],groups.flatMap(g=>[[g.label,num(g.amount)],...g.accounts.map(a=>[a.code+' · '+a.name,num(a.amount)])]),[132,44]);}
   table(['Resumen','EUR'],[['Activo',r.balance.available?num(r.balance.totalAssets):'Sin datos'],['Patrimonio neto (incluido resultado)',r.balance.available?num(r.balance.totalEquity):'Sin datos'],['Pasivo',r.balance.available?num(r.balance.totalLiabilities):'Sin datos'],['Diferencia',r.balance.available?num(r.balance.difference):'Sin datos']],[132,44]);
+  section('Comparativo del mismo corte del año anterior');
+  table(['Magnitud',String(r.window.year),String(r.window.year-1)],[['Activo',r.balance.available?num(r.balance.totalAssets):'Sin datos',r.balance.previous.available?num(r.balance.previous.totalAssets):'Sin datos'],['Patrimonio neto',r.balance.available?num(r.balance.totalEquity):'Sin datos',r.balance.previous.available?num(r.balance.previous.totalEquity):'Sin datos'],['Pasivo',r.balance.available?num(r.balance.totalLiabilities):'Sin datos',r.balance.previous.available?num(r.balance.previous.totalLiabilities):'Sin datos']],[100,38,38]);
+  paragraph('Cortes: '+r.balance.asOf+' y '+r.balance.previous.asOf+'. '+(!r.balance.previous.hasOpening?'Comparativo sin apertura: revisar continuidad de los saldos.':''));
   newPage('Cash flow y vencimientos','Flujos del período y cartera pendiente actual');
   table(['Actividad','Entradas','Salidas','Neto'],r.cashflow.groups.map(g=>[g.label,num(g.inflows),num(g.outflows),num(g.net)]),[62,38,38,38]);paragraph(r.methodology.cashflow);
   section('Antigüedad de saldos · estado actual a '+r.workingCapital.asOf);
