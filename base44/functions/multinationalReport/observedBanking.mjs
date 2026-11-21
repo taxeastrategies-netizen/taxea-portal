@@ -64,4 +64,3 @@ export function bankFlows(observation, window) {
   const outflows = money(-rows.filter(row => row.signedAmount < 0).reduce((sum, row) => sum + row.signedAmount, 0));
   return { inflows, outflows, net: money(inflows - outflows), count: rows.length, first: rows.map(row => row.day).sort()[0] || null };
 }
-

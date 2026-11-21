@@ -73,12 +73,16 @@ await assert.rejects(()=>authorizeReport(svc,{id:'admin',role:'admin'},{$ne:null
 assert.equal(safeCell('=HYPERLINK("bad")'),'\'=HYPERLINK("bad")');assert.equal(safeCell(-123),-123);assert.equal(safeCell('@SUM(A1)'),"'@SUM(A1)");
 const sheets=reportSheets(report);assert.equal(sheets.length,17);assert.equal(sheets.find(([name])=>name==='Origen documentos')[1].length,3);
 const {wb,XLSX}=await makeReportWorkbook(report);assert.equal(wb.SheetNames.length,17);const bytes=XLSX.write(wb,{type:'buffer',bookType:'xlsx'});assert.ok(bytes.length>3000);const reloaded=XLSX.read(bytes,{type:'buffer'});assert.equal(reloaded.SheetNames.length,17);
-const output=process.env.TAXEA_REPORT_QA_DIR||'.qa/multinational-report';await fs.mkdir(output,{recursive:true});
+const output=process.env.TAXEA_REPORT_QA_DIR||'/tmp/taxea-qa/multinational-report';await fs.mkdir(output,{recursive:true});
 await fs.writeFile(path.join(output,'report-synthetic.xlsx'),bytes);
 const pdf=await makeReportPDF(report);assert.ok(pdf.getNumberOfPages()>=8);await fs.writeFile(path.join(output,'report-synthetic.pdf'),Buffer.from(pdf.output('arraybuffer')));
 await fs.writeFile(path.join(output,'report-synthetic.json'),JSON.stringify(report,null,2));
 const endpoint=await fs.readFile('base44/functions/multinationalReport/entry.ts','utf8');assert.ok(!/\.\s*(create|update|delete|bulkCreate)\s*\(/.test(endpoint),'Read-only endpoint');assert.ok(endpoint.indexOf('authorizeReport(svc,user,body.companyId)')<endpoint.indexOf('accountingData(svc,company.id'));
 const page=await fs.readFile('src/pages/LibroRegistros.jsx','utf8');assert.ok(page.indexOf("key: 'pnl'")<page.indexOf("key: 'multinational'"));assert.ok(page.indexOf("key: 'multinational'")<page.indexOf("key: 'asesoria'"));
 const exporter=await fs.readFile('src/components/libros/multinationalReportExport.mjs','utf8');assert.ok(!exporter.includes('saveBookExportReference'),'Report downloads must not reset the green-row invoice export reference');
+for(const [canonical,copy] of [['businessDashboardOperations/accountingReportEngine.ts','accountingReportEngine.ts'],['businessDashboardOperations/observedBanking.mjs','observedBanking.mjs'],['getCompanyFinancials/financialSourceTruth.js','financialSourceTruth.js']]){
+  const normalize=s=>s.replace(/\r\n/g,'\n').replace(/[ \t]+$/gm,'').trim();
+  assert.equal(normalize(await fs.readFile('base44/functions/'+canonical,'utf8')),normalize(await fs.readFile('base44/functions/multinationalReport/'+copy,'utf8')),'Shared report engines must stay in sync');
+}
 console.log(JSON.stringify({ok:true,synthetic:true,checks:['PGC signs','EBITDA bridge','comparative','monthly cutoffs','balance opening','regularisation and closing','segment isolation','bank duplicate identity','pending and internal transfers','FX exclusion','negative invoice','no source mutation','cross-tenant access','disabled access','Excel formula injection','XLSX roundtrip','PDF pages','book export reference preservation'],pdfPages:pdf.getNumberOfPages(),sheets:wb.SheetNames.length}));
 await fs.rm(tmp,{recursive:true,force:true});

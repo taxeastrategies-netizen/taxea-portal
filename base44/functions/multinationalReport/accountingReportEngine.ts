@@ -301,4 +301,3 @@ export function buildLedger(data, { year, scope = 'confirmed', accountCode = '' 
   let runningBalance = 0;
   return { year: report.year, years: report.years, scope, accounts: report.accounts, accountCode, movements: movements.map(m => ({ ...m, runningBalance: runningBalance = round2(runningBalance + m.debit - m.credit) })) };
 }
-
