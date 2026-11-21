@@ -1,6 +1,6 @@
 import {invoiceEuroAmount,formatInvoiceMoney} from '@/lib/financialSourceTruth';
 import { invoiceTaxRateLabel } from '@/lib/invoiceTaxBreakdown';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import ProfessionalExportPanel from '@/components/libros/ProfessionalExportPanel';
 import { useOutletContext } from 'react-router-dom';
 import NoCompanyState from '@/components/ui/NoCompanyState';
@@ -17,6 +17,8 @@ import { exportarLibrosPDF } from '@/components/libros/ExportPDF.jsx';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { compareBookExport, readBookExportReference, saveBookExportReference } from '@/lib/bookExportReferences.mjs';
 
+const MultinationalReport = lazy(() => import('@/components/libros/MultinationalReport'));
+
 const exportSnapshots = base44.entities.AccountingExportSnapshot;
 
 function fmt(n) {
@@ -29,6 +31,7 @@ const TABS = [
   { key: 'gastos', label: 'Gastos' },
   { key: 'recc', label: 'Criterio de caja' },
   { key: 'pnl', label: 'P&L' },
+  { key: 'multinational', label: 'Multinational Report' },
   { key: 'asesoria', label: 'Salida a la asesoría' },
 ];
 
@@ -206,6 +209,8 @@ export default function LibroRegistros() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'multinational' && <Suspense fallback={<p role="status" className="p-8 text-center text-muted-foreground">Preparando informe…</p>}><MultinationalReport company={company} userId={userId} year={filterAnio} quarter={filterTrimestre === 'all' ? null : filterTrimestre} /></Suspense>}
 
       {activeTab === 'asesoria' && <ProfessionalExportPanel companyId={company.id} year={Number(filterAnio)} />}
       {activeTab === 'recc' && <ReccBookPanel companyId={company?.id} year={filterAnio} />}
