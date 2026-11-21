@@ -169,7 +169,7 @@ export default function LibroRegistros() {
               <SelectItem value="T4">T4 · Oct-Dic</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportPDF} disabled={exportingPDF}>
+          {activeTab !== 'multinational' && <><Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportPDF} disabled={exportingPDF}>
             {exportingPDF
               ? <><div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> Generando PDF…</>
               : <><FileText className="w-4 h-4" /> Exportar PDF</>
@@ -195,6 +195,7 @@ export default function LibroRegistros() {
               : <><Download className="w-4 h-4" /> Exportar Excel {totalNewCount > 0 ? `(+${totalNewCount} nuevos)` : ''}</>
             }
           </Button>
+          </>}
         </div>
       </PageHeader>
 
