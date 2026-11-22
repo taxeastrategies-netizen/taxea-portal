@@ -3,29 +3,26 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 Deno.serve(async (req) => {
   try {
+    if (req.method !== 'POST') return Response.json({ error: 'Método no permitido' }, { status: 405 });
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user) return Response.json({ error: 'No autenticado' }, { status: 401 });
+    // Legacy administrative endpoint. OCR execution is not finalized by a client-supplied outcome.
+    // No frontend or OCR worker invokes this endpoint; quota corrections belong to administration.
+    const disabled = [user, user.data].filter(Boolean).some(row => row.is_deleted === true || ['eliminado', 'bloqueado', 'suspendido'].includes(String(row.status || '').toLowerCase()) || ['disabled', 'deleted', 'blocked', 'suspended'].includes(String(row.accountAccessStatus || '').toLowerCase()));
+    if (disabled || !['admin', 'super_admin'].includes(String(user.role || '').trim().toLowerCase())) {
+      return Response.json({ error: 'La finalización de créditos requiere autorización administrativa.' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const { reservationId, success, failureReasonSafe } = body;
 
+    if (typeof success !== 'boolean') return Response.json({ error: 'Indica un resultado administrativo válido.' }, { status: 400 });
     if (!reservationId) return Response.json({ error: 'reservationId requerido' }, { status: 400 });
 
     const reservations = await base44.asServiceRole.entities.OcrCreditReservation.filter({ id: reservationId });
     const reservation = reservations?.[0];
     if (!reservation) return Response.json({ error: 'Reserva no encontrada' }, { status: 404 });
-
-    const isAdmin = ['admin', 'super_admin'].includes(user.role);
-    if (!isAdmin) {
-      const ownedAccounts = await base44.asServiceRole.entities.ClientAccount.filter({
-        id: reservation.billingAccountId,
-        email: user.email,
-      });
-      if (!ownedAccounts?.length) {
-        return Response.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
 
     if (reservation.status !== 'reserved') {
       return Response.json({ status: reservation.status, idempotent: true });
@@ -34,7 +31,9 @@ Deno.serve(async (req) => {
     const period = await base44.asServiceRole.entities.OcrQuotaPeriod.get(reservation.quotaPeriodId);
     if (!period) return Response.json({ error: 'Periodo de cuota no encontrado' }, { status: 404 });
 
-    const credits = reservation.creditsReserved || 1;
+    if (period.billingAccountId !== reservation.billingAccountId) return Response.json({ error: 'La reserva no corresponde a este período de cuota.' }, { status: 409 });
+    const credits = Number(reservation.creditsReserved);
+    if (!Number.isInteger(credits) || credits < 1 || credits > 200) return Response.json({ error: 'Reserva de créditos no válida.' }, { status: 409 });
     const now = new Date().toISOString();
 
     if (success) {
@@ -49,7 +48,7 @@ Deno.serve(async (req) => {
       });
 
       // Update usage event
-      const events = await base44.asServiceRole.entities.OcrUsageEvent.filter({ idempotencyKey: reservation.idempotencyKey });
+      const events = await base44.asServiceRole.entities.OcrUsageEvent.filter({ idempotencyKey: reservation.idempotencyKey, billingAccountId: reservation.billingAccountId, quotaPeriodId: period.id });
       if (events.length > 0) {
         await base44.asServiceRole.entities.OcrUsageEvent.update(events[0].id, {
           status: 'completed',
@@ -84,7 +83,7 @@ Deno.serve(async (req) => {
         reservedCredits: Math.max(0, (period.reservedCredits || 0) - credits),
       });
 
-      const events = await base44.asServiceRole.entities.OcrUsageEvent.filter({ idempotencyKey: reservation.idempotencyKey });
+      const events = await base44.asServiceRole.entities.OcrUsageEvent.filter({ idempotencyKey: reservation.idempotencyKey, billingAccountId: reservation.billingAccountId, quotaPeriodId: period.id });
       if (events.length > 0) {
         await base44.asServiceRole.entities.OcrUsageEvent.update(events[0].id, {
           status: 'failed',
