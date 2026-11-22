@@ -3946,7 +3946,7 @@ Deno.serve(async (req) => {
     if(action==='dashboard_irpf') {
       await authorizeIrpfDashboard(svc,user,companyId,company);
       const dashboardPeriod=irpfDashboardPeriod(body,company);
-      return Response.json(await loadIrpfDashboard(svc,company,dashboardPeriod,{calculate130,supportedWithholdingEvents}),{headers:{'Cache-Control':'private, no-store'}});
+      return Response.json(await loadIrpfDashboard(svc,company,dashboardPeriod,{calculate130,supportedWithholdingEvents,taxFx}),{headers:{'Cache-Control':'private, no-store'}});
     }
     authorize(user,companyId,company);
 
