@@ -284,12 +284,12 @@ export default function TaxDashboard({ onNavigate }) {
           bg="bg-blue-400/10"
           onClick={() => onNavigate('obligaciones')}
         />
-        <div className="bg-card border border-border rounded-xl p-4" title={`Trimestre actual: ${formatPeriodDate(irpf.start)} – ${formatPeriodDate(irpf.end)}. Estimación orientativa sobre bases, sin arrastres ni deducciones.`}>
+        <div className="bg-card border border-border rounded-xl p-4" title={`Trimestre actual: ${formatPeriodDate(irpf.start)} – ${formatPeriodDate(irpf.end)}. Estimación orientativa: 20 % de (ingresos − gastos) del trimestre menos el IRPF retenido en sus facturas, mínimo cero.`}>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-500/10 mb-2"><Calculator className="w-4 h-4 text-violet-500" /></div>
           <p className="text-lg font-bold text-foreground">{irpfApplies ? fmt(irpf.estimate) + ' €' : 'No aplica'}</p>
           <p className="text-xs text-muted-foreground mt-0.5">IRPF estimado · {irpf.quarter}T {irpf.year}</p>
-          <p className="text-xs text-muted-foreground mt-2">{irpfApplies ? '20 % del beneficio · orientativo' : 'Perfil sin modelo 130'}</p>
-          <p className="text-xs text-muted-foreground mt-1">Retenido en facturas: <span className="font-medium text-foreground">{fmt(irpf.retained)} €</span></p>
+          <p className="text-xs text-muted-foreground mt-2">{irpfApplies ? '20 % del beneficio − retenciones' : 'Perfil sin modelo 130'}</p>
+          <p className="text-xs text-muted-foreground mt-1">IRPF descontado: <span className="font-medium text-foreground">{fmt(irpf.retained)} €</span></p>
         </div>
         <KPICard
           label="Obligaciones pdte."

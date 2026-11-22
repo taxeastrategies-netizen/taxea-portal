@@ -19,5 +19,5 @@ export function simpleQuarterIrpf({ invoices = [], expenses = [], companyId = ''
   const retained = quarterInvoices.filter(row => row.tipo === 'emitida').reduce((sum, row) => sum + invoiceEuroAmount(row, 'importe_retencion'), 0)
     + quarterExpenses.filter(row => row.tipo === 'ingreso').reduce((sum, row) => sum + invoiceEuroAmount(row, 'importe_retencion'), 0);
   return { year, quarter, start: window.start, end: window.end, income: known ? totals.base_ingresos : null, expenses: known ? totals.base_gastos : null,
-    estimate: known ? money(Math.max(0, totals.base_ingresos - totals.base_gastos) * 0.2) : null, retained: known ? money(retained) : null };
+    estimate: known ? money(Math.max(0, (totals.base_ingresos - totals.base_gastos) * 0.2 - retained)) : null, retained: known ? money(retained) : null };
 }
