@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { simpleQuarterIrpf } from '../src/lib/simpleQuarterIrpf.mjs';
+
+const now = new Date('2026-11-22T12:00:00Z');
+const sale = { id: 'i', company_id: 'qa', tipo: 'emitida', fecha_emision: '2026-10-01', base_imponible: 1000, cuota_iva: 210, importe_retencion: 150, total_factura: 1060, estado: 'emitida' };
+const purchase = { id: 'p', company_id: 'qa', tipo: 'recibida', fecha_emision: '2026-11-22', base_imponible: 200, cuota_iva: 42, total_factura: 242 };
+const calc = (patch = {}) => simpleQuarterIrpf({ companyId: 'qa', invoices: [sale, purchase], now, ...patch });
+let d = calc(); assert.equal(d.estimate, 160); assert.equal(d.retained, 150); assert.equal(d.start, '2026-10-01'); assert.equal(d.end, '2026-11-22');
+assert.equal(calc({ invoices: [sale, purchase, { ...sale, id: 'old', fecha_emision: '2026-09-30' }, { ...sale, id: 'future', fecha_emision: '2026-11-23' }] }).estimate, 160);
+assert.equal(calc({ invoices: [sale, purchase, { ...sale, id: 'other-company', company_id: 'other' }] }).estimate, 160);
+for (const patch of [{ anulada: true }, { estado: 'borrador', estado_cobro: 'pendiente' }, { estado: 'anulada' }]) assert.equal(calc({ invoices: [{ ...sale, ...patch }, purchase] }).estimate, 0);
+assert.equal(calc({ invoices: [sale, { ...purchase, base_imponible: 2000 }] }).estimate, 0);
+assert.equal(calc({ invoices: [], expenses: [] }).estimate, 0);
+assert.equal(calc({ financialError: 'No disponible' }).estimate, null);
+assert.equal(calc({ invoices: [sale, purchase, { ...sale, id: 'refund', base_imponible: -100, total_factura: -106, importe_retencion: -15 }] }).estimate, 140);
+d = calc({ expenses: [{ id: 'legacy', company_id: 'qa', tipo: 'gasto', canonical_invoice_id: 'p', fecha: '2026-11-22', base_imponible: 200, total: 242 }] }); assert.equal(d.expenses, 200); assert.equal(d.estimate, 160);
+assert.equal(calc({ invoices: [sale, purchase], expenses: [{ id: 'manual', company_id: 'qa', tipo: 'gasto', fecha: '2026-10-31', base_imponible: 50, total: 50 }] }).estimate, 150);
+assert.equal(calc({ invoices: [{ ...sale, fecha_emision: '2026-11-01', fiscal_document_type: 'F2', fecha_operacion: '2026-09-30' }, purchase] }).income, 0);
+d = calc({ now: new Date('2027-01-01T00:30:00Z'), invoices: [{ ...sale, fecha_emision: '2027-01-01' }], timeZone: 'Atlantic/Canary' }); assert.equal(d.quarter, 1); assert.equal(d.start, '2027-01-01'); assert.equal(d.estimate, 200);
+assert.equal(calc({ invoices: [{ ...sale, base_imponible: '1000' }, { ...purchase, base_imponible: '200' }] }).estimate, 160);
+assert.equal(calc({ invoices: [{ ...sale, moneda: 'USD', exchange_rate: 2 }] }).estimate, 400);
+console.log(JSON.stringify({ ok: true, scope: 'simple current-quarter estimate', sourceWrites: 0 }));

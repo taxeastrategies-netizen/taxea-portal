@@ -7,7 +7,7 @@ import {
   FileText, Calendar, AlertTriangle, CheckCircle2, Clock,
   Zap, ScanLine, ScanText, BookOpen, Plus, ChevronRight,
   Activity, BarChart3, Brain, Sparkles, CircleDollarSign,
-  Receipt, AlertCircle, Wallet
+  Receipt, AlertCircle, Wallet, Calculator
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NativeSelect from '@/components/ui/NativeSelect';
@@ -16,7 +16,7 @@ import { useFinancePeriod, useFinanceObligations } from '@/hooks/useFinanceRepor
 import { buildFinanceDashboardModel, confirmEmptyReportingPeriod } from '@/lib/financeDashboardModel.mjs';
 import { classifyObligations, obligationOpen, daysBetween, civilDay } from '@/lib/reportingPeriods.mjs';
 import NoCompanyState from '@/components/ui/NoCompanyState';
-import IrpfDashboardCards from './IrpfDashboardCards';
+import { simpleQuarterIrpf } from '@/lib/simpleQuarterIrpf.mjs';
 import GastosPorCategoria from './GastosPorCategoria';
 import { calculateFinancialKPIs, getOutstandingAmount } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
@@ -28,7 +28,7 @@ const fiscalInvoiceDate = invoice => invoice.fiscal_document_type === 'F2' && in
   : invoice.fecha_emision;
 
 export default function TaxDashboard({ onNavigate }) {
-  const { company, loadingCompany, user } = useOutletContext() || {};
+  const { company, loadingCompany } = useOutletContext() || {};
   const [selectedPeriod, setSelectedPeriod] = useState('mtd');
   const timeZone = company?.timezone === 'Atlantic/Canary' ? 'Atlantic/Canary' : 'Europe/Madrid';
   const today = civilDay(new Date(), timeZone);
@@ -72,6 +72,12 @@ export default function TaxDashboard({ onNavigate }) {
   const quotes = quoteScope.companyId === company?.id ? quoteScope.rows : [];
   const [loading, setLoading] = useState(true);
   const fiscalProfile = calendar.data?.profile || null;
+  const irpf = useMemo(() => simpleQuarterIrpf({
+    invoices, expenses, companyId: company?.id, now: new Date(today + 'T12:00:00Z'), timeZone,
+    financialError: financialData.error,
+  }), [invoices, expenses, company?.id, today, timeZone, financialData.error]);
+  const irpfApplies = !['sociedad', 'asociacion_fundacion', 'entidad_publica'].includes(fiscalProfile?.entityType)
+    && fiscalProfile?.irpfEstimation !== 'objetiva_modulos' && fiscalProfile?.model130ExemptionConfirmed !== true;
   const [supportError, setSupportError] = useState('');
   const [aiAlerts, setAiAlerts] = useState([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
@@ -239,7 +245,7 @@ export default function TaxDashboard({ onNavigate }) {
       </div>
       {accounting.isLoading && <p role="status" className="text-xs text-muted-foreground">Cargando datos contables del periodo…</p>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" aria-busy={accounting.isLoading}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3" aria-busy={accounting.isLoading}>
         <div onClick={() => onNavigate('ingresos-gastos')} className="bg-card border border-border rounded-xl p-4 cursor-pointer hover:border-taxea-red/30 hover:shadow-card-hover transition-all">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/10 mb-2">
             <TrendingUp className="w-4 h-4 text-emerald-500" />
@@ -278,6 +284,13 @@ export default function TaxDashboard({ onNavigate }) {
           bg="bg-blue-400/10"
           onClick={() => onNavigate('obligaciones')}
         />
+        <div className="bg-card border border-border rounded-xl p-4" title={`Trimestre actual: ${formatPeriodDate(irpf.start)} – ${formatPeriodDate(irpf.end)}. Estimación orientativa sobre bases, sin arrastres ni deducciones.`}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-500/10 mb-2"><Calculator className="w-4 h-4 text-violet-500" /></div>
+          <p className="text-lg font-bold text-foreground">{irpfApplies ? fmt(irpf.estimate) + ' €' : 'No aplica'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">IRPF estimado · {irpf.quarter}T {irpf.year}</p>
+          <p className="text-xs text-muted-foreground mt-2">{irpfApplies ? '20 % del beneficio · orientativo' : 'Perfil sin modelo 130'}</p>
+          <p className="text-xs text-muted-foreground mt-1">Retenido en facturas: <span className="font-medium text-foreground">{fmt(irpf.retained)} €</span></p>
+        </div>
         <KPICard
           label="Obligaciones pdte."
           value={kpis.oblPendientes}
@@ -288,8 +301,6 @@ export default function TaxDashboard({ onNavigate }) {
           onClick={() => onNavigate('obligaciones')}
         />
       </div>
-
-      <IrpfDashboardCards companyId={company?.id} userId={user?.id} year={currentYear} cutoff={financials.window.end} windowStart={financials.window.start} />
 
       {/* Second row KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
