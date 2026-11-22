@@ -5,6 +5,7 @@ import {exportCapability,EXPORT_CAPABILITIES_VERSION} from './exportCapabilities
 import {createCashTaxLineForPeriod} from './reccTaxLines.ts';
 import { repepAt, c5Metadata, c5RepepVolume, c5CashProvisional } from './c5Rules.mjs';
 import {accountingFx,invoiceCurrency,taxFx,fxMoney,fxRatioMoney} from './reccCurrency.mjs';
+import { authorizeIrpfDashboard, irpfDashboardPeriod, loadIrpfDashboard } from './irpfDashboard.mjs';
 import{taxModelUserEnabled,taxModelCompanyAllowed,taxModelValidation,taxModelPublicError}from'./taxModelAccess.mjs';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { isZeroResidualReccFinal } from './reccAdvances.mjs';
@@ -3942,6 +3943,11 @@ Deno.serve(async (req) => {
     const requestService=queuedAccountingClient(base44.asServiceRole,{intervalMs:150,readRetries:3});
     const svc=['export','download_official_file','export_review','export_handoff','export_296_annexes'].includes(action)?taxStorageClient(requestService):requestService; const company=await svc.entities.Company.get(companyId);
     if(!company) return Response.json({error:'Empresa no encontrada.'},{status:404});
+    if(action==='dashboard_irpf') {
+      await authorizeIrpfDashboard(svc,user,companyId,company);
+      const dashboardPeriod=irpfDashboardPeriod(body,company);
+      return Response.json(await loadIrpfDashboard(svc,company,dashboardPeriod,{calculate130,supportedWithholdingEvents}),{headers:{'Cache-Control':'private, no-store'}});
+    }
     authorize(user,companyId,company);
 
     if(action==='export_lock_context'){const reviewer=['admin','super_admin','advisor','asesor'].includes(clean(user.role).toLowerCase());return Response.json({ok:true,lock:reviewer&&company.tax_artifact_lock_token?{token:company.tax_artifact_lock_token,startedAt:company.tax_artifact_lock_started_at,recoverable:Date.now()-Date.parse(company.tax_artifact_lock_started_at)>=600000}:null});}
