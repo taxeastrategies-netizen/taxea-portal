@@ -16,6 +16,7 @@ import { useFinancePeriod, useFinanceObligations } from '@/hooks/useFinanceRepor
 import { buildFinanceDashboardModel, confirmEmptyReportingPeriod } from '@/lib/financeDashboardModel.mjs';
 import { classifyObligations, obligationOpen, daysBetween, civilDay } from '@/lib/reportingPeriods.mjs';
 import NoCompanyState from '@/components/ui/NoCompanyState';
+import IrpfDashboardCards from './IrpfDashboardCards';
 import GastosPorCategoria from './GastosPorCategoria';
 import { calculateFinancialKPIs, getOutstandingAmount } from '@/lib/financialCore';
 import { useFinancialData } from '@/hooks/useFinancialData';
@@ -27,7 +28,7 @@ const fiscalInvoiceDate = invoice => invoice.fiscal_document_type === 'F2' && in
   : invoice.fecha_emision;
 
 export default function TaxDashboard({ onNavigate }) {
-  const { company, loadingCompany } = useOutletContext() || {};
+  const { company, loadingCompany, user } = useOutletContext() || {};
   const [selectedPeriod, setSelectedPeriod] = useState('mtd');
   const timeZone = company?.timezone === 'Atlantic/Canary' ? 'Atlantic/Canary' : 'Europe/Madrid';
   const today = civilDay(new Date(), timeZone);
@@ -287,6 +288,8 @@ export default function TaxDashboard({ onNavigate }) {
           onClick={() => onNavigate('obligaciones')}
         />
       </div>
+
+      <IrpfDashboardCards companyId={company?.id} userId={user?.id} year={currentYear} cutoff={financials.window.end} windowStart={financials.window.start} />
 
       {/* Second row KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
