@@ -103,6 +103,15 @@ export function buildIrpfDashboard(rows, companyId, period, engine) {
   if (excludedEntries) warnings.push(`${excludedEntries} asiento(s) excluidos por descuadre o contabilización incompleta.`);
   const invoices = rows.invoices.filter(activeInvoice);
   const invoicePayments = rows.invoicePayments.filter(row => (!row.operation_status || row.operation_status === 'committed') && (!row.accounting_operation_id || operationById.get(row.accounting_operation_id)?.status === 'committed'));
+  let excludedFiscalFx = 0;
+  const fiscalInvoices = invoices.filter(invoice => {
+    if (text(invoice.moneda || invoice.currency || 'EUR').toUpperCase() === 'EUR') return true;
+    const dates = invoicePayments.filter(payment => payment.invoice_id === invoice.id).map(payment => day(payment.payment_date || payment.date));
+    if (!dates.length) dates.push(day(invoice.ultimo_pago_at || invoice.fecha_cobro || invoice.fecha_pago));
+    try { for (const date of dates.filter(date => date >= period.cumulativeStart && date <= period.cutoff)) engine.taxFx(invoice, date); return true; }
+    catch { excludedFiscalFx += 1; return false; }
+  });
+  if (excludedFiscalFx) warnings.push(`${excludedFiscalFx} factura(s) con cobros o pagos en divisa sin cambio fiscal confirmado. La estimación queda pendiente; el acumulado documental sigue disponible.`);
   const invoiceTotals = { issued: 0, received: 0, issuedPeriod: 0, receivedPeriod: 0, issuedCount: 0, receivedCount: 0, excludedFx: 0 };
   for (const invoice of invoices) {
     const date = day(invoice.fecha_operacion || invoice.fecha_emision);
@@ -126,14 +135,14 @@ export function buildIrpfDashboard(rows, companyId, period, engine) {
     else if (item.value !== '' && item.value != null && Number.isFinite(Number(item.value))) adjustments[item.field] = Number(item.value);
   }
   if (omittedAdjustments) warnings.push('Los ajustes de importes del borrador trimestral solo se incorporan al seleccionar el trimestre completo. El corte parcial usa datos actuales.');
-  const data = { entries, entryLines, invoices, invoicePayments, profile, activities, filings: rows.filings, year: period.year, period: period.quarter, warnings: [], blockers: [] };
+  const data = { company: { id: companyId }, entries, entryLines, invoices: fiscalInvoices, invoicePayments, profile, activities, filings: rows.filings, year: period.year, period: period.quarter, warnings: [], blockers: [] };
   const b = { start: period.quarterStart, end: period.cutoff, cumulativeStart: period.cumulativeStart };
   // Same calculator as the tax models, with freshly read sources; never reuse a frozen result.
   const calculation = ['applicable', 'unconfirmed'].includes(applicability.state) ? engine.calculate130(data, b, adjustments) : null;
   const fields = Object.fromEntries((calculation?.fields || []).map(field => [field.code, money(field.value)]));
   const recognized = engine.supportedWithholdingEvents({ ...data, warnings: [], blockers: [] }, b).reduce((sum, event) => sum + event.withholding, 0);
   const hasIncomeExpense = entryLines.some(line => /^[67]/.test(text(line.accountCode || line.subcuenta))) || calculation?.details?.[0]?.cashEvents?.length > 0;
-  const estimate = calculation && hasIncomeExpense ? Math.max(0, money(calculation.result)) : null;
+  const estimate = calculation && hasIncomeExpense && !excludedFiscalFx ? Math.max(0, money(calculation.result)) : null;
   if (calculation && !hasIncomeExpense) warnings.push('Todavía no hay ingresos o gastos contables confirmados para estimar el 130.');
   if (applicability.state === 'unconfirmed') warnings.push('La estimación no confirma por sí sola la obligación de presentar el modelo 130.');
   const safeMessages = [...new Set([...warnings, ...data.warnings, ...data.blockers])].map(message => text(message).replace(/Factura [^ ]+/g, 'Una factura').replace(/factura emitida [^ ]+/g, 'factura emitida')).slice(0, 30);
@@ -141,8 +150,8 @@ export function buildIrpfDashboard(rows, companyId, period, engine) {
     ok: true, version: 'irpf-dashboard-v1', companyId, ...period, generatedAt: new Date().toISOString(), applicability,
     estimate, signedResult: estimate === null ? null : money(calculation.result), provisional: safeMessages.length > 0 || !['applicable', 'not_applicable', 'exempt', 'model131'].includes(applicability.state),
     basis: { revenue: fields['01'] ?? null, expenses: fields['02'] ?? null, net: fields['03'] ?? null, rate: calculation?.details?.[0]?.sectionOneRate ?? null, grossPayment: fields['04'] ?? null, priorPayments: fields['05'] ?? null, deductibleWithholdings: fields['06'] ?? null, reduction: fields['13'] ?? null, priorNegative: fields['15'] ?? null, housing: fields['16'] ?? null, previousSamePeriod: fields['18'] ?? null, imputationMethod: calculation?.details?.[0]?.irpfImputationMethod || null },
-    retentions: { ...invoiceTotals, recognizedByCollections: money(recognized) },
+    retentions: { ...invoiceTotals, recognizedByCollections: excludedFiscalFx ? null : money(recognized) },
     carryforward: calculation ? { previousPaymentsSource: calculation.carryforward.previousPaymentsSource, priorNegativeSource: calculation.carryforward.priorNegativeSource, missingPeriods: calculation.carryforward.missingPeriods, missingNegativePeriods: calculation.carryforward.missingNegativePeriods } : null,
-    coverage: { confirmedEntries: entries.length, excludedEntries, issuedInvoices: invoices.filter(row => row.tipo === 'emitida').length, receivedInvoices: invoices.filter(row => row.tipo === 'recibida').length, savedAdjustments: Object.keys(adjustments).length }, warnings: safeMessages,
+    coverage: { confirmedEntries: entries.length, excludedEntries, excludedFiscalFx, issuedInvoices: invoices.filter(row => row.tipo === 'emitida').length, receivedInvoices: invoices.filter(row => row.tipo === 'recibida').length, savedAdjustments: Object.keys(adjustments).length }, warnings: safeMessages,
   };
 }

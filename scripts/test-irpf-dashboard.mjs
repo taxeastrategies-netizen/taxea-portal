@@ -69,6 +69,7 @@ fixture(); user = { id: 'legacy', email: 'legacy@qa.test', role: 'user' }; recor
 fixture(); user = { id: 'admin', email: 'admin@qa.test', role: 'admin' }; data = await invoke(); assert.equal(data.estimate, 850);
 fixture(); user = null; await invoke({}, 401);
 for (const patch of [{ cutoff: '2025-02-30' }, { ejercicio: 2024 }, { windowStart: '2025-04-01' }, { cutoff: '2099-01-01', ejercicio: 2099 }]) { fixture(); await invoke(patch, 400); }
+fixture(); records.Invoice[0].moneda = 'USD'; records.Invoice[0].exchange_rate = 2; data = await invoke(); assert.equal(data.retentions.issued, 3000); assert.equal(data.estimate, null); assert.equal(data.retentions.recognizedByCollections, null); assert.equal(data.coverage.excludedFiscalFx, 1);
 assert.equal(writes, 0);
 for (const file of ['financialSourceTruth.js', 'verifiedCompanyAssignment.mjs']) assert.equal(fs.readFileSync('base44/functions/taxModelOperations/' + file, 'utf8'), fs.readFileSync('base44/functions/getCompanyFinancials/' + file, 'utf8'), 'Canonical helper parity');
 console.log(JSON.stringify({ ok: true, checks, writes, actualTaxEngine: true, tenantIsolation: true }));

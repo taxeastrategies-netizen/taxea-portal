@@ -61,14 +61,14 @@ export default function IrpfDashboardCards({ companyId, userId, year, cutoff, wi
           </>}
           <details className="mt-4 text-xs border-t border-border pt-3">
             <summary className="cursor-pointer font-medium py-1">Ver cálculo y datos pendientes{data.warnings.length ? ` (${data.warnings.length})` : ''}</summary>
-            {!noEstimate && <dl className="grid grid-cols-2 gap-3 mt-3">
+            {!noEstimate && <div className="grid grid-cols-2 gap-3 mt-3">
               <Metric label="Ingresos computables · cas. 01" value={data.basis.revenue} />
               <Metric label="Gastos deducibles · cas. 02" value={data.basis.expenses} />
               <Metric label="Minoración · cas. 13" value={data.basis.reduction} />
               <Metric label="Negativos anteriores · cas. 15" value={data.basis.priorNegative} />
               <Metric label="Vivienda · cas. 16" value={data.basis.housing} />
               <Metric label="Ingreso previo del mismo período" value={data.basis.previousSamePeriod} />
-            </dl>}
+            </div>}
             <p className="mt-3 text-muted-foreground">{data.coverage.confirmedEntries} asientos confirmados incluidos. {data.basis.imputationMethod === 'cash' ? 'Criterio de cobros y pagos confirmado.' : 'Base contable por devengo, con los ajustes fiscales guardados que correspondan al corte.'}</p>
             {data.warnings.length > 0 && <ul className="mt-3 space-y-2 text-amber-700 dark:text-amber-400 list-disc pl-4">{data.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>}
             <p className="mt-3 text-muted-foreground">Orientativo, según los datos registrados. No presenta impuestos ni modifica facturas. Las retenciones a proveedores no se descuentan del 130 propio.</p>
@@ -97,5 +97,5 @@ export default function IrpfDashboardCards({ companyId, userId, year, cutoff, wi
 }
 
 function Metric({ label, value }) {
-  return <div><dt className="text-muted-foreground leading-relaxed">{label}</dt><dd className="font-semibold mt-0.5">{euro(value)}</dd></div>;
+  return <dl><dt className="text-muted-foreground leading-relaxed">{label}</dt><dd className="font-semibold mt-0.5">{euro(value)}</dd></dl>;
 }
