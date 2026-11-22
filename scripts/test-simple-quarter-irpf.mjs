@@ -19,4 +19,5 @@ assert.equal(calc({ invoices: [{ ...sale, fecha_emision: '2026-11-01', fiscal_do
 d = calc({ now: new Date('2027-01-01T00:30:00Z'), invoices: [{ ...sale, fecha_emision: '2027-01-01' }], timeZone: 'Atlantic/Canary' }); assert.equal(d.quarter, 1); assert.equal(d.start, '2027-01-01'); assert.equal(d.estimate, 200);
 assert.equal(calc({ invoices: [{ ...sale, base_imponible: '1000' }, { ...purchase, base_imponible: '200' }] }).estimate, 160);
 assert.equal(calc({ invoices: [{ ...sale, moneda: 'USD', exchange_rate: 2 }] }).estimate, 400);
+assert.equal(calc({ invoices: [{ ...sale, anulada: true }], expenses: [{ id: 'cancelled-mirror', company_id: 'qa', tipo: 'ingreso', canonical_invoice_id: 'i', fecha: '2026-11-01', base_imponible: 1000, total: 1060 }] }).estimate, 0);
 console.log(JSON.stringify({ ok: true, scope: 'simple current-quarter estimate', sourceWrites: 0 }));
