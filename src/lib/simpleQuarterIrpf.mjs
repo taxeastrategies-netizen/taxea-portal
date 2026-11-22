@@ -5,7 +5,7 @@ const money = value => Math.round(value * 100) / 100;
 const cancelled = row => row.anulada || [row.estado, row.estado_cobro].some(state => ['borrador', 'anulado', 'anulada', 'cancelado', 'cancelada', 'rechazado', 'rechazada'].includes(String(state || '').toLowerCase()));
 
 // Dashboard budgeting shortcut requested by the client, not a model 130 liquidation.
-export function simpleQuarterIrpf({ invoices = [], expenses = [], companyId, now = new Date(), timeZone = 'Europe/Madrid', financialError = '' } = {}) {
+export function simpleQuarterIrpf({ invoices = [], expenses = [], companyId = '', now = new Date(), timeZone = 'Europe/Madrid', financialError = '' } = {}) {
   const today = civilDay(now, timeZone);
   const year = Number(today.slice(0, 4)), quarter = Math.ceil(Number(today.slice(5, 7)) / 3);
   const window = reportingWindow(`${year}-T${quarter}`, now, timeZone);
